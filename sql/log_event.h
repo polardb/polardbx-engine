@@ -2817,6 +2817,24 @@ class Rows_log_event : public virtual binary_log::Rows_event, public Log_event {
 
   bool is_rbr_logging_format() const override { return true; }
 
+protected:
+    int write_row(const Relay_log_info *const, const bool, const bool);
+
+    /**
+    This member function judge whether before image(BI) and after image(AI)
+    have full row(that is, all columns).
+
+    When the binlog_row_image option is set to minimal or noblob by master,
+    the row is perhaps not full. Refer to binlog_row_image option.
+
+    @returns true full row. false, not full row.
+    */
+#if defined(MYSQL_SERVER)
+    bool is_binlog_row_image_full(){
+      return bitmap_is_set_all(m_table->read_set) && bitmap_is_set_all(m_table->write_set);
+    }
+#endif
+
  private:
 #if defined(MYSQL_SERVER)
   virtual int do_apply_event(Relay_log_info const *rli) override;
@@ -2945,7 +2963,8 @@ class Rows_log_event : public virtual binary_log::Rows_event, public Log_event {
   */
   virtual int skip_after_image_for_update_event(
       const Relay_log_info *rli MY_ATTRIBUTE((unused)),
-      const uchar *curr_bi_start MY_ATTRIBUTE((unused))) {
+      const uchar *curr_bi_start MY_ATTRIBUTE((unused)),
+      bool skip_for_smart_mode MY_ATTRIBUTE((unused))) {
     return 0;
   }
 
@@ -3081,9 +3100,6 @@ class Write_rows_log_event : public Rows_log_event,
   }
 #endif
 
- protected:
-  int write_row(const Relay_log_info *const, const bool);
-
  private:
   virtual Log_event_type get_general_type_code() override {
     return (Log_event_type)TYPE_CODE;
@@ -3196,7 +3212,7 @@ class Update_rows_log_event : public Rows_log_event,
   virtual int do_exec_row(const Relay_log_info *const) override;
 
   virtual int skip_after_image_for_update_event(
-      const Relay_log_info *rli, const uchar *curr_bi_start) override;
+      const Relay_log_info *rli, const uchar *curr_bi_start, bool skip_for_smart_mode) override;
 
  private:
   /**

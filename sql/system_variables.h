@@ -55,6 +55,7 @@ enum enum_binlog_format {
 enum enum_rbr_exec_mode {
   RBR_EXEC_MODE_STRICT,
   RBR_EXEC_MODE_IDEMPOTENT,
+  RBR_EXEC_MODE_SMART,
   RBR_EXEC_MODE_LAST_BIT
 };
 

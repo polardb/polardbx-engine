@@ -9028,7 +9028,12 @@ end:
     */
     (void)close_record_scan();
 
-  int unpack_error = skip_after_image_for_update_event(rli, saved_m_curr_row);
+  bool skip_for_smart_mode = (rbr_exec_mode == RBR_EXEC_MODE_SMART) && // smart
+                             ((error == HA_ERR_KEY_NOT_FOUND) ||
+                              (error == HA_ERR_FOUND_DUPP_KEY)) && // only the two kind of error
+                             is_binlog_row_image_full();
+
+  int unpack_error = skip_after_image_for_update_event(rli, saved_m_curr_row, skip_for_smart_mode);
   if (!error) error = unpack_error;
 
   m_table->default_column_bitmaps();
@@ -9036,8 +9041,8 @@ end:
 }
 
 int Update_rows_log_event::skip_after_image_for_update_event(
-    const Relay_log_info *rli, const uchar *curr_bi_start) {
-  if (m_curr_row == curr_bi_start && m_curr_row_end != nullptr) {
+    const Relay_log_info *rli, const uchar *curr_bi_start, bool skip_for_smart_mode) {
+  if (m_curr_row == curr_bi_start && m_curr_row_end != nullptr && !skip_for_smart_mode) {
     /*
       This handles the case that the BI was read successfully, but an
       error happened while looking up the row.  In this case, the AI
@@ -9424,7 +9429,11 @@ end:
     */
     (void)close_record_scan();
 
-  int unpack_error = skip_after_image_for_update_event(rli, saved_m_curr_row);
+  bool skip_for_smart_mode = (rbr_exec_mode == RBR_EXEC_MODE_SMART) && // smart
+                             (error == HA_ERR_END_OF_FILE) && // one error
+                             is_binlog_row_image_full();
+
+  int unpack_error = skip_after_image_for_update_event(rli, saved_m_curr_row, skip_for_smart_mode);
   if (!error) error = unpack_error;
 
   table->default_column_bitmaps();
@@ -9932,6 +9941,60 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
       DBUG_PRINT("info", ("calling do_apply_row_ptr"));
 
       error = (this->*do_apply_row_ptr)(rli);
+      /*
+       * Smart model is not available for ROW_LOOKUP_HASH_SCAN
+       * and ROW_LOOKUP_NOT_NEEDED, please refer to
+       * decide_row_lookup_algorithm_and_key function.
+       *
+       * If the error is HA_ERR_KEY_NOT_FOUND or HA_ERR_END_OF_FILE,
+       * the function can't find the before image, so write it and disable binlog.
+       */
+      if (rbr_exec_mode == RBR_EXEC_MODE_SMART &&
+              is_binlog_row_image_full()) {
+        thd->clear_error();
+        if ((m_rows_lookup_algorithm ==ROW_LOOKUP_INDEX_SCAN && error == HA_ERR_KEY_NOT_FOUND) ||
+                (m_rows_lookup_algorithm == ROW_LOOKUP_TABLE_SCAN && error == HA_ERR_END_OF_FILE)) {
+          int err;
+          err= write_row(rli, true, true);
+          if (err) {
+            __sync_add_and_fetch(&smart_handle_failed, 1);
+          } else {
+            err= (this->*do_apply_row_ptr)(rli);
+            if (err) {
+              __sync_add_and_fetch(&smart_handle_failed, 1);
+            } else {
+              __sync_add_and_fetch(&smart_handle_no_key, 1);
+              error= err;
+            }
+          }
+        } else if( m_rows_lookup_algorithm == ROW_LOOKUP_INDEX_SCAN &&
+                 error == HA_ERR_FOUND_DUPP_KEY ) {
+          int err= error;
+          /*
+           * If there are multi dupplicate unique keys when we update `after image(AI)`,
+           * we must call do_apply_row_ptr many times to delete dupp rows and
+           * do the right thing at last time.
+           *
+           * There is one case:
+           *  schema:  pk  uk1 uk2
+           *  master   1    4   5
+           *  slave:   1    4   5
+           *           2    2   2
+           *           3    3   3
+           * When the master call `update uk_table_ex set uk1=2,uk2=3 where pk=1;`,
+           * we must call do_apply_row_ptr two times to delete dupp key.
+           */
+          while(err == HA_ERR_FOUND_DUPP_KEY) {
+            err= (this->*do_apply_row_ptr)(rli);
+          }
+          if (err) {
+            __sync_add_and_fetch(&smart_handle_failed, 1);
+          } else {
+            __sync_add_and_fetch(&smart_handle_dup_key, 1);
+            error= err;
+          }
+        }
+      }
 
       if (handle_idempotent_and_ignored_errors(rli, &error)) break;
 
@@ -11681,6 +11744,7 @@ int Write_rows_log_event::do_before_row_operations(
      applying the event in the replace (idempotent) fashion.
   */
   if ((rbr_exec_mode == RBR_EXEC_MODE_IDEMPOTENT) ||
+      (rbr_exec_mode == RBR_EXEC_MODE_SMART) ||
       (m_table->s->db_type()->db_type == DB_TYPE_NDBCLUSTER)) {
     /*
       We are using REPLACE semantics and not INSERT IGNORE semantics
@@ -11784,7 +11848,7 @@ int Write_rows_log_event::do_after_row_operations(
 
   return error ? error : local_error;
 }
-
+#if 0
 /*
   Check if there are more UNIQUE keys after the given key.
 */
@@ -11793,7 +11857,7 @@ static int last_uniq_key(TABLE *table, uint keyno) {
     if (table->key_info[keyno].flags & HA_NOSAME) return 0;
   return 1;
 }
-
+#endif
 /**
   Write the current row into event's table.
 
@@ -11829,8 +11893,9 @@ static int last_uniq_key(TABLE *table, uint keyno) {
   @c ha_update_row() or first deleted and then new record written.
 */
 
-int Write_rows_log_event::write_row(const Relay_log_info *const rli,
-                                    const bool overwrite) {
+int Rows_log_event::write_row(const Relay_log_info *const rli,
+                              const bool overwrite,
+                              const bool disable_binlog) {
   DBUG_TRACE;
   DBUG_ASSERT(m_table != nullptr && thd != nullptr);
 
@@ -11843,7 +11908,10 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
                  table->file->ht->db_type != DB_TYPE_NDBCLUSTER);
 
   /* unpack row into table->record[0] */
-  if ((error = unpack_current_row(rli, &m_cols, true /*is AI*/))) return error;
+  if ((error = unpack_current_row(rli, &m_cols,
+      /*update and delete use different Image with write*/
+      (get_general_type_code() == binary_log::WRITE_ROWS_EVENT) ? true : false)))
+    return error;
 
   /*
     When m_curr_row == m_curr_row_end, it means a row that contains nothing,
@@ -11901,7 +11969,26 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
 
   m_table->mark_columns_per_binlog_row_image(thd);
 
-  while ((error = table->file->ha_write_row(table->record[0]))) {
+  while (true) {
+    if (disable_binlog) {
+      tmp_disable_binlog(thd);
+      error= table->file->ha_write_row(table->record[0]);
+      reenable_binlog(thd);
+    }
+    else {
+      error= table->file->ha_write_row(table->record[0]);
+    }
+    if (!error)
+      break;
+
+    if (rbr_exec_mode ==RBR_EXEC_MODE_SMART &&
+            error == HA_ERR_FOUND_DUPP_KEY &&
+            is_binlog_row_image_full())
+      slave_rows_error_report(WARNING_LEVEL, error, rli, thd, table,
+                              get_type_str(), const_cast<Relay_log_info*>(rli)->get_rpl_log_name(),
+                              (ulong) common_header->log_pos, consensus_index, consensus_sequence);
+
+
     if (error == HA_ERR_LOCK_DEADLOCK || error == HA_ERR_LOCK_WAIT_TIMEOUT ||
         (keynum = table->file->get_dup_key(error)) < 0 || !overwrite) {
       DBUG_PRINT("info", ("get_dup_key returns %d)", keynum));
@@ -12004,7 +12091,7 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
     */
     if (!get_flags(COMPLETE_ROWS_F)) {
       restore_record(table, record[1]);
-      error = unpack_current_row(rli, &m_cols, true /*is AI*/);
+      error = unpack_current_row(rli, &m_cols, (get_general_type_code() == binary_log::WRITE_ROWS_EVENT) ? true : false);
     }
 
 #ifndef DBUG_OFF
@@ -12013,49 +12100,16 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
     DBUG_DUMP("record[0] (after)", table->record[0], table->s->reclength);
 #endif
 
-    /*
-       REPLACE is defined as either INSERT or DELETE + INSERT.  If
-       possible, we can replace it with an UPDATE, but that will not
-       work on InnoDB if FOREIGN KEY checks are necessary.
+    DBUG_PRINT("info",("Deleting offending row and trying to write new one again"));
+    tmp_disable_binlog(thd);
+    error= table->file->ha_delete_row(table->record[1]);
+    reenable_binlog(thd);
 
-       I (Matz) am not sure of the reason for the last_uniq_key()
-       check as, but I'm guessing that it's something along the
-       following lines.
-
-       Suppose that we got the duplicate key to be a key that is not
-       the last unique key for the table and we perform an update:
-       then there might be another key for which the unique check will
-       fail, so we're better off just deleting the row and inserting
-       the correct row.
-     */
-    if (last_uniq_key(table, keynum) &&
-        !table->file->referenced_by_foreign_key()) {
-      DBUG_PRINT("info", ("Updating row using ha_update_row()"));
-      error = table->file->ha_update_row(table->record[1], table->record[0]);
-      switch (error) {
-        case HA_ERR_RECORD_IS_THE_SAME:
-          DBUG_PRINT("info", ("ignoring HA_ERR_RECORD_IS_THE_SAME error from"
-                              " ha_update_row()"));
-          error = 0;
-
-        case 0:
-          break;
-
-        default:
-          DBUG_PRINT("info", ("ha_update_row() returns error %d", error));
-          table->file->print_error(error, MYF(0));
-      }
-
+    if (error)
+    {
+      DBUG_PRINT("info",("ha_delete_row() returns error %d",error));
+      table->file->print_error(error, MYF(0));
       goto error;
-    } else {
-      DBUG_PRINT("info",
-                 ("Deleting offending row and trying to write new one again"));
-      if ((error = table->file->ha_delete_row(table->record[1]))) {
-        DBUG_PRINT("info", ("ha_delete_row() returns error %d", error));
-        table->file->print_error(error, MYF(0));
-        goto error;
-      }
-      /* Will retry ha_write_row() with the offending row removed. */
     }
   }
 
@@ -12066,7 +12120,8 @@ error:
 
 int Write_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
   DBUG_ASSERT(m_table != nullptr);
-  int error = write_row(rli, rbr_exec_mode == RBR_EXEC_MODE_IDEMPOTENT);
+  int error = write_row(rli, (rbr_exec_mode == RBR_EXEC_MODE_IDEMPOTENT) ||
+                             (rbr_exec_mode == RBR_EXEC_MODE_SMART), false);
 
   if (error && !thd->is_error()) {
     DBUG_ASSERT(0);
@@ -12297,6 +12352,8 @@ int Update_rows_log_event::do_after_row_operations(
 }
 
 int Update_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
+  const uchar* m_curr_row_tmp= m_curr_row;
+  const uchar* m_curr_row_end_tmp= m_curr_row_end;
   DBUG_ASSERT(m_table != nullptr);
   int error = 0;
 
@@ -12332,6 +12389,68 @@ int Update_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
 
   m_table->mark_columns_per_binlog_row_image(thd);
   error = m_table->file->ha_update_row(m_table->record[1], m_table->record[0]);
+  if(error == HA_ERR_FOUND_DUPP_KEY &&
+          rbr_exec_mode == RBR_EXEC_MODE_SMART &&
+          is_binlog_row_image_full()) {
+    TABLE *table= m_table;
+    char* key= NULL;;
+    int keynum;
+
+    slave_rows_error_report(WARNING_LEVEL, error, rli, thd, m_table,
+                            get_type_str(), const_cast<Relay_log_info*>(rli)->get_rpl_log_name(),
+                            (ulong)common_header->log_pos, consensus_index, consensus_sequence);
+    if ((keynum =table->file->get_dup_key(error)) < 0)
+    {
+      DBUG_PRINT("info", ("get_dup_key return %d", keynum));
+      table->file->print_error(error, MYF(0));
+      return error;
+    }
+    if (key == NULL)
+    {
+      key= static_cast<char*>(my_alloca(table->s->max_unique_length));
+      if (key == NULL)
+      {
+        DBUG_PRINT("info",("Can't allocate key buffer"));
+        return error;
+      }
+    }
+    key_copy((uchar*)key, table->record[0], table->key_info + keynum, 0);
+    error= table->file->ha_index_read_idx_map(table->record[1], keynum,
+                                            (const uchar*)key,
+                                            HA_WHOLE_KEY,
+                                            HA_READ_KEY_EXACT);
+
+    if (error)
+    {
+      DBUG_PRINT("info",("index_read_idx() returns %s", HA_ERR(error)));
+      table->file->print_error(error, MYF(0));
+      return error;
+    }
+
+    if (!get_flags(COMPLETE_ROWS_F))
+    {
+      restore_record(table,record[1]);
+      error= unpack_current_row(rli, &m_cols, true);
+    }
+
+    DBUG_PRINT("info",("Deleting offending row and trying to write new one again"));
+    // disable_binlog for cascade slave, such as A(master)->B(slave)->C(slave)
+    tmp_disable_binlog(thd);
+    error= table->file->ha_delete_row(table->record[1]);
+    reenable_binlog(thd);
+    if (error)
+    {
+      DBUG_PRINT("info",("ha_delete_row() returns error %d",error));
+      table->file->print_error(error, MYF(0));
+      return error;
+    }
+
+    error= HA_ERR_FOUND_DUPP_KEY;
+    m_curr_row= m_curr_row_tmp;
+    m_curr_row_end= m_curr_row_end_tmp;
+
+  }
+
   if (error == HA_ERR_RECORD_IS_THE_SAME) error = 0;
   m_table->default_column_bitmaps();
 

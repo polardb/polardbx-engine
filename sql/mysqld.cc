@@ -1191,6 +1191,9 @@ bool thread_cache_size_specified = false;
 bool host_cache_size_specified = false;
 bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
+ulonglong smart_handle_dup_key= 0;
+ulonglong smart_handle_no_key= 0;
+ulonglong smart_handle_failed= 0;
 
 /**
   Limit of the total number of prepared statements in the server.
@@ -8904,6 +8907,12 @@ SHOW_VAR status_vars[] = {
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {"Slave_last_heartbeat", (char *)&show_slave_last_heartbeat, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
+    {"Smart_handle_dup_key",     (char*) &smart_handle_dup_key, SHOW_LONGLONG,
+     SHOW_SCOPE_ALL},
+    {"Smart_handle_no_key",      (char*) &smart_handle_no_key, SHOW_LONGLONG,
+     SHOW_SCOPE_ALL},
+    {"Smart_handle_failed",      (char*) &smart_handle_failed, SHOW_LONGLONG,
+     SHOW_SCOPE_ALL},
 #ifndef DBUG_OFF
     {"Slave_rows_last_search_algorithm_used",
      (char *)&show_slave_rows_last_search_algorithm_used, SHOW_FUNC,

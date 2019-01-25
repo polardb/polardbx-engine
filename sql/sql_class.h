@@ -4452,6 +4452,12 @@ inline void my_eof(THD *thd) {
   }
 }
 
+#define tmp_disable_binlog(A)       \
+  {ulonglong tmp_disable_binlog__save_options= (A)->variables.option_bits; \
+  (A)->variables.option_bits&= ~OPTION_BIN_LOG
+
+#define reenable_binlog(A)   (A)->variables.option_bits= tmp_disable_binlog__save_options;}
+
 bool add_item_to_list(THD *thd, Item *item);
 void add_order_to_list(THD *thd, ORDER *order);
 
