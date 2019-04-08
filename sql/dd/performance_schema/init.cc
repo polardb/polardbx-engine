@@ -59,6 +59,8 @@
 #include "sql/table.h"
 #include "sql/thd_raii.h"
 
+#include "sql/dd/dd_minor_upgrade.h"
+
 namespace dd {
 class Schema;
 }  // namespace dd
@@ -100,6 +102,10 @@ bool check_perf_schema_has_correct_version(THD *thd) {
   // Stop if P_S version is same.
   uint actual_version = d->get_actual_P_S_version(thd);
 
+  dd::Minor_upgrade_ctx *ctx = dd::Minor_upgrade_ctx::instance();
+
+  uint extra_version = ctx->get_actual_extra_P_S_version(thd);
+
 #ifndef DBUG_OFF
   // Unknown version of the current server PS schema. It is used for tests.
   const uint UNKNOWN_P_S_VERSION = -1;
@@ -108,7 +114,8 @@ bool check_perf_schema_has_correct_version(THD *thd) {
   DBUG_EXECUTE_IF("test_p_s_metadata_version",
                   { actual_version = UNKNOWN_P_S_VERSION; });
 
-  return d->get_target_P_S_version() == actual_version;
+  return (d->get_target_P_S_version() == actual_version &&
+          ctx->get_target_extra_P_S_version() == extra_version);
 }
 
 /**
@@ -166,6 +173,12 @@ bool create_pfs_tables(THD *thd) {
     dd::Dictionary_impl *d = dd::Dictionary_impl::instance();
 
     ret = d->set_P_S_version(thd, d->get_target_P_S_version());
+
+    if (!ret) {
+      dd::Minor_upgrade_ctx *ctx = dd::Minor_upgrade_ctx::instance();
+      ret =
+          ctx->set_extra_P_S_version(thd, ctx->get_target_extra_P_S_version());
+    }
   }
 
   ret = dd::end_transaction(thd, ret);

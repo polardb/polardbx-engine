@@ -79,6 +79,8 @@
 #include "sql/table.h"
 #include "sql/thd_raii.h"
 
+#include "sql/dd/dd_minor_upgrade.h"
+
 namespace {
 
 unsigned int UNKNOWN_PLUGIN_VERSION = -1;
@@ -471,11 +473,16 @@ bool update_server_I_S_metadata(THD *thd) {
   // Stop if I_S version is same and no DD upgrade was done.
   uint actual_version = d->get_actual_I_S_version(thd);
 
+  // Extra I_S version check
+  dd::Minor_upgrade_ctx *upgrade_ctx = dd::Minor_upgrade_ctx::instance();
+  uint extra_version = upgrade_ctx->get_actual_extra_I_S_version(thd);
+
   // Testing to make sure we update plugins when version changes.
   DBUG_EXECUTE_IF("test_i_s_metadata_version",
                   { actual_version = UNKNOWN_PLUGIN_VERSION; });
 
-  if (d->get_target_I_S_version() == actual_version &&
+ if (d->get_target_I_S_version() == actual_version &&
+      upgrade_ctx->get_target_extra_I_S_version() == extra_version &&
       !dd::bootstrap::DD_bootstrap_ctx::instance().dd_upgrade_done())
     return false;
 
@@ -576,6 +583,12 @@ bool create_system_views(THD *thd) {
   if (!error) {
     dd::Dictionary_impl *d = dd::Dictionary_impl::instance();
     error = d->set_I_S_version(thd, d->get_target_I_S_version());
+
+    if (!error) {
+      dd::Minor_upgrade_ctx *upgrade_ctx = dd::Minor_upgrade_ctx::instance();
+      error = upgrade_ctx->set_extra_I_S_version(
+          thd, upgrade_ctx->get_target_extra_I_S_version());
+    }
   }
 
   // Restore the original character set.
