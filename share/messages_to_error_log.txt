@@ -12094,6 +12094,9 @@ ER_IB_INDEX_BUILDER_DONE
 
 start-error-number 25000
 
+ER_SERVER_UPGRADE_EXTRA_STATUS
+  eng "Server upgrade extra from '%d' to '%d' %s."
+
 ER_LIZARD
   eng "%s"
 

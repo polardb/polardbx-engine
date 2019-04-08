@@ -1089,6 +1089,9 @@ bool initialize_dd_properties(THD *thd) {
   bootstrap::DD_bootstrap_ctx::instance().set_upgraded_server_version(
       actual_server_version);
 
+  Minor_upgrade_ctx::instance()->set_extra_mvu_version(
+      Minor_upgrade_ctx::instance()->get_target_extra_mvu_version());
+
   if (!opt_initialize) {
     bool exists = false;
     bool exists_server = false;
@@ -1148,6 +1151,8 @@ bool initialize_dd_properties(THD *thd) {
       upgraded_server_version = actual_server_version;
     bootstrap::DD_bootstrap_ctx::instance().set_upgraded_server_version(
         upgraded_server_version);
+
+    Minor_upgrade_ctx::instance()->retrieve_and_set_extra_mvu_version(thd);
 
     if (DBUG_EVALUATE_IF("simulate_mysql_upgrade_skip_pending", true,
                          actual_server_version != upgraded_server_version &&
@@ -1214,6 +1219,10 @@ bool initialize_dd_properties(THD *thd) {
       }
       LogErr(INFORMATION_LEVEL, ER_SERVER_UPGRADE_FROM_VERSION,
              upgraded_server_version, MYSQL_VERSION_ID);
+
+      LogErr(INFORMATION_LEVEL, ER_SERVER_UPGRADE_FROM_VERSION,
+             Minor_upgrade_ctx::instance()->get_extra_mvu_version(),
+             Minor_upgrade_ctx::instance()->get_target_extra_mvu_version());
     }
     assert(bootstrap::DD_bootstrap_ctx::instance().is_dd_upgrade() ||
            bootstrap::DD_bootstrap_ctx::instance().is_server_upgrade());
@@ -1755,6 +1764,11 @@ bool update_versions(THD *thd, bool is_dd_upgrade_57) {
         return true;
       bootstrap::DD_bootstrap_ctx::instance().set_upgraded_server_version(
           MYSQL_VERSION_ID);
+
+      if (Minor_upgrade_ctx::instance()->save_and_set_extra_mvu_version(
+              thd,
+              Minor_upgrade_ctx::instance()->get_target_extra_mvu_version()))
+        return true;
     }
   } else {
     uint mysqld_version_lo = 0;
@@ -1787,6 +1801,8 @@ bool update_versions(THD *thd, bool is_dd_upgrade_57) {
     }
     bootstrap::DD_bootstrap_ctx::instance().set_upgraded_server_version(
         upgraded_server_version);
+
+    Minor_upgrade_ctx::instance()->retrieve_and_set_extra_mvu_version(thd);
 
     if ((mysqld_version_lo > MYSQL_VERSION_ID &&
          dd::tables::DD_properties::instance().set(thd, "MYSQLD_VERSION_LO",

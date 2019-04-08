@@ -73,6 +73,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+#include "sql/dd/dd_minor_upgrade.h"
+
 extern mysql_mutex_t LOCK_global_system_variables;
 
 constexpr char plugin_author[] = PLUGIN_AUTHOR_ORACLE;
@@ -112,7 +114,8 @@ constexpr uint8_t i_s_innodb_plugin_version_postfix = 2;
 /** I_S.innodb_* views version. It would be X.Y and X should be the server major
 version while Y is the InnoDB I_S views version, starting from 1 */
 constexpr uint64_t i_s_innodb_plugin_version =
-    (INNODB_VERSION_MAJOR << 8 | i_s_innodb_plugin_version_postfix);
+    (INNODB_VERSION_MAJOR << 8 |
+     (i_s_innodb_plugin_version_postfix + dd::EXTRA_IS_PLUGIN_VERSION));
 
 /* Check if we can hold all page types */
 static_assert(I_S_PAGE_TYPE_LAST < (1 << I_S_PAGE_TYPE_BITS),

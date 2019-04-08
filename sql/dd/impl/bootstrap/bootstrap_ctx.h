@@ -32,6 +32,8 @@
 #include "sql/dd/info_schema/metadata.h"  // IS_DD_VERSION
 #include "sql/mysqld.h"                   // opt_initialize
 
+#include "sql/dd/dd_minor_upgrade.h"
+
 class THD;
 
 namespace dd {
@@ -176,7 +178,10 @@ class DD_bootstrap_ctx {
   }
 
   bool is_server_upgrade() const {
-    return !opt_initialize && (m_upgraded_server_version < MYSQL_VERSION_ID);
+    return !opt_initialize &&
+           ((m_upgraded_server_version < MYSQL_VERSION_ID) ||
+            (Minor_upgrade_ctx::instance()->get_extra_mvu_version() !=
+             Minor_upgrade_ctx::instance()->get_target_extra_mvu_version()));
   }
 
   bool is_dd_upgrade_from_before(uint compare_actual_dd_version) const {

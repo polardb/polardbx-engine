@@ -289,6 +289,7 @@ SET(DD_SOURCES
   dd/upgrade_57/schema.cc
   dd/upgrade_57/table.cc
   dd/upgrade_57/upgrade.cc
+  dd/dd_minor_upgrade.cc
 )
 
 SET(SQL_GIS_SOURCES
