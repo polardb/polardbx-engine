@@ -182,6 +182,10 @@ init_replica
 init_replica
 init_slave
 init_slave
+inner_schema_list
+inner_schema_list
+inner_user_list
+inner_user_list
 innodb_btree_sampling
 innodb_btree_sampling
 innodb_cleanout_disable

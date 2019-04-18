@@ -1,0 +1,79 @@
+set global opt_enable_rds_priv_strategy=on;
+create database sys_db1;
+create database sys_db2;
+create database normal_db;
+create user 'sys_u0'@'%';
+create user 'sys_u1'@'%';
+create user 'normal_u0'@'%';
+create user 'normal_u1'@'%';
+grant create user on *.* to 'sys_u0'@'%';
+grant all privileges on sys_db1.* to 'sys_u0'@'%';
+grant all privileges on sys_db2.* to 'sys_u0'@'%';
+grant all privileges on normal_db.* to 'sys_u0'@'%';
+grant select, insert, create, index, drop on *.* to 'sys_u1'@'%';
+grant all privileges on sys_db1.* to 'normal_u0'@'%' with grant option;
+grant all privileges on sys_db2.* to 'normal_u0'@'%';
+grant all privileges on normal_db.* to 'normal_u0'@'%';
+grant create user on *.* to 'normal_u0'@'%';
+grant select, insert, create, index, drop on *.* to 'normal_u1'@'%' with grant option;
+grant create user on *.* to 'normal_u1'@'%';
+drop user 'sys_u0'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+use sys_db1;
+create table t(id int);
+insert into t values(1);
+commit;
+create index idx_1 on t(id);
+drop table t;
+use sys_db1;
+create table t(id int);
+insert into t values(1);
+commit;
+create index idx_1 on t(id);
+drop table t;
+use sys_db1;
+create table t(id int);
+use sys_db1;
+create table t1(id int);
+ERROR 42000: Access denied for user 'normal_u0'@'%' to database 'sys_db1'
+insert into t values(1);
+ERROR 42000: Access denied for user 'normal_u0'@'%' to database 'sys_db1'
+rollback;
+use sys_db1;
+create table t1(id int);
+ERROR 42000: Access denied for user 'normal_u1'@'%' to database 'sys_db1'
+insert into t values(1);
+ERROR 42000: Access denied for user 'normal_u1'@'%' to database 'sys_db1'
+rollback;
+use sys_db1;
+drop table t;
+use sys_db1;
+create table t(id int);
+use sys_db1;
+select * from t;
+id
+create index idx_t on t(id);
+create user 'test_u'@'%';
+grant select on sys_db1.* to 'test_u' @'%';
+drop user 'test_u'@'%';
+use sys_db1;
+drop table t;
+use sys_db1;
+create table t(id int);
+use sys_db1;
+select * from t;
+id
+create index idx_t on t(id);
+create user 'test_u'@'%';
+grant select on sys_db1.* to 'test_u' @'%';
+drop user 'test_u'@'%';
+use sys_db1;
+drop table t;
+drop database sys_db1;
+drop database sys_db2;
+drop database normal_db;
+drop user 'sys_u0'@'%';
+drop user 'sys_u1'@'%';
+drop user 'normal_u0'@'%';
+drop user 'normal_u1'@'%';
+set global opt_enable_rds_priv_strategy = OFF;

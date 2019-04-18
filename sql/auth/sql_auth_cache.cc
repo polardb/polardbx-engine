@@ -92,6 +92,8 @@
 #include <utility>
 #include <vector>
 
+#include "sql/auth/sql_guard.h"  // register_schema_access
+
 using std::make_unique;
 using std::min;
 using std::string;
@@ -123,8 +125,12 @@ struct ACL_internal_schema_registry_entry {
 
   Revision by RDS :
   - Add mysql database acl entry
+
+  Revision 2):
+  - Using dynamic array to expand ACL strategy volume easily.
 */
-static ACL_internal_schema_registry_entry registry_array[3];
+static Prealloced_array<ACL_internal_schema_registry_entry, 4> registry_array(
+    PSI_NOT_INSTRUMENTED);
 static uint m_registry_array_size = 0;
 
 MEM_ROOT global_acl_memory;
@@ -196,12 +202,14 @@ void init_acl_memory() {
 */
 void ACL_internal_schema_registry::register_schema(
     const LEX_CSTRING &name, const ACL_internal_schema_access *access) {
-  assert(m_registry_array_size < array_elements(registry_array));
+  assert(m_registry_array_size == registry_array.size());
 
   /* Not thread safe, and does not need to be. */
-  registry_array[m_registry_array_size].m_name = &name;
-  registry_array[m_registry_array_size].m_access = access;
-  m_registry_array_size++;
+  /**
+    Register schema ACL into map instead of array,
+    but still keep the array container in order to go back easily.
+  */
+  im::register_schema_access(std::string(name.str, name.length), access);
 }
 
 /**

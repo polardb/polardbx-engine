@@ -1627,12 +1627,12 @@ const ACL_internal_schema_access *get_cached_schema_access(
   if (grant_internal_info) {
     if (!grant_internal_info->m_schema_lookup_done) {
       grant_internal_info->m_schema_access =
-          ACL_internal_schema_registry::lookup(schema_name);
+          ACL_internal_schema_registry::hash_lookup(schema_name);
       grant_internal_info->m_schema_lookup_done = true;
     }
     return grant_internal_info->m_schema_access;
   }
-  return ACL_internal_schema_registry::lookup(schema_name);
+  return ACL_internal_schema_registry::hash_lookup(schema_name);
 }
 
 /**

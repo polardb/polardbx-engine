@@ -1,0 +1,138 @@
+connect(conn_root, localhost, root, , );
+connection conn_root;
+
+set global opt_enable_rds_priv_strategy=on;
+create database sys_db1;
+create database sys_db2;
+create database normal_db;
+
+create user 'sys_u0'@'%';
+create user 'sys_u1'@'%';
+create user 'normal_u0'@'%';
+create user 'normal_u1'@'%';
+grant create user on *.* to 'sys_u0'@'%';
+grant all privileges on sys_db1.* to 'sys_u0'@'%';
+grant all privileges on sys_db2.* to 'sys_u0'@'%';
+grant all privileges on normal_db.* to 'sys_u0'@'%';
+
+grant select, insert, create, index, drop on *.* to 'sys_u1'@'%';
+
+grant all privileges on sys_db1.* to 'normal_u0'@'%' with grant option;
+grant all privileges on sys_db2.* to 'normal_u0'@'%';
+grant all privileges on normal_db.* to 'normal_u0'@'%';
+grant create user on *.* to 'normal_u0'@'%';
+
+grant select, insert, create, index, drop on *.* to 'normal_u1'@'%' with grant option;
+grant create user on *.* to 'normal_u1'@'%';
+
+connect(conn_sys_u0, localhost, sys_u0, , );
+connect(conn_sys_u1, localhost, sys_u1, , );
+connect(conn_normal_u0, localhost, normal_u0, , );
+connect(conn_normal_u1, localhost, normal_u1, , );
+
+#
+#case 1: inner user cann't be dropped
+#
+connection conn_sys_u0;
+--error ER_RESERVED_USER_OR_PRIVS
+drop user 'sys_u0'@'%';
+
+
+#
+#case 2: inner can operate inner schema
+#
+connection conn_sys_u0;
+use sys_db1;
+create table t(id int);
+insert into t values(1);
+commit;
+create index idx_1 on t(id);
+drop table t;
+
+connection conn_sys_u1;
+use sys_db1;
+create table t(id int);
+insert into t values(1);
+commit;
+create index idx_1 on t(id);
+drop table t;
+
+#
+#case 2: normal user can't operate inner schema
+#
+connection conn_root;
+use sys_db1;
+create table t(id int);
+
+connection conn_normal_u0;
+use sys_db1;
+--error ER_DBACCESS_DENIED_ERROR
+create table t1(id int);
+--error ER_DBACCESS_DENIED_ERROR
+insert into t values(1);
+rollback;
+
+connection conn_normal_u1;
+use sys_db1;
+--error ER_DBACCESS_DENIED_ERROR
+create table t1(id int);
+--error ER_DBACCESS_DENIED_ERROR
+insert into t values(1);
+rollback;
+
+connection conn_root;
+use sys_db1;
+drop table t;
+#
+#case 3: normal user can select/index/grant inner schema
+#
+connection conn_root;
+use sys_db1;
+create table t(id int);
+
+connection conn_normal_u0;
+use sys_db1;
+select * from t;
+create index idx_t on t(id);
+
+create user 'test_u'@'%';
+grant select on sys_db1.* to 'test_u' @'%';
+drop user 'test_u'@'%';
+
+connection conn_root;
+use sys_db1;
+drop table t;
+
+connection conn_root;
+use sys_db1;
+create table t(id int);
+
+connection conn_normal_u1;
+use sys_db1;
+select * from t;
+create index idx_t on t(id);
+
+create user 'test_u'@'%';
+grant select on sys_db1.* to 'test_u' @'%';
+drop user 'test_u'@'%';
+
+connection conn_root;
+use sys_db1;
+drop table t;
+
+connection conn_root;
+drop database sys_db1;
+drop database sys_db2;
+drop database normal_db;
+
+drop user 'sys_u0'@'%';
+drop user 'sys_u1'@'%';
+drop user 'normal_u0'@'%';
+drop user 'normal_u1'@'%';
+
+set global opt_enable_rds_priv_strategy = OFF;
+disconnect conn_root;
+disconnect conn_sys_u0;
+disconnect conn_sys_u1;
+disconnect conn_normal_u0;
+disconnect conn_normal_u1;

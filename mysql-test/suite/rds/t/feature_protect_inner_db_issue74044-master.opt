@@ -1,0 +1,2 @@
+--inner_schema_list='sys_db1,sys_db2'
+--inner_user_list='sys_u0,sys_u1'

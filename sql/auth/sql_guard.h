@@ -454,6 +454,47 @@ class Mysql_internal_schema_access : public ACL_internal_schema_access {
   static Mysql_internal_schema_access *instance();
 };
 
-} /* namespace im */
+/**
+  The inner database access control:
 
+   - Inner databases can be set by read only variable "INNER_SCHEMA_LIST"
+   - Only inner or SUPER_ACL user can operate these DB if granted privs,
+     other account can't operate these DB even though granted except
+     SELECT/INDEX/GRANT ACLs.
+*/
+class Inner_schema_access : public ACL_internal_schema_access {
+ public:
+  Inner_schema_access() {}
+
+  ~Inner_schema_access() {}
+
+  ACL_internal_access_result check(ulong want_access, ulong *save_priv, bool any_combination_will_do) const override;
+
+  const ACL_internal_table_access *lookup(const char *name) const override;
+
+  static Inner_schema_access *instance();
+};
+
+extern char *inner_schema_list_str;
+
+/**
+  Register mysql and inner database according to global variable
+  INNER_SCHEMA_LIST.
+
+  @param[in]  bootstrap   Initialize or start MYSQLD
+
+  @retval     false       Success
+  @retval     true        Failure
+*/
+extern bool ACL_inner_schema_register(bool bootstrap);
+/**
+  Register schema access control.
+
+  @param[in]  schema      Database name
+  @param[in]  access      ACL strategy
+*/
+extern void register_schema_access(const std::string &schema,
+                                   const ACL_internal_schema_access *access);
+
+} /* namespace im */
 #endif

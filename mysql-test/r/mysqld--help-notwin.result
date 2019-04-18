@@ -675,6 +675,10 @@ The following options may be given as the first argument:
  --initialize-insecure 
  Create the default database and exit. Create a super user
  with empty password.
+ --inner-schema-list=name 
+ Inner schema string split by ','
+ --inner-user-list=name 
+ Inner account string split by ','
  --interactive-timeout=# 
  The number of seconds the server waits for activity on an
  interactive connection before closing it
@@ -2250,6 +2254,8 @@ init-replica
 init-slave 
 initialize TRUE
 initialize-insecure TRUE
+inner-schema-list (No default value)
+inner-user-list (No default value)
 interactive-timeout 28800
 internal-tmp-mem-storage-engine TempTable
 join-buffer-size 262144

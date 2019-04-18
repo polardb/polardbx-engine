@@ -8334,6 +8334,8 @@ int mysqld_main(int argc, char **argv)
 
   im::statement_outline_init(opt_initialize);
 
+  im::ACL_inner_schema_register(opt_initialize);
+
   im::internal_account_ctx_init();
 
   (void)RUN_HOOK(server_state, after_recovery, (nullptr));

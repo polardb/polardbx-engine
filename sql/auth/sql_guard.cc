@@ -31,6 +31,8 @@
   4. Protect internal account role that cann't modify or grant to normal user
 */
 #include "sql/auth/sql_guard.h"
+
+#include "map_helpers.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/field.h"
 
@@ -51,6 +53,25 @@ static int guard_privs[4] = {
     MYSQL_USER_FIELD_SHUTDOWN_PRIV, MYSQL_USER_FIELD_FILE_PRIV,
     MYSQL_USER_FIELD_SUPER_PRIV, MYSQL_USER_FIELD_CREATE_TABLESPACE_PRIV,
 };
+
+/* Global variable inner_schema_list string pointer */
+char *inner_schema_list_str = nullptr;
+/* Separator of schema within inner_schema_list */
+static constexpr const auto SEPARATOR = ",";
+
+/* Compare the schema name with case insensitive */
+struct Schema_comparator {
+  bool operator()(const std::string &lhs, const std::string &rhs) const {
+    return (my_strcasecmp(system_charset_info, lhs.c_str(), rhs.c_str()) == 0);
+  }
+};
+
+/* All the database/schema ACL access container */
+typedef malloc_unordered_map<std::string, const ACL_internal_schema_access *,
+                             std::hash<std::string>, Schema_comparator>
+    ACL_internal_schema_map;
+/* Here replace the ACL registry array. */
+static ACL_internal_schema_map *registry_map = nullptr;
 
 /**
   The constructor
@@ -525,15 +546,11 @@ Internal_guard_strategy::~Internal_guard_strategy() {
 }
 
 void internal_guard_strategy_init(bool bootstrap) {
+  void *ptr = my_malloc(key_memory_acl_cache, sizeof(ACL_internal_schema_map),
+                        MYF(MY_WME | ME_FATALERROR));
+  registry_map = new (ptr) ACL_internal_schema_map(key_memory_acl_cache);
+
   if (!bootstrap) {
-    /**
-      System table structure protecting strategy
-    */
-
-    /* mysql database acl */
-    ACL_internal_schema_registry::register_schema(
-        MYSQL_SCHEMA_NAME, Mysql_internal_schema_access::instance());
-
     /**
       Internal account protecting strategy
     */
@@ -555,7 +572,12 @@ void internal_guard_strategy_init(bool bootstrap) {
 }
 
 void internal_guard_strategy_shutdown() {
-  // nothing to do
+  if (registry_map) {
+    registry_map->clear();
+    registry_map->~ACL_internal_schema_map();
+    my_free(registry_map);
+    registry_map = nullptr;
+  }
 }
 
 /* Lookup the entity_guard through object_name */
@@ -627,6 +649,110 @@ Mysql_internal_schema_access *Mysql_internal_schema_access::instance() {
   return &schema_access;
 }
 
+Inner_schema_access *Inner_schema_access::instance() {
+  static Inner_schema_access schema_access;
+  return &schema_access;
+}
+
+/**
+ */
+ACL_internal_access_result Inner_schema_access::check(ulong want_access,
+                                                      ulong *,  bool) const {
+  /**
+    Relax SELECT/INDEX/GRANT privileges.
+  */
+  const ulong forbidden_privs =
+      DB_ACLS & (~(SELECT_ACL | INDEX_ACL | GRANT_ACL));
+
+  THD *thd = current_thd;
+  /**
+    If SUPER_ACL user, Inner user or not enable rds privilege strategy,
+    check the ACL continually.
+  */
+  if ((thd && (thd->security_context()->check_access(SUPER_ACL) ||
+               (thd->security_context()->account_attr.get_acl() &
+                Internal_account_config::INNER_DB_ACL))) ||
+      !opt_enable_rds_priv_strategy)
+    return ACL_INTERNAL_ACCESS_CHECK_GRANT;
+
+  if (want_access & forbidden_privs) return ACL_INTERNAL_ACCESS_DENIED;
+
+  return ACL_INTERNAL_ACCESS_CHECK_GRANT;
+}
+const ACL_internal_table_access *Inner_schema_access::lookup(
+    const char *) const {
+  /* Didn't set ACL on per table for inner database. */
+  return nullptr;
+}
+
+/**
+  Register mysql and inner database according to global variable
+  INNER_SCHEMA_LIST.
+
+  @param[in]  bootstrap   Initialize or start MYSQLD
+
+  @retval     false       Success
+  @retval     true        Failure
+*/
+bool ACL_inner_schema_register(bool bootstrap) {
+  std::string::size_type pos1, pos2;
+
+  if (bootstrap) return false;
+
+  /* mysql database acl register */
+  ACL_internal_schema_registry::register_schema(
+      MYSQL_SCHEMA_NAME, Mysql_internal_schema_access::instance());
+
+  /* Inner database acl register */
+  if (inner_schema_list_str == nullptr || inner_schema_list_str[0] == '\0')
+    return false;
+
+  std::string t_str(inner_schema_list_str);
+  pos1 = 0;
+  pos2 = t_str.find(SEPARATOR);
+  while (pos2 != std::string::npos) {
+    register_schema_access(t_str.substr(pos1, pos2 - pos1),
+                        Inner_schema_access::instance());
+    pos1 = pos2 + strlen(SEPARATOR);
+    pos2 = t_str.find(SEPARATOR, pos1);
+  }
+  register_schema_access(t_str.substr(pos1), Inner_schema_access::instance());
+
+  return false;
+}
+
+/**
+  Register schema access control.
+
+  @param[in]  schema      Database name
+  @param[in]  access      ACL strategy
+*/
+void register_schema_access(const std::string &schema,
+                            const ACL_internal_schema_access *access) {
+  if (registry_map)
+    registry_map->emplace(schema, access);
+  else
+    assert(0);
+}
+
 } /* namespace im */
 
+/**
+  Search the schema access by name.
+*/
+const ACL_internal_schema_access *ACL_internal_schema_registry::hash_lookup(
+    const char *name) {
+  assert(name != NULL);
+
+  if (im::registry_map) {
+    auto it = im::registry_map->find(std::string(name));
+    if (it == im::registry_map->end())
+      return NULL;
+    else
+      return it->second;
+  } else {
+    assert(0);
+  }
+  return NULL;
+}
 /// @} (end of group Internal Account Management)

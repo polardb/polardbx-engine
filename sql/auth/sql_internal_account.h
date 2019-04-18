@@ -53,16 +53,19 @@ namespace im {
 class Internal_account_config {
  public:
   /* Predefined Internal ACLs */
-  static constexpr const ulonglong NO_ACL = 1L << 2;
+  static constexpr const ulonglong NO_ACL = 1L << 3;
 
   static constexpr const ulonglong MAINTENACE_ACL = 1L << 0;
   static constexpr const ulonglong KILL_ACL = 1L << 1;
+  /* Allow to operate inner db if granted corresponding privileges */
+  static constexpr const ulonglong INNER_DB_ACL = 1L << 2;
 
   /* Predefined Internal Account Type */
   enum User_type {
     UNKNOWN_USER = -1,    // For normal user
     MAINTENACE_USER = 0,  // Maintenance user that have all privileges
     KILL_USER,            // Special user who can kill all non-super connections
+    INNER_USER,           // User specific allowed Inner DB operation
     LAST_USER             // Last user for ending enum
   };
 
@@ -395,7 +398,7 @@ struct ST_ACCOUNT_ATTR {
     m_account_type = IA_type::UNKNOWN_USER;
     m_account_access = Internal_account_config::NO_ACL;
   }
-  
+
   ulonglong get_acl() { return m_account_access; }
   IA_type get_type() { return m_account_type; }
 };

@@ -153,6 +153,11 @@ static bool update_kill_user(sys_var *, THD *, enum_var_type) {
   return (false);
 }
 
+static bool update_inner_user(sys_var *, THD *, enum_var_type) {
+  Internal_account_ctx::instance()->build_array(IA_type::INNER_USER);
+  return (false);
+}
+
 static Sys_var_charptr Sys_rds_kill_user_list(
     "rds_kill_user_list", "user can kill non-super user, string split by ','",
     GLOBAL_VAR(ia_config.user_str[IA_type::KILL_USER]),
@@ -530,6 +535,18 @@ static Sys_var_charptr Sys_rotate_log_table_last_name(
     READ_ONLY GLOBAL_VAR(im::rotate_log_table_last_name_ptr),
     CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(rotate_log_table_last_name),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
+
+static Sys_var_charptr Sys_rds_inner_schema_list(
+    "inner_schema_list", "Inner schema string split by ','",
+    READ_ONLY GLOBAL_VAR(im::inner_schema_list_str), CMD_LINE(REQUIRED_ARG),
+    IN_FS_CHARSET, DEFAULT(0), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL),
+    ON_UPDATE(0));
+
+static Sys_var_charptr Sys_rds_inner_user_list(
+    "inner_user_list", "Inner account string split by ','",
+    GLOBAL_VAR(ia_config.user_str[IA_type::INNER_USER]), CMD_LINE(REQUIRED_ARG),
+    IN_FS_CHARSET, DEFAULT(0), &Plock_internal_account_string, NOT_IN_BINLOG,
+    ON_CHECK(NULL), ON_UPDATE(update_inner_user));
 
 /* RDS DEFINED */
 

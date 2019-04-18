@@ -60,10 +60,19 @@ mysql_mutex_t LOCK_internal_account_string;
 Internal_account_config ia_config;
 
 /* The static struct for looping and checking account type */
+/**
+  Revision history:
+
+   - maintain user has inner DB acl.
+*/
 static const struct ST_ACCOUNT_INFO internal_accounts_info[] = {
     {"Maintain_user", IA_type::MAINTENACE_USER,
-     Internal_account_config::MAINTENACE_ACL, true},
+     Internal_account_config::MAINTENACE_ACL |
+         Internal_account_config::INNER_DB_ACL,
+     true},
     {"Kill_user", IA_type::KILL_USER, Internal_account_config::KILL_ACL, false},
+    {"Inner_user", IA_type::INNER_USER, Internal_account_config::INNER_DB_ACL,
+     true},
     {"", IA_type::LAST_USER, Internal_account_config::NO_ACL, false}};
 
 /* Begin: Class Internal_account_config member function definition */
@@ -210,8 +219,8 @@ ulonglong Internal_account_ctx::active_connection_count(IA_type type) {
 */
 bool Internal_account_ctx::protected_account(const char *account) {
   const ST_ACCOUNT_INFO *st = internal_accounts_info;
-  while (st->type != IA_type::LAST_USER && st->need_protected == true) {
-    if (exist_account(st->type, account)) {
+  while (st->type != IA_type::LAST_USER) {
+    if (st->need_protected == true && exist_account(st->type, account)) {
       return true;
     }
     st++;
