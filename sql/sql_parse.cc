@@ -1952,6 +1952,8 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         PPI_STATEMENT_CALL(end_statement)
         (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
+        mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
+
         /* PSI end */
         MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
         thd->m_statement_psi = NULL;
@@ -2325,6 +2327,14 @@ done:
   mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_COMMAND_END), command,
                      command_name[command].str);
 
+  PPI_STATEMENT_CALL(end_statement)
+        (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
+
+  /* RDS query audit only interested in query.  */
+  if (command == COM_QUERY) {
+    mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
+  }
+
   log_slow_statement(thd, query_start_status_ptr);
 
   THD_STAGE_INFO(thd, stage_cleaning_up);
@@ -2333,9 +2343,6 @@ done:
   thd->set_command(COM_SLEEP);
   thd->proc_info = 0;
   thd->lex->sql_command = SQLCOM_END;
-
-  PPI_STATEMENT_CALL(end_statement)
-  (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
   /* Performance Schema Interface instrumentation, end */
   MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());

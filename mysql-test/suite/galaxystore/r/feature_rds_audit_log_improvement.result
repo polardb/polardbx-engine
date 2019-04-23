@@ -1,0 +1,23 @@
+CREATE USER 'test'@'localhost';
+GRANT SELECT ON *.* TO 'test'@'localhost';
+SHOW VARIABLES LIKE 'rds_audit_log_enabled';
+Variable_name	Value
+rds_audit_log_enabled	OFF
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+there is no audit log generated
+select 1;
+1
+1
+select 1;
+1
+1
+select 1;
+1
+1
+set global rds_audit_log_flush = on;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+set global rds_audit_log_flush = on;
+set global rds_audit_log_enabled = default;
+DROP USER 'test'@'localhost';

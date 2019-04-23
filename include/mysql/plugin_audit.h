@@ -57,6 +57,8 @@ typedef enum {
   MYSQL_AUDIT_STORED_PROGRAM_CLASS = 10,
   MYSQL_AUDIT_AUTHENTICATION_CLASS = 11,
   MYSQL_AUDIT_MESSAGE_CLASS = 12,
+  MYSQL_AUDIT_RDS_CONNECTION_CLASS = 13, /* Used for RDS Audit Log */
+  MYSQL_AUDIT_RDS_QUERY_CLASS = 14, /* Used for RDS Audit Log */
   /* This item must be last in the list. */
   MYSQL_AUDIT_CLASS_MASK_SIZE
 } mysql_event_class_t;
@@ -628,6 +630,142 @@ struct mysql_event_message {
   mysql_event_message_key_value_t *key_value_map;
   /** Key value map length. */
   size_t key_value_map_length;
+};
+
+/**
+  @enum mysql_event_rds_connection_subclass_t
+
+  Events for MYSQL_AUDIT_RDS_CONNECTION_CLASS event class.
+*/
+typedef enum {
+  /** occurs after authentication phase is completed. */
+  MYSQL_AUDIT_RDS_CONNECTION_CONNECT = 1 << 0,
+  /** occurs after connection is terminated. */
+  MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT = 1 << 1
+} mysql_event_rds_connection_subclass_t;
+
+#define MYSQL_AUDIT_RDS_CONNECTION_ALL     \
+  (MYSQL_AUDIT_RDS_CONNECTION_CONNECT |    \
+   MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT)
+
+/**
+  @struct mysql_event_rds_connection
+
+  Structure for the MYSQL_AUDIT_RDS_CONNECTION_CLASS event class.
+*/
+struct mysql_event_rds_connection {
+  /** Event subclass. */
+  mysql_event_rds_connection_subclass_t event_subclass;
+  /** Current status of the connection. */
+  int error_code;
+  /** Thread id. */
+  unsigned long thread_id;
+  /** Super user */
+  bool is_super;
+  /** User name of this connection. */
+  MYSQL_LEX_CSTRING user;
+  /** Connection host. */
+  MYSQL_LEX_CSTRING host;
+  /** IP of the connection. */
+  MYSQL_LEX_CSTRING ip;
+  /** Database name specified at connection time. */
+  MYSQL_LEX_CSTRING db;
+  /** Connection type:
+        - 0 Undefined
+        - 1 TCP/IP
+        - 2 Socket
+        - 3 Named pipe
+        - 4 SSL
+        - 5 Shared memory
+  */
+  int connection_type;
+  /** Command start time (point) */
+  unsigned long long start_utime;
+  /** Total execution time */
+  unsigned long long cost_utime;
+  MYSQL_LEX_CSTRING message;
+};
+
+/**
+  @enum mysql_event_rds_query_subclass_t
+
+  Events for MYSQL_AUDIT_RDS_QUERY_CLASS event class.
+
+  Event handler can not terminate an event unless stated
+  explicitly.
+*/
+typedef enum {
+  /** occurs after transmitting a resultset to the user. */
+  MYSQL_AUDIT_RDS_QUERY_RESULT = 1 << 0,
+} mysql_event_rds_query_subclass_t;
+
+#define MYSQL_AUDIT_RDS_QUERY_ALL            \
+  (MYSQL_AUDIT_RDS_QUERY_RESULT)
+
+/**
+  @struct mysql_event_rds_query
+
+  Structure for MYSQL_AUDIT_RDS_QUERY_CLASS event class.
+*/
+struct mysql_event_rds_query {
+  /** Event subclass */
+  mysql_event_rds_query_subclass_t event_subclass;
+  /** Error code */
+  int error_code;
+  /** Thread id*/
+  unsigned long thread_id;
+  /** Super user */
+  bool is_super;
+  /** User name */
+  MYSQL_LEX_CSTRING user;
+  /** External user name */
+  MYSQL_LEX_CSTRING external_user;
+  /** IP */
+  MYSQL_LEX_CSTRING ip;
+  /** Host */
+  MYSQL_LEX_CSTRING host;
+ /** Database name */
+  MYSQL_LEX_CSTRING db;
+  /** MySQL command */
+  MYSQL_LEX_CSTRING command;
+  /** Command start time (point) */
+  unsigned long long start_utime;
+  /* SQL comamnd */
+  enum_sql_command sql_command;
+  /* SQL command name */
+  MYSQL_LEX_CSTRING sql_command_name;
+  /** SQL query text */
+  MYSQL_LEX_CSTRING query;
+  /** SQL query charset */
+  CHARSET_INFO *query_charset;
+  /** Lock time (interval) */
+  unsigned long long lock_utime;
+  /** Total execution time, include lock time (interval) */
+  unsigned long long cost_utime;
+  /** Transaction time (interval) */
+  unsigned long long trx_utime;
+  /** Examnied rows count */
+  unsigned long long examined_rows;
+  /** Update rows count */
+  unsigned long long updated_rows;
+  /** Sent rows count */
+  unsigned long long sent_rows;
+   /** Memory used by thread */
+  unsigned long long memory_used;
+  /** Memory used by query */
+  unsigned long long query_memory_used;
+  /** Logical read count (InnoDB) */
+  unsigned long long logical_reads;
+  /** Physical sync read count (InnoDB) */
+  unsigned long long physical_sync_reads;
+  /** Physical async read count (InnoDB) */
+  unsigned long long physical_async_reads;
+  /** Temporary tables size created by user */
+  unsigned long long temp_user_table_size;
+  /** Temporary table size within query. e.g using temporary in explain */
+  unsigned long long temp_sort_table_size;
+  /** Temporary file size within query. e.g using filesort in explain */
+  unsigned long long temp_sort_file_size;
 };
 
 #endif

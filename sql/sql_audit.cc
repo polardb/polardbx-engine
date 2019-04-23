@@ -44,6 +44,7 @@
 #include "mysql/psi/psi_base.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+#include "sql/auth/auth_acls.h"
 #include "sql/auto_thd.h"  // Auto_THD
 #include "sql/current_thd.h"
 #include "sql/error_handler.h"  // Internal_error_handler
@@ -58,6 +59,8 @@
 #include "sql/table.h"
 #include "sql_string.h"
 #include "thr_mutex.h"
+
+#include "ppi/ppi_transaction.h" // PPI_TRANSACTION_CALL
 
 /**
   @class Audit_error_handler
@@ -982,6 +985,127 @@ int mysql_audit_notify(THD *thd, mysql_event_message_subclass_t subclass,
 
   return event_class_dispatch_error(thd, MYSQL_AUDIT_MESSAGE_CLASS,
                                     subclass_name, &event);
+}
+
+int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
+                       const char *subclass_name) {
+
+  mysql_event_rds_connection event;
+  char user_buff[MAX_USER_HOST_SIZE];
+  ulonglong current_utime;
+  Security_context *sctx;
+
+  DBUG_ASSERT(thd);
+
+  if (mysql_audit_acquire_plugins(thd, MYSQL_AUDIT_RDS_CONNECTION_CLASS,
+                                  static_cast<unsigned long>(subclass)))
+    return 0;
+
+  current_utime = my_micro_time();
+  event.event_subclass = subclass;
+  event.error_code =
+    thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
+  event.thread_id = thd->thread_id();
+  sctx = thd->security_context();
+  event.is_super = sctx->check_access(SUPER_ACL);
+  event.user.str = user_buff;
+  event.user.length = make_user_name(sctx, user_buff);
+  event.host = sctx->host();
+  event.ip = sctx->ip();
+  event.db = thd->db();
+  event.connection_type = thd->get_vio_type();
+  event.start_utime = thd->start_utime;
+  event.cost_utime = (current_utime - thd->start_utime);
+
+  if (subclass == MYSQL_AUDIT_RDS_CONNECTION_CONNECT) {
+    if (event.error_code == 0) {
+      event.message = { C_STRING_WITH_LEN("login success!") };
+    } else {
+      event.message = { C_STRING_WITH_LEN("login failed!") };
+    }
+  } else if (subclass == MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT) {
+    event.message = { C_STRING_WITH_LEN("logout!") };
+  }
+
+  Ignore_event_error_handler handler(thd, subclass_name);
+
+  return handler.get_result(event_class_dispatch_error(
+      thd, MYSQL_AUDIT_RDS_CONNECTION_CLASS, subclass_name, &event));
+}
+
+int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
+                       const char *subclass_name) {
+  mysql_event_rds_query event;
+  char user_buff[MAX_USER_HOST_SIZE];
+  ulonglong current_utime;
+  Security_context *sctx;
+
+  DBUG_ASSERT(thd);
+  // DBUG_ASSERT(thd->get_command() == COM_QUERY);
+
+  if (mysql_audit_acquire_plugins(thd, MYSQL_AUDIT_RDS_QUERY_CLASS,
+                                  static_cast<unsigned long>(subclass)))
+    return 0;
+
+  current_utime = my_micro_time();
+  event.event_subclass = subclass;
+  event.error_code =
+    thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
+  event.thread_id = thd->thread_id();
+
+  sctx = thd->security_context();
+  event.is_super = sctx->check_access(SUPER_ACL);
+
+  event.user.str = user_buff;
+  event.user.length = make_user_name(sctx, user_buff);
+  event.external_user = sctx->external_user();
+  event.ip = sctx->ip();
+  event.host = sctx->host();
+  event.db = thd->db();
+  event.start_utime = thd->start_utime;
+  event.sql_command = thd->lex->sql_command;
+  event.sql_command_name = sql_statement_names[thd->lex->sql_command];
+
+  thd_get_audit_query(thd, &event.query,
+                      (const CHARSET_INFO **)&event.query_charset);
+
+  event.lock_utime = (thd->utime_after_lock - thd->start_utime);
+  event.cost_utime = (current_utime - thd->start_utime);
+  event.examined_rows = (ulonglong) thd->get_examined_row_count();
+
+  /*
+    This could be -1 under some circumstances, check comments for
+    THD::get_row_count_func().
+  */
+  longlong updated_rows = thd->get_row_count_func();
+  event.updated_rows = updated_rows < 0 ? 0 : updated_rows;
+  event.sent_rows = (ulonglong) thd->get_sent_row_count();
+
+  PPI_transaction_stat ppi_trx_stat;
+  ppi_trx_stat.reset();
+  PPI_TRANSACTION_CALL(get_transaction_stat)(thd->ppi_thread, &ppi_trx_stat);
+
+  if (ppi_trx_stat.state == PPI_TRANSACTION_ACTIVE) {
+    event.trx_utime = my_micro_time() - ppi_trx_stat.start_time;
+  } else {
+    event.trx_utime = 0;
+  }
+
+  event.memory_used = 0;
+  event.query_memory_used = 0;
+
+  struct PPI_stat *ppi_stat = thd->ppi_statement_stat.get();
+  event.logical_reads = ppi_stat->logical_reads;
+  event.physical_sync_reads = ppi_stat->physical_reads;
+  event.physical_async_reads = ppi_stat->physical_async_reads;
+  event.temp_user_table_size = 0;
+  event.temp_sort_table_size = 0;
+  event.temp_sort_file_size = 0;
+
+  Ignore_event_error_handler handler(thd, subclass_name);
+
+  return handler.get_result(event_class_dispatch_error(
+      thd, MYSQL_AUDIT_RDS_QUERY_CLASS, subclass_name, &event));
 }
 
 /**

@@ -1,0 +1,69 @@
+# rds_audit variables hidden
+CREATE USER test@localhost;
+GRANT SELECT ON *.* to test@localhost;
+connect(normal_user, localhost, test, , test);
+connection normal_user;
+--replace_column 2 #
+show variables like '%rds_audit%';
+
+# rds_audit variables show
+connection default;
+--replace_column 2 #
+show variables like '%rds_audit%';
+
+set global rds_audit_log_enabled= on;
+set global rds_audit_log_row_limit = 3;
+let $MYSQLD_DATADIR= `select @@datadir`;
+--disable_query_log
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+eval set global rds_audit_log_dir='$MYSQLD_DATADIR';
+--enable_query_log
+
+create user xx1@localhost;
+grant select on  *.* to  xx1@localhost;
+
+# conn1: write audit log
+connect(conn1, localhost, xx1);
+select 1;
+select 2;
+select 3;
+
+# this sql will be ignored because row_num > rdsaudit_row_limit
+select 4;
+--sleep 1
+
+connection default;
+# flush audit logs
+set global rds_audit_log_flush = on;
+--let $log_name1 = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'RDS_AUDIT_CURRENT_LOG_ROW';
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+
+# super user sql
+select 100;
+
+# flush audit logs again
+set global rds_audit_log_flush = on;
+--let $log_name2 = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'RDS_AUDIT_CURRENT_LOG_ROW';
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+
+# conn1: write audit log
+connection conn1;
+select 5;
+select 6;
+
+connection default;
+# flush audit logs
+set global rds_audit_log_flush = on;
+--let $log_name3 = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'RDS_AUDIT_CURRENT_LOG_ROW';
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+
+drop user test@localhost;
+drop user xx1@localhost;
+set global rds_audit_log_row_limit = default;
+set global rds_audit_log_enabled = default;
