@@ -36,6 +36,9 @@
 #include "my_sqlcommand.h"
 #include "plugin_audit_message_types.h"
 
+LEX_STRING *thd_get_rds_audit_event_buf(MYSQL_THD thd);
+void thd_set_rds_audit_event_buf(MYSQL_THD thd, LEX_STRING *event_buf);
+
 #define MYSQL_AUDIT_INTERFACE_VERSION 0x0401
 
 /**

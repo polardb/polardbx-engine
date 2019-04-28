@@ -1,8 +1,6 @@
 SET GLOBAL rds_audit_log_enabled = ON;
 SET GLOBAL rds_audit_log_dir = '/tmp';
 ERROR HY000: Variable 'rds_audit_log_dir' is a read only variable
-SET rds_audit_log_event_buffer = 'xxxx';
-ERROR HY000: Variable 'rds_audit_log_event_buffer' is a read only variable
 SET GLOBAL rds_audit_log_buffer_size = 16*1024*1024;
 SET GLOBAL rds_audit_log_policy = 'LOGINS';
 SET GLOBAL rds_audit_log_connection_policy = 'ERRORS';

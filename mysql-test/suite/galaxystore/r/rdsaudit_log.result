@@ -5,7 +5,6 @@ rds_audit_log_buffer_size	#
 rds_audit_log_connection_policy	#
 rds_audit_log_dir	#
 rds_audit_log_enabled	#
-rds_audit_log_event_buffer	#
 rds_audit_log_event_buffer_size	#
 rds_audit_log_flush	#
 rds_audit_log_format	#

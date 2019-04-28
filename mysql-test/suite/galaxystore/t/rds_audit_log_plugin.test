@@ -4,8 +4,6 @@ SET GLOBAL rds_audit_log_enabled = ON;
 ## Test readonly variables
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
 SET GLOBAL rds_audit_log_dir = '/tmp';
---error ER_INCORRECT_GLOBAL_LOCAL_VAR
-SET rds_audit_log_event_buffer = 'xxxx';
 
 ## Test other variables
 SET GLOBAL rds_audit_log_buffer_size = 16*1024*1024;

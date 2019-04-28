@@ -573,6 +573,7 @@ THD::THD(bool enable_plugins)
   /* Create the hash table to save the last CURRVAL value of sequence table */
   seq_thd_hash = new Sequence_last_value_hash(system_charset_info,
                                               key_memory_sequence_last_value);
+  rds_audit_event_buf = NULL;
 
   recycle_state = new im::recycle_bin::Recycle_state();
   m_extra_desc.reset();

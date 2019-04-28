@@ -351,6 +351,8 @@ typedef struct {
     long long num;
   } value;
 } mysql_event_message_key_value_t;
+LEX_STRING *thd_get_rds_audit_event_buf(void * thd);
+void thd_set_rds_audit_event_buf(void * thd, LEX_STRING *event_buf);
 typedef enum {
   MYSQL_AUDIT_GENERAL_CLASS = 0,
   MYSQL_AUDIT_CONNECTION_CLASS = 1,

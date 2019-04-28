@@ -4203,6 +4203,14 @@ private:
   */
   bool secondary_storage_engine_eligible() const;
 
+  LEX_STRING *get_rds_audit_event_buf() {
+    return rds_audit_event_buf;
+  }
+
+  void set_rds_audit_event_buf(LEX_STRING *event_buf) {
+    rds_audit_event_buf = event_buf;
+  }
+
  private:
   /**
     This flag tells if a secondary storage engine can be used to
@@ -4226,6 +4234,12 @@ private:
 
   /** Get returning lex */
   im::Lex_returning *get_lex_returning() { return lex_returning.get(); }
+
+  /* This member point to the buffer which is used to serialized rds audit
+  event, the buffer is allocated and freed by rds audit log plugin.
+  TODO This is a temporary workaround fix for memory leak, we don't want
+  expose the detail of rds audit log plugin to THD, or vice versa.*/
+  LEX_STRING *rds_audit_event_buf;
 
  public:
   std::unique_ptr<im::Ccl_comply> ccl_comply;

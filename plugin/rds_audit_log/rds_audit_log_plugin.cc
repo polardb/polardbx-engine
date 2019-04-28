@@ -45,17 +45,6 @@ rds_audit_log is a statically compiled plugin, so we don't need these.*/
 // SERVICE_TYPE(log_builtins) *log_bi = nullptr;
 // SERVICE_TYPE(log_builtins_string) *log_bs = nullptr;
 
-/* Every THD has one st_event_buffer binding */
-typedef struct {
-  /* This is a bit hacking, we don't want to expose the buffer's content, i.e
-  audit log string, so we use dummy string as the first member to deceive
-  mysql that we are a empty string. */
-  char dummy[1];
-
-  /* Buffer used to stored the serialized audit log */
-  LEX_STRING buffer;
-} st_event_buffer;
-
 /* Always define the memory key */
 PSI_memory_key key_memory_audit_thd_buf;
 PSI_memory_key key_memory_audit_log_buf;
@@ -137,11 +126,6 @@ static ulong rds_audit_log_statement_policy = 0;
 
 static MYSQL_THDVAR_BOOL(skip, PLUGIN_VAR_RQCMDARG,
     "Whether to skip log recording for current session.", NULL, NULL, 0);
-
-static MYSQL_THDVAR_STR(event_buffer,
-    PLUGIN_VAR_READONLY | PLUGIN_VAR_NOCMDARG | PLUGIN_VAR_MEMALLOC,
-    "Buffer for serialize event, before writting to log file.",
-    NULL, NULL, NULL);
 
 static MYSQL_SYSVAR_ULONG(event_buffer_size,
     rds_audit_log_event_buffer_size,
@@ -366,7 +350,6 @@ static MYSQL_SYSVAR_ENUM(statement_policy,
 
 static SYS_VAR *audit_log_system_vars[] = {
     MYSQL_SYSVAR(skip),
-    MYSQL_SYSVAR(event_buffer),
     MYSQL_SYSVAR(event_buffer_size),
     MYSQL_SYSVAR(buffer_size),
     MYSQL_SYSVAR(dir),
@@ -752,20 +735,19 @@ static int audit_log_notify(MYSQL_THD thd, mysql_event_class_t event_class,
 
   /* This is the 1st time to write audit log for current THD, or the buffer
   is freed by release_thd(). */
-  if (THDVAR(thd, event_buffer) == NULL) {
-    st_event_buffer *event_buffer = (st_event_buffer *)my_malloc(
+  if (thd_get_rds_audit_event_buf(thd) == NULL) {
+    LEX_STRING *event_buf = (LEX_STRING *)my_malloc(
         key_memory_audit_thd_buf,
-        sizeof(st_event_buffer) + rds_audit_log_event_buffer_size, MYF(MY_FAE));
+        sizeof(LEX_STRING) + rds_audit_log_event_buffer_size, MYF(MY_FAE));
 
-    event_buffer->dummy[0] = '\0';
-    event_buffer->buffer.length = rds_audit_log_event_buffer_size;
-    event_buffer->buffer.str = (char *)(event_buffer + 1);
-    THDVAR(thd, event_buffer) = (char *)event_buffer;
+    event_buf->length = rds_audit_log_event_buffer_size;
+    event_buf->str = (char *) (event_buf + 1);
+    thd_set_rds_audit_event_buf(thd, event_buf);
   }
 
-  st_event_buffer *event_buffer = (st_event_buffer *)THDVAR(thd, event_buffer);
-  char *buf = event_buffer->buffer.str;
-  size_t buf_len = event_buffer->buffer.length;
+  LEX_STRING *event_buf = thd_get_rds_audit_event_buf(thd);
+  char *buf = event_buf->str;
+  size_t buf_len = event_buf->length;
 
   rds_audit_log->process_event(event_class, event, buf, buf_len);
 
@@ -773,11 +755,10 @@ static int audit_log_notify(MYSQL_THD thd, mysql_event_class_t event_class,
 }
 
 static void audit_log_release(MYSQL_THD thd) {
-  if (THDVAR(thd, event_buffer) != NULL) {
-    st_event_buffer *event_buffer =
-        (st_event_buffer *)THDVAR(thd, event_buffer);
-    my_free(event_buffer);
-    THDVAR(thd, event_buffer) = NULL;
+  LEX_STRING * event_buf = thd_get_rds_audit_event_buf(thd);
+  if (event_buf) {
+    my_free(event_buf);
+    thd_set_rds_audit_event_buf(thd, NULL);
   }
 }
 
