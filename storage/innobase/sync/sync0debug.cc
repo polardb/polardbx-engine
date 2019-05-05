@@ -62,6 +62,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0sys.h"
 #include "lizard0gp.h"
 
+#include "srv0file.h"
+
 #ifdef UNIV_DEBUG
 
 bool srv_sync_debug;
@@ -1517,6 +1519,9 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
   LATCH_ADD_MUTEX(GP_SYS, SYNC_NO_ORDER_CHECK, gp_sys_mutex_key);
 
   LATCH_ADD_MUTEX(GP_SYS_WAIT, SYNC_NO_ORDER_CHECK, gp_sys_wait_mutex_key);
+
+  LATCH_ADD_MUTEX(FILE_PURGE_LIST, SYNC_NO_ORDER_CHECK,
+                  file_purge_list_mutex_key);
 
   latch_id_t id = LATCH_ID_NONE;
 

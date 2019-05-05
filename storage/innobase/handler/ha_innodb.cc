@@ -208,6 +208,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0mysql.h"
 #include "lizard0gp.h"
 
+#include "handler/i_s_ext.h"
+#include "srv0file.h"
 
 #ifndef UNIV_HOTBACKUP
 /** Stop printing warnings, if the count exceeds this threshold. */
@@ -696,7 +698,8 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_sys_mtx_id_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME)};
+    PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(file_purge_list_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -768,7 +771,8 @@ static PSI_thread_info all_innodb_threads[] = {
     PSI_KEY(parallel_read_ahead_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(meb::redo_log_archive_consumer_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(scn_history_thread, 0, 0, PSI_DOCUMENT_ME),
-    PSI_KEY(srv_gp_wait_timeout_thread, 0, 0, PSI_DOCUMENT_ME)};
+    PSI_KEY(srv_gp_wait_timeout_thread, 0, 0, PSI_DOCUMENT_ME),
+    PSI_KEY(srv_file_purge_thread, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_THREAD */
 
 #ifdef UNIV_PFS_IO
@@ -22518,6 +22522,46 @@ static MYSQL_SYSVAR_ULONG(undo_space_reserved_size,
                           lizard::Undo_retention::check_reserve,
                           lizard::Undo_retention::on_update,
                           0, 0, UINT_MAX32, 0);
+/* Data file purge system variables  */
+static MYSQL_SYSVAR_BOOL(data_file_purge, srv_data_file_purge,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Data file purge little by little (off by default)",
+                         NULL, NULL, FALSE);
+
+static MYSQL_SYSVAR_BOOL(data_file_purge_immediate,
+                         srv_data_file_purge_immediate, PLUGIN_VAR_OPCMDARG,
+                         "Data file unlink by purge thread directly "
+                         "even though async purge",
+                         NULL, NULL, FALSE);
+
+static MYSQL_SYSVAR_BOOL(
+    data_file_purge_all_at_shutdown, srv_data_file_purge_all_at_shutdown,
+    PLUGIN_VAR_OPCMDARG,
+    "Data file unlink directly even though async purge when shutdown", NULL,
+    NULL, FALSE);
+
+static MYSQL_SYSVAR_ULONG(
+    data_file_purge_interval, srv_data_file_purge_interval, PLUGIN_VAR_OPCMDARG,
+    "Time interval each of data file purge operation (milliseconds)", NULL,
+    NULL, 100, 0, 10000, 0);
+
+static MYSQL_SYSVAR_ULONG(data_file_purge_max_size,
+                          srv_data_file_purge_max_size, PLUGIN_VAR_OPCMDARG,
+                          "Max size each of data file purge operation (MB)",
+                          NULL, NULL, 512, 16, 1024 * 1024 * 1024, 0);
+
+static MYSQL_SYSVAR_STR(data_file_purge_dir, srv_data_file_purge_dir,
+                        PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY |
+                            PLUGIN_VAR_NOPERSIST,
+                        "The directory that data file will be removed into",
+                        NULL, NULL, NULL);
+
+static MYSQL_SYSVAR_BOOL(
+    print_data_file_purge_process, srv_print_data_file_purge_process,
+    PLUGIN_VAR_OPCMDARG,
+    "Print all data file purge process to MySQL error log (off by default)",
+    NULL, NULL, FALSE);
+/* End of data file purge system variables  */
 
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
@@ -22743,6 +22787,13 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(undo_space_supremum_size),
     MYSQL_SYSVAR(undo_space_reserved_size),
     MYSQL_SYSVAR(global_query_wait_timeout),
+    MYSQL_SYSVAR(data_file_purge),
+    MYSQL_SYSVAR(data_file_purge_immediate),
+    MYSQL_SYSVAR(data_file_purge_all_at_shutdown),
+    MYSQL_SYSVAR(data_file_purge_interval),
+    MYSQL_SYSVAR(data_file_purge_max_size),
+    MYSQL_SYSVAR(data_file_purge_dir),
+    MYSQL_SYSVAR(print_data_file_purge_process),
     NULL};
 
 mysql_declare_plugin(innobase){
@@ -22771,7 +22822,7 @@ mysql_declare_plugin(innobase){
     i_s_innodb_ft_index_cache, i_s_innodb_ft_index_table, i_s_innodb_tables,
     i_s_innodb_tablestats, i_s_innodb_indexes, i_s_innodb_tablespaces,
     i_s_innodb_columns, i_s_innodb_virtual, i_s_innodb_cached_indexes,
-    i_s_innodb_session_temp_tablespaces
+    i_s_innodb_session_temp_tablespaces, i_s_innodb_data_file_purge
 
     mysql_declare_plugin_end;
 
