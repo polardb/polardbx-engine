@@ -600,7 +600,8 @@ struct mysql_event_rds_query {
   MYSQL_LEX_CSTRING ip;
   MYSQL_LEX_CSTRING host;
   MYSQL_LEX_CSTRING db;
-  MYSQL_LEX_CSTRING command;
+  enum enum_server_command command;
+  MYSQL_LEX_CSTRING command_name;
   unsigned long long start_utime;
   enum_sql_command sql_command;
   MYSQL_LEX_CSTRING sql_command_name;

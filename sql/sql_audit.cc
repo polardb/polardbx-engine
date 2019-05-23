@@ -1041,7 +1041,6 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   Security_context *sctx;
 
   DBUG_ASSERT(thd);
-  // DBUG_ASSERT(thd->get_command() == COM_QUERY);
 
   if (mysql_audit_acquire_plugins(thd, MYSQL_AUDIT_RDS_QUERY_CLASS,
                                   static_cast<unsigned long>(subclass)))
@@ -1062,6 +1061,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   event.ip = sctx->ip();
   event.host = sctx->host();
   event.db = thd->db();
+  event.command = thd->get_command();
   event.start_utime = thd->start_utime;
   event.sql_command = thd->lex->sql_command;
   event.sql_command_name = sql_statement_names[thd->lex->sql_command];

@@ -2330,8 +2330,8 @@ done:
   PPI_STATEMENT_CALL(end_statement)
         (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
-  /* RDS query audit only interested in query.  */
-  if (command == COM_QUERY) {
+  /* COM_STMT_PREPARE is handled in sql_prepare.cc .  */
+  if (command == COM_QUERY || command == COM_STMT_EXECUTE) {
     mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
   }
 

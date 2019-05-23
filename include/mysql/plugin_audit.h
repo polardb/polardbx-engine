@@ -730,7 +730,9 @@ struct mysql_event_rds_query {
  /** Database name */
   MYSQL_LEX_CSTRING db;
   /** MySQL command */
-  MYSQL_LEX_CSTRING command;
+  enum enum_server_command command;
+  /** MySQL command name */
+  MYSQL_LEX_CSTRING command_name;
   /** Command start time (point) */
   unsigned long long start_utime;
   /* SQL comamnd */

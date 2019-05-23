@@ -88,6 +88,34 @@ uint Plain_serializer::serialize_connection_event(
 uint Plain_serializer::serialize_query_event(
     const struct mysql_event_rds_query* event, char *buf, uint buf_len) {
   uint len;
+  uint command = 0;
+
+  /*
+    Command column value meanings as defined in RDS MySQL 5.6:
+    0 : for normal query
+    1 : for statement execute (COM or SQLCOM)
+    2 : for statement prepare (COM or SQLCOM)
+  */
+  switch (event->command) {
+  case COM_QUERY:
+    command = 0;
+    if (event->sql_command == SQLCOM_PREPARE) {
+      command = 2;
+    } else if (event->sql_command == SQLCOM_EXECUTE) {
+      command = 1;
+    }
+    break;
+  case COM_STMT_PREPARE:
+    command = 2;
+    break;
+  case COM_STMT_EXECUTE:
+    command = 1;
+    break;
+  default:
+    DBUG_ASSERT(0);
+    break;
+  }
+
   len = snprintf(buf, buf_len,
     "MYSQL_V1\t" /* RDS audit log version, keep compatible with rds 5.6 */
     "%ld\t"      /* thread id */
@@ -132,7 +160,7 @@ uint Plain_serializer::serialize_query_event(
     event->temp_user_table_size,
     event->temp_sort_table_size,
     event->temp_sort_file_size,
-    0, /* 0 is for normal query as defined in RDS MySQL 5.6 */
+    command,
     event->is_super,
     event->lock_utime);
 
