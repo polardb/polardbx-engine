@@ -73,7 +73,26 @@ class Minor_upgrade_ctx {
 
   // Persist extra P_S version into dd_properites
   uint set_extra_P_S_version(THD *thd, uint version);
+
+  // Get compiled extra mysqld_version_upgraded version
+  static uint get_target_extra_mvu_version();
+
+  // Set extra mysqld_version_upgraded variable
+  void set_extra_mvu_version(uint version);
+
+  // Get extra mysqld_version_upgraded variable
+  uint get_extra_mvu_version();
+
+  // Query the version and set variable
+  void retrieve_and_set_extra_mvu_version(THD *thd);
+
+  // Save the version and set variables
+  bool save_and_set_extra_mvu_version(THD *thd, uint version);
+
+ private:
+  uint m_extra_mvu_version;
 };
+
 
 }  // namespace dd
 

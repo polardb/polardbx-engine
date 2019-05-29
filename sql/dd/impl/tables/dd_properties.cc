@@ -108,7 +108,8 @@ DD_properties::DD_properties() : m_properties() {
       {"UPGRADE_ACTUAL_SCHEMA", Property_type::CHARACTER_STRING},
       {"EXTRA_IS_VERSION", Property_type::UNSIGNED_INT_32},
       {"EXTRA_PS_VERSION", Property_type::UNSIGNED_INT_32},
-      {"MYSQLD_VERSION_UPGRADED", Property_type::UNSIGNED_INT_32}};
+      {"MYSQLD_VERSION_UPGRADED", Property_type::UNSIGNED_INT_32},
+      {"EXTRA_MYSQLD_VERSION_UPGRADED", Property_type::UNSIGNED_INT_32}};
 }
 
 // Read all properties from disk and populate the cache.

@@ -22,6 +22,7 @@
 
 #include "sql/dd/impl/upgrade/server.h"
 #include "sql/dd/upgrade/server.h"
+#include "sql/dd/dd_minor_upgrade.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -834,6 +835,13 @@ bool upgrade_system_schemas(THD *thd) {
 
   LogErr(SYSTEM_LEVEL, ER_SERVER_UPGRADE_STATUS, server_version,
          MYSQL_VERSION_ID, "started");
+
+  uint extra_mvu_version =
+      Minor_upgrade_ctx::instance()->get_extra_mvu_version();
+
+  LogErr(SYSTEM_LEVEL, ER_SERVER_UPGRADE_EXTRA_STATUS, extra_mvu_version,
+         Minor_upgrade_ctx::get_target_extra_mvu_version(), "started");
+
   log_sink_buffer_check_timeout();
   sysd::notify("STATUS=Server upgrade in progress\n");
 
@@ -849,14 +857,20 @@ bool upgrade_system_schemas(THD *thd) {
            : check.check_system_schemas(thd)) ||
       check.repair_tables(thd) ||
       dd::tables::DD_properties::instance().set(thd, "MYSQLD_VERSION_UPGRADED",
-                                                MYSQL_VERSION_ID);
+                                                MYSQL_VERSION_ID) ||
+      Minor_upgrade_ctx::instance()->save_and_set_extra_mvu_version(
+          thd, Minor_upgrade_ctx::get_target_extra_mvu_version());
 
   create_upgrade_file();
   bootstrap_error_handler.set_log_error(true);
 
-  if (!err)
+  if (!err) {
     LogErr(SYSTEM_LEVEL, ER_SERVER_UPGRADE_STATUS, server_version,
            MYSQL_VERSION_ID, "completed");
+
+    LogErr(SYSTEM_LEVEL, ER_SERVER_UPGRADE_EXTRA_STATUS, extra_mvu_version,
+           Minor_upgrade_ctx::get_target_extra_mvu_version(), "completed");
+  }
   log_sink_buffer_check_timeout();
   sysd::notify("STATUS=Server upgrade complete\n");
 
