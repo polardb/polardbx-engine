@@ -711,9 +711,11 @@ The documentation is based on the source files such as:
 #include "typelib.h"
 #include "violite.h"
 
+#include "sql/package/package_interface.h"
+
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
-#endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
+#endif
 
 #ifdef _WIN32
 #include "sql/conn_handler/named_pipe_connection.h"
@@ -4080,6 +4082,9 @@ SHOW_VAR com_status_vars[] = {
     {"xa_start",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_XA_START]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"native_proc",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_PROC]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
@@ -6277,6 +6282,8 @@ int mysqld_main(int argc, char **argv)
     server instruments.
   */
   init_server_psi_keys();
+
+  im::package_context_init();
 
   /*
     Now that some instrumentation is in place,

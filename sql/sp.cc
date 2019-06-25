@@ -99,6 +99,8 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 
+#include "sql/package/package_interface.h"
+
 class sp_rcontext;
 
 /* Used in error handling only */
@@ -613,17 +615,22 @@ static bool create_routine_precheck(THD *thd, sp_head *sp) {
   // Check if routine with same name exists.
   bool error;
   const dd::Routine *sr;
+  bool exists = false;
   if (sp->m_type == enum_sp_type::FUNCTION)
     error = thd->dd_client()->acquire<dd::Function>(sp->m_db.str,
                                                     sp->m_name.str, &sr);
-  else
+  else {
     error = thd->dd_client()->acquire<dd::Procedure>(sp->m_db.str,
                                                      sp->m_name.str, &sr);
+
+    exists = im::exist_native_proc(sp->m_db.str, sp->m_name.str);
+  }
   if (error) {
     // Error is reported by DD API framework.
     return true;
   }
-  if (sr != nullptr) {
+
+  if (sr != nullptr || exists) {
     my_error(ER_SP_ALREADY_EXISTS, MYF(0), SP_TYPE_STRING(sp->m_type),
              sp->m_name.str);
     return true;

@@ -547,6 +547,13 @@ SET(SQL_SHARED_SOURCES
   uniques.cc
   xa.cc
   ssl_acceptor_context.cc
+  common/component.cc
+  package/package.cc
+  package/package_cache.cc
+  package/package_common.cc
+  package/proc.cc
+  package/package_parse.cc
+  package/proc_dummy.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

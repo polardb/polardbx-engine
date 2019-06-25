@@ -110,6 +110,8 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 #include "sql/sql_trigger.h"                     // Sql_cmd_create_trigger
 #include "sql/sql_truncate.h"                      // Sql_cmd_truncate_table
 
+#include "sql/package/package_interface.h"  // find_native_proc_and_evoke
+
 /* this is to get the bison compilation windows warnings out */
 #ifdef _MSC_VER
 /* warning C4065: switch statement contains 'default' but no 'case' labels */
@@ -3313,7 +3315,10 @@ sp_suid:
 call_stmt:
           CALL_SYM sp_name opt_paren_expr_list
           {
-            $$= NEW_PTN PT_call($2, $3);
+            if (($$ = im::find_native_proc_and_evoke(YYTHD, $2, $3))) {
+            } else {
+              $$ = NEW_PTN PT_call($2, $3);
+            }
           }
         ;
 
