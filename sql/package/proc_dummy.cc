@@ -38,6 +38,9 @@
 */
 namespace im {
 
+/* The schema of dummy and dummy_2 proc */
+const LEX_CSTRING PROC_DUMMY_SCHEMA = {C_STRING_WITH_LEN("mysql")};
+
 Proc *Proc_dummy::instance() {
   static Proc_dummy *proc = new Proc_dummy(key_memory_package);
 
@@ -50,7 +53,7 @@ Sql_cmd *Proc_dummy::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
 
 bool Sql_cmd_proc_dummy::pc_execute(THD *) {
   bool error = false;
-  DBUG_ENTER("Sql_cmd_proc_dummy::execute");
+  DBUG_ENTER("Sql_cmd_proc_dummy::pc_execute");
   assert(m_proc->get_result_type() != Proc::Result_type::RESULT_NONE);
   /**
     Do nothing for dummy:

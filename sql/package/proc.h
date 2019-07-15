@@ -173,12 +173,12 @@ class Proc : public PSI_memory_base {
     @retval       string        Proc name
   */
   virtual const std::string str() const = 0;
+  /**
+    Interface of sp name.
 
-  virtual const std::string qname() const {
-    std::stringstream ss;
-    ss << PACKAGE_SCHEMA << "." << str();
-    return ss.str();
-  }
+    @retval       string        sp name
+  */
+  virtual const std::string qname() const = 0;
 
   /* Disable copy and assign function */
   Proc(const Proc &) = delete;
@@ -255,6 +255,9 @@ class Sql_cmd_proc : public Sql_cmd {
     Prepare the proc before execution.
   */
   virtual bool prepare(THD *thd) override;
+
+ protected:
+  void set_priv_type(Priv_type priv_type) { m_priv_type = priv_type; }
 
  protected:
   THD *m_thd;

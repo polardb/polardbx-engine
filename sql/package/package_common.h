@@ -36,8 +36,6 @@ namespace im {
 /* Package memory P_S key */
 extern PSI_memory_key key_memory_package;
 
-extern const char *PACKAGE_SCHEMA;
-
 /* Package element map type */
 template <typename T>
 using Package_element_map = Pair_key_unordered_map<std::string, std::string, T>;

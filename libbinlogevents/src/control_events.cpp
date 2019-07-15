@@ -115,7 +115,76 @@ Format_description_event::Format_description_event(uint8_t binlog_ver,
           IGNORABLE_HEADER_LEN, TRANSACTION_CONTEXT_HEADER_LEN,
           VIEW_CHANGE_HEADER_LEN, XA_PREPARE_HEADER_LEN, ROWS_HEADER_LEN_V2,
           TRANSACTION_PAYLOAD_EVENT, 0 /* HEARTBEAT_LOG_EVENT_V2*/
+          ,
+          0,                                       /* for log_event_type 42 */
+          0,                                       /* for log_event_type 43 */
+          0,                                       /* for log_event_type 44 */
+          0,                                       /* for log_event_type 45 */
+          0,                                       /* for log_event_type 46 */
+          0,                                       /* for log_event_type 47 */
+          0,                                       /* for log_event_type 48 */
+          0,                                       /* for log_event_type 49 */
+          0,                                       /* for log_event_type 50 */
+          0,                                       /* for log_event_type 51 */
+          0,                                       /* for log_event_type 52 */
+          0,                                       /* for log_event_type 53 */
+          0,                                       /* for log_event_type 54 */
+          0,                                       /* for log_event_type 55 */
+          0,                                       /* for log_event_type 56 */
+          0,                                       /* for log_event_type 57 */
+          0,                                       /* for log_event_type 58 */
+          0,                                       /* for log_event_type 59 */
+          0,                                       /* for log_event_type 60 */
+          0,                                       /* for log_event_type 61 */
+          0,                                       /* for log_event_type 62 */
+          0,                                       /* for log_event_type 63 */
+          0,                                       /* for log_event_type 64 */
+          0,                                       /* for log_event_type 65 */
+          0,                                       /* for log_event_type 66 */
+          0,                                       /* for log_event_type 67 */
+          0,                                       /* for log_event_type 68 */
+          0,                                       /* for log_event_type 69 */
+          0,                                       /* for log_event_type 70 */
+          0,                                       /* for log_event_type 71 */
+          0,                                       /* for log_event_type 72 */
+          0,                                       /* for log_event_type 73 */
+          0,                                       /* for log_event_type 74 */
+          0,                                       /* for log_event_type 75 */
+          0,                                       /* for log_event_type 76 */
+          0,                                       /* for log_event_type 77 */
+          0,                                       /* for log_event_type 78 */
+          0,                                       /* for log_event_type 79 */
+          0,                                       /* for log_event_type 80 */
+          0,                                       /* for log_event_type 81 */
+          0,                                       /* for log_event_type 82 */
+          0,                                       /* for log_event_type 83 */
+          0,                                       /* for log_event_type 84 */
+          0,                                       /* for log_event_type 85 */
+          0,                                       /* for log_event_type 86 */
+          0,                                       /* for log_event_type 87 */
+          0,                                       /* for log_event_type 88 */
+          0,                                       /* for log_event_type 89 */
+          0,                                       /* for log_event_type 90 */
+          0,                                       /* for log_event_type 91 */
+          0,                                       /* for log_event_type 92 */
+          0,                                       /* for log_event_type 93 */
+          0,                                       /* for log_event_type 94 */
+          0,                                       /* for log_event_type 95 */
+          0,                                       /* for log_event_type 96 */
+          0,                                       /* for log_event_type 97 */
+          0,                                       /* for log_event_type 98 */
+          0,                                       /* for log_event_type 99 */
+          0,                                       /* for log_event_type 100 */
+          /* For Normandy Cluster*/
+          0,                                       /* for log_event_type 101 */
+          0,                                       /* for log_event_type 102 */
+          0,                                       /* for log_event_type 103 */
+          0,                                       /* for log_event_type 104 */
+          0,                                       /* for log_event_type 105 (Gcn) */
       };
+      static_assert((sizeof(server_event_header_length) /
+                     sizeof(server_event_header_length[0])) == LOG_EVENT_TYPES,
+                    "Attention: it might result in memory overflow");
       /*
         Allows us to sanity-check that all events initialized their
         events (see the end of this 'if' block).

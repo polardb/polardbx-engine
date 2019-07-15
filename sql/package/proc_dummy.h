@@ -23,6 +23,11 @@
 #ifndef SQL_PACKAGE_PROC_DUMMY_INCLUDED
 #define SQL_PACKAGE_PROC_DUMMY_INCLUDED
 
+#include <string>
+
+#include "lex_string.h"
+#include "sql/package/proc.h"
+
 /**
   Dummy proc definition.
 
@@ -30,6 +35,9 @@
   so it only take effect on DBUG mode.
 */
 namespace im {
+
+/* The schema of dummy and dummy_2 proc */
+extern const LEX_CSTRING PROC_DUMMY_SCHEMA;
 
 /**
   Dummy proc sql command class.
@@ -68,6 +76,12 @@ class Proc_dummy : public Proc {
   virtual Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override { return std::string("dummy"); }
+
+  virtual const std::string qname() const override {
+    std::stringstream ss;
+    ss << PROC_DUMMY_SCHEMA.str << "." << str();
+    return ss.str();
+  }
 };
 
 /**
@@ -144,6 +158,12 @@ class Proc_dummy_2 : public Proc {
   virtual Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override { return std::string("dummy_2"); }
+
+  virtual const std::string qname() const override {
+    std::stringstream ss;
+    ss << PROC_DUMMY_SCHEMA.str << "." << str();
+    return ss.str();
+  }
 };
 } /* namespace im */
 

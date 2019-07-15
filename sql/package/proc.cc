@@ -104,10 +104,13 @@ void Sql_cmd_proc::send_result(THD *thd, bool error) {
 
 /**
   Check access, require SUPER_ACL defaultly.
-  Override it if any other requirement.
+
+  Override it if any other requirement or set different
+  priv type.
 */
 bool Sql_cmd_proc::check_access(THD *thd) {
   Security_context *sctx = thd->security_context();
+
   if (m_priv_type == Priv_type::PRIV_NONE_ACL) {
     return false;
   } else if (m_priv_type == Priv_type::PRIV_SUPER_ACL) {
@@ -121,7 +124,8 @@ bool Sql_cmd_proc::check_access(THD *thd) {
 }
 
 /**
-  Check the list of parameters.
+  Check the list of parameters, report error if failed.
+
   Override it if any other requirement.
 */
 bool Sql_cmd_proc::check_parameter() {
@@ -150,6 +154,11 @@ bool Sql_cmd_proc::check_parameter() {
 
 /**
   Prepare the proc before execution.
+
+  @param[in]    THD           Thread context
+
+  @retval       true          Failure
+  @retval       false         Success
 */
 bool Sql_cmd_proc::prepare(THD *thd) {
   if (check_parameter() || check_access(thd))
