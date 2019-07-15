@@ -712,6 +712,7 @@ The documentation is based on the source files such as:
 #include "violite.h"
 
 #include "sql/package/package_interface.h"
+#include "sql/ccl/ccl_interface.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -2341,6 +2342,8 @@ static void clean_up(bool print_message) {
   persisted_variables_cache.cleanup();
 
   udf_deinit_globals();
+
+  im::ccl_destroy();
   /*
     The following lines may never be executed as the main thread may have
     killed us
@@ -6287,6 +6290,8 @@ int mysqld_main(int argc, char **argv)
   init_server_psi_keys();
 
   im::package_context_init();
+  /* Init conconcurrency control system */
+  im::ccl_init();
 
   /*
     Now that some instrumentation is in place,
@@ -6840,6 +6845,10 @@ int mysqld_main(int argc, char **argv)
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
 
   initialize_information_schema_acl();
+
+  im::ccl_rules_init(opt_initialize);
+  im::ccl_queue_buckets_init(im::ccl_queue_bucket_count,
+                             im::ccl_queue_bucket_size);
 
   (void)RUN_HOOK(server_state, after_recovery, (NULL));
 

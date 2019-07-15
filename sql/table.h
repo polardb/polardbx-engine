@@ -552,7 +552,13 @@ enum enum_table_category {
     TABLE_SHARE versions because these table structures
     are fixed upon server bootstrap.
   */
-  TABLE_CATEGORY_DICTIONARY = 9
+  TABLE_CATEGORY_DICTIONARY = 9,
+
+  /**
+    Concurrency_control.
+    Table didn't generate binlog.
+  */
+  TABLE_CATEGORY_CCL = 16
 };
 typedef enum enum_table_category TABLE_CATEGORY;
 

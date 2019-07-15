@@ -559,6 +559,17 @@ SET(SQL_SHARED_SOURCES
   trans_proc/common.cc
   trans_proc/returning.cc
   trans_proc/returning_parse.cc
+  ccl/ccl_cache.cc
+  ccl/ccl.cc
+  ccl/ccl_common.cc
+  ccl/ccl_table.cc
+  ccl/ccl_table_common.cc
+  ccl/ccl_proc.cc
+  ccl/ccl_interface.cc
+  common/table.cc
+  ccl/ccl_hint_parse.cc
+  ccl/ccl_hint.cc
+  ccl/ccl_bucket.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

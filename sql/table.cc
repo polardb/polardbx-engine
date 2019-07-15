@@ -119,6 +119,9 @@
 #include "sql_string.h"
 #include "template_utils.h"  // down_cast
 #include "thr_mutex.h"
+
+#include "sql/ccl/ccl_table.h"
+
 /* INFORMATION_SCHEMA name */
 LEX_CSTRING INFORMATION_SCHEMA_NAME = {STRING_WITH_LEN("information_schema")};
 
@@ -340,6 +343,8 @@ TABLE_CATEGORY get_table_category(const LEX_CSTRING &db,
 
     if (dd::get_dictionary()->is_dd_table_name(MYSQL_SCHEMA_NAME.str, name.str))
       return TABLE_CATEGORY_DICTIONARY;
+
+    if (im::is_ccl_table(name.str, name.length)) return TABLE_CATEGORY_CCL;
   }
 
   return TABLE_CATEGORY_USER;
@@ -3224,7 +3229,8 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
 
   if ((share->table_category == TABLE_CATEGORY_LOG) ||
       (share->table_category == TABLE_CATEGORY_RPL_INFO) ||
-      (share->table_category == TABLE_CATEGORY_GTID)) {
+      (share->table_category == TABLE_CATEGORY_GTID) ||
+      (share->table_category == TABLE_CATEGORY_CCL)) {
     outparam->no_replicate = true;
   } else if (outparam->file) {
     handler::Table_flags flags = outparam->file->ha_table_flags();

@@ -229,6 +229,7 @@ void System_tables::add_remaining_dd_tables() {
   register_table("time_zone_transition_type", system);
   register_table("user", system);
   register_table("user_backup", system);
+  register_table("concurrency_control", system);
 }
 
 void System_views::init() {

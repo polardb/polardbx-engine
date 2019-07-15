@@ -20,6 +20,12 @@ binlog_encryption
 binlog_encryption
 binlog_rotate_encryption_master_key_at_startup
 binlog_rotate_encryption_master_key_at_startup
+ccl_queue_bucket_count
+ccl_queue_bucket_count
+ccl_queue_bucket_size
+ccl_queue_bucket_size
+ccl_wait_timeout
+ccl_wait_timeout
 cte_max_recursion_depth
 cte_max_recursion_depth
 default_collation_for_utf8mb4

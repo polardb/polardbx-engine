@@ -257,6 +257,9 @@ class Sql_cmd_proc : public Sql_cmd {
   virtual bool prepare(THD *thd);
 
  protected:
+  void set_priv_type(Priv_type priv_type) { m_priv_type = priv_type; }
+
+ protected:
   THD *m_thd;
   List<Item> *m_list;
   const Proc *m_proc;

@@ -29,6 +29,7 @@
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
 #include "sql/trans_proc/returning.h"
+#include "sql/ccl/ccl_proc.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -123,8 +124,24 @@ void package_context_init() {
   register_package<Proc, im::Jemalloc_profile_proc>(im::JEMALLOC_PROC_SCHEMA);
 #endif
   register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
+
   /* dbms_trans.returning() */
   register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
+
+  /* dbms_ccl.add_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_add>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.flush_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_flush>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.del_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_del>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.show_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_show>(CCL_PROC_SCHEMA);
+
+  /* dbms_ccl.flush_ccl_queue(...) */
+  register_package<Proc, Ccl_proc_flush_queue>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.show_ccl_queue(...) */
+  register_package<Proc, Ccl_proc_show_queue>(CCL_PROC_SCHEMA);
+
 }
 
 } /* namespace im */

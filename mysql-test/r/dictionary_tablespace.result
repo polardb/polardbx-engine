@@ -21,6 +21,7 @@ column_type_elements	mysql
 columns	mysql
 columns_priv	mysql
 component	mysql
+concurrency_control	mysql
 db	mysql
 dd_properties	mysql
 default_roles	mysql
@@ -90,6 +91,7 @@ column_type_elements
 columns
 columns_priv
 component
+concurrency_control
 db
 dd_properties
 default_roles

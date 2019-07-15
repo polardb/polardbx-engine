@@ -111,6 +111,9 @@
 #include "violite.h"
 #include "sql/trans_proc/returning_parse.h"
 
+#include "sql/ccl/ccl.h"
+#include "sql/ccl/ccl_interface.h"
+
 enum enum_check_fields : int;
 enum enum_tx_isolation : int;
 enum ha_notification_type : int;
@@ -4162,6 +4165,10 @@ class THD : public MDL_context_owner,
 
   /** Get returning lex */
   im::Lex_returning *get_lex_returning() { return lex_returning.get(); }
+
+ public:
+  std::unique_ptr<im::Ccl_comply> ccl_comply;
+  std::vector<im::Ccl_comply_handler *> ccl_comply_handlers;
 };
 
 /**

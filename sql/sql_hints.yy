@@ -35,6 +35,8 @@
 #include "sql/sql_const.h"
 #include "sql/sql_lex_hints.h"
 
+#include "sql/ccl/ccl_hint_parse.h"
+
 #define NEW_PTN new (thd->mem_root)
 
 static bool parse_int(longlong *to, const char *from, size_t from_length)
@@ -94,6 +96,9 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 %token HASH_JOIN_HINT
 %token NO_HASH_JOIN_HINT
 
+%token CCL_QUEUE_FIELD_HINT
+%token CCL_QUEUE_VALUE_HINT
+
 /* Other tokens */
 
 %token HINT_ARG_NUMBER
@@ -104,6 +109,10 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 
 %token HINT_CLOSE
 %token HINT_ERROR
+/* Rds tokens */
+
+%token CCL_QUEUE_FIELD_HINT 
+%token CCL_QUEUE_VALUE_HINT 
 
 /* Types */
 %type <hint_type>
@@ -121,6 +130,7 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
   qb_name_hint
   set_var_hint
   resource_group_hint
+  ccl_queue_hint
 
 %type <hint_list> hint_list
 
@@ -154,6 +164,8 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
   set_var_num_item
   set_var_string_item
   set_var_arg
+  ccl_queue_field_arg
+  ccl_queue_value_arg
 
 %type <ulong_num>
   semijoin_strategy semijoin_strategies
@@ -193,8 +205,23 @@ hint:
         | max_execution_time_hint
         | set_var_hint
         | resource_group_hint
+        | ccl_queue_hint
         ;
 
+ccl_queue_hint:
+          CCL_QUEUE_FIELD_HINT '(' ccl_queue_field_arg ')'
+          {
+            $$ = NEW_PTN im::PT_hint_ccl_queue(
+                   im::Ccl_hint_type::CCL_HINT_QUEUE_FIELD, $3);
+            if ($$ == NULL) YYABORT;
+          }
+        | CCL_QUEUE_VALUE_HINT '(' ccl_queue_value_arg ')'
+          {
+            $$= NEW_PTN im::PT_hint_ccl_queue(
+                  im::Ccl_hint_type::CCL_HINT_QUEUE_VALUE, $3);
+            if ($$ == NULL) YYABORT;
+          }
+        ;
 
 max_execution_time_hint:
           MAX_EXECUTION_TIME_HINT '(' HINT_ARG_NUMBER ')'
@@ -631,4 +658,13 @@ set_var_string_item:
 set_var_arg:
     set_var_string_item
     | set_var_num_item
+    ;
+
+ccl_queue_value_arg:
+    set_var_string_item
+    | set_var_num_item
+    ;
+
+ccl_queue_field_arg:
+    set_var_string_item
     ;

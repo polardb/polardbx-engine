@@ -1967,6 +1967,9 @@ class SELECT_LEX {
                   enum_mdl_type mdl_type);
 
   TABLE_LIST *find_table_by_name(const Table_ident *ident);
+
+ public:
+  List<Item> ccl_queue_field_cond_list;
 };
 
 inline bool SELECT_LEX_UNIT::is_union() const {

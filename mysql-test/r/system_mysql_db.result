@@ -2,6 +2,7 @@ show tables where Tables_in_db != 'ndb_binlog_index';
 Tables_in_db
 columns_priv
 component
+concurrency_control
 db
 default_roles
 engine_cost

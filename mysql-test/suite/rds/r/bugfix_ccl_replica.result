@@ -1,0 +1,44 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+create database ccl_db;
+create table ccl_db.t1(id int auto_increment primary key,
+col1 int,
+col2 varchar(100),
+key ind_1(col1),
+key ind_2(col2)) engine = innodb;
+create table ccl_db.t2(id int auto_increment primary key,
+col1 int,
+col2 varchar(100),
+key ind_1(col1),
+key ind_2(col2)) engine = innodb;
+insert into ccl_db.t1 values(1, 2, 'xpchild');
+insert into ccl_db.t2 values(1, 2, 'xpchild');
+commit;
+create user normal_1@'%' identified by 'pass';
+grant all on ccl_db.* to normal_1@'%' ;
+grant all on mysql.* to normal_1@'%' ;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+--------------------------------------------------------------
+Add ccl rule didn't generate binlog
+--------------------------------------------------------------
+call dbms_ccl.add_ccl_rule('SELECT', '', '', 10, '');
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+1	SELECT			Y	N	10	0	0	0	
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+--------------------------------------------------------------
+Add ccl on slave
+--------------------------------------------------------------
+call dbms_ccl.add_ccl_rule('SELECT', '', '', 10, '');
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+1	SELECT			Y	N	10	0	0	0	
+set global read_only = @start_read_only;
+drop user normal_1@'%';
+drop database ccl_db;
+include/rpl_end.inc

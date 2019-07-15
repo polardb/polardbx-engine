@@ -30,7 +30,7 @@ along with this program; if not, write to the Free Software
 #include "sql/protocol.h"
 
 namespace im {
-const LEX_STRING ADMIN_PROC_SCHEMA = {C_STRING_WITH_LEN("dbms_admin")};
+const LEX_STRING ADMIN_PROC_SCHEMA = {STRING_WITH_LEN(const_cast<char *>("dbms_admin"))};
 
 Proc *Show_native_procedure_proc::instance() {
   static Proc *proc = new Show_native_procedure_proc();

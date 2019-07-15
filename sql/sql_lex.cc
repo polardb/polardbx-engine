@@ -2099,7 +2099,8 @@ SELECT_LEX::SELECT_LEX(Item *where, Item *having)
       m_json_agg_func_used(false),
       m_empty_query(false),
       sj_candidates(NULL),
-      hidden_order_field_count(0) {
+      hidden_order_field_count(0),
+      ccl_queue_field_cond_list()  {
   end_lateral_table = NULL;
 }
 

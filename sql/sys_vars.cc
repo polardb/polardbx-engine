@@ -6768,3 +6768,5 @@ static Sys_var_ulong Sys_global_query_wait_timeout(
     HINT_UPDATEABLE SESSION_VAR(global_query_wait_timeout),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, LONG_TIMEOUT), DEFAULT(LONG_TIMEOUT),
     BLOCK_SIZE(1));
+
+#include "sys_vars_ext.cc"

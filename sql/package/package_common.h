@@ -40,7 +40,8 @@ extern const char *PACKAGE_SCHEMA;
 
 /* Package element map type */
 template <typename T>
-using Package_element_map = Pair_key_unordered_map<std::string, std::string, T>;
+using Package_element_map =
+    Pair_key_icase_unordered_map<std::string, std::string, T>;
 
 } /*  namespace im */
 
