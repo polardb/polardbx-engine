@@ -95,6 +95,10 @@ Preparing deadlock scenario for mysql.innodb_table_stats
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
 ROLLBACK;
+Preparing deadlock scenario for mysql.outline
+ROLLBACK;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+ROLLBACK;
 Preparing deadlock scenario for mysql.password_history
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction

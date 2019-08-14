@@ -34,6 +34,8 @@
 #include "sql/rpl_gtid.h"        // Gitd_specification
 #include "sql/sql_plugin_ref.h"  // plugin_ref
 
+#include "sql/common/reload.h"
+
 class MY_LOCALE;
 class Time_zone;
 
@@ -404,6 +406,8 @@ struct System_variables {
   bool sequence_read_skip_cache;
 
   bool recycle_bin;
+
+  bool outline_allowed_sql_digest_truncate;
 };
 
 /**
@@ -469,6 +473,8 @@ struct System_status_var {
   ulonglong max_execution_time_exceeded;
   ulonglong max_execution_time_set;
   ulonglong max_execution_time_set_failed;
+
+  ulonglong reload_stat[(uint)im::MAX_RELOAD_ENTRY_COUNT];
 
   /* Number of statements sent from the client. */
   ulonglong questions;

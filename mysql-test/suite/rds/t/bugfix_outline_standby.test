@@ -1,0 +1,170 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+call mtr.add_suppression("reload outline failed");
+call mtr.add_suppression("Column count of mysql.outline is wrong");
+
+connection master;
+create database outline_db;
+
+create table outline_db.t1(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+create table outline_db.t2(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+insert into outline_db.t1 values(1, 2, 'xpchild');
+insert into outline_db.t2 values(1, 2, 'xpchild');
+commit;
+
+
+create user super_1@'%' identified by 'pass';
+create user normal_1@'%' identified by 'pass';
+
+grant all on *.* to super_1@'%';
+grant all on outline_db.* to normal_1@'%' ;
+grant all on mysql.* to normal_1@'%' ;
+
+
+--sync_slave_with_master
+
+connect(m_super_1, 127.0.0.1, super_1, pass, outline_db, $MASTER_MYPORT);
+connect(s_super_1, 127.0.0.1, super_1, pass, outline_db, $SLAVE_MYPORT);
+
+connect(m_normal_1, 127.0.0.1, normal_1, pass, outline_db, $MASTER_MYPORT);
+connect(s_normal_1, 127.0.0.1, normal_1, pass, outline_db, $SLAVE_MYPORT);
+
+connection slave;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+
+
+--echo --------------------------------------------------------------
+--echo  Fail on slave add outline
+--echo --------------------------------------------------------------
+
+connection s_normal_1;
+--error ER_OPTION_PREVENTS_STATEMENT
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+
+--echo --------------------------------------------------------------
+--echo add/delete outline
+--echo --------------------------------------------------------------
+connection m_normal_1;
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+connection master;
+--sync_slave_with_master
+--sleep 2
+
+connection s_normal_1;
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+
+connection m_normal_1;
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+connection master;
+--sync_slave_with_master
+--sleep 2
+
+connection s_normal_1;
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+--echo --------------------------------------------------------------
+--echo modify outline table structure.
+--echo --------------------------------------------------------------
+connection s_super_1;
+set session sql_log_bin=off;
+alter table mysql.outline add xx int;
+set session sql_log_bin=on;
+
+connection m_normal_1;
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+connection master;
+--sync_slave_with_master
+--sleep 2
+
+connection s_normal_1;
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+
+connection s_super_1;
+set session sql_log_bin=off;
+alter table mysql.outline drop column xx;
+set session sql_log_bin=on;
+
+
+--echo --------------------------------------------------------------
+--echo DDL on outline
+--echo --------------------------------------------------------------
+connection m_normal_1;
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+connection master;
+--sync_slave_with_master
+--sleep 2
+
+connection s_normal_1;
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+
+connection m_normal_1;
+truncate table mysql.outline;
+call dbms_outln.flush_outline();
+
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+connection master;
+--sync_slave_with_master
+--sleep 2
+
+connection s_normal_1;
+call dbms_outln.show_outline();
+show global status like 'reload_slave_outline';
+
+
+connection slave;
+set global read_only = @start_read_only;
+
+connection master;
+drop user super_1@'%';
+drop user normal_1@'%';
+drop database outline_db;
+
+--sync_slave_with_master
+--source include/rpl_end.inc

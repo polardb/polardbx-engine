@@ -53,6 +53,7 @@ Transaction_ctx::Transaction_ctx()
   init_sql_alloc(key_memory_thd_transactions, &m_mem_root,
                  global_system_variables.trans_alloc_block_size,
                  global_system_variables.trans_prealloc_size);
+  memset(reload_entries, 0, sizeof(reload_entries));
 }
 
 void Transaction_ctx::push_unsafe_rollback_warnings(THD *thd) {

@@ -714,6 +714,7 @@ The documentation is based on the source files such as:
 #include "sql/package/package_interface.h"
 #include "sql/ccl/ccl_interface.h"
 #include "sql/sequence_common.h"
+#include "sql/outline/outline_interface.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -795,6 +796,7 @@ The documentation is based on the source files such as:
 #include "sql/dd/upgrade/server.h"      // dd::upgrade::upgrade_system_schemas
 #include "sql/dd/upgrade_57/upgrade.h"  // dd::upgrade_57::in_progress
 #include "sql/srv_session.h"
+#include "sql/common/reload.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle.h"
@@ -2354,6 +2356,7 @@ static void clean_up(bool print_message) {
 
   im::ccl_destroy();
   im::recycle_bin::recycle_deinit();
+  im::outline_destroy();
 
   /*
     Cleanup for user defined functions with the same names as sequence
@@ -6327,6 +6330,8 @@ int mysqld_main(int argc, char **argv)
   im::ccl_init();
   /* Init recycle_bin system */
   im::recycle_bin::recycle_init();
+  /* Init outline system */
+  im::outline_init();
 
   im::package_context_init();
   /*
@@ -6885,6 +6890,8 @@ int mysqld_main(int argc, char **argv)
   im::ccl_rules_init(opt_initialize);
   im::ccl_queue_buckets_init(im::ccl_queue_bucket_count,
                              im::ccl_queue_bucket_size);
+
+  im::statement_outline_init(opt_initialize);
 
   (void)RUN_HOOK(server_state, after_recovery, (NULL));
 
@@ -8827,6 +8834,8 @@ SHOW_VAR status_vars[] = {
     {"Uptime_since_flush_status", (char *)&show_flushstatustime, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
 #endif
+    {"Reload_slave", (char *)im::reload_entry_status, SHOW_ARRAY,
+     SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {

@@ -20,6 +20,8 @@ binlog_encryption
 binlog_encryption
 binlog_rotate_encryption_master_key_at_startup
 binlog_rotate_encryption_master_key_at_startup
+ccl_max_waiting_count
+ccl_max_waiting_count
 ccl_queue_bucket_count
 ccl_queue_bucket_count
 ccl_queue_bucket_size
@@ -82,6 +84,12 @@ keyring_operations
 keyring_operations
 mandatory_roles
 mandatory_roles
+opt_outline_enabled
+opt_outline_enabled
+outline_allowed_sql_digest_truncate
+outline_allowed_sql_digest_truncate
+outline_partitions
+outline_partitions
 partial_revokes
 partial_revokes
 password_require_current

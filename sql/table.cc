@@ -121,6 +121,7 @@
 #include "thr_mutex.h"
 
 #include "sql/ccl/ccl_table.h"
+#include "sql/common/reload.h"
 
 /* INFORMATION_SCHEMA name */
 LEX_CSTRING INFORMATION_SCHEMA_NAME = {STRING_WITH_LEN("information_schema")};
@@ -429,6 +430,8 @@ TABLE_SHARE *alloc_table_share(const char *db, const char *table_name,
     /** Must destruct it without free */
     share->sequence_property = new (&mem_root) Sequence_property();
 
+    share->reload_entry = im::lookup_reload_entry(key, key_length);
+
     share->mem_root = std::move(mem_root);
     mysql_mutex_init(key_TABLE_SHARE_LOCK_ha_data, &share->LOCK_ha_data,
                      MY_MUTEX_INIT_FAST);
@@ -494,6 +497,11 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
   share->table_map_id = (ulonglong)thd->query_id;
 
   share->m_flush_tickets.empty();
+
+  share->entity_guard = nullptr;
+  share->reload_entry =
+      im::lookup_reload_entry(share->db.str, share->db.length,
+                              share->table_name.str, share->table_name.length);
 
   share->sequence_property = new (&share->mem_root) Sequence_property();
 }

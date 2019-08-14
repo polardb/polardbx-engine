@@ -177,6 +177,8 @@
 #include "sql/ccl/ccl.h"
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_parse.h"
+#include "sql/outline/outline_digest.h"
+#include "sql/outline/outline_interface.h"
 
 namespace dd {
 class Spatial_reference_system;
@@ -4670,6 +4672,8 @@ finish:
     trans_commit_implicit(thd);
     thd->get_stmt_da()->set_overwrite_status(false);
     thd->mdl_context.release_transactional_locks();
+
+    im::execute_reload_on_slave(thd, thd->get_transaction());
   } else if (!thd->in_sub_stmt && !thd->in_multi_stmt_transaction_mode()) {
     /*
       - If inside a multi-statement transaction,
@@ -5173,6 +5177,8 @@ void mysql_parse(THD *thd, Parser_state *parser_state) {
   thd->m_parser_state = NULL;
 
   enable_digest_if_any_plugin_needs_it(thd, parser_state);
+
+  im::enable_digest_by_outline(parser_state);
 
   LEX *lex = thd->lex;
   const char *found_semicolon = nullptr;
@@ -7164,6 +7170,13 @@ bool parse_sql(THD *thd, Parser_state *parser_state,
   /* That's it. */
 
   ret_value = mysql_parse_status || thd->is_fatal_error();
+
+  if (ret_value == 0 && thd->m_digest) {
+    /* invoke index outline */
+    im::invoke_outlines(
+        thd, thd->db().str, &thd->m_digest->m_digest_storage,
+        im::calculate_strip_length_for_explain(&thd->m_digest->m_digest_storage));
+  }
 
   if ((ret_value == 0) && (parser_state->m_digest_psi != NULL)) {
     /*

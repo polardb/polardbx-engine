@@ -46,6 +46,7 @@ LEX_CSTRING CCL_SCHEMA_NAME = {C_STRING_WITH_LEN("mysql")};
 /* ccl table name */
 LEX_CSTRING CCL_TABLE_NAME = {C_STRING_WITH_LEN("concurrency_control")};
 
+
 const char *CCL_TABLE_ALIAS = "concurrency_control";
 
 /* Whether the table is concurrency_control */

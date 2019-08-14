@@ -727,6 +727,10 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
+ --opt-outline-enabled 
+ When this option is enabled,it will invoke statement
+ outline when execute sql
+ (Defaults to on; use --skip-opt-outline-enabled to disable.)
  --optimizer-prune-level=# 
  Controls the heuristic(s) applied during query
  optimization to prune less-promising partial plans from
@@ -771,6 +775,12 @@ The following options may be given as the first argument:
  Maximum allowed cumulated size of stored optimizer traces
  --optimizer-trace-offset=# 
  Offset of first optimizer trace to show; see manual
+ --outline-allowed-sql-digest-truncate 
+ Whether allowed the incomplete of sql digest when add
+ outline
+ (Defaults to on; use --skip-outline-allowed-sql-digest-truncate to disable.)
+ --outline-partitions=# 
+ How many parititon of system outline structure.
  --parser-max-mem-size=# 
  Maximum amount of memory available to the parser
  --partial-revokes   Access of database objects can be restricted, even if
@@ -1613,6 +1623,7 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
+opt-outline-enabled TRUE
 optimizer-prune-level 1
 optimizer-search-depth 62
 optimizer-switch index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,engine_condition_pushdown=on,index_condition_pushdown=on,mrr=on,mrr_cost_based=on,block_nested_loop=on,batched_key_access=off,materialization=on,semijoin=on,loosescan=on,firstmatch=on,duplicateweedout=on,subquery_materialization_cost_based=on,use_index_extensions=on,condition_fanout_filter=on,derived_merge=on,use_invisible_indexes=off,skip_scan=on,hash_join=on
@@ -1621,6 +1632,8 @@ optimizer-trace-features greedy_search=on,range_optimizer=on,dynamic_range=on,re
 optimizer-trace-limit 1
 optimizer-trace-max-mem-size 1048576
 optimizer-trace-offset -1
+outline-allowed-sql-digest-truncate TRUE
+outline-partitions 16
 parser-max-mem-size 18446744073709551615
 partial-revokes ####
 password-history 0

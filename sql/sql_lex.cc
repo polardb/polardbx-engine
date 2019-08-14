@@ -478,6 +478,7 @@ void LEX::reset() {
   is_update_stmt = false;
   table_snap_expr_count_to_evaluate = 0;
   sequence_info = nullptr;
+  reset_query_blocks_list();
 }
 
 /**
@@ -576,6 +577,8 @@ SELECT_LEX *LEX::new_query(SELECT_LEX *curr_select) {
   select->include_down(this, sel_unit);
 
   select->include_in_global(&all_selects_list);
+
+  add_to_query_blocks(select);
 
   if (select->set_context(NULL)) return NULL; /* purecov: inspected */
   /*
@@ -742,7 +745,7 @@ Yacc_state::~Yacc_state() {
   }
 }
 
-static bool consume_optimizer_hints(Lex_input_stream *lip) {
+bool consume_optimizer_hints(Lex_input_stream *lip) {
   const my_lex_states *state_map = lip->query_charset->state_maps->main_map;
   int whitespace = 0;
   uchar c = lip->yyPeek();
@@ -2101,7 +2104,8 @@ SELECT_LEX::SELECT_LEX(Item *where, Item *having)
       m_empty_query(false),
       sj_candidates(NULL),
       hidden_order_field_count(0),
-      ccl_queue_field_cond_list()  {
+      ccl_queue_field_cond_list(),
+      outline_optimizer_list(nullptr) {
   end_lateral_table = NULL;
 }
 

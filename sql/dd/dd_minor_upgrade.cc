@@ -87,7 +87,7 @@ static const String_type
   ------------------------------------------
   __recycle_bin__
 */
-static const uint EXTRA_MYSQLD_VERSION_UPGRADED = 1;
+static const uint EXTRA_MYSQLD_VERSION_UPGRADED = 3;
 
 static const unsigned int UNKNOWN_EXTRA_VERSION = -1;
 

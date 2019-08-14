@@ -3911,7 +3911,8 @@ static bool innobase_is_supported_system_table(const char *db,
                                        "default_roles",
                                        "global_grants",
                                        "password_history",
-                                       "concurrency_control"};
+                                       "concurrency_control",
+                                       "outline"};
 
   static const char *const *const end = tables + UT_ARR_SIZE(tables);
 

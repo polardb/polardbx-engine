@@ -98,6 +98,8 @@
 
 #include "sql/sequence_common.h"  // Sequence_scan
 
+#include "sql/outline/outline_interface.h"
+
 namespace im {
 class Lex_optimizer_hint;
 }
@@ -1975,6 +1977,9 @@ class SELECT_LEX {
 
  public:
   List<Item> ccl_queue_field_cond_list;
+  List<im::Lex_optimizer_hint> *outline_optimizer_list;
+  SELECT_LEX *next_query_block{nullptr};
+  SELECT_LEX **prev_query_block{nullptr};
 };
 
 inline bool SELECT_LEX_UNIT::is_union() const {
@@ -3205,7 +3210,7 @@ class LEX_GRANT_AS {
 
 /* The state of the lex parsing. This is saved in the THD struct */
 
-struct LEX : public Query_tables_list {
+struct LEX : public Query_tables_list, public im::Query_blocks_list {
   friend bool lex_start(THD *thd);
 
   SELECT_LEX_UNIT *unit;  ///< Outer-most query expression
@@ -4039,4 +4044,6 @@ bool walk_item(Item *item, Select_lex_visitor *visitor);
 bool accept_for_order(SQL_I_List<ORDER> orders, Select_lex_visitor *visitor);
 bool accept_table(TABLE_LIST *t, Select_lex_visitor *visitor);
 bool accept_for_join(List<TABLE_LIST> *tables, Select_lex_visitor *visitor);
+
+bool consume_optimizer_hints(Lex_input_stream *lip);
 #endif /* SQL_LEX_INCLUDED */
