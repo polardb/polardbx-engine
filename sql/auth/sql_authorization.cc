@@ -1831,6 +1831,9 @@ bool check_readonly(THD *thd, bool err_if_readonly) {
   */
   if (thd->slave_thread || thd->is_cmd_skip_readonly()) return false;
 
+  /* Allowed recycle scheduler thread to purge recycled table */
+  if (thd->system_thread == SYSTEM_THREAD_RECYCLE_SCHEDULER) return false;
+
   Security_context *sctx = thd->security_context();
   bool is_super =
       sctx->check_access(SUPER_ACL) ||

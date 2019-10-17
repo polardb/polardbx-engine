@@ -17,6 +17,7 @@ DROP DATABASE db2_extended;
 DROP DATABASE db1_extended;
 SHOW DATABASES;
 Database
+__recycle_bin__
 db2_extended
 information_schema
 mtr
@@ -170,6 +171,7 @@ DROP DATABASE db3_extended;
 DROP DATABASE db4_extended;
 SHOW DATABASES;
 Database
+__recycle_bin__
 db2_extended
 db4_extended
 information_schema

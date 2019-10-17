@@ -458,6 +458,9 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
   void set_last_altered(ulonglong last_altered) override {
     Abstract_table_impl::set_last_altered(last_altered);
   }
+  virtual ulonglong get_last_altered() const override {
+    return Abstract_table_impl::get_last_altered();
+  }
   Column *add_column() override { return Abstract_table_impl::add_column(); }
   bool drop_column(const String_type &name) override {
     return Abstract_table_impl::drop_column(name);
@@ -613,6 +616,12 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
     placeholder->set_se_private_id(se_private_id());
     return placeholder;
   }
+
+ public:
+  /**
+    Clear table foreign key objects.
+  */
+  virtual void drop_all_foreign_keys() override;
 };
 
 ///////////////////////////////////////////////////////////////////////////

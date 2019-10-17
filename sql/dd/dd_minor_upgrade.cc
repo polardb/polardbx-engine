@@ -78,10 +78,16 @@ static const String_type
   1. Published by Concurrency control system
   ------------------------------------------
   mysql.concurrency_control
+
+  2. Published by outline system
+  ------------------------------------------
+  mysql.outline
+
+  3. Published by Recycle bin
+  ------------------------------------------
+  __recycle_bin__
 */
 static const uint EXTRA_MYSQLD_VERSION_UPGRADED = 1;
-
-
 
 static const unsigned int UNKNOWN_EXTRA_VERSION = -1;
 

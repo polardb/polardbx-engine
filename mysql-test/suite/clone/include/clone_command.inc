@@ -75,6 +75,9 @@ if($remote_clone) {
     # Delay the clone process for 10 seconds
     SET GLOBAL clone_delay_after_data_drop = 2;
    }
+#--echo #sleep begin
+#--sleep 50
+#--echo #sleep end
 
   # Execute Remote Clone command with error
   if ($clone_remote_err) {

@@ -1205,6 +1205,14 @@ The following options may be given as the first argument:
  --read-rnd-buffer-size=# 
  When reading rows in sorted order after a sort, the rows
  are read through this buffer to avoid a disk seeks
+ --recycle-bin       Whether recycle the table which is going to be dropped
+ --recycle-bin-retention=# 
+ Seconds before really purging the recycled table.
+ --recycle-scheduler Enable the recycle scheduler.
+ --recycle-scheduler-interval=# 
+ Interval in seconds for recycle scheduler.
+ --recycle-scheduler-purge-table-print 
+ Print the recycle scheduler process.
  --regexp-stack-limit=# 
  Stack size limit for regular expressions matches
  --regexp-time-limit=# 
@@ -2074,6 +2082,11 @@ rds-version 32
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144
+recycle-bin FALSE
+recycle-bin-retention 604800
+recycle-scheduler FALSE
+recycle-scheduler-interval 30
+recycle-scheduler-purge-table-print FALSE
 regexp-stack-limit 8000000
 regexp-time-limit 32
 relay-log relaylog

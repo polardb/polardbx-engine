@@ -27,6 +27,7 @@ def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 select schema_name from information_schema.schemata ORDER BY schema_name;
 SCHEMA_NAME
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -38,6 +39,7 @@ Database (t%)
 test
 show databases;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -381,6 +383,7 @@ end	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 create view v0 (c) as select schema_name from information_schema.schemata order by schema_name;
 select * from v0;
 c
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -2651,6 +2654,7 @@ FLUSH PRIVILEGES;
 # The user specified as a definer ('root'@'localhost') does not exist
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

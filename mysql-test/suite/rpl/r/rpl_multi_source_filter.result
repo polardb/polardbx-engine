@@ -171,6 +171,7 @@ include/sync_slave_sql_with_master.inc [FOR CHANNEL 'channel_6']
 #
 SHOW DATABASES;
 Database
+__recycle_bin__
 db1
 db3
 db333

@@ -1056,4 +1056,10 @@ Table_impl::Table_impl(const Table_impl &src)
   m_triggers.deep_copy(src.m_triggers, this);
   m_check_constraints.deep_copy(src.m_check_constraints, this);
 }
+
+/**
+  Clear table foreign key objects.
+*/
+void Table_impl::drop_all_foreign_keys() { m_foreign_keys.remove_all(); }
+
 }  // namespace dd

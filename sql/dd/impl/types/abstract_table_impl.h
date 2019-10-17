@@ -143,6 +143,8 @@ class Abstract_table_impl : public Entity_object_impl,
     m_last_altered = last_altered;
   }
 
+  virtual ulonglong get_last_altered() const override { return m_last_altered; }
+
   /////////////////////////////////////////////////////////////////////////
   // hidden.
   /////////////////////////////////////////////////////////////////////////

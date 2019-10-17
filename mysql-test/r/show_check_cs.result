@@ -154,6 +154,7 @@ show databases;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def		schemata	SCHEMATA	Database	Database	253	256	18	N	#	0	255
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

@@ -290,6 +290,7 @@ SET(DD_SOURCES
   dd/upgrade_57/table.cc
   dd/upgrade_57/upgrade.cc
   dd/dd_minor_upgrade.cc
+  dd/recycle_bin/dd_recycle.cc
 )
 
 SET(SQL_GIS_SOURCES
@@ -672,6 +673,13 @@ SET(SQL_SHARED_SOURCES
   sequence_common.cc
   sequence_transaction.cc
   sql_sequence.cc
+  recycle_bin/recycle_table.cc
+  recycle_bin/recycle.cc
+  recycle_bin/recycle_parse.cc
+  recycle_bin/recycle_proc.cc
+  recycle_bin/recycle_cache.cc
+  recycle_bin/recycle_auth.cc
+  recycle_bin/recycle_scheduler.cc
   timestamp_service.cc
   tso/tso_proc.cc
   lizard/lizard_snapshot.cc

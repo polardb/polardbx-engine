@@ -94,6 +94,7 @@ CREATE SCHEMA S;
 SELECT * FROM information_schema.schemata_extensions ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	OPTIONS
 def	S	
+def	__recycle_bin__	
 def	information_schema	
 def	mtr	
 def	mysql	
@@ -104,6 +105,7 @@ ALTER SCHEMA S READ ONLY=1;
 SELECT * FROM information_schema.schemata_extensions ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	OPTIONS
 def	S	READ ONLY=1
+def	__recycle_bin__	
 def	information_schema	
 def	mtr	
 def	mysql	
@@ -114,6 +116,7 @@ ALTER SCHEMA S READ ONLY=0;
 SELECT * FROM information_schema.schemata_extensions ORDER BY SCHEMA_NAME;
 CATALOG_NAME	SCHEMA_NAME	OPTIONS
 def	S	
+def	__recycle_bin__	
 def	information_schema	
 def	mtr	
 def	mysql	
@@ -237,6 +240,7 @@ S	CREATE DATABASE `S` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_090
 SELECT schema_name FROM information_schema.schemata ORDER BY schema_name;
 SCHEMA_NAME
 S
+__recycle_bin__
 information_schema
 mtr
 mysql

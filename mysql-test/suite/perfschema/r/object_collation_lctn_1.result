@@ -65,6 +65,7 @@ CREATE SCHEMA `bRŎKȩn`;
 CREATE SCHEMA `∀p∊ℙ`;
 SHOW DATABASES;
 Database
+__recycle_bin__
 broken
 brokén
 brŏkȩn

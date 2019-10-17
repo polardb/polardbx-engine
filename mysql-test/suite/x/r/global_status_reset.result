@@ -1,6 +1,7 @@
 RUN SHOW SCHEMAS
 
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

@@ -15,6 +15,7 @@ HEX('s(p)≎⊤')
 CREATE SCHEMA `∀p∊ℙ`;
 show databases;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

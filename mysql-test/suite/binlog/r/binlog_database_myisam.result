@@ -90,6 +90,7 @@ binlog.000001	#	Query	#	#	use `testing_1`; DROP TABLE IF EXISTS `t1` /* generate
 DROP DATABASE testing_1;
 show databases;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

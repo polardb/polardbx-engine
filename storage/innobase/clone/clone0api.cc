@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0clone.h"
 #include "os0thread-create.h"
 
+#include "recycle_bin/recycle_table.h"
 #include "sql/clone_handler.h"
 #include "sql/mysqld.h"
 #include "sql/sql_backup_lock.h"
@@ -1821,7 +1822,8 @@ class Fixup_data {
     if (0 == strcmp(schema_name, MYSQL_SCHEMA_NAME.str) ||
         0 == strcmp(schema_name, "sys") ||
         0 == strcmp(schema_name, PERFORMANCE_SCHEMA_DB_NAME.str) ||
-        0 == strcmp(schema_name, INFORMATION_SCHEMA_NAME.str)) {
+        0 == strcmp(schema_name, INFORMATION_SCHEMA_NAME.str) ||
+        0 == strcmp(schema_name, im::recycle_bin::RECYCLE_BIN_SCHEMA.str)) {
       return (true);
     }
     return (false);

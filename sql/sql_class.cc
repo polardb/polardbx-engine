@@ -116,6 +116,7 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+#include "sql/recycle_bin/recycle.h"
 
 class Parse_tree_root;
 
@@ -729,13 +730,13 @@ THD::THD(bool enable_plugins)
       ppi_thread(nullptr),
       ppi_transaction(nullptr),
       ppi_statement_stat(new PPI_stat()),
+      ccl_comply(new im::Ccl_comply(this)),
       m_inside_system_variable_global_update(false),
       bind_parameter_values(nullptr),
       bind_parameter_values_count(0),
       owned_commit_gcn(),
       owned_vision_gcn(),
-      lex_returning(new im::Lex_returning(false, mem_root)),
-      ccl_comply(new im::Ccl_comply(this)) {
+      lex_returning(new im::Lex_returning(false, mem_root)) {
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);
@@ -872,6 +873,7 @@ THD::THD(bool enable_plugins)
   seq_thd_hash = new Sequence_last_value_hash(system_charset_info,
                                               key_memory_sequence_last_value);
   conn_attr.reset();
+  recycle_state = new im::recycle_bin::Recycle_state();
 }
 
 void THD::copy_table_access_properties(THD *thd) {
@@ -879,6 +881,7 @@ void THD::copy_table_access_properties(THD *thd) {
   variables.option_bits = thd->variables.option_bits & OPTION_BIN_LOG;
   skip_readonly_check = thd->skip_readonly_check;
   tx_isolation = thd->tx_isolation;
+
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {
@@ -1504,6 +1507,7 @@ THD::~THD() {
   /* Destroy the hash table used to save last CURRVAL value of sequence table */
   destroy_hash(seq_thd_hash);
   seq_thd_hash = nullptr;
+  delete recycle_state;
 }
 
 /**

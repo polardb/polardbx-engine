@@ -100,6 +100,8 @@
 #include "sql_string.h"
 #include "typelib.h"
 
+#include "sql/recycle_bin/recycle_table.h"
+
 /*
   .frm is left in this list so that any orphan files can be removed on upgrade.
   .SDI needs to be there for now... need to investigate why...
@@ -718,7 +720,8 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
 
   // Reject dropping the system schema except for system threads.
   if (!thd->is_dd_system_thread() &&
-      dd::get_dictionary()->is_dd_schema_name(dd::String_type(db.str))) {
+      (dd::get_dictionary()->is_dd_schema_name(dd::String_type(db.str)) ||
+       im::recycle_bin::is_recycle_db(db.str))) {
     my_error(ER_NO_SYSTEM_SCHEMA_ACCESS, MYF(0), db.str);
     return true;
   }

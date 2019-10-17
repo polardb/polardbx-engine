@@ -511,6 +511,8 @@ struct System_variables {
   ulonglong innodb_commit_gcn;
 
   bool innodb_current_snapshot_gcn;
+
+  bool recycle_bin;
 };
 
 /**

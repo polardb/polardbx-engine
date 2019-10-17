@@ -133,6 +133,7 @@ class Foreign_key_parents_invalidator {
   const Parent_map &parents() const { return m_parent_map; }
   bool is_empty() const { return m_parent_map.empty(); }
   void clear() { m_parent_map.clear(); }
+  void force_invalidate(THD *thd);
 };
 
 /**

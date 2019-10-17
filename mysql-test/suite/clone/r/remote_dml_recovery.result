@@ -171,6 +171,7 @@ SET global debug="-d,clone_recovery_crash_point";
 # In connection default
 SHOW SCHEMAS;
 Database
+__recycle_bin__
 information_schema
 mysql
 performance_schema

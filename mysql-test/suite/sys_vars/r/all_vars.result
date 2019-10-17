@@ -210,6 +210,16 @@ rds_release_date
 rds_release_date
 rds_version
 rds_version
+recycle_bin
+recycle_bin
+recycle_bin_retention
+recycle_bin_retention
+recycle_scheduler
+recycle_scheduler
+recycle_scheduler_interval
+recycle_scheduler_interval
+recycle_scheduler_purge_table_print
+recycle_scheduler_purge_table_print
 regexp_stack_limit
 regexp_stack_limit
 regexp_time_limit

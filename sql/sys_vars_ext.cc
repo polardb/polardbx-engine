@@ -21,17 +21,19 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "sql_statistics_common.h"
-#include "sys_vars.h"
 #include "sys_vars_ext.h"
+#include "my_config.h"
 #include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_internal_account.h"
-#include "sql/sql_common_ext.h"
-#include "sql/sys_vars.h"
-#include "my_config.h"
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_bucket.h"
 #include "sql/ccl/ccl_interface.h"
+#include "sql/recycle_bin/recycle_scheduler.h"
+#include "sql/recycle_bin/recycle_table.h"
+#include "sql/sql_common_ext.h"
+#include "sql/sys_vars.h"
+#include "sql_statistics_common.h"
+#include "sys_vars.h"
 
 #include "my_config.h"
 #include "mysqld.h"
@@ -369,3 +371,58 @@ static Sys_var_ulong Sys_ccl_queue_bucket(
     VALID_RANGE(1, CCL_QUEUE_BUCKET_COUNT_MAX),
     DEFAULT(CCL_QUEUE_BUCKET_COUNT_DEFAULT), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(update_ccl_queue));
+
+static Sys_var_bool Sys_recycle_bin(
+    "recycle_bin", "Whether recycle the table which is going to be dropped",
+    SESSION_VAR(recycle_bin), CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_ulong Sys_recycle_scheduler_interval(
+    "recycle_scheduler_interval", "Interval in seconds for recycle scheduler.",
+    GLOBAL_VAR(im::recycle_bin::recycle_scheduler_interval),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, 60), DEFAULT(30), BLOCK_SIZE(1));
+
+static bool recycle_scheduler_retention_update(sys_var *, THD *,
+                                               enum_var_type) {
+  im::recycle_bin::Recycle_scheduler::instance()->wakeup();
+  return false;
+}
+
+static Sys_var_ulong Sys_recycle_bin_retention(
+    "recycle_bin_retention",
+    "Seconds before really purging the recycled table.",
+    GLOBAL_VAR(im::recycle_bin::recycle_bin_retention), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 365 * 24 * 60 * 60), DEFAULT(7 * 24 * 60 * 60),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(recycle_scheduler_retention_update));
+
+static bool recycle_scheduler_update(sys_var *, THD *, enum_var_type) {
+  bool res = false;
+  bool value = im::recycle_bin::opt_recycle_scheduler;
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+
+  if (value) {
+    res = im::recycle_bin::Recycle_scheduler::instance()->start();
+  } else {
+    res = im::recycle_bin::Recycle_scheduler::instance()->stop();
+  }
+  mysql_mutex_lock(&LOCK_global_system_variables);
+  if (res) {
+    im::recycle_bin::opt_recycle_scheduler = false;
+    my_error(ER_EVENT_SET_VAR_ERROR, MYF(0), 0);
+  }
+  return res;
+}
+
+static Sys_var_bool Sys_recycle_scheduler(
+    "recycle_scheduler", "Enable the recycle scheduler.",
+    GLOBAL_VAR(im::recycle_bin::opt_recycle_scheduler), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(recycle_scheduler_update));
+
+static Sys_var_bool Sys_recycle_scheduler_purge_table_print(
+    "recycle_scheduler_purge_table_print",
+    "Print the recycle scheduler process.",
+    GLOBAL_VAR(im::recycle_bin::recycle_scheduler_purge_table_print),
+    CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));

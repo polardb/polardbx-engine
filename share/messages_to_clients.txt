@@ -10087,6 +10087,10 @@ ER_CCL_REFUSE_QUERY
 
 ER_CCL_QUEUE_FIELD_NOT_FOUND
   eng "Didn't found suitable field condition when apply ccl queue"
+
+ER_PREPARE_RECYCLE_TABLE_ERROR
+  eng "Recycle table failed : %s"
+
 #
 #  End of RDS error message.
 #

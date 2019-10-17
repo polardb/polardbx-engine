@@ -456,6 +456,11 @@ class Table : virtual public Abstract_table {
   */
 
   virtual bool deserialize(Sdi_rcontext *rctx, const RJ_Value &val) = 0;
+
+  /**
+    Clear table foreign key objects.
+  */
+  virtual void drop_all_foreign_keys() = 0;
 };
 
 ///////////////////////////////////////////////////////////////////////////

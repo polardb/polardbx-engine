@@ -25,7 +25,6 @@
 
 class THD;
 class LEX;
-struct TABLE_LIST;
 class Query_block;
 
 namespace im {

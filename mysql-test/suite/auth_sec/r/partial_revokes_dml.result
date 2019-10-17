@@ -302,6 +302,7 @@ REVOKE SELECT, INSERT ON `partial_revokes_db`.* FROM `baz`@`localhost`
 GRANT `r3`@`%` TO `baz`@`localhost`
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -312,6 +313,7 @@ test
 SET ROLE r3;
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -328,6 +330,7 @@ REVOKE SELECT ON `partial_revokes_db`.* FROM `baz`@`localhost`
 GRANT `r3`@`%` TO `baz`@`localhost`
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -339,6 +342,7 @@ test
 SET ROLE r3;
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -354,6 +358,7 @@ GRANT SELECT, INSERT ON *.* TO `baz`@`localhost`
 GRANT `r3`@`%` TO `baz`@`localhost`
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -365,6 +370,7 @@ test
 SET ROLE r3;
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

@@ -31,6 +31,8 @@
 */
 
 #include "my_config.h"
+#include "my_sharedlib.h"
+#include "mysql_com.h"
 
 #include <stddef.h>
 #include <stdlib.h>

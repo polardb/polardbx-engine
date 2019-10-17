@@ -232,6 +232,7 @@ DROP PROCEDURE p1;
 # 'bug58090' database should not be present.
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -241,6 +242,7 @@ test
 # 'bug58090' database should be present.
 SHOW DATABASES;
 Database
+__recycle_bin__
 bug58090
 information_schema
 mtr

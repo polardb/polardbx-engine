@@ -12166,6 +12166,15 @@ ER_LIZARD_GTID
 ER_XA_SPEC_VERSION_NOT_MATCH
   eng "Binlog file version %d is lower than XA specification recovery version %d"
 
+ER_RECYCLE_SCHEDULER
+  eng "Recycle scheduler : %s"
+
+ER_RECYCLE_BIN_SCHEMA_INIT_FAILED
+  eng "Recycle_bin schema initialization failed"
+
+ER_RECYCLE_BIN
+  eng "Recycle_bin : %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

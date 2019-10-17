@@ -32,6 +32,7 @@
 #include "sql/tso/tso_proc.h"
 #include "sql/trans_proc/returning.h"
 #include "sql/ccl/ccl_proc.h"
+#include "sql/recycle_bin/recycle_proc.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -159,6 +160,12 @@ void package_context_init() {
   /* dbms_ccl.show_ccl_queue(...) */
   register_package<Proc, Ccl_proc_show_queue>(CCL_PROC_SCHEMA);
 
+  /* dbms_recycle.show_tables() */
+  register_package<Proc, im::recycle_bin::Recycle_proc_show>(
+      im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
+  /* dbms_recycle.purge_table() */
+  register_package<Proc, im::recycle_bin::Recycle_proc_purge>(
+      im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
 }
 
 } /* namespace im */
