@@ -151,6 +151,7 @@ class Abstract_table : virtual public Entity_object {
 
   virtual ulonglong last_altered(bool convert_time) const = 0;
   virtual void set_last_altered(ulonglong last_altered) = 0;
+  virtual ulonglong get_last_altered() const = 0;
 
   virtual enum_table_type type() const = 0;
 

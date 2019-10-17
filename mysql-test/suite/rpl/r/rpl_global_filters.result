@@ -101,6 +101,7 @@ include/sync_slave_sql_with_master.inc
 #
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

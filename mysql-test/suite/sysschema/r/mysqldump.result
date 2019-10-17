@@ -3,6 +3,7 @@ CREATE TABLE mysql.tmp_backup_user AS SELECT * FROM mysql.user;
 DROP DATABASE sys;
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql
@@ -11,6 +12,7 @@ test
 # restart:--upgrade=FORCE
 SHOW DATABASES;
 Database
+__recycle_bin__
 information_schema
 mtr
 mysql

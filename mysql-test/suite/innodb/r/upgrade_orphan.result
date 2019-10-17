@@ -21,6 +21,7 @@ a
 DROP SCHEMA test123;
 SHOW DATABASES;
 Database
+__recycle_bin__
 aview
 events
 foreign_keys

@@ -402,6 +402,8 @@ struct System_variables {
   ulonglong global_query_wait_timeout;
 
   bool sequence_read_skip_cache;
+
+  bool recycle_bin;
 };
 
 /**

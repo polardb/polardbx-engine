@@ -796,6 +796,11 @@ The documentation is based on the source files such as:
 #include "sql/dd/upgrade_57/upgrade.h"  // dd::upgrade_57::in_progress
 #include "sql/srv_session.h"
 
+#include "sql/dd/recycle_bin/dd_recycle.h"
+#include "sql/recycle_bin/recycle.h"
+#include "sql/recycle_bin/recycle_scheduler.h"
+#include "sql/recycle_bin/recycle_table.h"
+
 using std::max;
 using std::min;
 using std::vector;
@@ -1983,6 +1988,9 @@ static void close_connections(void) {
   // Disable the event scheduler
   Events::stop();
 
+  /* Stop recycle scheduler */
+  im::recycle_bin::Recycle_scheduler::instance()->stop();
+
   if (thd_manager->get_thd_count() > 0) sleep(2);  // Give threads time to die
 
   /*
@@ -2345,6 +2353,7 @@ static void clean_up(bool print_message) {
   udf_deinit_globals();
 
   im::ccl_destroy();
+  im::recycle_bin::recycle_deinit();
 
   /*
     Cleanup for user defined functions with the same names as sequence
@@ -5656,6 +5665,22 @@ static int init_server_components() {
   }
 #endif
 
+  /** Init recycle bin system, and create recycle schema */
+  if (!is_help_or_validate_option()) {
+    bool st;
+    init_optimizer_cost_module(true);
+    if (opt_initialize || dd_upgrade_was_initiated)
+      st = im::recycle_bin::init(dd::enum_dd_init_type::DD_INITIALIZE);
+    else
+      st = im::recycle_bin::init(dd::enum_dd_init_type::DD_RESTART_OR_UPGRADE);
+    delete_optimizer_cost_module();
+
+    if (st) {
+      LogErr(ERROR_LEVEL, ER_RECYCLE_BIN_SCHEMA_INIT_FAILED);
+      unireg_abort(1);
+    }
+  }
+
   if (!is_help_or_validate_option() && !opt_initialize &&
       !dd::upgrade::no_server_upgrade_required()) {
     if (opt_upgrade_mode == UPGRADE_MINIMAL)
@@ -6300,7 +6325,10 @@ int mysqld_main(int argc, char **argv)
   im::package_context_init();
   /* Init conconcurrency control system */
   im::ccl_init();
+  /* Init recycle_bin system */
+  im::recycle_bin::recycle_init();
 
+  im::package_context_init();
   /*
     Now that some instrumentation is in place,
     recreate objects which were initialised early,
@@ -6862,6 +6890,11 @@ int mysqld_main(int argc, char **argv)
 
   if (Events::init(opt_noacl || opt_initialize))
     unireg_abort(MYSQLD_ABORT_EXIT);
+
+  /* Start recycle scheduler thread */
+  if (im::recycle_bin::recycle_scheduler_start(opt_initialize))
+    unireg_abort(MYSQLD_ABORT_EXIT);
+
 
 #ifndef _WIN32
   //  Start signal handler thread.

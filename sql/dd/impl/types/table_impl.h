@@ -435,6 +435,9 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
   virtual void set_last_altered(ulonglong last_altered) {
     Abstract_table_impl::set_last_altered(last_altered);
   }
+  virtual ulonglong get_last_altered() const {
+    return Abstract_table_impl::get_last_altered();
+  }
   virtual Column *add_column() { return Abstract_table_impl::add_column(); }
   virtual const Column_collection &columns() const {
     return Abstract_table_impl::columns();
@@ -563,6 +566,12 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
 
   Table_impl(const Table_impl &src);
   Table_impl *clone() const { return new Table_impl(*this); }
+
+ public:
+  /**
+    Clear table foreign key objects.
+  */
+  virtual void drop_all_foreign_keys();
 };
 
 ///////////////////////////////////////////////////////////////////////////

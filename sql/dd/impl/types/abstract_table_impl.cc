@@ -86,7 +86,9 @@ static const std::set<String_type> default_valid_option_keys = {
     "storage",
     "tablespace",
     "timestamp",
-    "view_valid"};
+    "view_valid",
+    "__origin_schema__",
+    "__origin_table__"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Abstract_table_impl implementation.

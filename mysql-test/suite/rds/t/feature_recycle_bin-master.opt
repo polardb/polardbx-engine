@@ -1,0 +1,5 @@
+--recycle_bin=on
+--recycle_scheduler=on
+--recycle_scheduler_purge_table_print=on
+--recycle_scheduler_interval=1
+--recycle_bin_retention=1

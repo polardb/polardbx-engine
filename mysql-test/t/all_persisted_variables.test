@@ -41,7 +41,10 @@ call mtr.add_suppression("Failed to set up SSL because of the following SSL libr
 let $total_global_vars=`SELECT COUNT(*) FROM performance_schema.global_variables where variable_name NOT LIKE 'ndb_%' AND variable_name NOT LIKE 'xengine_%'`;
 # Add concurrency control variables.
 # Add ccl queue variables
-let $total_persistent_vars=403;
+# Add sync_binlog_redo_together
+# Add recovery_force_flush_log_trx_size
+# Add recycle bin variables
+let $total_persistent_vars=449;
 
 --echo ***************************************************************
 --echo * 0. Verify that variables present in performance_schema.global

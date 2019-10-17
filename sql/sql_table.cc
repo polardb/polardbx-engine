@@ -165,6 +165,8 @@
 #include "thr_lock.h"
 #include "typelib.h"
 
+#include "sql/recycle_bin/recycle_table.h"
+
 namespace dd {
 class View;
 }  // namespace dd
@@ -2921,6 +2923,7 @@ bool mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
   dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   Drop_tables_ctx drop_ctx(if_exists, drop_temporary, drop_database);
   std::vector<MDL_ticket *> safe_to_release_mdl_atomic;
+  Foreign_key_parents_invalidator recycle_fk_invalidator;
 
   bool default_db_doesnt_exist = false;
 
@@ -3125,10 +3128,19 @@ bool mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     });
 
     for (TABLE_LIST *table : drop_ctx.base_atomic_tables) {
-      if (drop_base_table(thd, drop_ctx, table, true /* atomic */,
-                          post_ddl_htons, fk_invalidator,
-                          &safe_to_release_mdl_atomic)) {
+      im::recycle_bin::Recycle_result res;
+      res = im::recycle_bin::recycle_base_table(thd, post_ddl_htons,
+                                                &recycle_fk_invalidator, table);
+      if (res == im::recycle_bin::Recycle_result::ERROR)
         goto err_with_rollback;
+      else if (res == im::recycle_bin::Recycle_result::DROP_CONTINUE) {
+        if (drop_base_table(thd, drop_ctx, table, true /* atomic */,
+                            post_ddl_htons, fk_invalidator,
+                            &safe_to_release_mdl_atomic)) {
+          goto err_with_rollback;
+        }
+      } else {
+        DBUG_ASSERT(res == im::recycle_bin::Recycle_result::OK);
       }
     }
 
@@ -3319,6 +3331,9 @@ bool mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     */
     fk_invalidator->invalidate(thd);
   }
+
+  recycle_fk_invalidator.force_invalidate(thd);
+
 
   /*
     Dropping of temporary tables cannot be rolled back. On the other hand it
@@ -9804,10 +9819,9 @@ class Rename_table_error_handler : public Internal_error_handler {
 
   @return false on success, true on error
 */
-static bool rename_histograms(THD *thd, const char *old_schema_name,
-                              const char *old_table_name,
-                              const char *new_schema_name,
-                              const char *new_table_name) {
+bool rename_histograms(THD *thd, const char *old_schema_name,
+                       const char *old_table_name, const char *new_schema_name,
+                       const char *new_table_name) {
   histograms::results_map results;
   bool res =
       histograms::rename_histograms(thd, old_schema_name, old_table_name,
@@ -18790,4 +18804,42 @@ bool lock_check_constraint_names(THD *thd, TABLE_LIST *tables) {
     return true;
 
   return false;
+}
+
+/* Call the dict_cache_reset() forcely compare to invalidate() */
+void Foreign_key_parents_invalidator::force_invalidate(THD *thd) {
+  for (auto parent_it : m_parent_map) {
+    // Invalidate Table and Table Definition Caches too.
+    mysql_ha_flush_table(thd, parent_it.first.first.c_str(),
+                         parent_it.first.second.c_str());
+    close_all_tables_for_name(thd, parent_it.first.first.c_str(),
+                              parent_it.first.second.c_str(), false);
+
+    /*
+      TODO: Should revisit the way we do invalidation to avoid
+      suppressing errors, which is necessary since it's done after
+      commit. For now, we use an error handler.
+    */
+    Dummy_error_handler error_handler;
+    thd->push_internal_handler(&error_handler);
+    bool ignored MY_ATTRIBUTE((unused));
+    ignored = thd->dd_client()->invalidate(parent_it.first.first.c_str(),
+                                           parent_it.first.second.c_str());
+    DBUG_EXECUTE_IF("fail_while_invalidating_fk_parents",
+                    { my_error(ER_LOCK_DEADLOCK, MYF(0)); });
+    thd->pop_internal_handler();
+
+    // And storage engine internal dictionary cache as well.
+    /*
+      TODO: Simply removing entries from InnoDB internal cache breaks
+            its FK checking logic at the moment. This is to be solved
+            as part of WL#9533. We might have to replace invalidation
+            with cache update to do this.
+    */
+    if ((parent_it.second)->dict_cache_reset)
+      ((parent_it.second))
+          ->dict_cache_reset(parent_it.first.first.c_str(),
+                             parent_it.first.second.c_str());
+  }
+  m_parent_map.clear();
 }

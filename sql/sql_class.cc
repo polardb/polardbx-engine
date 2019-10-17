@@ -93,9 +93,7 @@
 #include "sql/xa.h"
 #include "thr_mutex.h"
 #include "sql/trans_proc/common.h"
-
-
-#include "sql/sequence_common.h"  // Sequence_last_value_hash
+#include "sql/recycle_bin/recycle.h"
 
 using std::max;
 using std::min;
@@ -566,11 +564,13 @@ THD::THD(bool enable_plugins)
   /* Create the hash table to save the last CURRVAL value of sequence table */
   seq_thd_hash = new Sequence_last_value_hash(system_charset_info,
                                               key_memory_sequence_last_value);
+
+  recycle_state = new im::recycle_bin::Recycle_state();
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {
-  DBUG_ASSERT(is_attachable_ro_transaction_active() || is_autonomous_transaction());
-
+  DBUG_ASSERT(is_attachable_ro_transaction_active() ||
+              is_autonomous_transaction());
   delete m_transaction.release();
   m_transaction.reset(transaction_ctx);
 }
@@ -1136,6 +1136,7 @@ THD::~THD() {
   /* Destroy the hash table used to save last CURRVAL value of sequence table */
   destroy_hash(seq_thd_hash);
   seq_thd_hash = nullptr;
+  delete recycle_state;
 }
 
 /**

@@ -175,6 +175,8 @@
 #include "sql/debug_lock_order.h"
 #endif /* WITH_LOCK_ORDER */
 #include "sql/ccl/ccl.h"
+#include "sql/recycle_bin/recycle.h"
+#include "sql/recycle_bin/recycle_parse.h"
 
 namespace dd {
 class Spatial_reference_system;
@@ -2686,6 +2688,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
     */
     thd->get_stmt_da()->reset_condition_info(thd);
   }
+
+  im::recycle_bin::Recycle_process_context recycle_context(thd);
+  im::recycle_bin::recycle_state_rewrite(thd, &recycle_context);
 
   if (thd->resource_group_ctx()->m_warn != 0) {
     auto res_grp_name = thd->resource_group_ctx()->m_switch_resource_group_str;

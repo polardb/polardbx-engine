@@ -114,6 +114,12 @@
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_interface.h"
 
+namespace im {
+namespace recycle_bin {
+class Recycle_state;
+}
+}
+
 enum enum_check_fields : int;
 enum enum_tx_isolation : int;
 enum ha_notification_type : int;
@@ -4196,6 +4202,8 @@ class THD : public MDL_context_owner,
  public:
   std::unique_ptr<im::Ccl_comply> ccl_comply;
   std::vector<im::Ccl_comply_handler *> ccl_comply_handlers;
+
+  im::recycle_bin::Recycle_state *recycle_state;
 
   Sequence_last_value_hash *get_sequence_hash() { return seq_thd_hash; }
 

@@ -76,6 +76,12 @@ bool Proc::send_result_metadata(THD *thd) const {
 
         item->maybe_null = 1;
         break;
+      case MYSQL_TYPE_TIMESTAMP:
+        field_list.push_back(item = new Item_temporal(
+                                 MYSQL_TYPE_TIMESTAMP,
+                                 Name_string((*it).name, strlen((*it).name)), 0,
+                                 0));
+        break;
       default:
         DBUG_ASSERT(0);
     }
