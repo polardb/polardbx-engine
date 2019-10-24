@@ -59,16 +59,12 @@ bool init_key_id_mgr() {
 #endif
 
   char keyring_file[FN_REFLEN] = {0};
+  const char *dir = keyring_rds_dir;
 
-  if (keyring_rds_dir[0] != FN_LIBCHAR) {
-    // Relative path
-    snprintf(keyring_file, sizeof(keyring_file) - 1, "%s%s%cmaster_key_id",
-             mysql_real_data_home_ptr, keyring_rds_dir, FN_LIBCHAR);
-  } else {
-    // Full path
-    snprintf(keyring_file, sizeof(keyring_file) - 1, "%s%cmaster_key_id",
-             keyring_rds_dir, FN_LIBCHAR);
-  }
+  if (dir == NULL || dir[0] == '\0') dir = mysql_real_data_home_ptr;
+
+  snprintf(keyring_file, sizeof(keyring_file) - 1, "%s%cmaster_key_id", dir,
+           FN_LIBCHAR);
 
   key_container = new Key_container();
   if (key_container == NULL) {
@@ -100,13 +96,13 @@ static bool create_file_dir_if_not_exist(const char *file_path) {
   size_t keyring_dir_length;
 
   dirname_part(keyring_dir, file_path, &keyring_dir_length);
-  if (keyring_dir_length > 1 &&
+  while (keyring_dir_length > 1 &&
       (keyring_dir[keyring_dir_length - 1] == FN_LIBCHAR)) {
     keyring_dir[keyring_dir_length - 1] = '\0';
     --keyring_dir_length;
   }
 
-  assert(strlen(keyring_dir) != 0);
+  assert(strlen(keyring_dir) > 0);
 
   int flags =
 #ifdef _WIN32
@@ -115,16 +111,25 @@ static bool create_file_dir_if_not_exist(const char *file_path) {
       S_IRWXU | S_IRGRP | S_IXGRP
 #endif
       ;
+
   /*
     If keyring_dir not exist then create it.
   */
   MY_STAT stat_info;
-  if (!my_stat(keyring_dir, &stat_info, MYF(0))) {
-    if (my_mkdir(keyring_dir, flags, MYF(0)) < 0) {
-      char errbuf[MYSYS_STRERROR_SIZE];
-      Logger::log(ERROR_LEVEL, EE_CANT_MKDIR, my_errno(),
-                  my_strerror(errbuf, sizeof(errbuf), my_errno()));
-      return true;
+  for (size_t i = 1; i <= keyring_dir_length; i++) {
+    if (keyring_dir[i] == FN_LIBCHAR || i == keyring_dir_length) {
+      keyring_dir[i] = 0;
+
+      if (!my_stat(keyring_dir, &stat_info, MYF(0))) {
+        if (my_mkdir(keyring_dir, flags, MYF(0)) < 0) {
+          char errbuf[MYSYS_STRERROR_SIZE];
+          Logger::log(ERROR_LEVEL, EE_CANT_MKDIR, my_errno(),
+                      my_strerror(errbuf, sizeof(errbuf), my_errno()));
+          return true;
+        }
+      }
+
+      keyring_dir[i] = FN_LIBCHAR;
     }
   }
 

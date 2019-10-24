@@ -38,40 +38,15 @@
 #include "keyring_rds_kms_agent.h"
 #include "keyring_rds_logger.h"
 
-/**
-  Validate the specified local file path.
-  @return 0   OK
-  @return 1   invalid
-*/
-static int check_key_id_file(MYSQL_THD thd MY_ATTRIBUTE((unused)),
-                             SYS_VAR *var MY_ATTRIBUTE((unused)),
-                             void *save MY_ATTRIBUTE((unused)),
-                             st_mysql_value *value) {
-  char buff[FN_REFLEN + 1];
-  const char *keyring_filename;
-  int len = static_cast<int>(sizeof(buff));
-
-  keyring_filename = value->val_str(value, buff, &len);
-
-  keyring_rds::Lock_helper wrlock(&keyring_rds::LOCK_keyring_rds, true);
-
-  if (keyring_filename == NULL || keyring_filename[0] == 0) {
-    keyring_rds::Logger::log(ERROR_LEVEL,
-                             ER_KEYRING_FAILED_TO_SET_KEYRING_FILE_DATA);
-    return 1;
-  }
-
-  return 0;
-}
 
 static MYSQL_SYSVAR_STR(
     key_id_file_dir,                                /* name       */
     keyring_rds::keyring_rds_dir,                   /* value      */
     PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,      /* flags      */
     "The path to the master key id file direction", /* comment    */
-    check_key_id_file,                              /* check()    */
+    NULL,                                           /* check()    */
     NULL,                                           /* update()   */
-    "__##keyring_rds##__"                           /* default    */
+    ""                                              /* default    */
 );
 
 static MYSQL_SYSVAR_STR(kms_agent_cmd,              /* name       */

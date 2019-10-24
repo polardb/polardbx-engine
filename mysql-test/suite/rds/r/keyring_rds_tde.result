@@ -7,7 +7,7 @@ daemon_keyring_proxy_plugin	1.0	ACTIVE	DAEMON	80032.0	NULL	NULL	Oracle	A plugin 
 show variables like 'keyring_rds%';
 Variable_name	Value
 keyring_rds_command_timeout_sec	10
-keyring_rds_key_id_file_dir	__##keyring_rds##__
+keyring_rds_key_id_file_dir	
 keyring_rds_kms_agent_cmd	/home/mysql/kms_agent
 select * from performance_schema.keyring_keys;
 KEY_ID	KEY_OWNER	BACKEND_KEY_ID
