@@ -1342,6 +1342,8 @@ static bool check_prepared_statement(Prepared_statement *stmt) {
     case SQLCOM_SHOW_KEYS:
     case SQLCOM_CREATE_TABLE:
     case SQLCOM_SET_RESOURCE_GROUP:
+    case SQLCOM_ADMIN_PROC:
+    case SQLCOM_TRANS_PROC:
       res = lex->m_sql_cmd->prepare(thd);
       // @todo Temporary solution: Unprepare after preparation to preserve
       //       old behaviour
