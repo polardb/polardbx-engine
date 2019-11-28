@@ -26,6 +26,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <sys/wait.h>
+#include <sys/epoll.h>
 
 #include <chrono>
 #include <functional>
@@ -159,22 +160,36 @@ size_t keyring_read(int fd, pid_t pid, char *buf, size_t buf_len,
   time_t start = time(0);
   size_t total_read = 0;
   int can_wait_sec = timeout_sec;
+  int epfd = -1;
+  int ret = -1;
+  struct epoll_event ev_in, ev_out;
+
+  epfd = epoll_create(1);
+  if (epfd < 0) {
+    keyring_rds::Logger::log(ERROR_LEVEL, "epoll_create error [%d, %s]",
+                             errno, strerror(errno));
+    buf[0] = 0;
+    return 0;
+  }
+
+  ev_in.events = EPOLLIN | EPOLLET | EPOLLERR | EPOLLHUP;
+  if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev_in)) {
+    keyring_rds::Logger::log(ERROR_LEVEL, "epoll_ctl error [%d, %s]",
+                             errno, strerror(errno));
+    close(epfd);
+    buf[0] = 0;
+    return 0;
+  }
 
   while (can_wait_sec > 0 && total_read < (buf_len - 1)) {
-    fd_set readfd, expfd;
-    FD_ZERO(&readfd);
-    FD_ZERO(&expfd);
-    FD_SET(fd, &readfd);
-    FD_SET(fd, &expfd);
-
-    struct timeval timeout = {1, 0}; /* Wait for 1 second per reading */
-
-    int ret = select(fd + 1, &readfd, NULL, &expfd, &timeout);
+    ret = epoll_wait(epfd, &ev_out, 1, 1000);
 
     if (ret < 0) {
-      keyring_rds::Logger::log(ERROR_LEVEL, "select() failed, error [%d, %s]",
-                               errno, strerror(errno));
-      break;
+      if (errno != EINTR) {
+        keyring_rds::Logger::log(ERROR_LEVEL, "epoll_wait error [%d, %s]",
+                                 errno, strerror(errno));
+        break;
+      }
     } else if (ret == 0) {
       /**
         Sometimes the child process has been exited, but the pipeline fd
@@ -183,9 +198,11 @@ size_t keyring_read(int fd, pid_t pid, char *buf, size_t buf_len,
       */
       if (waitpid(pid, NULL, WNOHANG) == pid) break;
     } else {
-      if (FD_ISSET(fd, &expfd)) {
-        keyring_rds::Logger::log(ERROR_LEVEL,
-                                 "select() pipeline output fd exception");
+      if (!(ev_out.events & EPOLLIN)) {
+        if (ev_out.events & EPOLLERR)
+          keyring_rds::Logger::log(ERROR_LEVEL,
+                                   "epoll_wait EPOLLERR error [%d, %s]",
+                                   errno, strerror(errno));
         break;
       }
 
@@ -230,6 +247,9 @@ size_t keyring_read(int fd, pid_t pid, char *buf, size_t buf_len,
 
     can_wait_sec -= (int)diff;
   }
+
+  epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
+  close(epfd);
 
   buf[total_read] = 0;
   return total_read;
