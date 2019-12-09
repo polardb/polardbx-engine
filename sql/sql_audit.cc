@@ -990,6 +990,10 @@ int mysql_audit_notify(THD *thd, mysql_event_message_subclass_t subclass,
 int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
                        const char *subclass_name) {
 
+  /* Skip rds audit for bootstrap */
+  if (opt_initialize)
+    return 0;
+
   mysql_event_rds_connection event;
   char user_buff[MAX_USER_HOST_SIZE];
   ulonglong current_utime;
@@ -1035,6 +1039,10 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
 
 int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
                        const char *subclass_name) {
+  /* Skip rds audit for bootstrap */
+  if (opt_initialize)
+    return 0;
+
   mysql_event_rds_query event;
   char user_buff[MAX_USER_HOST_SIZE];
   ulonglong current_utime;
