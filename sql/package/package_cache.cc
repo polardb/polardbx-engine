@@ -33,6 +33,8 @@
 #include "sql/package/proc_dummy.h"
 #endif
 
+#include "sql/package/show_native_procedure.h"
+
 namespace im {
 
 /* All package memory usage aggregation point */
@@ -57,10 +59,10 @@ static void init_package_psi_key() {
 
 /* Register all the native package element */
 template <typename K, typename T>
-static void register_package() {
+static void register_package(const LEX_STRING &schema) {
   if (package_inited) {
     Package::instance()->register_element<K>(
-        std::string(PACKAGE_SCHEMA), T::instance()->str(), T::instance());
+        std::string(schema.str), T::instance()->str(), T::instance());
   }
 }
 
@@ -112,9 +114,14 @@ void package_context_init() {
   package_inited = true;
 
 #ifndef DBUG_OFF
-  register_package<Proc, Proc_dummy>();
-  register_package<Proc, Proc_dummy_2>();
+  register_package<Proc, Proc_dummy>(PROC_DUMMY_SCHEMA);
+  register_package<Proc, Proc_dummy_2>(PROC_DUMMY_SCHEMA);
 #endif
+
+#ifdef RDS_HAVE_JEMALLOC
+  register_package<Proc, im::Jemalloc_profile_proc>(im::JEMALLOC_PROC_SCHEMA);
+#endif
+  register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
 }
 
 } /* namespace im */

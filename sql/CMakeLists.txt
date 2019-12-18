@@ -554,6 +554,7 @@ SET(SQL_SHARED_SOURCES
   package/proc.cc
   package/package_parse.cc
   package/proc_dummy.cc
+  package/show_native_procedure.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

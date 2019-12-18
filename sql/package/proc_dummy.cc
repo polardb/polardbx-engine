@@ -38,6 +38,9 @@
 */
 namespace im {
 
+/* The schema of dummy and dummy_2 proc */
+const LEX_STRING PROC_DUMMY_SCHEMA = {C_STRING_WITH_LEN("mysql")};
+
 Proc *Proc_dummy::instance() {
   static Proc_dummy *proc = new Proc_dummy(key_memory_package);
 

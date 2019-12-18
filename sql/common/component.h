@@ -50,6 +50,18 @@ class PSI_memory_base {
   PSI_memory_key m_key;
 };
 
+/* Disable the copy and assign construct */
+class Disable_copy_base {
+ public:
+  Disable_copy_base() {}
+  virtual ~Disable_copy_base() {}
+
+ private:
+  Disable_copy_base(const Disable_copy_base &);
+  Disable_copy_base(const Disable_copy_base &&);
+  Disable_copy_base &operator=(const Disable_copy_base &);
+};
+
 /*
   Pair key map definition
 */
