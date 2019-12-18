@@ -38,6 +38,8 @@
 #include "sql/package/proc_dummy.h"
 #endif
 
+#include "sql/package/show_native_procedure.h"
+
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/package/proc_undo_purge.h"
 
@@ -169,6 +171,8 @@ void package_context_init() {
   /* dbms_recycle.restore_table(...) */
   register_package<Proc, im::recycle_bin::Recycle_proc_restore>(
       im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
+        register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
+
 }
 
 } /* namespace im */

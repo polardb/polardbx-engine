@@ -1,0 +1,2 @@
+--source include/have_nodebug.inc
+call dbms_admin.show_native_procedure();

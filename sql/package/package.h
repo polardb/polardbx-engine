@@ -104,6 +104,11 @@ class Package : public PSI_memory_base {
       return it->second;
   }
 
+  template <typename T>
+  const Proc_map *get_all_element(){
+    return m_map<T>();
+  }
+
  private:
   /* Proc map getting */
   Proc_map *m_map(Type_selector<Proc>) { return &m_proc_map; }

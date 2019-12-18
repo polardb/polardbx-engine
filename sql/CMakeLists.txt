@@ -647,6 +647,7 @@ SET(SQL_SHARED_SOURCES
   package/proc.cc
   package/package_parse.cc
   package/proc_dummy.cc
+  package/show_native_procedure.cc
   trans_proc/common.cc
   trans_proc/returning.cc
   trans_proc/returning_parse.cc
