@@ -723,6 +723,8 @@ SET(SQL_SHARED_SOURCES
   keyring/keyring_common.cc
   keyring/keyring_generate_key.cc
   keyring/keyring_current_key_id.cc
+  inventory/inventory_hint_parse.cc
+  inventory/inventory_hint.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

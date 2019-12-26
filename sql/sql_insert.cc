@@ -775,9 +775,14 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
       (!(thd->variables.option_bits & OPTION_WARNINGS) ||
        !thd->num_truncated_fields)) {
     /* Send eof if it is returning clause */
-    if (returning_stmt.is_returning())
+    if (returning_stmt.is_returning()) {
       returning_stmt.send_eof(thd);
-    else
+      thd->set_row_count_func(
+          info.stats.copied + info.stats.deleted +
+          (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+               ? info.stats.touched
+               : info.stats.updated));
+    } else
       my_ok(thd,
             info.stats.copied + info.stats.deleted +
                 (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)

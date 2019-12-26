@@ -10222,6 +10222,15 @@ ER_X_CAN_NOT_ALLOCATE_MEMORY
 ER_CHANGESET_COMMAND_ERROR
   eng "ChangeSet command error : %s"
 
+ER_IC_NOT_ALLOWED_IN_SUB_STMT
+  eng "Inventory transactional hints didn't alllowed in stored procedure"
+
+ER_IC_NOT_ALLOWED_IN_AUTOCOMMIT
+  eng "Inventory transactinal hints didn't allowed in autocommit mode"
+
+ER_IC_NOT_MATCH_TARGET
+  eng "Inventory conditional hints didn't match with result"
+
 #
 # End of PolarDB-X special error messages intended to be return to CN.
 #

@@ -1,0 +1,325 @@
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+grant reload on *.* to 'u0'@'%';
+grant SESSION_VARIABLES_ADMIN on *.*  to 'u0'@'%';
+use my_db;
+set session transaction_isolation="READ-COMMITTED";
+use my_db;
+set session transaction_isolation="READ-COMMITTED";
+use my_db;
+set session transaction_isolation="READ-COMMITTED";
+create table t(id int primary key, col1 int);
+insert into t values(1, 1);
+commit;
+create table t2(id int);
+-------------------------------------------------
+test autocommit.
+-------------------------------------------------
+set autocommit =1;
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t values(1, 1);
+ERROR HY000: Inventory transactinal hints didn't allowed in autocommit mode
+update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=2 where id =1;
+ERROR HY000: Inventory transactinal hints didn't allowed in autocommit mode
+delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t;
+ERROR HY000: Inventory transactinal hints didn't allowed in autocommit mode
+-------------------------------------------------
+test sub statement
+-------------------------------------------------
+CREATE TRIGGER tri_1
+before INSERT ON t FOR EACH ROW
+BEGIN
+INSERT /*+ commit_on_success */ INTO t2 values(1);
+END//
+set autocommit = 0;
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t values(2, 1);
+ERROR HY000: Inventory transactional hints didn't alllowed in stored procedure
+select * from t;
+id	col1
+1	1
+select * from t2;
+id
+drop trigger tri_1;
+-------------------------------------------------
+test insert
+-------------------------------------------------
+set autocommit = 0;
+insert into t2 values(10);
+insert /*+ commit_on_success rollback_on_fail */ into t values(10, 10);
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+select * from t2;
+id
+10
+set autocommit = 0;
+insert into t2 values(11);
+insert /*+ commit_on_success rollback_on_fail */ into t values(10, 11);
+ERROR 23000: Duplicate entry '10' for key 't.PRIMARY'
+commit;
+select * from t;
+id	col1
+1	1
+10	10
+select * from t2;
+id
+10
+set autocommit = 0;
+insert into t2 values(12);
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ into t values(12, 12);
+commit;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+select * from t2;
+id
+10
+12
+set autocommit = 0;
+insert into t2 values(13);
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ into t values(13, 13),(14,14);
+ERROR HY000: Inventory conditional hints didn't match with result
+commit;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+select * from t2;
+id
+10
+12
+-------------------------------------------------
+test update
+-------------------------------------------------
+set autocommit =0;
+insert into t values(30, 30), (31, 31), (32, 32), (33,33);
+commit;
+set autocommit=0;
+insert into t2 values(30);
+update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id =30;
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+30	31
+31	31
+32	32
+33	33
+select * from t2;
+id
+10
+12
+30
+set autocommit=0;
+insert into t2 values(31);
+update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id >=30 and id <= 31;
+ERROR HY000: Inventory conditional hints didn't match with result
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+30	31
+31	31
+32	32
+33	33
+select * from t2;
+id
+10
+12
+30
+set autocommit=0;
+insert into t2 values(32);
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+30	31
+31	31
+32	32
+33	33
+call dbms_trans.returning("*", "update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id=30");
+id	col1
+30	32
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+30	32
+31	31
+32	32
+33	33
+select * from t2;
+id
+10
+12
+30
+32
+set autocommit=0;
+insert into t2 values(33);
+call dbms_trans.returning("*", "update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id >=30 and id <= 31");
+ERROR HY000: Inventory conditional hints didn't match with result
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+30	32
+31	31
+32	32
+33	33
+select * from t2;
+id
+10
+12
+30
+32
+-------------------------------------------------
+test insert returning
+-------------------------------------------------
+set autocommit = 0;
+insert into t2 values(20);
+call dbms_trans.returning("*", "insert /*+ commit_on_success rollback_on_fail */ into t values(20, 20)");
+id	col1
+20	20
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+20	20
+30	32
+31	31
+32	32
+33	33
+select * from t2;
+id
+10
+12
+30
+32
+20
+set autocommit = 0;
+insert into t2 values(21);
+call dbms_trans.returning("*", "insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ into t values(20, 21)");
+ERROR 23000: Duplicate entry '20' for key 't.PRIMARY'
+commit;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+20	20
+30	32
+31	31
+32	32
+33	33
+select * from t2;
+id
+10
+12
+30
+32
+20
+-------------------------------------------------
+test delete
+-------------------------------------------------
+set autocommit =0;
+insert into t values(50, 50), (51,51);
+commit;
+set autocommit=0;
+insert into t2 values(50);
+delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t;
+ERROR HY000: Inventory conditional hints didn't match with result
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+20	20
+30	32
+31	31
+32	32
+33	33
+50	50
+51	51
+select * from t2;
+id
+10
+12
+30
+32
+20
+set autocommit=0;
+insert into t2 values(51);
+delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t where id =50;
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+20	20
+30	32
+31	31
+32	32
+33	33
+51	51
+select * from t2;
+id
+10
+12
+30
+32
+20
+51
+set autocommit=0;
+insert into t2 values(52);
+call dbms_trans.returning("*", "delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t where id =51");
+id	col1
+51	51
+rollback;
+select * from t;
+id	col1
+1	1
+10	10
+12	12
+20	20
+30	32
+31	31
+32	32
+33	33
+select * from t2;
+id
+10
+12
+30
+32
+20
+51
+52
+-------------------------------------------------
+test explain
+-------------------------------------------------
+set autocommit=0;
+explain update /*+ commit_on_success rollback_on_fail target_affect_row(-1) */ t set col1=col1+1 where id >=30 and id <= 31;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t	NULL	range	PRIMARY	PRIMARY	4	const	2	100.00	Using where
+Warnings:
+Warning	1064	Optimizer hint syntax error near '-1) */ t set col1=col1+1 where id >=30 and id <= 31' at line 1
+Note	1003	update /*+ COMMIT_ON_SUCCESS ROLLBACK_ON_FAIL */ `my_db`.`t` set `my_db`.`t`.`col1` = (`my_db`.`t`.`col1` + 1) where ((`my_db`.`t`.`id` >= 30) and (`my_db`.`t`.`id` <= 31))
+drop user 'u0'@'%';
+drop database my_db;

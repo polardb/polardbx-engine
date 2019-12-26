@@ -45,6 +45,7 @@
 
 namespace im {
 class Ccl_queue_hint;
+class Inventory_hint;
 }
 
 enum class Subquery_strategy : int;
@@ -91,6 +92,7 @@ enum opt_hints_enum {
   ORDER_INDEX_HINT_ENUM,
   DERIVED_CONDITION_PUSHDOWN_HINT_ENUM,
   CCL_QUEUE_HINT_ENUM,
+  IC_HINT_ENUM,
   MAX_HINT_ENUM
 };
 
@@ -359,6 +361,7 @@ class Opt_hints_global : public Opt_hints {
   Sys_var_hint *sys_var_hint;
   im::Ccl_queue_hint *ccl_queue_hint;
   Sample_percentage_hint *sample_hint;
+  im::Inventory_hint *inventory_hint;
 
   Opt_hints_global(MEM_ROOT *mem_root_arg)
       : Opt_hints(nullptr, nullptr, mem_root_arg) {
@@ -366,6 +369,7 @@ class Opt_hints_global : public Opt_hints {
     sys_var_hint = nullptr;
     ccl_queue_hint = nullptr;
     sample_hint = nullptr;
+    inventory_hint = NULL;
   }
 
   void append_name(const THD *, String *) override {}

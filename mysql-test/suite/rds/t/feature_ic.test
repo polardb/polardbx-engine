@@ -1,0 +1,241 @@
+--source include/have_binlog_format_row.inc
+
+connect(con_root,127.0.0.1, root,,);
+connection con_root;
+
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+grant reload on *.* to 'u0'@'%';
+grant SESSION_VARIABLES_ADMIN on *.*  to 'u0'@'%';
+
+
+connect(con_u1, 127.0.0.1, u0,,);
+connect(con_u2, 127.0.0.1, u0,,);
+
+connection con_root;
+use my_db;
+set session transaction_isolation="READ-COMMITTED";
+connection con_u1;
+use my_db;
+set session transaction_isolation="READ-COMMITTED";
+connection con_u2;
+use my_db;
+set session transaction_isolation="READ-COMMITTED";
+
+connection con_root;
+create table t(id int primary key, col1 int);
+insert into t values(1, 1);
+commit;
+create table t2(id int);
+
+--echo -------------------------------------------------
+--echo test autocommit.
+--echo -------------------------------------------------
+
+connection con_u1;
+set autocommit =1;
+--error ER_IC_NOT_ALLOWED_IN_AUTOCOMMIT
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t values(1, 1);
+--error ER_IC_NOT_ALLOWED_IN_AUTOCOMMIT
+update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=2 where id =1;
+--error ER_IC_NOT_ALLOWED_IN_AUTOCOMMIT
+delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t;
+
+--echo -------------------------------------------------
+--echo test sub statement
+--echo -------------------------------------------------
+connection con_root;
+
+delimiter //;
+CREATE TRIGGER tri_1
+  before INSERT ON t FOR EACH ROW
+BEGIN
+  INSERT /*+ commit_on_success */ INTO t2 values(1);
+END//
+delimiter  ;//
+
+connection con_u1;
+set autocommit = 0;
+
+--error ER_IC_NOT_ALLOWED_IN_SUB_STMT
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t values(2, 1);
+
+connection con_u2;
+
+select * from t;
+select * from t2;
+
+connection con_root;
+drop trigger tri_1;
+
+--echo -------------------------------------------------
+--echo test insert
+--echo -------------------------------------------------
+connection con_u1;
+set autocommit = 0;
+insert into t2 values(10);
+insert /*+ commit_on_success rollback_on_fail */ into t values(10, 10);
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+connection con_u1;
+set autocommit = 0;
+insert into t2 values(11);
+--error ER_DUP_ENTRY
+insert /*+ commit_on_success rollback_on_fail */ into t values(10, 11);
+commit;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+connection con_u1;
+set autocommit = 0;
+insert into t2 values(12);
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ into t values(12, 12);
+commit;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+connection con_u1;
+set autocommit = 0;
+insert into t2 values(13);
+--error ER_IC_NOT_MATCH_TARGET
+insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ into t values(13, 13),(14,14);
+commit;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+--echo -------------------------------------------------
+--echo test update
+--echo -------------------------------------------------
+connection con_u1;
+set autocommit =0;
+insert into t values(30, 30), (31, 31), (32, 32), (33,33);
+commit;
+
+connection con_u1;
+set autocommit=0;
+insert into t2 values(30);
+update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id =30;
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+connection con_u1;
+set autocommit=0;
+insert into t2 values(31);
+--error ER_IC_NOT_MATCH_TARGET
+update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id >=30 and id <= 31;
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+connection con_u1;
+set autocommit=0;
+insert into t2 values(32);
+select * from t;
+call dbms_trans.returning("*", "update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id=30");
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+connection con_u1;
+set autocommit=0;
+insert into t2 values(33);
+--error ER_IC_NOT_MATCH_TARGET
+call dbms_trans.returning("*", "update /*+ commit_on_success rollback_on_fail target_affect_row(1) */ t set col1=col1+1 where id >=30 and id <= 31");
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+--echo -------------------------------------------------
+--echo test insert returning
+--echo -------------------------------------------------
+connection con_u1;
+set autocommit = 0;
+insert into t2 values(20);
+call dbms_trans.returning("*", "insert /*+ commit_on_success rollback_on_fail */ into t values(20, 20)");
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+connection con_u1;
+set autocommit = 0;
+insert into t2 values(21);
+--error ER_DUP_ENTRY
+call dbms_trans.returning("*", "insert /*+ commit_on_success rollback_on_fail target_affect_row(1) */ into t values(20, 21)");
+commit;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+--echo -------------------------------------------------
+--echo test delete
+--echo -------------------------------------------------
+connection con_u1;
+set autocommit =0;
+insert into t values(50, 50), (51,51);
+commit;
+
+connection con_u1;
+set autocommit=0;
+insert into t2 values(50);
+--error ER_IC_NOT_MATCH_TARGET
+delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+
+connection con_u1;
+set autocommit=0;
+insert into t2 values(51);
+delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t where id =50;
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+
+connection con_u1;
+set autocommit=0;
+insert into t2 values(52);
+call dbms_trans.returning("*", "delete /*+ commit_on_success rollback_on_fail target_affect_row(1) */ from t where id =51");
+rollback;
+
+connection con_u2;
+select * from t;
+select * from t2;
+
+--echo -------------------------------------------------
+--echo test explain
+--echo -------------------------------------------------
+
+connection con_u1;
+set autocommit=0;
+explain update /*+ commit_on_success rollback_on_fail target_affect_row(-1) */ t set col1=col1+1 where id >=30 and id <= 31;
+
+connection con_root;
+drop user 'u0'@'%';
+drop database my_db;

@@ -229,6 +229,9 @@ void Hint_scanner::add_hint_token_digest() {
           case NO_DERIVED_CONDITION_PUSHDOWN_HINT:
           case CCL_QUEUE_FIELD_HINT:
           case CCL_QUEUE_VALUE_HINT:
+          case COMMIT_ON_SUCCESS_HINT:
+          case ROLLBACK_ON_FAIL_HINT:
+          case TARGET_AFFECT_ROW_HINT:
             break;
           default:
             assert(false);
