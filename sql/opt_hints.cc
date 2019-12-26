@@ -49,6 +49,7 @@
 #include "sql/table.h"
 
 #include "sql/ccl/ccl_hint.h"
+#include "sql/inventory/inventory_hint.h"
 
 struct MEM_ROOT;
 
@@ -83,6 +84,7 @@ struct st_opt_hint_info opt_hint_info[] = {
     {"SKIP_SCAN", false, false, false},
     {"HASH_JOIN", true, true, false},
     {"CCL_QUEUE", false, false, true},
+    {"INVENTORY", false, false, true},
     {0, 0, 0, 0}};
 
 /**
@@ -200,6 +202,8 @@ void Opt_hints_global::print_irregular_hints(const THD *thd, String *str) {
   if (ccl_queue_hint) ccl_queue_hint->print(thd, str);
 
   if (sample_hint) sample_hint->print(thd, str);
+
+  if (inventory_hint) inventory_hint->print(thd, str);
 }
 
 Opt_hints_qb::Opt_hints_qb(Opt_hints *opt_hints_arg, MEM_ROOT *mem_root_arg,

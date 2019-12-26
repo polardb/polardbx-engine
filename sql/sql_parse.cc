@@ -199,6 +199,7 @@
 #ifdef NORMANDY_TEST
 #include "sql/rpl_msr.h" // channel_map
 #endif
+#include "sql/inventory/inventory_hint.h"
 
 namespace dd {
 class Spatial_reference_system;
@@ -3041,6 +3042,11 @@ int mysql_execute_command(THD *thd, bool first_level) {
   /* Deny returning clause if it is not supported */
   if (im::deny_returning_clause_by_command(thd, lex)) return -1;
 
+  if (lex->opt_hints_global && lex->opt_hints_global->inventory_hint) {
+    if (im::disable_inventory_hint(thd, lex->opt_hints_global->inventory_hint))
+      return -1;
+  }
+
   thd->status_var.com_stat[lex->sql_command]++;
 
   Opt_trace_start ots(thd, all_tables, lex->sql_command, &lex->var_list,
@@ -4916,6 +4922,13 @@ finish:
 
     /* report error issued during command execution */
     if (thd->killed) thd->send_kill_message();
+
+    /* Deal with the inventory target hints */
+    if (!thd->is_error() && lex->opt_hints_global &&
+        lex->opt_hints_global->inventory_hint) {
+      im::process_inventory_target_hint(thd,
+                                        lex->opt_hints_global->inventory_hint);
+    }
     if (thd->is_error() ||
         (thd->variables.option_bits & OPTION_MASTER_SQL_ERROR))
       trans_rollback_stmt(thd);
@@ -4940,6 +4953,12 @@ finish:
   if (lex->sql_command != SQLCOM_SET_OPTION && !thd->in_sub_stmt)
     DEBUG_SYNC(thd, "execute_command_after_close_tables");
 #endif
+
+  if (!thd->in_sub_stmt && lex->opt_hints_global &&
+      lex->opt_hints_global->inventory_hint) {
+    im::process_inventory_transactional_hint(
+        thd, lex->opt_hints_global->inventory_hint);
+  }
 
   if (!thd->in_sub_stmt && thd->transaction_rollback_request) {
     /*

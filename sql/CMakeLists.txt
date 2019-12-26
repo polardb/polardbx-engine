@@ -613,6 +613,8 @@ SET(SQL_SHARED_SOURCES
   xa_handler.cc
   log_table.cc
   xrpc/xrpc_proc.cc
+  inventory/inventory_hint_parse.cc
+  inventory/inventory_hint.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

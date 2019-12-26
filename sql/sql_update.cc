@@ -1079,9 +1079,13 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
     /* Send eof if it is returning clause */
-    if (returning_stmt.is_returning())
+    if (returning_stmt.is_returning()) {
       returning_stmt.send_eof(thd);
-    else
+      thd->set_row_count_func(
+          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+              ? found_rows
+              : updated_rows);
+    } else
       my_ok(thd,
             thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
                 ? found_rows

@@ -37,6 +37,7 @@
 #include "sql/sql_lex_hints.h"
 
 #include "sql/ccl/ccl_hint_parse.h"
+#include "sql/inventory/inventory_hint_parse.h"
 
 #define NEW_PTN new (thd->mem_root)
 
@@ -98,6 +99,10 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 %token NO_HASH_JOIN_HINT
 %token SAMPLE_PERCENTAGE_HINT
 
+%token COMMIT_ON_SUCCESS_HINT
+%token ROLLBACK_ON_FAIL_HINT
+%token TARGET_AFFECT_ROW_HINT
+
 /* Other tokens */
 
 %token HINT_ARG_NUMBER
@@ -133,6 +138,9 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
   resource_group_hint
   ccl_queue_hint
   sample_percentage_hint
+  ic_commit_hint
+  ic_rollback_hint
+  ic_target_hint
 
 %type <hint_list> hint_list
 
@@ -210,7 +218,42 @@ hint:
         | resource_group_hint
         | ccl_queue_hint
         | sample_percentage_hint
+        | ic_commit_hint
+        | ic_rollback_hint
+        | ic_target_hint
         ;
+
+ic_commit_hint:
+          COMMIT_ON_SUCCESS_HINT
+          {
+            $$ = NEW_PTN im::PT_hint_ic_commit();
+            if ($$ == NULL) YYABORT;
+          }
+
+ic_rollback_hint:
+         ROLLBACK_ON_FAIL_HINT
+          {
+            $$ = NEW_PTN im::PT_hint_ic_rollback();
+            if ($$ == NULL) YYABORT;
+          }
+
+ic_target_hint:
+          TARGET_AFFECT_ROW_HINT '(' HINT_ARG_NUMBER ')'
+          {
+            longlong n;
+            if (parse_int(&n, $3.str, $3.length) || n > UINT_MAX32)
+            {
+              scanner->syntax_warning(ER_THD(thd,
+                                             ER_WRONG_SIZE_NUMBER));
+              $$= NULL;
+            }
+            else
+            {
+              $$ = NEW_PTN im::PT_hint_ic_target((ulonglong)n);
+              if ($$ == NULL)
+                YYABORT;
+            }
+          }
 
 ccl_queue_hint:
           CCL_QUEUE_FIELD_HINT '(' ccl_queue_field_arg ')'
