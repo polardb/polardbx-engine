@@ -1,0 +1,35 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--disable_ps_protocol
+
+call mtr.add_suppression("Fail to recycle table");
+
+create table test.t1(id int);
+
+set session recycle_bin=on;
+
+lock tables test.t1 write;
+drop table test.t1;
+--error ER_NO_SUCH_TABLE
+show create table t1;
+--error ER_NO_SUCH_TABLE
+show create table __recycle_bin__.__innodb_165;
+unlock tables;
+
+
+create database db_json;
+use db_json;
+CREATE TABLE db_json.t1(c4 JSON ,
+   c5 INT GENERATED ALWAYS AS (JSON_EXTRACT(c4,'$.key_a')) STORED,
+   c6 INT GENERATED ALWAYS AS (JSON_EXTRACT(c4,'$.key_b')) VIRTUAL,
+   c7 POINT NOT NULL SRID 0,
+   spatial INDEX idx2 (c7)
+) ENGINE = InnoDB;
+
+drop database db_json;
+
+show create table __recycle_bin__.__innodb_165;
+
+call dbms_recycle.purge_table("__innodb_165");
+
+--enable_ps_protocol

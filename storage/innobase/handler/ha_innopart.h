@@ -1137,5 +1137,10 @@ class ha_innopart : public ha_innobase,
   @param[in]	is_analyze	True if called from "::analyze()".
   @return	HA_ERR_* error code or 0. */
   int info_low(uint flag, bool is_analyze) override;
+public:
+  virtual void get_create_info(const char *, const dd::Table *,
+                               HA_CREATE_INFO *) {
+    return;
+  }
 };
 #endif /* ha_innopart_h */

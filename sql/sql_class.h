@@ -4204,6 +4204,7 @@ class THD : public MDL_context_owner,
   std::vector<im::Ccl_comply_handler *> ccl_comply_handlers;
 
   im::recycle_bin::Recycle_state *recycle_state;
+  bool is_recycle_command;
 
   Sequence_last_value_hash *get_sequence_hash() { return seq_thd_hash; }
 

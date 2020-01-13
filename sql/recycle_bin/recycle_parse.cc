@@ -40,7 +40,9 @@ void recycle_state_rewrite(const THD *thd, const Recycle_process_context *) {
   DBUG_ENTER("recycle_state_rewrite");
   LEX *lex = thd->lex;
   if (lex->sql_command == SQLCOM_DROP_DB ||
-      (lex->sql_command == SQLCOM_DROP_TABLE && !lex->drop_temporary)) {
+      ((lex->sql_command == SQLCOM_DROP_TABLE ||
+        lex->sql_command == SQLCOM_TRUNCATE) &&
+       !lex->drop_temporary)) {
     thd->recycle_state->set();
   }
   DBUG_VOID_RETURN;

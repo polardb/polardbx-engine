@@ -439,7 +439,8 @@ THD::THD(bool enable_plugins)
       is_a_srv_session_thd(false),
       m_is_plugin_fake_ddl(false),
       lex_returning(new im::Lex_returning(false)),
-      ccl_comply(new im::Ccl_comply(this)) {
+      ccl_comply(new im::Ccl_comply(this)),
+      is_recycle_command(false) {
   main_lex->reset();
   set_psi(NULL);
   mdl_context.init(this);

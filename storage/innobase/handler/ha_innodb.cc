@@ -4699,7 +4699,8 @@ static int innodb_init(void *p) {
   innobase_hton->flags = HTON_SUPPORTS_EXTENDED_KEYS |
                          HTON_SUPPORTS_FOREIGN_KEYS | HTON_SUPPORTS_ATOMIC_DDL |
                          HTON_CAN_RECREATE | HTON_SUPPORTS_SECONDARY_ENGINE |
-                         HTON_SUPPORTS_TABLE_ENCRYPTION;
+                         HTON_SUPPORTS_TABLE_ENCRYPTION |
+                         HTON_SUPPORTS_RECYCLE_BIN;
 
   innobase_hton->replace_native_transaction_in_thd = innodb_replace_trx_in_thd;
   innobase_hton->file_extensions = ha_innobase_exts;
@@ -23640,3 +23641,46 @@ static bool innobase_check_reserved_file_name(
   return (true);
 }
 #endif /* !UNIV_HOTBACKUP */
+
+void ha_innobase::get_create_info(const char *table, const dd::Table *table_def,
+                                  HA_CREATE_INFO *create_info) {
+  dict_table_t *dict_table = nullptr;
+  THD *m_thd = ha_thd();
+  char norm_name[FN_REFLEN];
+
+  normalize_table_name(norm_name, table);
+
+  if (table_def->is_persistent()) {
+    dd::cache::Dictionary_client *client = dd::get_dd_client(m_thd);
+    dd::cache::Dictionary_client::Auto_releaser releaser(client);
+
+    int error = dd_table_open_on_dd_obj(client, *table_def, nullptr, norm_name,
+                                        dict_table, m_thd);
+    if (error != 0)
+      return;
+  } else {
+    dict_table = dd_table_open_on_name_in_mem(norm_name, false);
+    ut_ad(dict_table->is_temporary());
+  }
+
+  /* Didn't support temporary table to get create info. */
+  ut_ad(!dict_table->is_temporary());
+
+  if (dict_table) {
+    if (dict_table->data_dir_path !=nullptr)
+      create_info->data_file_name =
+          strmake_root(m_thd->mem_root, dict_table->data_dir_path,
+                       strlen(dict_table->data_dir_path));
+    else
+      create_info->data_file_name = nullptr;
+
+    if (dict_table->tablespace != nullptr)
+      create_info->tablespace =
+          strmake_root(m_thd->mem_root, dict_table->tablespace,
+                       strlen(dict_table->tablespace));
+    else
+      create_info->tablespace = nullptr;
+
+    dd_table_close(dict_table, m_thd, nullptr, false);
+  }
+}

@@ -690,6 +690,10 @@ class ha_innobase : public handler {
 
   /** If mysql has locked with external_lock() */
   bool m_mysql_has_locked;
+
+public:
+  virtual void get_create_info(const char *table, const dd::Table *table_def,
+                               HA_CREATE_INFO *create_info);
 };
 
 struct trx_t;
