@@ -3328,11 +3328,11 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
 
     for (Table_ref *table : drop_ctx.base_atomic_tables) {
       im::recycle_bin::Recycle_result res;
-      res = im::recycle_bin::recycle_base_table(thd, post_ddl_htons,
-                                                &recycle_fk_invalidator, table);
+      res = im::recycle_bin::recycle_base_table(
+          thd, post_ddl_htons, &recycle_fk_invalidator, false, table, nullptr);
       if (res == im::recycle_bin::Recycle_result::ERROR)
         goto err_with_rollback;
-      else if (res == im::recycle_bin::Recycle_result::DROP_CONTINUE) {
+      else if (res == im::recycle_bin::Recycle_result::CONTINUE) {
         if (drop_base_table(thd, drop_ctx, table, true /* atomic */,
                             post_ddl_htons, fk_invalidator,
                             &safe_to_release_mdl_atomic, &foreach_table_root)) {

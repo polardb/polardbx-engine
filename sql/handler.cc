@@ -136,6 +136,8 @@
 #include "ppi/ppi_transaction.h"
 #include "xa_handler.h"
 
+#include "sql/recycle_bin/recycle_table.h"
+
 /**
   @def MYSQL_TABLE_IO_WAIT
   Instrumentation helper for table io_waits.
@@ -5159,6 +5161,11 @@ int handler::index_next_same(uchar *buf, const uchar *key, uint keylen) {
                              by storage engine if it supports atomic DDL.
                              For non-temporary tables these changes will
                              be saved to the data-dictionary by this call.
+  @param recycled            Whether create table came from recycling the
+                             truncated operation
+  @param original_create_info
+                             The old table se attributes when recycle the
+                             truncated table
 
   @retval
    0  ok
@@ -5168,7 +5175,8 @@ int handler::index_next_same(uchar *buf, const uchar *key, uint keylen) {
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     bool update_create_info, bool is_temp_table,
-                    dd::Table *table_def) {
+                    dd::Table *table_def, bool recycled,
+                    HA_CREATE_INFO *original_create_info) {
   int error = 1;
   TABLE table;
   char name_buff[FN_REFLEN];
@@ -5202,6 +5210,12 @@ int ha_create_table(THD *thd, const char *path, const char *db,
 
   if (update_create_info) update_create_info_from_table(create_info, &table);
 
+  /* When recycled table, the new table SE attributes come from old table. */
+  if (recycled) {
+    im::recycle_bin::move_se_attributes(create_info, original_create_info);
+    create_info->key_block_size = table.s->key_block_size;
+  }
+
   name = get_canonical_filename(table.file, share.path.str, name_buff);
 
   error = table.file->ha_create(name, &table, create_info, table_def);
@@ -5225,7 +5239,13 @@ int ha_create_table(THD *thd, const char *path, const char *db,
     if (!((create_info->options & HA_LEX_CREATE_TMP_TABLE) || is_temp_table ||
           dd::get_dictionary()->is_dd_table_name(db, table_name)) &&
         (table.file->ht->flags & HTON_SUPPORTS_ATOMIC_DDL)) {
-      if (thd->dd_client()->update<dd::Table>(table_def)) error = 1;
+      if (recycled) {
+        if (thd->dd_client()->store<dd::Table>(table_def))
+          error = 1;
+      } else {
+        if (thd->dd_client()->update<dd::Table>(table_def))
+          error = 1;
+      }
     }
   }
   (void)closefrm(&table, false);

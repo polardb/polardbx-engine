@@ -128,7 +128,8 @@ BEGIN
 
   -- Dump all tablespaces, there should be none
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ FILE_NAME, FILE_TYPE, TABLESPACE_NAME, ENGINE FROM INFORMATION_SCHEMA.FILES
-    WHERE FILE_TYPE !='TEMPORARY' ORDER BY FILE_NAME;
+    WHERE FILE_TYPE !='TEMPORARY' AND FILE_NAME not like '%__recycle_bin__%'
+    ORDER BY FILE_NAME;
 
   -- The test database should not contain any tables
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ table_name AS tables_in_test FROM INFORMATION_SCHEMA.TABLES

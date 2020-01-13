@@ -731,6 +731,7 @@ THD::THD(bool enable_plugins)
       ppi_transaction(nullptr),
       ppi_statement_stat(new PPI_stat()),
       ccl_comply(new im::Ccl_comply(this)),
+      is_recycle_command(false),
       m_inside_system_variable_global_update(false),
       bind_parameter_values(nullptr),
       bind_parameter_values_count(0),

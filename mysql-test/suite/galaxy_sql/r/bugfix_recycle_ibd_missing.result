@@ -1,0 +1,33 @@
+call mtr.add_suppression("Cannot rename");
+call mtr.add_suppression("Operating system error number 2 in a file operation");
+call mtr.add_suppression("The error means the system cannot find the path specified");
+call mtr.add_suppression("returned OS error 71");
+call mtr.add_suppression("Failed to delete the datafile of tablespace");
+create table test.t1(id int);
+flush tables;
+set session recycle_bin=on;
+drop table test.t1;
+ERROR HY000: Error on rename of './test/t1' to './__recycle_bin__/__innodb_165' (errno: 197 - Tablespace cannot be accessed)
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table __recycle_bin__.__innodb_165;
+ERROR 42S02: Table '__recycle_bin__.__innodb_165' doesn't exist
+set session recycle_bin=off;
+drop table test.t1;
+create table test.t1(id int);
+flush tables;
+set session recycle_bin=on;
+truncate table test.t1;
+ERROR HY000: Error on rename of './test/t1' to './__recycle_bin__/__innodb_165' (errno: 197 - Tablespace cannot be accessed)
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table __recycle_bin__.__innodb_165;
+ERROR 42S02: Table '__recycle_bin__.__innodb_165' doesn't exist
+set session recycle_bin=off;
+drop table test.t1;

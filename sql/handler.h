@@ -2912,6 +2912,9 @@ inline bool secondary_engine_supports_ddl(const handlerton *hton) {
   return (hton->flags & HTON_SECONDARY_ENGINE_SUPPORTS_DDL) != 0;
 }
 
+/** Engine supports recycle bin. */
+#define HTON_SUPPORTS_RECYCLE_BIN (1 << 20)
+
 inline bool ddl_is_atomic(const handlerton *hton) {
   return (hton->flags & HTON_SUPPORTS_ATOMIC_DDL) != 0;
 }
@@ -6960,6 +6963,17 @@ class handler {
   void update_statistics();
   
   virtual int ha_flush_cache(TABLE *, void *) { return HA_ERR_WRONG_COMMAND; }
+    /* Rotate storage engine data file */
+  int ha_rotate_table(const char *name, const dd::Table *table_def);
+  virtual int rotate_table(const char *, const dd::Table *) {
+    return HA_ERR_WRONG_COMMAND;
+  }
+
+  /* Copy SE attributes from engine. */
+  virtual void get_create_info(const char *, const dd::Table *,
+                               HA_CREATE_INFO *) {
+    return;
+  }
 };
 
 /* Temporary Table handle for opening uncached table */
@@ -7184,7 +7198,8 @@ void ha_drop_database(char *path);
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     bool update_create_info, bool is_temp_table,
-                    dd::Table *table_def);
+                    dd::Table *table_def, bool recycled = false,
+                    HA_CREATE_INFO *original_create_info = nullptr);
 
 int ha_delete_table(THD *thd, handlerton *db_type, const char *path,
                     const char *db, const char *alias,

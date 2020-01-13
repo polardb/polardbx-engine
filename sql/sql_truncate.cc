@@ -65,6 +65,9 @@
 #include "sql_string.h"
 #include "thr_lock.h"
 
+#include "sql/recycle_bin/recycle_table.h"
+
+
 namespace dd {
 class Table;
 }  // namespace dd
@@ -549,17 +552,32 @@ void Sql_cmd_truncate_table::truncate_base(THD *thd, Table_ref *table_ref) {
       The storage engine can truncate the table by creating an
       empty table with the same structure.
     */
-    HA_CREATE_INFO create_info;
 
     // Create a path to the table, but without a extension
     char path[FN_REFLEN + 1];
     build_table_filename(path, sizeof(path) - 1, table_ref->db,
                          table_ref->table_name, "", 0);
 
-    // Attempt to reconstruct the table
-    if (ha_create_table(thd, path, table_ref->db, table_ref->table_name,
-                        &create_info, true, false, table_def) != 0) {
+    im::recycle_bin::Recycle_result res =
+        im::recycle_bin::Recycle_result::CONTINUE;
+
+    if (hton->flags & HTON_SUPPORTS_ATOMIC_DDL) {
+      HA_CREATE_INFO create_info;
+      res = im::recycle_bin::recycle_truncate_table(
+          thd, path, table_ref, &create_info, true, false, table_def);
+    }
+
+    if (res == im::recycle_bin::Recycle_result::ERROR) {
       return;
+    } else if (res == im::recycle_bin::Recycle_result::CONTINUE) {
+      HA_CREATE_INFO create_info;
+      // Attempt to reconstruct the table
+      if (ha_create_table(thd, path, table_ref->db, table_ref->table_name,
+                          &create_info, true, false, table_def) != 0) {
+        return;
+      }
+    } else {
+      assert(res == im::recycle_bin::Recycle_result::OK);
     }
 
     // Binlog only if truncate-by-recreate succeeds.

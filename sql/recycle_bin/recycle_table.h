@@ -35,6 +35,11 @@ class handlerton;
 class THD;
 class Foreign_key_parents_invalidator;
 
+namespace dd {
+class Table;
+}
+struct HA_CREATE_INFO;
+
 namespace im {
 namespace recycle_bin {
 
@@ -48,8 +53,12 @@ inline bool is_recycle_db(const char *str) {
   return !my_strcasecmp(system_charset_info, RECYCLE_BIN_SCHEMA.str, str);
 }
 
-/* Recycle table result */
-enum class Recycle_result { OK, DROP_CONTINUE, ERROR };
+/* Recycle operation result */
+enum class Recycle_result {
+  OK,       /* Recycle success. */
+  CONTINUE, /* Recycle pre-check failed, DROP or TRUNCATE continue. */
+  ERROR     /* Recycle operation failed, report error */
+};
 /**
   Recycle error handling.
 */
@@ -78,7 +87,9 @@ class Recycle_context_wrapper {
 
   virtual ~Recycle_context_wrapper();
 
- private:
+  bool is_error() { return m_error_handler.is_error(); }
+
+private:
   THD *m_thd;
   MDL_savepoint m_mdl_savepoint;
   Recycle_error_handler m_error_handler;
@@ -114,15 +125,22 @@ class Timestamp_timezone_guard {
 
   @param[in]      thd             thread context
   @param[in]      post_ddl_htons  atomic hton container
+  @param[in]      fk_invalidator  Reference table container
+  @param[in]      only self       Whether only collect myself when add FK
+                                  container
   @param[in]      table_list      dropping table
+  @param[out]     ha_create_info  the original create info from SE before
+                                  rename.
 
   @retval         ok              Success
   @retval         drop_continue   Should continue to drop table
   @retval         error           Report client error
 */
-Recycle_result recycle_base_table(
-    THD *thd, std::set<handlerton *> *post_ddl_htons,
-    Foreign_key_parents_invalidator *fk_invalidator, Table_ref *table_list);
+Recycle_result
+recycle_base_table(THD *thd, std::set<handlerton *> *post_ddl_htons,
+                   Foreign_key_parents_invalidator *fk_invalidator,
+                   bool only_self, Table_ref *table_list,
+                   HA_CREATE_INFO *original_create_info);
 
 /**
   dbms_recycle.show_tables result
@@ -191,6 +209,30 @@ bool drop_base_recycle_table(THD *thd, const char *table);
 */
 Table_ref *build_table_list(THD *thd, const char *db, size_t db_len,
                             const char *table, size_t table_len);
+
+/**
+  Recycle the table when truncate table.
+
+  @param[in]      thd                 current thd
+  @param[in]      path                table path
+  @param[in]      table               table list
+  @param[in]      create_info         temporary create info
+  @param[in]      update_create_info  Whether update create info
+  @param[in]      is_temp_table       Whether it's temporary table
+  @param[in]      table_def           dd Table object
+
+  @retval         ok              Success
+  @retval         drop_continue   Should continue to truncate table
+  @retval         error           Report client error
+*/
+Recycle_result recycle_truncate_table(THD *thd, const char *path,
+                                      Table_ref *table_list,
+                                      HA_CREATE_INFO *create_info,
+                                      bool update_create_info,
+                                      bool is_temp_table, dd::Table *table_def);
+
+void move_se_attributes(HA_CREATE_INFO *create_info,
+                        HA_CREATE_INFO *original_create_info);
 } /* namespace recycle_bin */
 } /* namespace im */
 

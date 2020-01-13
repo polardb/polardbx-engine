@@ -1,0 +1,39 @@
+create table test.t1(id int);
+# Restart server, then truncate will load dict_table_t from DD.
+set session recycle_bin=on;
+truncate table test.t1;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table __recycle_bin__.__innodb_165;
+Table	Create Table
+__innodb_165	CREATE TABLE `__innodb_165` (
+  `id` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call dbms_recycle.purge_table("__innodb_165");
+set session recycle_bin=off;
+drop table test.t1;
+set session recycle_bin=on;
+CREATE TABLE test.t1(a INT) PARTITION BY HASH(a) PARTITIONS 1;
+INSERT INTO test.t1 VALUES(0);
+FLUSH TABLE test.t1;
+TRUNCATE TABLE test.t1;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`a`)
+PARTITIONS 1 */
+show create table __recycle_bin__.__innodb_165;
+Table	Create Table
+__innodb_165	CREATE TABLE `__innodb_165` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`a`)
+PARTITIONS 1 */
+call dbms_recycle.purge_table("__innodb_165");
+set session recycle_bin=off;
+drop table test.t1;

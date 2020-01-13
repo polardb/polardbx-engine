@@ -1480,7 +1480,8 @@ bool fix_partition_func(THD *thd, TABLE *table, bool is_create_table_ind) {
   thd->mark_used_columns = MARK_COLUMNS_NONE;
   thd->want_privilege = 0;
 
-  if (!is_create_table_ind || thd->lex->sql_command != SQLCOM_CREATE_TABLE) {
+  if (!is_create_table_ind || thd->lex->sql_command != SQLCOM_CREATE_TABLE ||
+      thd->is_recycle_command) {
     if (partition_default_handling(table, part_info, is_create_table_ind,
                                    table->s->normalized_path.str)) {
       return true;
@@ -3937,7 +3938,12 @@ bool mysql_unpack_partition(THD *thd, char *part_buf, uint part_info_len,
              ("default engine = %s, default_db_type = %s",
               ha_resolve_storage_engine_name(part_info->default_engine_type),
               ha_resolve_storage_engine_name(default_db_type)));
-  if (is_create_table_ind && old_lex->sql_command == SQLCOM_CREATE_TABLE) {
+  /*
+    Maybe it came from recycling truncated table, so it's not a real
+    create table
+  */
+  if (!thd->is_recycle_command && is_create_table_ind &&
+      old_lex->sql_command == SQLCOM_CREATE_TABLE) {
     /*
       When we come here we are doing a create table. In this case we
       have already done some preparatory work on the old part_info
