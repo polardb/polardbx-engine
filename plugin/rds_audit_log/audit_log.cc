@@ -333,7 +333,7 @@ MYSQL_RDS_AUDIT_LOG::~MYSQL_RDS_AUDIT_LOG() {
 void MYSQL_RDS_AUDIT_LOG::rotate_log_file_low() {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::rotate_log_file_low");
 
-  File old_log_fd = log_fd;
+  File old_log_fd = -1;
   File new_log_fd = -1;
   char new_log_name[FN_REFLEN];
   uint len = 0;
@@ -360,7 +360,7 @@ void MYSQL_RDS_AUDIT_LOG::rotate_log_file_low() {
   }
 
   /*
-    Change log_fd, curr_file_pos, and row_num while holding LOCK_file.
+    Change log_fd, curr_file_pos, row_num and log_name while holding LOCK_file.
 
     The reason for LOCK_file lock is:
     1. log_fd, apparently we don't want write to invalid fd
@@ -373,17 +373,21 @@ void MYSQL_RDS_AUDIT_LOG::rotate_log_file_low() {
           overwrite record written in a)
     3. row_num, same like 3, row_num is used to check whether row_limit is
     reached, we don't want get a false negative result and skip records.
+
+    4. there could be concurrent log rotating, and we should keep log_name
+    consistent with being-writting fd.
   */
   LOCK_file.wrlock();
 
+  old_log_fd = log_fd;
   log_fd = new_log_fd;
   curr_file_pos.store(0);
   last_row_num = row_num.load();
   row_num.store(0);
+  memcpy(log_name, new_log_name, len + 1);
 
   LOCK_file.wrunlock();
 
-  memcpy(log_name, new_log_name, len + 1);
   /* Print message to indicate timestamp. */
   if (lost_row_num_by_buf_full.load()) {
     LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_END_LOST_LOG);
@@ -450,6 +454,13 @@ void MYSQL_RDS_AUDIT_LOG::rotate_log_file() {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::rotate_log_file");
 
   /*
+    As rotate log is a relative heavy operation, for exmaple could become
+    slow under busy IO device, so we release the global sys var mutex
+    here and reacquire it before returning.
+  */
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+
+  /*
     Make rotate operation mutually exclusive with other maintain operation,
     but not mutually excluesive with user writting thread in buffered-write
     mode.
@@ -466,6 +477,8 @@ void MYSQL_RDS_AUDIT_LOG::rotate_log_file() {
 
 finish:
   LOCK_log.rdunlock(0);
+
+  mysql_mutex_lock(&LOCK_global_system_variables);
 
   DBUG_VOID_RETURN;
 }
