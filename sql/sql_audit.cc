@@ -995,7 +995,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
     return 0;
 
   mysql_event_rds_connection event;
-  char user_buff[MAX_USER_HOST_SIZE];
+  char user_buff[USERNAME_LENGTH + 1] = "";
   ulonglong current_utime;
   Security_context *sctx;
 
@@ -1013,7 +1013,9 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
   sctx = thd->security_context();
   event.is_super = sctx->check_access(SUPER_ACL);
   event.user.str = user_buff;
-  event.user.length = make_user_name(sctx, user_buff);
+  event.user.length = snprintf(user_buff, USERNAME_LENGTH, "%s",
+                               sctx->user().str ? sctx->user().str : "");
+  DBUG_ASSERT(event.user.length <= USERNAME_LENGTH);
   event.host = sctx->host();
   event.ip = sctx->ip();
   event.db = thd->db();
@@ -1044,7 +1046,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
     return 0;
 
   mysql_event_rds_query event;
-  char user_buff[MAX_USER_HOST_SIZE];
+  char user_buff[USERNAME_LENGTH + 1] = "";
   ulonglong current_utime;
   Security_context *sctx;
 
@@ -1064,7 +1066,9 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   event.is_super = sctx->check_access(SUPER_ACL);
 
   event.user.str = user_buff;
-  event.user.length = make_user_name(sctx, user_buff);
+  event.user.length = snprintf(user_buff, USERNAME_LENGTH, "%s",
+                               sctx->user().str ? sctx->user().str : "");
+  DBUG_ASSERT(event.user.length <= USERNAME_LENGTH);
   event.external_user = sctx->external_user();
   event.ip = sctx->ip();
   event.host = sctx->host();
