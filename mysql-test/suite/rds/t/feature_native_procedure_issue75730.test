@@ -67,19 +67,23 @@ delimiter ;$$
 drop procedure mysql.dummy;
 
 --error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call mysql.dummy();
+
+--error ER_SP_WRONG_NO_OF_ARGS
 call mysql.dummy(1);
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call mysql.dummy(`xxx`.tttt);
 
 
 --error ER_SPECIFIC_ACCESS_DENIED_ERROR
 call mysql.dummy_2(1, 'xpchild');
 
---error ER_SPECIFIC_ACCESS_DENIED_ERROR
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
 call mysql.dummy_2(1, 1);
 
---error ER_SPECIFIC_ACCESS_DENIED_ERROR
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
 call mysql.dummy_2("xpchild", 1);
-
-
 
 connection default;
 drop user 'u0'@'%';

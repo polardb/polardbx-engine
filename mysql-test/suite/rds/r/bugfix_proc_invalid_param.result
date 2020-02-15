@@ -1,0 +1,2 @@
+call dbms_recycle.purge_table(`xxxx`.table);
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_recycle.purge_table
