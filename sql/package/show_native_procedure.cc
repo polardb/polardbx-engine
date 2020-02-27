@@ -176,6 +176,7 @@ void Sql_cmd_show_native_procedure::send_result(THD *thd, bool error) {
 
     auto parameters = procit->get_parameters();
     std::size_t param_size = parameters->size();
+    params_str = "";
     if (param_size != 0)
       params_str = field_type_enum_to_string(parameters->at(0));
     if (param_size > 1)
@@ -191,9 +192,11 @@ void Sql_cmd_show_native_procedure::send_result(THD *thd, bool error) {
                            system_charset_info);
     protocol->store_string(sql_command_code_str.c_str(),
                            sql_command_code_str.length(), system_charset_info);
-    protocol->store_string(params_str.c_str(), params_str.length(),
-                           system_charset_info);
-
+    if (param_size == 0)
+      protocol->store_null();
+    else
+      protocol->store_string(params_str.c_str(), params_str.length(),
+                             system_charset_info);
     if (protocol->end_row()) DBUG_VOID_RETURN;
   }
 
