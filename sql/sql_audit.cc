@@ -1044,6 +1044,9 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   /* Skip rds audit for bootstrap */
   if (opt_initialize)
     return 0;
+  /* Skip rds audit for dd upgrade */
+  if (thd->is_server_upgrade_thread())
+    return 0;
 
   mysql_event_rds_query event;
   char user_buff[USERNAME_LENGTH + 1] = "";
