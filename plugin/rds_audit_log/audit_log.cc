@@ -226,7 +226,6 @@ extern PSI_mutex_key key_mutex_audit_buf_full_sleep;
 extern PSI_cond_key key_cond_audit_flush_sleep;
 extern PSI_cond_key key_cond_audit_buf_full_sleep;
 extern PSI_thread_key key_thread_audit_flush;
-extern PSI_thread_key key_file_audit_log;
 #endif
 
 /* Constuctor */
@@ -347,7 +346,7 @@ void MYSQL_RDS_AUDIT_LOG::rotate_log_file_low() {
     new_log_name[len] = '\0';
   }
 
-  new_log_fd = mysql_file_open(key_file_audit_log, new_log_name,
+  new_log_fd = mysql_file_open(PSI_NOT_INSTRUMENTED, new_log_name,
                                O_CREAT | O_WRONLY | O_EXCL, MYF(0));
 
   if (new_log_fd == -1) {

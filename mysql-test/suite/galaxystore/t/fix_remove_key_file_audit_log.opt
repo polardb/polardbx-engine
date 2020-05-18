@@ -1,0 +1,2 @@
+--performance_agent_enabled=ON --performance_schema_max_file_instances=-1 --performance-schema-consumer-thread-instrumentation=ON
+

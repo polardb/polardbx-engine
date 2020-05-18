@@ -83,11 +83,6 @@ PSI_thread_key key_thread_audit_flush;
 static PSI_thread_info rds_audit_all_threads[] = {
     {&key_thread_audit_flush, "flush_thread", 0, 0, PSI_DOCUMENT_ME}};
 
-PSI_file_key key_file_audit_log;
-
-static PSI_file_info rds_audit_all_files[] = {
-    {&key_file_audit_log, "log_file", 0, 0, PSI_DOCUMENT_ME}};
-
 static void register_all_audit_psi_keys(void) {
   const char *category = "rds_audit";
   int count;
@@ -107,8 +102,6 @@ static void register_all_audit_psi_keys(void) {
   count = static_cast<int>(array_elements(rds_audit_all_threads));
   mysql_thread_register(category, rds_audit_all_threads, count);
 
-  count = static_cast<int>(array_elements(rds_audit_all_files));
-  mysql_file_register(category, rds_audit_all_files, count);
 }
 #endif /* HAVE_PSI_INTERFACE */
 

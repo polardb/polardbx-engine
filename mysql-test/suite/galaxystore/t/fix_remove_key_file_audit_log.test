@@ -1,0 +1,15 @@
+
+show global variables like 'performance_schema';
+show global variables like 'performance_schema_max_file_instances';
+select * from performance_schema.setup_consumers where name='thread_instrumentation';
+select * from performance_schema.setup_instruments where name ='wait/io/file/rds_audit/log_file';
+
+select @@global.rds_audit_log_enabled into @saved_rds_audit_log_enabled;
+
+set global rds_audit_log_enabled=on;
+select * from performance_schema.file_instances where EVENT_NAME='wait/io/file/rds_audit/log_file';
+set global rds_audit_log_flush=on;
+select * from performance_schema.file_instances where EVENT_NAME='wait/io/file/rds_audit/log_file';
+
+
+set global rds_audit_log_enabled=@saved_rds_audit_log_enabled;
