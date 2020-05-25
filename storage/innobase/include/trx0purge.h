@@ -323,7 +323,8 @@ struct Tablespace {
         m_file_name(),
         m_log_file_name(),
         m_log_file_name_old(),
-        m_rsegs() {}
+        m_rsegs(),
+        m_txn(false) {}
 
   /** Copy Constructor
   @param[in]  other    undo tablespace to copy */
@@ -336,7 +337,8 @@ struct Tablespace {
         m_file_name(),
         m_log_file_name(),
         m_log_file_name_old(),
-        m_rsegs() {
+        m_rsegs(),
+        m_txn(other.is_txn()) {
     ut_ad(m_id == 0 || is_reserved(m_id));
 
     set_space_name(other.space_name());
@@ -659,6 +661,13 @@ struct Tablespace {
   /** List of rollback segments within this tablespace.
   This is not always used. Must call init_rsegs to use it. */
   Rsegs *m_rsegs;
+
+  /** Lizard transaction tablespace */
+  bool m_txn;
+
+ public:
+  bool is_txn() const { return m_txn; }
+  void set_txn() { m_txn = true; }
 };
 
 /** List of undo tablespaces, each containing a list of
@@ -696,12 +705,15 @@ class Tablespaces {
   /** Get the Tablespace tracked at a position. */
   Tablespace *at(size_t pos) { return (m_spaces.at(pos)); }
 
+  /** Get the Tablespace at back. */
+  Tablespace *back() { return m_spaces.back(); }
+
   /** Add a new undo::Tablespace to the back of the vector.
   The vector has been pre-allocated to 128 so read threads will
   not loose what is pointed to. If tablespace_name and file_name
   are standard names, they are optional.
   @param[in]    ref_undo_space  undo tablespace */
-  void add(Tablespace &ref_undo_space);
+  void add(Tablespace &ref_undo_space, int pos);
 
   /** Drop an existing explicit undo::Tablespace.
   @param[in]    undo_space      pointer to undo space */
@@ -715,6 +727,9 @@ class Tablespaces {
   @param[in]  num  undo tablespace number
   @return true if space_id is found, else false */
   bool contains(space_id_t num) { return (find(num) != nullptr); }
+
+  /** Lizard : mark transaction tablespace */
+  void mark_txn();
 
   /** Find the given space_num in the vector.
   @param[in]  num  undo tablespace number

@@ -211,6 +211,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "lizard0fsp.h"
 #include "lizard0scn.h"
+#include "lizard0txn.h"
 
 #ifndef UNIV_HOTBACKUP
 
@@ -1592,6 +1593,8 @@ static void innodb_space_shutdown() {
     srv_tmp_space.delete_files();
   }
   srv_tmp_space.shutdown();
+
+  lizard::srv_lizard_space.shutdown();
 }
 
 /** Shut down InnoDB after the Global Data Dictionary has been shut down.
@@ -12374,7 +12377,9 @@ static int validate_tablespace_name(ts_command_type ts_command,
           (ts_command == ALTER_UNDO_TABLESPACE ||
            (ts_command == DROP_UNDO_TABLESPACE &&
             0 != strcmp(name, dict_sys_t::s_default_undo_space_name_1) &&
-            0 != strcmp(name, dict_sys_t::s_default_undo_space_name_2)));
+            0 != strcmp(name, dict_sys_t::s_default_undo_space_name_2) &&
+            0 != strcmp(name, lizard::dict_lizard::s_default_txn_space_name_1) &&
+            0 != strcmp(name, lizard::dict_lizard::s_default_txn_space_name_2)));
       if (!allow) {
         my_printf_error(ER_WRONG_TABLESPACE_NAME,
                         "InnoDB: Tablespace names starting"
@@ -16226,7 +16231,7 @@ static int innodb_alter_undo_tablespace_inactive(undo::Tablespace *undo_space,
       }
     }
 
-    if (other_active_spaces < 2) {
+    if (other_active_spaces < (2 + FSP_IMPLICIT_TXN_TABLESPACES)) {
       my_printf_error(ER_DISALLOWED_OPERATION,
                       "Cannot set %s inactive since there would be"
                       " less than 2 undo tablespaces left active.",
@@ -16294,6 +16299,17 @@ static int innodb_alter_undo_tablespace(handlerton *hton,
                     "Cannot ALTER UNDO TABLESPACE `%s` because it is a "
                     "general tablespace.  Please use ALTER TABLESPACE.",
                     MYF(0), alter_info->tablespace_name);
+
+    return HA_ERR_NOT_ALLOWED_COMMAND;
+  }
+
+  /** Lizard: Didn't allowed to alter transaction tablespace */
+  if (lizard::fsp_is_txn_tablespace_by_id(space_id)) {
+    my_printf_error(
+        ER_WRONG_TABLESPACE_NAME,
+        "Cannot ALTER LIZARD TRANSACTION TABLESPACE `%s` because it is a "
+        "permanent active tablespace.",
+        MYF(0), alter_info->tablespace_name);
 
     return HA_ERR_NOT_ALLOWED_COMMAND;
   }
@@ -16412,6 +16428,19 @@ static int innodb_drop_undo_tablespace(handlerton *hton, THD *thd,
     mutex_exit(&undo::ddl_mutex);
 
     return HA_ERR_TABLESPACE_IS_NOT_EMPTY;
+  }
+
+  /** Lizard: Didn't allowed to alter transaction tablespace */
+  if (lizard::fsp_is_txn_tablespace_by_id(space_id)) {
+    my_printf_error(
+        ER_WRONG_TABLESPACE_NAME,
+        "Cannot DROP LIZARD TRANSACTION TABLESPACE `%s` because it is a "
+        "permanent active tablespace.",
+        MYF(0), alter_info->tablespace_name);
+
+    undo::spaces->x_unlock();
+    mutex_exit(&(undo::ddl_mutex));
+    return HA_ERR_NOT_ALLOWED_COMMAND;
   }
 
   /* We don't need to invalidate buffer pool pages belonging to this undo

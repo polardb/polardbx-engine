@@ -24,25 +24,23 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0dict.h
- Special Zeus tablespace definition.
+/** @file include/lizard0undo0types.h
+  Lizard transaction undo and purge types.
 
- Created 2020-03-19 by Jianwei.zhao
+ Created 2020-04-02 by Jianwei.zhao
  *******************************************************/
 
-#include "lizard0dict.h"
-#include "dict0dd.h"
-#include "dict0mem.h"
+#ifndef lizard0undo0types_h
+#define lizard0undo0types_h
 
-namespace lizard {
+#include "trx0types.h"
 
-/** The space name of lizard */
-const char *dict_lizard::s_lizard_space_name = "innodb_lizard";
+#include <atomic>
+#include <queue>
+#include <set>
+#include <vector>
 
-/** The file name of lizard space */
-const char *dict_lizard::s_lizard_space_file_name = "lizard.ibd";
+struct trx_rseg_t;
+struct trx_undo_t;
 
-/** Lizard: First two undo tablespaces will be treated as txn tablespace */
-const char *dict_lizard::s_default_txn_space_name_1 = "innodb_undo_001";
-const char *dict_lizard::s_default_txn_space_name_2 = "innodb_undo_002";
-}  // namespace lizard
+#endif  // lizard0undo0types_h

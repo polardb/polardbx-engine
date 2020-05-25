@@ -258,6 +258,7 @@ SET(INNOBASE_SOURCES
   dict/lizard0dict.cc
   fil/lizard0fil.cc
   fsp/lizard0fsp.cc
+  trx/lizard0txn.cc
   )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753

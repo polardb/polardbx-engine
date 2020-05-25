@@ -24,6 +24,8 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 NAME	SPACE_TYPE	ENCRYPTION	STATE
 innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
+innodb_undo_003	Undo	Y	active
+innodb_undo_004	Undo	Y	active
 undo_3	Undo	Y	active
 SET GLOBAL innodb_undo_log_encrypt=OFF;
 SHOW VARIABLES LIKE "%innodb_undo_log_encrypt%";
@@ -33,6 +35,8 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 NAME	SPACE_TYPE	ENCRYPTION	STATE
 innodb_undo_001	Undo	N	active
 innodb_undo_002	Undo	N	active
+innodb_undo_003	Undo	N	active
+innodb_undo_004	Undo	N	active
 undo_3	Undo	N	active
 # Create a new UNDO tablespace. Should be created as UNENCRYPTED.
 CREATE UNDO TABLESPACE undo_4 ADD DATAFILE 'undo_4.ibu';
@@ -40,6 +44,8 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 NAME	SPACE_TYPE	ENCRYPTION	STATE
 innodb_undo_001	Undo	N	active
 innodb_undo_002	Undo	N	active
+innodb_undo_003	Undo	N	active
+innodb_undo_004	Undo	N	active
 undo_3	Undo	N	active
 undo_4	Undo	N	active
 SET GLOBAL innodb_undo_log_encrypt=ON;
@@ -50,6 +56,8 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 NAME	SPACE_TYPE	ENCRYPTION	STATE
 innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
+innodb_undo_003	Undo	Y	active
+innodb_undo_004	Undo	Y	active
 undo_3	Undo	Y	active
 undo_4	Undo	Y	active
 ###############################################################################
@@ -60,6 +68,8 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 NAME	SPACE_TYPE	ENCRYPTION	STATE
 innodb_undo_001	Undo	N	active
 innodb_undo_002	Undo	N	active
+innodb_undo_003	Undo	N	active
+innodb_undo_004	Undo	N	active
 undo_3	Undo	N	inactive
 undo_4	Undo	N	active
 DROP UNDO TABLESPACE undo_3;
@@ -68,12 +78,16 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 NAME	SPACE_TYPE	ENCRYPTION	STATE
 innodb_undo_001	Undo	N	active
 innodb_undo_002	Undo	N	active
+innodb_undo_003	Undo	N	active
+innodb_undo_004	Undo	N	active
 undo_4	Undo	N	inactive
 DROP UNDO TABLESPACE undo_4;
 SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES WHERE SPACE_TYPE='Undo';
 NAME	SPACE_TYPE	ENCRYPTION	STATE
 innodb_undo_001	Undo	N	active
 innodb_undo_002	Undo	N	active
+innodb_undo_003	Undo	N	active
+innodb_undo_004	Undo	N	active
 # ----------------------------------------------------------------------
 # Teardown
 # Removing local keyring file for keyring component: component_keyring_file

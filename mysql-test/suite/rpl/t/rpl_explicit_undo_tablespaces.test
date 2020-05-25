@@ -49,13 +49,13 @@ SHOW WARNINGS;
 --connection master
 
 # Check implicit undo tablespace inactive
-ALTER UNDO TABLESPACE innodb_undo_001 SET INACTIVE;
-ALTER UNDO TABLESPACE innodb_undo_002 SET INACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_003 SET INACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_004 SET INACTIVE;
 
 # Wait until implicit undo tablespace become empty
-let $inactive_undo_space = innodb_undo_001;
+let $inactive_undo_space = innodb_undo_003;
 source include/wait_until_undo_space_is_empty.inc;
-let $inactive_undo_space = innodb_undo_002;
+let $inactive_undo_space = innodb_undo_004;
 source include/wait_until_undo_space_is_empty.inc;
 
 # Check metadata info on master
@@ -75,9 +75,9 @@ SELECT name,space_type,state
 # at least 2 active undo tablespaces so that they can be implicitly
 # truncated one at a time..
 --error ER_DISALLOWED_OPERATION
-ALTER UNDO TABLESPACE innodb_undo_001 SET INACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_003 SET INACTIVE;
 --error ER_DISALLOWED_OPERATION
-ALTER UNDO TABLESPACE innodb_undo_002 SET INACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_004 SET INACTIVE;
 
 # Check metadata info on slave
 SELECT name,space_type,state
@@ -119,7 +119,7 @@ SHOW WARNINGS;
 
 # Check that implicit undo tablespaces can not be dropped
 --error ER_WRONG_TABLESPACE_NAME
-DROP UNDO TABLESPACE innodb_undo_001;
+DROP UNDO TABLESPACE innodb_undo_003;
 
 # Check metadata info on master
 SELECT name,space_type,state
@@ -146,8 +146,8 @@ DROP UNDO TABLESPACE innodb_undo_001;
 --connection master
 
 # Check implicit undo tablespace active
-ALTER UNDO TABLESPACE innodb_undo_001 SET ACTIVE;
-ALTER UNDO TABLESPACE innodb_undo_002 SET ACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_003 SET ACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_004 SET ACTIVE;
 
 # Check metadata info on master
 SELECT name,space_type,state

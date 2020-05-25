@@ -70,6 +70,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/plugin.h"
 #include "sql/clone_handler.h"
 
+#include "mysql/service_thd_wait.h"
+
+#include "lizard0txn.h"
+
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
 
 /** Set of table_id */
@@ -1085,7 +1089,10 @@ static trx_rseg_t *get_next_redo_rseg_from_undo_spaces() {
   /* Use all known undo tablespaces.  Some may be inactive. */
   ulint target_undo_tablespaces = undo::spaces->size();
 
-  ut_ad(target_undo_tablespaces > 0);
+  /** Lizard: skip txn tablespace */
+  ut_a(lizard::txn_spaces.size() == FSP_IMPLICIT_TXN_TABLESPACES);
+  ut_ad(target_undo_tablespaces > (0 + FSP_IMPLICIT_TXN_TABLESPACES));
+  target_undo_tablespaces -= FSP_IMPLICIT_TXN_TABLESPACES;
 
   /* The number of rollback segments may be changed at any instant.
   So use the value at this instant.  Rollback segments are never
@@ -1111,7 +1118,12 @@ static trx_rseg_t *get_next_redo_rseg_from_undo_spaces() {
 
     current++;
 
-    undo_space = undo::spaces->at(spaces_slot);
+    /** The first spaces are always transaction tablespace */
+    ut_ad(lizard::txn_always_first_undo_tablespace(undo::spaces));
+
+    undo_space = undo::spaces->at(spaces_slot + FSP_IMPLICIT_TXN_TABLESPACES);
+
+    ut_ad(!lizard::fsp_is_txn_tablespace_by_id(undo_space->id()));
 
     /* Avoid any rseg that resides in a tablespace that has been made
     inactive either explicitly or by being marked for truncate. We do

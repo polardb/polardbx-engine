@@ -1263,7 +1263,14 @@ static bool trx_purge_mark_undo_for_truncate(size_t truncate_count) {
 
   if (normal_operation) {
     /* Skip truncate if there is only one active undo tablespace to check. */
-    if (num_active == 1) {
+    /**
+      Revision:
+      --------
+      Skip if there is noly one active undo tablespace left besides TXN
+      tablespaces.
+    */
+    ut_ad(num_active > 0 + FSP_IMPLICIT_TXN_TABLESPACES);
+    if (num_active == 1 + FSP_IMPLICIT_TXN_TABLESPACES) {
       return (false);
     }
 
@@ -1290,7 +1297,7 @@ static bool trx_purge_mark_undo_for_truncate(size_t truncate_count) {
   do {
     auto undo_space = undo::spaces->find(space_num);
 
-    if (undo_space->needs_truncation()) {
+    if (!undo_space->is_txn() && undo_space->needs_truncation()) {
       /* Tablespace qualifies for truncate. */
       undo_trunc->increment_scan();
       undo_trunc->mark(undo_space);
@@ -2643,7 +2650,7 @@ The vector has been pre-allocated to 128 so read threads will
 not loose what is pointed to. If tablespace_name and file_name
 are standard names, they are optional.
 @param[in]      ref_undo_space  undo tablespace */
-void undo::Tablespaces::add(Tablespace &ref_undo_space) {
+void undo::Tablespaces::add(Tablespace &ref_undo_space, int pos) {
   ut_ad(is_reserved(ref_undo_space.id()));
 
   if (contains(ref_undo_space.num())) {
@@ -2653,7 +2660,10 @@ void undo::Tablespaces::add(Tablespace &ref_undo_space) {
   auto undo_space =
       ut::new_withkey<Tablespace>(UT_NEW_THIS_FILE_PSI_KEY, ref_undo_space);
 
-  m_spaces.push_back(undo_space);
+  m_spaces.insert((pos < 0 || pos > (int)m_spaces.size())
+                      ? m_spaces.end()
+                      : m_spaces.begin() + pos,
+                  undo_space);
 }
 
 /** Drop an existing explicit undo::Tablespace.

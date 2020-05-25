@@ -8,6 +8,8 @@
 # Directory listing of MYSQL_UNDO_DIR
 undo_001
 undo_002
+undo_003
+undo_004
 #
 # Start the DB server with the temp datadir and undo directory
 #
@@ -55,7 +57,9 @@ Level	Code	Message
 Error	3606	Duplicate file name for tablespace 'undo_999'
 undo_001
 undo_002
+undo_003
 undo_003.ibu
+undo_004
 undo_004.ibu
 #
 # Cleanup

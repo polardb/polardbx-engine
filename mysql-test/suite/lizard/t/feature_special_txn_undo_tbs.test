@@ -1,0 +1,23 @@
+connection default;
+
+
+SELECT @@innodb_undo_tablespaces;
+
+use information_schema;
+select * from INNODB_TABLESPACES where space >= 4294967276 and space <= 4294967279;
+select * from INNODB_TABLESPACES_BRIEF where space >= 4294967276 and space <= 4294967279;
+select * from INNODB_DATAFILES where space >= 4294967276 and space <= 4294967279;
+
+
+--error ER_WRONG_TABLESPACE_NAME
+drop tablespace innodb_undo_001;
+
+--error ER_WRONG_TABLESPACE_NAME
+drop tablespace innodb_undo_002;
+
+--error ER_WRONG_TABLESPACE_NAME
+ALTER UNDO TABLESPACE innodb_undo_001 SET INACTIVE;
+
+--error ER_WRONG_TABLESPACE_NAME
+ALTER UNDO TABLESPACE innodb_undo_002 SET INACTIVE;
+
