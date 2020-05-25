@@ -39,6 +39,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mem0mem.h"
 #include "sql/dd/object_id.h"
 
+#include "lizard0undo0types.h"
+
 struct dict_table_t;
 struct dict_index_t;
 
@@ -75,8 +77,20 @@ struct dict_lizard {
 
   /** The file name of lizard space */
   static const char *s_lizard_space_file_name;
+
+  /** The lizard transaction tablespace is from max undo tablespace */
+  static constexpr space_id_t s_max_txn_space_id =
+      dict_sys_t::s_max_undo_space_id;
+
+  /** The lizard transaction tablespace minmum space id */
+  static constexpr space_id_t s_min_txn_space_id =
+      dict_sys_t::s_max_undo_space_id - 1;
+
+  /** Lizard: First two undo tablespaces will be treated as txn tablespace */
+  static const char *s_default_txn_space_name_1;
+  static const char *s_default_txn_space_name_2;
 };
 
 }  // namespace lizard
 
-#endif // lizard0dict_h
+#endif  // lizard0dict_h

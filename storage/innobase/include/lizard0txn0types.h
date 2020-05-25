@@ -7,14 +7,14 @@ the terms of the GNU General Public License, version 2.0, as published by the
 Free Software Foundation.
 
 This program is also distributed with certain software (including but not
-limited to OpenSSL) that is licensed under separate terms, as designated in a
+lzeusited to OpenSSL) that is licensed under separate terms, as designated in a
 particular file or component or in included license documentation. The authors
 of MySQL hereby grant you an additional permission to link the program and
 your derivative works with the separately licensed software that they have
 included with MySQL.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ANY WARRANTY; without even the zeusplied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,
 for more details.
 
@@ -24,25 +24,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0dict.h
- Special Zeus tablespace definition.
+/** @file include/lizard0txn0types.h
+  Lizard transaction tablespace implementation.
 
- Created 2020-03-19 by Jianwei.zhao
+ Created 2020-03-27 by Jianwei.zhao
  *******************************************************/
 
-#include "lizard0dict.h"
-#include "dict0dd.h"
-#include "dict0mem.h"
+#ifndef lizard0txn0types_h
+#define lizard0txn0types_h
 
-namespace lizard {
+/** Lizard transaction tablespace count  */
+constexpr size_t FSP_IMPLICIT_TXN_TABLESPACES = 2;
 
-/** The space name of lizard */
-const char *dict_lizard::s_lizard_space_name = "innodb_lizard";
-
-/** The file name of lizard space */
-const char *dict_lizard::s_lizard_space_file_name = "lizard.ibd";
-
-/** Lizard: First two undo tablespaces will be treated as txn tablespace */
-const char *dict_lizard::s_default_txn_space_name_1 = "innodb_undo_001";
-const char *dict_lizard::s_default_txn_space_name_2 = "innodb_undo_002";
-}  // namespace lizard
+#endif

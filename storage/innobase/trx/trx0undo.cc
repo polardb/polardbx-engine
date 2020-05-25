@@ -54,6 +54,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0rseg.h"
 #include "trx0trx.h"
 
+#include "lizard0txn.h"
+
 /* How should the old versions in the history list be managed?
    ----------------------------------------------------------
 If each transaction is given a whole page for its update undo log, file
@@ -1942,6 +1944,8 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
   space_id_t old_space_id = marked_space->id();
   space_id_t space_num = undo::id2num(old_space_id);
   Rsegs *marked_rsegs = marked_space->rsegs();
+
+  ut_a(!lizard::fsp_is_txn_tablespace_by_id(old_space_id));
 
   undo::unuse_space_id(old_space_id);
 

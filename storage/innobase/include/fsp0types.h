@@ -36,6 +36,8 @@ Created May 26, 2009 Vasil Dimov
 
 #include "univ.i"
 
+#include "lizard0txn0types.h"
+
 /** @name Flags for inserting records in order
 If records are inserted in order, there are the following
 flags to tell this (their type is made byte for the compiler
@@ -387,9 +389,9 @@ impose the 7 bit restriction. e.g., mach_write_to_3() */
 
 /** Minimum and Maximum number of implicit undo tablespaces.  This kind
 of undo tablespace is always created and found in --innodb-undo-directory. */
-#define FSP_MIN_UNDO_TABLESPACES 2
+#define FSP_MIN_UNDO_TABLESPACES (2 + FSP_IMPLICIT_TXN_TABLESPACES)
 #define FSP_MAX_UNDO_TABLESPACES (TRX_SYS_N_RSEGS - 1)
-#define FSP_IMPLICIT_UNDO_TABLESPACES 2
+#define FSP_IMPLICIT_UNDO_TABLESPACES (2 + FSP_IMPLICIT_TXN_TABLESPACES)
 #define FSP_MAX_ROLLBACK_SEGMENTS (TRX_SYS_N_RSEGS)
 
 #endif /* fsp0types_h */

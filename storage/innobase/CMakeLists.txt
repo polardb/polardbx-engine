@@ -210,11 +210,13 @@ SET(INNOBASE_SOURCES
 	ut/ut0ut.cc
 	ut/ut0vec.cc
 	ut/ut0wqueue.cc
-  trx/lizard0scn.cc
-  trx/lizard0sys.cc
-  dict/lizard0dict.cc
-  fil/lizard0fil.cc
-  fsp/lizard0fsp.cc)
+	trx/lizard0scn.cc
+	trx/lizard0sys.cc
+	dict/lizard0dict.cc
+	fil/lizard0fil.cc
+	fsp/lizard0fsp.cc
+	trx/lizard0txn.cc
+)
 
 ADD_LIBRARY(innodb_zipdecompress STATIC ${INNOBASE_ZIP_DECOMPRESS_SOURCES})
 TARGET_COMPILE_DEFINITIONS(

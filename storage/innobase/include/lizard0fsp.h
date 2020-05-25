@@ -80,6 +80,7 @@ extern bool fsp_header_init_for_lizard(page_no_t size);
 /** Get the size of lizard tablespace from header */
 extern page_no_t fsp_header_get_lizard_tablespace_size(void);
 
+/** Lizard system tablespace */
 class LizardTablespace : public Tablespace {
  public:
   LizardTablespace()

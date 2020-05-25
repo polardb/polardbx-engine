@@ -17,6 +17,8 @@ RUN SELECT name,space_type,state FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 name	space_type	state
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
 undo_003	Undo	active
 0 rows affected
 RUN ALTER UNDO TABLESPACE undo_003 SET INACTIVE
@@ -45,6 +47,8 @@ WHERE space_type = 'Undo';
 name	space_type	state
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
 undo_003	Undo	empty
 RUN USE mysqlxplugin
 

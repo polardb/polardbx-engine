@@ -14,7 +14,7 @@ eval set @@global.log_error_verbosity = $log_error_verbosity_start_value;
 # This is in case the truncate got started before the settings above were reset.
 # chtest will see any leftover trunc file.
 let $wait_timeout= 300; # Override default 30 seconds with 300.
-let $wait_condition= SELECT count(*) = 2 FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
+let $wait_condition= SELECT count(*) = 4 FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
                      WHERE SPACE_TYPE = 'Undo' AND STATE = 'active';
 source include/wait_condition.inc;
 

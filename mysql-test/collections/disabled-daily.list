@@ -452,3 +452,4 @@ main.dd_upgrade_lctn_cs_lin                       : WL#000 Lizard didn't support
 main.dd_upgrade_non_debug                         : WL#000 Lizard didn't support in-place upgrade.
 main.read_only_ddl                                : WL#000 Lizard didn't support in-place upgrade.
 clone.remote_dml_upgrade                          : WL#000 Lizard didn't support in-place upgrade.
+innodb.innodb_extend_and_initialize_debug         : WL#000 Lizard didn't support MLOG_FILE_EXTEND.

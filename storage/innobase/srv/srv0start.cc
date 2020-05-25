@@ -121,10 +121,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0crc32.h"
 #include "ut0new.h"
 
-#include "srv0file.h"
-
-#include "lizard0sys.h"
 #include "lizard0fsp.h"
+#include "lizard0sys.h"
+#include "lizard0txn.h"
 
 /** fil_space_t::flags for hard-coded tablespaces */
 extern uint32_t predefined_flags;
@@ -975,7 +974,10 @@ static dberr_t srv_undo_tablespace_open(undo::Tablespace &undo_space) {
   }
 
   if (undo::is_reserved(space_id)) {
-    undo::spaces->add(undo_space);
+    int pos = lizard::fsp_txn_tablespace_pos_by_id(space_id);
+    undo::spaces->add(undo_space, pos);
+    /** Mark lizard transaction tablespace */
+    undo::spaces->mark_txn();
   }
 
   return (DB_SUCCESS);
@@ -1213,6 +1215,7 @@ static dberr_t srv_undo_tablespaces_create() {
     /* If the trunc log file is present, the fixup process will be
     finished later. */
     if (undo::is_active_truncate_log_present(num)) {
+      ut_a(lizard::fsp_is_txn_tablespace_by_num(num) == false);
       continue;
     }
 
@@ -1486,6 +1489,8 @@ void undo_spaces_init() {
   trx_sys_undo_spaces_init();
 
   undo::init_space_id_bank();
+
+  ut_a(lizard::txn_spaces.size() == 0);
 }
 
 /** Free the resources occupied by undo::spaces and trx_sys_undo_spaces,
@@ -1508,6 +1513,11 @@ void undo_spaces_deinit() {
   if (undo::space_id_bank != nullptr) {
     UT_DELETE_ARRAY(undo::space_id_bank);
     undo::space_id_bank = nullptr;
+  }
+
+  if (lizard::txn_spaces.size() != 0) {
+    ut_a(lizard::txn_spaces.size() == FSP_IMPLICIT_TXN_TABLESPACES);
+    lizard::txn_spaces.clear();
   }
 }
 
