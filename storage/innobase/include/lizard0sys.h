@@ -89,6 +89,9 @@ extern lizard_sysf_t *lizard_sysf_get(mtr_t *mtr);
 /** Create lizard system pages within lizard tablespace */
 extern void lizard_create_sys_pages();
 
+/** GLobal lizard system */
+extern lizard_sys_t *lizard_sys;
+
 }  // namespace lizard
 
 #endif  // lizard0sys_h define

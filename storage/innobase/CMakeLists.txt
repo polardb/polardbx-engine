@@ -216,7 +216,8 @@ SET(INNOBASE_SOURCES
   fil/lizard0fil.cc
   fsp/lizard0fsp.cc
   trx/lizard0txn.cc
-  trx/lizard0undo.cc)
+  trx/lizard0undo.cc
+  mtr/lizard0mtr.cc)
 
 ADD_LIBRARY(innodb_zipdecompress STATIC ${INNOBASE_ZIP_DECOMPRESS_SOURCES})
 TARGET_COMPILE_DEFINITIONS(

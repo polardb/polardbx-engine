@@ -53,6 +53,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #endif /* !UNIV_HOTBACKUP */
 #include "srv0srv.h"
 
+#include "lizard0undo0types.h"
+
 // Forward declaration
 struct mtr_t;
 
@@ -444,12 +446,13 @@ with an explicit check for the read-only status.
 
 /**
 Assert that the transaction is in the trx_sys_t::rw_trx_list */
-#define assert_trx_in_rw_list(t)                         \
-  do {                                                   \
-    ut_ad(!(t)->read_only);                              \
-    ut_ad((t)->in_rw_trx_list ==                         \
-          !((t)->read_only || !(t)->rsegs.m_redo.rseg)); \
-    check_trx_state(t);                                  \
+#define assert_trx_in_rw_list(t)                                  \
+  do {                                                            \
+    ut_ad(!(t)->read_only);                                       \
+    ut_ad((t)->in_rw_trx_list ==                                  \
+          !((t)->read_only ||                                     \
+            !((t)->rsegs.m_redo.rseg || (t)->rsegs.m_txn.rseg))); \
+    check_trx_state(t);                                           \
   } while (0)
 
 /**
@@ -769,6 +772,9 @@ struct trx_rsegs_t {
   temp tablespace used for undo logging of tables that doesn't need
   to be recovered on crash. */
   trx_undo_ptr_t m_noredo;
+
+  /** Lizard: txn undo */
+  txn_undo_ptr_t m_txn;
 };
 
 enum trx_rseg_type_t {
@@ -1210,6 +1216,12 @@ struct trx_t {
   }
 
   bool allow_semi_consistent() const { return (skip_gap_locks()); }
+
+  /**
+    Lizard: The fixed undo log header address
+    and commit scn that descripe  transaction.
+  */
+  txn_desc_t txn_desc;
 };
 #ifndef UNIV_HOTBACKUP
 

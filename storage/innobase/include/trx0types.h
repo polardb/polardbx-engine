@@ -225,6 +225,11 @@ struct trx_rseg_t {
   /** List of insert undo log segments cached for fast reuse */
   UT_LIST_BASE_NODE_T(trx_undo_t) insert_undo_cached;
 
+  /** List of transction undo logs */
+  UT_LIST_BASE_NODE_T(trx_undo_t) txn_undo_list;
+
+  /** List of transction undo log segments cached for fast reuse */
+  UT_LIST_BASE_NODE_T(trx_undo_t) txn_undo_cached;
   /*--------------------------------------------------------*/
 
   /** Page number of the last not yet purged log header in the history

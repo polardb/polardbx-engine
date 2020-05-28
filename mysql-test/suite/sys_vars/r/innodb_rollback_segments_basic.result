@@ -60,17 +60,19 @@ innodb_rollback_segments	128
 # Check if value can be set
 #
 SET GLOBAL innodb_rollback_segments=100;
+Warnings:
+Warning	1292	Truncated incorrect innodb_rollback_segments value: '100'
 SELECT @@global.innodb_rollback_segments;
 @@global.innodb_rollback_segments
-100
+128
 SELECT * FROM performance_schema.global_variables 
 WHERE variable_name='innodb_rollback_segments';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_rollback_segments	100
+innodb_rollback_segments	128
 SELECT * FROM performance_schema.session_variables 
 WHERE variable_name='innodb_rollback_segments';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_rollback_segments	100
+innodb_rollback_segments	128
 SET SESSION innodb_rollback_segments=101;
 ERROR HY000: Variable 'innodb_rollback_segments' is a GLOBAL variable and should be set with SET GLOBAL
 #
@@ -87,17 +89,19 @@ Warnings:
 Warning	1292	Truncated incorrect innodb_rollback_segments value: '-7'
 SELECT @@global.innodb_rollback_segments;
 @@global.innodb_rollback_segments
-1
+128
 SET GLOBAL innodb_rollback_segments=0;
 Warnings:
 Warning	1292	Truncated incorrect innodb_rollback_segments value: '0'
 SELECT @@global.innodb_rollback_segments;
 @@global.innodb_rollback_segments
-1
+128
 SET GLOBAL innodb_rollback_segments=50;
+Warnings:
+Warning	1292	Truncated incorrect innodb_rollback_segments value: '50'
 SELECT @@global.innodb_rollback_segments;
 @@global.innodb_rollback_segments
-50
+128
 SET GLOBAL innodb_rollback_segments=129;
 Warnings:
 Warning	1292	Truncated incorrect innodb_rollback_segments value: '129'

@@ -6,6 +6,8 @@ SET GLOBAL innodb_fast_shutdown = 0;
 SET GLOBAL innodb_undo_log_truncate = 1;
 SET GLOBAL innodb_purge_rseg_truncate_frequency = 1;
 SET GLOBAL innodb_rollback_segments = 3;
+Warnings:
+Warning	1292	Truncated incorrect innodb_rollback_segments value: '3'
 SET GLOBAL innodb_max_undo_log_size = 11534336;
 SET GLOBAL log_error_verbosity = 3;
 SET GLOBAL innodb_fast_shutdown = 0;

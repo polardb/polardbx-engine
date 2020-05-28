@@ -646,6 +646,9 @@ ulint trx_sys_any_active_transactions(void) {
         trx_undo_fake_prepared(trx, trx->rsegs.m_redo.update_undo);
         trx_undo_fake_prepared(trx, trx->rsegs.m_noredo.insert_undo);
         trx_undo_fake_prepared(trx, trx->rsegs.m_noredo.update_undo);
+
+        trx_undo_fake_prepared(trx, trx->rsegs.m_txn.txn_undo);
+
         trx->state = TRX_STATE_PREPARED;
         trx_sys->n_prepared_trx++;
       }

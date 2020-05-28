@@ -44,6 +44,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0purge.h"
 #include "trx0undo.h"
 
+#include "lizard0txn.h"
+
 /** Creates a rollback segment header.
 This function is called only when a new rollback segment is created in
 the database.
@@ -135,6 +137,19 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) {
   /* There can't be any active transactions. */
   ut_a(UT_LIST_GET_LEN(rseg->update_undo_list) == 0);
   ut_a(UT_LIST_GET_LEN(rseg->insert_undo_list) == 0);
+
+  ut_a(UT_LIST_GET_LEN(rseg->txn_undo_list) == 0);
+
+  for (undo = UT_LIST_GET_FIRST(rseg->txn_undo_cached); undo != NULL;
+       undo = next_undo) {
+    next_undo = UT_LIST_GET_NEXT(undo_list, undo);
+
+    UT_LIST_REMOVE(rseg->txn_undo_cached, undo);
+
+    MONITOR_DEC(MONITOR_NUM_UNDO_SLOT_CACHED);
+
+    trx_undo_mem_free(undo);
+  }
 
   for (undo = UT_LIST_GET_FIRST(rseg->update_undo_cached); undo != NULL;
        undo = next_undo) {
@@ -229,7 +244,9 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
   rseg->page_no = page_no;
   rseg->trx_ref_count = 0;
 
-  if (fsp_is_system_temporary(space_id)) {
+  if (lizard::fsp_is_txn_tablespace_by_id(space_id)) {
+    mutex_create(LATCH_ID_TXN_UNDO_SPACE_RSEG, &rseg->mutex);
+  } else if (fsp_is_system_temporary(space_id)) {
     mutex_create(LATCH_ID_TEMP_SPACE_RSEG, &rseg->mutex);
   } else if (fsp_is_undo_tablespace(space_id)) {
     mutex_create(LATCH_ID_UNDO_SPACE_RSEG, &rseg->mutex);
@@ -241,6 +258,9 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
   UT_LIST_INIT(rseg->update_undo_cached, &trx_undo_t::undo_list);
   UT_LIST_INIT(rseg->insert_undo_list, &trx_undo_t::undo_list);
   UT_LIST_INIT(rseg->insert_undo_cached, &trx_undo_t::undo_list);
+
+  UT_LIST_INIT(rseg->txn_undo_list, &trx_undo_t::undo_list);
+  UT_LIST_INIT(rseg->txn_undo_cached, &trx_undo_t::undo_list);
 
   auto rseg_header = trx_rsegf_get_new(space_id, page_no, page_size, mtr);
 
