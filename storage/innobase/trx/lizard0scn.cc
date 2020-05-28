@@ -136,7 +136,7 @@ scn_t SCN::acquire_scn() {
   @return       scn state SCN_STATE_INITIAL, SCN_STATE_ALLOCATED or
                           SCN_STATE_INVALID
 */
-enum scn_state_t zeus_commit_scn_state(const commit_scn_t &scn) {
+enum scn_state_t commit_scn_state(const commit_scn_t &scn) {
   /** The init value */
   if (scn.first == SCN_NULL && scn.second == UTC_NULL) return SCN_STATE_INITIAL;
 

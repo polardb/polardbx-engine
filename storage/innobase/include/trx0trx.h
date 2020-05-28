@@ -55,6 +55,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/handler.h"  // Xa_state_list
 #include "srv0srv.h"
 
+#include "lizard0undo0types.h"
+
 // Forward declaration
 struct mtr_t;
 
@@ -669,6 +671,9 @@ struct trx_rsegs_t {
   temp tablespace used for undo logging of tables that doesn't need
   to be recovered on crash. */
   trx_undo_ptr_t m_noredo;
+
+  /** Lizard: txn undo */
+  txn_undo_ptr_t m_txn;
 };
 
 enum trx_rseg_type_t {
@@ -1134,6 +1139,12 @@ struct trx_t {
   @return true iff in this transaction's isolation level locks on records which
                do not match the WHERE clause are released */
   bool releases_non_matching_rows() const { return skip_gap_locks(); }
+
+  /**
+    Lizard: The fixed undo log header address
+    and commit scn that descripe  transaction.
+  */
+  txn_desc_t txn_desc;
 };
 
 #ifndef UNIV_HOTBACKUP
@@ -1177,7 +1188,8 @@ static inline void check_trx_state(const trx_t *t) {
 Assert that the transaction is in the trx_sys_t::rw_trx_list */
 static inline void assert_trx_in_rw_list(const trx_t *t) {
   ut_ad(!t->read_only);
-  ut_ad(t->in_rw_trx_list == !(t->read_only || !t->rsegs.m_redo.rseg));
+  ut_ad(t->in_rw_trx_list ==
+        !(t->read_only || !(t->rsegs.m_redo.rseg || t->rsegs.m_txn.rseg)));
   check_trx_state(t);
 }
 

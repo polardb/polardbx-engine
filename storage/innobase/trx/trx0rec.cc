@@ -56,6 +56,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0mem.h"
 
 #include "my_dbug.h"
+#include "lizard0undo.h"
 
 namespace dd {
 class Spatial_reference_system;

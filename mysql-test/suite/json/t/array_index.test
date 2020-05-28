@@ -133,17 +133,20 @@ insert into t values
 ('0'),('1'),('2'),('3'),('4'),('5'),('6'),('7'),('8'),('9'),('A'),('B'),('C'),('D'),('E'),('F');
 create table t1(doc json,key i1((cast(doc->'$' as unsigned array))));
 set session group_concat_max_len = 1000000;
+# Lizard: There may be two reasons for the excessive length:
+# 1. Undo take more space (SCN, GCN, UBA for insert/update undo...)
+# 2. The row take more space (SCN, GCN, UBA fields...)
 --echo Check limit on max total mv keys length
 --echo Should succeed
 insert into t1 select concat('[',group_concat(val),']') from (
   select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
     from t t1, t t2, t t3
-    having val < 1605) tt;
+    having val < 1603) tt;
 --error ER_EXCEEDED_MV_KEYS_NUM
 insert into t1 select concat('[',group_concat(val),']') from (
   select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
     from t t1, t t2, t t3
-    having val < 1606) tt;
+    having val < 1605) tt;
 create table t2(doc json,key i1((cast(doc->'$' as char(10) array))));
 --error ER_EXCEEDED_MV_KEYS_SPACE
 insert into t2 select concat('[',group_concat(val),']') from (

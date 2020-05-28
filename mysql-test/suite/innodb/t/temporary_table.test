@@ -12,6 +12,8 @@ call mtr.add_suppression("The table 't1' is full");
 call mtr.add_suppression("Skip re-populating collations and character sets tables in InnoDB read-only mode.");
 call mtr.add_suppression("Skip updating information_schema metadata in InnoDB read-only mode.");
 call mtr.add_suppression("Skipped updating resource group metadata in InnoDB read only mode.");
+call mtr.add_suppression("innodb-rollback-segments");
+
 --enable_query_log
 
 ################################################################################

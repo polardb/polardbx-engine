@@ -256,6 +256,11 @@ struct trx_rseg_t {
   /** List of insert undo log segments cached for fast reuse */
   Undo_list insert_undo_cached;
 
+  /** List of transction undo logs */
+  Undo_list txn_undo_list;
+
+  /** List of transction undo log segments cached for fast reuse */
+  Undo_list txn_undo_cached;
   /*--------------------------------------------------------*/
 
   /** Page number of the last not yet purged log header in the history
@@ -538,7 +543,9 @@ class TrxUndoRsegs {
         return;
       }
     }
-    ut_a(m_rsegs_n < 2);
+    // ut_a(m_rsegs_n < 2);
+    /* Lizard: one more txn rseg. */
+    ut_a(m_rsegs_n < 2 + 1);
     m_rsegs[m_rsegs_n++] = rseg;
   }
 
@@ -584,7 +591,9 @@ class TrxUndoRsegs {
   size_t m_rsegs_n{};
 
   /** Rollback segments of a transaction, scheduled for purge. */
-  Rsegs_array<2> m_rsegs;
+  // Rsegs_array<2> m_rsegs;
+  /* Lizard: one more txn rseg. */
+  Rsegs_array<3> m_rsegs;
 };
 
 typedef std::priority_queue<

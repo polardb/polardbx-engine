@@ -430,6 +430,10 @@ struct trx_undo_t {
   UT_LIST_NODE_T(trx_undo_t) undo_list;
   /*!< undo log objects in the rollback
   segment are chained into lists */
+
+  /*-----------------------------*/
+  commit_scn_t scn;
+  /*!< SCN after commit */
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(trx_undo_t, undo_list)

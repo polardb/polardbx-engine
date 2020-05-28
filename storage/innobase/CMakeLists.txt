@@ -260,6 +260,7 @@ SET(INNOBASE_SOURCES
   fsp/lizard0fsp.cc
   trx/lizard0txn.cc
   trx/lizard0undo.cc
+  mtr/lizard0mtr.cc
   )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753

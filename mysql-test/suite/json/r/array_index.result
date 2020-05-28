@@ -174,11 +174,11 @@ Should succeed
 insert into t1 select concat('[',group_concat(val),']') from (
 select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
 from t t1, t t2, t t3
-having val < 1605) tt;
+having val < 1603) tt;
 insert into t1 select concat('[',group_concat(val),']') from (
 select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
 from t t1, t t2, t t3
-having val < 1606) tt;
+having val < 1605) tt;
 ERROR HY000: Exceeded max number of values per record for multi-valued index 'i1' by 1 value(s).
 create table t2(doc json,key i1((cast(doc->'$' as char(10) array))));
 insert into t2 select concat('[',group_concat(val),']') from (
@@ -190,7 +190,7 @@ repeat(t3.f,2),
 '"') val
 from t t1, t t2, t t3
 having dec_val < 1600) tt;
-ERROR HY000: Exceeded max total length of values per record for multi-valued index 'i1' by 7446 bytes.
+ERROR HY000: Exceeded max total length of values per record for multi-valued index 'i1' by 7452 bytes.
 insert into t2 select concat('[',group_concat(val),']') from (
 select conv(concat(t1.f, t2.f, t3.f, t4.f), 16, 10) dec_val,
 concat('"',
@@ -200,7 +200,7 @@ repeat(t3.f,2),
 repeat(t4.f,2),
 '"') val
 from t t1, t t2, t t3, t t4) tt;
-ERROR HY000: Exceeded max number of values per record for multi-valued index 'i1' by 60184 value(s).
+ERROR HY000: Exceeded max number of values per record for multi-valued index 'i1' by 60189 value(s).
 analyze table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK

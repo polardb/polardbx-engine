@@ -1,5 +1,7 @@
 --source include/not_valgrind.inc
 
+call mtr.add_suppression("innodb-rollback-segments");
+
 --echo #
 --echo # WL7943 Implement INFORMATION_SCHEMA.FILES
 --echo #

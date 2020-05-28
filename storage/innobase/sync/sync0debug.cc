@@ -514,6 +514,7 @@ LatchDebug::LatchDebug() {
   LEVEL_MAP_INSERT(SYNC_RSEG_HEADER_NEW);
   LEVEL_MAP_INSERT(SYNC_TEMP_SPACE_RSEG);
   LEVEL_MAP_INSERT(SYNC_UNDO_SPACE_RSEG);
+  LEVEL_MAP_INSERT(SYNC_TXN_UNDO_SPACE_RSEG);
   LEVEL_MAP_INSERT(SYNC_TRX_SYS_RSEG);
   LEVEL_MAP_INSERT(SYNC_RSEGS);
   LEVEL_MAP_INSERT(SYNC_UNDO_SPACES);
@@ -743,6 +744,7 @@ Latches *LatchDebug::check_order(const latch_t *latch,
     case SYNC_IBUF_BITMAP_MUTEX:
     case SYNC_TEMP_SPACE_RSEG:
     case SYNC_UNDO_SPACE_RSEG:
+    case SYNC_TXN_UNDO_SPACE_RSEG:
     case SYNC_TRX_SYS_RSEG:
     case SYNC_RSEGS:
     case SYNC_UNDO_SPACES:
@@ -1319,6 +1321,9 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(UNDO_SPACE_RSEG, SYNC_UNDO_SPACE_RSEG,
                   undo_space_rseg_mutex_key);
+
+  LATCH_ADD_MUTEX(TXN_UNDO_SPACE_RSEG, SYNC_TXN_UNDO_SPACE_RSEG,
+                  txn_undo_space_rseg_mutex_key);
 
   LATCH_ADD_MUTEX(TRX_SYS_RSEG, SYNC_TRX_SYS_RSEG, trx_sys_rseg_mutex_key);
 

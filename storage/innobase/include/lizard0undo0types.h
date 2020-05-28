@@ -122,7 +122,7 @@ struct txn_desc_t {
   /** undo log header address */
   undo_ptr_t undo_ptr;
   /** scn number */
-  scn_id_t scn;
+  commit_scn_t scn;
 };
 
 /**
