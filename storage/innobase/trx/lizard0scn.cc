@@ -111,7 +111,7 @@ scn_t SCN::new_scn() {
 
 /** Calculate a new scn number and consistent UTC time
 @return   <SCN, UTC> */
-std::pair<scn_t, utc_t> SCN::new_commit_scn() {
+commit_scn_t SCN::new_commit_scn() {
   scn_t scn = new_scn();
 
   /** Attention: it's unnecessary to hold mutex when get time */

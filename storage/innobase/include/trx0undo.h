@@ -41,6 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0xa.h"
 #include "univ.i"
 
+#include "lizard0undo0types.h"
+
 #ifndef UNIV_HOTBACKUP
 /** Returns true if the roll pointer is of the insert type.
  @return true if insert undo log */
@@ -311,6 +313,8 @@ constexpr uint32_t TRX_UNDO_INSERT = 1;
 /** contains undo entries for updates and delete markings: in short, modifys
  (the name 'UPDATE' is a historical relic) */
 constexpr uint32_t TRX_UNDO_UPDATE = 2;
+/* Lizard: txn undo log segment type */
+constexpr uint32_t TRX_UNDO_TXN = 3;
 
 /* States of an undo log segment */
 /** contains an undo log of an active  transaction */
@@ -464,6 +468,7 @@ constexpr uint32_t TRX_UNDO_PAGE_HDR = FSEG_PAGE_DATA;
 /** Transaction undo log page header offsets */
 /** @{ */
 /** TRX_UNDO_INSERT or TRX_UNDO_UPDATE */
+/** Revision: TRX_UNDO_INSERT or TRX_UNDO_UPDATE or TRX_UNDO_TXN. */
 constexpr uint32_t TRX_UNDO_PAGE_TYPE = 0;
 /** Byte offset where the undo log records for the LATEST transaction start on
  this page (remember that in an update undo log, the first page can contain
@@ -543,6 +548,9 @@ constexpr uint32_t TRX_UNDO_FLAG_XID = 0x01;
 constexpr uint32_t TRX_UNDO_FLAG_GTID = 0x02;
 /** true if undo log header includes GTID information for XA PREPARE */
 constexpr uint32_t TRX_UNDO_FLAG_XA_PREPARE_GTID = 0x04;
+/** Lizard: define txn undo log.
+    true if undo log header is txn undo log header */
+constexpr uint32_t TRX_UNDO_FLAG_TXN = 0x80;
 /** true if the transaction is a table create, index create, or drop
  transaction: in recovery the transaction cannot be rolled back in the usual
  way: a 'rollback' rather means dropping the created or dropped table, if it
@@ -556,9 +564,13 @@ constexpr uint32_t TRX_UNDO_NEXT_LOG = 30;
 constexpr uint32_t TRX_UNDO_PREV_LOG = 32;
 /** If the log is put to the history list, the file list node is here */
 constexpr uint32_t TRX_UNDO_HISTORY_NODE = 34;
+/** Lizard: Offset of the SCN */
+constexpr uint32_t TRX_UNDO_SCN = (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE); // = 46
+/** Lizard: Offset of the utc */
+constexpr uint32_t TRX_UNDO_UTC = (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN); // = 54
 /*-------------------------------------------------------------*/
 /** Size of the undo log header without XID information */
-constexpr uint32_t TRX_UNDO_LOG_OLD_HDR_SIZE = 34 + FLST_NODE_SIZE;
+constexpr uint32_t TRX_UNDO_LOG_OLD_HDR_SIZE = TRX_UNDO_UTC + TRX_UNDO_UTC_LEN;
 
 /* Note: the writing of the undo log old header is coded by a log record
 MLOG_UNDO_HDR_CREATE or MLOG_UNDO_HDR_REUSE. The appending of an XID to the
