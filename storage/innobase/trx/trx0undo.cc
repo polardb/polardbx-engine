@@ -55,6 +55,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 
 #include "lizard0txn.h"
+#include "lizard0undo.h"
+#include "lizard0fsp.h"
 
 /* How should the old versions in the history list be managed?
    ----------------------------------------------------------
@@ -551,6 +553,9 @@ static ulint trx_undo_header_create(
   mach_write_to_2(log_hdr + TRX_UNDO_NEXT_LOG, 0);
   mach_write_to_2(log_hdr + TRX_UNDO_PREV_LOG, prev_log);
 
+  /** Init the scn as NULL, and write redo log */
+  lizard::trx_undo_hdr_init_scn(log_hdr, mtr);
+
   /* Write the log record about the header creation */
   trx_undo_header_create_log(undo_page, trx_id, mtr);
 
@@ -849,6 +854,8 @@ static ulint trx_undo_insert_header_reuse(
   mach_write_to_1(log_hdr + TRX_UNDO_FLAGS, 0);
   mach_write_to_1(log_hdr + TRX_UNDO_DICT_TRANS, FALSE);
 
+  lizard::trx_undo_hdr_init_scn(log_hdr, mtr);
+
   /* Write the log record MLOG_UNDO_HDR_REUSE */
   trx_undo_insert_header_reuse_log(undo_page, trx_id, mtr);
 
@@ -876,6 +883,9 @@ buf_block_t *trx_undo_add_page(
 
   ut_ad(mutex_own(&(trx->undo_mutex)));
   ut_ad(mutex_own(&(undo_ptr->rseg->mutex)));
+
+  /* Lizard: txn undo log segment can only have log header */
+  lizard_verify_txn_tablespace_by_id(undo->space, false);
 
   rseg = undo_ptr->rseg;
 
@@ -940,6 +950,8 @@ static page_no_t trx_undo_free_page(
 
   ut_a(hdr_page_no != page_no);
   ut_ad(mutex_own(&(rseg->mutex)));
+
+  lizard_verify_txn_tablespace_by_id(space, false);
 
   undo_page =
       trx_undo_page_get(page_id_t(space, page_no), rseg->page_size, mtr);
@@ -1161,6 +1173,8 @@ static void trx_undo_seg_free(const trx_undo_t *undo, bool noredo) {
   mtr_t mtr;
 
   rseg = undo->rseg;
+
+  lizard_verify_txn_tablespace_by_id(undo->space, false);
 
   do {
     mtr_start(&mtr);
@@ -1503,7 +1517,14 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
   trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                     add_space_gtid);
 
+  /** Lizard: special for txn undo */
+  if (type == TRX_UNDO_TXN) {
+    lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
+    lizard::trx_undo_hdr_init_for_txn(undo_page, undo_page + offset, mtr);
+  }
+
   *undo = trx_undo_mem_create(rseg, id, type, trx_id, xid, page_no, offset);
+
   if (*undo == NULL) {
     err = DB_OUT_OF_MEMORY;
   } else {
@@ -1568,7 +1589,7 @@ static trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg,
 
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       false);
-  } else {
+  } else if (type == TRX_UNDO_UPDATE) {
     ut_a(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
          TRX_UNDO_UPDATE);
 
@@ -1577,6 +1598,16 @@ static trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg,
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       is_gtid);
     add_space_gtid = is_gtid;
+  } else {
+    ut_a(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
+         TRX_UNDO_TXN);
+    offset = trx_undo_header_create(undo_page, trx_id, mtr);
+
+    /* Lizard: special for txn undo log header */
+    lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
+    lizard::trx_undo_hdr_init_for_txn(undo_page, undo_page + offset, mtr);
+
+    ut_ad(add_space_gtid == false);
   }
 
   trx_undo_mem_init_for_reuse(undo, trx_id, xid, offset);

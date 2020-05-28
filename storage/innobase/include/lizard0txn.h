@@ -73,5 +73,17 @@ bool txn_always_first_undo_tablespace(undo::Tablespaces *spaces);
 
 }  // namespace lizard
 
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+
+#define lizard_verify_txn_tablespace_by_id(id, is)       \
+  do {                                                   \
+    ut_a(lizard::fsp_is_txn_tablespace_by_id(id) == is); \
+  } while (0)
+
+#else
+
+#define lizard_verify_txn_tablespace_by_id(id, is)
+
+#endif
 
 #endif  // lizard0txn_h

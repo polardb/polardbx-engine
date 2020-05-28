@@ -56,8 +56,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ut0new.h"
 
-#include "srv0file.h"
-
 #include "lizard0scn.h"
 
 #ifdef UNIV_DEBUG

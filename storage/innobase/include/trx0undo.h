@@ -41,6 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0xa.h"
 #include "univ.i"
 
+#include "lizard0undo0types.h"
+
 #ifndef UNIV_HOTBACKUP
 /** Returns TRUE if the roll pointer is of the insert type.
  @return true if insert undo log */
@@ -314,6 +316,10 @@ void trx_undo_mem_free(trx_undo_t *undo); /* in: the undo object to be freed */
     and delete markings: in short,       \
     modifys (the name 'UPDATE' is a      \
     historical relic) */
+
+/* Lizard: txn undo log segment type */
+#define TRX_UNDO_TXN 3
+
 /* States of an undo log segment */
 #define TRX_UNDO_ACTIVE                                         \
   1                        /* contains an undo log of an active \
@@ -437,7 +443,7 @@ void trx_undo_gtid_write(trx_t *trx, trx_ulogf_t *undo_header, trx_undo_t *undo,
 /* @{ */
 #define TRX_UNDO_PAGE_TYPE  \
   0 /*!< TRX_UNDO_INSERT or \
-    TRX_UNDO_UPDATE */
+    TRX_UNDO_UPDATE  or TRX_UNDO_TXN */
 #define TRX_UNDO_PAGE_START               \
   2 /*!< Byte offset where the undo log   \
     records for the LATEST transaction    \
@@ -529,6 +535,12 @@ page of an update undo log segment. */
 #define TRX_UNDO_FLAG_GTID                   \
   0x02 /*!< TRUE if undo log header includes \
        GTID information from replication */
+
+/* Lizard: define txn undo log */
+#define TRX_UNDO_FLAG_TXN                       \
+  0x80 /*!< TRUE if undo log header is txn undo \
+       log header */
+
 #define TRX_UNDO_DICT_TRANS                  \
   21 /*!< TRUE if the transaction is a table \
      create, index create, or drop           \
@@ -549,9 +561,16 @@ page of an update undo log segment. */
 #define TRX_UNDO_HISTORY_NODE              \
   34 /*!< If the log is put to the history \
      list, the file list node is here */
+
+/** Lizard: Offset of the SCN */
+#define TRX_UNDO_SCN (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE)
+
+/** Lizard: Offset of the utc */
+#define TRX_UNDO_UTC (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN)
+
 /*-------------------------------------------------------------*/
 /** Size of the undo log header without XID information */
-#define TRX_UNDO_LOG_OLD_HDR_SIZE (34 + FLST_NODE_SIZE)
+#define TRX_UNDO_LOG_OLD_HDR_SIZE (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN)
 
 /* Note: the writing of the undo log old header is coded by a log record
 MLOG_UNDO_HDR_CREATE or MLOG_UNDO_HDR_REUSE. The appending of an XID to the
