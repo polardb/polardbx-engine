@@ -352,7 +352,7 @@ static const byte *page_zip_apply_log_ext(
       /* Skip trx_id and roll_ptr */
       dst = rec_get_nth_field(rec, offsets, i, &len);
       if (UNIV_UNLIKELY(dst - next_out >= end - data) ||
-          UNIV_UNLIKELY(len < (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN)) ||
+          UNIV_UNLIKELY(len < PAGE_ZIP_TRX_FIELDS_SIZE) ||
           rec_offs_nth_extern(offsets, i)) {
         page_zip_fail(
             ("page_zip_apply_log_ext:"
@@ -365,7 +365,7 @@ static const byte *page_zip_apply_log_ext(
 
       memcpy(next_out, data, dst - next_out);
       data += dst - next_out;
-      next_out = dst + (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+      next_out = dst + PAGE_ZIP_TRX_FIELDS_SIZE;
     } else if (rec_offs_nth_extern(offsets, i)) {
       dst = rec_get_nth_field(rec, offsets, i, &len);
       ut_ad(len >= BTR_EXTERN_FIELD_REF_SIZE);
@@ -561,7 +561,7 @@ static const byte *page_zip_apply_log(
       byte *b;
 
       if (UNIV_UNLIKELY(data + l >= end) ||
-          UNIV_UNLIKELY(len < (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN))) {
+          UNIV_UNLIKELY(len < PAGE_ZIP_TRX_FIELDS_SIZE)) {
         page_zip_fail(
             ("page_zip_apply_log:"
              " trx_id %p+%lu >= %p\n",
@@ -574,7 +574,7 @@ static const byte *page_zip_apply_log(
       data += l;
 
       /* Copy any bytes following DB_TRX_ID, DB_ROLL_PTR. */
-      b = rec + l + (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+      b = rec + l + PAGE_ZIP_TRX_FIELDS_SIZE;
       len = rec_get_end(rec, offsets) - b;
       if (UNIV_UNLIKELY(data + len >= end)) {
         page_zip_fail(
@@ -1028,7 +1028,7 @@ static ibool page_zip_decompress_clust_ext(
     if (UNIV_UNLIKELY(i == trx_id_col)) {
       /* Skip trx_id and roll_ptr */
       dst = rec_get_nth_field(rec, offsets, i, &len);
-      if (UNIV_UNLIKELY(len < DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN)) {
+      if (UNIV_UNLIKELY(len < PAGE_ZIP_TRX_FIELDS_SIZE)) {
         page_zip_fail(
             ("page_zip_decompress_clust_ext:"
              " len[%lu] = %lu\n",
@@ -1067,9 +1067,9 @@ static ibool page_zip_decompress_clust_ext(
       /* Clear DB_TRX_ID and DB_ROLL_PTR in order to
       avoid uninitialized bytes in case the record
       is affected by page_zip_apply_log(). */
-      memset(dst, 0, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+      memset(dst, 0, PAGE_ZIP_TRX_FIELDS_SIZE);
 
-      d_stream->next_out += DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+      d_stream->next_out += PAGE_ZIP_TRX_FIELDS_SIZE;
     } else if (rec_offs_nth_extern(offsets, i)) {
       dst = rec_get_nth_field(rec, offsets, i, &len);
       ut_ad(len >= BTR_EXTERN_FIELD_REF_SIZE);
@@ -1188,7 +1188,7 @@ static ibool page_zip_decompress_clust(
       /* Skip trx_id and roll_ptr */
       ulint len;
       byte *dst = rec_get_nth_field(rec, offsets, trx_id_col, &len);
-      if (UNIV_UNLIKELY(len < DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN)) {
+      if (UNIV_UNLIKELY(len < PAGE_ZIP_TRX_FIELDS_SIZE)) {
         page_zip_fail(
             ("page_zip_decompress_clust:"
              " len = %lu\n",
@@ -1219,9 +1219,9 @@ static ibool page_zip_decompress_clust(
       /* Clear DB_TRX_ID and DB_ROLL_PTR in order to
       avoid uninitialized bytes in case the record
       is affected by page_zip_apply_log(). */
-      memset(dst, 0, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+      memset(dst, 0, PAGE_ZIP_TRX_FIELDS_SIZE);
 
-      d_stream->next_out += DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+      d_stream->next_out += PAGE_ZIP_TRX_FIELDS_SIZE;
     }
 
     /* Decompress the last bytes of the record. */
@@ -1315,7 +1315,7 @@ zlib_done:
 
   storage = page_zip_dir_start_low(page_zip, n_dense);
 
-  externs = storage - n_dense * (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+  externs = storage - n_dense * PAGE_ZIP_TRX_FIELDS_SIZE;
 
   /* Restore the uncompressed columns in heap_no order. */
 
@@ -1328,9 +1328,9 @@ zlib_done:
     offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
 
     dst = rec_get_nth_field(rec, offsets, trx_id_col, &len);
-    ut_ad(len >= DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
-    storage -= DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
-    memcpy(dst, storage, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+    ut_ad(len >= PAGE_ZIP_TRX_FIELDS_SIZE);
+    storage -= PAGE_ZIP_TRX_FIELDS_SIZE;
+    memcpy(dst, storage, PAGE_ZIP_TRX_FIELDS_SIZE);
 
     /* Check if there are any externally stored
     columns in this record.  For each externally

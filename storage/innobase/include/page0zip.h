@@ -55,6 +55,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "univ.i"
 #include "ut0crc32.h"
+#include "lizard0data0types.h"
 
 /* Compression level to be used by zlib. Settable by user. */
 extern uint page_zip_level;
@@ -65,9 +66,12 @@ extern uint page_zip_level;
 #define PAGE_ZIP_START PAGE_NEW_SUPREMUM_END
 /** Size of an compressed page directory entry */
 #define PAGE_ZIP_DIR_SLOT_SIZE 2
+/** Size of trx related fields: TRX_ID, ROLL_PTR, SCN_ID and UNDO_PTR */
+#define PAGE_ZIP_TRX_FIELDS_SIZE \
+  (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN + DATA_LIZARD_TOTAL_LEN)
 /** Predefine the sum of DIR_SLOT, TRX_ID & ROLL_PTR */
 #define PAGE_ZIP_CLUST_LEAF_SLOT_SIZE \
-  (PAGE_ZIP_DIR_SLOT_SIZE + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN)
+  (PAGE_ZIP_DIR_SLOT_SIZE + PAGE_ZIP_TRX_FIELDS_SIZE)
 /** Mask of record offsets */
 #define PAGE_ZIP_DIR_SLOT_MASK 0x3fff
 /** 'owned' flag */

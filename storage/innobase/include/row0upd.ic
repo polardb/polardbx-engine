@@ -38,6 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #endif /* !UNIV_HOTBACKUP */
 #include "page0zip.h"
+#include "lizard0row.h"
 
 /** Creates an update vector object.
  @return own: update vector object */

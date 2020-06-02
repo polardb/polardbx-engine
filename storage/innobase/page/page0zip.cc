@@ -44,6 +44,7 @@ const byte field_ref_zero[FIELD_REF_SIZE] = {
 
 #include <zlib.h>
 
+#include "lizard0row.h"
 #include "btr0cur.h"
 #include "dict0dict.h"
 #include "log0recv.h"
@@ -219,8 +220,7 @@ static void page_zip_compress_write_log(
   if (!page_is_leaf(page)) {
     trailer_size *= PAGE_ZIP_DIR_SLOT_SIZE + REC_NODE_PTR_SIZE;
   } else if (index->is_clustered()) {
-    trailer_size *=
-        PAGE_ZIP_DIR_SLOT_SIZE + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+    trailer_size *= PAGE_ZIP_DIR_SLOT_SIZE + PAGE_ZIP_TRX_FIELDS_SIZE;
   } else {
     trailer_size *= PAGE_ZIP_DIR_SLOT_SIZE;
   }
@@ -735,12 +735,14 @@ static int page_zip_compress_clust_ext(
 
     if (UNIV_UNLIKELY(i == trx_id_col)) {
       ut_ad(!rec_offs_nth_extern(offsets, i));
-      /* Store trx_id and roll_ptr
+      /* Store trx_id, roll_ptr, scn_id and undo_ptr
       in uncompressed form. */
       src = rec_get_nth_field(rec, offsets, i, &len);
       ut_ad(src + DATA_TRX_ID_LEN ==
             rec_get_nth_field(rec, offsets, i + 1, &len));
       ut_ad(len == DATA_ROLL_PTR_LEN);
+      ut_ad(lizard::validate_lizard_fields_in_record(
+          src + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN, i + 2, rec, offsets));
 
       /* Compress any preceding bytes. */
       c_stream->avail_in = static_cast<uInt>(src - c_stream->next_in);
@@ -755,14 +757,14 @@ static int page_zip_compress_clust_ext(
       ut_ad(!c_stream->avail_in);
       ut_ad(c_stream->next_in == src);
 
-      memcpy(storage - (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN) *
-                           (rec_get_heap_no_new(rec) - 1),
-             c_stream->next_in, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+      memcpy(
+          storage - (PAGE_ZIP_TRX_FIELDS_SIZE) * (rec_get_heap_no_new(rec) - 1),
+          c_stream->next_in, PAGE_ZIP_TRX_FIELDS_SIZE);
 
-      c_stream->next_in += DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+      c_stream->next_in += PAGE_ZIP_TRX_FIELDS_SIZE;
 
-      /* Skip also roll_ptr */
-      i++;
+      /* Skip also roll_ptr, scn_id and undo_ptr */
+      i += 3;
     } else if (rec_offs_nth_extern(offsets, i)) {
       src = rec_get_nth_field(rec, offsets, i, &len);
       ut_ad(len >= BTR_EXTERN_FIELD_REF_SIZE);
@@ -832,7 +834,7 @@ static int page_zip_compress_clust(
   int err = Z_OK;
   ulint *offsets = NULL;
   /* BTR_EXTERN_FIELD_REF storage */
-  byte *externs = storage - n_dense * (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+  byte *externs = storage - n_dense * PAGE_ZIP_TRX_FIELDS_SIZE;
 
   ut_ad(*n_blobs == 0);
 
@@ -884,6 +886,9 @@ static int page_zip_compress_clust(
       ut_ad(src + DATA_TRX_ID_LEN ==
             rec_get_nth_field(rec, offsets, trx_id_col + 1, &len));
       ut_ad(len == DATA_ROLL_PTR_LEN);
+      ut_ad(lizard::validate_lizard_fields_in_record(
+          src + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN, trx_id_col + 2, rec,
+          offsets));
       UNIV_MEM_ASSERT_RW(rec, rec_offs_data_size(offsets));
       UNIV_MEM_ASSERT_RW(rec - rec_offs_extra_size(offsets),
                          rec_offs_extra_size(offsets));
@@ -901,14 +906,14 @@ static int page_zip_compress_clust(
       ut_ad(!c_stream->avail_in);
       ut_ad(c_stream->next_in == src);
 
-      memcpy(storage - (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN) *
+      memcpy(storage - PAGE_ZIP_TRX_FIELDS_SIZE *
                            (rec_get_heap_no_new(rec) - 1),
-             c_stream->next_in, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+             c_stream->next_in, PAGE_ZIP_TRX_FIELDS_SIZE);
 
-      c_stream->next_in += DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+      c_stream->next_in += PAGE_ZIP_TRX_FIELDS_SIZE;
 
-      /* Skip also roll_ptr */
-      ut_ad(trx_id_col + 1 < rec_offs_n_fields(offsets));
+      /* Skip also roll_ptr, scn_id and undo_ptr */
+      ut_ad(trx_id_col + 3 < rec_offs_n_fields(offsets));
     }
 
     /* Compress the last bytes of the record. */
@@ -1085,7 +1090,7 @@ ibool page_zip_compress(page_zip_des_t *page_zip, /*!< in: size; out: data,
       ut_ad(trx_id_col > 0);
       ut_ad(trx_id_col != ULINT_UNDEFINED);
 
-      slot_size = PAGE_ZIP_DIR_SLOT_SIZE + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+      slot_size = PAGE_ZIP_DIR_SLOT_SIZE + PAGE_ZIP_TRX_FIELDS_SIZE;
 
     } else {
       /* Signal the absence of trx_id
@@ -1547,7 +1552,7 @@ ibool page_zip_validate(
 #ifdef UNIV_DEBUG
 /** Assert that the compressed and decompressed page headers match.
  @return true */
-static ibool page_zip_header_cmp(
+ibool page_zip_header_cmp(
     const page_zip_des_t *page_zip, /*!< in: compressed page */
     const byte *page)               /*!< in: uncompressed page */
 {
@@ -1587,13 +1592,12 @@ static byte *page_zip_write_rec_ext(
   UNIV_MEM_ASSERT_RW(rec - rec_offs_extra_size(offsets),
                      rec_offs_extra_size(offsets));
 
-  externs -= (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN) *
+  externs -= PAGE_ZIP_TRX_FIELDS_SIZE *
              (page_dir_get_n_heap(page) - PAGE_HEAP_NO_USER_LOW);
 
   /* Note that this will not take into account
   the BLOB columns of rec if create==TRUE. */
-  ut_ad(data + rec_offs_data_size(offsets) -
-            (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN) -
+  ut_ad(data + rec_offs_data_size(offsets) - PAGE_ZIP_TRX_FIELDS_SIZE -
             n_ext * BTR_EXTERN_FIELD_REF_SIZE <
         externs - BTR_EXTERN_FIELD_REF_SIZE * page_zip->n_blobs);
 
@@ -1625,17 +1629,19 @@ static byte *page_zip_write_rec_ext(
       ut_ad(src + DATA_TRX_ID_LEN ==
             rec_get_nth_field(rec, offsets, i + 1, &len));
       ut_ad(len == DATA_ROLL_PTR_LEN);
+      ut_ad(lizard::validate_lizard_fields_in_record(
+          src + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN, i + 2, rec, offsets));
 
       /* Log the preceding fields. */
       ASSERT_ZERO(data, src - start);
       memcpy(data, start, src - start);
       data += src - start;
-      start = src + (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+      start = src + PAGE_ZIP_TRX_FIELDS_SIZE;
 
-      /* Store trx_id and roll_ptr. */
-      memcpy(storage - (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN) * (heap_no - 1),
-             src, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
-      i++; /* skip also roll_ptr */
+      /* Store trx_id, roll_ptr, scn_id and undo_ptr. */
+      memcpy(storage - PAGE_ZIP_TRX_FIELDS_SIZE * (heap_no - 1),
+             src, PAGE_ZIP_TRX_FIELDS_SIZE);
+      i += 3; /* skip also roll_ptr, scn_id and undo_ptr */
     } else if (rec_offs_nth_extern(offsets, i)) {
       src = rec_get_nth_field(rec, offsets, i, &len);
 
@@ -1769,6 +1775,9 @@ void page_zip_write_rec(
         ut_ad(src + DATA_TRX_ID_LEN ==
               rec_get_nth_field(rec, offsets, trx_id_col + 1, &len));
         ut_ad(len == DATA_ROLL_PTR_LEN);
+        ut_ad(lizard::validate_lizard_fields_in_record(
+            src + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN, trx_id_col + 2, rec,
+            offsets));
 
         /* Log the preceding fields. */
         ASSERT_ZERO(data, src - rec);
@@ -1776,10 +1785,10 @@ void page_zip_write_rec(
         data += src - rec;
 
         /* Store trx_id and roll_ptr. */
-        memcpy(storage - (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN) * (heap_no - 1),
-               src, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+        memcpy(storage - PAGE_ZIP_TRX_FIELDS_SIZE * (heap_no - 1), src,
+               PAGE_ZIP_TRX_FIELDS_SIZE);
 
-        src += DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+        src += PAGE_ZIP_TRX_FIELDS_SIZE;
 
         /* Log the last bytes of the record. */
         len = rec_offs_data_size(offsets) - (src - rec);
@@ -2120,9 +2129,8 @@ void page_zip_write_trx_id_and_roll_ptr(
 
   UNIV_MEM_ASSERT_RW(page_zip->data, page_zip_get_size(page_zip));
 
-  storage =
-      page_zip_dir_start(page_zip) -
-      (rec_get_heap_no_new(rec) - 1) * (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+  storage = page_zip_dir_start(page_zip) -
+            (rec_get_heap_no_new(rec) - 1) * PAGE_ZIP_TRX_FIELDS_SIZE;
 
   field = const_cast<byte *>(rec_get_nth_field(rec, offsets, trx_id_col, &len));
   ut_ad(len == DATA_TRX_ID_LEN);
@@ -2194,9 +2202,9 @@ static void page_zip_clear_rec(
     field = rec_get_nth_field(rec, offsets, trx_id_pos, &len);
     ut_ad(len == DATA_TRX_ID_LEN);
 
-    memset(field, 0, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
-    memset(storage - (heap_no - 1) * (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN), 0,
-           DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+    memset(field, 0, PAGE_ZIP_TRX_FIELDS_SIZE);
+    memset(storage - (heap_no - 1) * PAGE_ZIP_TRX_FIELDS_SIZE, 0,
+           PAGE_ZIP_TRX_FIELDS_SIZE);
 
     if (rec_offs_any_extern(offsets)) {
       ulint i;
@@ -2442,7 +2450,7 @@ void page_zip_dir_add_slot(
     roll_ptr and trx_id columns and the dense directory slot. */
     byte *externs;
 
-    stored = dir - n_dense * (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+    stored = dir - n_dense * PAGE_ZIP_TRX_FIELDS_SIZE;
     externs = stored - page_zip->n_blobs * BTR_EXTERN_FIELD_REF_SIZE;
     ASSERT_ZERO(externs - PAGE_ZIP_CLUST_LEAF_SLOT_SIZE,
                 PAGE_ZIP_CLUST_LEAF_SLOT_SIZE);

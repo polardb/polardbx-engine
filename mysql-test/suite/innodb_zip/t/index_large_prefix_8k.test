@@ -143,13 +143,13 @@ show warnings;
 create index idx3 on worklog5743_1(a2(436));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx4 on worklog5743_1(a2(434));
+create index idx4 on worklog5743_1(a2(419));
 show warnings;
 -- error ER_TOO_BIG_ROWSIZE
 create index idx5 on worklog5743_1(a1, a2(430));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx6 on worklog5743_1(a1, a2(428));
+create index idx6 on worklog5743_1(a1, a2(413));
 show warnings;
 
 # Test edge cases for indexes using key_block_size=2
@@ -161,13 +161,13 @@ show warnings;
 create index idx3 on worklog5743_2(a2(948));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx4 on worklog5743_2(a2(946));
+create index idx4 on worklog5743_2(a2(931));
 show warnings;
 -- error ER_TOO_BIG_ROWSIZE
 create index idx5 on worklog5743_2(a1, a2(942));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx6 on worklog5743_2(a1, a2(940));
+create index idx6 on worklog5743_2(a1, a2(925));
 show warnings;
 
 # Test edge cases for indexes using key_block_size=4
