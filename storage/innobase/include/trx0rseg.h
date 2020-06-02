@@ -209,11 +209,20 @@ constexpr uint32_t TRX_RSEG_MAX_SIZE = 0;
 constexpr uint32_t TRX_RSEG_HISTORY_SIZE = 4;
 /* The update undo logs for committed transactions */
 constexpr uint32_t TRX_RSEG_HISTORY = 8;
+
+/** Lizard: TXN free list for undo log segment (4 + 8) bytes */
+
+/** Lizard: record free list node count */
+constexpr uint32_t TXN_RSEG_FREE_LIST_SIZE = (TRX_RSEG_HISTORY + FLST_BASE_NODE_SIZE);
+/** Lizard: Free list base node */
+constexpr uint32_t TXN_RSEG_FREE_LIST = (TXN_RSEG_FREE_LIST_SIZE + 4);
+
 /* Header for the file segment where this page is placed */
-constexpr uint32_t TRX_RSEG_FSEG_HEADER = 8 + FLST_BASE_NODE_SIZE;
+constexpr uint32_t TRX_RSEG_FSEG_HEADER =
+    TXN_RSEG_FREE_LIST + FLST_BASE_NODE_SIZE;
 /** Undo log segment slots */
 constexpr uint32_t TRX_RSEG_UNDO_SLOTS =
-    8 + FLST_BASE_NODE_SIZE + FSEG_HEADER_SIZE;
+    TRX_RSEG_FSEG_HEADER + FSEG_HEADER_SIZE;
 
 /** End of undo slots in rollback segment page. */
 #define TRX_RSEG_SLOT_END \

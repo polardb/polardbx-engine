@@ -72,6 +72,9 @@ namespace lizard {
 struct lizard_sys_t {
   /** The global scn number which is total order. */
   SCN scn;
+
+  /** Length of txn undo log segment free list */
+  std::atomic<uint64_t> rseg_free_list_len;
 };
 
 /** Create lizard system structure. */

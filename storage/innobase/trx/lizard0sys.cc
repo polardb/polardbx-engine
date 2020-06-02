@@ -53,6 +53,8 @@ void lizard_sys_create() {
   /** Placement new SCN object  */
   new (&(lizard_sys->scn)) SCN();
 
+  lizard_sys->rseg_free_list_len = 0;
+
   return;
 }
 

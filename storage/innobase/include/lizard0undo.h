@@ -272,6 +272,14 @@ lsn_t txn_prepare_low(
                               segment scheduled for prepare. */
     mtr_t *mtr);
 
+/**
+  Put the txn undo log segment into free list after purge all.
+
+  @param[in]        rseg        rollback segment
+  @param[in]        hdr_addr    txn log hdr address
+*/
+void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr);
+
 }  // namespace lizard
 
 
@@ -306,6 +314,20 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
                                                 free space on it */
                              trx_id_t trx_id,   /*!< in: transaction id */
                              mtr_t *mtr);       /*!< in: mtr */
+/** Remove an rseg header from the history list.
+@param[in,out]	rseg_hdr	rollback segment header
+@param[in]	log_hdr		undo log segment header
+@param[in,out]	mtr		mini transaction. */
+void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr, trx_ulogf_t *log_hdr,
+                              mtr_t *mtr);
+/** Adds space for the XA XID after an undo log old-style header.
+@param[in,out]	undo_page	undo log segment header page
+@param[in,out]	log_hdr		undo log header
+@param[in,out]	mtr		mini transaction
+@param[in]	gtid_storage    GTID storage type */
+void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
+                                       mtr_t *mtr,
+                                       trx_undo_t::Gtid_storage gtid_storage);
 /*=============================================================================*/
 
 #define TXN_DESC_NULL \
@@ -364,6 +386,11 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
       ut_a((trx)->is_recovered);                                               \
     }                                                                          \
   } while (0)
+
+#define lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)     \
+  do {                                                                   \
+    ut_a(lizard::txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)); \
+  } while (0)
 #else
 
 #define lizard_trx_undo_page_validation(page)
@@ -377,6 +404,7 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
 #define lizard_undo_addr_validation(undo_addr, index)
 #define lizard_undo_scn_validation(undo)
 #define assert_trx_in_recovery(trx)
+#define lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)
 
 #endif
 
