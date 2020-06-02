@@ -45,6 +45,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 
 #include "lizard0txn.h"
+#include "lizard0undo.h"
+#include "lizard0sys.h"
 
 /** Creates a rollback segment header.
 This function is called only when a new rollback segment is created in
@@ -89,6 +91,10 @@ page_no_t trx_rseg_header_create(space_id_t space_id,
   /* Initialize the history list */
   mlog_write_ulint(rsegf + TRX_RSEG_HISTORY_SIZE, 0, MLOG_4BYTES, mtr);
   flst_init(rsegf + TRX_RSEG_HISTORY, mtr);
+
+  /** Lizard: Txn free list */
+  mlog_write_ulint(rsegf + TXN_RSEG_FREE_LIST_SIZE, 0, MLOG_4BYTES, mtr);
+  flst_init(rsegf + TXN_RSEG_FREE_LIST, mtr);
 
   /* Reset the undo log slots */
   for (i = 0; i < TRX_RSEG_N_SLOTS; i++) {
@@ -275,6 +281,13 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
       mtr_read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr) +
       1 + sum_of_undo_sizes;
 
+  /** Lizard: Initialize free list size */
+  auto free_list_len = flst_get_len(rseg_header + TXN_RSEG_FREE_LIST);
+  if (free_list_len > 0) {
+    lizard_ut_ad(lizard::fsp_is_txn_tablespace_by_id(space_id));
+    lizard::lizard_sys->rseg_free_list_len += free_list_len;
+  }
+
   auto len = flst_get_len(rseg_header + TRX_RSEG_HISTORY);
 
   if (len > 0) {
@@ -358,6 +371,7 @@ active undo logs.
 @param[in]	purge_queue	queue of rsegs to purge */
 void trx_rsegs_init(purge_pq_t *purge_queue) {
   trx_sys->rseg_history_len = 0;
+  lizard::lizard_sys->rseg_free_list_len = 0;
 
   ulint slot;
   mtr_t mtr;

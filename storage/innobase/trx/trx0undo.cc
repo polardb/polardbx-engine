@@ -734,9 +734,8 @@ static void trx_undo_read_xid(
 @param[in,out]	log_hdr		undo log header
 @param[in,out]	mtr		mini transaction
 @param[in]	add_gtid	add space for GTID */
-static void trx_undo_header_add_space_for_xid(page_t *undo_page,
-                                              trx_ulogf_t *log_hdr, mtr_t *mtr,
-                                              bool add_gtid) {
+void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
+                                       mtr_t *mtr, bool add_gtid) {
   trx_upagef_t *page_hdr;
   ulint free;
   ulint new_free;

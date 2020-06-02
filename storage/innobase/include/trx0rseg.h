@@ -202,11 +202,19 @@ void trx_rsegsf_set_page_no(trx_rsegsf_t *rsegs_header, ulint slot,
 #define TRX_RSEG_HISTORY                  \
   8 /* The update undo logs for committed \
     transactions */
+
+/** Lizard: TXN free list for undo log segment (4 + 8) bytes */
+
+/** Lizard: record free list node count */
+#define TXN_RSEG_FREE_LIST_SIZE (TRX_RSEG_HISTORY + FLST_BASE_NODE_SIZE)
+/** Lizard: Free list base node */
+#define TXN_RSEG_FREE_LIST (TXN_RSEG_FREE_LIST_SIZE + 4)
+
 /* Header for the file segment where
 this page is placed */
-#define TRX_RSEG_FSEG_HEADER (8 + FLST_BASE_NODE_SIZE)
+#define TRX_RSEG_FSEG_HEADER (TXN_RSEG_FREE_LIST + FLST_BASE_NODE_SIZE)
 /* Undo log segment slots */
-#define TRX_RSEG_UNDO_SLOTS (8 + FLST_BASE_NODE_SIZE + FSEG_HEADER_SIZE)
+#define TRX_RSEG_UNDO_SLOTS (TRX_RSEG_FSEG_HEADER + FSEG_HEADER_SIZE)
 
 /* End of undo slots in rollback segment page. */
 #define TRX_RSEG_SLOT_END \
