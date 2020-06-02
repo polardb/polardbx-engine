@@ -43,6 +43,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0row.h"
 #include "row0upd.h"
 
+#ifdef UNIV_DEBUG
+extern void page_zip_header_cmp(const page_zip_des_t *, const byte *);
+#endif /* UNIV_DEBUG */
+
 namespace lizard {
 
 /*=============================================================================*/
@@ -101,17 +105,17 @@ void row_upd_index_entry_lizard_field(que_thr_t *thr, dtuple_t *entry,
   dfield_t *dfield;
   byte *ptr;
   ulint pos;
-  trx_t *trx;
   const txn_desc_t *txn_desc = nullptr;
 
   ut_ad(thr && entry && index);
   ut_ad(index->is_clustered());
   ut_ad(!index->table->is_intrinsic());
-  trx = thr_get_trx(thr);
 
   if (index->table->is_temporary()) {
     txn_desc = &TXN_DESC_TEMP;
   } else {
+    trx_t *trx = thr_get_trx(thr);
+    assert_txn_desc_allocated(trx);
     txn_desc = &trx->txn_desc;
   }
 
@@ -129,6 +133,42 @@ void row_upd_index_entry_lizard_field(que_thr_t *thr, dtuple_t *entry,
 }
 
 /**
+  Get address of scn field in record.
+  @param[in]      rec       record
+  @paramp[in]     index     cluster index
+  @param[in]      offsets   rec_get_offsets(rec, idnex)
+  @retval pointer to scn_id
+*/
+byte *row_get_scn_ptr_in_rec(rec_t *rec, const dict_index_t *index,
+                             const ulint *offsets) {
+  ulint len;
+  ulint scn_pos;
+  byte *field;
+  ut_ad(index->is_clustered());
+
+  scn_pos = index->get_sys_col_pos(DATA_SCN_ID);
+  field =
+      const_cast<byte *>(rec_get_nth_field(index, rec, offsets, scn_pos, &len));
+
+  ut_ad(len == DATA_SCN_ID_LEN);
+  ut_ad(field + DATA_SCN_ID_LEN ==
+        rec_get_nth_field(index, rec, offsets, scn_pos + 1, &len));
+  ut_ad(len == DATA_UNDO_PTR_LEN);
+
+  return field;
+}
+
+/**
+  Modify the scn and undo_ptr of record.
+  @param[in]      ptr_scn_id  scn_id pointer
+  @param[in]      txn_desc  txn description
+*/
+void row_upd_rec_lizard_fields(byte *ptr_scn_id, const txn_desc_t *txn_desc) {
+  trx_write_scn(ptr_scn_id, txn_desc);
+  trx_write_undo_ptr(ptr_scn_id + DATA_SCN_ID_LEN, txn_desc);
+}
+
+/**
   Modify the scn and undo_ptr of record.
   @param[in]      rec       record
   @param[in]      page_zip
@@ -139,8 +179,7 @@ void row_upd_index_entry_lizard_field(que_thr_t *thr, dtuple_t *entry,
 void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
                                const dict_index_t *index, const ulint *offsets,
                                const trx_t *trx) {
-  const txn_desc_t *txn_desc = nullptr;
-
+  const txn_desc_t *txn_desc;
   ut_ad(index->is_clustered());
   ut_ad(!index->table->skip_alter_undo);
   ut_ad(!index->table->is_intrinsic());
@@ -166,20 +205,80 @@ void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
 void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
                                const dict_index_t *index, const ulint *offsets,
                                const txn_desc_t *txn_desc) {
-  ulint offset;
+  byte *field;
   ut_ad(index->is_clustered());
 
   if (page_zip) {
-    /** TODO */
-  } else {
-    /** SCN_ID */
-    offset = row_get_lizard_offset(index, DATA_SCN_ID, offsets);
-    trx_write_scn(rec + offset, txn_desc);
+    byte *storage;
+#ifdef UNIV_DEBUG
+    page_t *page = page_align(rec);
+#endif /* UNIV_DEBUG */
 
-    /** UNDO_PTR */
-    offset = row_get_lizard_offset(index, DATA_UNDO_PTR, offsets);
-    trx_write_undo_ptr(rec + offset, txn_desc);
+    ut_ad(page_simple_validate_new(page));
+    ut_ad(page_zip_simple_validate(page_zip));
+    ut_ad(page_zip_get_size(page_zip) >
+          PAGE_DATA + page_zip_dir_size(page_zip));
+    ut_ad(rec_offs_validate(rec, NULL, offsets));
+    ut_ad(rec_offs_comp(offsets));
+
+    ut_ad(page_zip->m_start >= PAGE_DATA);
+    ut_d(page_zip_header_cmp(page_zip, page));
+
+    ut_ad(page_is_leaf(page));
+
+    UNIV_MEM_ASSERT_RW(page_zip->data, page_zip_get_size(page_zip));
+
+    /** Get location of scn_id slot */
+    storage = page_zip_dir_start(page_zip) -
+              (rec_get_heap_no_new(rec) - 1) * PAGE_ZIP_TRX_FIELDS_SIZE +
+              DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+
+    /** Get pointer of scn_id in record */
+    field = row_get_scn_ptr_in_rec(rec, index, offsets);
+
+#if defined UNIV_DEBUG || defined UNIV_ZIP_DEBUG
+    ut_a(!memcmp(storage, field, DATA_LIZARD_TOTAL_LEN));
+#endif /* UNIV_DEBUG || UNIV_ZIP_DEBUG */
+
+    row_upd_rec_lizard_fields(field, txn_desc);
+
+    /** Copy to compressed page */
+    memcpy(storage, field, DATA_LIZARD_TOTAL_LEN);
+
+    UNIV_MEM_ASSERT_RW(rec, rec_offs_data_size(offsets));
+    UNIV_MEM_ASSERT_RW(rec - rec_offs_extra_size(offsets),
+                       rec_offs_extra_size(offsets));
+    UNIV_MEM_ASSERT_RW(page_zip->data, page_zip_get_size(page_zip));
+  } else {
+    /** Get pointer of scn_id in record */
+    field = row_get_scn_ptr_in_rec(rec, index, offsets);
+    row_upd_rec_lizard_fields(field, txn_desc);
   }
+}
+
+/**
+  Validate the scn and undo_ptr fields in record.
+  @param[in]      index     dict_index_t
+  @param[in]      scn_ptr_in_rec   scn_id position in record
+  @param[in]      scn_pos   scn_id no in system cols
+  @param[in]      rec       record
+  @param[in]      offsets   rec_get_offsets(rec, idnex)
+
+  @retval true if verification passed, abort otherwise
+*/
+bool validate_lizard_fields_in_record(const dict_index_t *index,
+                                      const byte *scn_ptr_in_rec, ulint scn_pos,
+                                      const rec_t *rec, const ulint *offsets) {
+  ulint len;
+
+  ut_a(scn_ptr_in_rec ==
+       const_cast<byte *>(rec_get_nth_field(index, rec, offsets, scn_pos, &len)));
+  ut_a(len == DATA_SCN_ID_LEN);
+  ut_a(scn_ptr_in_rec + DATA_SCN_ID_LEN ==
+       rec_get_nth_field(index, rec, offsets, scn_pos + 1, &len));
+  ut_a(len == DATA_UNDO_PTR_LEN);
+
+  return true;
 }
 
 /*=============================================================================*/

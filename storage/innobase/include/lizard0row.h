@@ -46,6 +46,7 @@ struct dict_index_t;
 struct page_zip_des_t;
 struct trx_t;
 struct upd_t;
+
 /**
   Lizard Record Format:
 
@@ -80,6 +81,19 @@ void ins_alloc_lizard_fields(ins_node_t *node);
 /*=============================================================================*/
 
 /**
+  Validate the scn and undo_ptr fields in record.
+  @param[in]      index     dict_index_t
+  @param[in]      scn_ptr_in_rec   scn_id position in record
+  @param[in]      scn_pos   scn_id no in system cols
+  @param[in]      rec       record
+  @param[in]      offsets   rec_get_offsets(rec, idnex)
+  @retval true if verification passed
+*/
+bool validate_lizard_fields_in_record(const dict_index_t *index,
+                                      const byte *scn_ptr_in_rec, ulint scn_pos,
+                                      const rec_t *rec, const ulint *offsets);
+
+/**
   Fill SCN and UBA into index entry.
   @param[in]    thr       query
   @param[in]    entry     dtuple
@@ -87,6 +101,23 @@ void ins_alloc_lizard_fields(ins_node_t *node);
 */
 void row_upd_index_entry_lizard_field(que_thr_t *thr, dtuple_t *entry,
                                       dict_index_t *index);
+
+/**
+  Get address of scn field in record.
+  @param[in]      rec       record
+  @paramp[in]     index     cluster index
+  @param[in]      offsets   rec_get_offsets(rec, idnex)
+  @retval pointer to scn_id
+*/
+byte *row_get_scn_ptr_in_rec(rec_t *rec, const dict_index_t *index,
+                             const ulint *offsets);
+
+/**
+  Modify the scn and undo_ptr of record.
+  @param[in]      scn_ptr  scn_id pointer
+  @param[in]      txn_desc  txn description
+*/
+void row_upd_rec_lizard_fields(byte *scn_ptr, const txn_desc_t *txn_desc);
 
 /**
   Modify the scn and undo_ptr of record.
@@ -177,7 +208,6 @@ void trx_undo_update_rec_by_lizard_fields(const dict_index_t *index,
   Read the scn and undo_ptr from undo record
   @param[in]      ptr       undo record
   @param[out]     txn_info  SCN and UBA info
-
   @retval begin of the left undo data.
 */
 byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,

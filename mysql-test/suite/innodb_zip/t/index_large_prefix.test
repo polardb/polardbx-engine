@@ -142,13 +142,13 @@ show warnings;
 create index idx3 on worklog5743_1(a2(436));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx4 on worklog5743_1(a2(434));
+create index idx4 on worklog5743_1(a2(419));
 show warnings;
 -- error ER_TOO_BIG_ROWSIZE
 create index idx5 on worklog5743_1(a1, a2(430));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx6 on worklog5743_1(a1, a2(428));
+create index idx6 on worklog5743_1(a1, a2(413));
 show warnings;
 
 # Test edge cases for indexes using key_block_size=2
@@ -161,13 +161,13 @@ show warnings;
 create index idx3 on worklog5743_2(a2(948));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx4 on worklog5743_2(a2(946));
+create index idx4 on worklog5743_2(a2(938));
 show warnings;
 -- error ER_TOO_BIG_ROWSIZE
 create index idx5 on worklog5743_2(a1, a2(942));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx6 on worklog5743_2(a1, a2(940));
+create index idx6 on worklog5743_2(a1, a2(932));
 show warnings;
 
 # Test edge cases for indexes using key_block_size=4
@@ -178,45 +178,45 @@ show warnings;
 create index idx3 on worklog5743_4(a2(1972));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx4 on worklog5743_4(a2(1970));
+create index idx4 on worklog5743_4(a2(1962));
 show warnings;
 -- error ER_TOO_BIG_ROWSIZE
 create index idx5 on worklog5743_4(a1, a2(1966));
 show warnings;
 # Bug#13391353 Limit is one byte less on on 32bit-Linux only
-create index idx6 on worklog5743_4(a1, a2(1964));
+create index idx6 on worklog5743_4(a1, a2(1956));
 show warnings;
 
 # Test edge cases for indexes using key_block_size=8
-create index idx2 on worklog5743_8(a2(3073));
+create index idx2 on worklog5743_8(a2(3065));
 show warnings;
 create index idx3 on worklog5743_8(a2(3072));
 show warnings;
 -- error ER_TOO_LONG_KEY
 create index idx4 on worklog5743_8(a1, a2(3069));
 show warnings;
-create index idx5 on worklog5743_8(a1, a2(3068));
+create index idx5 on worklog5743_8(a1, a2(3060));
 show warnings;
 -- error ER_TOO_LONG_KEY
 create index idx6 on worklog5743_8(a1, a2(2000), a3(1069));
 show warnings;
-create index idx7 on worklog5743_8(a1, a2(2000), a3(1068));
+create index idx7 on worklog5743_8(a1, a2(2000), a3(1060));
 show warnings;
 
 # Test edge cases for indexes using key_block_size=16
-create index idx2 on worklog5743_16(a2(3073));
+create index idx2 on worklog5743_16(a2(3065));
 show warnings;
-create index idx3 on worklog5743_16(a2(3072));
+create index idx3 on worklog5743_16(a2(3064));
 show warnings;
 -- error ER_TOO_LONG_KEY
 create index idx4 on worklog5743_16(a1, a2(3069));
 show warnings;
-create index idx5 on worklog5743_16(a1, a2(3068));
+create index idx5 on worklog5743_16(a1, a2(3060));
 show warnings;
 -- error ER_TOO_LONG_KEY
 create index idx6 on worklog5743_16(a1, a2(2000), a3(1069));
 show warnings;
-create index idx7 on worklog5743_16(a1, a2(2000), a3(1068));
+create index idx7 on worklog5743_16(a1, a2(2000), a3(1060));
 show warnings;
 set sql_mode= default;
 

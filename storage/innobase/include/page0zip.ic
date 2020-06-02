@@ -94,7 +94,8 @@ In summary, the compressed page looks like this:
   - in descending collation order
 (7) Uncompressed columns of user records, n_dense * uncompressed_size bytes,
   - indexed by heap_no
-  - DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN for leaf pages of clustered indexes
+  - DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN
+    for leaf pages of clustered indexes
   - REC_NODE_PTR_SIZE for non-leaf pages
   - 0 otherwise
 (8) dense page directory, stored backwards
@@ -175,8 +176,7 @@ static inline ulint page_zip_get_trailer_len(
     uncompressed_size = PAGE_ZIP_DIR_SLOT_SIZE + REC_NODE_PTR_SIZE;
     ut_ad(!page_zip->n_blobs);
   } else if (is_clust) {
-    uncompressed_size =
-        PAGE_ZIP_DIR_SLOT_SIZE + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+    uncompressed_size = PAGE_ZIP_DIR_SLOT_SIZE + PAGE_ZIP_TRX_FIELDS_SIZE;
   } else {
     uncompressed_size = PAGE_ZIP_DIR_SLOT_SIZE;
     ut_ad(!page_zip->n_blobs);

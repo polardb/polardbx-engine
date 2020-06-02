@@ -306,7 +306,7 @@ DROP TABLE worklog5743;
 # With KEY_BLOCK_SIZE = 2,prefix index limit comes around ~946 for following
 CREATE TABLE worklog5743_key2 (
 col_1_varchar VARCHAR (4000) , col_2_varchar VARCHAR (4000) ,
-PRIMARY KEY (col_1_varchar(946))
+PRIMARY KEY (col_1_varchar(931))
 ) charset latin1 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=2, engine = innodb;
 INSERT INTO worklog5743_key2 VALUES(REPEAT("a", 4000) , REPEAT("o", 4000));
 #CREATE INDEX prefix_idx ON worklog5743_key2 (col_1_varchar (767));
@@ -325,7 +325,7 @@ DROP TABLE worklog5743_key2;
 # With KEY_BLOCK_SIZE = 4,prefix index limit comes around ~1964 for following
 CREATE TABLE worklog5743_key4 (
 col_1_varchar VARCHAR (4000) , col_2_varchar VARCHAR (4000) ,
-PRIMARY KEY (col_1_varchar(1964))
+PRIMARY KEY (col_1_varchar(1949))
 ) charset latin1 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4, engine = innodb;
 INSERT INTO worklog5743_key4 VALUES(REPEAT("a", 4000) , REPEAT("o", 4000));
 #CREATE INDEX prefix_idx ON worklog5743_key4 (col_1_varchar (767));
@@ -367,7 +367,7 @@ DROP TABLE worklog5743_key8;
 # With KEY_BLOCK_SIZE = 2,prefix index limit comes around ~946 for following
 CREATE TABLE worklog5743_key2 (
 col_1_text TEXT (4000) , col_2_text TEXT (4000) ,
-PRIMARY KEY (col_1_text(946))
+PRIMARY KEY (col_1_text(931))
 ) charset latin1 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=2, engine = innodb;
 INSERT INTO worklog5743_key2 VALUES(REPEAT("a", 4000) , REPEAT("o", 4000));
 #CREATE INDEX prefix_idx ON worklog5743_key2 (col_1_text (767));
@@ -386,7 +386,7 @@ DROP TABLE worklog5743_key2;
 # With KEY_BLOCK_SIZE = 4,prefix index limit comes around ~1964 for following
 CREATE TABLE worklog5743_key4 (
 col_1_text TEXT (4000) , col_2_text TEXT (4000) ,
-PRIMARY KEY (col_1_text(1964))
+PRIMARY KEY (col_1_text(1949))
 ) charset latin1 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4, engine = innodb;
 INSERT INTO worklog5743_key4 VALUES(REPEAT("a", 4000) , REPEAT("o", 4000));
 #CREATE INDEX prefix_idx ON worklog5743_key4 (col_1_text (767));
@@ -427,7 +427,7 @@ DROP TABLE worklog5743_key8;
 # With KEY_BLOCK_SIZE = 2,prefix index limit comes around ~946 for following
 CREATE TABLE worklog5743_key2 (
 col_1_blob BLOB (4000) , col_2_blob BLOB (4000) ,
-PRIMARY KEY (col_1_blob(946))
+PRIMARY KEY (col_1_blob(931))
 ) ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=2, engine = innodb;
 INSERT INTO worklog5743_key2 VALUES(REPEAT("a", 4000) , REPEAT("o", 4000));
 #CREATE INDEX prefix_idx ON worklog5743_key2 (col_1_blob (767));
@@ -446,7 +446,7 @@ DROP TABLE worklog5743_key2;
 # With KEY_BLOCK_SIZE = 4,prefix index limit comes around ~1964 for following
 CREATE TABLE worklog5743_key4 (
 col_1_blob BLOB (4000) , col_2_blob BLOB (4000) ,
-PRIMARY KEY (col_1_blob(1964))
+PRIMARY KEY (col_1_blob(1949))
 ) ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4, engine = innodb;
 INSERT INTO worklog5743_key4 VALUES(REPEAT("a", 4000) , REPEAT("o", 4000));
 #CREATE INDEX prefix_idx ON worklog5743_key4 (col_1_blob (767));
@@ -1241,7 +1241,7 @@ DROP TABLE worklog5743;
 # For compressed row type + primary key
 CREATE TABLE worklog5743 (
 col_1_text TEXT (4000) , col_2_text TEXT (4000) ,
-PRIMARY KEY (col_1_text(946))
+PRIMARY KEY (col_1_text(931))
 ) charset latin1 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=2, engine = innodb;
 INSERT INTO worklog5743 VALUES(REPEAT("a", 4000) , REPEAT("o", 4000));
 # Create index of 767

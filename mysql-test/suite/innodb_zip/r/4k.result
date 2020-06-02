@@ -430,7 +430,7 @@ ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 Warnings:
 Warning	139	Row size too large (> max_row_size). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 DROP TABLE t1;
-CREATE TABLE t1(c text, PRIMARY KEY (c(436)))
+CREATE TABLE t1(c text, PRIMARY KEY (c(421)))
 ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 INSERT INTO t1 VALUES(REPEAT('A',512)),(REPEAT('B',512));
 DROP TABLE t1;

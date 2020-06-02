@@ -47,6 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #endif /* !UNIV_HOTBACKUP */
 
 #include "lizard0page.h"
+#include "lizard0row.h"
 
 #ifdef PAGE_CUR_ADAPT
 #ifdef UNIV_SEARCH_PERF_STAT
@@ -1872,7 +1873,7 @@ rec_t *page_cur_insert_rec_zip(
       trx_id_offs = rec_get_nth_field_offs(index, foffsets, trx_id_col, &len);
       ut_ad(len == DATA_TRX_ID_LEN);
 
-      if (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN + trx_id_offs +
+      if (PAGE_ZIP_TRX_FIELDS_SIZE + trx_id_offs +
               rec_offs_extra_size(foffsets) >
           rec_size) {
         /* We will have to zero out the
@@ -1880,12 +1881,16 @@ rec_t *page_cur_insert_rec_zip(
         they will not be fully overwritten by
         insert_rec. */
 
-        memset(free_rec + trx_id_offs, 0, DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+        memset(free_rec + trx_id_offs, 0, PAGE_ZIP_TRX_FIELDS_SIZE);
       }
 
       ut_ad(free_rec + trx_id_offs + DATA_TRX_ID_LEN ==
             rec_get_nth_field(index, free_rec, foffsets, trx_id_col + 1, &len));
       ut_ad(len == DATA_ROLL_PTR_LEN);
+
+      ut_ad(lizard::validate_lizard_fields_in_record(
+          index, free_rec + trx_id_offs + DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN,
+          trx_id_col + 2, free_rec, foffsets));
     }
 
     if (UNIV_LIKELY_NULL(heap)) {

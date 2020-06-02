@@ -99,7 +99,7 @@ ERROR 42000: Row size too large. The maximum row size for the used table type, n
 show warnings;
 Level	Code	Message
 Error	1118	Row size too large. The maximum row size for the used table type, not counting BLOBs, is 8126. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
-create index idx4 on worklog5743_1(a2(434));
+create index idx4 on worklog5743_1(a2(419));
 show warnings;
 Level	Code	Message
 create index idx5 on worklog5743_1(a1, a2(430));
@@ -107,7 +107,7 @@ ERROR 42000: Row size too large. The maximum row size for the used table type, n
 show warnings;
 Level	Code	Message
 Error	1118	Row size too large. The maximum row size for the used table type, not counting BLOBs, is 8126. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
-create index idx6 on worklog5743_1(a1, a2(428));
+create index idx6 on worklog5743_1(a1, a2(413));
 show warnings;
 Level	Code	Message
 SET sql_mode= '';
@@ -122,7 +122,7 @@ ERROR 42000: Row size too large. The maximum row size for the used table type, n
 show warnings;
 Level	Code	Message
 Error	1118	Row size too large. The maximum row size for the used table type, not counting BLOBs, is 8126. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
-create index idx4 on worklog5743_2(a2(946));
+create index idx4 on worklog5743_2(a2(938));
 show warnings;
 Level	Code	Message
 create index idx5 on worklog5743_2(a1, a2(942));
@@ -130,7 +130,7 @@ ERROR 42000: Row size too large. The maximum row size for the used table type, n
 show warnings;
 Level	Code	Message
 Error	1118	Row size too large. The maximum row size for the used table type, not counting BLOBs, is 8126. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
-create index idx6 on worklog5743_2(a1, a2(940));
+create index idx6 on worklog5743_2(a1, a2(932));
 show warnings;
 Level	Code	Message
 create index idx2 on worklog5743_4(a2(4000));
@@ -144,7 +144,7 @@ ERROR 42000: Row size too large. The maximum row size for the used table type, n
 show warnings;
 Level	Code	Message
 Error	1118	Row size too large. The maximum row size for the used table type, not counting BLOBs, is 8126. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
-create index idx4 on worklog5743_4(a2(1970));
+create index idx4 on worklog5743_4(a2(1962));
 show warnings;
 Level	Code	Message
 create index idx5 on worklog5743_4(a1, a2(1966));
@@ -152,27 +152,21 @@ ERROR 42000: Row size too large. The maximum row size for the used table type, n
 show warnings;
 Level	Code	Message
 Error	1118	Row size too large. The maximum row size for the used table type, not counting BLOBs, is 8126. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
-create index idx6 on worklog5743_4(a1, a2(1964));
+create index idx6 on worklog5743_4(a1, a2(1956));
 show warnings;
 Level	Code	Message
-create index idx2 on worklog5743_8(a2(3073));
-Warnings:
-Warning	1071	Specified key was too long; max key length is 3072 bytes
+create index idx2 on worklog5743_8(a2(3065));
 show warnings;
 Level	Code	Message
-Warning	1071	Specified key was too long; max key length is 3072 bytes
 create index idx3 on worklog5743_8(a2(3072));
-Warnings:
-Warning	1831	Duplicate index 'idx3' defined on the table 'test.worklog5743_8'. This is deprecated and will be disallowed in a future release.
 show warnings;
 Level	Code	Message
-Warning	1831	Duplicate index 'idx3' defined on the table 'test.worklog5743_8'. This is deprecated and will be disallowed in a future release.
 create index idx4 on worklog5743_8(a1, a2(3069));
 ERROR 42000: Specified key was too long; max key length is 3072 bytes
 show warnings;
 Level	Code	Message
 Error	1071	Specified key was too long; max key length is 3072 bytes
-create index idx5 on worklog5743_8(a1, a2(3068));
+create index idx5 on worklog5743_8(a1, a2(3060));
 show warnings;
 Level	Code	Message
 create index idx6 on worklog5743_8(a1, a2(2000), a3(1069));
@@ -180,27 +174,21 @@ ERROR 42000: Specified key was too long; max key length is 3072 bytes
 show warnings;
 Level	Code	Message
 Error	1071	Specified key was too long; max key length is 3072 bytes
-create index idx7 on worklog5743_8(a1, a2(2000), a3(1068));
+create index idx7 on worklog5743_8(a1, a2(2000), a3(1060));
 show warnings;
 Level	Code	Message
-create index idx2 on worklog5743_16(a2(3073));
-Warnings:
-Warning	1071	Specified key was too long; max key length is 3072 bytes
+create index idx2 on worklog5743_16(a2(3065));
 show warnings;
 Level	Code	Message
-Warning	1071	Specified key was too long; max key length is 3072 bytes
-create index idx3 on worklog5743_16(a2(3072));
-Warnings:
-Warning	1831	Duplicate index 'idx3' defined on the table 'test.worklog5743_16'. This is deprecated and will be disallowed in a future release.
+create index idx3 on worklog5743_16(a2(3064));
 show warnings;
 Level	Code	Message
-Warning	1831	Duplicate index 'idx3' defined on the table 'test.worklog5743_16'. This is deprecated and will be disallowed in a future release.
 create index idx4 on worklog5743_16(a1, a2(3069));
 ERROR 42000: Specified key was too long; max key length is 3072 bytes
 show warnings;
 Level	Code	Message
 Error	1071	Specified key was too long; max key length is 3072 bytes
-create index idx5 on worklog5743_16(a1, a2(3068));
+create index idx5 on worklog5743_16(a1, a2(3060));
 show warnings;
 Level	Code	Message
 create index idx6 on worklog5743_16(a1, a2(2000), a3(1069));
@@ -208,7 +196,7 @@ ERROR 42000: Specified key was too long; max key length is 3072 bytes
 show warnings;
 Level	Code	Message
 Error	1071	Specified key was too long; max key length is 3072 bytes
-create index idx7 on worklog5743_16(a1, a2(2000), a3(1068));
+create index idx7 on worklog5743_16(a1, a2(2000), a3(1060));
 show warnings;
 Level	Code	Message
 set sql_mode= default;
