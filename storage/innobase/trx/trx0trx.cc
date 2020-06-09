@@ -1493,7 +1493,8 @@ static bool trx_serialisation_number_get(
   already in the rollback segment. User threads only
   produce events when a rollback segment is empty. */
   if ((redo_rseg != NULL && redo_rseg->last_page_no == FIL_NULL) ||
-      (temp_rseg != NULL && temp_rseg->last_page_no == FIL_NULL)) {
+      (temp_rseg != NULL && temp_rseg->last_page_no == FIL_NULL) ||
+      (txn_rseg != NULL && txn_rseg->last_page_no == FIL_NULL)) {
     TrxUndoRsegs elem(trx->no);
 
     if (redo_rseg != NULL && redo_rseg->last_page_no == FIL_NULL) {
@@ -1669,12 +1670,24 @@ static bool trx_write_serialisation_history(
 
     if (trx->rsegs.m_noredo.update_undo != NULL) {
       page_t *undo_hdr_page;
+      trx_undo_t *update_undo = trx->rsegs.m_noredo.update_undo;
 
       undo_hdr_page = trx_undo_set_state_at_finish(
           trx->rsegs.m_noredo.update_undo, &temp_mtr);
 
       ulint n_added_logs =
           (redo_rseg_undo_ptr != NULL) ? 2 + txn_rseg_len : 1 + txn_rseg_len;
+
+      if (lizard::commit_scn_state(scn) == SCN_STATE_ALLOCATED) {
+        /** Use already SCN */
+        lizard::trx_commit_scn(trx, &scn, update_undo, undo_hdr_page,
+                               update_undo->hdr_offset, &temp_mtr);
+      } else {
+        /** Temporary update undo log purge still need SCN number */
+        /** Generate SCN */
+        scn = lizard::trx_commit_scn(trx, nullptr, update_undo, undo_hdr_page,
+                                     update_undo->hdr_offset, &temp_mtr);
+      }
 
       trx_undo_update_cleanup(trx, &trx->rsegs.m_noredo, undo_hdr_page, true,
                               n_added_logs, &temp_mtr);

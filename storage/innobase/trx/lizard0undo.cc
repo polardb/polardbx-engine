@@ -755,7 +755,9 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
   ut_ad(lizard_sys);
   ut_ad(trx && undo && undo_hdr_page && mtr);
 
-  ut_ad(mutex_own(&trx->rsegs.m_txn.rseg->mutex));
+  ut_ad((trx->rsegs.m_txn.rseg != nullptr &&
+         mutex_own(&trx->rsegs.m_txn.rseg->mutex)) ||
+        trx->rsegs.m_noredo.update_undo == undo);
   /** Attention: Some transaction commit directly from ACTIVE */
 
   /** TODO:
@@ -906,6 +908,9 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
   /* Write information about delete markings to the undo log header */
   if (!undo->del_marks) {
     mlog_write_ulint(undo_header + TRX_UNDO_DEL_MARKS, FALSE, MLOG_2BYTES, mtr);
+  } else {
+    /** Txn undo log didn't have any delete marked record to purge forever  */
+    ut_a(0);
   }
 
   /* Lizard: txn undo didn't need gtid information */
