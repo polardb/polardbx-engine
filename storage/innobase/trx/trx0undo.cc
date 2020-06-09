@@ -2036,9 +2036,7 @@ void trx_undo_update_cleanup(trx_t *trx, trx_undo_ptr_t *undo_ptr,
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
-  if (undo_ptr == &trx->rsegs.m_redo) {
-    assert_undo_scn_allocated(undo);
-  }
+  assert_undo_scn_allocated(undo);
 
   trx_purge_add_update_undo_to_history(
       trx, undo_ptr, undo_page, update_rseg_history_len, n_added_logs, mtr);
