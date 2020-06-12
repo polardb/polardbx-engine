@@ -66,12 +66,29 @@ typedef byte lizard_sysf_t;
 /** The page number of lizard system header in lizard tablespace */
 #define LIZARD_SYS_PAGE_NO 3
 
+/** Initial value of min_active_trx_id */
+#define LIZARD_SYS_MTX_ID_NULL 0
+
+#ifdef UNIV_PFS_MUTEX
+/* min active trx_id mutex PFS key */
+extern mysql_pfs_key_t lizard_sys_mtx_id_mutex_key;
+#endif
+
 namespace lizard {
 
 /** The memory structure of lizard system */
 struct lizard_sys_t {
   /** The global scn number which is total order. */
   SCN scn;
+
+  /** Protect min_active_trx_id */
+  ib_mutex_t min_active_mutex;
+
+  /** The min active trx id */
+  trx_id_t min_active_trx_id;
+
+  /** min_active_trx has been inited */
+  bool mtx_inited;
 
   /** Length of txn undo log segment free list */
   std::atomic<uint64_t> txn_undo_log_free_list_len;
@@ -100,6 +117,20 @@ extern lizard_sys_t *lizard_sys;
 
 /** Get current SCN number */
 extern scn_t lizard_sys_get_scn();
+
+/**
+  Modify the min active trx id
+
+  @param[in]      true if the function is called after adding a new transaction,
+                  false if called after removing a transaction.
+  @param[in]      the add/removed trx */
+void lizard_sys_mod_min_active_trx_id(bool is_add, trx_t *trx);
+
+/**
+  Get the min active trx id
+
+  @retval         the min active id in trx_sys. */
+trx_id_t lizard_sys_get_min_active_trx_id();
 
 }  // namespace lizard
 

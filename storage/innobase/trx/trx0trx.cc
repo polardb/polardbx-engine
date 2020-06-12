@@ -76,6 +76,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0mtr.h"
+#include "lizard0sys.h"
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
 
@@ -1142,6 +1143,8 @@ void trx_lists_init_at_db_start(void) {
       trx_sys->rw_trx_ids.push_back(trx->id);
     }
     trx_add_to_rw_trx_list(trx);
+
+    lizard::lizard_sys_mod_min_active_trx_id(true, trx);
   }
 }
 
@@ -1448,6 +1451,8 @@ static void trx_start_low(
           srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO);
 
     trx_add_to_rw_trx_list(trx);
+
+    lizard::lizard_sys_mod_min_active_trx_id(true, trx);
 
     trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
 
@@ -1961,6 +1966,7 @@ static void trx_erase_lists(trx_t *trx) {
   } else {
     trx_remove_from_rw_trx_list(trx);
     ut_ad(trx_sys_validate_trx_list());
+    lizard::lizard_sys_mod_min_active_trx_id(false, trx);
 
     if (trx->read_view != nullptr) {
       trx_sys->mvcc->view_close(trx->read_view, true);
@@ -2430,6 +2436,8 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
 
   ut_a(!trx->read_only);
   trx_remove_from_rw_trx_list(trx);
+
+  lizard::lizard_sys_mod_min_active_trx_id(false, trx);
 
   trx_sys_mutex_exit();
 
@@ -3636,6 +3644,8 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
     MVCC::set_view_creator_trx_id(trx->read_view, trx->id);
   }
   trx_add_to_rw_trx_list(trx);
+
+  lizard::lizard_sys_mod_min_active_trx_id(true, trx);
 
   trx_sys_mutex_exit();
 

@@ -32,12 +32,20 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "fsp0fsp.h"
 #include "mtr0mtr.h"
+#include "trx0trx.h"
+#include "trx0sys.h"
 
 #include "lizard0dict.h"
 #include "lizard0fil.h"
 #include "lizard0fsp.h"
+#include "lizard0read0read.h"
 #include "lizard0scn.h"
 #include "lizard0sys.h"
+
+#ifdef UNIV_PFS_MUTEX
+/* min active trx_id mutex PFS key */
+mysql_pfs_key_t lizard_sys_mtx_id_mutex_key;
+#endif
 
 namespace lizard {
 
@@ -53,6 +61,15 @@ void lizard_sys_create() {
   /** Placement new SCN object  */
   new (&(lizard_sys->scn)) SCN();
 
+  mutex_create(LATCH_ID_LIZARD_SYS_MTX_ID, &lizard_sys->min_active_mutex);
+
+  lizard_sys->min_active_trx_id = LIZARD_SYS_MTX_ID_NULL;
+
+  lizard_sys->mtx_inited = true;
+
+  /** Promise here didn't have any active trx */
+  ut_ad(trx_sys == nullptr || UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
+
   /** Attention: it's monitor metrics, didn't promise accuration */
   lizard_sys->txn_undo_log_free_list_len = 0;
   lizard_sys->txn_undo_log_cached = 0;
@@ -64,9 +81,14 @@ void lizard_sys_create() {
 void lizard_sys_close() {
   if (lizard_sys != nullptr) {
     lizard_sys->scn.~SCN();
+    mutex_free(&lizard_sys->min_active_mutex);
+    lizard_sys->mtx_inited = false;
+
     ut::free(lizard_sys);
     lizard_sys = nullptr;
   }
+
+  trx_vision_container_destroy();
 }
 
 /** Get the address of lizard system header */
@@ -87,6 +109,9 @@ lizard_sysf_t *lizard_sysf_get(mtr_t *mtr) {
 void lizard_sys_init() {
   ut_ad(lizard_sys);
   lizard_sys->scn.init();
+
+  /** Init vision system */
+  trx_vision_container_init();
 }
 
 /** Create a new file segment special for lizard system
@@ -137,6 +162,82 @@ scn_t lizard_sys_get_scn() {
   ut_a(lizard_sys);
 
   return lizard_sys->scn.acquire_scn();
+}
+
+/**
+  Modify the min active trx id
+
+  @param[in]      true if the function is called after adding a new transaction,
+                  false if called after removing a transaction.
+  @param[in]      the add/removed trx */
+void lizard_sys_mod_min_active_trx_id(bool is_add, trx_t *trx) {
+  trx_t *min_active_trx = NULL;
+  trx_id_t old_min_active_id;
+
+  ut_ad(trx != NULL);
+  ut_ad(lizard_sys->mtx_inited);
+  // ut_ad(trx_sys_mutex_own());
+
+#if defined UNIV_DEBUG
+  if (is_add) {
+    /** Called after add */
+    ut_a(trx->in_rw_trx_list);
+  } else {
+    /** Called after remove */
+    ut_a(!trx->in_rw_trx_list);
+  }
+#endif
+
+  /* If the func is called after removing, trx must be not NULL */
+  ut_ad(is_add || trx != NULL);
+
+  min_active_trx = UT_LIST_GET_LAST(trx_sys->rw_trx_list);
+
+  ut_ad(lizard_sys->min_active_trx_id <= trx->id);
+
+  /** Only myself modify mtx id, so delay to hold mtx mutex */
+  old_min_active_id = lizard_sys->min_active_trx_id;
+
+  if (lizard_sys->min_active_trx_id == LIZARD_SYS_MTX_ID_NULL) {
+    /** 1. If the trx_sys->min_active_trx_id is still uninitialized, the
+    following operation must be adding a new transaction. */
+
+    ut_ad(is_add);
+    ut_ad(min_active_trx == trx);
+    mutex_enter(&lizard_sys->min_active_mutex);
+    lizard_sys->min_active_trx_id = min_active_trx->id;
+    mutex_exit(&lizard_sys->min_active_mutex);
+  } else if (!is_add && trx->id == old_min_active_id) {
+    /** 2. If the trx_sys->min_active_trx_id is initialized,
+    and the removing transaction's id is lizard_sys->min_active_trx_id,
+    then lizard_sys->min_active_trx_id should be updated. */
+
+    mutex_enter(&lizard_sys->min_active_mutex);
+
+    if (min_active_trx) {
+      /* If having active transactions, update as the min active trx */
+      lizard_sys->min_active_trx_id = min_active_trx->id;
+    } else {
+      /* If not having lizard_sys->min_active_trx_id, update as
+      trx_sys->max_trx_id */
+      lizard_sys->min_active_trx_id = trx_sys->next_trx_id_or_no;
+    }
+    mutex_exit(&lizard_sys->min_active_mutex);
+  }
+
+  ut_a(old_min_active_id <= lizard_sys->min_active_trx_id);
+}
+
+/**
+  Get the min active trx id
+
+  @retval         the min active id in trx_sys. */
+trx_id_t lizard_sys_get_min_active_trx_id() {
+  trx_id_t ret;
+  mutex_enter(&lizard_sys->min_active_mutex);
+  ret = lizard_sys->min_active_trx_id;
+  mutex_exit(&lizard_sys->min_active_mutex);
+  return ret;
 }
 
 }  // namespace lizard

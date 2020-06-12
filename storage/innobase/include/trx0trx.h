@@ -56,6 +56,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 
 #include "lizard0undo0types.h"
+#include "lizard0read0read.h"
 
 // Forward declaration
 struct mtr_t;
@@ -818,6 +819,8 @@ struct trx_t {
 
   ReadView *read_view; /*!< consistent read view used in the
                        transaction, or NULL if not yet set */
+
+  lizard::Vision *vision;
 
   UT_LIST_NODE_T(trx_t)
   trx_list; /*!< list of transactions;
