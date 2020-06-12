@@ -59,6 +59,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0scn.h"
 #include "lizard0cleanout.h"
+#include "lizard0read0read.h"
 
 #include "srv0file.h"
 
@@ -1505,6 +1506,9 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(LIZARD_UNDO_HDR_HASH, SYNC_NO_ORDER_CHECK,
                   lizard_undo_hdr_hash_mutex_key);
+
+  LATCH_ADD_MUTEX(LIZARD_VISION_LIST, SYNC_NO_ORDER_CHECK,
+                  lizard_vision_list_mutex_key);
 
   latch_id_t id = LATCH_ID_NONE;
 

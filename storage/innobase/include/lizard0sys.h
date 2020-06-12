@@ -98,6 +98,9 @@ extern void lizard_create_sys_pages();
 /** GLobal lizard system */
 extern lizard_sys_t *lizard_sys;
 
+/** Get current SCN number */
+extern scn_t lizard_sys_get_scn();
+
 }  // namespace lizard
 
 #endif  // lizard0sys_h define

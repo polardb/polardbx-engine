@@ -132,4 +132,11 @@ void lizard_create_sys_pages() {
   mtr_commit(&mtr);
 }
 
+/** Get current SCN number */
+scn_t lizard_sys_get_scn() {
+  ut_a(lizard_sys);
+
+  return lizard_sys->scn.acquire_scn();
+}
+
 }  // namespace lizard
