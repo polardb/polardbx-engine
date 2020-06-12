@@ -73,6 +73,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0mtr.h"
+#include "lizard0sys.h"
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
 
@@ -1102,6 +1103,7 @@ void trx_lists_init_at_db_start(void) {
     }
 
     UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, it->m_trx);
+    lizard::lizard_sys_mod_min_active_trx_id(true, it->m_trx);
   }
 }
 
@@ -1391,6 +1393,7 @@ static void trx_start_low(
     UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
 
     ut_d(trx->in_rw_trx_list = true);
+    lizard::lizard_sys_mod_min_active_trx_id(true, trx);
 
     trx->state = TRX_STATE_ACTIVE;
 
@@ -1902,6 +1905,7 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
     UT_LIST_REMOVE(trx_sys->rw_trx_list, trx);
     ut_d(trx->in_rw_trx_list = false);
     ut_ad(trx_sys_validate_trx_list());
+    lizard::lizard_sys_mod_min_active_trx_id(false, trx);
 
     if (trx->read_view != NULL) {
       trx_sys->mvcc->view_close(trx->read_view, true);
@@ -2316,6 +2320,8 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
   UT_LIST_REMOVE(trx_sys->rw_trx_list, trx);
 
   ut_d(trx->in_rw_trx_list = FALSE);
+
+  lizard::lizard_sys_mod_min_active_trx_id(false, trx);
 
   trx_sys_mutex_exit();
 
@@ -3289,6 +3295,7 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
   UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
 
   ut_d(trx->in_rw_trx_list = true);
+  lizard::lizard_sys_mod_min_active_trx_id(true, trx);
 
   mutex_exit(&trx_sys->mutex);
 }

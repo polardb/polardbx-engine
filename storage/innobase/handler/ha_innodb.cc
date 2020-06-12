@@ -201,6 +201,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0mon.h"
 #include "lizard0cleanout.h"
 #include "lizard0read0read.h"
+#include "lizard0sys.h"
 
 
 #ifndef UNIV_HOTBACKUP
@@ -687,7 +688,8 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(row_drop_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_scn_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_undo_hdr_hash_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME)};
+    PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(lizard_sys_mtx_id_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
