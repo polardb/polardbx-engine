@@ -250,7 +250,8 @@ MYSQL_RDS_AUDIT_LOG::MYSQL_RDS_AUDIT_LOG(const char *dir, ulong n_buf_size,
       lost_row_num_by_row_limit(0),
       lost_row_num_by_row_limit_total(0),
       last_flush_len(0),
-      last_sleep_time(0) {
+      last_sleep_time(0),
+      pwrite_err_num(0) {
   buffered_offset.store(0);
   flushed_offset.store(0);
   curr_file_pos.store(0);
@@ -431,6 +432,11 @@ void MYSQL_RDS_AUDIT_LOG::reset_file_info() {
     lost_row_num_by_buf_full.store(0);
   }
   lost_row_num_by_row_limit.store(0);
+
+  if (pwrite_err_num > 0) {
+    LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_PWRITE_ERROR, pwrite_err_num);
+    pwrite_err_num = 0;
+  }
 
   DBUG_VOID_RETURN;
 }
@@ -1054,6 +1060,10 @@ skip_write_log:
   DBUG_VOID_RETURN;
 }
 
+#ifndef DBUG_OFF
+uint MYSQL_RDS_AUDIT_LOG::log_debug = 0;
+#endif
+
 /*
   General function to write log records.
 
@@ -1063,6 +1073,11 @@ skip_write_log:
 */
 void MYSQL_RDS_AUDIT_LOG::write_log(const char *log_str, ulong len, ulong tid) {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::write_log");
+
+#ifndef DBUG_OFF
+  DBUG_EXECUTE_IF("rds_audit_pwrite_err", MYSQL_RDS_AUDIT_LOG::log_debug = 1;);
+  DBUG_EXECUTE_IF("rds_audit_pwrite_0", MYSQL_RDS_AUDIT_LOG::log_debug = 2;);
+#endif
 
   /* Always hold LOCK_log READ lock */
   LOCK_log.rdlock(tid);
@@ -1116,6 +1131,10 @@ wait:
   max_wait_cnt++;
   if (flush_thread_running && max_wait_cnt <= RDS_AUDIT_MAX_THREAD_WAIT_CNT)
     goto wait;
+
+  if (pwrite_err_num) {
+    LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_PWRITE_ERROR, pwrite_err_num);
+  }
 
   if (!flush_thread_running)
     LogPluginErr(INFORMATION_LEVEL, ER_AUDIT_LOG_DEINIT_FLUSH_THREAD);
@@ -1272,13 +1291,46 @@ bool MYSQL_RDS_AUDIT_LOG::pwrite_batch(const uchar *pwrite_buf,
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::pwrite_batch");
 
   my_off_t already_written = 0;
+  int errors = 0;
 
   /* In most case, following loop will execute only once. */
   do {
-    already_written += mysql_file_pwrite(
-        log_fd, pwrite_buf + already_written, pwrite_len - already_written,
-        pwrite_offset + already_written, MYF(0));
+    size_t written = my_pwrite(log_fd, pwrite_buf + already_written,
+                               pwrite_len - already_written,
+                               pwrite_offset + already_written, MYF(0));
     log_file_writes++;
+#ifndef DBUG_OFF
+    if (log_debug == 1)
+      written = (size_t)-1;
+    else if (log_debug == 2)
+      written = 0;
+#endif
+    /* Error occurs */
+    if (written == (size_t)-1) {
+      if ((pwrite_err_num++) % 1000 == 0) {
+        sql_print_error(
+            "audit my_pwrite got -1: to_write(%lld), already_written(%lld), "
+            "errno(%d), total_err_num(%lu)",
+            pwrite_len, already_written, errno, pwrite_err_num);
+      }
+      DBUG_RETURN(false);
+    }
+    assert(((already_written + (int64)written) <= pwrite_len));
+    /* Nothing was written */
+    if (written == 0) {
+      if (++errors > 1) {
+        if ((pwrite_err_num++) % 1000 == 0) {
+          sql_print_error(
+              "audit my_pwrite got 0: to_write(%lld), already_written(%lld), "
+              "total_err_num(%lu)",
+              pwrite_len, already_written, pwrite_err_num);
+        }
+        DBUG_RETURN(false);
+      }
+      continue; /* we try once more */
+    }
+    errors = 0;
+    already_written += written;
   } while (unlikely(already_written < pwrite_len));
 
   /* Currently, we only flush if we use write-to-memory algorithm.
@@ -1317,10 +1369,7 @@ void MYSQL_RDS_AUDIT_LOG::flush_from_buf(my_off_t curr_flu_offset,
 
     if (unlikely(
             pwrite_batch(log_buf + flu_pos, first_part_len, file_pos, true))) {
-      char errbuf[MYSQL_ERRMSG_SIZE];
-      LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_FAILED_TO_WRITE_TO_FILE,
-                   first_part_len, log_name, file_pos, my_errno(),
-                   my_strerror(errbuf, MYSQL_ERRMSG_SIZE, my_errno()));
+      DBUG_VOID_RETURN;  // Do not increase curr_file_pos, log lost */
     }
     /*
       if flu_pos == 0 && buf_pos == log_buf + log_buf_size, buf_pos will be
@@ -1329,18 +1378,12 @@ void MYSQL_RDS_AUDIT_LOG::flush_from_buf(my_off_t curr_flu_offset,
     if (likely(buf_pos) &&
         unlikely(
             pwrite_batch(log_buf, buf_pos, file_pos + first_part_len, true))) {
-      char errbuf[MYSQL_ERRMSG_SIZE];
-      LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_FAILED_TO_WRITE_TO_FILE, buf_pos,
-                   log_name, file_pos + first_part_len, my_errno(),
-                   my_strerror(errbuf, MYSQL_ERRMSG_SIZE, my_errno()));
+      DBUG_VOID_RETURN;  // Do not increase curr_file_pos, log lost */
     }
 
   } else {
     if (unlikely(pwrite_batch(log_buf + flu_pos, len, file_pos, true))) {
-      char errbuf[MYSQL_ERRMSG_SIZE];
-      LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_FAILED_TO_WRITE_TO_FILE, len,
-                   log_name, file_pos, my_errno(),
-                   my_strerror(errbuf, MYSQL_ERRMSG_SIZE, my_errno()));
+      DBUG_VOID_RETURN;  // Do not increase curr_file_pos, log lost */
     }
   }
 

@@ -635,6 +635,17 @@ static uint audit_log_get_log_file_syncs(MYSQL_THD, SHOW_VAR *var,
   return 0;
 }
 
+static uint audit_log_get_pwrite_err(MYSQL_THD, SHOW_VAR *var, char *buff)
+{
+  var->type= SHOW_LONG;
+  var->value= buff;
+  if (rds_audit_log)
+    *((long *)buff)= (long)(rds_audit_log->get_pwrite_err());
+  else
+    *((long *)buff)= 0;
+  return 0;
+}
+
 static SHOW_VAR audit_log_status_vars[] = {
     {"rds_audit_log_filename", (char *)&audit_log_get_filename, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
@@ -696,6 +707,9 @@ static SHOW_VAR audit_log_status_vars[] = {
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
 
     {"rds_audit_log_file_syncs", (char *)&audit_log_get_log_file_syncs,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    
+    {"rds_audit_pwrite_err_num", (char*) &audit_log_get_pwrite_err, 
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
 
     {0, 0, SHOW_UNDEF, SHOW_SCOPE_GLOBAL}};

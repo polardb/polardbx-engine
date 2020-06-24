@@ -440,6 +440,11 @@ class MYSQL_RDS_AUDIT_LOG {
   */
   Partitioned_rwlock LOCK_file;
 
+  /*
+    Count of pwrite returning error.
+  */
+  ulong pwrite_err_num;
+
   /* Issue audit log flushing thread to exit loop. */
   void set_abort() { m_aborted = true; }
 
@@ -764,6 +769,13 @@ class MYSQL_RDS_AUDIT_LOG {
   inline ulonglong get_log_file_writes() { return log_file_writes.load(); }
 
   inline ulonglong get_log_file_syncs() { return log_file_syncs.load(); }
+
+  /* Return count of pwrite error */
+  ulong get_pwrite_err() const { return pwrite_err_num; }
+#ifndef DBUG_OFF
+ public:
+  static uint log_debug;
+#endif
 };
 
 /* Singleton of MySQL_RDS_AUDIT_LOG */
