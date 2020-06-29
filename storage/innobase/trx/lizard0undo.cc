@@ -225,6 +225,15 @@ bool undo_scn_validation(const trx_undo_t *undo) {
   }
   return true;
 }
+
+/** Comfirm the commit scn is uninited */
+static bool trx_undo_hdr_scn_committed(trx_ulogf_t *log_hdr, mtr_t *mtr) {
+  commit_scn_t scn = trx_undo_hdr_read_scn(log_hdr, mtr);
+  if (commit_scn_state(scn) == SCN_STATE_ALLOCATED) return true;
+
+  return false;
+}
+
 #endif
 
 /**
@@ -729,14 +738,6 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx){
 }
 /*-----------------------------------------------------------------------------*/
 
-/** Comfirm the commit scn is uninited */
-static bool trx_undo_hdr_scn_committed(trx_ulogf_t *log_hdr, mtr_t *mtr) {
-  commit_scn_t scn = trx_undo_hdr_read_scn(log_hdr, mtr);
-  if (commit_scn_state(scn) == SCN_STATE_ALLOCATED) return true;
-
-  return false;
-}
-
 /**
   Init the txn description as NULL initial value.
   @param[in]      trx       current transaction
@@ -792,7 +793,7 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
   ulint state = mach_read_from_2(seg_hdr + TRX_UNDO_STATE);
 
   /** TXN undo log must be finished */
-  ut_ad(state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_PURGE);
+  ut_a(state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_PURGE);
 
   /** Commit must be the last log hdr */
   ut_ad(hdr_offset == mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG));
