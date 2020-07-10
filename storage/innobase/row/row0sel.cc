@@ -701,7 +701,7 @@ void sel_enqueue_prefetched_row(plan_t *plan) /*!< in: plan node for a table */
 /** Builds a previous version of a clustered index record for a consistent read
  @return DB_SUCCESS or error code */
 static MY_ATTRIBUTE((warn_unused_result)) dberr_t row_sel_build_prev_vers(
-    ReadView *read_view,        /*!< in: read view */
+    lizard::Vision *vision,     /*!< in: read view */
     dict_index_t *index,        /*!< in: plan node for table */
     rec_t *rec,                 /*!< in: record in a clustered index */
     ulint **offsets,            /*!< in/out: offsets returned by
@@ -723,7 +723,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t row_sel_build_prev_vers(
     *old_vers_heap = mem_heap_create(512);
   }
 
-  err = row_vers_build_for_consistent_read(rec, mtr, index, offsets, read_view,
+  err = row_vers_build_for_consistent_read(rec, mtr, index, offsets, vision,
                                            offset_heap, *old_vers_heap,
                                            old_vers, NULL, nullptr);
   return (err);
@@ -859,7 +859,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t row_sel_get_clust_rec(
       btr_pcur_get_low_match(&(plan->clust_pcur)) <
           dict_index_get_n_unique(index)) {
     ut_a(rec_get_deleted_flag(rec, dict_table_is_comp(plan->table)));
-    ut_a(node->read_view);
+    ut_a(node->vision);
 
     /* In a rare case it is possible that no clust rec is found
     for a delete-marked secondary index record: if in row0umod.cc
@@ -875,7 +875,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t row_sel_get_clust_rec(
 
   offsets = rec_get_offsets(clust_rec, index, offsets, ULINT_UNDEFINED, &heap);
 
-  if (!node->read_view) {
+  if (!node->vision) {
     /* Try to place a lock on the index record */
 
     ulint lock_type;
@@ -907,9 +907,9 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t row_sel_get_clust_rec(
     old_vers = NULL;
 
     if (!lock_clust_rec_cons_read_sees(clust_rec, index, offsets,
-                                       node->read_view)) {
+                                       node->vision)) {
       err =
-          row_sel_build_prev_vers(node->read_view, index, clust_rec, &offsets,
+          row_sel_build_prev_vers(node->vision, index, clust_rec, &offsets,
                                   &heap, &plan->old_vers_heap, &old_vers, mtr);
 
       if (err != DB_SUCCESS) {
@@ -1391,7 +1391,7 @@ static ulint row_sel_try_search_shortcut(
 
   index = plan->index;
 
-  ut_ad(node->read_view);
+  ut_ad(node->vision);
   ut_ad(plan->unique_search);
   ut_ad(!plan->must_get_clust);
 #ifdef UNIV_DEBUG
@@ -1424,12 +1424,12 @@ static ulint row_sel_try_search_shortcut(
   offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
 
   if (index->is_clustered()) {
-    if (!lock_clust_rec_cons_read_sees(rec, index, offsets, node->read_view)) {
+    if (!lock_clust_rec_cons_read_sees(rec, index, offsets, node->vision)) {
       ret = SEL_RETRY;
       goto func_exit;
     }
   } else if (!srv_read_only_mode &&
-             !lock_sec_rec_cons_read_sees(rec, index, node->read_view)) {
+             !lock_sec_rec_cons_read_sees(rec, index, node->vision)) {
     ret = SEL_RETRY;
     goto func_exit;
   }
@@ -1510,7 +1510,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 
   search_latch_locked = FALSE;
 
-  if (node->read_view) {
+  if (node->vision) {
     /* In consistent reads, we try to do with the hash index and
     not to use the buffer page get. This is to reduce memory bus
     load resulting from semaphore operations. The search latch
@@ -1786,8 +1786,8 @@ skip_lock:
 
     if (index->is_clustered()) {
       if (!lock_clust_rec_cons_read_sees(rec, index, offsets,
-                                         node->read_view)) {
-        err = row_sel_build_prev_vers(node->read_view, index, rec, &offsets,
+                                         node->vision)) {
+        err = row_sel_build_prev_vers(node->vision, index, rec, &offsets,
                                       &heap, &plan->old_vers_heap, &old_vers,
                                       &mtr);
 
@@ -1828,7 +1828,7 @@ skip_lock:
         rec = old_vers;
       }
     } else if (!srv_read_only_mode &&
-               !lock_sec_rec_cons_read_sees(rec, index, node->read_view)) {
+               !lock_sec_rec_cons_read_sees(rec, index, node->vision)) {
       cons_read_requires_clust_rec = TRUE;
     }
   }
@@ -2169,10 +2169,10 @@ que_thr_t *row_sel_step(que_thr_t *thr) /*!< in: query thread */
       /* Assign a read view for the query */
       trx_assign_read_view(thr_get_trx(thr));
 
-      if (thr_get_trx(thr)->read_view != NULL) {
-        node->read_view = thr_get_trx(thr)->read_view;
+      if (thr_get_trx(thr)->vision != NULL) {
+        node->vision = thr_get_trx(thr)->vision;
       } else {
-        node->read_view = NULL;
+        node->vision = NULL;
       }
 
     } else {
@@ -3113,7 +3113,7 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
 @param[in,out]	lob_undo	Undo information for BLOBs.
 @return DB_SUCCESS or error code */
 static MY_ATTRIBUTE((warn_unused_result)) dberr_t
-    row_sel_build_prev_vers_for_mysql(ReadView *read_view,
+    row_sel_build_prev_vers_for_mysql(lizard::Vision *vision,
                                       dict_index_t *clust_index,
                                       row_prebuilt_t *prebuilt,
                                       const rec_t *rec, ulint **offsets,
@@ -3131,7 +3131,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
   }
 
   err = row_vers_build_for_consistent_read(
-      rec, mtr, clust_index, offsets, read_view, offset_heap,
+      rec, mtr, clust_index, offsets, vision, offset_heap,
       prebuilt->old_vers_heap, old_vers, vrow, lob_undo);
 
   return err;
@@ -3345,11 +3345,11 @@ dberr_t Row_sel_get_clust_rec_for_mysql::operator()(
 
     if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
         !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets,
-                                       trx_get_read_view(trx))) {
+                                       trx_get_vision(trx))) {
       if (clust_rec != cached_clust_rec) {
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
-            trx->read_view, clust_index, prebuilt, clust_rec, offsets,
+            trx->vision, clust_index, prebuilt, clust_rec, offsets,
             offset_heap, &old_vers, vrow, mtr, lob_undo);
 
         if (err != DB_SUCCESS) {
@@ -3794,7 +3794,7 @@ static ulint row_sel_try_search_shortcut_for_mysql(
   *offsets = rec_get_offsets(rec, index, *offsets, ULINT_UNDEFINED, heap);
 
   if (!lock_clust_rec_cons_read_sees(rec, index, *offsets,
-                                     trx_get_read_view(trx))) {
+                                     trx_get_vision(trx))) {
     return (SEL_RETRY);
   }
 
@@ -4650,7 +4650,8 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     if (trx->mysql_n_tables_locked == 0 && !prebuilt->ins_sel_stmt &&
         prebuilt->select_lock_type == LOCK_NONE &&
         trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
-        MVCC::is_view_active(trx->read_view)) {
+        // MVCC::is_view_active(trx->read_view)) {
+        trx->vision != nullptr) {
       /* This is a SELECT query done as a consistent read,
       and the read view has already been allocated:
       let us try a search shortcut through the hash
@@ -4760,7 +4761,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   ut_ad(!trx_is_started(trx) || trx->state == TRX_STATE_ACTIVE);
 
   ut_ad(prebuilt->sql_stat_start || prebuilt->select_lock_type != LOCK_NONE ||
-        MVCC::is_view_active(trx->read_view) || srv_read_only_mode);
+        trx->vision || srv_read_only_mode);
 
   trx_start_if_not_started(trx, false);
 
@@ -4803,7 +4804,8 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   if (!prebuilt->sql_stat_start) {
     /* No need to set an intention lock or assign a read view */
 
-    if (!MVCC::is_view_active(trx->read_view) && !srv_read_only_mode &&
+    //if (!MVCC::is_view_active(trx->read_view)
+    if (trx->vision == nullptr && !srv_read_only_mode &&
         prebuilt->select_lock_type == LOCK_NONE) {
       ib::error(ER_IB_MSG_1031) << "MySQL is trying to perform a"
                                    " consistent read but the read view is not"
@@ -5318,13 +5320,12 @@ rec_loop:
 
       if (srv_force_recovery < 5 &&
           !lock_clust_rec_cons_read_sees(rec, index, offsets,
-                                         trx_get_read_view(trx))) {
+                                         trx_get_vision(trx))) {
         rec_t *old_vers;
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
-            trx->read_view, clust_index, prebuilt, rec, &offsets, &heap,
-            &old_vers, need_vrow ? &vrow : NULL, &mtr,
-            prebuilt->get_lob_undo());
+            trx->vision, clust_index, prebuilt, rec, &offsets, &heap, &old_vers,
+            need_vrow ? &vrow : NULL, &mtr, prebuilt->get_lob_undo());
 
         if (err != DB_SUCCESS) {
           goto lock_wait_or_error;
@@ -5350,7 +5351,7 @@ rec_loop:
       ut_ad(!index->is_clustered());
 
       if (!srv_read_only_mode &&
-          !lock_sec_rec_cons_read_sees(rec, index, trx->read_view)) {
+          !lock_sec_rec_cons_read_sees(rec, index, trx->vision)) {
         /* We should look at the clustered index.
         However, as this is a non-locking read,
         we can skip the clustered index lookup if

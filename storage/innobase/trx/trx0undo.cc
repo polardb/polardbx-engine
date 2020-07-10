@@ -2180,8 +2180,8 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
 
     rseg->last_page_no = FIL_NULL;
     rseg->last_offset = 0;
-    rseg->last_trx_no = 0;
     rseg->last_del_marks = FALSE;
+    rseg->last_scn = 0;
   }
 
   /* If tablespace is to be encrypted, encrypt it now */

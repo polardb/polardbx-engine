@@ -223,7 +223,8 @@ SET(INNOBASE_SOURCES
   btr/lizard0cleanout.cc
   ut/lizard0ut.cc
   page/lizard0page.cc
-  read/lizard0read.cc)
+  read/lizard0read.cc
+  trx/lizard0purge.cc)
 
 ADD_LIBRARY(innodb_zipdecompress STATIC ${INNOBASE_ZIP_DECOMPRESS_SOURCES})
 TARGET_COMPILE_DEFINITIONS(

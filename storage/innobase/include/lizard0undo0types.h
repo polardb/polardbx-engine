@@ -152,6 +152,19 @@ struct txn_info_t {
   undo_ptr_t undo_ptr;
 };
 
+/**
+  Lizard transaction attributes in index (used by Vision)
+   1) scn
+   2) undo_ptr
+*/
+struct txn_index_t {
+  /** scn number */
+  undo_ptr_t uba;
+  /** undo log header address */
+  std::atomic<scn_id_t> scn;
+};
+
+
 /** The struct of transaction undo for UBA */
 struct txn_undo_ptr_t {
   /** Rollback segment in txn space */
@@ -169,6 +182,53 @@ inline bool lizard_undo_ptr_is_active(undo_ptr_t undo_ptr) {
 inline void lizard_undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
   *undo_ptr |= (undo_ptr_t)1 << 55;
 }
+
+/**
+  The element of minimum heap for the purge.
+*/
+class TxnUndoRsegs {
+ public:
+  explicit TxnUndoRsegs() {}
+
+  explicit TxnUndoRsegs(scn_t scn) : m_scn(scn) {}
+
+  scn_t get_scn() const { return m_scn; }
+
+  void set_scn(scn_t scn) { m_scn = scn; }
+
+  void push_back(trx_rseg_t *rseg) { m_rsegs.push_back(rseg); }
+
+  void erase(Rseg_Iterator &it) { m_rsegs.erase(it); }
+
+  ulint size() const { return m_rsegs.size(); }
+
+  Rseg_Iterator begin() { return m_rsegs.begin(); }
+
+  Rseg_Iterator end() { return m_rsegs.end(); }
+
+  void append(const TxnUndoRsegs &append_from) {
+    ut_ad(get_scn() == append_from.get_scn());
+
+    m_rsegs.insert(m_rsegs.end(), append_from.m_rsegs.begin(),
+                   append_from.m_rsegs.end());
+  }
+
+  bool operator()(const TxnUndoRsegs &lhs, const TxnUndoRsegs &rhs) {
+    return (lhs.m_scn > rhs.m_scn);
+  }
+
+ private:
+  scn_t m_scn;
+  Rsegs_Vector m_rsegs;
+};
+
+/**
+  Use priority_queue as the minimum heap structure
+  which is order by scn number */
+typedef std::priority_queue<
+    TxnUndoRsegs, std::vector<TxnUndoRsegs, ut_allocator<TxnUndoRsegs>>,
+    TxnUndoRsegs>
+    purge_heap_t;
 
 } /* namespace lizard */
 

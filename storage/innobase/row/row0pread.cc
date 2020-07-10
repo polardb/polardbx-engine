@@ -327,10 +327,11 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
                                                  mtr_t *mtr) {
   const auto table_name = m_config.m_index->table->name;
 
-  ut_ad(m_trx->read_view == nullptr || MVCC::is_view_active(m_trx->read_view));
+  // ut_ad(m_trx->read_view == nullptr ||
+  // MVCC::is_view_active(m_trx->read_view));
 
-  if (m_trx->read_view != nullptr) {
-    auto view = m_trx->read_view;
+  if (m_trx->vision != nullptr) {
+    auto vision = m_trx->vision;
 
     if (m_config.m_index->is_clustered()) {
       trx_id_t rec_trx_id;
@@ -363,11 +364,11 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
       }
 
       if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
-          !view->changes_visible(rec_trx_id, table_name)) {
+          !vision->modifications_visible(&txn_rec, table_name)) {
         rec_t *old_vers;
 
         row_vers_build_for_consistent_read(rec, mtr, m_config.m_index, &offsets,
-                                           view, &heap, heap, &old_vers,
+                                           vision, &heap, heap, &old_vers,
                                            nullptr, nullptr);
 
         rec = old_vers;
@@ -384,7 +385,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
 
       ut_ad(max_trx_id > 0);
 
-      if (!view->sees(max_trx_id)) {
+      if (!vision->sees(max_trx_id)) {
         /* FIXME: This is not sufficient. We may need to read in the cluster
         index record to be 100% sure. */
         return (false);

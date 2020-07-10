@@ -194,14 +194,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <unistd.h>
 #endif /* HAVE_UNISTD_H */
 
+#include "lizard0cleanout.h"
 #include "lizard0dict.h"
 #include "lizard0fsp.h"
-#include "lizard0scn.h"
-#include "lizard0txn.h"
 #include "lizard0mon.h"
-#include "lizard0cleanout.h"
 #include "lizard0read0read.h"
+#include "lizard0scn.h"
 #include "lizard0sys.h"
+#include "lizard0txn.h"
+#include "lizard0undo.h"
 
 
 #ifndef UNIV_HOTBACKUP
@@ -14242,6 +14243,12 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
     p.set(dd_index_key_strings[DD_INDEX_TRX_ID], 0);
     p.set(dd_index_key_strings[DD_INDEX_SPACE_ID], dict_sys_t::s_space_id);
     p.set(dd_index_key_strings[DD_TABLE_ID], n_tables);
+
+    /** For data dict tables, it's always visible, and
+    dict_index_t::is_usable return true if it found DD_INDEX_TRX_ID == 0.
+    Here we give it a fake number. */
+    p.set(dd_index_key_strings[DD_INDEX_UBA], lizard::UNDO_PTR_DICT_REC);
+    p.set(dd_index_key_strings[DD_INDEX_SCN], lizard::SCN_DICT_REC);
   }
 
   DBUG_ASSERT(n_indexes - n_indexes_old == data.n_indexes);
@@ -18252,13 +18259,11 @@ int ha_innobase::external_lock(THD *thd, /*!< in: handle to the user thread */
         ut_d(trx->is_dd_trx = false);
       }
 
-    } else if (trx->isolation_level <= TRX_ISO_READ_COMMITTED &&
-               MVCC::is_view_active(trx->read_view)) {
-      mutex_enter(&trx_sys->mutex);
-
-      trx_sys->mvcc->view_close(trx->read_view, true);
-
-      mutex_exit(&trx_sys->mutex);
+    } else if (trx->isolation_level <= TRX_ISO_READ_COMMITTED && trx->vision) {
+      //   mutex_enter(&trx_sys->mutex);
+      //   trx_sys->mvcc->view_close(trx->read_view, true);
+      //   mutex_exit(&trx_sys->mutex);
+      lizard::trx_vision_release(trx->vision);
     }
   }
 
@@ -18854,16 +18859,15 @@ THR_LOCK_DATA **ha_innobase::store_lock(
     trx->isolation_level =
         innobase_map_isolation_level((enum_tx_isolation)thd_tx_isolation(thd));
 
-    if (trx->isolation_level <= TRX_ISO_READ_COMMITTED &&
-        MVCC::is_view_active(trx->read_view)) {
+    if (trx->isolation_level <= TRX_ISO_READ_COMMITTED && trx->vision) {
       /* At low transaction isolation levels we let
       each consistent read set its own snapshot */
 
-      mutex_enter(&trx_sys->mutex);
+      //      mutex_enter(&trx_sys->mutex);
+      //      trx_sys->mvcc->view_close(trx->read_view, true);
+      //      mutex_exit(&trx_sys->mutex);
 
-      trx_sys->mvcc->view_close(trx->read_view, true);
-
-      mutex_exit(&trx_sys->mutex);
+      lizard::trx_vision_release(trx->vision);
     }
   }
 

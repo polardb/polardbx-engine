@@ -892,13 +892,13 @@ sel_node_t *pars_select_statement(
     select_node->row_lock_mode = LOCK_X;
 
     select_node->consistent_read = FALSE;
-    select_node->read_view = NULL;
+    select_node->vision = NULL;
   } else if (lock_shared) {
     select_node->set_x_locks = FALSE;
     select_node->row_lock_mode = LOCK_S;
 
     select_node->consistent_read = FALSE;
-    select_node->read_view = NULL;
+    select_node->vision = NULL;
   } else {
     select_node->set_x_locks = FALSE;
     select_node->row_lock_mode = LOCK_S;

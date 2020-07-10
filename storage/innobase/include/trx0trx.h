@@ -60,7 +60,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 struct mtr_t;
 
 // Forward declaration
-class ReadView;
+// class ReadView;
 
 // Forward declaration
 class FlushObserver;
@@ -223,18 +223,27 @@ trx_t *trx_get_trx_by_xid(
 void trx_commit_complete_for_mysql(trx_t *trx); /*!< in/out: transaction */
 /** Marks the latest SQL statement ended. */
 void trx_mark_sql_stat_end(trx_t *trx); /*!< in: trx handle */
+
 /** Assigns a read view for a consistent read query. All the consistent reads
  within the same transaction will get the same read view, which is created
  when this function is first called for a new started transaction. */
-ReadView *trx_assign_read_view(trx_t *trx); /*!< in: active transaction */
+lizard::Vision *trx_assign_read_view(trx_t *trx); /*!< in: active transaction */
 
 /** @return the transaction's read view or NULL if one not assigned. */
 UNIV_INLINE
-ReadView *trx_get_read_view(trx_t *trx);
+lizard::Vision *trx_get_vision(trx_t *trx);
 
 /** @return the transaction's read view or NULL if one not assigned. */
 UNIV_INLINE
-const ReadView *trx_get_read_view(const trx_t *trx);
+const lizard::Vision *trx_get_vision(const trx_t *trx);
+
+///** @return the transaction's read view or NULL if one not assigned. */
+//UNIV_INLINE
+//ReadView *trx_get_read_view(trx_t *trx);
+//
+///** @return the transaction's read view or NULL if one not assigned. */
+//UNIV_INLINE
+//const ReadView *trx_get_read_view(const trx_t *trx);
 
 /** Prepares a transaction for commit/rollback. */
 void trx_commit_or_rollback_prepare(trx_t *trx); /*!< in/out: transaction */
@@ -476,12 +485,25 @@ Check transaction state */
 
 /** Check if transaction is free so that it can be re-initialized.
 @param t transaction handle */
+/*
+// #define assert_trx_is_free(t)                            \
+//  do {                                                   \
+//    ut_ad(trx_state_eq((t), TRX_STATE_NOT_STARTED) ||    \
+//          trx_state_eq((t), TRX_STATE_FORCED_ROLLBACK)); \
+//    ut_ad(!trx_is_rseg_updated(trx));                    \
+//    ut_ad(!MVCC::is_view_active((t)->read_view));        \
+//    ut_ad((t)->lock.wait_thr == NULL);                   \
+//    ut_ad(UT_LIST_GET_LEN((t)->lock.trx_locks) == 0);    \
+//    ut_ad((t)->dict_operation == TRX_DICT_OP_NONE);      \
+//  } while (0)
+*/
+
 #define assert_trx_is_free(t)                            \
   do {                                                   \
     ut_ad(trx_state_eq((t), TRX_STATE_NOT_STARTED) ||    \
           trx_state_eq((t), TRX_STATE_FORCED_ROLLBACK)); \
     ut_ad(!trx_is_rseg_updated(trx));                    \
-    ut_ad(!MVCC::is_view_active((t)->read_view));        \
+    ut_ad(!(t)->vision);                                 \
     ut_ad((t)->lock.wait_thr == NULL);                   \
     ut_ad(UT_LIST_GET_LEN((t)->lock.trx_locks) == 0);    \
     ut_ad((t)->dict_operation == TRX_DICT_OP_NONE);      \
@@ -915,8 +937,8 @@ struct trx_t {
   concurrent unique insert or replace operation. */
   bool skip_lock_inheritance;
 
-  ReadView *read_view; /*!< consistent read view used in the
-                       transaction, or NULL if not yet set */
+  //  ReadView *read_view; /*!< consistent read view used in the
+  //                       transaction, or NULL if not yet set */
 
   lizard::Vision *vision;
 

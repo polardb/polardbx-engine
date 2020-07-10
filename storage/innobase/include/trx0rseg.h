@@ -121,7 +121,7 @@ bool trx_rseg_init_rollback_segments(space_id_t space_id,
 /** Create the memory copies for rollback segments and initialize the
 rseg array in trx_sys at a database startup.
 @param[in]	purge_queue	queue of rsegs to purge */
-void trx_rsegs_init(purge_pq_t *purge_queue);
+void trx_rsegs_init(lizard::purge_heap_t *purge_heap);
 
 /** Create and initialize a rollback segment object.  Some of
 the values for the fields are read from the segment header page.

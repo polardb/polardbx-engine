@@ -5,7 +5,7 @@
 --let $p2=/("created": )[0-9]+/\1NNN/
 
 # Remove se_private_data: id & trx_id output. retain the root page number value
---let $p3=/("se_private_data":) "id=[0-9]+;root=[0-9]+;space_id=[0-9]+;table_id=[0-9]+;trx_id=[0-9]+;"/\1 "id=A;root=B;space_id=C,table_id=D,trx_id=E"/
+--let $p3=/("se_private_data":) "id=[0-9]+;root=[0-9]+;scn=[0-9]+;space_id=[0-9]+;table_id=[0-9]+;trx_id=[0-9]+;uba=[0-9]+;"/\1 "id=A;root=B;space_id=C,table_id=D,trx_id=E"/
 
 # Remove se_private_data: id & trx_id output. retain the root page number value
 --let $p4=/("se_private_data":) "id=[0-9]+;root=[0-9]+;trx_id=[0-9]+;"/\1 "id=X;root=Y;trx_id=Z"/

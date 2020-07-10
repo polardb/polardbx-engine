@@ -64,6 +64,9 @@ constexpr scn_t SCN_TEMP_TAB_REC = 2;
 /** SCN special for undo lost */
 constexpr scn_t SCN_UNDO_LOST = 3;
 
+/** SCN special for index */
+constexpr scn_t SCN_DICT_REC = 4;
+
 /** MAX reserved scn NUMBER  */
 constexpr scn_t SCN_RESERVERD_MAX = 1024;
 
@@ -146,35 +149,35 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
 /* Debug validation of commit scn directly */
-#define assert_commit_scn_state(scn, state)                                 \
-  do {                                                                      \
-    ut_a(lizard::commit_scn_state(scn) == state);                           \
+#define assert_commit_scn_state(scn, state)       \
+  do {                                            \
+    ut_a(lizard::commit_scn_state(scn) == state); \
   } while (0)
 
-#define assert_commit_scn_initial(scn)                                      \
-  do {                                                                      \
-    assert_commit_scn_state(scn, SCN_STATE_INITIAL);                        \
+#define assert_commit_scn_initial(scn)               \
+  do {                                               \
+    assert_commit_scn_state(scn, SCN_STATE_INITIAL); \
   } while (0)
 
-#define assert_commit_scn_allocated(scn)                                    \
-  do {                                                                      \
-    assert_commit_scn_state(scn, SCN_STATE_ALLOCATED);                      \
+#define assert_commit_scn_allocated(scn)               \
+  do {                                                 \
+    assert_commit_scn_state(scn, SCN_STATE_ALLOCATED); \
   } while (0)
 
 /* Debug validation of commit scn from trx->scn */
-#define assert_trx_scn_state(trx, state)                                    \
-  do {                                                                      \
-    ut_a(lizard::commit_scn_state(trx->txn_desc.scn) == state);             \
+#define assert_trx_scn_state(trx, state)                        \
+  do {                                                          \
+    ut_a(lizard::commit_scn_state(trx->txn_desc.scn) == state); \
   } while (0)
 
-#define assert_trx_scn_initial(trx)                                         \
-  do {                                                                      \
-    assert_trx_scn_state(trx, SCN_STATE_INITIAL);                           \
+#define assert_trx_scn_initial(trx)               \
+  do {                                            \
+    assert_trx_scn_state(trx, SCN_STATE_INITIAL); \
   } while (0)
 
-#define assert_trx_scn_allocated(trx)                                       \
-  do {                                                                      \
-    assert_trx_scn_state(trx, SCN_STATE_ALLOCATED);                         \
+#define assert_trx_scn_allocated(trx)               \
+  do {                                              \
+    assert_trx_scn_state(trx, SCN_STATE_ALLOCATED); \
   } while (0)
 
 #define assert_trx_scn(trx)                                                 \
@@ -186,19 +189,19 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
   } while (0)
 
 /* Debug validation of commit scn from undo->scn */
-#define assert_undo_scn_state(undo, state)                                  \
-  do {                                                                      \
-    ut_a(lizard::commit_scn_state(undo->scn) == state);                     \
+#define assert_undo_scn_state(undo, state)              \
+  do {                                                  \
+    ut_a(lizard::commit_scn_state(undo->scn) == state); \
   } while (0)
 
-#define assert_undo_scn_initial(undo)                                       \
-  do {                                                                      \
-    assert_undo_scn_state(undo, SCN_STATE_INITIAL);                         \
+#define assert_undo_scn_initial(undo)               \
+  do {                                              \
+    assert_undo_scn_state(undo, SCN_STATE_INITIAL); \
   } while (0)
 
-#define assert_undo_scn_allocated(undo)                                     \
-  do {                                                                      \
-    assert_undo_scn_state(undo, SCN_STATE_ALLOCATED);                       \
+#define assert_undo_scn_allocated(undo)               \
+  do {                                                \
+    assert_undo_scn_state(undo, SCN_STATE_ALLOCATED); \
   } while (0)
 
 #else
@@ -221,4 +224,4 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
 
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
-#endif  /* lizard0scn_h define */
+#endif /* lizard0scn_h define */

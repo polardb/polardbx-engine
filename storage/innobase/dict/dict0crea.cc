@@ -57,6 +57,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "usr0sess.h"
 #include "ut0vec.h"
 
+#include "lizard0dict.h"
+
 /** Build a table definition without updating SYSTEM TABLES
 @param[in,out]	table	dict table object
 @param[in,out]	trx	transaction instance
@@ -405,17 +407,22 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
 
   dberr_t err = DB_SUCCESS;
 
-  page_no =
-      btr_create(index->type, index->space, dict_table_page_size(index->table),
-                 index->id, index, &mtr);
+  /* Assign txn undo in advance during DDL operation */
+  err = lizard::dd_index_init_txn_desc(index, trx);
+
+  if (err == DB_SUCCESS) {
+    page_no =
+        btr_create(index->type, index->space,
+                   dict_table_page_size(index->table), index->id, index, &mtr);
+
+    if (page_no == FIL_NULL) err = DB_OUT_OF_FILE_SPACE;
+  }
 
   index->page = page_no;
   index->trx_id = trx->id;
 
   mtr_commit(&mtr);
-  if (page_no == FIL_NULL) {
-    err = DB_OUT_OF_FILE_SPACE;
-  } else {
+  if (err == DB_SUCCESS) {
     /* FIXME: Now writing ddl log after the index has been created,
     so if server crashes before the redo log gets persisted,
     there is no way to find the resources(two segments, etc.)

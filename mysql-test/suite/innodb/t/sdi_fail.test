@@ -16,7 +16,7 @@ show create table t1;
 
 SET DEBUG='+d,ib_create_table_fail_too_many_trx';
 
---error ER_SDI_OPERATION_FAILED,
+--error ER_TOO_MANY_CONCURRENT_TRXS
 ALTER TABLE t1 ADD INDEX (c2), ADD INDEX (c3);
 
 SET DEBUG='-d,ib_create_table_fail_too_many_trx';

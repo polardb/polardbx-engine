@@ -50,6 +50,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 #include "trx0trx.h"
 
+#include "lizard0undo0types.h"
+
 #ifndef UNIV_HOTBACKUP
 typedef UT_LIST_BASE_NODE_T(trx_t) trx_ut_list_t;
 
@@ -69,7 +71,7 @@ bool trx_sys_hdr_page(const page_id_t &page_id);
 /** Creates and initializes the central memory structures for the transaction
  system. This is called when the database is started.
  @return min binary heap of rsegs to purge */
-purge_pq_t *trx_sys_init_at_db_start(void);
+lizard::purge_heap_t *trx_sys_init_at_db_start(void);
 /** Creates the trx_sys instance and initializes purge_queue and mutex. */
 void trx_sys_create(void);
 /** Creates and initializes the transaction system at the database creation. */
@@ -426,23 +428,28 @@ struct trx_sys_t {
                      this structure except when noted
                      otherwise */
 
-  MVCC *mvcc;                   /*!< Multi version concurrency control
-                                manager */
+//  MVCC *mvcc;                   /*!< Multi version concurrency control
+//                                manager */
+
   volatile trx_id_t max_trx_id; /*!< The smallest number not yet
                                 assigned as a transaction id or
                                 transaction number. This is declared
                                 volatile because it can be accessed
                                 without holding any mutex during
                                 AC-NL-RO view creation. */
-  std::atomic<trx_id_t> min_active_id;
+  //  std::atomic<trx_id_t> min_active_id;
   /*!< Minimal transaction id which is
   still in active state. */
-  trx_ut_list_t serialisation_list;
+
+  // Lizard: comment out
+  // trx_ut_list_t serialisation_list;
+
   /*!< Ordered on trx_t::no of all the
   currenrtly active RW transactions */
 #ifdef UNIV_DEBUG
-  trx_id_t rw_max_trx_no; /*!< Max trx number of read-write
-                          transactions added for purge. */
+  // trx_id_t rw_max_trx_no;
+                            /*!< Max trx number of read-write
+                            transactions added for purge. */
 #endif                    /* UNIV_DEBUG */
 
   char pad1[64];             /*!< To avoid false sharing */
@@ -462,14 +469,14 @@ struct trx_sys_t {
                                 transactions that have not yet been
                                 started in InnoDB. */
 
-  trx_ids_t rw_trx_ids; /*!< Array of Read write transaction IDs
-                        for MVCC snapshot. A ReadView would take
-                        a snapshot of these transactions whose
-                        changes are not visible to it. We should
-                        remove transactions from the list before
-                        committing in memory and releasing locks
-                        to ensure right order of removal and
-                        consistent snapshot. */
+//  trx_ids_t rw_trx_ids; /*!< Array of Read write transaction IDs
+//                        for MVCC snapshot. A ReadView would take
+//                        a snapshot of these transactions whose
+//                        changes are not visible to it. We should
+//                        remove transactions from the list before
+//                        committing in memory and releasing locks
+//                        to ensure right order of removal and
+//                        consistent snapshot. */
 
   char pad3[64]; /*!< To avoid false sharing */
 

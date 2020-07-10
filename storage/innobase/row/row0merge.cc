@@ -1918,23 +1918,21 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
       ONLINE_INDEX_COMPLETE state between the time
       the DML thread has updated the clustered index
       but has not yet accessed secondary index. */
-      ut_ad(MVCC::is_view_active(trx->read_view));
 
-      {
-        txn_rec_t txn_rec {
+      ut_ad(trx->vision);
+
+      txn_rec_t txn_rec{
           row_get_rec_trx_id(rec, clust_index, offsets),
           lizard::row_get_rec_scn_id(rec, clust_index, offsets),
-          lizard::row_get_rec_undo_ptr(rec, clust_index, offsets)
-        };
-        lizard::txn_undo_hdr_lookup(&txn_rec);
-      }
+          lizard::row_get_rec_undo_ptr(rec, clust_index, offsets)};
 
-      if (!trx->read_view->changes_visible(
-              row_get_rec_trx_id(rec, clust_index, offsets), old_table->name)) {
+      lizard::txn_undo_hdr_lookup(&txn_rec);
+
+      if (!trx->vision->modifications_visible(&txn_rec, old_table->name)) {
         rec_t *old_vers;
 
         row_vers_build_for_consistent_read(rec, &mtr, clust_index, &offsets,
-                                           trx->read_view, &row_heap, row_heap,
+                                           trx->vision, &row_heap, row_heap,
                                            &old_vers, NULL, nullptr);
 
         rec = old_vers;

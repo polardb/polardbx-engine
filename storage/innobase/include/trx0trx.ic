@@ -255,20 +255,38 @@ void trx_release_reference(trx_t *trx) {
 }
 
 /**
-@param trx		Get the active view for this transaction, if one exists
-@return the transaction's read view or NULL if one not assigned. */
+@param trx		Get the active vision for this transaction, if one exists
+@return the transaction's vision or NULL if one not assigned. */
 UNIV_INLINE
-ReadView *trx_get_read_view(trx_t *trx) {
-  return (!MVCC::is_view_active(trx->read_view) ? NULL : trx->read_view);
+lizard::Vision *trx_get_vision(trx_t *trx) {
+  /** read_view is being used or not assigned */
+  return (trx->vision);
 }
 
 /**
 @param trx		Get the active view for this transaction, if one exists
-@return the transaction's read view or NULL if one not assigned. */
+@return the transaction's vsion or NULL if one not assigned. */
 UNIV_INLINE
-const ReadView *trx_get_read_view(const trx_t *trx) {
-  return (!MVCC::is_view_active(trx->read_view) ? NULL : trx->read_view);
+const lizard::Vision *trx_get_vision(const trx_t *trx) {
+  /** read_view is being used or not assigned */
+  return (trx->vision);
 }
+
+///**
+//@param trx		Get the active view for this transaction, if one exists
+//@return the transaction's read view or NULL if one not assigned. */
+//UNIV_INLINE
+//ReadView *trx_get_read_view(trx_t *trx) {
+//  return (!MVCC::is_view_active(trx->read_view) ? NULL : trx->read_view);
+//}
+//
+///**
+//@param trx		Get the active view for this transaction, if one exists
+//@return the transaction's read view or NULL if one not assigned. */
+//UNIV_INLINE
+//const ReadView *trx_get_read_view(const trx_t *trx) {
+//  return (!MVCC::is_view_active(trx->read_view) ? NULL : trx->read_view);
+//}
 
 /**
 @param[in] trx		Transaction to check

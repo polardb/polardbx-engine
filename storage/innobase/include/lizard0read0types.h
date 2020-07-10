@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn0types.h"
 #include "lizard0undo0types.h"
 #include "trx0types.h"
+#include "dict0mem.h"
 
 namespace lizard {
 
@@ -63,6 +64,7 @@ class Vision {
   Vision(const Vision &&) = delete;
   Vision &operator=(const Vision &) = delete;
 
+ public:
   /**
     Return scn of the vision
     @retval   scn of the vision
@@ -79,11 +81,26 @@ class Vision {
             m_snapshot_scn);
   }
 
-  /** Check whether the changes by id are visible.
-  @param[in]	trx_zeus
-  @return whether the view sees the modifications of id. True if visible */
-  bool modifications_visible(txn_rec_t *txn_info) const
+  /**
+    Check whether the changes by id are visible.
+
+    @param[in]  txn_rec           txn related information.
+    @param[in]  name	            table name
+    @param[in]  check_consistent  check the consistent between SCN and UBA
+
+    @retval       whether the vision sees the modifications of id.
+                  True if visible
+  */
+  bool modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
+                             bool check_consistent = true) const
       MY_ATTRIBUTE((warn_unused_result));
+
+  /**
+    Check whether transaction id is valid.
+
+    @param[in]	id	transaction id to check
+    @param[in]	name	table name */
+  void check_trx_id_sanity(trx_id_t id, const table_name_t &name) const;
 
   /**
     Whether Vision can see the target trx id,
@@ -97,7 +114,15 @@ class Vision {
     ut_ad(id < TRX_ID_MAX && m_creator_trx_id < TRX_ID_MAX);
     ut_ad(m_list_idx != VISION_LIST_IDX_NULL);
     return id < m_up_limit_id;
-  }
+    }
+
+    /** Set the view creator transaction id. This should be set only
+    for views created by RW transactions. */
+    void set_vision_creator_trx_id(trx_id_t id) {
+      ut_ad(id > 0);
+      ut_ad(m_creator_trx_id == 0);
+      m_creator_trx_id = id;
+    }
 
 #ifdef UNIV_DEBUG
   /**
