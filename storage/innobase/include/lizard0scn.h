@@ -114,7 +114,27 @@ class SCN {
 
   /** Get m_scn
   @return     m_scn */
-  scn_t acquire_scn();
+  scn_t acquire_scn(bool mutex_hold = false);
+
+  /** lock mutex */
+  void lock() {
+    ut_ad(m_inited);
+    mutex_enter(&m_mutex);
+  }
+
+  /** unlock mutex */
+  void unlock() {
+    ut_ad(m_inited);
+    mutex_exit(&m_mutex);
+  }
+
+#ifdef UNIV_DEBUG
+  /** check if own mutex */
+  bool own_lock() {
+    ut_ad(m_inited);
+    return mutex_own(&m_mutex);
+  }
+#endif
 
  private:
   /** Flush the scn number to system tablepace every LIZARD_SCN_NUMBER_MAGIN */
@@ -141,6 +161,22 @@ class SCN {
 enum scn_state_t commit_scn_state(const commit_scn_t &scn);
 
 }  // namespace lizard
+
+#define lizard_sys_scn_mutex_enter()      \
+  do {                                    \
+    ut_ad(lizard::lizard_sys != nullptr); \
+    lizard::lizard_sys->scn.lock();       \
+  } while(0)
+
+#define lizard_sys_scn_mutex_exit()       \
+  do {                                    \
+    ut_ad(lizard::lizard_sys != nullptr); \
+    lizard::lizard_sys->scn.unlock();     \
+  } while(0)
+
+#ifdef UNIV_DEBUG
+#define lizard_sys_scn_mutex_own() lizard::lizard_sys->scn.own_lock()
+#endif
 
 /** Commit scn initial value */
 #define COMMIT_SCN_NULL \

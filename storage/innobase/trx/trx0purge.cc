@@ -1791,19 +1791,24 @@ static void trx_purge_read_undo_rec(trx_purge_t *purge_sys,
 /** Chooses the next undo log to purge and updates the info in purge_sys. This
  function is used to initialize purge_sys when the next record to purge is not
  known, and also to update the purge system info on the next record when purge
- has handled the whole undo log for a transaction. */
-static void trx_purge_choose_next_log(void) {
-  bool go_next = true;
+ has handled the whole undo log for a transaction.
+ purge has handled the whole undo log for a transaction.
+
+ @return true if the top of purge_sys::purge_heap is kept,
+ because of its scn is larger than purge_sys->vision */
+static bool trx_purge_choose_next_log(void) {
+  bool keep_top = false;
   ut_ad(purge_sys->next_stored == false);
 
-  const page_size_t &page_size = purge_sys->rseg_iter->set_next(&go_next);
+  const page_size_t &page_size = purge_sys->rseg_iter->set_next(&keep_top);
 
-  if (purge_sys->rseg != nullptr && go_next) {
+  if (purge_sys->rseg != nullptr && !keep_top) {
     trx_purge_read_undo_rec(purge_sys, page_size);
   } else {
     /* There is nothing to do yet. */
     std::this_thread::yield();
   }
+  return keep_top;
 }
 
 /** Gets the next record to purge and updates the info in the purge system.
@@ -2138,16 +2143,19 @@ void Purge_groups_t::distribute_if_needed() {
                             handled */
     mem_heap_t *heap)       /*!< in: memory heap where copied */
 {
+  bool keep_top = false;
   if (!purge_sys->next_stored) {
-    trx_purge_choose_next_log();
+    keep_top = trx_purge_choose_next_log();
 
-    if (!purge_sys->next_stored) {
+    /** keep_top == true mean the top of heap is larger than purge_sys's
+    vision. That is to say, there are logs left in the history list */
+    if (!purge_sys->next_stored && !keep_top) {
       DBUG_PRINT("ib_purge", ("no logs left in the history list"));
       return nullptr;
     }
   }
 
-  if (purge_sys->iter.scn > purge_sys->vision.snapshot_scn()) {
+  if (purge_sys->iter.scn > purge_sys->vision.snapshot_scn() || keep_top) {
     return nullptr;
   }
 

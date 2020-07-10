@@ -35,10 +35,10 @@ while ($wait_counter)
 --disable_warnings
 # Don't wait for purge blocked by active ReadView(s)
     let $trx_view_age = `SELECT VARIABLE_VALUE FROM performance_schema.global_status
-WHERE VARIABLE_NAME = 'INNODB_PURGE_VIEW_TRX_ID_AGE';`;
+WHERE VARIABLE_NAME = 'INNODB_PURGE_VIEW_TRX_SCN_AGE';`;
 
     let $trx_age = `SELECT VARIABLE_VALUE FROM performance_schema.global_status
-WHERE VARIABLE_NAME = 'INNODB_PURGE_TRX_ID_AGE';`;
+WHERE VARIABLE_NAME = 'INNODB_PURGE_TRX_SCN_AGE';`;
 --enable_warnings
 
     if ($trx_age != $prev_trx_age)
@@ -64,7 +64,7 @@ WHERE VARIABLE_NAME = 'INNODB_PURGE_TRX_ID_AGE';`;
 if (!$success)
 {
   let $age_log=$age_log:$wait_condition_reps;
-  echo INNODB_PURGE_TRX_ID_AGE = $trx_age (previous id:count $age_log);
+  echo INNODB_PURGE_TRX_SCN_AGE = $trx_age (previous id:count $age_log);
   die Timeout in wait_innodb_all_purged.inc;
 }
 

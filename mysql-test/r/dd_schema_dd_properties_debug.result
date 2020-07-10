@@ -947,15 +947,14 @@ scn=4
        space_id=4294967294
        table_id=13
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx5=id=32
        root=35
+scn=4
        space_id=4294967294
        table_id=13
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 foreign_key_column_usage=
   col0=table_id=14
@@ -1019,43 +1018,27 @@ foreign_key_column_usage=
             lbl=TABLESPACE
             pos=5
   id=14
-<<<<<<< HEAD
   idx0=id=33
-=======
-  idx0=id=32
-       root=35
-scn=4
-       space_id=4294967294
-       table_id=14
-       trx_id=0
-uba=36028797019029500
-  idx1=id=33
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=36
 scn=4
        space_id=4294967294
        table_id=14
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=34
-=======
 uba=36028797019029500
-  idx2=id=34
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=34
        root=37
 scn=4
        space_id=4294967294
        table_id=14
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx2=id=35
        root=38
+scn=4
        space_id=4294967294
        table_id=14
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
     foreign_keys=
   col0=table_id=15
@@ -1160,54 +1143,34 @@ uba=36028797019029500
             lbl=TABLESPACE
             pos=5
   id=15
-<<<<<<< HEAD
   idx0=id=36
-=======
-  idx0=id=35
-       root=38
-scn=4
-       space_id=4294967294
-       table_id=15
-       trx_id=0
-uba=36028797019029500
-  idx1=id=36
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=39
 scn=4
        space_id=4294967294
        table_id=15
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=37
-=======
 uba=36028797019029500
-  idx2=id=37
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=37
        root=40
 scn=4
        space_id=4294967294
        table_id=15
        trx_id=0
-<<<<<<< HEAD
-  idx2=id=38
-=======
 uba=36028797019029500
-  idx3=id=38
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx2=id=38
        root=41
 scn=4
        space_id=4294967294
        table_id=15
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx3=id=39
        root=42
+scn=4
        space_id=4294967294
        table_id=15
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 index_column_usage=
   col0=table_id=16
@@ -1279,43 +1242,27 @@ index_column_usage=
             lbl=TABLESPACE
             pos=5
   id=16
-<<<<<<< HEAD
   idx0=id=40
-=======
-  idx0=id=39
-       root=42
-scn=4
-       space_id=4294967294
-       table_id=16
-       trx_id=0
-uba=36028797019029500
-  idx1=id=40
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=43
 scn=4
        space_id=4294967294
        table_id=16
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=41
-=======
 uba=36028797019029500
-  idx2=id=41
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=41
        root=44
 scn=4
        space_id=4294967294
        table_id=16
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx2=id=42
        root=45
+scn=4
        space_id=4294967294
        table_id=16
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 index_partitions=
   col0=table_id=17
@@ -1386,43 +1333,27 @@ index_partitions=
             lbl=TABLESPACE
             pos=5
   id=17
-<<<<<<< HEAD
   idx0=id=43
-=======
-  idx0=id=42
-       root=45
-scn=4
-       space_id=4294967294
-       table_id=17
-       trx_id=0
-uba=36028797019029500
-  idx1=id=43
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=47
 scn=4
        space_id=4294967294
        table_id=17
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=44
-=======
 uba=36028797019029500
-  idx2=id=44
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=44
        root=48
 scn=4
        space_id=4294967294
        table_id=17
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx2=id=45
        root=49
+scn=4
        space_id=4294967294
        table_id=17
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 index_stats=
   col0=table_id=18
@@ -1482,14 +1413,9 @@ index_stats=
             lbl=TABLESPACE
             pos=5
   id=18
-<<<<<<< HEAD
   idx0=id=46
        root=50
-=======
-  idx0=id=45
-       root=49
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=18
        trx_id=0
@@ -1622,43 +1548,27 @@ uba=36028797019029500
             lbl=TABLESPACE
             pos=5
   id=19
-<<<<<<< HEAD
   idx0=id=47
-=======
-  idx0=id=46
-       root=50
-scn=4
-       space_id=4294967294
-       table_id=19
-       trx_id=0
-uba=36028797019029500
-  idx1=id=47
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=51
 scn=4
        space_id=4294967294
        table_id=19
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=48
-=======
 uba=36028797019029500
-  idx2=id=48
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=48
        root=52
 scn=4
        space_id=4294967294
        table_id=19
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx2=id=49
        root=53
+scn=4
        space_id=4294967294
        table_id=19
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 innodb_ddl_log=
   col0=table_id=5
@@ -1994,14 +1904,9 @@ parameter_type_elements=
             lbl=TABLESPACE
             pos=5
   id=20
-<<<<<<< HEAD
   idx0=id=50
        root=54
-=======
-  idx0=id=49
-       root=53
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=20
        trx_id=0
@@ -2131,43 +2036,27 @@ parameters=
             lbl=TABLESPACE
             pos=5
   id=21
-<<<<<<< HEAD
   idx0=id=51
-=======
-  idx0=id=50
-       root=54
-scn=4
-       space_id=4294967294
-       table_id=21
-       trx_id=0
-uba=36028797019029500
-  idx1=id=51
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=55
 scn=4
        space_id=4294967294
        table_id=21
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=52
-=======
 uba=36028797019029500
-  idx2=id=52
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=52
        root=56
 scn=4
        space_id=4294967294
        table_id=21
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx2=id=53
        root=57
+scn=4
        space_id=4294967294
        table_id=21
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 resource_groups=
   col0=table_id=22
@@ -2235,26 +2124,16 @@ resource_groups=
             lbl=TABLESPACE
             pos=5
   id=22
-<<<<<<< HEAD
   idx0=id=54
        root=58
-       space_id=4294967294
-       table_id=22
-       trx_id=0
-  idx1=id=55
-       root=59
-=======
-  idx0=id=53
-       root=57
 scn=4
        space_id=4294967294
        table_id=22
        trx_id=0
 uba=36028797019029500
-  idx1=id=54
-       root=58
+  idx1=id=55
+       root=59
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=22
        trx_id=0
@@ -2463,81 +2342,55 @@ routines=
             lbl=TABLESPACE
             pos=5
   id=23
-<<<<<<< HEAD
   idx0=id=56
-=======
-  idx0=id=55
-       root=59
-scn=4
-       space_id=4294967294
-       table_id=23
-       trx_id=0
-uba=36028797019029500
-  idx1=id=56
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=60
 scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=57
-=======
 uba=36028797019029500
-  idx2=id=57
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=57
        root=61
 scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
-<<<<<<< HEAD
-  idx2=id=58
-=======
 uba=36028797019029500
-  idx3=id=58
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx2=id=58
        root=62
 scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
-<<<<<<< HEAD
-  idx3=id=59
-=======
 uba=36028797019029500
-  idx4=id=59
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx3=id=59
        root=63
 scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
-<<<<<<< HEAD
-  idx4=id=60
-=======
 uba=36028797019029500
-  idx5=id=60
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx4=id=60
        root=64
 scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx5=id=61
        root=65
+scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
+uba=36028797019029500
   idx6=id=62
        root=66
+scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 schemata=
   col0=table_id=24
@@ -2622,44 +2475,27 @@ schemata=
             lbl=TABLESPACE
             pos=5
   id=24
-<<<<<<< HEAD
   idx0=id=63
-=======
-  idx0=id=61
-       root=65
-scn=4
-       space_id=4294967294
-       table_id=24
-       trx_id=0
-uba=36028797019029500
-  idx1=id=62
-       root=66
-scn=4
-       space_id=4294967294
-       table_id=24
-       trx_id=0
-uba=36028797019029500
-  idx2=id=63
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=67
 scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx1=id=64
        root=68
+scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
+uba=36028797019029500
   idx2=id=65
        root=69
+scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 st_spatial_reference_systems=
   col0=table_id=25
@@ -2750,44 +2586,27 @@ COLLATE utf8mb3_general_ci
             lbl=TABLESPACE
             pos=5
   id=25
-<<<<<<< HEAD
   idx0=id=66
-=======
-  idx0=id=64
-       root=68
-scn=4
-       space_id=4294967294
-       table_id=25
-       trx_id=0
-uba=36028797019029500
-  idx1=id=65
-       root=69
-scn=4
-       space_id=4294967294
-       table_id=25
-       trx_id=0
-uba=36028797019029500
-  idx2=id=66
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=70
 scn=4
        space_id=4294967294
        table_id=25
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx1=id=67
        root=71
+scn=4
        space_id=4294967294
        table_id=25
        trx_id=0
+uba=36028797019029500
   idx2=id=68
        root=72
+scn=4
        space_id=4294967294
        table_id=25
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 table_partition_values=
   col0=table_id=26
@@ -2846,14 +2665,9 @@ table_partition_values=
             lbl=TABLESPACE
             pos=5
   id=26
-<<<<<<< HEAD
   idx0=id=69
        root=73
-=======
-  idx0=id=67
-       root=71
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=26
        trx_id=0
@@ -2969,88 +2783,55 @@ table_partitions=
             lbl=TABLESPACE
             pos=5
   id=27
-<<<<<<< HEAD
   idx0=id=70
-=======
-  idx0=id=68
-       root=72
-scn=4
-       space_id=4294967294
-       table_id=27
-       trx_id=0
-uba=36028797019029500
-  idx1=id=69
-       root=73
-scn=4
-       space_id=4294967294
-       table_id=27
-       trx_id=0
-uba=36028797019029500
-  idx2=id=70
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=74
 scn=4
        space_id=4294967294
        table_id=27
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=71
-=======
 uba=36028797019029500
-  idx3=id=71
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=71
        root=75
 scn=4
        space_id=4294967294
        table_id=27
        trx_id=0
-<<<<<<< HEAD
-  idx2=id=72
-=======
 uba=36028797019029500
-  idx4=id=72
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx2=id=72
        root=76
 scn=4
        space_id=4294967294
        table_id=27
        trx_id=0
-<<<<<<< HEAD
-  idx3=id=73
-=======
 uba=36028797019029500
-  idx5=id=73
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx3=id=73
        root=77
 scn=4
        space_id=4294967294
        table_id=27
        trx_id=0
-<<<<<<< HEAD
-  idx4=id=74
-=======
 uba=36028797019029500
-  idx6=id=74
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx4=id=74
        root=78
 scn=4
        space_id=4294967294
        table_id=27
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx5=id=75
        root=79
+scn=4
        space_id=4294967294
        table_id=27
        trx_id=0
+uba=36028797019029500
   idx6=id=76
        root=80
+scn=4
        space_id=4294967294
        table_id=27
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 table_stats=
   col0=table_id=28
@@ -3138,14 +2919,9 @@ table_stats=
             lbl=TABLESPACE
             pos=5
   id=28
-<<<<<<< HEAD
   idx0=id=77
        root=81
-=======
-  idx0=id=75
-       root=79
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=28
        trx_id=0
@@ -3386,115 +3162,76 @@ tables=
             lbl=TABLESPACE
             pos=5
   id=29
-<<<<<<< HEAD
   idx0=id=78
-=======
-  idx0=id=76
-       root=80
-scn=4
-       space_id=4294967294
-       table_id=29
-       trx_id=0
-uba=36028797019029500
-  idx1=id=77
-       root=81
-scn=4
-       space_id=4294967294
-       table_id=29
-       trx_id=0
-uba=36028797019029500
-  idx2=id=78
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=82
 scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=79
-=======
 uba=36028797019029500
-  idx3=id=79
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=79
        root=83
 scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-<<<<<<< HEAD
-  idx2=id=80
-=======
 uba=36028797019029500
-  idx4=id=80
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx2=id=80
        root=84
 scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-<<<<<<< HEAD
-  idx3=id=81
-=======
 uba=36028797019029500
-  idx5=id=81
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx3=id=81
        root=85
 scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-<<<<<<< HEAD
-  idx4=id=82
-=======
 uba=36028797019029500
-  idx6=id=82
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx4=id=82
        root=86
 scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-<<<<<<< HEAD
-  idx5=id=83
-=======
 uba=36028797019029500
-  idx7=id=83
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx5=id=83
        root=87
 scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-<<<<<<< HEAD
-  idx6=id=84
-=======
 uba=36028797019029500
-  idx8=id=84
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx6=id=84
        root=88
 scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx7=id=85
        root=90
+scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
+uba=36028797019029500
   idx8=id=86
        root=91
+scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
+uba=36028797019029500
   idx9=id=87
        root=92
+scn=4
        space_id=4294967294
        table_id=29
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 tablespace_files=
   col0=table_id=30
@@ -3552,26 +3289,16 @@ tablespace_files=
             lbl=TABLESPACE
             pos=5
   id=30
-<<<<<<< HEAD
   idx0=id=88
        root=93
-       space_id=4294967294
-       table_id=30
-       trx_id=0
-  idx1=id=89
-       root=94
-=======
-  idx0=id=85
-       root=90
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=36028797019029500
-  idx1=id=86
-       root=91
+  idx1=id=89
+       root=94
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=30
        trx_id=0
@@ -3643,26 +3370,16 @@ tablespaces=
             lbl=TABLESPACE
             pos=5
   id=31
-<<<<<<< HEAD
   idx0=id=90
        root=95
-       space_id=4294967294
-       table_id=31
-       trx_id=0
-  idx1=id=91
-       root=96
-=======
-  idx0=id=87
-       root=92
 scn=4
        space_id=4294967294
        table_id=31
        trx_id=0
 uba=36028797019029500
-  idx1=id=88
-       root=93
+  idx1=id=91
+       root=96
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=31
        trx_id=0
@@ -3804,83 +3521,55 @@ triggers=
             lbl=TABLESPACE
             pos=5
   id=32
-<<<<<<< HEAD
   idx0=id=92
-=======
-  idx0=id=89
-       root=94
-scn=4
-       space_id=4294967294
-       table_id=32
-       trx_id=0
-uba=36028797019029500
-  idx1=id=90
-       root=95
-scn=4
-       space_id=4294967294
-       table_id=32
-       trx_id=0
-uba=36028797019029500
-  idx2=id=91
-       root=96
-scn=4
-       space_id=4294967294
-       table_id=32
-       trx_id=0
-uba=36028797019029500
-  idx3=id=92
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        root=97
 scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
-<<<<<<< HEAD
-  idx1=id=93
-=======
 uba=36028797019029500
-  idx4=id=93
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx1=id=93
        root=98
 scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
-<<<<<<< HEAD
-  idx2=id=94
-=======
 uba=36028797019029500
-  idx5=id=94
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
+  idx2=id=94
        root=99
 scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
-<<<<<<< HEAD
+uba=36028797019029500
   idx3=id=95
        root=100
+scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
+uba=36028797019029500
   idx4=id=96
        root=101
+scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
+uba=36028797019029500
   idx5=id=97
        root=102
+scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
+uba=36028797019029500
   idx6=id=98
        root=103
+scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
-=======
 uba=36028797019029500
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=1
 view_routine_usage=
   col0=table_id=33
@@ -3938,26 +3627,16 @@ view_routine_usage=
             lbl=TABLESPACE
             pos=5
   id=33
-<<<<<<< HEAD
   idx0=id=99
        root=104
-       space_id=4294967294
-       table_id=33
-       trx_id=0
-  idx1=id=100
-       root=105
-=======
-  idx0=id=95
-       root=100
 scn=4
        space_id=4294967294
        table_id=33
        trx_id=0
 uba=36028797019029500
-  idx1=id=96
-       root=101
+  idx1=id=100
+       root=105
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=33
        trx_id=0
@@ -4019,26 +3698,16 @@ view_table_usage=
             lbl=TABLESPACE
             pos=5
   id=34
-<<<<<<< HEAD
   idx0=id=101
        root=106
-       space_id=4294967294
-       table_id=34
-       trx_id=0
-  idx1=id=102
-       root=107
-=======
-  idx0=id=97
-       root=102
 scn=4
        space_id=4294967294
        table_id=34
        trx_id=0
 uba=36028797019029500
-  idx1=id=98
-       root=103
+  idx1=id=102
+       root=107
 scn=4
->>>>>>> 691ee7109c2 ([Feature] Lizard Vision & Purge system)
        space_id=4294967294
        table_id=34
        trx_id=0

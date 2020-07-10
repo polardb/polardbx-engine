@@ -1216,9 +1216,12 @@ struct export_var_t {
   ulint innodb_undo_tablespaces_active;   /*!< number of active undo
                                           tablespaces */
 #ifdef UNIV_DEBUG
-  ulint innodb_purge_trx_id_age;      /*!< rw_max_trx_no - purged trx_no */
-  ulint innodb_purge_view_trx_id_age; /*!< rw_max_trx_no
-                                      - purged view's min trx_no */
+  // ulint innodb_purge_trx_id_age;      /*!< rw_max_trx_no - purged trx_no */
+  // ulint innodb_purge_view_trx_id_age; /*!< rw_max_trx_no
+  //                                     - purged view's min trx_no */
+  ulint innodb_purge_trx_scn_age;      /*!< rw_max_trx_scn - purged trx_scn */
+  ulint innodb_purge_view_trx_scn_age; /*!< rw_max_trx_scn
+                                       - purged view's min trx_scn */
   ulint innodb_ahi_drop_lookups;      /*!< number of adaptive hash
                                       index lookups when freeing
                                       file pages */

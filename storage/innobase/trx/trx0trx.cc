@@ -2106,6 +2106,8 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
     // trx_erase_from_serialisation_list_low(trx);
 
     trx_sys_serialisation_mutex_exit();
+
+    lizard::lizard_sys_erase_lists(trx);
   }
 
   lock_trx_release_locks(trx);

@@ -41,6 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0read.h"
 #include "lizard0scn.h"
 #include "lizard0sys.h"
+#include "lizard0dbg.h"
+
 
 #ifdef UNIV_PFS_MUTEX
 /* min active trx_id mutex PFS key */
@@ -74,12 +76,44 @@ void lizard_sys_create() {
   lizard_sys->txn_undo_log_free_list_len = 0;
   lizard_sys->txn_undo_log_cached = 0;
 
+  UT_LIST_INIT(lizard_sys->serialisation_list_scn);
+
   return;
+}
+
+/** Erase trx in serialisation_list_scn, and update min_safe_scn
+@param[in]      trx      trx to be removed */
+void lizard_sys_erase_lists(trx_t *trx) {
+  assert_lizard_min_safe_scn_valid();
+
+  lizard_sys_scn_mutex_enter();
+
+  lizard_ut_ad(UT_LIST_GET_LEN(lizard_sys->serialisation_list_scn) > 0);
+
+  lizard_ut_ad(trx != NULL);
+
+  auto oldest_trx = UT_LIST_GET_FIRST(lizard_sys->serialisation_list_scn);
+  UT_LIST_REMOVE(lizard_sys->serialisation_list_scn, trx);
+
+  /** Considering the case:
+  serialisation_list_scn [100, 101], lizard_sys->scn = 101
+  if **101** erased, and then **100** erased, serialisation_list_scn []
+  we also set min_safe_scn as 100 for safety */
+  if (oldest_trx == trx) {
+    lizard_ut_ad(lizard_sys->min_safe_scn.load() < trx->txn_desc.scn.first);
+    lizard_sys->min_safe_scn.store(oldest_trx->txn_desc.scn.first);
+  }
+
+  lizard_sys_scn_mutex_exit();
+
+  assert_lizard_min_safe_scn_valid();
 }
 
 /** Close lizard system structure. */
 void lizard_sys_close() {
   if (lizard_sys != nullptr) {
+    lizard_ut_ad(UT_LIST_GET_LEN(lizard_sys->serialisation_list_scn) == 0);
+
     lizard_sys->scn.~SCN();
     mutex_free(&lizard_sys->min_active_mutex);
     lizard_sys->mtx_inited = false;
@@ -238,6 +272,78 @@ trx_id_t lizard_sys_get_min_active_trx_id() {
   ret = lizard_sys->min_active_trx_id;
   mutex_exit(&lizard_sys->min_active_mutex);
   return ret;
+}
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+/** Check if min_safe_scn is valid
+@return         true if min_safe_scn is valid */
+void min_safe_scn_valid() {
+  scn_t sys_scn;
+  trx_t *trx = nullptr;
+  trx_t *prev_trx = nullptr;
+
+  ut_ad(!lizard_sys_scn_mutex_own());
+
+  lizard_sys_scn_mutex_enter();
+
+  sys_scn = lizard_sys->scn.acquire_scn(true);
+  if (UT_LIST_GET_LEN(lizard_sys->serialisation_list_scn) == 0) {
+    ut_a(lizard_sys->min_safe_scn <= sys_scn);
+  } else {
+    trx = UT_LIST_GET_FIRST(lizard_sys->serialisation_list_scn);
+    ut_a(trx);
+
+    ut_a(lizard_sys->min_safe_scn < trx->txn_desc.scn.first);
+
+    ut_a(lizard_sys->min_safe_scn < sys_scn);
+
+    /** trx in serialisation_list_scn are ordered by scn */
+    prev_trx = trx;
+    for (trx = UT_LIST_GET_NEXT(scn_list, trx); trx != nullptr;
+         trx = UT_LIST_GET_NEXT(scn_list, trx)) {
+      ut_a(prev_trx->txn_desc.scn.first < trx->txn_desc.scn.first);
+      prev_trx = trx;
+    }
+  }
+
+  lizard_sys_scn_mutex_exit();
+}
+#endif /* UNIV_DEBUG || LIZARD_DEBUG */
+
+/**
+  In MySQL 8.0:
+  * Hold trx_sys::mutex, generate trx->no, add trx to trx_sys->serialisation_list
+  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are ordered.
+  * Erase above mutexs, commit in undo header
+  * Hold trx_sys::mutex, erase serialisation_list, rw_trx_ids, rw_trx_list,
+    the modifications from the committed trx can be seen.
+
+  In Lizard:
+  * Hold trx_sys::mutex, generate trx->txn_desc.scn
+  * Hold SCN::mutex, add trx to trx_sys->serialisation_list_scn
+  * Erase trx_sys::mutex, hold purge_sys::pq_mutex and rseg::mutex, and add
+    undo rseg to purge_queue. So undo records in the same rseg are ordered, but
+    undo records from different rsegs are not ordered in purge_heap.
+  * Erase above mutexs, commit in undo header
+  * Hold SCN::mutex, remove trx in trx_sys->serialisation_list_scn,
+    and update min_safe_scn.
+
+  To ensure purge_sys purge in order, min_safe_scn is used for purge sys.
+  min_safe_scn is the current smallest scn of committing transactions (both
+  prepared state and committed in memory state).
+
+  This function might be used in the following scenarios:
+  * purge sys should get a safe scn for purging
+  * clone
+  * PolarDB
+
+  @retval         the min safe commited scn in current lizard sys
+*/
+scn_t lizard_sys_get_min_safe_scn() {
+  ut_ad(!lizard_sys_scn_mutex_own());
+  assert_lizard_min_safe_scn_valid();
+  /* Get the oldest transaction from serialisation list. */
+  return lizard_sys->min_safe_scn.load();
 }
 
 }  // namespace lizard

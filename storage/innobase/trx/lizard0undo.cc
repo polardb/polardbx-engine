@@ -802,29 +802,48 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
   undo_hdr = undo_hdr_page + hdr_offset;
   ut_ad(!trx_undo_hdr_scn_committed(undo_hdr, mtr));
 
-  /** SCN number has been allocated when cleanup redo update undo log */
-  scn = (scn_ptr != NULL) ? *scn_ptr : lizard_sys->scn.new_commit_scn();
+  assert_lizard_min_safe_scn_valid();
 
-  ut_ad(commit_scn_state(scn) == SCN_STATE_ALLOCATED);
+  /* Step 1: modify trx->scn */
+  if (scn_ptr == nullptr) {
+    lizard_sys_scn_mutex_enter();
 
-  /* Step 1: modify the update undo header. */
-  trx_undo_hdr_write_scn(undo_hdr, scn, mtr);
-  ut_ad(trx_undo_hdr_scn_committed(undo_hdr, mtr));
+    /** Generate a new scn */
+    scn = lizard_sys->scn.new_commit_scn();
 
-  /* Step 2: modify undo->scn */
-  assert_undo_scn_initial(undo);
-  undo->scn = scn;
+    /** If a read only transaction (for example: start transaction read only),
+    temporary table can be also modified. It doesn't matter if purge_sys purges
+    them */
+    if (!trx->read_only) {
+      /** add to lizard_sys->serialisation_list_scn */
+      UT_LIST_ADD_LAST(lizard_sys->serialisation_list_scn, trx);
+    }
 
-  /* Step 3: modify trx->scn */
-  if (!scn_ptr) {
-    assert_trx_scn_initial(trx);
     trx_mutex_enter(trx);
+
+    lizard_sys_scn_mutex_exit();
+
+    assert_trx_scn_initial(trx);
+
     trx->txn_desc.scn = scn;
+
     trx_mutex_exit(trx);
   } else {
     assert_trx_scn_allocated(trx);
+    scn = *scn_ptr;
     ut_ad(trx->txn_desc.scn.first == scn.first);
   }
+  ut_ad(commit_scn_state(scn) == SCN_STATE_ALLOCATED);
+
+  /* Step 2: modify the update undo header. */
+  trx_undo_hdr_write_scn(undo_hdr, scn, mtr);
+  ut_ad(trx_undo_hdr_scn_committed(undo_hdr, mtr));
+
+  /* Step 3: modify undo->scn */
+  assert_undo_scn_initial(undo);
+  undo->scn = scn;
+
+  assert_lizard_min_safe_scn_valid();
 
   return scn;
 }
@@ -1527,21 +1546,14 @@ static bool txn_undo_hdr_lookup_strict(txn_rec_t *txn_rec) {
 
   @return         bool       true if the record should be cleaned out.
 */
-bool txn_undo_hdr_lookup(txn_rec_t *txn_rec) {
+bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec) {
   bool ret;
   undo_addr_t undo_addr;
   bool exist;
 
-  if (!lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
-    /** scn must allocated */
-    ut_a(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
-    lizard_stats.txn_undo_lookup_not_by_uba.inc();
-    return false;
-  } else {
-    /** In theory, lizard has to findout the real acutal scn (if have) by
-    uba */
-    lizard_stats.txn_undo_lookup_by_uba.inc();
-  }
+  /** In theory, lizard has to findout the real acutal scn (if have) by
+  uba */
+  lizard_stats.txn_undo_lookup_by_uba.inc();
 
   if (opt_cleanout_safe_mode) {
     undo_decode_undo_ptr(txn_rec->undo_ptr, &undo_addr);

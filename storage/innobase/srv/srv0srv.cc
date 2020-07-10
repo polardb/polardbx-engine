@@ -114,6 +114,7 @@ bool srv_upgrade_old_undo_found = false;
 #endif /* INNODB_DD_TABLE */
 
 #include "lizard0cleanout.h"
+#include "lizard0sys.h"
 
 /* Revert to old partition file name if upgrade fails. */
 bool srv_downgrade_partition_files = false;
@@ -1763,6 +1764,37 @@ void srv_export_innodb_status(void) {
 //    export_vars.innodb_purge_view_trx_id_age =
 //        (ulint)(max_trx_no - low_limit_no + 1);
 //  }
+
+  rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
+  scn_t done_trx_scn = purge_sys->done.scn;
+
+  /* Purge always deals with transaction end points represented by
+  transaction number. We are allowed to purge transactions with number
+  below the low limit. */
+  lizard::Vision oldest_vision;
+  lizard::trx_clone_oldest_vision(&oldest_vision);
+  scn_t low_limit_scn = oldest_vision.snapshot_scn();
+
+  rw_lock_s_unlock(&purge_sys->latch);
+
+  /* Maximum transaction number added to history list for purge. */
+  scn_t max_trx_scn = lizard::lizard_sys->min_safe_scn.load();
+
+  if (done_trx_scn == 0 || max_trx_scn < done_trx_scn) {
+    export_vars.innodb_purge_trx_scn_age = 0;
+  } else {
+    /* Add 1 as done_trx_no always points to the next transaction ID. */
+    export_vars.innodb_purge_trx_scn_age = (ulint)(max_trx_scn - done_trx_scn + 1);
+  }
+
+  if (low_limit_scn == 0 || max_trx_scn < low_limit_scn) {
+    export_vars.innodb_purge_view_trx_scn_age = 0;
+  } else {
+    /* Add 1 as low_limit_scn always points to the next transaction ID. */
+    export_vars.innodb_purge_view_trx_scn_age =
+        (ulint)(max_trx_scn - low_limit_scn + 1);
+  }
+
 #endif /* UNIV_DEBUG */
 
   mutex_exit(&srv_innodb_monitor_mutex);

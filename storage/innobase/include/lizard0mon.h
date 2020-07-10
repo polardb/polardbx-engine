@@ -81,8 +81,6 @@ struct lizard_var_t {
 
   ulint txn_undo_lost_trx_id_mismatch;
 
-  ulint txn_undo_lookup_not_by_uba;
-
   ulint txn_undo_lookup_by_uba;
 };
 
@@ -131,9 +129,6 @@ struct lizard_stats_t {
 
   /** txn undo lost because trx_id is mismatch */
   ulint_ctr_1_t txn_undo_lost_trx_id_mismatch;
-
-  /** lookup scn directly by SCN in record */
-  ulint_ctr_1_t txn_undo_lookup_not_by_uba;
 
   /** lookup scn by uba */
   ulint_ctr_1_t txn_undo_lookup_by_uba;

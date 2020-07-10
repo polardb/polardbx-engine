@@ -388,7 +388,24 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr);
 
   @return         bool       true if the record should be cleaned out.
 */
-bool txn_undo_hdr_lookup(txn_rec_t *txn_rec);
+bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec);
+
+/**
+  Try to lookup the real scn of given records.
+
+  @param[in/out]  txn_rec    txn info of the records.
+
+  @return         bool       true if the record should be cleaned out.
+*/
+inline bool txn_undo_hdr_lookup(txn_rec_t *txn_rec) {
+  if (!lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
+    /** scn must allocated */
+    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
+    return false;
+  } else {
+    return txn_undo_hdr_lookup_low(txn_rec);
+  }
+}
 
 /** Collect rsegs into the purge heap for the first time */
 bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,

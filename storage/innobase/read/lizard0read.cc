@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0types.h"
 #include "lizard0scn.h"
 #include "lizard0sys.h"
+#include "lizard0undo.h"
 
 #ifdef UNIV_PFS_MUTEX
 /* Vision container list mutex key */
@@ -79,9 +80,8 @@ Vision *VisionContainer::VisionList::new_element() {
     return nullptr;
   }
 
-  /** TODO: */
-  // vision->m_up_limit_id = trx_sys_get_min_active_trx_id();
-  //
+  vision->m_up_limit_id = lizard_sys_get_min_active_trx_id();
+
   ut_ad(!m_mutex.is_owned());
 
   mutex_enter(&m_mutex);
@@ -189,7 +189,7 @@ void VisionContainer::clone_oldest_vision(Vision *vision) {
 
   scn_t oldest_scn = SCN_NULL;
 
-  scn_t sys_scn = lizard_sys_get_scn();
+  scn_t sys_scn = lizard_sys_get_min_safe_scn();
 
   for (ulint i = 0; i < m_n_lists; i++) {
     scn_t first_scn = m_lists[i].first_element_scn();
@@ -200,6 +200,7 @@ void VisionContainer::clone_oldest_vision(Vision *vision) {
     }
   }
 
+  oldest_scn = std::min(oldest_scn, sys_scn);
   vision->m_snapshot_scn = oldest_scn;
 
   ut_ad(vision->m_snapshot_scn <= lizard_sys_get_scn());
@@ -244,8 +245,13 @@ bool Vision::modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
   check_trx_id_sanity(txn_rec->trx_id, name);
 
   if (txn_rec->trx_id == m_creator_trx_id) {
-    /** If modification from myself, then they should be seen */
-    ut_ad(!check_consistent || lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    if (check_consistent) {
+      /** If modification from myself, then they should be seen,
+      unless it's a temp table */
+      lizard_ut_ad((txn_rec->scn == SCN_TEMP_TAB_REC &&
+                    txn_rec->undo_ptr == UNDO_PTR_TEMP_TAB_REC) ||
+                   lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    }
     return true;
   } else if (txn_rec->scn == SCN_NULL) {
     /** If transaction still active,  not seen */

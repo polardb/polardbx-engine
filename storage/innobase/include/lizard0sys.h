@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fsp0types.h"
 #include "lizard0scn.h"
 #include "trx0types.h"
+#include "trx0sys.h"
 
 struct mtr_t;
 
@@ -95,6 +96,13 @@ struct lizard_sys_t {
 
   /** Count of txn undo log which is cached */
   std::atomic<uint64_t> txn_undo_log_cached;
+
+  /** A min safe SCN, only used for purge */
+  std::atomic<scn_t> min_safe_scn;
+
+  /*!< Ordered on commited scn of trx_t of all the
+  currenrtly active RW transactions */
+  UT_LIST_BASE_NODE_T(trx_t, scn_list) serialisation_list_scn;
 };
 
 /** Create lizard system structure. */
@@ -132,6 +140,58 @@ void lizard_sys_mod_min_active_trx_id(bool is_add, trx_t *trx);
   @retval         the min active id in trx_sys. */
 trx_id_t lizard_sys_get_min_active_trx_id();
 
+/**
+  In MySQL 8.0:
+  * Hold trx_sys::mutex, generate trx->no, add trx to trx_sys->serialisation_list
+  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are ordered.
+  * Erase above mutexs, commit in undo header
+  * Hold trx_sys::mutex, erase serialisation_list, rw_trx_ids, rw_trx_list,
+    the modifications from the committed trx can be seen.
+
+  In Lizard:
+  * Hold trx_sys::mutex, generate trx->txn_desc.scn
+  * Hold SCN::mutex, add trx to trx_sys->serialisation_list_scn
+  * Erase trx_sys::mutex, hold purge_sys::pq_mutex and rseg::mutex, and add
+    undo rseg to purge_queue. So undo records in the same rseg are ordered, but
+    undo records from different rsegs are not ordered in purge_heap.
+  * Erase above mutexs, commit in undo header
+  * Hold SCN::mutex, remove trx in trx_sys->serialisation_list_scn,
+    and update min_safe_scn.
+
+  To ensure purge_sys purge in order, min_safe_scn is used for purge sys.
+  min_safe_scn is the current smallest scn of committing transactions (both
+  prepared state and committed in memory state).
+
+  This function might be used in the following scenarios:
+  * purge sys should get a safe scn for purging
+  * clone
+  * PolarDB
+
+  @retval         the min safe commited scn in current lizard sys
+*/
+scn_t lizard_sys_get_min_safe_scn();
+
+/** Erase trx in serialisation_list_scn, and update min_safe_scn
+@param[in]      trx      trx to be removed */
+void lizard_sys_erase_lists(trx_t *trx);
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+/** Check if min_safe_scn is valid */
+void min_safe_scn_valid();
+#endif /* UNIV_DEBUG || LIZARD_DEBUG */
+
 }  // namespace lizard
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+#define assert_lizard_min_safe_scn_valid() \
+  do {                                     \
+    lizard::min_safe_scn_valid();          \
+  } while (0)
+
+#else
+
+#define assert_min_safe_scn_valid()
+
+#endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
 #endif  // lizard0sys_h define

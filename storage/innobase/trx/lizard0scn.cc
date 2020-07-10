@@ -68,6 +68,8 @@ void SCN::init() {
           ut_uint64_align_up(mach_read_from_8(lzd_hdr + LIZARD_SYS_SCN),
                              LIZARD_SCN_NUMBER_MAGIN);
 
+  lizard_sys->min_safe_scn = m_scn;
+
   ut_a(m_scn > 0 && m_scn < SCN_NULL);
   mtr.commit();
 
@@ -96,7 +98,7 @@ scn_t SCN::new_scn() {
   scn_t num;
   ut_ad(m_inited);
 
-  mutex_enter(&m_mutex);
+  ut_ad(mutex_own(&m_mutex));
 
   /** flush scn every magin */
   if (!(m_scn % LIZARD_SCN_NUMBER_MAGIN)) flush_scn();
@@ -104,7 +106,6 @@ scn_t SCN::new_scn() {
   num = ++m_scn;
 
   ut_a(num > 0 && num < SCN_NULL);
-  mutex_exit(&m_mutex);
 
   return num;
 }
@@ -122,12 +123,19 @@ commit_scn_t SCN::new_commit_scn() {
 }
 
 /** Get current scn which is committed.
+@param[in]  true if m_mutex is hold
 @return     m_scn */
-scn_t SCN::acquire_scn() {
+scn_t SCN::acquire_scn(bool mutex_hold) {
   scn_t ret;
-  mutex_enter(&m_mutex);
+  if (!mutex_hold) {
+    mutex_enter(&m_mutex);
+  }
+
   ret = m_scn;
-  mutex_exit(&m_mutex);
+
+  if (!mutex_hold) {
+    mutex_exit(&m_mutex);
+  }
   return ret;
 }
 

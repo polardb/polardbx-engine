@@ -283,3 +283,6 @@ innodb.innodb-import-lctn_1                       : WL#000 Lizard can't import t
 
 # galaxy_sql
 galaxy_sql.feature_record_row_read_delete_mark    : WL#000 System variable 'innodb_undo_retention' is not supported yet
+
+# trx_sys_t::max_trx_id
+innodb.max_trx_id                                 : WL#000 Transaction commit no longer pushes up next_trx_id_or_no.
