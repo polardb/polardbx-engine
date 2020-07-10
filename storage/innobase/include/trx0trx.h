@@ -949,6 +949,10 @@ struct trx_t {
   no_list; /*!< Required during view creation
            to check for the view limit for
            transactions that are committing */
+  UT_LIST_NODE_T(trx_t)
+  scn_list; /*!< Required during vision creation
+            to check for the vision limit for
+            transactions that are committing */
 
   trx_lock_t lock;   /*!< Information about the transaction
                      locks and state. Protected by

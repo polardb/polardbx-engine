@@ -47,10 +47,10 @@ TxnUndoRsegsIterator::TxnUndoRsegsIterator(trx_purge_t *purge_sys)
       m_txn_undo_rsegs(NullElement),
       m_iter(m_txn_undo_rsegs.end()) {}
 
-const page_size_t TxnUndoRsegsIterator::set_next(bool *go_next) {
-  ut_ad(go_next != NULL);
+const page_size_t TxnUndoRsegsIterator::set_next(bool *keep_top) {
+  ut_ad(keep_top != NULL);
   mutex_enter(&m_purge_sys->pq_mutex);
-  *go_next = true;
+  *keep_top = false;
 
   if (m_iter != m_txn_undo_rsegs.end()) {
     m_purge_sys->iter.scn = (*m_iter)->last_scn;
@@ -65,9 +65,8 @@ const page_size_t TxnUndoRsegsIterator::set_next(bool *go_next) {
 
     if (purge_sys->purge_heap->top().get_scn() >
         m_purge_sys->vision.snapshot_scn()) {
-      *go_next = false;
+      *keep_top = true;
       ut_ad(purge_sys == m_purge_sys);
-      m_purge_sys->iter.scn = purge_sys->purge_heap->top().get_scn();
       mutex_exit(&m_purge_sys->pq_mutex);
       return (univ_page_size);
     }

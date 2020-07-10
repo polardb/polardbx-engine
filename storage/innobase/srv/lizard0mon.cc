@@ -84,9 +84,6 @@ static void export_lizard_status(void) {
   lizard_vars.txn_undo_lost_trx_id_mismatch =
       lizard_stats.txn_undo_lost_trx_id_mismatch;
 
-  lizard_vars.txn_undo_lookup_not_by_uba =
-      lizard_stats.txn_undo_lookup_not_by_uba;
-
   lizard_vars.txn_undo_lookup_by_uba =
       lizard_stats.txn_undo_lookup_by_uba;
 }
@@ -144,10 +141,6 @@ static SHOW_VAR lizard_status_variables[] = {
 
     {"txn_undo_lost_trx_id_mismatch",
       (char *)&lizard_vars.txn_undo_lost_trx_id_mismatch,
-      SHOW_LONG, SHOW_SCOPE_GLOBAL},
-
-    {"txn_undo_lookup_not_by_uba",
-      (char *)&lizard_vars.txn_undo_lookup_not_by_uba,
       SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_lookup_by_uba",

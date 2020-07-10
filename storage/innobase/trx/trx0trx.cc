@@ -1907,6 +1907,8 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
   if (serialised) {
     // UT_LIST_REMOVE(trx_sys->serialisation_list, trx);
 
+    lizard::lizard_sys_erase_lists(trx);
+
     /* Add GTID to be persisted to disk table. It must be done ...
     1.After the transaction is marked committed in undo. Otherwise
       GTID might get committed before the transaction commit on disk.
