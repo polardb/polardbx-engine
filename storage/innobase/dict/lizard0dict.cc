@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0dd.h"
 #include "dict0mem.h"
 #include "lizard0data0types.h"
+#include "lizard0undo.h"
 
 namespace lizard {
 
@@ -86,6 +87,90 @@ void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap) {
   dict_mem_table_add_col(table, heap, "DB_UNDO_PTR", DATA_SYS,
                          DATA_UNDO_PTR | DATA_NOT_NULL, DATA_UNDO_PTR_LEN,
                          false, phy_pos, v_added, v_dropped);
+}
+
+/**
+  Init txn_desc with the creator trx when created.
+
+  @param[in]      index       the index being created
+  @param[in]      trx         creator transaction
+  @return         DB_SUCCESS  Success
+*/
+dberr_t dd_index_init_txn_desc(dict_index_t *index, trx_t *trx) {
+  dberr_t err = DB_SUCCESS;
+  ut_ad(index->table);
+  ut_ad(!mutex_own(&trx->undo_mutex));
+
+  /** If a table is temporary, or even intrinsic, its dict info will not
+  be written to dict tables. */
+  if (!index->table->is_temporary()) {
+    mutex_enter(&trx->undo_mutex);
+    err = trx_always_assign_txn_undo(trx);
+    mutex_exit(&trx->undo_mutex);
+
+    if (err == DB_SUCCESS) {
+      assert_trx_scn_initial(trx);
+      assert_undo_ptr_allocated(trx->txn_desc.undo_ptr);
+      ut_ad(lizard_undo_ptr_is_active(trx->txn_desc.undo_ptr));
+
+      index->txn.uba = trx->txn_desc.undo_ptr;
+      index->txn.scn = trx->txn_desc.scn.first;
+    }
+  }
+
+  return err;
+}
+
+/**
+  Check if a index should be seen by a transaction.
+
+  @param[in]      index       the index being opened.
+  @param[in]      trx         transaction.
+  @return         true if visible
+*/
+bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx) {
+  txn_rec_t rec_txn;
+  scn_t scn = index->txn.scn.load();
+  ut_ad(trx);
+  ut_ad(trx->vision);
+
+  rec_txn.trx_id = index->trx_id;
+  rec_txn.undo_ptr = index->txn.uba;
+  rec_txn.scn = scn;
+
+  if (scn == SCN_NULL) {
+    lizard::txn_undo_hdr_lookup(&rec_txn);
+    /** It might be stored many times but they should be the same value */
+    index->txn.scn.store(rec_txn.scn);
+  }
+
+  /**
+    When is_usable() is executed concurrently, SCN and UBA will be not
+    consistent, the vision judgement only depend on real SCN, UBA state
+    will be used to code defense, so here omit the check.
+  */
+  return trx->vision->modifications_visible(&rec_txn, index->table->name,
+                                            false);
+}
+
+/**
+  Fill index txn information from se_private_data.
+
+  @param[in,out]  index       the index being opened.
+  @param[in]      p           se_private_data from the mysql.indexes record.
+  @return         true if failed
+*/
+bool dd_index_fill_txn_desc(dict_index_t *index, const dd::Properties &p) {
+  undo_ptr_t uba = 0;
+  scn_t scn = SCN_NULL;
+
+  if (p.get(dd_index_key_strings[DD_INDEX_UBA], &uba) ||
+      p.get(dd_index_key_strings[DD_INDEX_SCN], &scn))
+    return true;
+
+  index->txn.uba = uba;
+  index->txn.scn = scn;
+  return false;
 }
 
 /**

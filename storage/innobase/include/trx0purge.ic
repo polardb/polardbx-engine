@@ -52,8 +52,16 @@ static inline bool trx_purge_check_limit(void) {
   undo_no ordering is enforced only within the same rollback segment.
   If a transaction uses multiple rollback segments then we need to
   consider the rollback segment space id too. */
-  return (purge_sys->iter.trx_no > purge_sys->limit.trx_no ||
-          (purge_sys->iter.trx_no == purge_sys->limit.trx_no &&
+
+  /* Lizard: comment out
+    return (purge_sys->iter.trx_no > purge_sys->limit.trx_no ||
+            (purge_sys->iter.trx_no == purge_sys->limit.trx_no &&
+             ((purge_sys->iter.undo_no >= purge_sys->limit.undo_no) ||
+              (purge_sys->iter.undo_rseg_space !=
+               purge_sys->limit.undo_rseg_space))));
+  */
+  return (purge_sys->iter.scn > purge_sys->limit.scn ||
+          (purge_sys->iter.scn == purge_sys->limit.scn &&
            ((purge_sys->iter.undo_no >= purge_sys->limit.undo_no) ||
             (purge_sys->iter.undo_rseg_space !=
              purge_sys->limit.undo_rseg_space))));

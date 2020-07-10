@@ -128,11 +128,11 @@ that reference undo tablespaces and have active undo logs, then quit.
 They require an upgrade of undo tablespaces and that cannot happen with
 active undo logs.
 @param[in]      purge_queue     queue of rsegs to purge */
-void trx_rsegs_init(purge_pq_t *purge_queue);
+void trx_rsegs_init(lizard::purge_heap_t *purge_queue);
 
 /** Initialize rollback segments in parallel
 @param[in]      purge_queue     queue of rsegs to purge */
-void trx_rsegs_parallel_init(purge_pq_t *purge_queue);
+void trx_rsegs_parallel_init(lizard::purge_heap_t *purge_queue);
 
 /** Create and initialize a rollback segment object.  Some of
 the values for the fields are read from the segment header page.

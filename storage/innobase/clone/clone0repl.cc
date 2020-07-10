@@ -493,7 +493,12 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
   trx_sys_serialisation_mutex_enter();
   /* Get oldest transaction number that is yet to be committed. Any transaction
   with lower transaction number is committed and is added to GTID list. */
-  auto oldest_trx_no = trx_sys_oldest_trx_no();
+
+  /** TODO: Replace it by SCN */
+  // auto oldest_trx_no = trx_sys_oldest_trx_no();
+  //
+  trx_id_t oldest_trx_no = 0;
+
   bool compress_recovery = false;
   /* Check and write if any GTID is accumulated. */
   if (m_num_gtid_mem.load() != 0) {

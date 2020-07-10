@@ -185,7 +185,7 @@ void VisionContainer::vision_release(Vision *&vision) {
 */
 void VisionContainer::clone_oldest_vision(Vision *vision) {
   ut_ad(vision && vision->m_list_idx == VISION_LIST_IDX_NULL);
-  ut_ad(vision->m_in_list = false);
+  ut_ad(vision->m_in_list == false);
 
   scn_t oldest_scn = SCN_NULL;
 
@@ -228,30 +228,36 @@ ulint VisionContainer::size() const {
 /**
   Check whether the changes by id are visible.
 
-  @param[in]  txn_rec_info    txn related information.
-  @retval     whether the view sees the modifications of id.
+  @param[in]  txn_rec           txn related information.
+  @param[in]  name	            table name
+  @param[in]  check_consistent  check the consistent between SCN and UBA
+
+  @retval     whether the vision sees the modifications of id.
               True if visible
 */
-bool Vision::modifications_visible(txn_rec_t *txn_info) const {
+bool Vision::modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
+                                   bool check_consistent) const {
   /** purge view will use m_snapshot_scn straightway */
-  ut_ad(txn_info);
-  ut_ad(txn_info->trx_id > 0 && txn_info->trx_id < TRX_ID_MAX);
+  ut_ad(txn_rec);
+  ut_ad(txn_rec->trx_id > 0 && txn_rec->trx_id < TRX_ID_MAX);
 
-  if (txn_info->trx_id == m_creator_trx_id) {
+  check_trx_id_sanity(txn_rec->trx_id, name);
+
+  if (txn_rec->trx_id == m_creator_trx_id) {
     /** If modification from myself, then they should be seen */
-    ut_ad(lizard_undo_ptr_is_active(txn_info->undo_ptr));
+    ut_ad(!check_consistent || lizard_undo_ptr_is_active(txn_rec->undo_ptr));
     return true;
-  } else if (txn_info->scn == SCN_NULL) {
+  } else if (txn_rec->scn == SCN_NULL) {
     /** If transaction still active,  not seen */
-    ut_ad(lizard_undo_ptr_is_active(txn_info->undo_ptr));
+    ut_ad(!check_consistent || lizard_undo_ptr_is_active(txn_rec->undo_ptr));
     return false;
   } else {
     /**
       Modification scn is less than snapshot mean that
       the trx commit is prior the query lanuch.
     */
-    ut_ad(!lizard_undo_ptr_is_active(txn_info->undo_ptr));
-    return txn_info->scn <= m_snapshot_scn;
+    ut_ad(!check_consistent || !lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    return txn_rec->scn <= m_snapshot_scn;
   }
 }
 
@@ -273,7 +279,6 @@ Vision *trx_vision_open(trx_id_t creator_id) {
 */
 void trx_vision_release(Vision *&vision) {
   ut_ad(vision_container->inited());
-  ut_ad(trx_sys == nullptr || !trx_sys_mutex_own());
 
   vision_container->vision_release(vision);
 }

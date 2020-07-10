@@ -1493,7 +1493,7 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
 
   /* This is a dirty read, without holding trx_sys->mutex. */
   fprintf(file, ULINTPF " read views open inside InnoDB\n",
-          trx_sys->mvcc->size());
+          lizard::trx_vision_container_size());
 
   n_reserved = fil_space_get_n_reserved_extents(0);
   if (n_reserved > 0) {
@@ -1732,37 +1732,37 @@ void srv_export_innodb_status(void) {
   undo::spaces->s_unlock();
 
 #ifdef UNIV_DEBUG
-  rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
-  trx_id_t done_trx_no = purge_sys->done.trx_no;
-
-  /* Purge always deals with transaction end points represented by
-  transaction number. We are allowed to purge transactions with number
-  below the low limit. */
-  ReadView oldest_view;
-  trx_sys->mvcc->clone_oldest_view(&oldest_view);
-  trx_id_t low_limit_no = oldest_view.view_low_limit_no();
-
-  rw_lock_s_unlock(&purge_sys->latch);
-
-  trx_sys_serialisation_mutex_enter();
-  /* Maximum transaction number added to history list for purge. */
-  trx_id_t max_trx_no = trx_sys->rw_max_trx_no;
-  trx_sys_serialisation_mutex_exit();
-
-  if (done_trx_no == 0 || max_trx_no < done_trx_no) {
-    export_vars.innodb_purge_trx_id_age = 0;
-  } else {
-    /* Add 1 as done_trx_no always points to the next transaction ID. */
-    export_vars.innodb_purge_trx_id_age = (ulint)(max_trx_no - done_trx_no + 1);
-  }
-
-  if (low_limit_no == 0 || max_trx_no < low_limit_no) {
-    export_vars.innodb_purge_view_trx_id_age = 0;
-  } else {
-    /* Add 1 as low_limit_no always points to the next transaction ID. */
-    export_vars.innodb_purge_view_trx_id_age =
-        (ulint)(max_trx_no - low_limit_no + 1);
-  }
+//  rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
+//  trx_id_t done_trx_no = purge_sys->done.trx_no;
+//
+//  /* Purge always deals with transaction end points represented by
+//  transaction number. We are allowed to purge transactions with number
+//  below the low limit. */
+//  ReadView oldest_view;
+//  trx_sys->mvcc->clone_oldest_view(&oldest_view);
+//  trx_id_t low_limit_no = oldest_view.view_low_limit_no();
+//
+//  rw_lock_s_unlock(&purge_sys->latch);
+//
+//  trx_sys_serialisation_mutex_enter();
+//  /* Maximum transaction number added to history list for purge. */
+//  trx_id_t max_trx_no = trx_sys->rw_max_trx_no;
+//  trx_sys_serialisation_mutex_exit();
+//
+//  if (done_trx_no == 0 || max_trx_no < done_trx_no) {
+//    export_vars.innodb_purge_trx_id_age = 0;
+//  } else {
+//    /* Add 1 as done_trx_no always points to the next transaction ID. */
+//    export_vars.innodb_purge_trx_id_age = (ulint)(max_trx_no - done_trx_no + 1);
+//  }
+//
+//  if (low_limit_no == 0 || max_trx_no < low_limit_no) {
+//    export_vars.innodb_purge_view_trx_id_age = 0;
+//  } else {
+//    /* Add 1 as low_limit_no always points to the next transaction ID. */
+//    export_vars.innodb_purge_view_trx_id_age =
+//        (ulint)(max_trx_no - low_limit_no + 1);
+//  }
 #endif /* UNIV_DEBUG */
 
   mutex_exit(&srv_innodb_monitor_mutex);

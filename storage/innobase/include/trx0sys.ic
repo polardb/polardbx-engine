@@ -266,9 +266,9 @@ inline trx_id_t trx_sys_allocate_trx_no() {
 
 /** Reads trx->no up to which all transactions have been serialised.
  @return minimum value which is still possibly not serialised */
-static inline trx_id_t trx_get_serialisation_min_trx_no(void) {
-  return (trx_sys->serialisation_min_trx_no.load());
-}
+// static inline trx_id_t trx_get_serialisation_min_trx_no(void) {
+//   return (trx_sys->serialisation_min_trx_no.load());
+// }
 
 inline trx_id_t trx_sys_get_next_trx_id_or_no() {
   return trx_sys->next_trx_id_or_no.load();

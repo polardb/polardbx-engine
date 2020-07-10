@@ -344,7 +344,10 @@ struct sel_node_t {
                              containing the search plan and the
                              search data structures */
   que_node_t *search_cond;   /*!< search condition */
-  ReadView *read_view;       /*!< if the query is a non-locking
+
+  // ReadView *read_view;
+  lizard::Vision *vision;
+                            /*!< if the query is a non-locking
                              consistent read, its read view is
                              placed here, otherwise NULL */
   bool consistent_read;      /*!< true if the select is a consistent,

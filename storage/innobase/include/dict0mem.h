@@ -78,6 +78,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 
 #include "lizard0data0types.h"
+#include "lizard0undo0types.h"
 
 /* Forward declaration. */
 struct ib_rbt_t;
@@ -1266,6 +1267,16 @@ struct dict_index_t {
     return n_nullable;
   }
 
+  /*!< lIZARD: The transaction description of the creator trx.
+  Only used to find the real SCN of the creator trx.
+  uba: Point to the real undo header, no matterr what the state
+       is, because the real state of the transaction is stored
+       in undo header.
+  scn: The real scn of the creator trx. It's always set as the
+       actual value from undo header when it is SCN_NULL */
+  txn_index_t txn;
+
+
   /** Determine if the index has been committed to the
   data dictionary.
   @return whether the index definition has been committed */
@@ -1337,7 +1348,7 @@ struct dict_index_t {
 
   /** Check whether index can be used by transaction
   @param[in] trx                transaction*/
-  bool is_usable(const trx_t *trx) const;
+  bool is_usable(const trx_t *trx);
 
   /** Check whether index has any instantly added columns.
   Possible only if table has INSTANT ADD columns and is upgraded.

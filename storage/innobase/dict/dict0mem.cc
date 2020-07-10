@@ -54,6 +54,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sync0sync.h"
 
+#include "lizard0dict.h"
+
 /** An integer randomly initialized at startup used to make a temporary
 table name as unuique as possible. */
 static std::atomic<uint32_t> dict_temp_file_num;
@@ -600,7 +602,7 @@ bool dict_col_default_t::operator!=(const dict_col_default_t &other) {
 
 /** Check whether index can be used by transaction
 @param[in] trx          transaction*/
-bool dict_index_t::is_usable(const trx_t *trx) const {
+bool dict_index_t::is_usable(const trx_t *trx) {
   /* Indexes that are being created are not usable. */
   if (!is_clustered() && dict_index_is_online_ddl(this)) {
     return false;
@@ -611,12 +613,9 @@ bool dict_index_t::is_usable(const trx_t *trx) const {
     return false;
   }
 
-  /** Lizard, TODO: scn and undo_info should be acquired from se_private_data */
-
   /* Check if the specified transaction can see this index. */
-  return (table->is_temporary() || trx_id == 0 ||
-          !MVCC::is_view_active(trx->read_view) ||
-          trx->read_view->changes_visible(trx_id, table->name));
+  return (table->is_temporary() || trx_id == 0 || !trx->vision ||
+          lizard::dd_index_modificatsion_visible(this, trx));
 }
 #endif /* !UNIV_HOTBACKUP */
 

@@ -39,6 +39,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "read0types.h"
 #include "univ.i"
 
+static_assert(false, "No again use the file!!");
+
 /** The MVCC read view manager */
 class MVCC {
  public:

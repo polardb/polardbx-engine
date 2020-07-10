@@ -203,7 +203,7 @@ SET(INNOBASE_SOURCES
   pars/pars0pars.cc
   pars/pars0sym.cc
   que/que0que.cc
-  read/read0read.cc
+  # read/read0read.cc
   rem/rem0cmp.cc
   rem/rem0rec.cc
   rem/rem0wrec.cc
@@ -269,7 +269,8 @@ SET(INNOBASE_SOURCES
   btr/lizard0cleanout.cc
   ut/lizard0ut.cc
   page/lizard0page.cc
-  read/lizard0read.cc)
+  read/lizard0read.cc
+  trx/lizard0purge.cc)
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
 IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11)

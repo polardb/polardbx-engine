@@ -2499,6 +2499,8 @@ static void dd_write_index(dd::Object_id dd_space_id, Index *dd_index,
   p.set(dd_index_key_strings[DD_TABLE_ID], index->table->id);
   p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page);
   p.set(dd_index_key_strings[DD_INDEX_TRX_ID], index->trx_id);
+  p.set(dd_index_key_strings[DD_INDEX_UBA], index->txn.uba);
+  p.set(dd_index_key_strings[DD_INDEX_SCN], index->txn.scn.load());
 }
 
 template void dd_write_index<dd::Index>(dd::Object_id, dd::Index *,
@@ -5066,6 +5068,12 @@ dict_table_t *dd_open_table_one(dd::cache::Dictionary_client *client,
     index->space = sid;
     index->id = id;
     index->trx_id = trx_id;
+
+    /** Fill index txn info by from se_private_data */
+    if (lizard::dd_index_fill_txn_desc(index, se_private_data)) {
+      fail = true;
+      break;
+    }
 
     /** Look up the spatial reference system in the
     dictionary. Since this may cause a table open to read the

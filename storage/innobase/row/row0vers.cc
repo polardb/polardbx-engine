@@ -40,7 +40,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lock0lock.h"
 #include "mach0data.h"
 #include "que0que.h"
+/*
 #include "read0read.h"
+*/
 #include "rem0cmp.h"
 #include "row0ext.h"
 #include "row0mysql.h"
@@ -56,6 +58,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+#include "lizard0read0read.h"
 #include "lizard0row.h"
 #include "lizard0undo.h"
 
@@ -589,11 +592,9 @@ bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
 
   mtr_s_lock(&purge_sys->latch, mtr, UT_LOCATION_HERE);
 
-  {
-    lizard::txn_undo_hdr_lookup(txn_rec);
-  }
+  lizard::txn_undo_hdr_lookup(txn_rec);
 
-  return (!purge_sys->view.changes_visible(txn_rec->trx_id, name));
+  return (!purge_sys->vision.modifications_visible(txn_rec, name));
 }
 
 /** Check whether all non-virtual columns in a index entries match
@@ -1255,7 +1256,7 @@ bool row_vers_old_has_index_entry(
  @return DB_SUCCESS or DB_MISSING_HISTORY */
 dberr_t row_vers_build_for_consistent_read(
     const rec_t *rec, mtr_t *mtr, dict_index_t *index, ulint **offsets,
-    ReadView *view, mem_heap_t **offset_heap, mem_heap_t *in_heap,
+    lizard::Vision *vision, mem_heap_t **offset_heap, mem_heap_t *in_heap,
     rec_t **old_vers, const dtuple_t **vrow, lob::undo_vers_t *lob_undo) {
   DBUG_TRACE;
   const rec_t *version;
@@ -1281,7 +1282,7 @@ dberr_t row_vers_build_for_consistent_read(
     lob_undo->reset();
   }
 
-  ut_ad(!view->changes_visible(trx_id, index->table->name));
+  // ut_ad(!view->changes_visible(trx_id, index->table->name));
 
   ut_ad(!vrow || !(*vrow));
 
@@ -1325,16 +1326,12 @@ dberr_t row_vers_build_for_consistent_read(
 
     trx_id = row_get_rec_trx_id(prev_version, index, *offsets);
 
-    {
-      txn_rec_t txn_rec {
-        trx_id,
-        lizard::row_get_rec_scn_id(prev_version, index, *offsets),
-        lizard::row_get_rec_undo_ptr(prev_version, index, *offsets)
-      };
-      lizard::txn_undo_hdr_lookup(&txn_rec);
-    }
+    txn_rec_t txn_rec{
+        trx_id, lizard::row_get_rec_scn_id(prev_version, index, *offsets),
+        lizard::row_get_rec_undo_ptr(prev_version, index, *offsets)};
+    lizard::txn_undo_hdr_lookup(&txn_rec);
 
-    if (view->changes_visible(trx_id, index->table->name)) {
+    if (vision->modifications_visible(&txn_rec, index->table->name)) {
       /* The view already sees this version: we can copy
       it to in_heap and return */
 

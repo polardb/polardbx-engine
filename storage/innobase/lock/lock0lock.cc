@@ -230,11 +230,11 @@ bool lock_check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec,
  @return true if sees, or false if an earlier version of the record
  should be retrieved */
 bool lock_clust_rec_cons_read_sees(
-    const rec_t *rec,     /*!< in: user record which should be read or
-                          passed over by a read cursor */
-    dict_index_t *index,  /*!< in: clustered index */
-    const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
-    ReadView *view)       /*!< in: consistent read view */
+    const rec_t *rec,       /*!< in: user record which should be read or
+                            passed over by a read cursor */
+    dict_index_t *index,    /*!< in: clustered index */
+    const ulint *offsets,   /*!< in: rec_get_offsets(rec, index) */
+    lizard::Vision *vision) /*!< in: consistent read view */
 {
   ut_ad(index->is_clustered());
   ut_ad(page_rec_is_user_rec(rec));
@@ -245,7 +245,7 @@ bool lock_clust_rec_cons_read_sees(
   operate on same temp-table and so read of temp-table is
   always consistent read. */
   if (srv_read_only_mode || index->table->is_temporary()) {
-    ut_ad(view == nullptr || index->table->is_temporary());
+    ut_ad(vision == nullptr || index->table->is_temporary());
     return (true);
   }
 
@@ -254,16 +254,15 @@ bool lock_clust_rec_cons_read_sees(
 
   trx_id_t trx_id = row_get_rec_trx_id(rec, index, offsets);
 
-  {
-    /** Lizard: the following codes is a check */
-    txn_rec_t txn_rec = {
+  /** Lizard: the following codes is a check */
+  txn_rec_t txn_rec = {
       trx_id,
       lizard::row_get_rec_scn_id(rec, index, offsets),
       lizard::row_get_rec_undo_ptr(rec, index, offsets),
-    };
-    lizard::txn_undo_hdr_lookup(&txn_rec);
-  }
-  return (view->changes_visible(trx_id, index->table->name));
+  };
+  lizard::txn_undo_hdr_lookup(&txn_rec);
+
+  return (vision->modifications_visible(&txn_rec, index->table->name));
 }
 
 /** Checks that a non-clustered index record is seen in a consistent read.
@@ -276,11 +275,11 @@ bool lock_clust_rec_cons_read_sees(
  @return true if certainly sees, or false if an earlier version of the
  clustered index record might be needed */
 bool lock_sec_rec_cons_read_sees(
-    const rec_t *rec,          /*!< in: user record which
-                               should be read or passed over
-                               by a read cursor */
-    const dict_index_t *index, /*!< in: index */
-    const ReadView *view)      /*!< in: consistent read view */
+    const rec_t *rec,             /*!< in: user record which
+                                  should be read or passed over
+                                  by a read cursor */
+    const dict_index_t *index,    /*!< in: index */
+    const lizard::Vision *vision) /*!< in: consistent read view */
 {
   ut_ad(page_rec_is_user_rec(rec));
 
@@ -303,7 +302,7 @@ bool lock_sec_rec_cons_read_sees(
 
   ut_ad(max_trx_id > 0);
 
-  return (view->sees(max_trx_id));
+  return (vision->sees(max_trx_id));
 }
 
 /** Creates the lock system at database start. */
@@ -4660,9 +4659,9 @@ void lock_print_info_summary(FILE *file) {
           trx_sys_get_next_trx_id_or_no());
 
   fprintf(file,
-          "Purge done for trx's n:o < " TRX_ID_FMT " undo n:o < " TRX_ID_FMT
+          "Purge done for trx's scn < " TRX_ID_FMT " undo n:o < " TRX_ID_FMT
           " state: ",
-          purge_sys->iter.trx_no, purge_sys->iter.undo_no);
+          purge_sys->iter.scn, purge_sys->iter.undo_no);
 
   /* Note: We are reading the state without the latch. One because it
   will violate the latching order and two because we are merely querying
@@ -4832,10 +4831,10 @@ void lock_trx_print_wait_and_mvcc_state(FILE *file, const trx_t *trx) {
 
   trx_print_latched(file, trx, 600);
 
-  const ReadView *read_view = trx_get_read_view(trx);
+  const lizard::Vision *vision = trx_get_vision(trx);
 
-  if (read_view != nullptr) {
-    read_view->print_limits(file);
+  if (vision != nullptr) {
+    vision->print_limits(file);
   }
 
   if (trx->lock.que_state == TRX_QUE_LOCK_WAIT) {

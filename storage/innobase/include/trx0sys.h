@@ -53,6 +53,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 #include "trx0trx.h"
 
+#include "lizard0undo0types.h"
+
 #ifndef UNIV_HOTBACKUP
 
 // Forward declaration
@@ -70,7 +72,7 @@ static inline bool trx_sys_hdr_page(const page_id_t &page_id);
 /** Creates and initializes the central memory structures for the transaction
  system. This is called when the database is started.
  @return min binary heap of rsegs to purge */
-purge_pq_t *trx_sys_init_at_db_start(void);
+lizard::purge_heap_t *trx_sys_init_at_db_start(void);
 /** Creates the trx_sys instance and initializes purge_queue and mutex. */
 void trx_sys_create(void);
 /** Creates and initializes the transaction system at the database creation. */
@@ -457,7 +459,7 @@ struct trx_sys_t {
 
   /** Multi version concurrency control manager */
 
-  MVCC *mvcc;
+  // MVCC *mvcc;
 
   /** Vector of pointers to rollback segments. These rsegs are iterated
   and added to the end under a read lock. They are deleted under a write
@@ -503,21 +505,23 @@ struct trx_sys_t {
   /** Mutex to protect serialisation_list. */
   TrxSysMutex serialisation_mutex;
 
-  /** Tracks minimal transaction id which has received trx->no, but has
-  not yet finished commit for the mtr writing the trx commit. Protected
-  by the serialisation_mutex. Ordered on the trx->no field. */
-  UT_LIST_BASE_NODE_T(trx_t, no_list) serialisation_list;
+  // Lizard: comment out
+  // /** Tracks minimal transaction id which has received trx->no, but has
+  // not yet finished commit for the mtr writing the trx commit. Protected
+  // by the serialisation_mutex. Ordered on the trx->no field. */
+  // UT_LIST_BASE_NODE_T(trx_t, no_list) serialisation_list;
 
 #ifdef UNIV_DEBUG
-  /** Max trx number of read-write transactions added for purge. */
-  trx_id_t rw_max_trx_no;
+  // Lizard: comment out
+  // /** Max trx number of read-write transactions added for purge. */
+  // trx_id_t rw_max_trx_no;
 #endif /* UNIV_DEBUG */
 
   char pad3[ut::INNODB_CACHE_LINE_SIZE];
 
   /* The minimum trx->no inside the serialisation_list. Protected by
   the serialisation_mutex. Might be read without the mutex. */
-  std::atomic<trx_id_t> serialisation_min_trx_no;
+  // std::atomic<trx_id_t> serialisation_min_trx_no;
 
   /** @} */
 
@@ -544,11 +548,11 @@ struct trx_sys_t {
   been started in InnoDB. */
   UT_LIST_BASE_NODE_T(trx_t, mysql_trx_list) mysql_trx_list;
 
-  /** Array of Read write transaction IDs for MVCC snapshot. A ReadView would
-  take a snapshot of these transactions whose changes are not visible to it.
-  We should remove transactions from the list before committing in memory and
-  releasing locks to ensure right order of removal and consistent snapshot. */
-  trx_ids_t rw_trx_ids;
+  // /** Array of Read write transaction IDs for MVCC snapshot. A ReadView would
+  // take a snapshot of these transactions whose changes are not visible to it.
+  // We should remove transactions from the list before committing in memory and
+  // releasing locks to ensure right order of removal and consistent snapshot. */
+  // trx_ids_t rw_trx_ids;
 
   char pad7[ut::INNODB_CACHE_LINE_SIZE];
 

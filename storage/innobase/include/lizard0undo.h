@@ -144,6 +144,13 @@ constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
 constexpr txn_desc_t TXN_DESC_LD = {UNDO_PTR_LOG_DDL,
                                     {SCN_LOG_DDL, UTC_LOG_DDL}};
 
+/** Index UBA offset */
+constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
+
+/** Index UBA */
+constexpr undo_ptr_t UNDO_PTR_DICT_REC =
+    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
+
 /* Lizard transaction undo header operation */
 /*-----------------------------------------------------------------------------*/
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
@@ -383,8 +390,16 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr);
 */
 bool txn_undo_hdr_lookup(txn_rec_t *txn_rec);
 
-}  // namespace lizard
+/** Collect rsegs into the purge heap for the first time */
+bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
+                                 trx_undo_ptr_t *redo_rseg_undo_ptr,
+                                 trx_undo_ptr_t *temp_rseg_undo_ptr,
+                                 txn_undo_ptr_t *txn_rseg_undo_ptr);
 
+/** Add the rseg into the purge queue heap */
+void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem);
+
+}  // namespace lizard
 
 /** Delcare the functions which were defined in other cc files.*/
 /*=============================================================================*/
@@ -431,6 +446,7 @@ void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr, trx_ulogf_t *log_hdr,
 void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
                                        mtr_t *mtr,
                                        trx_undo_t::Gtid_storage gtid_storage);
+
 /*=============================================================================*/
 
 #define TXN_DESC_NULL                                                          \

@@ -36,6 +36,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "trx0sys.h"
 
+static_assert(false, "No again use the file !!");
+
 /*
 -------------------------------------------------------------------------------
 FACT A: Cursor read view on a secondary index sees only committed versions

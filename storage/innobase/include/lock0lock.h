@@ -242,7 +242,11 @@ That might lead to the deadlock with G3 never being noticed.
 */
 
 // Forward declaration
-class ReadView;
+// class ReadView;
+
+namespace lizard {
+class Vision;
+}  // namespace lizard
 
 extern bool innobase_deadlock_detect;
 
@@ -591,11 +595,11 @@ dberr_t lock_clust_rec_read_check_and_lock(
  @return true if sees, or false if an earlier version of the record
  should be retrieved */
 bool lock_clust_rec_cons_read_sees(
-    const rec_t *rec,     /*!< in: user record which should be read or
-                          passed over by a read cursor */
-    dict_index_t *index,  /*!< in: clustered index */
-    const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
-    ReadView *view);      /*!< in: consistent read view */
+    const rec_t *rec,        /*!< in: user record which should be read or
+                             passed over by a read cursor */
+    dict_index_t *index,     /*!< in: clustered index */
+    const ulint *offsets,    /*!< in: rec_get_offsets(rec, index) */
+    lizard::Vision *vision); /*!< in: consistent read view */
 /** Checks that a non-clustered index record is seen in a consistent read.
 
  NOTE that a non-clustered index page contains so little information on
@@ -610,7 +614,7 @@ bool lock_clust_rec_cons_read_sees(
                                should be read or passed over
                                by a read cursor */
     const dict_index_t *index, /*!< in: index */
-    const ReadView *view);     /*!< in: consistent read view */
+    const lizard::Vision *vision);   /*!< in: consistent read view */
 /** Locks the specified database table in the mode given. If the lock cannot
  be granted immediately, the query thread is put to wait.
  @return DB_SUCCESS, DB_LOCK_WAIT, or DB_DEADLOCK */

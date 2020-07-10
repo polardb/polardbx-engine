@@ -936,14 +936,13 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
   if (rseg->last_page_no == FIL_NULL) {
     rseg->last_page_no = undo->hdr_page_no;
     rseg->last_offset = undo->hdr_offset;
-    rseg->last_trx_no = trx->no;
+    // rseg->last_trx_no = trx->no;
     rseg->last_del_marks = undo->del_marks;
 
     /** trx->scn must be allocated  */
     assert_trx_scn_allocated(trx);
 
-    // TODO:
-    // rseg->last_scn = trx->scn.first;
+    rseg->last_scn = trx->txn_desc.scn.first;
   }
 }
 
@@ -1572,6 +1571,55 @@ bool txn_undo_hdr_lookup(txn_rec_t *txn_rec) {
 
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
   return ret;
+}
+/** Add the rseg into the purge queue heap */
+void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem) {
+  ut_ad(scn.first == elem->get_scn());
+  mutex_enter(&purge_sys->pq_mutex);
+  purge_sys->purge_heap->push(*elem);
+  mutex_exit(&purge_sys->pq_mutex);
+}
+
+/** Collect rsegs into the purge heap for the first time */
+bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
+                                 trx_undo_ptr_t *redo_rseg_undo_ptr,
+                                 trx_undo_ptr_t *temp_rseg_undo_ptr,
+                                 txn_undo_ptr_t *txn_rseg_undo_ptr) {
+  bool has = false;
+  trx_rseg_t *redo_rseg = nullptr;
+  trx_rseg_t *temp_rseg = nullptr;
+  trx_rseg_t *txn_rseg = nullptr;
+
+  if (redo_rseg_undo_ptr != nullptr) {
+    redo_rseg = redo_rseg_undo_ptr->rseg;
+    ut_ad(mutex_own(&redo_rseg->mutex));
+  }
+
+  if (temp_rseg_undo_ptr != NULL) {
+    temp_rseg = temp_rseg_undo_ptr->rseg;
+    ut_ad(mutex_own(&temp_rseg->mutex));
+  }
+
+  if (txn_rseg_undo_ptr != nullptr) {
+    txn_rseg = txn_rseg_undo_ptr->rseg;
+    ut_ad(mutex_own(&txn_rseg->mutex));
+  }
+
+  if (redo_rseg != NULL && redo_rseg->last_page_no == FIL_NULL) {
+    elem->insert(redo_rseg);
+    has = true;
+  }
+
+  if (temp_rseg != NULL && temp_rseg->last_page_no == FIL_NULL) {
+    elem->insert(temp_rseg);
+    has = true;
+  }
+
+  if (txn_rseg != NULL && txn_rseg->last_page_no == FIL_NULL) {
+    elem->insert(txn_rseg);
+    has = true;
+  }
+  return has;
 }
 
 }  // namespace lizard

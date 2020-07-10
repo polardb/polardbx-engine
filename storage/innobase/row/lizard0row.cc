@@ -537,7 +537,7 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
   }
 
   /** scn must be consistent with the undo_ptr */
-  row_lizard_valid(rec, index, offsets);
+  assert_row_lizard_valid(rec, index, offsets);
   ut_ad(index->is_clustered());
   ut_ad(!index->table->is_intrinsic());
 

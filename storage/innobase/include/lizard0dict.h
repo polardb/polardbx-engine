@@ -117,6 +117,34 @@ void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap);
 */
 void dd_add_lizard_columns(dd::Table *dd_table, dd::Index *primary);
 
+/**
+  Init txn_desc with the creator trx when created.
+
+  @param[in]      index       the index being created
+  @param[in]      trx         creator transaction
+  @return         DB_SUCCESS  Success
+*/
+dberr_t dd_index_init_txn_desc(dict_index_t *index, trx_t *trx);
+
+/**
+  Fill index txn information by from se_private_data.
+
+  @param[in,out]  index       the index being opened.
+  @param[in]      p           se_private_data from the mysql.indexes record.
+  @return         true if failed
+*/
+bool dd_index_fill_txn_desc(dict_index_t *index, const dd::Properties &p);
+
+/**
+  Check if a index should be seen by a transaction.
+
+  @param[in]      index       the index being opened.
+  @param[in]      trx         transaction.
+  @return         true if visible
+*/
+bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx);
+
+
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**
   Check the dict_table_t object

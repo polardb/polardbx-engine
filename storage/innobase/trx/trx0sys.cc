@@ -45,7 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0recv.h"
 #include "mtr0log.h"
 #include "os0file.h"
-#include "read0read.h"
+// #include "read0read.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0purge.h"
@@ -53,13 +53,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 
+#include "lizard0read0types.h"
+
 /** The transaction system */
 trx_sys_t *trx_sys = nullptr;
 
 /** Check whether transaction id is valid.
 @param[in]      id      transaction id to check
 @param[in]      name    table name */
-void ReadView::check_trx_id_sanity(trx_id_t id, const table_name_t &name) {
+void lizard::Vision::check_trx_id_sanity(trx_id_t id,
+                                         const table_name_t &name) const {
   if (&name == &dict_sys->dynamic_metadata->name) {
     /* The table mysql.innodb_dynamic_metadata uses a
     constant DB_TRX_ID=~0. */
@@ -147,15 +150,16 @@ void trx_sys_persist_gtid_num(trx_id_t gtid_trx_no) {
   mtr.commit();
 }
 
-trx_id_t trx_sys_oldest_trx_no() {
-  ut_ad(trx_sys_serialisation_mutex_own());
-  /* Get the oldest transaction from serialisation list. */
-  if (UT_LIST_GET_LEN(trx_sys->serialisation_list) > 0) {
-    auto trx = UT_LIST_GET_FIRST(trx_sys->serialisation_list);
-    return (trx->no);
-  }
-  return trx_sys_get_next_trx_id_or_no();
-}
+/** lizard: oldest trx no wil be replaced by SCN */
+// trx_id_t trx_sys_oldest_trx_no() {
+//   ut_ad(trx_sys_serialisation_mutex_own());
+//   /* Get the oldest transaction from serialisation list. */
+//   if (UT_LIST_GET_LEN(trx_sys->serialisation_list) > 0) {
+//     auto trx = UT_LIST_GET_FIRST(trx_sys->serialisation_list);
+//     return (trx->no);
+//   }
+//   return trx_sys_get_next_trx_id_or_no();
+// }
 
 void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids) {
   trx_sys_mutex_enter();
@@ -433,8 +437,10 @@ const uint32_t max_rseg_init_threads = 4;
 /** Creates and initializes the central memory structures for the transaction
  system. This is called when the database is started.
  @return min binary heap of rsegs to purge */
-purge_pq_t *trx_sys_init_at_db_start(void) {
-  purge_pq_t *purge_queue;
+lizard::purge_heap_t *trx_sys_init_at_db_start(void) {
+  /** Lizard: comment out */
+  // purge_pq_t *purge_queue;
+  lizard::purge_heap_t *purge_heap;
   trx_sysf_t *sys_header;
   uint64_t rows_to_undo = 0;
   const char *unit = "";
@@ -442,8 +448,8 @@ purge_pq_t *trx_sys_init_at_db_start(void) {
   /* We create the min binary heap here and pass ownership to
   purge when we init the purge sub-system. Purge is responsible
   for freeing the binary heap. */
-  purge_queue = ut::new_withkey<purge_pq_t>(UT_NEW_THIS_FILE_PSI_KEY);
-  ut_a(purge_queue != nullptr);
+  purge_heap = ut::new_withkey<lizard::purge_heap_t>(UT_NEW_THIS_FILE_PSI_KEY);
+  ut_a(purge_heap != nullptr);
 
   if (srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN) {
     /* Create the memory objects for all the rollback segments
@@ -460,9 +466,9 @@ purge_pq_t *trx_sys_init_at_db_start(void) {
     using Clock_point = std::chrono::time_point<Clock>;
     Clock_point start = Clock::now();
     if (srv_rseg_init_threads > 1) {
-      trx_rsegs_parallel_init(purge_queue);
+      trx_rsegs_parallel_init(purge_heap);
     } else {
-      trx_rsegs_init(purge_queue);
+      trx_rsegs_init(purge_heap);
     }
     Clock_point end = Clock::now();
     const auto time_diff =
@@ -497,16 +503,16 @@ purge_pq_t *trx_sys_init_at_db_start(void) {
   trx_sys->next_trx_id_or_no.store(max_trx_id +
                                    2 * trx_sys_get_trx_id_write_margin());
 
-  trx_sys->serialisation_min_trx_no.store(trx_sys->next_trx_id_or_no.load());
+  // trx_sys->serialisation_min_trx_no.store(trx_sys->next_trx_id_or_no.load());
 
   mtr.commit();
 
 #ifdef UNIV_DEBUG
   /* max_trx_id is the next transaction ID to assign. Initialize maximum
   transaction number to one less if all transactions are already purged. */
-  if (trx_sys->rw_max_trx_no == 0) {
-    trx_sys->rw_max_trx_no = trx_sys_get_next_trx_id_or_no() - 1;
-  }
+  // if (trx_sys->rw_max_trx_no == 0) {
+  //   trx_sys->rw_max_trx_no = trx_sys_get_next_trx_id_or_no() - 1;
+  // }
 #endif /* UNIV_DEBUG */
 
   trx_sys_mutex_enter();
@@ -552,7 +558,7 @@ purge_pq_t *trx_sys_init_at_db_start(void) {
 
   trx_sys_mutex_exit();
 
-  return (purge_queue);
+  return (purge_heap);
 }
 
 /** Creates the trx_sys instance and initializes purge_queue and mutex. */
@@ -565,18 +571,18 @@ void trx_sys_create(void) {
   mutex_create(LATCH_ID_TRX_SYS, &trx_sys->mutex);
   mutex_create(LATCH_ID_TRX_SYS_SERIALISATION, &trx_sys->serialisation_mutex);
 
-  UT_LIST_INIT(trx_sys->serialisation_list);
+  // UT_LIST_INIT(trx_sys->serialisation_list);
   UT_LIST_INIT(trx_sys->rw_trx_list);
   UT_LIST_INIT(trx_sys->mysql_trx_list);
 
-  trx_sys->mvcc = ut::new_withkey<MVCC>(UT_NEW_THIS_FILE_PSI_KEY, 1024);
+  // trx_sys->mvcc = ut::new_withkey<MVCC>(UT_NEW_THIS_FILE_PSI_KEY, 1024);
 
-  trx_sys->serialisation_min_trx_no.store(0);
+  // trx_sys->serialisation_min_trx_no.store(0);
 
-  ut_d(trx_sys->rw_max_trx_no = 0);
+  // ut_d(trx_sys->rw_max_trx_no = 0);
 
-  new (&trx_sys->rw_trx_ids)
-      trx_ids_t(ut::allocator<trx_id_t>(mem_key_trx_sys_t_rw_trx_ids));
+  // new (&trx_sys->rw_trx_ids)
+  //     trx_ids_t(ut::allocator<trx_id_t>(mem_key_trx_sys_t_rw_trx_ids));
 
   for (auto &shard : trx_sys->shards) {
     new (&shard) Trx_shard{};
@@ -609,7 +615,8 @@ void trx_sys_close(void) {
     return;
   }
 
-  ulint size = trx_sys->mvcc->size();
+  // ulint size = trx_sys->mvcc->size();
+  ulint size = lizard::trx_vision_container_size();
 
   if (size > 0) {
     ib::error(ER_IB_MSG_1201) << "All read views were not closed before"
@@ -637,11 +644,11 @@ void trx_sys_close(void) {
 
   trx_sys->tmp_rsegs.~Rsegs();
 
-  ut::delete_(trx_sys->mvcc);
+  // ut::delete_(trx_sys->mvcc);
 
   ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
   ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
-  ut_a(UT_LIST_GET_LEN(trx_sys->serialisation_list) == 0);
+  // ut_a(UT_LIST_GET_LEN(trx_sys->serialisation_list) == 0);
 
   for (auto &shard : trx_sys->shards) {
     shard.~Trx_shard();
@@ -651,7 +658,7 @@ void trx_sys_close(void) {
   mutex_free(&trx_sys->serialisation_mutex);
   mutex_free(&trx_sys->mutex);
 
-  trx_sys->rw_trx_ids.~trx_ids_t();
+  // trx_sys->rw_trx_ids.~trx_ids_t();
 
   ut::free(trx_sys);
 

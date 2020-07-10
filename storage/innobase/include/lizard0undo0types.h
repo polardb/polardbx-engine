@@ -152,6 +152,19 @@ struct txn_info_t {
   undo_ptr_t undo_ptr;
 };
 
+/**
+  Lizard transaction attributes in index (used by Vision)
+   1) scn
+   2) undo_ptr
+*/
+struct txn_index_t {
+  /** scn number */
+  undo_ptr_t uba;
+  /** undo log header address */
+  std::atomic<scn_id_t> scn;
+};
+
+
 /** The struct of transaction undo for UBA */
 struct txn_undo_ptr_t {
   /** Rollback segment in txn space */
@@ -169,6 +182,92 @@ inline bool lizard_undo_ptr_is_active(undo_ptr_t undo_ptr) {
 inline void lizard_undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
   *undo_ptr |= (undo_ptr_t)1 << 55;
 }
+
+/**
+  The element of minimum heap for the purge.
+*/
+class TxnUndoRsegs {
+ public:
+  explicit TxnUndoRsegs(scn_t scn) : m_scn(scn) {
+    for (auto &rseg : m_rsegs) {
+      rseg = nullptr;
+    }
+  }
+
+  /** Default constructor */
+  TxnUndoRsegs() : TxnUndoRsegs(0) {}
+
+  void set_scn(scn_t scn) { m_scn = scn; }
+
+  scn_t get_scn() const { return m_scn; }
+
+  /** Add rollback segment.
+  @param rseg rollback segment to add. */
+  void insert(trx_rseg_t *rseg) {
+    for (size_t i = 0; i < m_rsegs_n; ++i) {
+      if (m_rsegs[i] == rseg) {
+        return;
+      }
+    }
+    // ut_a(m_rsegs_n < 2);
+    /* Lizard: one more txn rseg. */
+    ut_a(m_rsegs_n < 2 + 1);
+    m_rsegs[m_rsegs_n++] = rseg;
+  }
+
+  /** Number of registered rsegs.
+  @return size of rseg list. */
+  size_t size() const { return (m_rsegs_n); }
+
+  /**
+  @return an iterator to the first element */
+  typename Rsegs_array<3>::iterator begin() { return m_rsegs.begin(); }
+
+  /**
+  @return an iterator to the end */
+  typename Rsegs_array<3>::iterator end() {
+    return m_rsegs.begin() + m_rsegs_n;
+  }
+
+  /** Append rollback segments from referred instance to current
+  instance. */
+  void insert(const TxnUndoRsegs &append_from) {
+    ut_ad(get_scn() == append_from.get_scn());
+    for (size_t i = 0; i < append_from.m_rsegs_n; ++i) {
+      insert(append_from.m_rsegs[i]);
+    }
+  }
+
+  /** Compare two TxnUndoRsegs based on scn.
+  @param lhs first element to compare
+  @param rhs second element to compare
+  @return true if elem1 > elem2 else false.*/
+  bool operator()(const TxnUndoRsegs &lhs, const TxnUndoRsegs &rhs) {
+    return (lhs.m_scn > rhs.m_scn);
+  }
+
+  /** Compiler defined copy-constructor/assignment operator
+  should be fine given that there is no reference to a memory
+  object outside scope of class object.*/
+
+ private:
+  scn_t m_scn;
+
+  size_t m_rsegs_n{};
+
+  /** Rollback segments of a transaction, scheduled for purge. */
+  // Rsegs_array<2> m_rsegs;
+  /* Lizard: one more txn rseg. */
+  Rsegs_array<3> m_rsegs;
+};
+
+/**
+  Use priority_queue as the minimum heap structure
+  which is order by scn number */
+typedef std::priority_queue<
+    TxnUndoRsegs, std::vector<TxnUndoRsegs, ut::allocator<TxnUndoRsegs>>,
+    TxnUndoRsegs>
+    purge_heap_t;
 
 } /* namespace lizard */
 

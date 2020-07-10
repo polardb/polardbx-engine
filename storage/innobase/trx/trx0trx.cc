@@ -49,7 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0write.h"
 #include "os0proc.h"
 #include "que0que.h"
-#include "read0read.h"
+// #include "read0read.h"
 #include "row0mysql.h"
 #include "srv0mon.h"
 #include "srv0srv.h"
@@ -72,11 +72,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "mysql/service_thd_wait.h"
 
+#include "lizard0mtr.h"
 #include "lizard0scn.h"
+#include "lizard0sys.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
-#include "lizard0mtr.h"
-#include "lizard0sys.h"
+#include "lizard0undo0types.h"
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
 
@@ -223,7 +224,9 @@ static void trx_init(trx_t *trx) {
 
   trx->last_sql_stat_start.least_undo_no = 0;
 
-  ut_ad(!MVCC::is_view_active(trx->read_view));
+  // ut_ad(!MVCC::is_view_active(trx->read_view));
+  //
+  ut_ad(trx->vision == nullptr);
 
   trx->lock.rec_cached = 0;
 
@@ -316,7 +319,8 @@ struct TrxFactory {
 
     trx->mod_tables.~trx_mod_tables_t();
 
-    ut_ad(trx->read_view == nullptr);
+    // ut_ad(trx->read_view == nullptr);
+    ut_ad(trx->vision == nullptr);
 
     if (!trx->lock.rec_pool.empty()) {
       /* See lock_trx_alloc_locks() why we only free
@@ -512,7 +516,10 @@ static void trx_free(trx_t *&trx) {
 
   trx->mod_tables.clear();
 
-  ut_ad(trx->read_view == nullptr);
+  // ut_ad(trx->read_view == nullptr);
+
+  ut_ad(trx->vision == nullptr);
+
   ut_ad(trx->is_dd_trx == false);
 
   /* trx locking state should have been reset before returning trx
@@ -653,8 +660,12 @@ inline void trx_disconnect_from_mysql(trx_t *trx, bool prepared) {
 
   UT_LIST_REMOVE(trx_sys->mysql_trx_list, trx);
 
-  if (trx->read_view != nullptr) {
-    trx_sys->mvcc->view_close(trx->read_view, true);
+  // if (trx->read_view != nullptr) {
+  //   trx_sys->mvcc->view_close(trx->read_view, true);
+  // }
+
+  if (trx->vision != nullptr) {
+    lizard::trx_vision_release(trx->vision);
   }
 
   ut_ad(trx_sys_validate_trx_list());
@@ -1140,10 +1151,10 @@ void trx_lists_init_at_db_start(void) {
             [&](trx_t *a, trx_t *b) { return a->id < b->id; });
 
   for (trx_t *trx : trxs) {
-    if (trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE ||
-        trx->state.load(std::memory_order_relaxed) == TRX_STATE_PREPARED) {
-      trx_sys->rw_trx_ids.push_back(trx->id);
-    }
+    // if (trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE ||
+    //     trx->state.load(std::memory_order_relaxed) == TRX_STATE_PREPARED) {
+    //   trx_sys->rw_trx_ids.push_back(trx->id);
+    // }
     trx_add_to_rw_trx_list(trx);
 
     lizard::lizard_sys_mod_min_active_trx_id(true, trx);
@@ -1328,7 +1339,7 @@ void trx_assign_rseg_temp(trx_t *trx) {
 
     trx->id = trx_sys_allocate_trx_id();
 
-    trx_sys->rw_trx_ids.push_back(trx->id);
+    // trx_sys->rw_trx_ids.push_back(trx->id);
 
     trx_sys_mutex_exit();
 
@@ -1447,7 +1458,7 @@ static void trx_start_low(
 
     trx->id = trx_sys_allocate_trx_id();
 
-    trx_sys->rw_trx_ids.push_back(trx->id);
+    // trx_sys->rw_trx_ids.push_back(trx->id);
 
     ut_ad(trx->rsegs.m_redo.rseg != nullptr || srv_read_only_mode ||
           srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO);
@@ -1481,7 +1492,7 @@ static void trx_start_low(
 
         trx->id = trx_sys_allocate_trx_id();
 
-        trx_sys->rw_trx_ids.push_back(trx->id);
+        // trx_sys->rw_trx_ids.push_back(trx->id);
 
         trx_sys_mutex_exit();
 
@@ -1506,114 +1517,114 @@ Skips adding to the serialisation_list if the transaction is read-only, in
 which case still the trx->no is assigned.
 @param[in,out]  trx   the modified transaction
 @return true if added to the serialisation_list (non read-only trx) */
-static inline bool trx_add_to_serialisation_list(trx_t *trx) {
-  trx_sys_serialisation_mutex_enter();
-
-  trx->no = trx_sys_allocate_trx_no();
-
-  /* Update the latest transaction number. */
-  ut_d(trx_sys->rw_max_trx_no = trx->no);
-
-  if (trx->read_only) {
-    trx_sys_serialisation_mutex_exit();
-    return false;
-  }
-
-  UT_LIST_ADD_LAST(trx_sys->serialisation_list, trx);
-
-  if (UT_LIST_GET_LEN(trx_sys->serialisation_list) == 1) {
-    trx_sys->serialisation_min_trx_no.store(trx->no);
-  }
-
-  trx_sys_serialisation_mutex_exit();
-  return true;
-}
+// static inline bool trx_add_to_serialisation_list(trx_t *trx) {
+//   trx_sys_serialisation_mutex_enter();
+// 
+//   trx->no = trx_sys_allocate_trx_no();
+// 
+//   /* Update the latest transaction number. */
+//   ut_d(trx_sys->rw_max_trx_no = trx->no);
+// 
+//   if (trx->read_only) {
+//     trx_sys_serialisation_mutex_exit();
+//     return false;
+//   }
+// 
+//   UT_LIST_ADD_LAST(trx_sys->serialisation_list, trx);
+// 
+//   if (UT_LIST_GET_LEN(trx_sys->serialisation_list) == 1) {
+//     trx_sys->serialisation_min_trx_no.store(trx->no);
+//   }
+// 
+//   trx_sys_serialisation_mutex_exit();
+//   return true;
+// }
 
 /** Erases transaction from the serialisation_list. Caller must have
 acquired trx_sys->serialisation_mutex prior to calling this function.
 @param[in,out]  trx   the transaction to erase */
-static inline void trx_erase_from_serialisation_list_low(trx_t *trx) {
-  ut_ad(trx_sys_serialisation_mutex_own());
-
-  UT_LIST_REMOVE(trx_sys->serialisation_list, trx);
-
-  if (UT_LIST_GET_LEN(trx_sys->serialisation_list) > 0) {
-    trx_sys->serialisation_min_trx_no.store(
-        UT_LIST_GET_FIRST(trx_sys->serialisation_list)->no);
-
-  } else {
-    trx_sys->serialisation_min_trx_no.store(trx_sys_get_next_trx_id_or_no());
-  }
-}
+// static inline void trx_erase_from_serialisation_list_low(trx_t *trx) {
+//   ut_ad(trx_sys_serialisation_mutex_own());
+// 
+//   UT_LIST_REMOVE(trx_sys->serialisation_list, trx);
+// 
+//   if (UT_LIST_GET_LEN(trx_sys->serialisation_list) > 0) {
+//     trx_sys->serialisation_min_trx_no.store(
+//         UT_LIST_GET_FIRST(trx_sys->serialisation_list)->no);
+// 
+//   } else {
+//     trx_sys->serialisation_min_trx_no.store(trx_sys_get_next_trx_id_or_no());
+//   }
+// }
 
 /** Set the transaction serialisation number.
  @return true if the transaction number was added to the serialisation_list. */
-static bool trx_serialisation_number_get(
-    trx_t *trx,                         /*!< in/out: transaction */
-    trx_undo_ptr_t *redo_rseg_undo_ptr, /*!< in/out: Set trx
-                                        serialisation number in
-                                        referred undo rseg. */
-    trx_undo_ptr_t *temp_rseg_undo_ptr, /*!< in/out: Set trx
-                                        serialisation number in
-                                        referred undo rseg. */
-    txn_undo_ptr_t *txn_rseg_undo_ptr) {
-  bool added_trx_no;
-  trx_rseg_t *redo_rseg = nullptr;
-  trx_rseg_t *temp_rseg = nullptr;
-  trx_rseg_t *txn_rseg = nullptr;
-
-  if (redo_rseg_undo_ptr != nullptr) {
-    ut_ad(mutex_own(&redo_rseg_undo_ptr->rseg->mutex));
-    redo_rseg = redo_rseg_undo_ptr->rseg;
-  }
-
-  if (temp_rseg_undo_ptr != nullptr) {
-    ut_ad(mutex_own(&temp_rseg_undo_ptr->rseg->mutex));
-    temp_rseg = temp_rseg_undo_ptr->rseg;
-  }
-
-  if (txn_rseg_undo_ptr != nullptr) {
-    ut_ad(mutex_own(&txn_rseg_undo_ptr->rseg->mutex));
-    txn_rseg = txn_rseg_undo_ptr->rseg;
-  }
-
-  /* If the rollack segment is not empty then the
-  new trx_t::no can't be less than any trx_t::no
-  already in the rollback segment. User threads only
-  produce events when a rollback segment is empty. */
-  if ((redo_rseg != nullptr && redo_rseg->last_page_no == FIL_NULL) ||
-      (temp_rseg != nullptr && temp_rseg->last_page_no == FIL_NULL) ||
-      (txn_rseg != nullptr && txn_rseg->last_page_no == FIL_NULL)) {
-    TrxUndoRsegs elem(trx->no);
-
-    if (redo_rseg != nullptr && redo_rseg->last_page_no == FIL_NULL) {
-      elem.insert(redo_rseg);
-    }
-
-    if (temp_rseg != nullptr && temp_rseg->last_page_no == FIL_NULL) {
-      elem.insert(temp_rseg);
-    }
-
-    if (txn_rseg != nullptr && txn_rseg->last_page_no == FIL_NULL) {
-      elem.insert(txn_rseg);
-    }
-
-    mutex_enter(&purge_sys->pq_mutex);
-
-    added_trx_no = trx_add_to_serialisation_list(trx);
-
-    elem.set_trx_no(trx->no);
-
-    purge_sys->purge_queue->push(std::move(elem));
-
-    mutex_exit(&purge_sys->pq_mutex);
-
-  } else {
-    added_trx_no = trx_add_to_serialisation_list(trx);
-  }
-
-  return (added_trx_no);
-}
+// static bool trx_serialisation_number_get(
+//     trx_t *trx,                         /*!< in/out: transaction */
+//     trx_undo_ptr_t *redo_rseg_undo_ptr, /*!< in/out: Set trx
+//                                         serialisation number in
+//                                         referred undo rseg. */
+//     trx_undo_ptr_t *temp_rseg_undo_ptr, /*!< in/out: Set trx
+//                                         serialisation number in
+//                                         referred undo rseg. */
+//     txn_undo_ptr_t *txn_rseg_undo_ptr) {
+//   bool added_trx_no;
+//   trx_rseg_t *redo_rseg = nullptr;
+//   trx_rseg_t *temp_rseg = nullptr;
+//   trx_rseg_t *txn_rseg = nullptr;
+// 
+//   if (redo_rseg_undo_ptr != nullptr) {
+//     ut_ad(mutex_own(&redo_rseg_undo_ptr->rseg->mutex));
+//     redo_rseg = redo_rseg_undo_ptr->rseg;
+//   }
+// 
+//   if (temp_rseg_undo_ptr != nullptr) {
+//     ut_ad(mutex_own(&temp_rseg_undo_ptr->rseg->mutex));
+//     temp_rseg = temp_rseg_undo_ptr->rseg;
+//   }
+// 
+//   if (txn_rseg_undo_ptr != nullptr) {
+//     ut_ad(mutex_own(&txn_rseg_undo_ptr->rseg->mutex));
+//     txn_rseg = txn_rseg_undo_ptr->rseg;
+//   }
+// 
+//   /* If the rollack segment is not empty then the
+//   new trx_t::no can't be less than any trx_t::no
+//   already in the rollback segment. User threads only
+//   produce events when a rollback segment is empty. */
+//   if ((redo_rseg != nullptr && redo_rseg->last_page_no == FIL_NULL) ||
+//       (temp_rseg != nullptr && temp_rseg->last_page_no == FIL_NULL) ||
+//       (txn_rseg != nullptr && txn_rseg->last_page_no == FIL_NULL)) {
+//     TrxUndoRsegs elem(trx->no);
+// 
+//     if (redo_rseg != nullptr && redo_rseg->last_page_no == FIL_NULL) {
+//       elem.insert(redo_rseg);
+//     }
+// 
+//     if (temp_rseg != nullptr && temp_rseg->last_page_no == FIL_NULL) {
+//       elem.insert(temp_rseg);
+//     }
+// 
+//     if (txn_rseg != nullptr && txn_rseg->last_page_no == FIL_NULL) {
+//       elem.insert(txn_rseg);
+//     }
+// 
+//     mutex_enter(&purge_sys->pq_mutex);
+// 
+//     added_trx_no = trx_add_to_serialisation_list(trx);
+// 
+//     elem.set_trx_no(trx->no);
+// 
+//     purge_sys->purge_queue->push(std::move(elem));
+// 
+//     mutex_exit(&purge_sys->pq_mutex);
+// 
+//   } else {
+//     added_trx_no = trx_add_to_serialisation_list(trx);
+//   }
+// 
+//   return (added_trx_no);
+// }
 
 /** Assign the transaction its history serialisation number and write the
  update UNDO log record to the assigned rollback segment.
@@ -1701,11 +1712,17 @@ static bool trx_write_serialisation_history(
                                                    : nullptr;
 
     /* Will set trx->no and will add rseg to purge queue. */
-    serialised = trx_serialisation_number_get(
-        trx, redo_rseg_undo_ptr, temp_rseg_undo_ptr, txn_rseg_undo_ptr);
+    //    serialised = trx_serialisation_number_get(
+    //        trx, redo_rseg_undo_ptr, temp_rseg_undo_ptr, txn_rseg_undo_ptr);
+
+    if (!trx->read_only) serialised = true;
 
     /** Lizard: txn undo header */
     commit_scn_t scn = COMMIT_SCN_NULL;
+    lizard::TxnUndoRsegs elem;
+    bool has_collected = lizard::trx_collect_rsegs_for_purge(
+        &elem, redo_rseg_undo_ptr, temp_rseg_undo_ptr, txn_rseg_undo_ptr);
+
     ulint txn_rseg_len = 0;
     if (trx->rsegs.m_txn.txn_undo != nullptr) {
       page_t *undo_hdr_page;
@@ -1716,6 +1733,7 @@ static bool trx_write_serialisation_history(
       /** Generate SCN */
       scn = lizard::trx_commit_scn(trx, nullptr, txn_undo, undo_hdr_page,
                                    txn_undo->hdr_offset, mtr);
+      elem.set_scn(scn.first);
 
       bool update_txn_rseg_len = (trx->rsegs.m_noredo.update_undo == nullptr &&
                                   trx->rsegs.m_redo.update_undo == nullptr);
@@ -1776,10 +1794,17 @@ static bool trx_write_serialisation_history(
         /** Generate SCN */
         scn = lizard::trx_commit_scn(trx, nullptr, update_undo, undo_hdr_page,
                                      update_undo->hdr_offset, &temp_mtr);
+        elem.set_scn(scn.first);
       }
 
       trx_undo_update_cleanup(trx, &trx->rsegs.m_noredo, undo_hdr_page, true,
                               n_added_logs, &temp_mtr);
+    }
+
+    /** Add the rseg into purge queue */
+    if (has_collected) {
+      ut_ad(elem.get_scn() != lizard::SCN_NULL);
+      lizard::trx_add_rsegs_for_purge(scn, &elem);
     }
   }
 
@@ -1954,11 +1979,11 @@ static void trx_erase_lists(trx_t *trx) {
   ut_ad(trx->id > 0);
   ut_ad(trx_sys_mutex_own());
 
-  trx_ids_t::iterator it = std::lower_bound(trx_sys->rw_trx_ids.begin(),
-                                            trx_sys->rw_trx_ids.end(), trx->id);
+  // trx_ids_t::iterator it = std::lower_bound(trx_sys->rw_trx_ids.begin(),
+  //                                           trx_sys->rw_trx_ids.end(), trx->id);
 
-  ut_ad(*it == trx->id);
-  trx_sys->rw_trx_ids.erase(it);
+  // ut_ad(*it == trx->id);
+  // trx_sys->rw_trx_ids.erase(it);
 
   assert_trx_in_recovery(trx);
 
@@ -1970,8 +1995,12 @@ static void trx_erase_lists(trx_t *trx) {
     ut_ad(trx_sys_validate_trx_list());
     lizard::lizard_sys_mod_min_active_trx_id(false, trx);
 
-    if (trx->read_view != nullptr) {
-      trx_sys->mvcc->view_close(trx->read_view, true);
+    // if (trx->read_view != nullptr) {
+    //   trx_sys->mvcc->view_close(trx->read_view, true);
+    // }
+
+    if (trx->vision != nullptr) {
+      lizard::trx_vision_release(trx->vision);
     }
   }
   DEBUG_SYNC_C("after_trx_erase_lists");
@@ -2074,7 +2103,7 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
       gtid_persistor.add(gtid_desc);
     }
 
-    trx_erase_from_serialisation_list_low(trx);
+    // trx_erase_from_serialisation_list_low(trx);
 
     trx_sys_serialisation_mutex_exit();
   }
@@ -2121,8 +2150,12 @@ written */
 
     ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE));
 
-    if (trx->read_view != nullptr) {
-      trx_sys->mvcc->view_close(trx->read_view, false);
+    // if (trx->read_view != nullptr) {
+    //   trx_sys->mvcc->view_close(trx->read_view, false);
+    // }
+
+    if (trx->vision != nullptr) {
+      lizard::trx_vision_release(trx->vision);
     }
 
     MONITOR_INC(MONITOR_TRX_NL_RO_COMMIT);
@@ -2147,8 +2180,12 @@ written */
     if (trx->read_only || (trx->rsegs.m_redo.rseg == nullptr &&
                            trx->rsegs.m_txn.rseg == nullptr)) {
       MONITOR_INC(MONITOR_TRX_RO_COMMIT);
-      if (trx->read_view != nullptr) {
-        trx_sys->mvcc->view_close(trx->read_view, false);
+      // if (trx->read_view != nullptr) {
+      //   trx_sys->mvcc->view_close(trx->read_view, false);
+      // }
+
+      if (trx->vision != nullptr) {
+        lizard::trx_vision_release(trx->vision);
       }
 
     } else {
@@ -2458,20 +2495,29 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
  within the same transaction will get the same read view, which is created
  when this function is first called for a new started transaction.
  @return consistent read view */
-ReadView *trx_assign_read_view(trx_t *trx) /*!< in/out: active transaction */
+lizard::Vision *trx_assign_read_view(
+    trx_t *trx) /*!< in/out: active transaction */
 {
   ut_ad(trx_can_be_handled_by_current_thread_or_is_hp_victim(trx));
   ut_ad(trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE);
 
+  // if (srv_read_only_mode) {
+  //   ut_ad(trx->read_view == nullptr);
+  //   return (nullptr);
+
+  // } else if (!MVCC::is_view_active(trx->read_view)) {
+  //   trx_sys->mvcc->view_open(trx->read_view, trx);
+  // }
+
   if (srv_read_only_mode) {
-    ut_ad(trx->read_view == nullptr);
+    ut_ad(trx->vision == nullptr);
     return (nullptr);
 
-  } else if (!MVCC::is_view_active(trx->read_view)) {
-    trx_sys->mvcc->view_open(trx->read_view, trx);
+  } else if (trx->vision == nullptr) {
+    trx->vision = lizard::trx_vision_open(trx->id);
   }
 
-  return (trx->read_view);
+  return (trx->vision);
 }
 
 /** Prepares a transaction for commit/rollback. */
@@ -3639,11 +3685,15 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
   ut_ad(trx->id == 0);
   trx->id = trx_sys_allocate_trx_id();
 
-  trx_sys->rw_trx_ids.push_back(trx->id);
+  // trx_sys->rw_trx_ids.push_back(trx->id);
 
   /* So that we can see our own changes. */
-  if (MVCC::is_view_active(trx->read_view)) {
-    MVCC::set_view_creator_trx_id(trx->read_view, trx->id);
+  // if (MVCC::is_view_active(trx->read_view)) {
+  //  MVCC::set_view_creator_trx_id(trx->read_view, trx->id);
+  // }
+
+  if (trx->vision) {
+    trx->vision->set_vision_creator_trx_id(trx->id);
   }
   trx_add_to_rw_trx_list(trx);
 

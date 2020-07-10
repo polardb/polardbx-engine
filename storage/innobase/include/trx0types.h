@@ -44,6 +44,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <set>
 #include <vector>
 
+#include "lizard0scn0types.h"
+
 /** printf(3) format used for printing DB_TRX_ID and other system fields */
 #define TRX_ID_FMT IB_ID_FMT
 
@@ -271,13 +273,16 @@ struct trx_rseg_t {
   size_t last_offset{};
 
   /** Transaction number of the last not yet purged log */
-  trx_id_t last_trx_no;
+  // trx_id_t last_trx_no;
 
   /** true if the last not yet purged log needs purging */
   bool last_del_marks{};
 
   /** Reference counter to track rseg allocated transactions. */
   std::atomic<size_t> trx_ref_count{};
+
+  /** SCN number of the last not yet purged log, it still is in history list */
+  scn_t last_scn;
 
   std::ostream &print(std::ostream &out) const {
     out << "[trx_rseg_t: this=" << (void *)this << ", id=" << id
