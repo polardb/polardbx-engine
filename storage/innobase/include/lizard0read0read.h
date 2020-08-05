@@ -59,8 +59,16 @@ class VisionContainer {
       Add a element
 
       @retval		a new empty vision obj
+      @deprecated    use add_element instead
     */
     inline Vision *new_element();
+
+    /**
+      Add an element
+
+      @param[in]		the element will be added
+    */
+    inline void add_element(Vision *vision);
 
     /**
       Remove an element
@@ -91,17 +99,16 @@ class VisionContainer {
   /**
     Add a element.
 
-    @param[in]    creator_id      Creator trx id
-    @retval		    a new empty vision obj
+    @param[in]		the transaction to assign vision
   */
-  Vision *vision_open(trx_id_t creator_id);
+  void vision_open(trx_t *trx);
 
   /**
     Release the corresponding element.
 
     @param[in]		the element will be released
   */
-  void vision_release(Vision *&vision);
+  void vision_release(Vision *vision);
 
   /**
     Get the earliest undestructed element.
@@ -147,19 +154,18 @@ class VisionContainer {
 extern VisionContainer *vision_container;
 
 /**
-  Add a new vision.
+  Assign vision for an active trancaction.
 
-  @param[in]		The creator's id of the view
-  @retval       new vision obj
+  @param[in]		the transaction to assign vision
 */
-Vision *trx_vision_open(trx_id_t creator_id);
+void trx_vision_open(trx_t *trx);
 
 /**
   Release the corresponding element.
 
   @param[in]		the element will be released
 */
-void trx_vision_release(Vision *&vision);
+void trx_vision_release(Vision *vision);
 
 /**
   Get the earliest undestructed element.

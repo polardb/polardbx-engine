@@ -1919,7 +1919,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
       the DML thread has updated the clustered index
       but has not yet accessed secondary index. */
 
-      ut_ad(trx->vision);
+      ut_ad(trx->vision.is_active());
 
       txn_rec_t txn_rec{
           row_get_rec_trx_id(rec, clust_index, offsets),
@@ -1928,11 +1928,11 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 
       lizard::txn_undo_hdr_lookup(&txn_rec);
 
-      if (!trx->vision->modifications_visible(&txn_rec, old_table->name)) {
+      if (!trx->vision.modifications_visible(&txn_rec, old_table->name)) {
         rec_t *old_vers;
 
         row_vers_build_for_consistent_read(rec, &mtr, clust_index, &offsets,
-                                           trx->vision, &row_heap, row_heap,
+                                           &trx->vision, &row_heap, row_heap,
                                            &old_vers, NULL, nullptr);
 
         rec = old_vers;

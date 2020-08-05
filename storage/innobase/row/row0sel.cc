@@ -2174,8 +2174,8 @@ que_thr_t *row_sel_step(que_thr_t *thr) /*!< in: query thread */
       /* Assign a read view for the query */
       trx_assign_read_view(thr_get_trx(thr));
 
-      if (thr_get_trx(thr)->vision != NULL) {
-        node->vision = thr_get_trx(thr)->vision;
+      if (thr_get_trx(thr)->vision.is_active()) {
+        node->vision = &thr_get_trx(thr)->vision;
       } else {
         node->vision = NULL;
       }
@@ -3355,7 +3355,7 @@ dberr_t Row_sel_get_clust_rec_for_mysql::operator()(
       if (clust_rec != cached_clust_rec) {
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
-            trx->vision, clust_index, prebuilt, clust_rec, offsets,
+            &trx->vision, clust_index, prebuilt, clust_rec, offsets,
             offset_heap, &old_vers, vrow, mtr, lob_undo);
 
         if (err != DB_SUCCESS) {
@@ -4659,7 +4659,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
         prebuilt->select_lock_type == LOCK_NONE &&
         trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
         // MVCC::is_view_active(trx->read_view)) {
-        trx->vision != nullptr) {
+        trx->vision.is_active()) {
       /* This is a SELECT query done as a consistent read,
       and the read view has already been allocated:
       let us try a search shortcut through the hash
@@ -4769,7 +4769,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   ut_ad(!trx_is_started(trx) || trx->state == TRX_STATE_ACTIVE);
 
   ut_ad(prebuilt->sql_stat_start || prebuilt->select_lock_type != LOCK_NONE ||
-        trx->vision || srv_read_only_mode);
+        trx->vision.is_active() || srv_read_only_mode);
 
   trx_start_if_not_started(trx, false);
 
@@ -4813,7 +4813,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     /* No need to set an intention lock or assign a read view */
 
     //if (!MVCC::is_view_active(trx->read_view)
-    if (trx->vision == nullptr && !srv_read_only_mode &&
+    if (!trx->vision.is_active() && !srv_read_only_mode &&
         prebuilt->select_lock_type == LOCK_NONE) {
       ib::error(ER_IB_MSG_1031) << "MySQL is trying to perform a"
                                    " consistent read but the read view is not"
@@ -5332,8 +5332,9 @@ rec_loop:
         rec_t *old_vers;
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
-            trx->vision, clust_index, prebuilt, rec, &offsets, &heap, &old_vers,
-            need_vrow ? &vrow : NULL, &mtr, prebuilt->get_lob_undo());
+            &trx->vision, clust_index, prebuilt, rec, &offsets, &heap,
+            &old_vers, need_vrow ? &vrow : NULL, &mtr,
+            prebuilt->get_lob_undo());
 
         if (err != DB_SUCCESS) {
           goto lock_wait_or_error;
@@ -5359,7 +5360,7 @@ rec_loop:
       ut_ad(!index->is_clustered());
 
       if (!srv_read_only_mode &&
-          !lock_sec_rec_cons_read_sees(rec, index, trx->vision)) {
+          !lock_sec_rec_cons_read_sees(rec, index, &trx->vision)) {
         /* We should look at the clustered index.
         However, as this is a non-locking read,
         we can skip the clustered index lookup if

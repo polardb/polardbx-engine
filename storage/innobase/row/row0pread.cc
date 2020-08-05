@@ -330,8 +330,8 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
   // ut_ad(m_trx->read_view == nullptr ||
   // MVCC::is_view_active(m_trx->read_view));
 
-  if (m_trx->vision != nullptr) {
-    auto vision = m_trx->vision;
+  if (m_trx->vision.is_active()) {
+    auto vision = &m_trx->vision;
 
     if (m_config.m_index->is_clustered()) {
       trx_id_t rec_trx_id;
