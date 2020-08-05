@@ -245,7 +245,8 @@ bool lock_clust_rec_cons_read_sees(
   operate on same temp-table and so read of temp-table is
   always consistent read. */
   if (srv_read_only_mode || index->table->is_temporary()) {
-    ut_ad(vision == nullptr || index->table->is_temporary());
+    ut_ad(vision == nullptr || !vision->is_active() ||
+          index->table->is_temporary());
     return (true);
   }
 

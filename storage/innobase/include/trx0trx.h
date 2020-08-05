@@ -829,7 +829,7 @@ struct trx_t {
   //  ReadView *read_view; /*!< consistent read view used in the
   //                       transaction, or NULL if not yet set */
 
-  lizard::Vision *vision;
+  lizard::Vision vision;
 
   UT_LIST_NODE_T(trx_t)
   trx_list; /*!< list of transactions;
@@ -1215,7 +1215,7 @@ static inline void assert_trx_is_free(const trx_t *t) {
   ut_ad(trx_state_eq(t, TRX_STATE_NOT_STARTED) ||
         trx_state_eq(t, TRX_STATE_FORCED_ROLLBACK));
   ut_ad(!trx_is_rseg_updated(t));
-  ut_ad(!(t)->vision);
+  ut_ad(!(t)->vision.is_active());
   ut_ad((t)->lock.wait_thr == nullptr);
   ut_ad(UT_LIST_GET_LEN((t)->lock.trx_locks) == 0);
   ut_ad((t)->dict_operation == TRX_DICT_OP_NONE);

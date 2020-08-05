@@ -19026,11 +19026,12 @@ int ha_innobase::external_lock(THD *thd, /*!< in: handle to the user thread */
         ut_d(trx->is_dd_trx = false);
       }
 
-    } else if (trx->isolation_level <= TRX_ISO_READ_COMMITTED && trx->vision) {
+    } else if (trx->isolation_level <= TRX_ISO_READ_COMMITTED &&
+               trx->vision.is_active()) {
       //   mutex_enter(&trx_sys->mutex);
       //   trx_sys->mvcc->view_close(trx->read_view, true);
       //   mutex_exit(&trx_sys->mutex);
-      lizard::trx_vision_release(trx->vision);
+      lizard::trx_vision_release(&trx->vision);
     }
   }
 
@@ -19617,7 +19618,8 @@ THR_LOCK_DATA **ha_innobase::store_lock(
     trx->isolation_level =
         innobase_trx_map_isolation_level(thd_get_trx_isolation(thd));
 
-    if (trx->isolation_level <= TRX_ISO_READ_COMMITTED && trx->vision) {
+    if (trx->isolation_level <= TRX_ISO_READ_COMMITTED &&
+        trx->vision.is_active()) {
       /* At low transaction isolation levels we let
       each consistent read set its own snapshot */
 
@@ -19625,7 +19627,7 @@ THR_LOCK_DATA **ha_innobase::store_lock(
       //      trx_sys->mvcc->view_close(trx->read_view, true);
       //      mutex_exit(&trx_sys->mutex);
 
-      lizard::trx_vision_release(trx->vision);
+      lizard::trx_vision_release(&trx->vision);
     }
   }
 

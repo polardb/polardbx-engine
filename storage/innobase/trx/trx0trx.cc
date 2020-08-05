@@ -224,7 +224,7 @@ static void trx_init(trx_t *trx) {
 
   // ut_ad(!MVCC::is_view_active(trx->read_view));
   //
-  ut_ad(trx->vision == nullptr);
+  ut_ad(!trx->vision.is_active());
 
   trx->lock.rec_cached = 0;
 
@@ -317,8 +317,8 @@ struct TrxFactory {
 
     trx->mod_tables.~trx_mod_tables_t();
 
-    // ut_ad(trx->read_view == nullptr);
-    ut_ad(trx->vision == nullptr);
+    // ut_ad(trx->read_view == NULL);
+    ut_ad(!trx->vision.is_active());
 
     if (!trx->lock.rec_pool.empty()) {
       /* See lock_trx_alloc_locks() why we only free
@@ -493,6 +493,8 @@ static trx_t *trx_create_low() {
   trx_free(). */
   ut_a(trx->mod_tables.size() == 0);
 
+  ut_ad(!trx->vision.is_active());
+
   return (trx);
 }
 
@@ -516,7 +518,7 @@ static void trx_free(trx_t *&trx) {
 
   // ut_ad(trx->read_view == nullptr);
 
-  ut_ad(trx->vision == nullptr);
+  ut_ad(!trx->vision.is_active());
 
   ut_ad(trx->is_dd_trx == false);
 
@@ -658,12 +660,12 @@ inline void trx_disconnect_from_mysql(trx_t *trx, bool prepared) {
 
   UT_LIST_REMOVE(trx_sys->mysql_trx_list, trx);
 
-  // if (trx->read_view != nullptr) {
-  //   trx_sys->mvcc->view_close(trx->read_view, true);
-  // }
-
-  if (trx->vision != nullptr) {
-    lizard::trx_vision_release(trx->vision);
+  //  if (trx->read_view != NULL) {
+  //    trx_sys->mvcc->view_close(trx->read_view, true);
+  //  }
+  
+  if (trx->vision.is_active()) {
+    lizard::trx_vision_release(&trx->vision);
   }
 
   ut_ad(trx_sys_validate_trx_list());
@@ -1851,8 +1853,8 @@ static void trx_erase_lists(trx_t *trx) {
     //   trx_sys->mvcc->view_close(trx->read_view, true);
     // }
 
-    if (trx->vision != nullptr) {
-      lizard::trx_vision_release(trx->vision);
+    if (trx->vision.is_active()) {
+      lizard::trx_vision_release(&trx->vision);
     }
   }
   DEBUG_SYNC_C("after_trx_erase_lists");
@@ -2008,8 +2010,8 @@ written */
     //   trx_sys->mvcc->view_close(trx->read_view, false);
     // }
 
-    if (trx->vision != nullptr) {
-      lizard::trx_vision_release(trx->vision);
+    if (trx->vision.is_active()) {
+      lizard::trx_vision_release(&trx->vision);
     }
 
     MONITOR_INC(MONITOR_TRX_NL_RO_COMMIT);
@@ -2038,8 +2040,8 @@ written */
       //   trx_sys->mvcc->view_close(trx->read_view, false);
       // }
 
-      if (trx->vision != nullptr) {
-        lizard::trx_vision_release(trx->vision);
+      if (trx->vision.is_active()) {
+        lizard::trx_vision_release(&trx->vision);
       }
 
     } else {
@@ -2364,14 +2366,13 @@ lizard::Vision *trx_assign_read_view(
   // }
 
   if (srv_read_only_mode) {
-    ut_ad(trx->vision == nullptr);
+    ut_ad(!trx->vision.is_active());
     return (nullptr);
-
-  } else if (trx->vision == nullptr) {
-    trx->vision = lizard::trx_vision_open(trx->id);
+  } else if (!trx->vision.is_active()) {
+    lizard::trx_vision_open(trx);
   }
 
-  return (trx->vision);
+  return (&trx->vision);
 }
 
 /** Prepares a transaction for commit/rollback. */
@@ -3546,8 +3547,8 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
   //  MVCC::set_view_creator_trx_id(trx->read_view, trx->id);
   // }
 
-  if (trx->vision) {
-    trx->vision->set_vision_creator_trx_id(trx->id);
+  if (trx->vision.is_active()) {
+    trx->vision.set_vision_creator_trx_id(trx->id);
   }
   trx_add_to_rw_trx_list(trx);
 

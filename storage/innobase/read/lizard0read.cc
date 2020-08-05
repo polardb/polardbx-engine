@@ -55,7 +55,15 @@ Vision::Vision()
       m_list_idx(VISION_LIST_IDX_NULL),
       m_creator_trx_id(TRX_ID_MAX),
       m_up_limit_id(TRX_ID_MAX),
-      m_in_list(false) {}
+      m_active(false) {}
+
+void Vision::reset() {
+  m_snapshot_scn = SCN_NULL;
+  m_list_idx = VISION_LIST_IDX_NULL;
+  m_creator_trx_id = TRX_ID_MAX;
+  m_up_limit_id = TRX_ID_MAX;
+  m_active = false;
+}
 
 VisionContainer::VisionList::VisionList() {
   mutex_create(LATCH_ID_LIZARD_VISION_LIST, &m_mutex);
@@ -71,6 +79,7 @@ VisionContainer::VisionList::~VisionList() {
   Add a element
 
   @retval		  a new empty vision obj
+  @deprecated    use add_element instead
 */
 Vision *VisionContainer::VisionList::new_element() {
   Vision *vision = nullptr;
@@ -88,10 +97,25 @@ Vision *VisionContainer::VisionList::new_element() {
   mutex_enter(&m_mutex);
   UT_LIST_ADD_LAST(m_vision_list, vision);
   vision->m_snapshot_scn = lizard_sys_get_scn();
-  vision->m_in_list = true;
+  vision->m_active = true;
   mutex_exit(&m_mutex);
 
   return vision;
+}
+
+/**
+  Add an element
+
+  @param[in]  the element will be added
+*/
+void VisionContainer::VisionList::add_element(Vision *vision) {
+  ut_ad(!m_mutex.is_owned());
+  ut_ad(!vision->m_active);
+
+  mutex_enter(&m_mutex);
+  UT_LIST_ADD_LAST(m_vision_list, vision);
+  vision->m_active = true;
+  mutex_exit(&m_mutex);
 }
 
 /**
@@ -101,13 +125,13 @@ Vision *VisionContainer::VisionList::new_element() {
 */
 void VisionContainer::VisionList::remove_element(Vision *vision) {
   ut_ad(!m_mutex.is_owned());
-  ut_ad(vision->m_in_list);
   ut_ad(vision->m_list_idx != VISION_LIST_IDX_NULL);
+  ut_ad(vision->m_active);
 
   mutex_enter(&m_mutex);
+  vision->m_active = false;
   UT_LIST_REMOVE(m_vision_list, vision);
   mutex_exit(&m_mutex);
-  ut::delete_(vision);
 }
 
 /**
@@ -138,28 +162,23 @@ VisionContainer::VisionContainer(ulint _n_lists)
 /**
   Add a element.
 
-  @retval     a new empty vision obj
+  @param[in]		the transaction to assign vision
 */
-Vision* VisionContainer::vision_open(trx_id_t creator_id) {
-  Vision *vision = nullptr;
+void VisionContainer::vision_open(trx_t *trx) {
+  ut_ad(trx->id != TRX_ID_MAX);
 
-  ut_ad(creator_id != TRX_ID_MAX);
+  auto vision = &trx->vision;
+  vision->m_creator_trx_id = trx->id;
+  vision->m_up_limit_id = lizard_sys_get_min_active_trx_id();
+  vision->m_snapshot_scn = lizard_sys_get_scn();
 
   ulint idx = m_counter.fetch_add(1);
-
   idx %= m_n_lists;
-
-  vision = m_lists[idx].new_element();
-
-  if (vision == nullptr) return nullptr;
+  m_lists[idx].add_element(vision);
 
   m_size.fetch_add(1);
 
   vision->m_list_idx = idx;
-
-  vision->m_creator_trx_id = creator_id;
-
-  return vision;
 }
 
 /**
@@ -167,7 +186,7 @@ Vision* VisionContainer::vision_open(trx_id_t creator_id) {
 
   @param[in]		the element will be released
 */
-void VisionContainer::vision_release(Vision *&vision) {
+void VisionContainer::vision_release(Vision *vision) {
   ut_ad(vision != nullptr);
   ut_ad(vision->m_list_idx < m_n_lists);
 
@@ -175,8 +194,8 @@ void VisionContainer::vision_release(Vision *&vision) {
 
   m_size.fetch_sub(1);
 
-  /** vision will not be cached */
-  vision = nullptr;
+  /** vision will be cached */
+  vision->reset();
 }
 
 /**
@@ -186,7 +205,7 @@ void VisionContainer::vision_release(Vision *&vision) {
 */
 void VisionContainer::clone_oldest_vision(Vision *vision) {
   ut_ad(vision && vision->m_list_idx == VISION_LIST_IDX_NULL);
-  ut_ad(vision->m_in_list == false);
+  ut_ad(vision->m_active == false);
 
   scn_t oldest_scn = lizard_sys_get_min_safe_scn();
 
@@ -207,7 +226,7 @@ void VisionContainer::clone_oldest_vision(Vision *vision) {
 
   /** This vision didn't put into list */
   vision->m_list_idx = VISION_LIST_IDX_NULL;
-  vision->m_in_list = false;
+  vision->m_active = false;
 }
 
 /**
@@ -268,14 +287,14 @@ bool Vision::modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
 }
 
 /**
-  Add a new vision.
+  Assign vision for an active trancaction.
 
-  @retval     a new vision obj
+  @param[in]		the transaction to assign vision
 */
-Vision *trx_vision_open(trx_id_t creator_id) {
+void trx_vision_open(trx_t *trx) {
   ut_ad(vision_container->inited());
   ut_ad(trx_sys == nullptr || !trx_sys_mutex_own());
-  return vision_container->vision_open(creator_id);
+  vision_container->vision_open(trx);
 }
 
 /**
@@ -283,7 +302,7 @@ Vision *trx_vision_open(trx_id_t creator_id) {
 
   @param[in]		the element will be released
 */
-void trx_vision_release(Vision *&vision) {
+void trx_vision_release(Vision *vision) {
   ut_ad(vision_container->inited());
 
   vision_container->vision_release(vision);

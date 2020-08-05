@@ -117,7 +117,7 @@ bool row_vers_old_has_index_entry(
  @return DB_SUCCESS or DB_MISSING_HISTORY */
 dberr_t row_vers_build_for_consistent_read(
     const rec_t *rec, mtr_t *mtr, dict_index_t *index, ulint **offsets,
-    lizard::Vision *vision, mem_heap_t **offset_heap, mem_heap_t *in_heap,
+    const lizard::Vision *vision, mem_heap_t **offset_heap, mem_heap_t *in_heap,
     rec_t **old_vers, const dtuple_t **vrow, lob::undo_vers_t *lob_undo);
 
 /** Constructs the last committed version of a clustered index record,

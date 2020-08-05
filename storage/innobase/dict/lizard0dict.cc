@@ -132,7 +132,7 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx) {
   txn_rec_t rec_txn;
   scn_t scn = index->txn.scn.load();
   ut_ad(trx);
-  ut_ad(trx->vision);
+  ut_ad(trx->vision.is_active());
 
   rec_txn.trx_id = index->trx_id;
   rec_txn.undo_ptr = index->txn.uba;
@@ -149,8 +149,8 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx) {
     consistent, the vision judgement only depend on real SCN, UBA state
     will be used to code defense, so here omit the check.
   */
-  return trx->vision->modifications_visible(&rec_txn, index->table->name,
-                                            false);
+  return trx->vision.modifications_visible(&rec_txn, index->table->name,
+                                           false);
 }
 
 /**

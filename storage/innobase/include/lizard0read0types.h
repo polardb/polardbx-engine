@@ -116,13 +116,22 @@ class Vision {
     return id < m_up_limit_id;
     }
 
-    /** Set the view creator transaction id. This should be set only
+  /**
+    Set the view creator transaction id. This should be set only
     for views created by RW transactions. */
-    void set_vision_creator_trx_id(trx_id_t id) {
-      ut_ad(id > 0);
-      ut_ad(m_creator_trx_id == 0);
-      m_creator_trx_id = id;
-    }
+  void set_vision_creator_trx_id(trx_id_t id) {
+    ut_ad(id > 0);
+    ut_ad(m_creator_trx_id == 0);
+    m_creator_trx_id = id;
+  }
+
+  /**
+    Return active state of the vision
+    @retval   active state of the vision
+  */
+  bool is_active() const { return m_active; }
+
+  void reset();
 
 #ifdef UNIV_DEBUG
   /**
@@ -151,8 +160,8 @@ class Vision {
   by secondary index */
   trx_id_t m_up_limit_id;
 
-  /** Whether in vision list. */
-  bool m_in_list;
+  /** Whether the vision is active, the active vision must be in list. */
+  bool m_active;
 
   UT_LIST_NODE_T(Vision) list;
 

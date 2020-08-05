@@ -239,12 +239,12 @@ static inline void trx_release_reference(trx_t *trx) {
 
 static lizard::Vision *trx_get_vision(trx_t *trx) {
   /** read_view is being used or not assigned */
-  return (trx->vision);
+  return (&trx->vision);
 }
 
 static const lizard::Vision *trx_get_vision(const trx_t *trx) {
   /** read_view is being used or not assigned */
-  return (trx->vision);
+  return (&trx->vision);
 }
 
 // /**

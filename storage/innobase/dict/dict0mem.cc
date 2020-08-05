@@ -614,7 +614,7 @@ bool dict_index_t::is_usable(const trx_t *trx) {
   }
 
   /* Check if the specified transaction can see this index. */
-  return (table->is_temporary() || trx_id == 0 || !trx->vision ||
+  return (table->is_temporary() || trx_id == 0 || !trx->vision.is_active() ||
           lizard::dd_index_modificatsion_visible(this, trx));
 }
 #endif /* !UNIV_HOTBACKUP */
