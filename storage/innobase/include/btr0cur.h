@@ -363,6 +363,7 @@ void btr_cur_update_in_place_log(
     const upd_t *update, /*!< in: update vector */
     trx_id_t trx_id,     /*!< in: transaction id */
     roll_ptr_t roll_ptr, /*!< in: roll ptr */
+    const txn_rec_t *txn_rec, /*!< in: lizard info in the record */
     mtr_t *mtr);         /*!< in: mtr */
 /** Tries to update a record on a page in an index tree. It is assumed that mtr
  holds an x-latch on the page. The operation does not succeed if there is too
