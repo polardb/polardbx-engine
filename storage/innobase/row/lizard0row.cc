@@ -303,7 +303,7 @@ void row_upd_rec_lizard_fields_in_recovery(rec_t *rec,
     The example found so far is:
     modify or insert a new record after instant drop column.
   */
-  // lizard_ut_ad(!(*rec_offs_base(offsets) & REC_OFFS_COMPACT) ||
+  // lizard_ut_ad(!rec_offs_comp(offsets) ||
   //              index->get_sys_col_pos(DATA_SCN_ID) == pos);
 
   if (page_zip) {
@@ -494,7 +494,7 @@ byte* row_upd_write_lizard_vals_to_log(const dict_index_t *index,
                                        mtr_t *mtr MY_ATTRIBUTE((unused))) {
   ut_ad(index->is_clustered());
   ut_ad(mtr);
-  assert_undo_ptr_allocated(txn_rec->undo_ptr);
+  ut_ad(txn_rec);
 
   log_ptr +=
       mach_write_compressed(log_ptr, index->get_sys_col_pos(DATA_SCN_ID));

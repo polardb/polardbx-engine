@@ -3592,7 +3592,9 @@ static void ibuf_insert_to_index_page(
       MLOG_COMP_REC_UPDATE_IN_PLACE/MLOG_REC_UPDATE_IN_PLACE
       expects trx_id, roll_ptr for secondary indexes. So we
       just write dummy trx_id(0), roll_ptr(0) */
+      /* Also, just write dummy scn(0), roll_ptr(0) */
       btr_cur_update_in_place_log(BTR_KEEP_SYS_FLAG, rec, index, update, 0, 0,
+                                  nullptr,
                                   mtr);
 
       DBUG_EXECUTE_IF("crash_after_log_ibuf_upd_inplace",

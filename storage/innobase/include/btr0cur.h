@@ -335,11 +335,12 @@ on the compressed page (IBUF_BITMAP_FREE was reset outside mtr) */
 @param[in] update Update vector
 @param[in] trx_id Transaction id
 @param[in] roll_ptr Roll ptr
+@param[in] txn_rec lizard info in the record
 @param[in] mtr Mini-transaction */
 void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
                                  dict_index_t *index, const upd_t *update,
                                  trx_id_t trx_id, roll_ptr_t roll_ptr,
-                                 mtr_t *mtr);
+                                 const txn_rec_t *txn_rec, mtr_t *mtr);
 
 /** Tries to update a record on a page in an index tree. It is assumed that mtr
 holds an x-latch on the page. The operation does not succeed if there is too

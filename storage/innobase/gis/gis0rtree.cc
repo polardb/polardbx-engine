@@ -52,6 +52,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0mon.h"
 #include "trx0trx.h"
 
+#include "lizard0row.h"
+#include "lizard0undo.h"
+
 /** Initial split nodes info for R-tree split.
  @return initialized split nodes array */
 static rtr_split_node_t *rtr_page_split_initialize_nodes(
@@ -201,9 +204,11 @@ static void rtr_update_mbr_field_in_place(
   /* Write redo log. */
   /* For now, we use LOG_REC_UPDATE_IN_PLACE to log this enlarge.
   In the future, we may need to add a new log type for this. */
-  const bool opened = mlog_open_and_write_index(
-      mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
-      1 + DATA_ROLL_PTR_LEN + 14 + 2 + MLOG_BUF_MARGIN, log_ptr);
+  const bool opened =
+      mlog_open_and_write_index(mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
+                                1 + DATA_ROLL_PTR_LEN + 14 + 2 +
+                                    MLOG_BUF_MARGIN + 2 + DATA_LIZARD_TOTAL_LEN,
+                                log_ptr);
 
   if (!opened) {
     /* Logging in mtr is switched off during
@@ -221,6 +226,14 @@ static void rtr_update_mbr_field_in_place(
   log_ptr += DATA_ROLL_PTR_LEN;
   /* TRX_ID */
   log_ptr += mach_u64_write_compressed(log_ptr, 0);
+
+  /* SCN_ID Position */
+  log_ptr += mach_write_compressed(log_ptr, 0);
+  /* SCN_ID */
+  log_ptr += mach_u64_write_compressed(log_ptr, 0);
+  /* Undo Ptr */
+  lizard::trx_write_undo_ptr(log_ptr, (undo_ptr_t)0);
+  log_ptr += DATA_UNDO_PTR_LEN;
 
   /* Offset */
   mach_write_to_2(log_ptr, page_offset(rec));

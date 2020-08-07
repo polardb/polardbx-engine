@@ -3153,19 +3153,22 @@ dberr_t btr_cur_pessimistic_insert(
 @param[in] update Update vector
 @param[in] trx_id Transaction id
 @param[in] roll_ptr Roll ptr
+@param[in] lizard info in the record
 @param[in] mtr Mini-transaction */
 void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
                                  dict_index_t *index, const upd_t *update,
                                  trx_id_t trx_id, roll_ptr_t roll_ptr,
-                                 mtr_t *mtr) {
+                                 const txn_rec_t *txn_rec, mtr_t *mtr) {
   byte *log_ptr = nullptr;
   ut_d(const page_t *page = page_align(rec));
   ut_ad(flags < 256);
   ut_ad(page_is_comp(page) == dict_table_is_comp(index->table));
 
-  const bool opened = mlog_open_and_write_index(
-      mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
-      1 + DATA_ROLL_PTR_LEN + 14 + 2 + MLOG_BUF_MARGIN, log_ptr);
+  const bool opened =
+      mlog_open_and_write_index(mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
+                                1 + DATA_ROLL_PTR_LEN + 14 + 2 +
+                                    MLOG_BUF_MARGIN + 2 + DATA_LIZARD_TOTAL_LEN,
+                                log_ptr);
 
   if (!opened) {
     /* Logging in mtr is switched off during crash recovery */
@@ -3184,6 +3187,9 @@ void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
   if (index->is_clustered()) {
     log_ptr =
         row_upd_write_sys_vals_to_log(index, trx_id, roll_ptr, log_ptr, mtr);
+
+    log_ptr =
+        lizard::row_upd_write_lizard_vals_to_log(index, txn_rec, log_ptr, mtr);
   } else {
     /* Dummy system fields for a secondary index */
     /* TRX_ID Position */
@@ -3193,6 +3199,15 @@ void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
     log_ptr += DATA_ROLL_PTR_LEN;
     /* TRX_ID */
     log_ptr += mach_u64_write_compressed(log_ptr, 0);
+
+    /* Dummy lizard fields for a secondary index */
+    /* SCN_ID Position */
+    log_ptr += mach_write_compressed(log_ptr, 0);
+    /* SCN_ID */
+    log_ptr += mach_u64_write_compressed(log_ptr, 0);
+    /* Undo Ptr */
+    lizard::trx_write_undo_ptr(log_ptr, (undo_ptr_t)0);
+    log_ptr += DATA_UNDO_PTR_LEN;
   }
 
   mach_write_to_2(log_ptr, page_offset(rec));
@@ -3220,6 +3235,9 @@ byte *btr_cur_parse_update_in_place(
   ulint rec_offset;
   mem_heap_t *heap;
   ulint *offsets;
+  ulint txn_pos;
+  scn_t scn;
+  undo_ptr_t undo_ptr;
 
   if (end_ptr < ptr + 1) {
     return (nullptr);
@@ -3232,6 +3250,12 @@ byte *btr_cur_parse_update_in_place(
 
   if (ptr == nullptr) {
     return (nullptr);
+  }
+
+  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn, &undo_ptr);
+
+  if (ptr == NULL) {
+    return (NULL);
   }
 
   if (end_ptr < ptr + 2) {
@@ -3263,6 +3287,9 @@ byte *btr_cur_parse_update_in_place(
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
     row_upd_rec_sys_fields_in_recovery(rec, page_zip, offsets, pos, trx_id,
                                        roll_ptr);
+
+    lizard::row_upd_rec_lizard_fields_in_recovery(rec, page_zip, index, txn_pos,
+                                                  offsets, scn, undo_ptr);
   }
 
   row_upd_rec_in_place(rec, index, offsets, update, page_zip);
@@ -3359,6 +3386,8 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
   rec_t *rec;
   roll_ptr_t roll_ptr = 0;
   bool was_delete_marked;
+  txn_rec_t txn_rec;
+  trx_t *trx;
 
   rec = btr_cur_get_rec(cursor);
   index = cursor->index;
@@ -3441,7 +3470,23 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
   block->ahi.validate();
   row_upd_rec_in_place(rec, index, offsets, update, page_zip);
 
-  btr_cur_update_in_place_log(flags, rec, index, update, trx_id, roll_ptr, mtr);
+  if (thr) {
+    trx = thr_get_trx(thr);
+    txn_rec.trx_id = trx->id;
+    txn_rec.scn = trx->txn_desc.scn.first;
+    txn_rec.undo_ptr = trx->txn_desc.undo_ptr;
+  } else {
+    /** We found a case: update innodb_dynamic_metadata, flags will be
+    set as BTR_KEEP_SYS_FLAG | ... , and trx is NULL. flags will also
+    be written to redo log, and in recovery, the sys columns will be
+    kept intact. */
+    txn_rec.trx_id = trx_id;
+    txn_rec.scn = 0;
+    txn_rec.undo_ptr = 0;
+  }
+
+  btr_cur_update_in_place_log(flags, rec, index, update, trx_id, roll_ptr,
+                              &txn_rec, mtr);
 
   if (index->is_clustered() && !index->table->is_intrinsic()) {
     assert_lizard_page_attributes(page_align(rec), index);
@@ -4215,15 +4260,16 @@ static inline void btr_cur_del_mark_set_clust_rec_log(
     dict_index_t *index, /*!< in: index of the record */
     trx_id_t trx_id,     /*!< in: transaction id */
     roll_ptr_t roll_ptr, /*!< in: roll ptr to the undo log record */
+    const txn_rec_t *txn_rec, /*!< in: lizard info in the record */
     mtr_t *mtr)          /*!< in: mtr */
 {
   byte *log_ptr = nullptr;
 
   ut_ad(page_rec_is_comp(rec) == dict_table_is_comp(index->table));
 
-  const bool opened =
-      mlog_open_and_write_index(mtr, rec, index, MLOG_REC_CLUST_DELETE_MARK,
-                                1 + 1 + DATA_ROLL_PTR_LEN + 14 + 2, log_ptr);
+  const bool opened = mlog_open_and_write_index(
+      mtr, rec, index, MLOG_REC_CLUST_DELETE_MARK,
+      1 + 1 + DATA_ROLL_PTR_LEN + 14 + 2 + 2 + DATA_LIZARD_TOTAL_LEN, log_ptr);
 
   if (!opened) {
     /* Logging in mtr is switched off during crash recovery */
@@ -4235,6 +4281,10 @@ static inline void btr_cur_del_mark_set_clust_rec_log(
 
   log_ptr =
       row_upd_write_sys_vals_to_log(index, trx_id, roll_ptr, log_ptr, mtr);
+
+  log_ptr =
+      lizard::row_upd_write_lizard_vals_to_log(index, txn_rec, log_ptr, mtr);
+
   mach_write_to_2(log_ptr, page_offset(rec));
   log_ptr += 2;
 
@@ -4257,6 +4307,9 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
   roll_ptr_t roll_ptr;
   ulint offset;
   rec_t *rec;
+  ulint txn_pos;
+  scn_t scn;
+  undo_ptr_t undo_ptr;
 
   ut_ad(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
@@ -4273,6 +4326,12 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
 
   if (ptr == nullptr) {
     return (nullptr);
+  }
+
+  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn, &undo_ptr);
+
+  if (ptr == NULL) {
+    return (NULL);
   }
 
   if (end_ptr < ptr + 2) {
@@ -4304,6 +4363,14 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
           rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
                           UT_LOCATION_HERE, &heap),
           pos, trx_id, roll_ptr);
+
+      lizard::row_upd_rec_lizard_fields_in_recovery(
+          rec, page_zip, index, txn_pos,
+          rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
+                          UT_LOCATION_HERE, &heap),
+          scn, undo_ptr);
+
+      /** TODO: Check it */
       if (UNIV_LIKELY_NULL(heap)) {
         mem_heap_free(heap);
       }
@@ -4334,6 +4401,7 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   dberr_t err;
   page_zip_des_t *page_zip;
   trx_t *trx;
+  txn_rec_t txn_rec;
 
   ut_ad(index->is_clustered());
   ut_ad(rec_offs_validate(rec, index, offsets));
@@ -4386,6 +4454,10 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   }
 
   trx = thr_get_trx(thr);
+  txn_rec.trx_id = trx->id;
+  txn_rec.scn = trx->txn_desc.scn.first;
+  txn_rec.undo_ptr = trx->txn_desc.undo_ptr;
+
   /* This function must not be invoked during rollback
   (of a TRX_STATE_PREPARE transaction or otherwise). */
   ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE));
@@ -4407,7 +4479,8 @@ dberr_t btr_cur_del_mark_set_clust_rec(
 
   assert_lizard_page_attributes(page_align(rec), index);
 
-  btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr, mtr);
+  btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr,
+                                     &txn_rec, mtr);
 
   return (err);
 }
