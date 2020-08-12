@@ -23352,10 +23352,21 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to reboot innodb on safe cleanout mode (off by default)", NULL,
     NULL, false);
 
+static const char *innodb_cleanout_mode_names[] = {"record", "page", NullS};
+
+static TYPELIB innodb_cleanout_mode_typelib = {
+    array_elements(innodb_cleanout_mode_names) - 1,
+    "innodb_cleanout_mode_typelib", innodb_cleanout_mode_names, NULL};
+
 static MYSQL_SYSVAR_BOOL(
     cleanout_disable, lizard::opt_cleanout_disable, PLUGIN_VAR_OPCMDARG,
     "Whether to disable cleanout when read (off by default)", NULL, NULL,
     false);
+
+static MYSQL_SYSVAR_ENUM(cleanout_mode, lizard::cleanout_mode,
+                         PLUGIN_VAR_RQCMDARG, " Cleanout mode, default(cursor)",
+                         NULL, NULL, lizard::CLEANOUT_BY_CURSOR,
+                         &innodb_cleanout_mode_typelib);
 
 static MYSQL_SYSVAR_ULONG(cleanout_max_scans_on_page,
                           lizard::cleanout_max_scans_on_page,
@@ -23607,6 +23618,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(cleanout_disable),
     MYSQL_SYSVAR(cleanout_max_scans_on_page),
     MYSQL_SYSVAR(cleanout_max_cleans_on_page),
+    MYSQL_SYSVAR(cleanout_mode),
     MYSQL_SYSVAR(txn_undo_page_reuse_max_percent),
     nullptr};
 

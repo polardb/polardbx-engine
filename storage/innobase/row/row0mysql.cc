@@ -886,6 +886,9 @@ row_prebuilt_t *row_create_prebuilt(
   prebuilt->pcur->m_cleanout_pages = ut::new_<lizard::Cleanout_pages>();
   prebuilt->clust_pcur->m_cleanout_pages = ut::new_<lizard::Cleanout_pages>();
 
+  prebuilt->pcur->m_cleanout_cursors = ut::new_<lizard::Cleanout_cursors>();
+  prebuilt->clust_pcur->m_cleanout_cursors = ut::new_<lizard::Cleanout_cursors>();
+
   prebuilt->pcur->reset();
   prebuilt->clust_pcur->reset();
 
@@ -955,6 +958,11 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
   ut::delete_(prebuilt->clust_pcur->m_cleanout_pages);
   prebuilt->pcur->m_cleanout_pages = nullptr;
   prebuilt->clust_pcur->m_cleanout_pages = nullptr;
+
+  ut::delete_(prebuilt->pcur->m_cleanout_cursors);
+  ut::delete_(prebuilt->clust_pcur->m_cleanout_cursors);
+  prebuilt->pcur->m_cleanout_cursors= nullptr;
+  prebuilt->clust_pcur->m_cleanout_cursors = nullptr;
 
   ut::free(prebuilt->mysql_template);
 

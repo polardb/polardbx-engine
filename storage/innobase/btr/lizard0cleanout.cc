@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2020-04-15 by Jianwei.zhao
  *******************************************************/
 
+#include "btr0pcur.h"
 #include "fil0fil.h"
 #include "sync0types.h"
 #include "trx0rseg.h"
@@ -330,6 +331,9 @@ ulint cleanout_max_scans_on_page = 0;
 /** Lizard max clean record count once cleanout one page.*/
 ulint cleanout_max_cleans_on_page = 1;
 
+/** Lizard cleanout mode, default(cursor) */
+ulong cleanout_mode = CLEANOUT_BY_CURSOR;
+
 Page::Page(const page_id_t &page_id, const dict_index_t *index)
     : m_page_id(page_id) {
   ut_ad(index->is_clustered());
@@ -404,6 +408,131 @@ Cleanout_pages::~Cleanout_pages() {
   m_pages.clear();
   m_txns.clear();
   m_page_num = 0;
+  m_txn_num = 0;
+}
+
+
+
+/*----------------------------------------------------------------*/
+/* Lizard cleanout by cursor. */
+/*----------------------------------------------------------------*/
+
+Cursor::Cursor(const Cursor &cursor) {
+  ut_ad(cursor.stored());
+
+  if (this != &cursor) {
+    m_old_stored = cursor.m_old_stored;
+    m_old_rec = cursor.m_old_rec;
+    m_block = cursor.m_block;
+    m_index = cursor.m_index;
+    m_modify_clock = cursor.m_modify_clock;
+    m_block_when_stored = cursor.m_block_when_stored;
+  }
+}
+
+Cursor &Cursor::operator=(const Cursor &cursor) {
+  if (this != &cursor) {
+    m_old_stored = cursor.m_old_stored;
+    m_old_rec = cursor.m_old_rec;
+    m_block = cursor.m_block;
+    m_index = cursor.m_index;
+    m_modify_clock = cursor.m_modify_clock;
+    m_block_when_stored = cursor.m_block_when_stored;
+  }
+  return *this;
+}
+
+bool Cursor::store_position(btr_pcur_t *pcur) {
+  ut_ad(pcur);
+  m_block = pcur->get_block();
+  m_index = pcur->get_btr_cur()->index;
+  m_old_rec = page_cur_get_rec(pcur->get_page_cur());
+
+  auto page = page_align(m_old_rec);
+
+  ut_ad(!page_is_empty(page) && page_is_leaf(page));
+
+  /* Function try to check if block is S/X latch. */
+  m_modify_clock = m_block->get_modify_clock(
+      IF_DEBUG(fsp_is_system_temporary(m_block->page.id.space())));
+
+  m_block_when_stored.store(m_block);
+
+  m_old_stored = true;
+  return true;
+}
+
+bool Cursor::restore_position(mtr_t *mtr, ut::Location location) {
+  ut_ad(m_old_stored == true);
+  ut_ad(m_old_rec != nullptr);
+
+  /** Cleanout will modify leaf page */
+  ulint latch_mode = BTR_MODIFY_LEAF;
+  Page_fetch fetch_mode = Page_fetch::SCAN;
+
+  /* Try optimistic restoration. */
+  if (m_block_when_stored.run_with_hint([&](buf_block_t *hint) {
+        return hint != nullptr &&
+               buf_page_optimistic_get(latch_mode, hint, m_modify_clock,
+                                       fetch_mode, location.filename,
+                                       location.line, mtr);
+      })) {
+    return true;
+  }
+
+  lizard_stats.cleanout_cursor_restore_failed.inc();
+
+  return false;
+}
+
+/**
+  Add the committed trx into hash map.
+  @param[in]    trx_id
+  @param[in]    trx_commit
+
+  @retval       true        Add success
+  @retval       false       Add failure
+*/
+bool Cleanout_cursors::push_trx(trx_id_t trx_id, txn_commit_t txn_commit) {
+  auto it =
+      m_txns.insert(std::pair<trx_id_t, txn_commit_t>(trx_id, txn_commit));
+
+  if (it.second) m_txn_num++;
+  return it.second;
+}
+
+/**
+  Put the cursor that needed to cleanout into vector.
+
+  @param[in]      page_id
+  @param[in]      index
+*/
+void Cleanout_cursors::push_cursor(const Cursor &cursor) {
+  m_cursors.push_back(cursor);
+  m_cursor_num++;
+}
+
+bool Cleanout_cursors::is_empty() {
+  if (m_cursor_num == 0 && m_txn_num == 0) return true;
+
+  return false;
+}
+
+void Cleanout_cursors::init() {
+  if (m_cursor_num > 0) {
+    m_cursors.clear();
+    m_cursor_num = 0;
+  }
+  if (m_txn_num > 0) {
+    m_txns.clear();
+    m_txn_num = 0;
+  }
+}
+
+Cleanout_cursors::~Cleanout_cursors() {
+  m_cursors.clear();
+  m_txns.clear();
+  m_cursor_num = 0;
   m_txn_num = 0;
 }
 

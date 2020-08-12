@@ -33,11 +33,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0cleanout_h
 #define lizard0cleanout_h
 
+#include "buf0types.h"
+#include "page0types.h"
+#include "rem0types.h"
 #include "trx0types.h"
 #include "ut0mutex.h"
-#include "rem0types.h"
-#include "page0types.h"
-#include "buf0types.h"
+#include "buf0block_hint.h"
 
 #include "lizard0undo0types.h"
 #include "lizard0ut.h"
@@ -46,6 +47,7 @@ struct mtr_t;
 struct dict_index_t;
 struct page_zip_des_t;
 struct txn_rec_t;
+struct btr_pcur_t;
 
 #ifdef UNIV_PFS_MUTEX
 /* lizard undo hdr hash mutex PFS key */
@@ -169,6 +171,10 @@ extern ulint cleanout_max_scans_on_page;
 /** Lizard max clean record count once cleanout one page.*/
 extern ulint cleanout_max_cleans_on_page;
 
+enum cleanout_mode_enum { CLEANOUT_BY_CURSOR, CLEANOUT_BY_PAGE };
+
+extern ulong cleanout_mode;
+
 class Page {
  public:
   Page() : m_page_id(0, 0), m_index(nullptr) {}
@@ -258,6 +264,108 @@ class Cleanout_pages {
   ulint m_page_num;
   ulint m_txn_num;
   Page m_last_page;
+};
+
+/*----------------------------------------------------------------*/
+/* Lizard cleanout by cursor. */
+/*----------------------------------------------------------------*/
+
+class Cursor {
+ public:
+  explicit Cursor()
+      : m_old_stored(false),
+        m_old_rec(nullptr),
+        m_block(nullptr),
+        m_index(nullptr),
+        m_modify_clock(0),
+        m_block_when_stored() {
+    m_block_when_stored.clear();
+  }
+
+  Cursor(const Cursor &);
+
+  Cursor &operator=(const Cursor &);
+
+  bool store_position(btr_pcur_t *pcur);
+
+  bool restore_position(mtr_t *mtr, ut::Location location);
+
+  bool stored() const { return m_old_stored; }
+
+  rec_t *get_rec() const { return m_old_rec; }
+
+  dict_index_t *get_index() const { return m_index; }
+
+  buf_block_t *get_block() const { return m_block; }
+
+ private:
+  bool m_old_stored;
+
+  rec_t *m_old_rec;
+
+  buf_block_t *m_block;
+
+  dict_index_t *m_index;
+
+  uint64_t m_modify_clock;
+
+  buf::Block_hint m_block_when_stored;
+};
+
+/** All the cursors need to cleanout within pcur */
+typedef std::vector<Cursor, ut::allocator<Cursor>> Cursors;
+
+/**
+  Collected cursor that will be cleanout soon.
+ */
+class Cleanout_cursors {
+ public:
+  explicit Cleanout_cursors()
+      : m_cursors(), m_txns(), m_cursor_num(0), m_txn_num(0) {}
+
+  virtual ~Cleanout_cursors();
+
+  void init();
+
+  bool is_empty();
+
+  const Txn_commits *txns() const { return &m_txns; }
+
+  ulint cursor_count() const { return m_cursor_num; }
+
+  ulint txn_count() const { return m_txn_num; }
+
+  template <typename Func>
+  ulint iterate_cursor(Func &functor) {
+    ulint cleaned = 0;
+    for (auto it : m_cursors) {
+      cleaned += functor(it);
+    }
+    return cleaned;
+  }
+
+  /**
+    Add the committed trx into hash map.
+    @param[in]    trx_id
+    @param[in]    trx_commit
+
+    @retval       true        Add success
+    @retval       false       Add failure
+  */
+  bool push_trx(trx_id_t trx_id, txn_commit_t txn_commit);
+  /**
+    Add the page which needed to cleanout into vector.
+
+    @param[in]      page_id
+    @param[in]      index
+  */
+  void push_cursor(const Cursor &cursor);
+
+ private:
+  Cursors m_cursors;
+  Txn_commits m_txns;
+  ulint m_cursor_num;
+  ulint m_txn_num;
 };
 
 }  // namespace lizard

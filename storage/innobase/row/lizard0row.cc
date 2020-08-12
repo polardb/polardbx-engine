@@ -610,7 +610,11 @@ byte *row_upd_parse_lizard_vals(const byte *ptr, const byte *end_ptr,
 bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
                           const dict_index_t *index, const ulint *offsets,
                           btr_pcur_t *pcur) {
-  if (!pcur || pcur->m_cleanout_pages == nullptr) return false;
+  if (cleanout_mode == CLEANOUT_BY_CURSOR) {
+    if (!pcur || pcur->m_cleanout_cursors == nullptr) return false;
+  } else {
+    if (!pcur || pcur->m_cleanout_pages == nullptr) return false;
+  }
 
   /** If disabled, skip it. */
   if (opt_cleanout_disable) return false;
@@ -623,12 +627,22 @@ bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
   page_no_t page_no = page_get_page_no(pcur->get_page());
   ut_ad(page_no == page_get_page_no(page_align(rec)));
 
-  page_id_t page_id(dict_index_get_space(index), page_no);
+  if (cleanout_mode == CLEANOUT_BY_CURSOR) {
+    Cursor cursor;
+    cursor.store_position(pcur);
+    pcur->m_cleanout_cursors->push_cursor(cursor);
+    pcur->m_cleanout_cursors->push_trx(trx_id, txn_rec);
 
-  pcur->m_cleanout_pages->push_page(page_id, index);
-  pcur->m_cleanout_pages->push_trx(trx_id, txn_rec);
+    lizard_stats.cleanout_cursor_collect.inc();
 
-  lizard_stats.cleanout_page_collect.inc();
+  } else {
+    page_id_t page_id(dict_index_get_space(index), page_no);
+
+    pcur->m_cleanout_pages->push_page(page_id, index);
+    pcur->m_cleanout_pages->push_trx(trx_id, txn_rec);
+
+    lizard_stats.cleanout_page_collect.inc();
+  }
 
   return true;
 }
@@ -636,6 +650,60 @@ bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
 /** Page cleanout operation */
 struct Cleanout {
   Cleanout(const Txn_commits *txns) : m_txns(txns) {}
+
+  ulint operator()(Cursor &cursor) {
+    bool restored = false;
+    ulint cleaned = 0;
+
+    rec_t *rec = nullptr;
+    dict_index_t *index = nullptr;
+    buf_block_t *block = nullptr;
+    ulint *offsets = nullptr;
+    mem_heap_t *heap = nullptr;
+
+    trx_id_t trx_id;
+    txn_rec_t txn_rec;
+
+    mtr_t mtr;
+
+    mtr.start();
+    if (!(restored = cursor.restore_position(&mtr, UT_LOCATION_HERE)))
+      goto mtr_end;
+
+    rec = const_cast<rec_t *>(cursor.get_rec());
+    index = const_cast<dict_index_t *>(cursor.get_index());
+    block = const_cast<buf_block_t *>(cursor.get_block());
+
+    heap = mem_heap_create(UNIV_PAGE_SIZE + 200, UT_LOCATION_HERE);
+
+    if (page_rec_is_user_rec(rec)) {
+      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+                                UT_LOCATION_HERE, &heap);
+      trx_id = row_get_rec_trx_id(rec, index, offsets);
+
+      /** If trx state is active ,try to cleanout */
+      if (row_get_rec_undo_ptr_is_active(rec, index, offsets)) {
+        auto it = m_txns->find(trx_id);
+        if (it != m_txns->end()) {
+          txn_rec = it->second;
+          /** Modify the scn and undo ptr */
+          row_upd_rec_lizard_fields_in_cleanout(
+              rec, buf_block_get_page_zip(block), index, offsets, &txn_rec);
+
+          /** Write the redo log */
+          btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &txn_rec, &mtr);
+
+          cleaned++;
+        }
+      }
+    }
+
+  mtr_end:
+    mtr.commit();
+
+    if (heap) mem_heap_free(heap);
+    return cleaned;
+  }
 
   /**
     Cleanout the page
@@ -709,7 +777,7 @@ struct Cleanout {
                                 UT_LOCATION_HERE, &heap);
       trx_id = row_get_rec_trx_id(rec, index, offsets);
 
-      /** If trx state is active ,try to cleanout */
+      /** If trx state is active , try to cleanout */
       if (row_get_rec_undo_ptr_is_active(rec, index, offsets)) {
         auto it = m_txns->find(trx_id);
         if (it != m_txns->end()) {
@@ -751,6 +819,18 @@ static ulint row_cleanout_pages(Cleanout_pages *pages) {
 }
 
 /**
+  Cleanout all the cursors once
+
+  @param[in]      pages       page container
+
+  @retval         count       cleaned records count
+*/
+static ulint row_cleanout_cursors(Cleanout_cursors *cursors) {
+  Cleanout op(cursors->txns());
+  return cursors->iterate_cursor<Cleanout>(op);
+}
+
+/**
   After search row complete, do the cleanout.
 
   @param[in]      prebuilt
@@ -764,11 +844,16 @@ ulint row_cleanout_after_read(row_prebuilt_t *prebuilt) {
 
   /** cursor maybe fixed on prebuilt->pcur or prebuilt->clust_pcur */
 
-  /** Find the collected and need cleanout pages */
+  /** Find the collected and need cleanout pages or cursors */
   pcur = prebuilt->pcur;
   if (pcur && pcur->m_cleanout_pages) {
     cleaned += row_cleanout_pages(pcur->m_cleanout_pages);
     pcur->m_cleanout_pages->init();
+  }
+
+  if (pcur && pcur->m_cleanout_cursors) {
+    cleaned += row_cleanout_cursors(pcur->m_cleanout_cursors);
+    pcur->m_cleanout_cursors->init();
   }
 
   pcur = prebuilt->clust_pcur;
@@ -777,28 +862,33 @@ ulint row_cleanout_after_read(row_prebuilt_t *prebuilt) {
     pcur->m_cleanout_pages->init();
   }
 
+  if (pcur && pcur->m_cleanout_cursors) {
+    cleaned += row_cleanout_cursors(pcur->m_cleanout_cursors);
+    pcur->m_cleanout_cursors->init();
+  }
+
   if (cleaned > 0) lizard_stats.cleanout_record_clean.add(cleaned);
 
   return cleaned;
 }
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/
-/* lizard field debug */
-/*=============================================================================*/
+  /* lizard field debug */
+  /*=============================================================================*/
 
-/**
-  Debug the scn id in record is initial state
-  @param[in]      rec       record
-  @param[in]      index     cluster index
-  @parma[in]      offsets   rec_get_offsets(rec, index)
+  /**
+    Debug the scn id in record is initial state
+    @param[in]      rec       record
+    @param[in]      index     cluster index
+    @parma[in]      offsets   rec_get_offsets(rec, index)
 
-  @retval         true      Success
-*/
-bool row_scn_initial(const rec_t *rec, const dict_index_t *index,
-                     const ulint *offsets) {
-  scn_id_t scn = row_get_rec_scn_id(rec, index, offsets);
-  ut_a(scn == SCN_NULL);
-  return true;
+    @retval         true      Success
+  */
+  bool row_scn_initial(const rec_t *rec, const dict_index_t *index,
+                       const ulint *offsets) {
+    scn_id_t scn = row_get_rec_scn_id(rec, index, offsets);
+    ut_a(scn == SCN_NULL);
+    return true;
 }
 
 /**
