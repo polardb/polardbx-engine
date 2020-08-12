@@ -90,6 +90,11 @@ static void export_lizard_status(void) {
   lizard_vars.cleanout_page_collect = lizard_stats.cleanout_page_collect;
 
   lizard_vars.cleanout_record_clean = lizard_stats.cleanout_record_clean;
+
+  lizard_vars.cleanout_cursor_collect = lizard_stats.cleanout_cursor_collect;
+
+  lizard_vars.cleanout_cursor_restore_failed =
+      lizard_stats.cleanout_cursor_restore_failed;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -155,6 +160,13 @@ static SHOW_VAR lizard_status_variables[] = {
 
     {"cleanout_record_clean", (char *)&lizard_vars.cleanout_record_clean,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"cleanout_cursor_collect", (char *)&lizard_vars.cleanout_cursor_collect,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"cleanout_cursor_restore_failed",
+     (char *)&lizard_vars.cleanout_cursor_restore_failed, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

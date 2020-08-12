@@ -86,6 +86,10 @@ struct lizard_var_t {
   ulint cleanout_page_collect;
 
   ulint cleanout_record_clean;
+
+  ulint cleanout_cursor_collect;
+
+  ulint cleanout_cursor_restore_failed;
 };
 
 struct lizard_stats_t {
@@ -140,6 +144,10 @@ struct lizard_stats_t {
   ulint_ctr_1_t cleanout_page_collect;
 
   ulint_ctr_1_t cleanout_record_clean;
+
+  ulint_ctr_1_t cleanout_cursor_collect;
+
+  ulint_ctr_1_t cleanout_cursor_restore_failed;
 };
 
 namespace lizard {

@@ -881,9 +881,25 @@ Max size Secondary index: 16 * 8 bytes + PK = 256 bytes. */
   prebuilt->clust_pcur = static_cast<btr_pcur_t *>(
       mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
 
-  prebuilt->pcur->m_cleanout_pages = UT_NEW_NOKEY(lizard::Cleanout_pages());
-  prebuilt->clust_pcur->m_cleanout_pages =
-      UT_NEW_NOKEY(lizard::Cleanout_pages());
+  void *ptr =
+      mem_heap_zalloc(prebuilt->heap, sizeof(lizard::Cleanout_pages) * 2 +
+                                          sizeof(lizard::Cleanout_cursors) * 2);
+
+  prebuilt->pcur->m_cleanout_pages = static_cast<lizard::Cleanout_pages *>(ptr);
+  new (prebuilt->pcur->m_cleanout_pages) lizard::Cleanout_pages();
+
+  prebuilt->clust_pcur->m_cleanout_pages = prebuilt->pcur->m_cleanout_pages + 1;
+  new (prebuilt->clust_pcur->m_cleanout_pages) lizard::Cleanout_pages();
+
+  prebuilt->pcur->m_cleanout_cursors =
+      reinterpret_cast<lizard::Cleanout_cursors *>(
+          prebuilt->clust_pcur->m_cleanout_pages + 1);
+
+  new (prebuilt->pcur->m_cleanout_cursors) lizard::Cleanout_cursors();
+
+  prebuilt->clust_pcur->m_cleanout_cursors =
+      prebuilt->pcur->m_cleanout_cursors + 1;
+  new (prebuilt->clust_pcur->m_cleanout_cursors) lizard::Cleanout_cursors();
 
   btr_pcur_reset(prebuilt->pcur);
   btr_pcur_reset(prebuilt->clust_pcur);
@@ -951,10 +967,15 @@ void row_prebuilt_free(
   btr_pcur_reset(prebuilt->pcur);
   btr_pcur_reset(prebuilt->clust_pcur);
 
-  UT_DELETE(prebuilt->pcur->m_cleanout_pages);
-  UT_DELETE(prebuilt->clust_pcur->m_cleanout_pages);
+  prebuilt->pcur->m_cleanout_pages->~Cleanout_pages();
+  prebuilt->clust_pcur->m_cleanout_pages->~Cleanout_pages();
   prebuilt->pcur->m_cleanout_pages = nullptr;
   prebuilt->clust_pcur->m_cleanout_pages = nullptr;
+
+  prebuilt->pcur->m_cleanout_cursors->~Cleanout_cursors();
+  prebuilt->clust_pcur->m_cleanout_cursors->~Cleanout_cursors();
+  prebuilt->pcur->m_cleanout_cursors = nullptr;
+  prebuilt->clust_pcur->m_cleanout_cursors = nullptr;
 
   ut_free(prebuilt->mysql_template);
 
