@@ -3167,7 +3167,7 @@ void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
   const bool opened =
       mlog_open_and_write_index(mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
                                 1 + DATA_ROLL_PTR_LEN + 14 + 2 +
-                                    MLOG_BUF_MARGIN + 2 + DATA_LIZARD_TOTAL_LEN,
+                                    MLOG_BUF_MARGIN + DATA_LIZARD_TOTAL_LEN + 14,
                                 log_ptr);
 
   if (!opened) {
@@ -4269,7 +4269,7 @@ static inline void btr_cur_del_mark_set_clust_rec_log(
 
   const bool opened = mlog_open_and_write_index(
       mtr, rec, index, MLOG_REC_CLUST_DELETE_MARK,
-      1 + 1 + DATA_ROLL_PTR_LEN + 14 + 2 + 2 + DATA_LIZARD_TOTAL_LEN, log_ptr);
+      1 + 1 + DATA_ROLL_PTR_LEN + 14 + 2 + DATA_LIZARD_TOTAL_LEN + 14, log_ptr);
 
   if (!opened) {
     /* Logging in mtr is switched off during crash recovery */
