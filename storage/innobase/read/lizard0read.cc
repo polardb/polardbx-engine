@@ -114,6 +114,7 @@ void VisionContainer::VisionList::add_element(Vision *vision) {
 
   mutex_enter(&m_mutex);
   UT_LIST_ADD_LAST(m_vision_list, vision);
+  vision->m_snapshot_scn = lizard_sys_get_scn();
   vision->m_active = true;
   mutex_exit(&m_mutex);
 }
@@ -170,7 +171,6 @@ void VisionContainer::vision_open(trx_t *trx) {
   auto vision = &trx->vision;
   vision->m_creator_trx_id = trx->id;
   vision->m_up_limit_id = lizard_sys_get_min_active_trx_id();
-  vision->m_snapshot_scn = lizard_sys_get_scn();
 
   ulint idx = m_counter.fetch_add(1);
   idx %= m_n_lists;
