@@ -36,7 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0types.h"
 
 /** How many lists in VisionContainer */
-#define VISION_CONTAINER_N_LISTS 16
+#define VISION_CONTAINER_N_LISTS 32
 
 #ifdef UNIV_PFS_MUTEX
 /* Vision container list mutex key */

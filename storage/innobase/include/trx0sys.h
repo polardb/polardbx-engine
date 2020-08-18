@@ -55,6 +55,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0undo0types.h"
 
+namespace lizard {
+extern trx_id_t lizard_sys_get_min_active_trx_id();
+}
+
 #ifndef UNIV_HOTBACKUP
 
 // Forward declaration
@@ -605,7 +609,7 @@ extern Space_Ids *trx_sys_undo_spaces;
 /** When a trx id which is zero modulo this number (which must be a power of
 two) is assigned, the field TRX_SYS_TRX_ID_STORE on the transaction system
 page is updated */
-constexpr trx_id_t TRX_SYS_TRX_ID_WRITE_MARGIN = 256;
+constexpr trx_id_t TRX_SYS_TRX_ID_WRITE_MARGIN = 8192;
 
 /** Acquire the trx_sys->mutex. */
 static inline void trx_sys_mutex_enter() { mutex_enter(&trx_sys->mutex); }

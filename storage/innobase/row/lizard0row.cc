@@ -563,6 +563,43 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
 }
 
 /**
+  Whether the transaction on the record has committed
+  @param[in]        trx_id
+  @param[in]        rec             current rec
+  @param[in]        index           cluster index
+  @parma[in]        offsets         rec_get_offsets(rec, index)
+
+  @retval           true            committed
+  @retval           false           active
+*/
+bool row_is_committed(trx_id_t trx_id, const rec_t *rec, dict_index_t *index,
+                      const ulint *offsets) {
+  /** If the trx id if less than the minimum active trx id,
+      it's sure that trx has committed.
+
+      Attention:
+      the minimum active trx id is changed after trx_sys structure
+      modification when commit, so it's later than txn undo header
+      modification.
+  */
+  if (lizard_sys_get_min_active_trx_id() > trx_id) {
+    return true;
+  }
+
+  txn_rec_t txn_rec = {
+      trx_id,
+      row_get_rec_scn_id(rec, index, offsets),
+      row_get_rec_undo_ptr(rec, index, offsets),
+  };
+
+  if (!lizard_undo_ptr_is_active(txn_rec.undo_ptr) ||
+      lizard::txn_undo_hdr_lookup(&txn_rec)) {
+    return true;
+  }
+  return false;
+}
+
+/**
   Parses the log data of lizard field values.
   @param[in]      ptr       buffer
   @param[in]      end_ptr   buffer end
