@@ -42,7 +42,7 @@ extern mysql_pfs_key_t lizard_scn_mutex_key;
 #endif
 
 /** The number gap of persist scn number into system tablespace */
-#define LIZARD_SCN_NUMBER_MAGIN 1024
+#define LIZARD_SCN_NUMBER_MAGIN 8192 
 
 namespace lizard {
 

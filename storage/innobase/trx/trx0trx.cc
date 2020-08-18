@@ -1093,7 +1093,6 @@ void trx_lists_init_at_db_start(void) {
     //    }
 
     UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, it->m_trx);
-    lizard::lizard_sys_mod_min_active_trx_id(true, it->m_trx);
   }
 }
 
@@ -1378,7 +1377,6 @@ static void trx_start_low(
     UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
 
     ut_d(trx->in_rw_trx_list = true);
-    lizard::lizard_sys_mod_min_active_trx_id(true, trx);
 
     trx->state = TRX_STATE_ACTIVE;
 
@@ -1798,8 +1796,6 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
     }
 
     // UT_LIST_REMOVE(trx_sys->serialisation_list, trx);
-
-    lizard::lizard_sys_erase_lists(trx);
   }
 
   //  trx_ids_t::iterator it = std::lower_bound(trx_sys->rw_trx_ids.begin(),
@@ -1817,7 +1813,6 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
     UT_LIST_REMOVE(trx_sys->rw_trx_list, trx);
     ut_d(trx->in_rw_trx_list = false);
     ut_ad(trx_sys_validate_trx_list());
-    lizard::lizard_sys_mod_min_active_trx_id(false, trx);
 
     //    if (trx->read_view != NULL) {
     //      trx_sys->mvcc->view_close(trx->read_view, true);
@@ -1836,6 +1831,7 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
   //                                                trx_sys->rw_trx_ids.front();
   //
   //  trx_sys->min_active_id.store(min_id);
+  lizard::lizard_sys_mod_min_active_trx_id(trx);
 }
 
 static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialized) {
@@ -1893,6 +1889,20 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialized) {
   }
 
   lock_trx_release_locks(trx);
+
+  /**
+    There are there phase when commit:
+
+    1) Modify txn undo header
+
+    2) Modify trx_sys structure
+
+    3) Modify lock_sys structure
+
+    Here the minimum safe scn is prepared for RO node and Purge system.
+    so delayed to the later of phase there.
+  */
+  if (serialized) lizard::lizard_sys_erase_lists(trx);
 }
 
 /** Commits a transaction in memory. */
@@ -2246,7 +2256,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
 
   ut_d(trx->in_rw_trx_list = FALSE);
 
-  lizard::lizard_sys_mod_min_active_trx_id(false, trx);
+  lizard::lizard_sys_mod_min_active_trx_id(trx);
 
   trx_sys_mutex_exit();
 
@@ -3236,8 +3246,6 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
   UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
 
   ut_d(trx->in_rw_trx_list = true);
-
-  lizard::lizard_sys_mod_min_active_trx_id(true, trx);
 
   mutex_exit(&trx_sys->mutex);
 }

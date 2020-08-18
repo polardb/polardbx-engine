@@ -64,9 +64,7 @@ void lizard_sys_create() {
   /** Placement new SCN object  */
   new (&(lizard_sys->scn)) SCN();
 
-  mutex_create(LATCH_ID_LIZARD_SYS_MTX_ID, &lizard_sys->min_active_mutex);
-
-  lizard_sys->min_active_trx_id = LIZARD_SYS_MTX_ID_NULL;
+  lizard_sys->min_active_trx_id.store(LIZARD_SYS_MTX_ID_NULL);
 
   lizard_sys->mtx_inited = true;
 
@@ -91,7 +89,7 @@ void lizard_sys_erase_lists(trx_t *trx) {
 
   lizard_ut_ad(UT_LIST_GET_LEN(lizard_sys->serialisation_list_scn) > 0);
 
-  lizard_ut_ad(trx != NULL);
+  lizard_ut_ad(trx != NULL && trx->state == TRX_STATE_COMMITTED_IN_MEMORY);
 
   auto oldest_trx = UT_LIST_GET_FIRST(lizard_sys->serialisation_list_scn);
   UT_LIST_REMOVE(lizard_sys->serialisation_list_scn, trx);
@@ -116,7 +114,6 @@ void lizard_sys_close() {
     lizard_ut_ad(UT_LIST_GET_LEN(lizard_sys->serialisation_list_scn) == 0);
 
     lizard_sys->scn.~SCN();
-    mutex_free(&lizard_sys->min_active_mutex);
     lizard_sys->mtx_inited = false;
 
     ut_free(lizard_sys);
@@ -202,65 +199,31 @@ scn_t lizard_sys_get_scn() {
 /**
   Modify the min active trx id
 
-  @param[in]      true if the function is called after adding a new transaction,
-                  false if called after removing a transaction.
-  @param[in]      the add/removed trx */
-void lizard_sys_mod_min_active_trx_id(bool is_add, trx_t *trx) {
+  @param[in]      the removed trx */
+void lizard_sys_mod_min_active_trx_id(trx_t *trx) {
   trx_t *min_active_trx = NULL;
-  trx_id_t old_min_active_id;
 
   ut_ad(trx != NULL);
   ut_ad(lizard_sys->mtx_inited);
-  // ut_ad(trx_sys_mutex_own());
+  /* Must hold the trx sys mutex */
+  ut_ad(trx_sys_mutex_own());
 
-#if defined UNIV_DEBUG
-  if (is_add) {
-    /** Called after add */
-    ut_a(trx->in_rw_trx_list);
-  } else {
-    /** Called after remove */
-    ut_a(!trx->in_rw_trx_list);
-  }
+  /** Called after remove */
+  ut_ad(!trx->in_rw_trx_list);
+  ut_ad(lizard_sys->min_active_trx_id.load() <= trx->id);
+#ifdef UNIV_DEBUG
+  /** Only myself modify mtx id, so delay to hold mtx mutex */
+  trx_id_t old_min_active_id = lizard_sys->min_active_trx_id.load();
 #endif
-
-  /* If the func is called after removing, trx must be not NULL */
-  ut_ad(is_add || trx != NULL);
 
   min_active_trx = UT_LIST_GET_LAST(trx_sys->rw_trx_list);
 
-  ut_ad(lizard_sys->min_active_trx_id <= trx->id);
+  trx_id_t min_id =
+      min_active_trx == nullptr ? trx_sys->max_trx_id : min_active_trx->id;
 
-  /** Only myself modify mtx id, so delay to hold mtx mutex */
-  old_min_active_id = lizard_sys->min_active_trx_id;
+  lizard_sys->min_active_trx_id.store(min_id);
 
-  if (lizard_sys->min_active_trx_id == LIZARD_SYS_MTX_ID_NULL) {
-    /** 1. If the trx_sys->min_active_trx_id is still uninitialized, the
-    following operation must be adding a new transaction. */
-
-    ut_ad(is_add);
-    ut_ad(min_active_trx == trx);
-    mutex_enter(&lizard_sys->min_active_mutex);
-    lizard_sys->min_active_trx_id = min_active_trx->id;
-    mutex_exit(&lizard_sys->min_active_mutex);
-  } else if (!is_add && trx->id == old_min_active_id) {
-    /** 2. If the trx_sys->min_active_trx_id is initialized,
-    and the removing transaction's id is lizard_sys->min_active_trx_id,
-    then lizard_sys->min_active_trx_id should be updated. */
-
-    mutex_enter(&lizard_sys->min_active_mutex);
-
-    if (min_active_trx) {
-      /* If having active transactions, update as the min active trx */
-      lizard_sys->min_active_trx_id = min_active_trx->id;
-    } else {
-      /* If not having lizard_sys->min_active_trx_id, update as
-      trx_sys->max_trx_id */
-      lizard_sys->min_active_trx_id = trx_sys->max_trx_id;
-    }
-    mutex_exit(&lizard_sys->min_active_mutex);
-  }
-
-  ut_a(old_min_active_id <= lizard_sys->min_active_trx_id);
+  ut_ad(old_min_active_id <= lizard_sys->min_active_trx_id.load());
 }
 
 /**
@@ -269,9 +232,7 @@ void lizard_sys_mod_min_active_trx_id(bool is_add, trx_t *trx) {
   @retval         the min active id in trx_sys. */
 trx_id_t lizard_sys_get_min_active_trx_id() {
   trx_id_t ret;
-  mutex_enter(&lizard_sys->min_active_mutex);
-  ret = lizard_sys->min_active_trx_id;
-  mutex_exit(&lizard_sys->min_active_mutex);
+  ret = lizard_sys->min_active_trx_id.load();
   return ret;
 }
 

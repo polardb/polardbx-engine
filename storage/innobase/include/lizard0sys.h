@@ -82,11 +82,8 @@ struct lizard_sys_t {
   /** The global scn number which is total order. */
   SCN scn;
 
-  /** Protect min_active_trx_id */
-  ib_mutex_t min_active_mutex;
-
   /** The min active trx id */
-  trx_id_t min_active_trx_id;
+  std::atomic<trx_id_t> min_active_trx_id;
 
   /** min_active_trx has been inited */
   bool mtx_inited;
@@ -129,10 +126,8 @@ extern scn_t lizard_sys_get_scn();
 /**
   Modify the min active trx id
 
-  @param[in]      true if the function is called after adding a new transaction,
-                  false if called after removing a transaction.
   @param[in]      the add/removed trx */
-void lizard_sys_mod_min_active_trx_id(bool is_add, trx_t *trx);
+void lizard_sys_mod_min_active_trx_id(trx_t *trx);
 
 /**
   Get the min active trx id

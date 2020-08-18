@@ -5715,8 +5715,11 @@ static void lock_rec_convert_impl_to_expl(const buf_block_t *block,
     trx_id_t trx_id;
 
     trx_id = lock_clust_rec_some_has_impl(rec, index, offsets);
-
-    trx = trx_rw_is_active(trx_id, NULL, true);
+    if (lizard::row_is_committed(trx_id, rec, index, offsets)) {
+      trx = nullptr;
+    } else {
+      trx = trx_rw_is_active(trx_id, NULL, true);
+    }
   } else {
     ut_ad(!dict_index_is_online_ddl(index));
 
