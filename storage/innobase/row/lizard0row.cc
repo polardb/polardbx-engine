@@ -577,9 +577,13 @@ byte *row_upd_parse_lizard_vals(const byte *ptr, const byte *end_ptr,
 
   if (ptr == nullptr) return nullptr;
 
-  if (end_ptr < ptr + DATA_UNDO_PTR_LEN) return nullptr;
-
   *scn = mach_u64_parse_compressed(&ptr, end_ptr);
+
+  if (ptr == nullptr) return nullptr;
+
+  if (end_ptr < ptr + DATA_UNDO_PTR_LEN) {
+    return (nullptr);
+  }
 
   *undo_ptr = trx_read_undo_ptr(ptr);
   ptr += DATA_UNDO_PTR_LEN;
