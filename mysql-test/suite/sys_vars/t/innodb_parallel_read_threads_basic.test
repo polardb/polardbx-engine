@@ -63,6 +63,22 @@ select * from performance_schema.session_variables where variable_name='innodb_p
 set global innodb_parallel_read_threads='AUTO';
 
 #
+# Execution test
+#
+set @@cte_max_recursion_depth=5000;
+CREATE TABLE t1 AS WITH RECURSIVE t(a, b) AS (
+    SELECT 1, 1
+UNION ALL
+    SELECT a+1, b+1 FROM t WHERE a < 3000
+)
+SELECT a, b FROM t;
+SELECT COUNT(*) FROM t1;
+SET session innodb_parallel_read_threads = 0;
+SELECT COUNT(*) FROM t1;
+CHECK TABLE t1;
+DROP TABLE t1;
+
+#
 # Cleanup
 #
 

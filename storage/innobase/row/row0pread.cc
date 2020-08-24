@@ -104,6 +104,8 @@ Parallel_reader::~Parallel_reader() {
 }
 
 size_t Parallel_reader::available_threads(size_t n_required) {
+  if (n_required == 0) return (0);
+
   const auto RELAXED = std::memory_order_relaxed;
   auto active = s_active_threads.fetch_add(n_required, RELAXED);
 

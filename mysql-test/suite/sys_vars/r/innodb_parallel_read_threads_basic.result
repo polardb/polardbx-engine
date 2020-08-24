@@ -44,14 +44,12 @@ select * from performance_schema.session_variables where variable_name='innodb_p
 VARIABLE_NAME	VARIABLE_VALUE
 innodb_parallel_read_threads	4
 set global innodb_parallel_read_threads=0;
-Warnings:
-Warning	1292	Truncated incorrect innodb_parallel_read_threads value: '0'
 select @@global.innodb_parallel_read_threads;
 @@global.innodb_parallel_read_threads
-1
+0
 select * from performance_schema.global_variables where variable_name='innodb_parallel_read_threads';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_parallel_read_threads	1
+innodb_parallel_read_threads	0
 select * from performance_schema.session_variables where variable_name='innodb_parallel_read_threads';
 VARIABLE_NAME	VARIABLE_VALUE
 innodb_parallel_read_threads	4
@@ -77,15 +75,33 @@ Warnings:
 Warning	1292	Truncated incorrect innodb_parallel_read_threads value: '-3'
 select @@global.innodb_parallel_read_threads;
 @@global.innodb_parallel_read_threads
-1
+0
 select * from performance_schema.global_variables where variable_name='innodb_parallel_read_threads';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_parallel_read_threads	1
+innodb_parallel_read_threads	0
 select * from performance_schema.session_variables where variable_name='innodb_parallel_read_threads';
 VARIABLE_NAME	VARIABLE_VALUE
 innodb_parallel_read_threads	3
 set global innodb_parallel_read_threads='AUTO';
 ERROR 42000: Incorrect argument type to variable 'innodb_parallel_read_threads'
+set @@cte_max_recursion_depth=5000;
+CREATE TABLE t1 AS WITH RECURSIVE t(a, b) AS (
+SELECT 1, 1
+UNION ALL
+SELECT a+1, b+1 FROM t WHERE a < 3000
+)
+SELECT a, b FROM t;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3000
+SET session innodb_parallel_read_threads = 0;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3000
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
 SET @@global.innodb_parallel_read_threads = @start_global_value;
 SELECT @@global.innodb_parallel_read_threads;
 @@global.innodb_parallel_read_threads
