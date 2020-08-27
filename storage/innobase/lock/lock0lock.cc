@@ -5223,8 +5223,12 @@ static bool lock_rec_queue_validate(
     if the check and assertion are covered by the lock mutex. */
 
     trx_id = lock_clust_rec_some_has_impl(rec, index, offsets);
-
-    const trx_t *impl_trx = trx_rw_is_active_low(trx_id, NULL);
+    const trx_t *impl_trx;
+    if (lizard::row_is_committed(trx_id, rec, index, offsets)) {
+      impl_trx = nullptr;
+    } else {
+      impl_trx = trx_rw_is_active_low(trx_id, NULL);
+    }
     if (impl_trx != nullptr) {
       ut_ad(lock_mutex_own());
       ut_ad(trx_sys_mutex_own());

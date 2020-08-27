@@ -1082,9 +1082,12 @@ void trx_lists_init_at_db_start(void) {
 
   undo::spaces->s_unlock();
 
-  TrxIdSet::iterator end = trx_sys->rw_trx_set.end();
+  /** Order the trx by trx_id. */
+  TrxIdSet rw_set;
+  lizard::copy_to(trx_sys->rw_trx_hash, rw_set);
 
-  for (TrxIdSet::iterator it = trx_sys->rw_trx_set.begin(); it != end; ++it) {
+  TrxIdSet::iterator end = rw_set.end();
+  for (TrxIdSet::iterator it = rw_set.begin(); it != end; ++it) {
     ut_ad(it->m_trx->in_rw_trx_list);
 
     //    if (it->m_trx->state == TRX_STATE_ACTIVE ||
@@ -1278,7 +1281,7 @@ void trx_assign_rseg_temp(trx_t *trx) {
 
     // trx_sys->rw_trx_ids.push_back(trx->id);
 
-    trx_sys->rw_trx_set.insert(TrxTrack(trx->id, trx));
+    trx_sys->rw_trx_hash.insert(TrxPair(trx->id, trx));
 
     mutex_exit(&trx_sys->mutex);
   }
@@ -1401,7 +1404,7 @@ static void trx_start_low(
 
         // trx_sys->rw_trx_ids.push_back(trx->id);
 
-        trx_sys->rw_trx_set.insert(TrxTrack(trx->id, trx));
+        trx_sys->rw_trx_hash.insert(TrxPair(trx->id, trx));
 
         trx_sys_mutex_exit();
       }
@@ -1511,8 +1514,6 @@ static bool trx_write_serialisation_history(
     trx_undo_ptr_t *temp_rseg_undo_ptr =
         trx->rsegs.m_noredo.update_undo != NULL ? &trx->rsegs.m_noredo : NULL;
 
-    if (!trx->read_only) serialised = true;
-
     /** Lizard: txn undo header */
     commit_scn_t scn = COMMIT_SCN_NULL;
     lizard::TxnUndoRsegs elem;
@@ -1528,7 +1529,7 @@ static bool trx_write_serialisation_history(
           trx_undo_set_state_at_finish(trx->rsegs.m_txn.txn_undo, mtr);
       /** Generate SCN */
       scn = lizard::trx_commit_scn(trx, nullptr, txn_undo, undo_hdr_page,
-                                   txn_undo->hdr_offset, mtr);
+                                   txn_undo->hdr_offset, &serialised, mtr);
       elem.set_scn(scn.first);
 
       bool update_txn_rseg_len = (trx->rsegs.m_noredo.update_undo == NULL &&
@@ -1563,7 +1564,7 @@ static bool trx_write_serialisation_history(
       /** Always has txn undo log for transaction */
       ut_ad(lizard::commit_scn_state(scn) == SCN_STATE_ALLOCATED);
       lizard::trx_commit_scn(trx, &scn, update_undo, undo_hdr_page,
-                             update_undo->hdr_offset, mtr);
+                             update_undo->hdr_offset, &serialised, mtr);
 
       trx_undo_update_cleanup(trx, undo_ptr, undo_hdr_page, update_rseg_len,
                               (update_rseg_len ? 1 + txn_rseg_len : 0), mtr);
@@ -1584,12 +1585,13 @@ static bool trx_write_serialisation_history(
       if (lizard::commit_scn_state(scn) == SCN_STATE_ALLOCATED) {
         /** Use already SCN */
         lizard::trx_commit_scn(trx, &scn, update_undo, undo_hdr_page,
-                               update_undo->hdr_offset, &temp_mtr);
+                               update_undo->hdr_offset, &serialised, &temp_mtr);
       } else {
         /** Temporary update undo log purge still need SCN number */
         /** Generate SCN */
         scn = lizard::trx_commit_scn(trx, nullptr, update_undo, undo_hdr_page,
-                                     update_undo->hdr_offset, &temp_mtr);
+                                     update_undo->hdr_offset, &serialised,
+                                     &temp_mtr);
         elem.set_scn(scn.first);
       }
 
@@ -1806,6 +1808,12 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
   //
   assert_trx_in_recovery(trx);
 
+  /**
+     Lizard: it's for min_active_trx_id modification
+
+     Read only didn't put into rw list even through it allocated new trx id
+     for temporary table update.
+  */
   if (trx->read_only ||
       (trx->rsegs.m_redo.rseg == NULL && trx->rsegs.m_txn.rseg == NULL)) {
     ut_ad(!trx->in_rw_trx_list);
@@ -1823,7 +1831,7 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
     }
   }
 
-  trx_sys->rw_trx_set.erase(TrxTrack(trx->id));
+  trx_sys->rw_trx_hash.erase(trx->id);
 
   //  /* Set minimal active trx id. */
   //  trx_id_t min_id = trx_sys->rw_trx_ids.empty() ? trx_sys->max_trx_id
@@ -3232,7 +3240,7 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
 
   // trx_sys->rw_trx_ids.push_back(trx->id);
 
-  trx_sys->rw_trx_set.insert(TrxTrack(trx->id, trx));
+  trx_sys->rw_trx_hash.insert(TrxPair(trx->id, trx));
 
   /* So that we can see our own changes. */
   // if (MVCC::is_view_active(trx->read_view)) {

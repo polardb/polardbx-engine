@@ -480,7 +480,7 @@ struct trx_sys_t {
   transactions), protected by
   rseg->mutex */
 
-  TrxIdSet rw_trx_set; /*!< Mapping from transaction id
+  TrxIdHash rw_trx_hash; /*!< Mapping from transaction id
                        to transaction instance */
 
   ulint n_prepared_trx; /*!< Number of transactions currently

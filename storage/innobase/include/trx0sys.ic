@@ -190,15 +190,15 @@ trx_t *trx_get_rw_trx_by_id(trx_id_t trx_id) /*!< in: trx id to search for */
   ut_ad(trx_id > 0);
   ut_ad(trx_sys_mutex_own());
 
-  if (trx_sys->rw_trx_set.empty()) {
+  if (trx_sys->rw_trx_hash.empty()) {
     return (NULL);
   }
 
-  TrxIdSet::iterator it;
+  TrxIdHash::iterator it;
 
-  it = trx_sys->rw_trx_set.find(TrxTrack(trx_id));
+  it = trx_sys->rw_trx_hash.find(trx_id);
 
-  return (it == trx_sys->rw_trx_set.end() ? NULL : it->m_trx);
+  return (it == trx_sys->rw_trx_hash.end() ? NULL : it->second);
 }
 
 /** Returns the minimum trx id in trx list. This is the smallest id for which
@@ -377,7 +377,7 @@ UNIV_INLINE
 void trx_sys_rw_trx_add(trx_t *trx) {
   ut_ad(trx->id != 0);
 
-  trx_sys->rw_trx_set.insert(TrxTrack(trx->id, trx));
+  trx_sys->rw_trx_hash.insert(TrxPair(trx->id, trx));
   ut_d(trx->in_rw_trx_list = true);
 }
 

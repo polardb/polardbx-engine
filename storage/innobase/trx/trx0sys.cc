@@ -498,7 +498,7 @@ void trx_sys_create(void) {
   UT_LIST_INIT(trx_sys->rw_trx_list, &trx_t::trx_list);
   UT_LIST_INIT(trx_sys->mysql_trx_list, &trx_t::mysql_trx_list);
 
-  new (&trx_sys->rw_trx_set) TrxIdSet();
+  new (&trx_sys->rw_trx_hash) TrxIdHash();
 
   new (&trx_sys->rsegs) Rsegs();
   trx_sys->rsegs.set_empty();
@@ -568,7 +568,7 @@ void trx_sys_close(void) {
 
   // trx_sys->rw_trx_ids.~trx_ids_t();
 
-  trx_sys->rw_trx_set.~TrxIdSet();
+  trx_sys->rw_trx_hash.~TrxIdHash();
 
   ut_free(trx_sys);
 
