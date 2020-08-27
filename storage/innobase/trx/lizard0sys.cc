@@ -208,7 +208,15 @@ void lizard_sys_mod_min_active_trx_id(trx_t *trx) {
   /* Must hold the trx sys mutex */
   ut_ad(trx_sys_mutex_own() || srv_is_being_started);
 
-  ut_ad(lizard_sys->min_active_trx_id.load() <= trx->id);
+  /** Called after remove */
+  // ut_ad(!trx->in_rw_trx_list);
+
+  /** Read only didn't put into rw list even through it allocated new trx id
+     for temporary table update. */
+  ut_ad((trx->read_only ||
+         (trx->rsegs.m_redo.rseg == NULL && trx->rsegs.m_txn.rseg == NULL)) ||
+        lizard_sys->min_active_trx_id.load() <= trx->id);
+
 #ifdef UNIV_DEBUG
   /** Only myself modify mtx id, so delay to hold mtx mutex */
   trx_id_t old_min_active_id = lizard_sys->min_active_trx_id.load();

@@ -408,12 +408,13 @@ void trx_init_txn_desc(trx_t *trx);
   @param[in]      undo page txn undo log header page
   @param[in]      offset    txn undo log header offset
   @param[in]      mtr       mini transaction
+  @param[out]     serialised
 
   @retval         scn       commit scn struture
 */
 commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
                             page_t *undo_hdr_page, ulint hdr_offset,
-                            mtr_t *mtr);
+                            bool *serialised, mtr_t *mtr);
 /**
   Cleanup txn undo log segment when commit,
 

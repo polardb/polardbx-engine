@@ -272,7 +272,8 @@ SET(INNOBASE_SOURCES
   ut/lizard0ut.cc
   page/lizard0page.cc
   read/lizard0read.cc
-  trx/lizard0purge.cc)
+  trx/lizard0purge.cc
+  trx/lizard0trx.cc)
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
 IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11)

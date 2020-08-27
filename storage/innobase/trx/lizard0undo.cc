@@ -875,12 +875,13 @@ void trx_init_txn_desc(trx_t *trx) { trx->txn_desc = TXN_DESC_NULL; }
   @param[in]      undo page txn undo log header page
   @param[in]      offset    txn undo log header offset
   @param[in]      mtr       mini transaction
+  @param[out]     serialised
 
   @retval         scn       commit scn struture
 */
 commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
                             page_t *undo_hdr_page, ulint hdr_offset,
-                            mtr_t *mtr) {
+                            bool *serialised, mtr_t *mtr) {
   trx_usegf_t *seg_hdr;
   trx_ulogf_t *undo_hdr;
   commit_scn_t scn = COMMIT_SCN_NULL;
@@ -935,10 +936,16 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
     /** If a read only transaction (for example: start transaction read only),
     temporary table can be also modified. It doesn't matter if purge_sys purges
     them */
-    if (!trx->read_only) {
-      /** add to lizard_sys->serialisation_list_scn */
-      UT_LIST_ADD_LAST(lizard_sys->serialisation_list_scn, trx);
-    }
+
+    /** Revision:
+        Temp undo still need to purge/truncate, so delay it by adding into
+        serialisation list */
+
+    /** add to lizard_sys->serialisation_list_scn */
+    UT_LIST_ADD_LAST(lizard_sys->serialisation_list_scn, trx);
+
+    ut_ad(*serialised == false);
+    *serialised = true;
 
     trx_mutex_enter(trx);
 

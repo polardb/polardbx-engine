@@ -59,6 +59,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0undo0types.h"
 #include "lizard0read0read.h"
+#include "lizard0trx.h"
 
 // Forward declaration
 struct mtr_t;

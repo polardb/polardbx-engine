@@ -334,8 +334,8 @@ bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
   @retval           true            committed
   @retval           false           active
 */
-bool row_is_committed(trx_id_t trx_id, const rec_t *rec, dict_index_t *index,
-                      const ulint *offsets);
+bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
+                      const dict_index_t *index, const ulint *offsets);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/

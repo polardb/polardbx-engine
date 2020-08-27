@@ -1569,8 +1569,6 @@ static bool trx_write_serialisation_history(
         trx->rsegs.m_noredo.update_undo != nullptr ? &trx->rsegs.m_noredo
                                                    : nullptr;
 
-    if (!trx->read_only) serialised = true;
-
     /** Lizard: txn undo header */
     commit_scn_t scn = COMMIT_SCN_NULL;
     lizard::TxnUndoRsegs elem;
@@ -1586,7 +1584,7 @@ static bool trx_write_serialisation_history(
           trx_undo_set_state_at_finish(trx->rsegs.m_txn.txn_undo, mtr);
       /** Generate SCN */
       scn = lizard::trx_commit_scn(trx, nullptr, txn_undo, undo_hdr_page,
-                                   txn_undo->hdr_offset, mtr);
+                                   txn_undo->hdr_offset, &serialised, mtr);
       elem.set_scn(scn.first);
 
       bool update_txn_rseg_len = (trx->rsegs.m_noredo.update_undo == nullptr &&
@@ -1621,7 +1619,7 @@ static bool trx_write_serialisation_history(
       /** Always has txn undo log for transaction */
       ut_ad(lizard::commit_scn_state(scn) == SCN_STATE_ALLOCATED);
       lizard::trx_commit_scn(trx, &scn, update_undo, undo_hdr_page,
-                             update_undo->hdr_offset, mtr);
+                             update_undo->hdr_offset, &serialised, mtr);
 
       trx_undo_update_cleanup(trx, undo_ptr, undo_hdr_page, update_rseg_len,
                               (update_rseg_len ? 1 + txn_rseg_len : 0), mtr);
@@ -1642,12 +1640,13 @@ static bool trx_write_serialisation_history(
       if (lizard::commit_scn_state(scn) == SCN_STATE_ALLOCATED) {
         /** Use already SCN */
         lizard::trx_commit_scn(trx, &scn, update_undo, undo_hdr_page,
-                               update_undo->hdr_offset, &temp_mtr);
+                               update_undo->hdr_offset, &serialised, &temp_mtr);
       } else {
         /** Temporary update undo log purge still need SCN number */
         /** Generate SCN */
         scn = lizard::trx_commit_scn(trx, nullptr, update_undo, undo_hdr_page,
-                                     update_undo->hdr_offset, &temp_mtr);
+                                     update_undo->hdr_offset, &serialised,
+                                     &temp_mtr);
         elem.set_scn(scn.first);
       }
 
@@ -1841,6 +1840,12 @@ static void trx_erase_lists(trx_t *trx) {
   //
   assert_trx_in_recovery(trx);
 
+  /**
+     Lizard: it's for min_active_trx_id modification
+
+     Read only didn't put into rw list even through it allocated new trx id
+     for temporary table update.
+  */
   if (trx->read_only ||
       (trx->rsegs.m_redo.rseg == nullptr && trx->rsegs.m_txn.rseg == nullptr)) {
     ut_ad(!trx->in_rw_trx_list);

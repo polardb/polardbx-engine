@@ -572,8 +572,8 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
   @retval           true            committed
   @retval           false           active
 */
-bool row_is_committed(trx_id_t trx_id, const rec_t *rec, dict_index_t *index,
-                      const ulint *offsets) {
+bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
+                      const dict_index_t *index, const ulint *offsets) {
   /** If the trx id if less than the minimum active trx id,
       it's sure that trx has committed.
 
