@@ -166,6 +166,9 @@ void package_context_init() {
   /* dbms_recycle.purge_table() */
   register_package<Proc, im::recycle_bin::Recycle_proc_purge>(
       im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
+  /* dbms_recycle.restore_table(...) */
+  register_package<Proc, im::recycle_bin::Recycle_proc_restore>(
+      im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
 }
 
 } /* namespace im */

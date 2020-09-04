@@ -347,6 +347,8 @@ drop table t5;
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_169	db_recycle	t5	#	#
+call dbms_recycle.purge_table("");
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_recycle.purge_table
 call dbms_recycle.purge_table("__innodb_169");
 set global recycle_scheduler=on;
 ------------------------------------------------------

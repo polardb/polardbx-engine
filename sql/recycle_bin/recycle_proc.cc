@@ -27,6 +27,15 @@
 #include "sql/sql_time.h"
 #include "sql/tztime.h"
 
+#include "sql/auth/auth_common.h"
+#include "sql/dd/cache/dictionary_client.h"
+#include "sql/dd/dd_schema.h"
+#include "sql/dd/properties.h"
+#include "sql/sql_rename.h"
+#include "sql/thd_raii.h"
+
+#include "mysql/components/services/log_builtins.h"
+
 namespace im {
 
 namespace recycle_bin {
@@ -174,6 +183,11 @@ bool Sql_cmd_recycle_proc_purge::check_access(THD *thd) {
 
   res = (*m_list)[0]->val_str(&str);
   const char *table = strmake_root(thd->mem_root, res->ptr(), res->length());
+  if (table == NULL || strlen(table) == 0) {
+    my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), 1,
+             m_proc->qname().c_str());
+    DBUG_RETURN(true);
+  }
 
   Table_ref *table_list =
       build_table_list(thd, RECYCLE_BIN_SCHEMA.str, RECYCLE_BIN_SCHEMA.length,
@@ -201,6 +215,187 @@ bool Sql_cmd_recycle_proc_purge::pc_execute(THD *thd) {
   const char *table = strmake_root(thd->mem_root, res->ptr(), res->length());
 
   DBUG_RETURN(recycle_purge_table(thd, table));
+}
+
+/* Singleton instance for restore_table */
+Proc *Recycle_proc_restore::instance() {
+  static Proc *proc = new Recycle_proc_restore(key_memory_recycle);
+
+  return proc;
+}
+
+/**
+  Evoke the sql_cmd object for restore_table() proc.
+*/
+Sql_cmd *Recycle_proc_restore::evoke_cmd(THD *thd,
+                                         mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+/* Override the default send result. */
+void Sql_cmd_recycle_proc_restore::send_result(THD *thd, bool error) {
+  DBUG_ENTER("Sql_cmd_recycle_proc_restore::restore_result");
+  if (error) {
+    (void)thd;
+    assert(thd->is_error());
+    DBUG_VOID_RETURN;
+  }
+  /** Ok protocal package has been set within mysql_rename_tables(); */
+  DBUG_VOID_RETURN;
+}
+
+/* Override the default check_access. */
+bool Sql_cmd_recycle_proc_restore::check_access(THD *thd) {
+  char buff[128];
+  String str(buff, sizeof(buff), system_charset_info);
+  String *res;
+  DBUG_ENTER("Sql_cmd_recycle_proc_restore::check_access");
+  Recycle_process_context recycle_context(thd);
+  /* Special privilege flag for ddl on recycle schema */
+  thd->recycle_state->set_priv_relax();
+
+  /* 1. Parse the input parameters */
+  res = (*m_list)[0]->val_str(&str);
+  const char *old_table =
+      strmake_root(thd->mem_root, res->ptr(), res->length());
+  res = (*m_list)[1]->val_str(&str);
+  const char *new_db = strmake_root(thd->mem_root, res->ptr(), res->length());
+  res = (*m_list)[2]->val_str(&str);
+  const char *new_table =
+      strmake_root(thd->mem_root, res->ptr(), res->length());
+  if (old_table == NULL || strlen(old_table) == 0) {
+    my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), 1,
+             m_proc->qname().c_str());
+    DBUG_RETURN(true);
+  }
+
+  /* 2. The old table must exist in recycle_bin */
+  {
+    if (!thd->mdl_context.owns_equal_or_stronger_lock(
+            MDL_key::SCHEMA, RECYCLE_BIN_SCHEMA.str, "",
+            MDL_INTENTION_EXCLUSIVE)) {
+      MDL_request schema_mdl_request;
+      MDL_REQUEST_INIT(&schema_mdl_request, MDL_key::SCHEMA,
+                       RECYCLE_BIN_SCHEMA.str, "", MDL_INTENTION_EXCLUSIVE,
+                       MDL_TRANSACTION);
+      if (thd->mdl_context.acquire_lock(&schema_mdl_request,
+                                        thd->variables.lock_wait_timeout))
+        DBUG_RETURN(true);
+    }
+
+    if (!thd->mdl_context.owns_equal_or_stronger_lock(
+            MDL_key::TABLE, RECYCLE_BIN_SCHEMA.str, old_table, MDL_EXCLUSIVE)) {
+      MDL_request table_mdl_request;
+      MDL_REQUEST_INIT(&table_mdl_request, MDL_key::TABLE,
+                       RECYCLE_BIN_SCHEMA.str, old_table, MDL_EXCLUSIVE,
+                       MDL_TRANSACTION);
+      if (thd->mdl_context.acquire_lock(&table_mdl_request,
+                                        thd->variables.lock_wait_timeout))
+        DBUG_RETURN(true);
+    }
+  }
+
+  const dd::Schema *recycle_schema = nullptr;
+  const dd::Table *old_table_def = nullptr;
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  if (thd->dd_client()->acquire(RECYCLE_BIN_SCHEMA.str, &recycle_schema)) {
+    LogErr(WARNING_LEVEL, ER_RECYCLE_BIN, "acquire recycle schema");
+    DBUG_RETURN(true);
+  }
+  if (recycle_schema == nullptr) {
+    my_error(ER_PREPARE_RECYCLE_TABLE_ERROR, MYF(0),
+             "recycle schema didn't exist.");
+    DBUG_RETURN(true);
+  }
+  if (thd->dd_client()->acquire(RECYCLE_BIN_SCHEMA.str, old_table,
+                                &old_table_def)) {
+    DBUG_RETURN(true);
+  }
+  if (old_table_def == nullptr) {
+    std::stringstream ss;
+    ss << old_table << " didn't exist";
+    my_error(ER_PREPARE_RECYCLE_TABLE_ERROR, MYF(0), ss.str().c_str());
+    DBUG_RETURN(true);
+  }
+  if (!old_table_def->options().exists(ORIGIN_SCHEMA.str) ||
+      !old_table_def->options().exists(ORIGIN_TABLE.str)) {
+    std::stringstream ss;
+    ss << old_table << " isn't recycled table";
+    my_error(ER_PREPARE_RECYCLE_TABLE_ERROR, MYF(0), ss.str().c_str());
+    DBUG_RETURN(true);
+  }
+
+  /* 3. If the new_db and new_table is unvalid, just restore to the original
+        name */
+  Table_ident *old_table_ident = nullptr;
+  Table_ident *new_table_ident = nullptr;
+  old_table_ident = new (thd->mem_root)
+      Table_ident(to_lex_cstring(thd->mem_strdup(RECYCLE_BIN_SCHEMA.str)),
+                  to_lex_cstring(old_table));
+  if (new_db && new_table && strlen(new_db) && strlen(new_table)) {
+    new_table_ident = new (thd->mem_root)
+        Table_ident(to_lex_cstring(new_db), to_lex_cstring(new_table));
+  } else {
+    LEX_STRING origin_db;
+    LEX_STRING origin_table;
+    old_table_def->options().get(ORIGIN_SCHEMA.str, &origin_db, thd->mem_root);
+    old_table_def->options().get(ORIGIN_TABLE.str, &origin_table,
+                                 thd->mem_root);
+    new_table_ident = new (thd->mem_root)
+        Table_ident(to_lex_cstring(origin_db), to_lex_cstring(origin_table));
+  }
+
+  /* 4. Add table to table_list array */
+  LEX *const lex = thd->lex;
+  Query_block *const select_lex = lex->current_query_block();
+  if (select_lex->add_table_to_list(thd, old_table_ident, NULL,
+                                    TL_OPTION_UPDATING, TL_IGNORE,
+                                    MDL_EXCLUSIVE) == NULL ||
+      select_lex->add_table_to_list(thd, new_table_ident, NULL,
+                                    TL_OPTION_UPDATING, TL_IGNORE,
+                                    MDL_EXCLUSIVE) == NULL) {
+    DBUG_RETURN(true);
+  }
+
+  /* 5. Check access, old table in recycle_bin need ALTER_ACL and DROP_ACL,
+        and new table need CREATE_ACL and INSERT_ACL */
+  Table_ref *const first_table = select_lex->get_table_list();
+  Table_ref *table;
+  for (table = first_table; table; table = table->next_local->next_local) {
+    if (check_table_access(thd, ALTER_ACL | DROP_ACL, table, false, 1, false) ||
+        check_table_access(thd, INSERT_ACL | CREATE_ACL, table->next_local,
+                           false, 1, false)) {
+      DBUG_RETURN(true);
+    }
+  }
+
+  DBUG_RETURN(false);
+}
+
+/**
+  Restore table in recycle_bin
+
+  @param[in]    THD           Thread context
+
+  @retval       true          Failure
+  @retval       false         Success
+*/
+bool Sql_cmd_recycle_proc_restore::pc_execute(THD *thd) {
+  DBUG_ENTER("Sql_cmd_recycle_proc_restore::pc_execute");
+
+  /*
+    For statements which need this, prevent InnoDB from automatically
+    committing InnoDB transaction each time data-dictionary tables are
+    closed after being updated.
+  */
+  Disable_autocommit_guard autocommit_guard(thd);
+
+  LEX *const lex = thd->lex;
+  Query_block *const select_lex = lex->current_query_block();
+  Table_ref *const first_table = select_lex->get_table_list();
+
+  /* Reuse the rename process */
+  DBUG_RETURN(mysql_rename_tables(thd, first_table));
 }
 
 } /* namespace recycle_bin */

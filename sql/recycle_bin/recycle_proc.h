@@ -213,6 +213,91 @@ class Recycle_proc_purge : public Recycle_proc_base {
   }
 };
 
+/**
+  3) dbms_recycle.restore_table(table_name, new_db_name, new_table_name);
+
+*/
+class Sql_cmd_recycle_proc_restore : public Sql_cmd_recycle_proc_base {
+ public:
+  explicit Sql_cmd_recycle_proc_restore(THD *thd, mem_root_deque<Item *> *list,
+                                        const Proc *proc)
+      : Sql_cmd_recycle_proc_base(thd, list, proc) {}
+
+  /**
+    Implementation of Proc execution body.
+
+    @param[in]    THD           Thread context
+
+    @retval       true          Failure
+    @retval       false         Success
+  */
+  virtual bool pc_execute(THD *thd) override;
+
+  /* Override default send_result */
+  virtual void send_result(THD *thd, bool error) override;
+
+  /**
+    Check the parameters and privileges.
+
+    Require ALTER_ACL and DROP_ACL privilege on purge table,
+    and require CREATE_ACL and INSERT_ACL on dest table.
+  */
+  virtual bool check_access(THD *thd) override;
+};
+
+class Recycle_proc_restore : public Recycle_proc_base {
+  using Sql_cmd_type = Sql_cmd_recycle_proc_restore;
+
+  /* All the parameters */
+  enum enum_parameter {
+    RECYCLE_PARAM_TABLE = 0,
+    RECYCLE_PARAM_NEW_DATABASE = 1,
+    RECYCLE_PARAM_NEW_TABLE = 2,
+    RECYCLE_PARAM_LAST
+  };
+
+  /* Corresponding field type */
+  enum_field_types get_field_type(enum_parameter param) {
+    switch (param) {
+      case RECYCLE_PARAM_TABLE:
+      case RECYCLE_PARAM_NEW_DATABASE:
+      case RECYCLE_PARAM_NEW_TABLE:
+        return MYSQL_TYPE_VARCHAR;
+      case RECYCLE_PARAM_LAST:
+        assert(0);
+    }
+    return MYSQL_TYPE_LONGLONG;
+  }
+
+ public:
+  explicit Recycle_proc_restore(PSI_memory_key key) : Recycle_proc_base(key) {
+    /* Only OK or ERROR protocol packet */
+    m_result_type = Result_type::RESULT_OK;
+
+    /* Init parameters */
+    for (size_t i = RECYCLE_PARAM_TABLE; i < RECYCLE_PARAM_LAST; i++) {
+      m_parameters.assign_at(
+          i, get_field_type(static_cast<enum enum_parameter>(i)));
+    }
+  }
+
+  /* Singleton instance for restore_table */
+  static Proc *instance();
+
+  /**
+    Evoke the sql_cmd object for restore_table() proc.
+  */
+  virtual Sql_cmd *evoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
+
+  virtual ~Recycle_proc_restore() {}
+
+  /* Proc name */
+  virtual const std::string str() const override {
+    return std::string("restore_table");
+  }
+};
+
 } /* namespace recycle_bin */
 
 } /* namespace im */

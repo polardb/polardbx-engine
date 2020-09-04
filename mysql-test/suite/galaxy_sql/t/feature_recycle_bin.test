@@ -421,6 +421,8 @@ drop table t5;
 
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_recycle.purge_table("");
 call dbms_recycle.purge_table("__innodb_169");
 
 connection m_super_1;
