@@ -10046,6 +10046,15 @@ bool mysql_rename_table(THD *thd, handlerton *base, const char *old_db,
     return true;
   }
 
+  /* For restoring from recycle_bin, these options should be removed. */
+  to_table_def->options().remove(im::recycle_bin::ORIGIN_SCHEMA.str);
+  to_table_def->options().remove(im::recycle_bin::ORIGIN_TABLE.str);
+
+  DBUG_ASSERT(
+      !to_table_def->options().exists(im::recycle_bin::ORIGIN_SCHEMA.str));
+  DBUG_ASSERT(
+      !to_table_def->options().exists(im::recycle_bin::ORIGIN_TABLE.str));
+
   // Set schema id, table name and hidden attribute.
   to_table_def->set_schema_id(new_schema.id());
   to_table_def->set_name(new_name);

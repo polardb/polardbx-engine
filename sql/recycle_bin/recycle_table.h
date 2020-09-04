@@ -45,6 +45,10 @@ namespace recycle_bin {
 
 extern LEX_STRING RECYCLE_BIN_SCHEMA;
 
+extern LEX_STRING ORIGIN_SCHEMA;
+
+extern LEX_STRING ORIGIN_TABLE;
+
 /* Seconds before really purging the recycled table. */
 extern ulonglong recycle_bin_retention;
 
