@@ -1,6 +1,6 @@
 SELECT @@innodb_undo_tablespaces;
 @@innodb_undo_tablespaces
-4
+6
 use information_schema;
 select * from INNODB_TABLESPACES where space >= 4294967276 and space <= 4294967279;
 SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
