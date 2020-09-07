@@ -12379,8 +12379,7 @@ static int validate_tablespace_name(ts_command_type ts_command,
            (ts_command == DROP_UNDO_TABLESPACE &&
             0 != strcmp(name, dict_sys_t::s_default_undo_space_name_1) &&
             0 != strcmp(name, dict_sys_t::s_default_undo_space_name_2) &&
-            0 != strcmp(name, lizard::dict_lizard::s_default_txn_space_name_1) &&
-            0 != strcmp(name, lizard::dict_lizard::s_default_txn_space_name_2)));
+            !lizard::is_txn_space_by_name(name)));
       if (!allow) {
         my_printf_error(ER_WRONG_TABLESPACE_NAME,
                         "InnoDB: Tablespace names starting"

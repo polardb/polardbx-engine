@@ -5,10 +5,10 @@
 # InnoDB should make the way wide and smooth for undo truncation
 # to occur while dml is happening.
 
-CREATE UNDO TABLESPACE undo_003 ADD DATAFILE 'undo_003.ibu';
-CREATE UNDO TABLESPACE undo_004 ADD DATAFILE 'undo_004.ibu';
-CREATE UNDO TABLESPACE undo_005 ADD DATAFILE 'undo_005.ibu';
-CREATE UNDO TABLESPACE undo_006 ADD DATAFILE 'undo_006.ibu';
+CREATE UNDO TABLESPACE undo_007 ADD DATAFILE 'undo_007.ibu';
+CREATE UNDO TABLESPACE undo_008 ADD DATAFILE 'undo_008.ibu';
+CREATE UNDO TABLESPACE undo_009 ADD DATAFILE 'undo_009.ibu';
+CREATE UNDO TABLESPACE undo_010 ADD DATAFILE 'undo_010.ibu';
 
 CREATE DATABASE africa;
 USE africa;
@@ -51,16 +51,16 @@ BEGIN
     END WHILE;
 
     IF (@undo_num = 3) THEN
-      ALTER UNDO TABLESPACE undo_003 SET INACTIVE;
+      ALTER UNDO TABLESPACE undo_007 SET INACTIVE;
     END IF;
     IF (@undo_num = 4) THEN
-      ALTER UNDO TABLESPACE undo_004 SET INACTIVE;
+      ALTER UNDO TABLESPACE undo_008 SET INACTIVE;
     END IF;
     IF (@undo_num = 5) THEN
-      ALTER UNDO TABLESPACE undo_005 SET INACTIVE;
+      ALTER UNDO TABLESPACE undo_009 SET INACTIVE;
     END IF;
     IF (@undo_num = 6) THEN
-      ALTER UNDO TABLESPACE undo_006 SET INACTIVE;
+      ALTER UNDO TABLESPACE undo_010 SET INACTIVE;
     END IF;
 
     SET @n = 0;
@@ -72,16 +72,16 @@ BEGIN
     END WHILE;
 
     IF (@undo_num = 3) THEN
-      ALTER UNDO TABLESPACE undo_003 SET ACTIVE;
+      ALTER UNDO TABLESPACE undo_007 SET ACTIVE;
     END IF;
     IF (@undo_num = 4) THEN
-      ALTER UNDO TABLESPACE undo_004 SET ACTIVE;
+      ALTER UNDO TABLESPACE undo_008 SET ACTIVE;
     END IF;
     IF (@undo_num = 5) THEN
-      ALTER UNDO TABLESPACE undo_005 SET ACTIVE;
+      ALTER UNDO TABLESPACE undo_009 SET ACTIVE;
     END IF;
     IF (@undo_num = 6) THEN
-      ALTER UNDO TABLESPACE undo_006 SET ACTIVE;
+      ALTER UNDO TABLESPACE undo_010 SET ACTIVE;
     END IF;
 
     SET @n = 0;
@@ -137,23 +137,23 @@ SELECT count(*) from serengeti;
 USE test;
 DROP DATABASE africa;
 
-ALTER UNDO TABLESPACE undo_003 SET INACTIVE;
-let $inactive_undo_space = undo_003;
+ALTER UNDO TABLESPACE undo_007 SET INACTIVE;
+let $inactive_undo_space = undo_007;
 source include/wait_until_undo_space_is_empty.inc;
-DROP UNDO TABLESPACE undo_003;
+DROP UNDO TABLESPACE undo_007;
 
-ALTER UNDO TABLESPACE undo_004 SET INACTIVE;
-let $inactive_undo_space = undo_004;
+ALTER UNDO TABLESPACE undo_008 SET INACTIVE;
+let $inactive_undo_space = undo_008;
 source include/wait_until_undo_space_is_empty.inc;
-DROP UNDO TABLESPACE undo_004;
+DROP UNDO TABLESPACE undo_008;
 
-ALTER UNDO TABLESPACE undo_005 SET INACTIVE;
-let $inactive_undo_space = undo_005;
+ALTER UNDO TABLESPACE undo_009 SET INACTIVE;
+let $inactive_undo_space = undo_009;
 source include/wait_until_undo_space_is_empty.inc;
-DROP UNDO TABLESPACE undo_005;
+DROP UNDO TABLESPACE undo_009;
 
-ALTER UNDO TABLESPACE undo_006 SET INACTIVE;
-let $inactive_undo_space = undo_006;
+ALTER UNDO TABLESPACE undo_010 SET INACTIVE;
+let $inactive_undo_space = undo_010;
 source include/wait_until_undo_space_is_empty.inc;
-DROP UNDO TABLESPACE undo_006;
+DROP UNDO TABLESPACE undo_010;
 

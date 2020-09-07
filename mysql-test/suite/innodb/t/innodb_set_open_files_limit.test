@@ -71,9 +71,11 @@ SELECT innodb_set_open_files_limit(14);
 
 # If the following (or above) query fails, check the error messages, you need
 # to adjust the value of 14 and 15 to match current limit.
-SELECT innodb_set_open_files_limit(15);
+# Lizard Revision 1:
+# Add more 4 files (TXN undo tablespace)
+SELECT innodb_set_open_files_limit(19);
 --error ER_WRONG_ARGUMENTS
-SELECT innodb_set_open_files_limit(14);
+SELECT innodb_set_open_files_limit(18);
 
 #
 # Set correct values.

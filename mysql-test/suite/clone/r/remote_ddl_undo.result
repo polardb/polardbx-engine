@@ -182,6 +182,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_00	Undo	active
 undo_001	Undo	active
 undo_01	Undo	active
@@ -194,6 +198,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_00	./undo_00.ibu	UNDO LOG	InnoDB
 undo_001	./undo_001.ibu	UNDO LOG	InnoDB
 undo_01	./undo_01.ibu	UNDO LOG	InnoDB
@@ -245,6 +253,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_00	Undo	active
 undo_001	Undo	active
 undo_01	Undo	active
@@ -257,6 +269,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_00	./undo_00.ibu	UNDO LOG	InnoDB
 undo_001	./undo_001.ibu	UNDO LOG	InnoDB
 undo_01	./undo_01.ibu	UNDO LOG	InnoDB
@@ -310,6 +326,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_00	Undo	active
 undo_001	Undo	active
 undo_01	Undo	active
@@ -322,6 +342,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_00	./undo_00.ibu	UNDO LOG	InnoDB
 undo_001	./undo_001.ibu	UNDO LOG	InnoDB
 undo_01	./undo_01.ibu	UNDO LOG	InnoDB
@@ -441,6 +465,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_00	Undo	empty
 undo_001	Undo	empty
 undo_01	Undo	empty
@@ -455,6 +483,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_00	./undo_00.ibu	UNDO LOG	InnoDB
 undo_001	./undo_001.ibu	UNDO LOG	InnoDB
 undo_01	./undo_01.ibu	UNDO LOG	InnoDB
@@ -508,6 +540,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_00	Undo	empty
 undo_001	Undo	empty
 undo_01	Undo	empty
@@ -522,6 +558,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_00	./undo_00.ibu	UNDO LOG	InnoDB
 undo_001	./undo_001.ibu	UNDO LOG	InnoDB
 undo_01	./undo_01.ibu	UNDO LOG	InnoDB
@@ -577,6 +617,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_00	Undo	empty
 undo_001	Undo	empty
 undo_01	Undo	empty
@@ -591,6 +635,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_00	./undo_00.ibu	UNDO LOG	InnoDB
 undo_001	./undo_001.ibu	UNDO LOG	InnoDB
 undo_01	./undo_01.ibu	UNDO LOG	InnoDB
@@ -712,6 +760,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_021	Undo	empty
 undo_03	Undo	empty
 SELECT TABLESPACE_NAME, FILE_NAME, FILE_TYPE, ENGINE
@@ -721,6 +773,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_021	./undo_021.ibu	UNDO LOG	InnoDB
 undo_03	./undo_03.ibu	UNDO LOG	InnoDB
 SHOW CREATE TABLE t11;
@@ -769,6 +825,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_021	Undo	empty
 undo_03	Undo	empty
 SELECT TABLESPACE_NAME, FILE_NAME, FILE_TYPE, ENGINE
@@ -778,6 +838,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_021	./undo_021.ibu	UNDO LOG	InnoDB
 undo_03	./undo_03.ibu	UNDO LOG	InnoDB
 SHOW CREATE TABLE t2;
@@ -828,6 +892,10 @@ WHERE SPACE_TYPE = 'Undo'
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_021	Undo	empty
 undo_03	Undo	empty
 SELECT TABLESPACE_NAME, FILE_NAME, FILE_TYPE, ENGINE
@@ -837,6 +905,10 @@ WHERE FILE_NAME LIKE '%undo_0%'
 TABLESPACE_NAME	FILE_NAME	FILE_TYPE	ENGINE
 innodb_undo_001	./undo_001	UNDO LOG	InnoDB
 innodb_undo_002	./undo_002	UNDO LOG	InnoDB
+innodb_undo_003	./undo_003	UNDO LOG	InnoDB
+innodb_undo_004	./undo_004	UNDO LOG	InnoDB
+innodb_undo_005	./undo_005	UNDO LOG	InnoDB
+innodb_undo_006	./undo_006	UNDO LOG	InnoDB
 undo_021	./undo_021.ibu	UNDO LOG	InnoDB
 undo_03	./undo_03.ibu	UNDO LOG	InnoDB
 CALL execute_dml(1, 0, 100, 100, 10, 0);

@@ -31,18 +31,18 @@ CREATE UNDO TABLESPACE undo_004 ADD DATAFILE 'undo_004.ibu';
 
 --echo # Make the 2 implicit undo tablespaces inactive so they get truncated.
 SET GLOBAL innodb_purge_rseg_truncate_frequency=1;
-ALTER UNDO TABLESPACE innodb_undo_001 SET INACTIVE;
-ALTER UNDO TABLESPACE innodb_undo_002 SET INACTIVE;
-let $inactive_undo_space = innodb_undo_001;
+ALTER UNDO TABLESPACE innodb_undo_005 SET INACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_006 SET INACTIVE;
+let $inactive_undo_space = innodb_undo_005;
 source include/wait_until_undo_space_is_empty.inc;
-let $inactive_undo_space = innodb_undo_002;
+let $inactive_undo_space = innodb_undo_006;
 source include/wait_until_undo_space_is_empty.inc;
 
 if ($USE_EXPLICIT == 0)
 {
   --echo # Make the 2 implicit undo tablespaces active.
-  ALTER UNDO TABLESPACE innodb_undo_001 SET ACTIVE;
-  ALTER UNDO TABLESPACE innodb_undo_002 SET ACTIVE;
+  ALTER UNDO TABLESPACE innodb_undo_005 SET ACTIVE;
+  ALTER UNDO TABLESPACE innodb_undo_006 SET ACTIVE;
 
   --echo # Get rid of the explcit undo tablespaces.
   ALTER UNDO TABLESPACE undo_003 SET INACTIVE;
@@ -54,8 +54,8 @@ if ($USE_EXPLICIT == 0)
   DROP UNDO TABLESPACE undo_003;
   DROP UNDO TABLESPACE undo_004;
 
-  --let UNDO_NAME_1 = innodb_undo_001
-  --let UNDO_NAME_2 = innodb_undo_002
+  --let UNDO_NAME_1 = innodb_undo_005
+  --let UNDO_NAME_2 = innodb_undo_006
 }
 
 if ($USE_EXPLICIT == 1) {
@@ -226,8 +226,8 @@ SELECT NAME, SPACE_TYPE, STATE, AUTOEXTEND_SIZE FROM INFORMATION_SCHEMA.INNODB_T
 
 if ($USE_EXPLICIT == 1)
 {
-  ALTER UNDO TABLESPACE innodb_undo_001 SET ACTIVE;
-  ALTER UNDO TABLESPACE innodb_undo_002 SET ACTIVE;
+  ALTER UNDO TABLESPACE innodb_undo_005 SET ACTIVE;
+  ALTER UNDO TABLESPACE innodb_undo_006 SET ACTIVE;
   ALTER UNDO TABLESPACE undo_003 SET INACTIVE;
   ALTER UNDO TABLESPACE undo_004 SET INACTIVE;
 

@@ -21,7 +21,7 @@
 
 let MYSQLD_DATADIR = `select @@datadir`;
 
-SELECT @@GLOBAL.innodb_undo_tablespaces >= 2;
+SELECT @@GLOBAL.innodb_undo_tablespaces >= 6;
 let $undo_tablespaces=`SELECT @@GLOBAL.innodb_undo_tablespaces`;
 
 
@@ -34,16 +34,16 @@ let $undo_tablespaces=`SELECT @@GLOBAL.innodb_undo_tablespaces`;
 call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Expected to open 127 undo tablespaces but found 0. Will create the rest");
 --enable_query_log
 
-SET GLOBAL innodb_undo_tablespaces=2;
+SET GLOBAL innodb_undo_tablespaces=6;
 SELECT @@innodb_undo_tablespaces;
 --echo # 2 Expected
 
-SET GLOBAL innodb_undo_tablespaces=1;
+SET GLOBAL innodb_undo_tablespaces=5;
 --echo # Expected warning 'Truncated incorrect innodb_undo_tablespaces value'
 SELECT @@innodb_undo_tablespaces;
 --echo # 2 Expected
 
-SET GLOBAL innodb_undo_tablespaces=0;
+SET GLOBAL innodb_undo_tablespaces=4;
 --echo # Expected warning 'Truncated incorrect innodb_undo_tablespaces value'
 SELECT @@innodb_undo_tablespaces;
 --echo # 2 Expected

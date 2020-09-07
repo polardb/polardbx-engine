@@ -18,6 +18,8 @@ innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
 innodb_undo_003	Undo	Y	active
 innodb_undo_004	Undo	Y	active
+innodb_undo_005	Undo	Y	active
+innodb_undo_006	Undo	Y	active
 undo_003	Undo	Y	active
 undo_004	Undo	Y	active
 SHOW VARIABLES LIKE "%innodb_undo_log_encrypt%";
@@ -49,6 +51,8 @@ innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
 innodb_undo_003	Undo	Y	active
 innodb_undo_004	Undo	Y	active
+innodb_undo_005	Undo	Y	active
+innodb_undo_006	Undo	Y	active
 undo_003	Undo	Y	active
 undo_004	Undo	Y	active
 #
@@ -65,6 +69,8 @@ innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
 innodb_undo_003	Undo	Y	active
 innodb_undo_004	Undo	Y	active
+innodb_undo_005	Undo	Y	active
+innodb_undo_006	Undo	Y	active
 undo_003	Undo	Y	active
 undo_004	Undo	Y	active
 ALTER INSTANCE ROTATE INNODB MASTER KEY;
@@ -74,6 +80,8 @@ innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
 innodb_undo_003	Undo	Y	active
 innodb_undo_004	Undo	Y	active
+innodb_undo_005	Undo	Y	active
+innodb_undo_006	Undo	Y	active
 undo_003	Undo	Y	active
 undo_004	Undo	Y	active
 #
@@ -86,6 +94,8 @@ innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
 innodb_undo_003	Undo	Y	active
 innodb_undo_004	Undo	Y	active
+innodb_undo_005	Undo	Y	active
+innodb_undo_006	Undo	Y	active
 undo_003	Undo	Y	empty
 undo_004	Undo	Y	active
 #
@@ -109,6 +119,8 @@ innodb_undo_001	Undo	Y	active
 innodb_undo_002	Undo	Y	active
 innodb_undo_003	Undo	Y	active
 innodb_undo_004	Undo	Y	active
+innodb_undo_005	Undo	Y	active
+innodb_undo_006	Undo	Y	active
 undo_003	Undo	Y	empty
 undo_004	Undo	Y	active
 # Resume the ROTATE thread.

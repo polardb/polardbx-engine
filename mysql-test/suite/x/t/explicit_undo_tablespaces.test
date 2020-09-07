@@ -14,12 +14,12 @@ DROP SCHEMA if EXISTS mysqlxplugin;
 CREATE SCHEMA mysqlxplugin;
 USE mysqlxplugin;
 
-CREATE UNDO TABLESPACE undo_003 ADD DATAFILE 'undo_003.ibu';
+CREATE UNDO TABLESPACE undo_007 ADD DATAFILE 'undo_007.ibu';
 
 SELECT name,space_type,state FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
                              WHERE space_type = 'Undo';
 
-ALTER UNDO TABLESPACE undo_003 SET INACTIVE;
+ALTER UNDO TABLESPACE undo_007 SET INACTIVE;
 
 CREATE TABLE tab2(c1 int , c2 varchar(10)) Engine=InnoDB;
 INSERT INTO tab2 VALUES(2, 'VISH');
@@ -34,7 +34,7 @@ EOF
 --remove_file $MYSQL_TMP_DIR/mysqlx-undo_sql.xpl
 
 # Check metadata info
-let $inactive_undo_space = undo_003;
+let $inactive_undo_space = undo_007;
 source include/wait_until_undo_space_is_empty.inc;
 
 SELECT name,space_type,state FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
@@ -45,7 +45,7 @@ SELECT name,space_type,state FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 
 USE mysqlxplugin;
 DROP TABLE tab2;
-DROP UNDO TABLESPACE undo_003;
+DROP UNDO TABLESPACE undo_007;
 DROP SCHEMA if EXISTS mysqlxplugin;
 DROP USER insertsqluser@localhost;
 

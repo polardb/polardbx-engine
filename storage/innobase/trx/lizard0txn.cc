@@ -40,11 +40,11 @@ namespace lizard {
 /** Global singlton txn tablespaces */
 TXN_tablespaces txn_spaces;
 
-/** Currently, hardcode two undo tablespaces as lizard transaction tbs. */
+/** Currently, hardcode four undo tablespaces as lizard transaction tbs. */
 static_assert(dict_lizard::s_max_txn_space_id -
                       dict_lizard::s_min_txn_space_id + 1 ==
                   FSP_IMPLICIT_TXN_TABLESPACES,
-              "Lizard implicit transaction needs two undo tablespace!");
+              "Lizard implicit transaction needs four undo tablespace!");
 
 /** Judge whether it's lizard transaction tablespace by num
 @param[in]      num         >=1 and <= 127

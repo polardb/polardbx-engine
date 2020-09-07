@@ -42,7 +42,19 @@ const char *dict_lizard::s_lizard_space_name = "innodb_lizard";
 /** The file name of lizard space */
 const char *dict_lizard::s_lizard_space_file_name = "lizard.ibd";
 
-/** Lizard: First two undo tablespaces will be treated as txn tablespace */
-const char *dict_lizard::s_default_txn_space_name_1 = "innodb_undo_001";
-const char *dict_lizard::s_default_txn_space_name_2 = "innodb_undo_002";
+/** Lizard: First several undo tablespaces will be treated as txn tablespace */
+const char *dict_lizard::s_default_txn_space_names[] = {
+    "innodb_undo_001", "innodb_undo_002", "innodb_undo_003", "innodb_undo_004"};
+
+/** Judge the undo tablespace is txn tablespace by name */
+bool is_txn_space_by_name(const char *name) {
+  if (name && (strcmp(name, dict_lizard::s_default_txn_space_names[0]) == 0 ||
+               strcmp(name, dict_lizard::s_default_txn_space_names[1]) == 0 ||
+               strcmp(name, dict_lizard::s_default_txn_space_names[2]) == 0 ||
+               strcmp(name, dict_lizard::s_default_txn_space_names[3]) == 0))
+    return true;
+
+  return false;
+}
+
 }  // namespace lizard

@@ -9,7 +9,7 @@ RUN CREATE SCHEMA mysqlxplugin
 RUN USE mysqlxplugin
 
 0 rows affected
-RUN CREATE UNDO TABLESPACE undo_003 ADD DATAFILE 'undo_003.ibu'
+RUN CREATE UNDO TABLESPACE undo_007 ADD DATAFILE 'undo_007.ibu'
 
 0 rows affected
 RUN SELECT name,space_type,state FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
@@ -19,9 +19,11 @@ innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
 innodb_undo_003	Undo	active
 innodb_undo_004	Undo	active
-undo_003	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
+undo_007	Undo	active
 0 rows affected
-RUN ALTER UNDO TABLESPACE undo_003 SET INACTIVE
+RUN ALTER UNDO TABLESPACE undo_007 SET INACTIVE
 
 0 rows affected
 RUN CREATE TABLE tab2(c1 int , c2 varchar(10)) Engine=InnoDB
@@ -49,14 +51,16 @@ innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
 innodb_undo_003	Undo	active
 innodb_undo_004	Undo	active
-undo_003	Undo	empty
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
+undo_007	Undo	empty
 RUN USE mysqlxplugin
 
 0 rows affected
 RUN DROP TABLE tab2
 
 0 rows affected
-RUN DROP UNDO TABLESPACE undo_003
+RUN DROP UNDO TABLESPACE undo_007
 
 0 rows affected
 RUN DROP SCHEMA if EXISTS mysqlxplugin

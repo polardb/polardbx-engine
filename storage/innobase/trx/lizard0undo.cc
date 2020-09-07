@@ -819,7 +819,7 @@ void trx_txn_undo_cleanup(trx_t *trx, txn_undo_ptr_t *undo_ptr,
 
   UT_LIST_REMOVE(rseg->txn_undo_list, undo);
 
-  undo_ptr->txn_undo = NULL;
+  undo_ptr->txn_undo = nullptr;
 
   if (undo->state == TRX_UNDO_CACHED) {
     UT_LIST_ADD_FIRST(rseg->txn_undo_cached, undo);

@@ -244,3 +244,9 @@ innodb.instant_ddl_upgrade_metadata_debug         : WL#000 Lizard didn't support
 innodb.instant_ddl_upgrade_part_metadata_debug    : WL#000 Lizard didn't support in-place upgrade.
 innodb.instant_ddl_upgrade_update                 : WL#000 Lizard didn't support in-place upgrade.
 innodb.instant_ddl_upgrade_rollback               : WL#000 Lizard didn't support in-place upgrade.
+
+# innodb-rollback-segments
+innodb.innodb_bug12400341                         : WL#000 Lizard didn't support adjust innodb-rollback-segments.
+
+# More mtr / redo
+innodb.log_first_rec_group                        : WL#000 Lizard generate more redo.

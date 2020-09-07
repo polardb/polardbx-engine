@@ -80,12 +80,12 @@ SELECT * FROM tab1;
 
 SELECT * FROM tab2;
 
-ALTER UNDO TABLESPACE innodb_undo_001 SET INACTIVE;
-let $inactive_undo_space = innodb_undo_001;
+ALTER UNDO TABLESPACE innodb_undo_005 SET INACTIVE;
+let $inactive_undo_space = innodb_undo_005;
 source include/wait_until_undo_space_is_empty.inc;
 
-ALTER UNDO TABLESPACE innodb_undo_002 SET INACTIVE;
-let $inactive_undo_space = innodb_undo_002;
+ALTER UNDO TABLESPACE innodb_undo_006 SET INACTIVE;
+let $inactive_undo_space = innodb_undo_006;
 source include/wait_until_undo_space_is_empty.inc;
 
 SELECT name,space_type,state 
@@ -110,8 +110,8 @@ SELECT name,space_type,state
        FROM INFORMATION_SCHEMA.INNODB_TABLESPACES 
        WHERE space_type = 'Undo';
 
-ALTER UNDO TABLESPACE innodb_undo_001 SET ACTIVE;
-ALTER UNDO TABLESPACE innodb_undo_002 SET ACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_005 SET ACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_006 SET ACTIVE;
 
 ALTER UNDO TABLESPACE undo_003 SET INACTIVE;
 let $inactive_undo_space = undo_003;

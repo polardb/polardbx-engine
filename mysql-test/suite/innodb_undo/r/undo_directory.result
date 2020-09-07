@@ -10,6 +10,8 @@ undo_001
 undo_002
 undo_003
 undo_004
+undo_005
+undo_006
 #
 # Start the DB server with the temp datadir and undo directory
 #
@@ -61,6 +63,8 @@ undo_003
 undo_003.ibu
 undo_004
 undo_004.ibu
+undo_005
+undo_006
 #
 # Cleanup
 #

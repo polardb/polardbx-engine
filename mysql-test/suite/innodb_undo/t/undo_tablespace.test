@@ -43,12 +43,12 @@ CALL populate_t1(1, 1000);
 --echo # Show that the implicit undo tablespaces may be set inactive
 --echo # and that a minimum of 2 undo tablespaces must remain active.
 --echo #
-ALTER UNDO TABLESPACE innodb_undo_001 SET INACTIVE;
-let $inactive_undo_space = innodb_undo_001;
+ALTER UNDO TABLESPACE innodb_undo_005 SET INACTIVE;
+let $inactive_undo_space = innodb_undo_005;
 source include/wait_until_undo_space_is_empty.inc;
 
-ALTER UNDO TABLESPACE innodb_undo_002 SET INACTIVE;
-let $inactive_undo_space = innodb_undo_002;
+ALTER UNDO TABLESPACE innodb_undo_006 SET INACTIVE;
+let $inactive_undo_space = innodb_undo_006;
 source include/wait_until_undo_space_is_empty.inc;
 
 ALTER UNDO TABLESPACE undo_003 SET INACTIVE;
@@ -67,8 +67,8 @@ SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
        WHERE FILE_NAME LIKE '%.ibu' ORDER BY TABLESPACE_NAME;
 
-ALTER UNDO TABLESPACE innodb_undo_001 SET ACTIVE;
-ALTER UNDO TABLESPACE innodb_undo_002 SET ACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_005 SET ACTIVE;
+ALTER UNDO TABLESPACE innodb_undo_006 SET ACTIVE;
 SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE SPACE_TYPE = 'Undo' ORDER BY NAME;
 
@@ -116,9 +116,9 @@ SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 --echo #
 --echo # Try various bad CREATE UNDO TABLESPACE commands
 --echo #
-# `innodb_undo_001` is an existing implict undo tablespace.
+# `innodb_undo_005` is an existing implict undo tablespace.
 --error ER_WRONG_TABLESPACE_NAME
-CREATE UNDO TABLESPACE innodb_undo_001 ADD DATAFILE 'undo_001.ibu';
+CREATE UNDO TABLESPACE innodb_undo_005 ADD DATAFILE 'undo_001.ibu';
 SHOW WARNINGS;
 
 # Show that you cannot use an existing file known to the DD.
@@ -205,7 +205,7 @@ ALTER UNDO TABLESPACE undo_005 SET EMPTY;
 
 # undo_001 is an implict undo tablespace, cannot be dropped.
 --error ER_WRONG_TABLESPACE_NAME
-DROP UNDO TABLESPACE innodb_undo_001;
+DROP UNDO TABLESPACE innodb_undo_005;
 SHOW WARNINGS;
 
 # undo_99 does not exist.

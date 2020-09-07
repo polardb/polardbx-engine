@@ -1575,7 +1575,8 @@ static bool trx_serialisation_number_get(
   already in the rollback segment. User threads only
   produce events when a rollback segment is empty. */
   if ((redo_rseg != nullptr && redo_rseg->last_page_no == FIL_NULL) ||
-      (temp_rseg != nullptr && temp_rseg->last_page_no == FIL_NULL)) {
+      (temp_rseg != nullptr && temp_rseg->last_page_no == FIL_NULL) ||
+      (txn_rseg != nullptr && txn_rseg->last_page_no == FIL_NULL)) {
     TrxUndoRsegs elem;
 
     if (redo_rseg != nullptr && redo_rseg->last_page_no == FIL_NULL) {

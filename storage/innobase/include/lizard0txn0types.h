@@ -34,6 +34,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0txn0types_h
 
 /** Lizard transaction tablespace count  */
-constexpr size_t FSP_IMPLICIT_TXN_TABLESPACES = 2;
+constexpr size_t FSP_IMPLICIT_TXN_TABLESPACES = 4;
 
 #endif

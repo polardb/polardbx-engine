@@ -27,12 +27,20 @@ WHERE SPACE_TYPE = 'Undo';
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 undo_003	Undo	empty
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
 WHERE TABLESPACE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
 TABLESPACE_NAME	FILE_TYPE	FILE_NAME
 innodb_undo_001	UNDO LOG	./undo_001
 innodb_undo_002	UNDO LOG	./undo_002
+innodb_undo_003	UNDO LOG	./undo_003
+innodb_undo_004	UNDO LOG	./undo_004
+innodb_undo_005	UNDO LOG	./undo_005
+innodb_undo_006	UNDO LOG	./undo_006
 undo_003	UNDO LOG	./undo_003.ibu
 #
 # Crash before deleting the tablespace file during the DDL_LOG apply.
@@ -49,14 +57,26 @@ WHERE SPACE_TYPE = 'Undo';
 NAME	SPACE_TYPE	STATE
 innodb_undo_001	Undo	active
 innodb_undo_002	Undo	active
+innodb_undo_003	Undo	active
+innodb_undo_004	Undo	active
+innodb_undo_005	Undo	active
+innodb_undo_006	Undo	active
 SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
 WHERE FILE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
 TABLESPACE_NAME	FILE_TYPE	FILE_NAME
 innodb_undo_001	UNDO LOG	./undo_001
 innodb_undo_002	UNDO LOG	./undo_002
+innodb_undo_003	UNDO LOG	./undo_003
+innodb_undo_004	UNDO LOG	./undo_004
+innodb_undo_005	UNDO LOG	./undo_005
+innodb_undo_006	UNDO LOG	./undo_006
 ### Undo files in datadir ###
 undo_001
 undo_002
+undo_003
+undo_004
+undo_005
+undo_006
 #
 # Cleanup
 #

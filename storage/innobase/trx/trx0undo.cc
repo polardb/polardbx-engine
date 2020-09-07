@@ -1692,8 +1692,8 @@ trx_undo_t *trx_undo_reuse_cached(trx_rseg_t *rseg, ulint type,
   } else {
     ut_ad(type == TRX_UNDO_TXN);
     undo = UT_LIST_GET_FIRST(rseg->txn_undo_cached);
-    if (undo == NULL) {
-      return (NULL);
+    if (undo == nullptr) {
+      return (nullptr);
     }
     UT_LIST_REMOVE(rseg->txn_undo_cached, undo);
 
