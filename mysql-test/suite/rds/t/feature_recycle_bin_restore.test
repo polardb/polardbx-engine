@@ -83,6 +83,18 @@ drop table t1;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
 
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_recycle.restore_table("__innodb_165", "");
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_recycle.restore_table("__innodb_165", "", "", "");
+
+call dbms_recycle.restore_table("__innodb_165");
+drop table t1;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
 call dbms_recycle.restore_table("__innodb_165", "db_recycle", "t2");
 show tables;
 

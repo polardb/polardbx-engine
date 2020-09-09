@@ -59,6 +59,15 @@ drop table t1;
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
+call dbms_recycle.restore_table("__innodb_165", "");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_recycle.restore_table; expected 3, got 2
+call dbms_recycle.restore_table("__innodb_165", "", "", "");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_recycle.restore_table; expected 3, got 4
+call dbms_recycle.restore_table("__innodb_165");
+drop table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
 call dbms_recycle.restore_table("__innodb_165", "db_recycle", "t2");
 show tables;
 Tables_in_db_recycle

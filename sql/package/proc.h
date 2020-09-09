@@ -112,6 +112,8 @@ class Proc : public PSI_memory_base {
   /* Container of proc columns */
   typedef Prealloced_array<Column_element, PROC_PREALLOC_SIZE> Columns;
 
+  typedef std::vector<const Parameters *> Parameters_list;
+
   /**
   */
   enum class Result_type {
@@ -125,6 +127,7 @@ class Proc : public PSI_memory_base {
       : PSI_memory_base(key),
         m_result_type(Result_type::RESULT_NONE),
         m_parameters(key),
+        m_parameters_list(),
         m_columns(key) {}
 
   virtual ~Proc() {}
@@ -154,6 +157,10 @@ class Proc : public PSI_memory_base {
   Result_type get_result_type() const { return m_result_type; }
 
   const Parameters *get_parameters() const { return &m_parameters; }
+
+  const Parameters_list &get_parameters_list() const {
+    return m_parameters_list;
+  }
 
   const Columns &get_columns() const { return m_columns; }
 
@@ -188,8 +195,10 @@ class Proc : public PSI_memory_base {
  protected:
   /* The type of result packet */
   Result_type m_result_type;
-  /* The list of proc parameters */
+  /* The list of proc parameters, the default parameter format */
   Parameters m_parameters;
+  /* Now support multiple parameter formats */
+  Parameters_list m_parameters_list;
   /* The list of proc columns */
   Columns m_columns;
 };
