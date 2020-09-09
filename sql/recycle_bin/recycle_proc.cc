@@ -255,18 +255,20 @@ bool Sql_cmd_recycle_proc_restore::check_access(THD *thd) {
   thd->recycle_state->set_priv_relax();
 
   /* 1. Parse the input parameters */
+  const char *old_table = nullptr;
+  const char *new_db = nullptr;
+  const char *new_table = nullptr;
   res = (*m_list)[0]->val_str(&str);
-  const char *old_table =
-      strmake_root(thd->mem_root, res->ptr(), res->length());
-  res = (*m_list)[1]->val_str(&str);
-  const char *new_db = strmake_root(thd->mem_root, res->ptr(), res->length());
-  res = (*m_list)[2]->val_str(&str);
-  const char *new_table =
-      strmake_root(thd->mem_root, res->ptr(), res->length());
+  old_table = strmake_root(thd->mem_root, res->ptr(), res->length());
   if (old_table == NULL || strlen(old_table) == 0) {
     my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), 1,
              m_proc->qname().c_str());
     DBUG_RETURN(true);
+  } else if (m_list->size() == 3) {
+    res = (*m_list)[1]->val_str(&str);
+    new_db = strmake_root(thd->mem_root, res->ptr(), res->length());
+    res = (*m_list)[2]->val_str(&str);
+    new_table = strmake_root(thd->mem_root, res->ptr(), res->length());
   }
 
   /* 2. The old table must exist in recycle_bin */

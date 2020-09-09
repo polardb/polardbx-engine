@@ -270,7 +270,8 @@ class Recycle_proc_restore : public Recycle_proc_base {
   }
 
  public:
-  explicit Recycle_proc_restore(PSI_memory_key key) : Recycle_proc_base(key) {
+  explicit Recycle_proc_restore(PSI_memory_key key)
+      : Recycle_proc_base(key), m_parameters_2(key) {
     /* Only OK or ERROR protocol packet */
     m_result_type = Result_type::RESULT_OK;
 
@@ -279,6 +280,15 @@ class Recycle_proc_restore : public Recycle_proc_base {
       m_parameters.assign_at(
           i, get_field_type(static_cast<enum enum_parameter>(i)));
     }
+
+    for (size_t i = RECYCLE_PARAM_TABLE; i < RECYCLE_PARAM_NEW_DATABASE; i++) {
+      m_parameters_2.assign_at(
+          i, get_field_type(static_cast<enum enum_parameter>(i)));
+    }
+
+    /* Add the parameter formats to list */
+    m_parameters_list.push_back(&m_parameters);
+    m_parameters_list.push_back(&m_parameters_2);
   }
 
   /* Singleton instance for restore_table */
@@ -296,6 +306,9 @@ class Recycle_proc_restore : public Recycle_proc_base {
   virtual const std::string str() const override {
     return std::string("restore_table");
   }
+
+ protected:
+  Parameters m_parameters_2;
 };
 
 } /* namespace recycle_bin */

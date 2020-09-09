@@ -171,8 +171,8 @@ void package_context_init() {
   /* dbms_recycle.restore_table(...) */
   register_package<Proc, im::recycle_bin::Recycle_proc_restore>(
       im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
-        register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
-
+  /* dbms_admin.show_native_procedure() */
+  register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
 }
 
 } /* namespace im */

@@ -138,7 +138,20 @@ bool Sql_cmd_proc::check_parameter() {
   std::size_t actual_size = (m_list == nullptr ? 0 : m_list->size());
   std::size_t define_size = m_proc->get_parameters()->size();
 
-  if (actual_size != define_size) {
+  const Proc::Parameters *current_parameters = nullptr;
+  if (m_proc->get_parameters_list().size() == 0) {
+    current_parameters = m_proc->get_parameters();
+  } else {
+    for (auto parameters : m_proc->get_parameters_list()) {
+      if (parameters->size() == actual_size) {
+        define_size = parameters->size();
+        current_parameters = parameters;
+        break;
+      }
+    }
+  }
+
+  if (current_parameters == nullptr || actual_size != define_size) {
     my_error(ER_SP_WRONG_NO_OF_ARGS, MYF(0), "PROCEDURE",
              m_proc->qname().c_str(), define_size, actual_size);
     return true;

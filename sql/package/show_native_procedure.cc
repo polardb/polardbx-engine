@@ -174,15 +174,32 @@ void Sql_cmd_show_native_procedure::send_result(THD *thd, bool error) {
     sql_command_code_str =
         sql_command_enum_to_string(sqlcmdit->sql_command_code());
 
-    auto parameters = procit->get_parameters();
-    std::size_t param_size = parameters->size();
-    if (param_size != 0)
-      params_str = field_type_enum_to_string(parameters->at(0));
-    if (param_size > 1)
-      for (std::size_t ii = 1; ii < param_size; ii++) {
-        params_str += ", ";
-        params_str += field_type_enum_to_string(parameters->at(ii));
+    params_str = "";
+    Proc::Parameters_list parameters_list;
+    if (procit->get_parameters_list().size() == 0) {
+      parameters_list.push_back(procit->get_parameters());
+    } else {
+      parameters_list = procit->get_parameters_list();
+    }
+
+    int index = 0;
+    for (auto parameters : parameters_list) {
+      if (index) params_str += " / ";
+
+      std::size_t param_size = parameters->size();
+      if (param_size == 0)
+        params_str += "NULL";
+      else {
+        params_str += field_type_enum_to_string(parameters->at(0));
+        if (param_size > 1)
+          for (std::size_t ii = 1; ii < param_size; ii++) {
+            params_str += ", ";
+            params_str += field_type_enum_to_string(parameters->at(ii));
+          }
       }
+
+      index++;
+    }
 
     protocol->start_row();
     protocol->store_string(schema_name_str.c_str(), schema_name_str.length(),
@@ -193,7 +210,6 @@ void Sql_cmd_show_native_procedure::send_result(THD *thd, bool error) {
                            sql_command_code_str.length(), system_charset_info);
     protocol->store_string(params_str.c_str(), params_str.length(),
                            system_charset_info);
-
     if (protocol->end_row()) DBUG_VOID_RETURN;
   }
 
