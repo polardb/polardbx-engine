@@ -68,7 +68,7 @@ void SCN::init() {
           ut_uint64_align_up(mach_read_from_8(lzd_hdr + LIZARD_SYS_SCN),
                              LIZARD_SCN_NUMBER_MAGIN);
 
-  lizard_sys->min_safe_scn = m_scn;
+  lizard_sys->min_safe_scn = m_scn.load();
 
   ut_a(m_scn > 0 && m_scn < SCN_NULL);
   mtr.commit();
@@ -129,13 +129,15 @@ scn_t SCN::acquire_scn(bool mutex_hold) {
     mutex_enter(&m_mutex);
   }
 
-  ret = m_scn;
+  ret = m_scn.load();
 
   if (!mutex_hold) {
     mutex_exit(&m_mutex);
   }
   return ret;
 }
+
+scn_t SCN::get_scn() { return m_scn.load(); }
 
 /**
   Check the commit scn state

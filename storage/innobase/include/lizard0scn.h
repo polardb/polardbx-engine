@@ -131,6 +131,8 @@ class SCN {
   @return     m_scn */
   scn_t acquire_scn(bool mutex_hold = false);
 
+  scn_t get_scn();
+
   /** lock mutex */
   void lock() {
     ut_ad(m_inited);
@@ -161,7 +163,7 @@ class SCN {
   SCN &operator=(const SCN &) = delete;
 
  private:
-  scn_t m_scn;
+  std::atomic<scn_t> m_scn;
   bool m_inited;
   ib_mutex_t m_mutex;
 };
