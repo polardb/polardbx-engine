@@ -193,7 +193,7 @@ void lizard_create_sys_pages() {
 scn_t lizard_sys_get_scn() {
   ut_a(lizard_sys);
 
-  return lizard_sys->scn.acquire_scn();
+  return lizard_sys->scn.get_scn();
 }
 
 /**
