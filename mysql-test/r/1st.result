@@ -21,6 +21,7 @@ help_category
 help_keyword
 help_relation
 help_topic
+innodb_flashback_snapshot
 innodb_index_stats
 innodb_table_stats
 password_history

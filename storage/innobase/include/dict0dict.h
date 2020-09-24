@@ -1128,6 +1128,8 @@ struct dict_sys_t {
   dict_table_t *ddl_log;
   /** Permanent handle to mysql.innodb_dynamic_metadata */
   dict_table_t *dynamic_metadata;
+  /** Permanent handle to mysql.innodb_flashback_snapshot */
+  dict_table_t *scn_hist;
 
   UT_LIST_BASE_NODE_T(dict_table_t)
   table_LRU; /*!< List of tables that can be evicted

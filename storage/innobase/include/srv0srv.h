@@ -227,6 +227,9 @@ struct Srv_threads {
   /** Thread for GTID persistence */
   IB_thread m_gtid_persister;
 
+  /** Thread for scn history */
+  IB_thread m_scn_hist;
+
 #ifdef UNIV_DEBUG
   /** Used in test scenario to delay threads' cleanup until the pre_dd_shutdown
   is ended and final plugin's shutdown is started (when plugin is DELETED).

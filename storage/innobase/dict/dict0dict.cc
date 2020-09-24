@@ -5911,6 +5911,10 @@ void dict_close(void) {
     dict_table_close(dict_sys->ddl_log, true, false);
   }
 
+  if (dict_sys->scn_hist) {
+    dict_table_close(dict_sys->scn_hist, true, false);
+  }
+
 #ifndef UNIV_HOTBACKUP
   /* Free the hash elements. We don't remove them from the table
   because we are going to destroy the table anyway. */

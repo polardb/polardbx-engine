@@ -19875,6 +19875,12 @@ ER_SERVER_AUTOUPGRADE_RENAME_PARTITION_TABLE_FAILED
 ER_LIZARD
   eng "%s"
 
+ER_STOP_SCN_HOSTORY_THREAD
+   eng "Waiting for SCN history thread to exit"
+
+ER_ROLL_FORWARD_SCN
+   eng "%s"
+
 #
 # End of RDS error messages intended to be logged to the server error log.
 #

@@ -126,6 +126,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0sys.h"
 #include "lizard0txn.h"
 #include "lizard0undo0types.h"
+#include "lizard0scn0hist.h"
 
 /** fil_space_t::flags for hard-coded tablespaces */
 extern uint32_t predefined_flags;
@@ -162,8 +163,11 @@ enum srv_start_state_t {
   SRV_START_STATE_MONITOR = 4,  /*!< Started montior thread */
   SRV_START_STATE_MASTER = 8,   /*!< Started master threadd. */
   SRV_START_STATE_PURGE = 16,   /*!< Started purge thread(s) */
-  SRV_START_STATE_STAT = 32     /*!< Started bufdump + dict stat
+  SRV_START_STATE_STAT = 32,    /*!< Started bufdump + dict stat
                                 and FTS optimize thread. */
+
+  SRV_START_STATE_SCN_HIST = 128 /*!< Started scn history generator thread.*/
+
 };
 
 /** Track server thrd starting phases */
@@ -1720,6 +1724,10 @@ void srv_shutdown_all_bg_threads() {
       }
     }
 
+    if (srv_start_state_is_set(SRV_START_STATE_SCN_HIST)) {
+      lizard::srv_scn_history_shutdown();
+    }
+
     if (srv_start_state_is_set(SRV_START_STATE_IO)) {
       /* e. Exit the i/o threads */
       if (!srv_read_only_mode) {
@@ -3071,6 +3079,16 @@ void srv_start_threads_after_ddl_recovery() {
   /* Now the InnoDB Metadata and file system should be consistent.
   Start the Purge thread */
   srv_start_purge_threads();
+
+  /** Create scn history background thread */
+  srv_threads.m_scn_hist =
+      os_thread_create(scn_history_thread_key, lizard::srv_scn_history_thread);
+
+  lizard::srv_scn_history_thread_init();
+
+  srv_threads.m_scn_hist.start();
+
+  srv_start_state_set(SRV_START_STATE_SCN_HIST);
 }
 
 #if 0
@@ -3119,6 +3137,10 @@ void srv_pre_dd_shutdown() {
     srv_is_being_shutdown = true;
     srv_shutdown_state.store(SRV_SHUTDOWN_CLEANUP);
     return;
+  }
+
+  if (srv_start_state_is_set(SRV_START_STATE_SCN_HIST)) {
+    lizard::srv_scn_history_shutdown();
   }
 
   if (srv_start_state_is_set(SRV_START_STATE_STAT)) {
@@ -3209,6 +3231,14 @@ void srv_pre_dd_shutdown() {
       }
     }
 
+    if (srv_thread_is_active(srv_threads.m_scn_hist)) {
+      wait = true;
+      os_event_set(lizard::scn_history_event);
+      if (count % SHUTDOWN_SLEEP_ROUNDS == 0) {
+        ib::info(ER_STOP_SCN_HOSTORY_THREAD);
+      }
+    }
+
     if (!wait) {
       break;
     }
@@ -3219,6 +3249,10 @@ void srv_pre_dd_shutdown() {
 
   if (srv_start_state_is_set(SRV_START_STATE_STAT)) {
     dict_stats_thread_deinit();
+  }
+
+  if (srv_start_state_is_set(SRV_START_STATE_SCN_HIST)) {
+    lizard::srv_scn_history_thread_deinit();
   }
 
   srv_is_being_shutdown = true;
@@ -3502,7 +3536,8 @@ void srv_shutdown() {
   const auto threads_stopped_before_shutdown = {
       std::cref(srv_threads.m_purge_coordinator),
       std::cref(srv_threads.m_ts_alter_encrypt),
-      std::cref(srv_threads.m_dict_stats)};
+      std::cref(srv_threads.m_dict_stats),
+      std::cref(srv_threads.m_scn_hist)};
 
   for (const auto &thread : threads_stopped_before_shutdown) {
     ut_a(!srv_thread_is_active(thread));

@@ -176,6 +176,8 @@ void Mysqldump_tool_chain_maker_options::process_positional_options(
         std::make_pair("mysql", "slave_master_info"));
     m_object_filter.m_tables_excluded.push_back(
         std::make_pair("mysql", "slave_relay_log_info"));
+    m_object_filter.m_tables_excluded.push_back(
+        std::make_pair("mysql", "innodb_flashback_snapshot"));
     /*
       We filter out all the tables which store account and privilge
       information. ex: mysql.user, mysql.db, mysql.tables_priv,

@@ -39,7 +39,7 @@
 call mtr.add_suppression("Failed to set up SSL because of the following SSL library error");
 
 let $total_global_vars=`SELECT COUNT(*) FROM performance_schema.global_variables where variable_name NOT LIKE 'ndb_%' AND variable_name NOT LIKE 'xengine_%'`;
-let $total_persistent_vars=493;
+let $total_persistent_vars=469;
 
 --echo ***************************************************************
 --echo * 0. Verify that variables present in performance_schema.global

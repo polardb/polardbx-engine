@@ -233,6 +233,12 @@ innodb/log_flusher_thread	BACKGROUND
 innodb/log_write_notifier_thread	BACKGROUND
 innodb/log_writer_thread	BACKGROUND
 innodb/page_flush_coordinator_thread	BACKGROUND
+<<<<<<< HEAD
+=======
+innodb/scn_history_thread	BACKGROUND
+pas/performance_agent_thread	BACKGROUND
+rds_audit/flush_thread	BACKGROUND
+>>>>>>> dbaf7d470f7... [Feature] Rolling forward SCN persistently
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
 sql/event_scheduler	FOREGROUND
@@ -284,6 +290,12 @@ innodb/log_flusher_thread	BACKGROUND
 innodb/log_write_notifier_thread	BACKGROUND
 innodb/log_writer_thread	BACKGROUND
 innodb/page_flush_coordinator_thread	BACKGROUND
+<<<<<<< HEAD
+=======
+innodb/scn_history_thread	BACKGROUND
+pas/performance_agent_thread	BACKGROUND
+rds_audit/flush_thread	BACKGROUND
+>>>>>>> dbaf7d470f7... [Feature] Rolling forward SCN persistently
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
 sql/event_scheduler	FOREGROUND
