@@ -185,7 +185,8 @@ static std::vector<std::string> ignored_tables = {
     */
     {"mysql.innodb_ddl_log"},
     {"mysql.innodb_dynamic_metadata"},
-    {"mysql.gtid_executed"}};
+    {"mysql.gtid_executed"},
+    {"mysql.innodb_flashback_snapshot"}};
 
 static bool is_ignored_table(const std::string &qualified_name) {
   for (std::vector<std::string>::iterator it = ignored_tables.begin();

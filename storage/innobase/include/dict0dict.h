@@ -1039,6 +1039,8 @@ struct dict_sys_t {
   /** Permanent handle to mysql.innodb_dynamic_metadata */
   dict_table_t *dynamic_metadata;
   using Table_LRU_list_base = UT_LIST_BASE_NODE_T(dict_table_t, table_LRU);
+  /** Permanent handle to mysql.innodb_flashback_snapshot */
+  dict_table_t *scn_hist;
 
   /** List of tables that can be evicted from the cache */
   Table_LRU_list_base table_LRU;

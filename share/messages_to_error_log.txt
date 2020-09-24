@@ -12151,6 +12151,12 @@ ER_AUDIT_LOG_ENABLE_OR_DISABLE
 ER_AUDIT_LOG_SWITCH_LOG_VERSION
   eng "Log version switched from %s to %s."
 
+ER_STOP_SCN_HOSTORY_THREAD
+  eng "Waiting for SCN history thread to exit"
+
+ER_ROLL_FORWARD_SCN
+  eng "%s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

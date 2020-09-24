@@ -303,6 +303,7 @@ const innodb_dd_table_t innodb_dd_table[] = {
     INNODB_DD_TABLE("innodb_table_stats", 1),
     INNODB_DD_TABLE("innodb_index_stats", 1),
     INNODB_DD_TABLE("innodb_ddl_log", 2),
+    INNODB_DD_TABLE("innodb_flashback_snapshot", 2),
 
     INNODB_DD_TABLE("catalogs", 2),
     INNODB_DD_TABLE("character_sets", 3),

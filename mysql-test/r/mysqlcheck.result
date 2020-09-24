@@ -19,6 +19,7 @@ mysql.help_category                                OK
 mysql.help_keyword                                 OK
 mysql.help_relation                                OK
 mysql.help_topic                                   OK
+mysql.innodb_flashback_snapshot                    OK
 mysql.innodb_index_stats                           OK
 mysql.innodb_table_stats                           OK
 mysql.password_history                             OK
@@ -96,6 +97,10 @@ status   : OK
 mysql.help_topic
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
+mysql.innodb_flashback_snapshot
+note     : Table does not support optimize, doing recreate + analyze instead
+error    : The used command is not allowed with this MySQL version
+status   : Operation failed
 mysql.innodb_index_stats
 note     : Table does not support optimize, doing recreate + analyze instead
 error    : The used command is not allowed with this MySQL version
@@ -188,6 +193,7 @@ mysql.help_category                                OK
 mysql.help_keyword                                 OK
 mysql.help_relation                                OK
 mysql.help_topic                                   OK
+mysql.innodb_flashback_snapshot                    OK
 mysql.innodb_index_stats                           OK
 mysql.innodb_table_stats                           OK
 mysql.password_history                             OK
@@ -252,6 +258,10 @@ status   : OK
 mysql.help_topic
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
+mysql.innodb_flashback_snapshot
+note     : Table does not support optimize, doing recreate + analyze instead
+error    : The used command is not allowed with this MySQL version
+status   : Operation failed
 mysql.innodb_index_stats
 note     : Table does not support optimize, doing recreate + analyze instead
 error    : The used command is not allowed with this MySQL version

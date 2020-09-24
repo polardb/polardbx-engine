@@ -437,7 +437,8 @@ void Sql_formatter::format_sql_objects_definer(
 */
 bool Sql_formatter::innodb_stats_tables(std::string db, std::string table) {
   return ((db == "mysql") &&
-          ((table == "innodb_table_stats") || (table == "innodb_index_stats")));
+          ((table == "innodb_table_stats") || (table == "innodb_index_stats") ||
+           (table == "innodb_flashback_snapshot")));
 }
 
 void Sql_formatter::format_object(Item_processing_data *item_to_process) {

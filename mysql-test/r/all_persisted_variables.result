@@ -40,7 +40,23 @@ include/assert.inc [Expect 500+ variables in the table. Due to open Bugs, we are
 
 # Test SET PERSIST
 
+<<<<<<< HEAD
 include/assert.inc [Expect 476 persisted variables in the table.]
+=======
+<<<<<<< HEAD
+include/assert.inc [Expect 465 persisted variables in the table.]
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+include/assert.inc [Expect 383 persisted variables in the table.]
+=======
+include/assert.inc [Expect 493 persisted variables in the table.]
+>>>>>>> 767eb8a3452... [opt] remove unused codes
+=======
+include/assert.inc [Expect 469 persisted variables in the table.]
+>>>>>>> dbaf7d470f7... [Feature] Rolling forward SCN persistently
+>>>>>>> b2d257bbb7e ([Feature] Rolling forward SCN persistently)
+>>>>>>> b39bb45f7b2 ([Feature] Rolling forward SCN persistently)
 
 ************************************************************
 * 3. Restart server, it must preserve the persisted variable
@@ -48,9 +64,33 @@ include/assert.inc [Expect 476 persisted variables in the table.]
 ************************************************************
 # restart
 
+<<<<<<< HEAD
 include/assert.inc [Expect 476 persisted variables in persisted_variables table.]
 include/assert.inc [Expect 476 persisted variables shown as PERSISTED in variables_info table.]
 include/assert.inc [Expect 476 persisted variables with matching peristed and global values.]
+=======
+<<<<<<< HEAD
+include/assert.inc [Expect 465 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 465 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 465 persisted variables with matching peristed and global values.]
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+include/assert.inc [Expect 383 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 383 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 383 persisted variables with matching peristed and global values.]
+=======
+include/assert.inc [Expect 493 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 493 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 493 persisted variables with matching peristed and global values.]
+>>>>>>> 767eb8a3452... [opt] remove unused codes
+=======
+include/assert.inc [Expect 469 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 469 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 469 persisted variables with matching peristed and global values.]
+>>>>>>> dbaf7d470f7... [Feature] Rolling forward SCN persistently
+>>>>>>> b2d257bbb7e ([Feature] Rolling forward SCN persistently)
+>>>>>>> b39bb45f7b2 ([Feature] Rolling forward SCN persistently)
 
 ************************************************************
 * 4. Test RESET PERSIST IF EXISTS. Verify persisted variable

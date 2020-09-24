@@ -1035,6 +1035,7 @@ static int get_options(int *argc, char ***argv) {
   ignore_table->insert("mysql.schema");
   ignore_table->insert("mysql.general_log");
   ignore_table->insert("mysql.slow_log");
+  ignore_table->insert("mysql.innodb_flashback_snapshot");
 
   if ((ho_error = handle_options(argc, argv, my_long_options, get_one_option)))
     return (ho_error);

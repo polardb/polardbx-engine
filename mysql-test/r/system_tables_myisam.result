@@ -96,6 +96,10 @@ mysql.help_topic
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.help_topic]
 @table_name
+mysql.innodb_flashback_snapshot
+ERROR
+The used command is not allowed with this MySQL version
+@table_name
 mysql.innodb_index_stats
 ERROR
 Specified key was too long; max key length is 1000 bytes
@@ -265,6 +269,8 @@ SEVERITY	ERRNO	MESSAGE
 Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.help_relation]
 SEVERITY	ERRNO	MESSAGE
 Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.help_topic]
+SEVERITY	ERRNO	MESSAGE
+ERROR	3554	Access to system table 'mysql.innodb_flashback_snapshot' is rejected.
 SEVERITY	ERRNO	MESSAGE
 ERROR	3554	Access to system table 'mysql.innodb_index_stats' is rejected.
 SEVERITY	ERRNO	MESSAGE
