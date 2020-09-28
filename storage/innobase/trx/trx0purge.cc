@@ -157,6 +157,9 @@ void trx_purge_sys_create(ulint n_purge_threads,
 
   /* Allocate 8K bytes for the initial heap. */
   purge_sys->heap = mem_heap_create(8 * 1024);
+
+  /* reload purged_scn from heap */
+  lizard::trx_purge_set_purged_scn(lizard::trx_purge_reload_purged_scn());
 }
 
 /************************************************************************
@@ -1646,6 +1649,8 @@ static void trx_purge_rseg_get_next_history_log(
 
   purge_sys->purge_heap->push(elem);
 
+  lizard_purged_scn_validation();
+
   mutex_exit(&purge_sys->pq_mutex);
 
   mutex_exit(&rseg->mutex);
@@ -1713,13 +1718,17 @@ static void trx_purge_read_undo_rec(trx_purge_t *purge_sys,
  than purge_sys->vision */
 static bool trx_purge_choose_next_log(void) {
   bool keep_top = false;
+  utc_t txn_scn;
   ut_ad(purge_sys->next_stored == FALSE);
 
   const page_size_t &page_size = purge_sys->rseg_iter->set_next(&keep_top);
 
   if (purge_sys->rseg != NULL && !keep_top) {
     lizard_ut_ad(lizard::txn_undo_log_has_purged(purge_sys->rseg, page_size));
-    lizard::txn_undo_set_state_at_purge(purge_sys->rseg, page_size);
+    txn_scn = lizard::txn_undo_set_state_at_purge(purge_sys->rseg, page_size);
+    if (lizard::fsp_is_txn_tablespace_by_id(purge_sys->rseg->space_id)) {
+      lizard::trx_purge_set_purged_scn(txn_scn);
+    }
     trx_purge_read_undo_rec(purge_sys, page_size);
   } else {
     /* There is nothing to do yet. */
