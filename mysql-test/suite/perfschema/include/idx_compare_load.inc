@@ -255,7 +255,16 @@ IF ($key_group == 4)
   eval CALL index_test($table, "WHERE thread_id > @target_thread_id");
   eval CALL index_test($table, "WHERE thread_id < @target_thread_id");
   eval CALL index_test($table, "WHERE thread_id >= @target_thread_id");
-  eval CALL index_test($table, "WHERE thread_id <= @target_thread_id");
+  # eval CALL index_test($table, "WHERE thread_id <= @target_thread_id");
+
+  # Lizard: The case might fail because the results of the two queries do not match, and the query statement is:
+  # SELECT @row:=@row+1 SEQ, output.* FROM (select * from performance_schema.threads where THREAD_ID <= @target_thread) output;
+  # The root reason is that the thread (thread/mysqlx/acceptor_network) is quited because it's idle for a long time (60s).
+  # So we skip these threads.
+  # Notes: mysqlx_idle_worker_thread_timeout is not work for those thread that has fallen asleep, even if
+  # --mysqld=--mysqlx_idle_worker_thread_timeout=600
+  eval CALL index_test($table,
+  "WHERE thread_id <= @target_thread_id and thread_id not in (select thread_id from performance_schema.threads where name = 'thread/mysqlx/acceptor_network' )");
 }
 
 # FIXME
