@@ -1813,6 +1813,7 @@ void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem) {
   ut_ad(scn.first == elem->get_scn());
   mutex_enter(&purge_sys->pq_mutex);
   purge_sys->purge_heap->push(*elem);
+  lizard_purged_scn_validation();
   mutex_exit(&purge_sys->pq_mutex);
 }
 

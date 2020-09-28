@@ -539,9 +539,11 @@ inline void txn_undo_set_state(trx_ulogf_t *log_hdr, ulint state, mtr_t *mtr) {
 
 /** Set txn undo log state to purged.
 @param[in]  rseg txn rseg
-@param[in]  page_size */
-inline void txn_undo_set_state_at_purge(const trx_rseg_t *rseg,
-                                        const page_size_t &page_size) {
+@param[in]  page_size
+@return     The corresponding scn if it's TXN undo,
+            or PURGED_SCN_INVALID if it's not TXN undo */
+inline utc_t txn_undo_set_state_at_purge(const trx_rseg_t *rseg,
+                                         const page_size_t &page_size) {
   if (fsp_is_txn_tablespace_by_id(rseg->space_id)) {
     mtr_t mtr;
     mtr_start(&mtr);
@@ -552,8 +554,13 @@ inline void txn_undo_set_state_at_purge(const trx_rseg_t *rseg,
 
     txn_undo_set_state(undo_header, TXN_UNDO_LOG_PURGED, &mtr);
 
+    auto txn_scn = mach_read_from_8(undo_header + TRX_UNDO_SCN);
+
     mtr_commit(&mtr);
+
+    return txn_scn;
   }
+  return PURGED_SCN_INVALID;
 }
 
 /** Set txn undo log state when commiting.

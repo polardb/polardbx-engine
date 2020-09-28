@@ -32,9 +32,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0purge.h"
 #include "lizard0scn.h"
+#include "lizard0sys.h"
 
 #include "mtr0log.h"
 #include "trx0purge.h"
+#include "trx0rseg.h"
 
 namespace lizard {
 
@@ -51,6 +53,8 @@ const page_size_t TxnUndoRsegsIterator::set_next(bool *keep_top) {
   ut_ad(keep_top != NULL);
   mutex_enter(&m_purge_sys->pq_mutex);
   *keep_top = false;
+
+  lizard_purged_scn_validation();
 
   if (m_iter != m_txn_undo_rsegs.end()) {
     m_purge_sys->iter.scn = (*m_iter)->last_scn;
@@ -145,6 +149,78 @@ const page_size_t TxnUndoRsegsIterator::set_next(bool *keep_top) {
 
   return (page_size);
 }
+
+/**
+  Initialize / reload purged_scn from purge_sys->purge_heap
+
+  @retval              a valid scn if found, or PURGED_SCN_INVALID if in
+                       "srv_force_recovery >= SRV_FORCE_NO_UNDO_LOG_SCAN"
+*/
+scn_t trx_purge_reload_purged_scn() {
+  scn_t min_history_scn;
+  /** If undo log scan is forbidden, purge_sys->purged_scn can't get a valid
+  value */
+  if (srv_force_recovery >= SRV_FORCE_NO_UNDO_LOG_SCAN) {
+    return PURGED_SCN_INVALID;
+  }
+
+  ut_ad(purge_sys);
+
+  if (purge_sys->purge_heap->empty()) {
+    min_history_scn = lizard_sys_get_scn();
+  } else {
+    min_history_scn = purge_sys->purge_heap->top().get_scn();
+    ut_ad(min_history_scn < lizard_sys_get_scn());
+  }
+
+  return min_history_scn;
+}
+
+/**
+  Set purged_scn in purge sys
+
+  @param[in]    txn_scn     purged scn
+*/
+void trx_purge_set_purged_scn(scn_t txn_scn) {
+  /* It's safe because there is purge coordinator thread and server
+  starting thread updating it. */
+  purge_sys->purged_scn.store(txn_scn);
+}
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+/**
+  Validate all transactions whose SCN > purged_scn is always unpurged.
+
+  @return         true      sucessful validation
+*/
+bool purged_scn_validation() {
+  bool ret = false;
+  scn_t top_scn;
+
+  /** If undo log scan is forbidden, purge_sys->purged_scn can't get a valid
+  value */
+  if (srv_force_recovery >= SRV_FORCE_NO_UNDO_LOG_SCAN) {
+    return true;
+  }
+
+  /* purge sys not init yet */
+  if (!purge_sys) return true;
+
+  ut_a(mutex_own(&purge_sys->pq_mutex));
+
+  ut_a(purge_sys->purged_scn.load() != PURGED_SCN_INVALID);
+
+  if (!purge_sys->purge_heap->empty()) {
+    top_scn = purge_sys->purge_heap->top().get_scn();
+    ret = (purge_sys->purged_scn <= top_scn);
+  } else {
+    ret = (purge_sys->purged_scn.load() <= lizard_sys_get_min_safe_scn());
+  }
+  ut_ad(ret);
+
+  return ret;
+}
+#endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
 
 }  // namespace lizard
 

@@ -39,6 +39,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 struct trx_purge_t;
 struct mtr_t;
 
+/** purged_scn is not valid */
+constexpr scn_t PURGED_SCN_INVALID = std::numeric_limits<scn_t>::max();
+
 namespace lizard {
 
 /**
@@ -100,6 +103,44 @@ struct TxnUndoRsegsIterator {
   static const TxnUndoRsegs NullElement;
 };
 
+/**
+  Initialize / reload purged_scn from purge_sys->purge_heap
+
+  @retval              a valid scn if found, or PURGED_SCN_INVALID if in
+                       "srv_force_recovery >= SRV_FORCE_NO_UNDO_LOG_SCAN"
+*/
+scn_t trx_purge_reload_purged_scn();
+
+/**
+  Set purged_scn in purge sys
+
+  @param[in]    txn_scn     purged scn
+*/
+void trx_purge_set_purged_scn(scn_t txn_scn);
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+/**
+  Validate all transactions whose SCN > purged_scn is always unpurged.
+
+  @return         true      sucessful validation
+*/
+bool purged_scn_validation();
+
+#endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
+
 }  // namespace lizard
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+
+#define lizard_purged_scn_validation()     \
+  do {                                     \
+    ut_a(lizard::purged_scn_validation()); \
+  } while (0)
+
+#else
+
+#define lizard_purged_scn_validation(page)
+
+#endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
 
 #endif

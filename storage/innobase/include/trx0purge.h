@@ -1105,6 +1105,10 @@ struct trx_purge_t {
 
   /** Set of all rseg queue. */
   std::vector<trx_rseg_t *> rsegs_queue;
+
+  /** All transactions whose scn <= purged_scn must have been purged.
+  Only the purge sys coordinator thread and recover thread can modify it. */
+  std::atomic<scn_t> purged_scn;
 };
 
 #include "trx0purge.ic"
