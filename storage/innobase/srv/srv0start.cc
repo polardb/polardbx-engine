@@ -1437,10 +1437,6 @@ void srv_shutdown_exit_threads() {
       srv_wakeup_file_purge_thread();
     }
 
-    if (srv_start_state_is_set(SRV_START_STATE_SCN_HIST)) {
-      lizard::srv_scn_history_shutdown();
-    }
-
     if (srv_start_state_is_set(SRV_START_STATE_IO)) {
       /* Exit the i/o threads */
       if (!srv_read_only_mode) {

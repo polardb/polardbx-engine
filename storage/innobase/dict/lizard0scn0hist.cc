@@ -310,7 +310,7 @@ void srv_scn_history_thread(void) {
     os_event_reset(scn_history_event);
   }
 
-  destroy_thd(thd);
+  destroy_internal_thd(thd);
 }
 
 /** Init the background thread attributes */
