@@ -54,6 +54,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sync0sync.h"
 
 #include "lizard0dict.h"
+#include "lizard0undo.h"
 
 /** An interger randomly initialized at startup used to make a temporary
 table name as unuique as possible. */
@@ -599,8 +600,34 @@ bool dict_index_t::is_usable(const trx_t *trx) {
 
   /* Check if the specified transaction can see this index. */
   return (table->is_temporary() || trx_id == 0 || !trx->vision.is_active() ||
-          lizard::dd_index_modificatsion_visible(this, trx));
+          lizard::dd_index_modificatsion_visible(this, trx,
+                                                 false, lizard::SCN_NULL));
 }
+
+/** Check whether index can be used by an as-of query
+@param[in] trx            transaction
+@param[in] as_of_scn      as of scn */
+bool dict_index_t::is_usable_as_of(const trx_t *trx,
+                                   const scn_t as_of_scn) {
+
+  /* Indexes that are being created are not usable. */
+  if (!is_clustered() && dict_index_is_online_ddl(this)) {
+    return false;
+  }
+
+  /* Cannot use a corrupted index. */
+  if (is_corrupted()) {
+    return false;
+  }
+
+  /* as of query don't support temporary table. */
+  if (table->is_temporary()) return false;
+
+  return (trx_id == 0 ||
+          lizard::dd_index_modificatsion_visible(this, trx,
+                                                 true, as_of_scn));
+}
+
 #endif /* !UNIV_HOTBACKUP */
 
 /** Gets the column number the nth field in an index.

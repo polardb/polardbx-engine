@@ -155,7 +155,7 @@ OK: Result set: Non-empty  Expected: Non-empty
 
 OK: Extra rows: 0  Missing rows: 0
 ========
-SELECT * FROM performance_schema.events_stages_history WHERE thread_id <= @target_thread_id
+SELECT * FROM performance_schema.events_stages_history WHERE thread_id <= @target_thread_id and thread_id not in (select thread_id from performance_schema.threads where name = 'thread/mysqlx/acceptor_network' )
 
 OK: Handler_read_key
 

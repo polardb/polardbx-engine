@@ -76,6 +76,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0dict.h"
 #include "lizard0cleanout.h"
+#include "lizard0undo.h"
 
 /** Maximum number of rows to prefetch; MySQL interface has another parameter */
 #define SEL_MAX_N_PREFETCH 16
@@ -4468,6 +4469,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   byte *next_buf = 0;
   bool spatial_search = false;
   ulint end_loop = 0;
+  lizard::AsofVisonWrapper asof_wrapper;
 
   rec_offs_init(offsets_);
 
@@ -4676,6 +4678,9 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
       rw_lock_s_lock(btr_get_search_latch(index));
       trx->has_search_latch = true;
 
+      /* set as-of condition vision if need */
+      asof_wrapper.set_as_of_vision(prebuilt);
+
       switch (row_sel_try_search_shortcut_for_mysql(&rec, prebuilt, &offsets,
                                                     &heap, &mtr)) {
         case SEL_FOUND:
@@ -4828,6 +4833,12 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
 
     if (!srv_read_only_mode) {
       trx_assign_read_view(trx);
+
+      /* convert ctx to innobase, only set once */
+      if ((err = lizard::convert_fbq_ctx_to_innobase(prebuilt))
+            != DB_SUCCESS) {
+        goto as_of_error;
+      }
     }
 
     prebuilt->sql_stat_start = FALSE;
@@ -4843,6 +4854,9 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     }
     prebuilt->sql_stat_start = FALSE;
   }
+
+  /* set as-of condition vision if need */
+  asof_wrapper.set_as_of_vision(prebuilt);
 
   /* Open or restore index cursor position */
 
@@ -5931,6 +5945,14 @@ lock_table_wait:
   }
 
   thr->lock_state = QUE_THR_LOCK_NOLOCK;
+
+  goto func_exit;
+
+as_of_error:
+  /*-------------------------------------------------------------*/
+  que_thr_stop_for_mysql_no_error(thr, trx);
+
+  ut_ad(err != DB_SUCCESS);
 
   goto func_exit;
 

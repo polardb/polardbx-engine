@@ -512,6 +512,18 @@ const char *ut_strerr(dberr_t num) {
     case DB_BTREE_LEVEL_LIMIT_EXCEEDED:
       return ("Btree level limit exceeded");
 
+    case DB_SNAPSHOT_OUT_OF_RANGE:
+      return ("The required snapshot is out of range");
+
+    case DB_AS_OF_INTERNAL:
+      return ("Flashback-like query encountered an internal error");
+
+    case DB_AS_OF_TABLE_DEF_CHANGED:
+      return ("The definition of the table required by the query has changed");
+
+    case DB_SNAPSHOT_TOO_OLD:
+      return ("Snapshot too old");
+
     case DB_ERROR_UNSET:;
       /* Fall through. */
 

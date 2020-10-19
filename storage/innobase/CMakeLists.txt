@@ -228,7 +228,8 @@ SET(INNOBASE_SOURCES
   read/lizard0read.cc
   trx/lizard0purge.cc
   trx/lizard0trx.cc
-  dict/lizard0scn0hist.cc)
+  dict/lizard0scn0hist.cc
+  row/lizard0mysql.cc)
 
 ADD_LIBRARY(innodb_zipdecompress STATIC ${INNOBASE_ZIP_DECOMPRESS_SOURCES})
 TARGET_COMPILE_DEFINITIONS(

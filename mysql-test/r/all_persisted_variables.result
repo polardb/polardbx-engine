@@ -39,6 +39,7 @@ include/assert.inc [Expect 500+ variables in the table. Due to open Bugs, we are
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 include/assert.inc [Expect 383 persisted variables in the table.]
 =======
 include/assert.inc [Expect 493 persisted variables in the table.]
@@ -46,6 +47,9 @@ include/assert.inc [Expect 493 persisted variables in the table.]
 =======
 include/assert.inc [Expect 469 persisted variables in the table.]
 >>>>>>> dbaf7d470f7... [Feature] Rolling forward SCN persistently
+=======
+include/assert.inc [Expect 519 persisted variables in the table.]
+>>>>>>> 767ffdab784... [Feature] Flash Back Query
 
 ************************************************************
 * 3. Restart server, it must preserve the persisted variable
@@ -53,6 +57,7 @@ include/assert.inc [Expect 469 persisted variables in the table.]
 ************************************************************
 # restart
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 include/assert.inc [Expect 383 persisted variables in persisted_variables table.]
@@ -68,6 +73,11 @@ include/assert.inc [Expect 469 persisted variables in persisted_variables table.
 include/assert.inc [Expect 469 persisted variables shown as PERSISTED in variables_info table.]
 include/assert.inc [Expect 469 persisted variables with matching peristed and global values.]
 >>>>>>> dbaf7d470f7... [Feature] Rolling forward SCN persistently
+=======
+include/assert.inc [Expect 519 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 519 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 519 persisted variables with matching peristed and global values.]
+>>>>>>> 767ffdab784... [Feature] Flash Back Query
 
 ************************************************************
 * 4. Test RESET PERSIST IF EXISTS. Verify persisted variable

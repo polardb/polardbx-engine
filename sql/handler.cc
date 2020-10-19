@@ -693,6 +693,10 @@ int ha_init_errors(void) {
   SETMSG(HA_ERR_NO_SESSION_TEMP, ER_DEFAULT(ER_NO_SESSION_TEMP));
   SETMSG(HA_ERR_WRONG_TABLE_NAME, ER_DEFAULT(ER_WRONG_TABLE_NAME));
   SETMSG(HA_ERR_TOO_LONG_PATH, ER_DEFAULT(ER_TABLE_NAME_CAUSES_TOO_LONG_PATH));
+  SETMSG(HA_ERR_SNAPSHOT_OUT_OF_RANGE, ER_DEFAULT(ER_SNAPSHOT_OUT_OF_RANGE));
+  SETMSG(HA_ERR_AS_OF_INTERNAL, ER_DEFAULT(ER_FLASHBACK_INTERNAL_ERROR));
+  SETMSG(HA_ERR_AS_OF_TABLE_DEF_CHANGED, ER_DEFAULT(ER_AS_OF_TABLE_DEF_CHANGED));
+  SETMSG(HA_ERR_SNAPSHOT_TOO_OLD, ER_DEFAULT(ER_SNAPSHOT_TOO_OLD));
   /* Register the error messages for use with my_error(). */
   return my_error_register(get_handler_errmsg, HA_ERR_FIRST, HA_ERR_LAST);
 }
@@ -4258,6 +4262,18 @@ void handler::print_error(int error, myf errflag) {
       break;
     case HA_ERR_TOO_LONG_PATH:
       textno = ER_TABLE_NAME_CAUSES_TOO_LONG_PATH;
+      break;
+    case HA_ERR_SNAPSHOT_OUT_OF_RANGE:
+      textno = ER_SNAPSHOT_OUT_OF_RANGE;
+      break;
+    case HA_ERR_AS_OF_INTERNAL:
+      textno = ER_FLASHBACK_INTERNAL_ERROR;
+      break;
+    case HA_ERR_AS_OF_TABLE_DEF_CHANGED:
+      textno = ER_AS_OF_TABLE_DEF_CHANGED;
+      break;
+    case HA_ERR_SNAPSHOT_TOO_OLD:
+      textno = ER_SNAPSHOT_TOO_OLD;
       break;
     default: {
       /* The error was "unknown" to this function.

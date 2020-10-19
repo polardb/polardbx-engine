@@ -254,7 +254,9 @@ static bool row_vers_find_matching(
     trx_undo_prev_version_build(
         clust_rec, mtr, version, clust_index, clust_offsets, heap,
         &prev_version, NULL,
-        dict_index_has_virtual(sec_index) ? &clust_vrow : NULL, 0, nullptr);
+        dict_index_has_virtual(sec_index) ? &clust_vrow : NULL, 0, nullptr,
+        false /* Only lock_sec_rec_some_has_impl run into here, it's a
+                 current reading so can't be a as-of query */);
 
     /* The oldest visible clustered index version must not be
     delete-marked, because we never start a transaction by
@@ -725,7 +727,8 @@ static void row_vers_build_cur_vrow_low(
 
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, NULL, vrow, status,
-                                nullptr);
+                                nullptr,
+                                false /* TODO: figure out it */);
 
     if (heap2) {
       mem_heap_free(heap2);
@@ -845,7 +848,8 @@ static bool row_vers_vc_matches_cluster(
 
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, NULL, vrow, status,
-                                nullptr);
+                                nullptr,
+                                false /* TODO: figured out it */ );
 
     if (heap2) {
       mem_heap_free(heap2);
@@ -1165,7 +1169,8 @@ ibool row_vers_old_has_index_entry(
 
     trx_undo_prev_version_build(
         rec, mtr, version, clust_index, clust_offsets, heap, &prev_version,
-        NULL, dict_index_has_virtual(index) ? &vrow : NULL, 0, nullptr);
+        NULL, dict_index_has_virtual(index) ? &vrow : NULL, 0, nullptr,
+        false /* Only purge sys, or rollback run into here */);
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (!prev_version) {
@@ -1276,6 +1281,7 @@ dberr_t row_vers_build_for_consistent_read(
   mem_heap_t *heap = NULL;
   byte *buf;
   dberr_t err;
+  txn_lookup_t txn_lookup;
 
   ut_ad(index->is_clustered());
   ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) ||
@@ -1313,9 +1319,15 @@ dberr_t row_vers_build_for_consistent_read(
 
     bool purge_sees =
         trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap,
-                                    &prev_version, NULL, vrow, 0, lob_undo);
+                                    &prev_version, NULL, vrow, 0,
+                                    lob_undo,
+                                    vision->is_as_of());
 
-    err = (purge_sees) ? DB_SUCCESS : DB_MISSING_HISTORY;
+    if (vision->is_as_of()) {
+      err = (purge_sees) ? DB_SUCCESS : DB_SNAPSHOT_TOO_OLD;
+    } else {
+      err = (purge_sees) ? DB_SUCCESS : DB_MISSING_HISTORY;
+    }
 
     if (prev_heap != NULL) {
       mem_heap_free(prev_heap);
@@ -1480,7 +1492,9 @@ void row_vers_build_for_semi_consistent_read(
 
     if (!trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap,
                                      &prev_version, in_heap, vrow, 0,
-                                     nullptr)) {
+                                     nullptr,
+                                     false /* semi-consi can't be a
+                                              as-of query */)) {
       mem_heap_free(heap);
       heap = heap2;
       heap2 = NULL;

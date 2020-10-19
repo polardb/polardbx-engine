@@ -1718,7 +1718,7 @@ static void trx_purge_read_undo_rec(trx_purge_t *purge_sys,
  than purge_sys->vision */
 static bool trx_purge_choose_next_log(void) {
   bool keep_top = false;
-  utc_t txn_scn;
+  commit_scn_t txn_scn;
   ut_ad(purge_sys->next_stored == FALSE);
 
   const page_size_t &page_size = purge_sys->rseg_iter->set_next(&keep_top);
@@ -1727,7 +1727,7 @@ static bool trx_purge_choose_next_log(void) {
     lizard_ut_ad(lizard::txn_undo_log_has_purged(purge_sys->rseg, page_size));
     txn_scn = lizard::txn_undo_set_state_at_purge(purge_sys->rseg, page_size);
     if (lizard::fsp_is_txn_tablespace_by_id(purge_sys->rseg->space_id)) {
-      lizard::trx_purge_set_purged_scn(txn_scn);
+      lizard::trx_purge_set_purged_scn(txn_scn.first);
     }
     trx_purge_read_undo_rec(purge_sys, page_size);
   } else {

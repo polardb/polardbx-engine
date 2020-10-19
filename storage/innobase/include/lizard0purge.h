@@ -34,13 +34,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0purge_h
 
 #include "lizard0undo0types.h"
+#include "lizard0scn.h"
 #include "page0size.h"
 
 struct trx_purge_t;
 struct mtr_t;
 
 /** purged_scn is not valid */
-constexpr scn_t PURGED_SCN_INVALID = std::numeric_limits<scn_t>::max();
+constexpr scn_t PURGED_SCN_INVALID = lizard::SCN_NULL;
 
 namespace lizard {
 
@@ -117,6 +118,15 @@ scn_t trx_purge_reload_purged_scn();
   @param[in]    txn_scn     purged scn
 */
 void trx_purge_set_purged_scn(scn_t txn_scn);
+
+/**
+  precheck if txn of the row is purged, without really reading txn
+
+  @param[in]    txn_rec     the current row to be checked
+
+  @retval       bool        true if the corresponding txn has been purged
+*/
+bool precheck_if_txn_is_purged(txn_rec_t *txn_rec);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**

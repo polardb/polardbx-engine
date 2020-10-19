@@ -1,3 +1,4 @@
+set global innodb_rds_flashback_enabled = false;
 
 create table tt (a int);
 create table pp (a int);
@@ -115,6 +116,7 @@ handler tt as of scn 1 open;
 replace into tt as of scn 1  valuse (1);
 
 # =====================
+set global innodb_rds_flashback_enabled = default;
 drop view vv;
 drop table tt;
 drop table pp;
