@@ -9986,6 +9986,17 @@ ER_AS_OF_NOT_INNODB_TABLE
 ER_AS_OF_NOT_SELECT
   eng "Snapshot (as of) expression can only be appear in select from list tables"
 
+ER_SNAPSHOT_OUT_OF_RANGE
+  eng "The snapshot to find is out of range, please adjust scn history configuration"
+
+ER_FLASHBACK_INTERNAL_ERROR
+  eng "Flashback query encountered an internal error"
+
+ER_AS_OF_TABLE_DEF_CHANGED
+  eng "The definition of the table required by the flashback query has changed"
+
+ER_SNAPSHOT_TOO_OLD
+  eng "Snapshot too old"
 
 
 ################################################################################

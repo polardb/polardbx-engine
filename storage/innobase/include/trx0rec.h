@@ -225,6 +225,7 @@ in which case we also set old_vers to NULL.
                                 function by purge thread or not. And if we read
                                 "after image" of undo log has been rebuilt
 @param[in]      lob_undo        LOB undo information.
+@param[in]      is_as_of        If it's a as-of query. (lizard)
 @retval true if previous version was built, or if it was an insert or the table
 has been rebuilt
 @retval false if the previous version is earlier than purge_view, or being
@@ -234,7 +235,8 @@ bool trx_undo_prev_version_build(const rec_t *index_rec, mtr_t *index_mtr,
                                  ulint *offsets, mem_heap_t *heap,
                                  rec_t **old_vers, mem_heap_t *v_heap,
                                  const dtuple_t **vrow, ulint v_status,
-                                 lob::undo_vers_t *lob_undo);
+                                 lob::undo_vers_t *lob_undo,
+                                 bool is_as_of);
 
 #endif /* !UNIV_HOTBACKUP */
 /** Parses a redo log record of adding an undo log record.

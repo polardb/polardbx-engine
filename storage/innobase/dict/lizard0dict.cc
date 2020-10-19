@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "dict0dd.h"
 #include "dict0mem.h"
+#include "row0mysql.h"
 #include "lizard0data0types.h"
 #include "lizard0undo.h"
 
@@ -128,11 +129,11 @@ dberr_t dd_index_init_txn_desc(dict_index_t *index, trx_t *trx) {
   @param[in]      trx         transaction.
   @return         true if visible
 */
-bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx) {
+bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
+                                    bool is_as_of, scn_t as_of_scn) {
   txn_rec_t rec_txn;
   scn_t scn = index->txn.scn.load();
   ut_ad(trx);
-  ut_ad(trx->vision.is_active());
 
   rec_txn.trx_id = index->trx_id;
   rec_txn.undo_ptr = index->txn.uba;
@@ -144,13 +145,19 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx) {
     index->txn.scn.store(rec_txn.scn);
   }
 
-  /**
-    When is_usable() is executed concurrently, SCN and UBA will be not
-    consistent, the vision judgement only depend on real SCN, UBA state
-    will be used to code defense, so here omit the check.
-  */
-  return trx->vision.modifications_visible(&rec_txn, index->table->name,
-                                           false);
+  if (is_as_of) {
+    return (rec_txn.scn != SCN_NULL && as_of_scn != SCN_NULL &&
+            rec_txn.scn <= as_of_scn);
+  } else {
+    ut_ad(trx->vision.is_active());
+    /**
+      When is_usable() is executed concurrently, SCN and UBA will be not
+      consistent, the vision judgement only depend on real SCN, UBA state
+      will be used to code defense, so here omit the check.
+    */
+    return trx->vision.modifications_visible(&rec_txn, index->table->name,
+                                             false);
+  }
 }
 
 /**

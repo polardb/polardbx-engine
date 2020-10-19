@@ -545,6 +545,10 @@ inline bool txn_undo_hdr_lookup(txn_rec_t *txn_rec,
   }
 }
 
+inline bool txn_lookup_rollptr_is_valid(const txn_lookup_t *txn_lookup) {
+  return (txn_lookup->real_state < txn_state_t::TXN_STATE_PURGED);
+}
+
 /** Collect rsegs into the purge heap for the first time */
 bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
                                  trx_undo_ptr_t *redo_rseg_undo_ptr,

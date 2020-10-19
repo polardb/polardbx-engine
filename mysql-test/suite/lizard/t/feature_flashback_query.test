@@ -1,0 +1,198 @@
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("'innodb-scn-history-interval': unsigned value 0 adjusted to 1");
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+
+delimiter //;
+
+create procedure print_idx_image(in image_idx int)
+begin
+  set @time_stamp = (select image_time from foo_history where id = image_idx);
+  select image_idx, foo.* from foo as of timestamp @time_stamp;
+end //
+
+create procedure print_all_images(in n_image int)
+begin
+  declare image_idx int default 1;
+  while image_idx <= n_image DO
+    call print_idx_image(image_idx);
+    set image_idx = image_idx + 1;
+  end while;
+end //
+
+create procedure update_foo_history()
+begin
+  do sleep(1.5);
+  set @image_number = @image_number + 1;
+  insert into foo_history (id) values (@image_number);
+  do sleep(1.5);
+end //
+
+delimiter ;//
+
+create table foo_history (id int, image_time datetime not null default now(),
+                          primary key(id));
+
+create table foo (id int, sec int, primary key(id), index sec (sec));
+
+# stop purge
+connection default;
+begin;
+select * from foo;
+
+# test transaction_isolation = read-committed
+connection con1;
+set session transaction_isolation = 'READ-COMMITTED';
+
+set @image_number = 0;
+
+--source feature_flashback_query.inc
+
+--echo # test transaction_isolation = REPEATABLE-READ
+connection con1;
+set session transaction_isolation = 'REPEATABLE-READ';
+
+--source feature_flashback_query.inc
+
+# TODO: test read_uncommiteed <24-09-20, zanye.zjy>
+
+call print_all_images(@image_number);
+
+connection default;
+commit;
+
+# test exception
+create table bar (c1 int);
+
+--source include/wait_innodb_all_purged.inc
+
+# test flashback to a future moment
+--error ER_SNAPSHOT_OUT_OF_RANGE
+select * from bar as of timestamp date_add(now(), interval 2 hour);
+
+insert into bar values (1);
+sleep 3;
+--source include/wait_innodb_all_purged.inc
+--error ER_SNAPSHOT_TOO_OLD
+select * from bar as of timestamp date_sub(now(), interval 2 second);
+
+# stop purge
+connection default;
+begin;
+select * from bar;
+
+connection con1;
+sleep 4;
+set session debug = "+d, required_scn_purged_before_reset";
+--error ER_SNAPSHOT_TOO_OLD
+select * from bar as of timestamp date_sub(now(), interval 2 second);
+set session debug = "-d, required_scn_purged_before_reset";
+
+# can't build prev image because of missing history
+update bar set c1 = 2;
+set session debug = "+d, simulate_prev_image_purged_during_query";
+--error ER_SNAPSHOT_TOO_OLD
+select * from bar as of timestamp date_sub(now(), interval 2 second);
+set session debug = "-d, simulate_prev_image_purged_during_query";
+
+connection default;
+commit;
+
+--source include/wait_innodb_all_purged.inc
+
+# test DDL
+create table t1 (c1 int, c2 int, primary key(c1));
+insert into t1 values (1, 100);
+insert into t1 values (2, 200);
+
+create table t2 like t1;
+create table t3 like t1;
+create table t4 like t1;
+create table t5 like t1;
+create table t6 like t1;
+create table t7 like t1;
+create table t8 like t1;
+create table t9 like t1;
+create table t10 like t1;
+
+insert into t2 select * from t1;
+insert into t3 select * from t1;
+insert into t4 select * from t1;
+insert into t5 select * from t1;
+insert into t6 select * from t1;
+insert into t7 select * from t1;
+insert into t8 select * from t1;
+insert into t9 select * from t1;
+insert into t10 select * from t1;
+
+# stop purge
+connection con1;
+begin;
+select * from t1;
+
+connection con2;
+sleep 1.5;
+set @past_timestamps = (select now());
+sleep 1.5;
+alter table t2 add c3 int default 100;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t2 as of timestamp @past_timestamps;
+
+alter table t3 add c3 int default 100, ALGORITHM = copy;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t3 as of timestamp @past_timestamps;
+
+drop table t4;
+create table t4 as select * from t1;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t3 as of timestamp @past_timestamps;
+
+alter table t5 add c3 int after c1;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t3 as of timestamp @past_timestamps;
+
+alter table t6 add index sec(c2);
+select * from t6 as of timestamp @past_timestamps;
+select * from t6 as of timestamp @past_timestamps force index(sec);
+select c2 from t6 as of timestamp @past_timestamps force index(sec);
+
+alter table t7 row_format = compressed;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t7 as of timestamp @past_timestamps;
+
+alter table t8 change c2 c2_a bigint not null;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t8 as of timestamp @past_timestamps;
+
+alter table t9 rename column c2 to c3;
+select * from t9 as of timestamp @past_timestamps;
+
+alter table t10 drop primary key, add primary key(c2);
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t10 as of timestamp @past_timestamps;
+
+connection con1;
+commit;
+
+connection default;
+
+disconnect con1;
+disconnect con2;
+drop table foo;
+drop table foo_history;
+drop table bar;
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+drop table t6;
+drop table t7;
+drop table t8;
+drop table t9;
+drop table t10;
+drop procedure print_idx_image;
+drop procedure print_all_images;
+drop procedure update_foo_history;

@@ -32,6 +32,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0read0types_h
 #define lizard0read0types_h
 
+/* #define TURN_MVCC_SEARCH_TO_AS_OF */
+
 #include <algorithm>
 
 #include "ut0lst.h"
@@ -39,8 +41,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0scn0types.h"
 #include "lizard0undo0types.h"
+#include "lizard0scn.h"
+
 #include "trx0types.h"
 #include "dict0mem.h"
+
+struct row_prebuilt_t;
 
 namespace lizard {
 
@@ -70,6 +76,7 @@ class Vision {
     @retval   scn of the vision
   */
   scn_t snapshot_scn() const { return m_snapshot_scn; }
+
   /**
     Write the limits to the file.
 
@@ -81,6 +88,20 @@ class Vision {
             m_snapshot_scn);
   }
 
+  bool modifications_visible_mvcc(txn_rec_t *txn_rec,
+                                  const table_name_t &name,
+                                  bool check_consistent) const;
+
+  /**
+    Check whether the changes by id are visible. Only used in as-of query.
+
+    @param[in]  txn_rec           txn related information of record.
+
+    @retval     whether the vision sees the modifications of id
+                True if visible.
+  */
+  bool modifications_visible_as_of(txn_rec_t *txn_rec) const;
+
   /**
     Check whether the changes by id are visible.
 
@@ -91,7 +112,8 @@ class Vision {
     @retval       whether the vision sees the modifications of id.
                   True if visible
   */
-  bool modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
+  bool modifications_visible(txn_rec_t *txn_rec,
+                             const table_name_t &name,
                              bool check_consistent = true) const
       MY_ATTRIBUTE((warn_unused_result));
 
@@ -113,8 +135,10 @@ class Vision {
   bool sees(trx_id_t id) const {
     ut_ad(id < TRX_ID_MAX && m_creator_trx_id < TRX_ID_MAX);
     ut_ad(m_list_idx != VISION_LIST_IDX_NULL);
+    /** If it's a as of scn snapshot query, we always force using pk */
+    if (m_is_as_of) return false;
     return id < m_up_limit_id;
-    }
+  }
 
   /**
     Set the view creator transaction id. This should be set only
@@ -131,7 +155,24 @@ class Vision {
   */
   bool is_active() const { return m_active; }
 
+  /** Reset as initialzed values */
   void reset();
+
+  /**
+    Set m_snapshot_scn, m_is_as_of
+
+    @param[in]    scn           m_snapshot_scn
+    @param[in]    is_as_of      true if it's a as-of query
+  */
+  void set_as_of_scn(scn_t scn);
+
+  /** reset m_as_of_scn, m_is_as_of as initialized values */
+  void reset_as_of_scn();
+
+  bool is_as_of() const {
+    return m_is_as_of;
+  }
+
 
 #ifdef UNIV_DEBUG
   /**
@@ -163,9 +204,40 @@ class Vision {
   /** Whether the vision is active, the active vision must be in list. */
   bool m_active;
 
+  /** true if it's a as-of query. An as-of query is that searches rows only
+  condiering scn. The as-of query context also uses m_snapshot_scn. */
+  bool m_is_as_of;
+
+  /** SCN_NULL if it's not a as-of query. Only used in
+  modifications_visible_as_of */
+  scn_t m_as_of_scn;
+
   UT_LIST_NODE_T(Vision) list;
 
   friend class VisionContainer;
+};
+
+/**
+  A helper class: backup trx->vision.m_snapshot_scn and restores it.
+*/
+class AsofVisonWrapper {
+ public:
+
+  AsofVisonWrapper()
+    : m_vision(nullptr)
+  {
+  }
+
+  ~AsofVisonWrapper() {
+    reset();
+  }
+
+  void set_as_of_vision(row_prebuilt_t *prebuilt);
+
+  void reset();
+
+ private:
+  Vision *m_vision;
 };
 
 }  // namespace lizard

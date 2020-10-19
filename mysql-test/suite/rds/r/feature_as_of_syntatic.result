@@ -1,3 +1,4 @@
+set global innodb_rds_flashback_enabled = false;
 create table tt (a int);
 create table pp (a int);
 create view vv as select * from pp;
@@ -88,6 +89,7 @@ handler tt as of scn 1 open;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of scn 1 open' at line 1
 replace into tt as of scn 1  valuse (1);
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of scn 1  valuse (1)' at line 1
+set global innodb_rds_flashback_enabled = default;
 drop view vv;
 drop table tt;
 drop table pp;

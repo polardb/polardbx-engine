@@ -63,6 +63,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 #include "ut0bool_scope_guard.h"
 
+#include "lizard0mysql.h"
+
 // Forward declarations
 class THD;
 class ha_innobase;
@@ -865,6 +867,9 @@ struct row_prebuilt_t {
 
   /** Undo information for LOB mvcc */
   lob::undo_vers_t m_lob_undo;
+
+  /** query only by scn context */
+  lizard::scn_query_context_t m_scn_query;
 
   lob::undo_vers_t *get_lob_undo() { return (&m_lob_undo); }
 

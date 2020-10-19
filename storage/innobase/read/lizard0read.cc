@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 #include "trx0sys.h"
 #include "clone0clone.h"
+#include "row0mysql.h"
 
 #include "lizard0read0read.h"
 #include "lizard0read0types.h"
@@ -55,14 +56,20 @@ Vision::Vision()
       m_list_idx(VISION_LIST_IDX_NULL),
       m_creator_trx_id(TRX_ID_MAX),
       m_up_limit_id(TRX_ID_MAX),
-      m_active(false) {}
+      m_active(false),
+      m_is_as_of(false),
+      m_as_of_scn(SCN_NULL)
+  {}
 
+/** Reset as initialzed values */
 void Vision::reset() {
   m_snapshot_scn = SCN_NULL;
   m_list_idx = VISION_LIST_IDX_NULL;
   m_creator_trx_id = TRX_ID_MAX;
   m_up_limit_id = TRX_ID_MAX;
   m_active = false;
+  m_is_as_of = false;
+  m_as_of_scn = SCN_NULL;
 }
 
 VisionContainer::VisionList::VisionList() {
@@ -245,24 +252,16 @@ ulint VisionContainer::size() const {
   return m_size;
 }
 
-/**
-  Check whether the changes by id are visible.
-
-  @param[in]  txn_rec           txn related information.
-  @param[in]  name	            table name
-  @param[in]  check_consistent  check the consistent between SCN and UBA
-
-  @retval     whether the vision sees the modifications of id.
-              True if visible
-*/
-bool Vision::modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
-                                   bool check_consistent) const {
+bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
+                                        const table_name_t &name,
+                                        bool check_consistent) const {
   /** purge view will use m_snapshot_scn straightway */
   ut_ad(txn_rec);
   ut_ad(txn_rec->trx_id > 0 && txn_rec->trx_id < TRX_ID_MAX);
 
   check_trx_id_sanity(txn_rec->trx_id, name);
 
+  /** purge view will use m_snapshot_scn straightway */
   if (txn_rec->trx_id == m_creator_trx_id) {
     if (check_consistent) {
       /** If modification from myself, then they should be seen,
@@ -284,6 +283,75 @@ bool Vision::modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
     ut_ad(!check_consistent || !lizard_undo_ptr_is_active(txn_rec->undo_ptr));
     return txn_rec->scn <= m_snapshot_scn;
   }
+}
+
+/**
+  Check whether the changes by id are visible. Only used in as-of query.
+
+  @param[in]  txn_rec           txn related information of record.
+
+  @retval     whether the vision sees the modifications of id
+              True if visible.
+*/
+bool
+Vision::modifications_visible_as_of(txn_rec_t *txn_rec) const {
+
+  ut_ad(m_is_as_of);
+
+#if defined UNIV_DEBUG && defined TURN_MVCC_SEARCH_TO_AS_OF
+  if (txn_rec->trx_id == m_creator_trx_id) {
+    return true;
+  }
+#endif
+
+  if (txn_rec->scn == SCN_NULL) {
+    /* flash back query can never see the un-committed modifications */
+    return false;
+  }
+
+  return txn_rec->scn <= m_as_of_scn;
+}
+
+/**
+  Check whether the changes by id are visible.
+
+  @param[in]  txn_rec           txn related information.
+  @param[in]  name	            table name
+  @param[in]  check_consistent  check the consistent between SCN and UBA
+
+  @retval     whether the vision sees the modifications of id.
+              True if visible
+*/
+bool Vision::modifications_visible(txn_rec_t *txn_rec,
+                                   const table_name_t &name,
+                                   bool check_consistent) const {
+  ut_ad(txn_rec);
+  ut_ad(txn_rec->trx_id > 0 && txn_rec->trx_id < TRX_ID_MAX);
+
+  if (m_is_as_of) {
+    return modifications_visible_as_of(txn_rec);
+  } else {
+    return modifications_visible_mvcc(txn_rec, name, check_consistent);
+  }
+}
+
+/**
+  Set m_snapshot_scn, m_is_as_of
+
+  @param[in]    scn           m_snapshot_scn
+  @param[in]    is_as_of      true if it's a as-of query
+*/
+void Vision::set_as_of_scn(scn_t scn) {
+  if (scn != SCN_NULL) {
+    m_as_of_scn = scn;
+    m_is_as_of = true;
+  }
+}
+
+/** reset m_as_of_scn, m_is_as_of as initialized values */
+void Vision::reset_as_of_scn() {
+  m_is_as_of = false;
+  m_as_of_scn = SCN_NULL;
 }
 
 /**
@@ -346,6 +414,28 @@ void trx_vision_container_destroy() {
   vision_container->~VisionContainer();
   ut::free(vision_container);
   vision_container = nullptr;
+}
+
+void AsofVisonWrapper::set_as_of_vision(row_prebuilt_t *prebuilt) {
+  if (!prebuilt || !prebuilt->m_scn_query.m_is_scn_query)
+    return;
+
+  ut_ad(prebuilt->trx);
+
+  ut_ad(prebuilt->trx->vision.is_active());
+
+  if (!prebuilt->trx->vision.is_active()) return;
+
+  m_vision = &prebuilt->trx->vision;
+
+  m_vision->set_as_of_scn(prebuilt->m_scn_query.m_scn);
+}
+
+void AsofVisonWrapper::reset() {
+  if (m_vision) {
+    m_vision->reset_as_of_scn();
+    m_vision = nullptr;
+  }
 }
 
 }  // namespace lizard

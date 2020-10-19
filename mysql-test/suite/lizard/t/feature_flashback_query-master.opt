@@ -1,0 +1,2 @@
+--default-time-zone=+8:00
+--innodb_scn_history_interval=1

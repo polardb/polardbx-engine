@@ -992,8 +992,35 @@ Information in the data-dictionary needs to be updated. */
 #define HA_ERR_SAMPLING_INIT_FAILED 208
 /** Too many sub-expression in search string */
 #define HA_ERR_FTS_TOO_MANY_NESTED_EXP 209
+
+/* These errors are only for Sequence Engine. */
+#define HA_ERR_SEQUENCE_RUN_OUT 210        /* Sequence has run out */
+#define HA_ERR_SEQUENCE_INVALID 211        /* Structure or number is invalid */
+#define HA_ERR_SEQUENCE_NOT_DEFINED 212    /* Sequence is not yet defined */
+#define HA_ERR_SEQUENCE_ACCESS_FAILURE 213 /* Sequence access failure*/
+
+/* These errors are for xengine */
+#define HA_ERR_INVALID_NULL_ERROR 214
+/* xengine errors end */
+
+/* These errors are for lizard */
+
+/* The snapshot to find is out of scope */
+#define HA_ERR_SNAPSHOT_OUT_OF_RANGE 215
+
+/* Flashback-like query encountered an internal error */
+#define HA_ERR_AS_OF_INTERNAL 216
+
+/* The definition of the table required by the query has changed */
+#define HA_ERR_AS_OF_TABLE_DEF_CHANGED 217
+
+/* The snapshot is so old that the required historical data has been deleted */
+#define HA_ERR_SNAPSHOT_TOO_OLD 218
+
+/* lizard errors end */
+
 /** Copy of last error number */
-#define HA_ERR_LAST 209
+#define HA_ERR_LAST 218
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

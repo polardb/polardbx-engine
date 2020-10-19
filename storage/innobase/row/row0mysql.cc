@@ -754,6 +754,12 @@ handle_new_error:
           << ". Please drop excessive"
              " foreign constraints and try again";
       break;
+    case DB_SNAPSHOT_OUT_OF_RANGE:
+    case DB_AS_OF_INTERNAL:
+    case DB_AS_OF_TABLE_DEF_CHANGED:
+    case DB_SNAPSHOT_TOO_OLD:
+      /** TODO: Check must be flashback query <16-09-20, zanye.zjy> */
+      break;
     default:
       ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_975)
           << "Unknown error code " << err << ": " << ut_strerr(err);
@@ -931,6 +937,8 @@ row_prebuilt_t *row_create_prebuilt(
 
   prebuilt->m_no_prefetch = false;
   prebuilt->m_read_virtual_key = false;
+
+  prebuilt->m_scn_query.reset();
 
   return prebuilt;
 }

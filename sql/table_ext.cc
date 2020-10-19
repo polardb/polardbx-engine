@@ -159,7 +159,7 @@ static bool try_cast_to_datetime(THD *thd, Item **item) {
   if (!cast) return true;
 
   cast->fix_fields(thd, item);
-  thd->change_item_tree(item, cast);
+  // thd->change_item_tree(item, cast);
   return false;
 }
 
@@ -172,7 +172,7 @@ static bool try_cast_to_scn(THD *thd, Item **item) {
   if (!cast) return true;
 
   cast->fix_fields(thd, item);
-  thd->change_item_tree(item, cast);
+  // thd->change_item_tree(item, cast);
   return false;
 }
 

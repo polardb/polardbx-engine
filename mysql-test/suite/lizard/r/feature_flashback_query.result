@@ -1,0 +1,371 @@
+CALL mtr.add_suppression("'innodb-scn-history-interval': unsigned value 0 adjusted to 1");
+create procedure print_idx_image(in image_idx int)
+begin
+set @time_stamp = (select image_time from foo_history where id = image_idx);
+select image_idx, foo.* from foo as of timestamp @time_stamp;
+end //
+create procedure print_all_images(in n_image int)
+begin
+declare image_idx int default 1;
+while image_idx <= n_image DO
+call print_idx_image(image_idx);
+set image_idx = image_idx + 1;
+end while;
+end //
+create procedure update_foo_history()
+begin
+do sleep(1.5);
+set @image_number = @image_number + 1;
+insert into foo_history (id) values (@image_number);
+do sleep(1.5);
+end //
+create table foo_history (id int, image_time datetime not null default now(),
+primary key(id));
+create table foo (id int, sec int, primary key(id), index sec (sec));
+begin;
+select * from foo;
+id	sec
+set session transaction_isolation = 'READ-COMMITTED';
+set @image_number = 0;
+#
+# insert
+#
+insert into foo values (1, 10);
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+1	1	10
+insert into foo values (2, 20);
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+2	1	10
+2	2	20
+#
+# update secondary index
+#
+update foo set sec = 200 where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+3	1	10
+3	2	200
+#
+# delete
+#
+delete from foo where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+4	1	10
+#
+# insert on delete marked
+#
+insert into foo values (2, 2000);
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+5	1	10
+5	2	2000
+#
+# update pk
+#
+update foo set id = 3 where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+6	1	10
+6	3	2000
+#
+# force using secondary index
+#
+insert into foo values (5, 50);
+call update_foo_history();
+set @time_stamp = (select image_time from foo_history where id = @image_number);
+select @image_number, foo.* from foo as of timestamp @time_stamp force index (sec);
+@image_number	id	sec
+7	1	10
+7	5	50
+7	3	2000
+#
+# can't see un-committed trx
+#
+begin;
+update foo set id = 6 where id = 5;
+insert into foo values (7, 70);
+update foo set id = 8 where id = 1;
+delete from foo where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+8	1	10
+8	5	50
+8	3	2000
+commit;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+9	8	10
+9	6	50
+9	7	70
+9	3	2000
+#
+# clear table
+#
+delete from foo;
+call update_foo_history();
+# test transaction_isolation = REPEATABLE-READ
+set session transaction_isolation = 'REPEATABLE-READ';
+#
+# insert
+#
+insert into foo values (1, 10);
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+11	1	10
+insert into foo values (2, 20);
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+12	1	10
+12	2	20
+#
+# update secondary index
+#
+update foo set sec = 200 where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+13	1	10
+13	2	200
+#
+# delete
+#
+delete from foo where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+14	1	10
+#
+# insert on delete marked
+#
+insert into foo values (2, 2000);
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+15	1	10
+15	2	2000
+#
+# update pk
+#
+update foo set id = 3 where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+16	1	10
+16	3	2000
+#
+# force using secondary index
+#
+insert into foo values (5, 50);
+call update_foo_history();
+set @time_stamp = (select image_time from foo_history where id = @image_number);
+select @image_number, foo.* from foo as of timestamp @time_stamp force index (sec);
+@image_number	id	sec
+17	1	10
+17	5	50
+17	3	2000
+#
+# can't see un-committed trx
+#
+begin;
+update foo set id = 6 where id = 5;
+insert into foo values (7, 70);
+update foo set id = 8 where id = 1;
+delete from foo where id = 2;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+18	1	10
+18	5	50
+18	3	2000
+commit;
+call update_foo_history();
+call print_idx_image(@image_number);
+image_idx	id	sec
+19	8	10
+19	6	50
+19	7	70
+19	3	2000
+#
+# clear table
+#
+delete from foo;
+call update_foo_history();
+call print_all_images(@image_number);
+image_idx	id	sec
+1	1	10
+image_idx	id	sec
+2	1	10
+2	2	20
+image_idx	id	sec
+3	1	10
+3	2	200
+image_idx	id	sec
+4	1	10
+image_idx	id	sec
+5	1	10
+5	2	2000
+image_idx	id	sec
+6	1	10
+6	3	2000
+image_idx	id	sec
+7	1	10
+7	5	50
+7	3	2000
+image_idx	id	sec
+8	1	10
+8	5	50
+8	3	2000
+image_idx	id	sec
+9	8	10
+9	6	50
+9	7	70
+9	3	2000
+image_idx	id	sec
+image_idx	id	sec
+11	1	10
+image_idx	id	sec
+12	1	10
+12	2	20
+image_idx	id	sec
+13	1	10
+13	2	200
+image_idx	id	sec
+14	1	10
+image_idx	id	sec
+15	1	10
+15	2	2000
+image_idx	id	sec
+16	1	10
+16	3	2000
+image_idx	id	sec
+17	1	10
+17	5	50
+17	3	2000
+image_idx	id	sec
+18	1	10
+18	5	50
+18	3	2000
+image_idx	id	sec
+19	8	10
+19	6	50
+19	7	70
+19	3	2000
+image_idx	id	sec
+commit;
+create table bar (c1 int);
+select * from bar as of timestamp date_add(now(), interval 2 hour);
+ERROR HY000: The snapshot to find is out of range, please adjust scn history configuration
+insert into bar values (1);
+select * from bar as of timestamp date_sub(now(), interval 2 second);
+ERROR HY000: Snapshot too old
+begin;
+select * from bar;
+c1
+1
+set session debug = "+d, required_scn_purged_before_reset";
+select * from bar as of timestamp date_sub(now(), interval 2 second);
+ERROR HY000: Snapshot too old
+set session debug = "-d, required_scn_purged_before_reset";
+update bar set c1 = 2;
+set session debug = "+d, simulate_prev_image_purged_during_query";
+select * from bar as of timestamp date_sub(now(), interval 2 second);
+ERROR HY000: Snapshot too old
+set session debug = "-d, simulate_prev_image_purged_during_query";
+commit;
+create table t1 (c1 int, c2 int, primary key(c1));
+insert into t1 values (1, 100);
+insert into t1 values (2, 200);
+create table t2 like t1;
+create table t3 like t1;
+create table t4 like t1;
+create table t5 like t1;
+create table t6 like t1;
+create table t7 like t1;
+create table t8 like t1;
+create table t9 like t1;
+create table t10 like t1;
+insert into t2 select * from t1;
+insert into t3 select * from t1;
+insert into t4 select * from t1;
+insert into t5 select * from t1;
+insert into t6 select * from t1;
+insert into t7 select * from t1;
+insert into t8 select * from t1;
+insert into t9 select * from t1;
+insert into t10 select * from t1;
+begin;
+select * from t1;
+c1	c2
+1	100
+2	200
+set @past_timestamps = (select now());
+alter table t2 add c3 int default 100;
+select * from t2 as of timestamp @past_timestamps;
+ERROR HY000: The definition of the table required by the flashback query has changed
+alter table t3 add c3 int default 100, ALGORITHM = copy;
+select * from t3 as of timestamp @past_timestamps;
+ERROR HY000: The definition of the table required by the flashback query has changed
+drop table t4;
+create table t4 as select * from t1;
+select * from t3 as of timestamp @past_timestamps;
+ERROR HY000: The definition of the table required by the flashback query has changed
+alter table t5 add c3 int after c1;
+select * from t3 as of timestamp @past_timestamps;
+ERROR HY000: The definition of the table required by the flashback query has changed
+alter table t6 add index sec(c2);
+select * from t6 as of timestamp @past_timestamps;
+c1	c2
+1	100
+2	200
+select * from t6 as of timestamp @past_timestamps force index(sec);
+c1	c2
+1	100
+2	200
+select c2 from t6 as of timestamp @past_timestamps force index(sec);
+c2
+100
+200
+alter table t7 row_format = compressed;
+select * from t7 as of timestamp @past_timestamps;
+ERROR HY000: The definition of the table required by the flashback query has changed
+alter table t8 change c2 c2_a bigint not null;
+select * from t8 as of timestamp @past_timestamps;
+ERROR HY000: The definition of the table required by the flashback query has changed
+alter table t9 rename column c2 to c3;
+select * from t9 as of timestamp @past_timestamps;
+c1	c3
+1	100
+2	200
+alter table t10 drop primary key, add primary key(c2);
+select * from t10 as of timestamp @past_timestamps;
+ERROR HY000: The definition of the table required by the flashback query has changed
+commit;
+drop table foo;
+drop table foo_history;
+drop table bar;
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+drop table t6;
+drop table t7;
+drop table t8;
+drop table t9;
+drop table t10;
+drop procedure print_idx_image;
+drop procedure print_all_images;
+drop procedure update_foo_history;

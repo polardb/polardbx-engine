@@ -219,6 +219,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0row.h"
 #include "lizard0scn0hist.h"
+#include "lizard0mysql.h"
 
 #include "handler/i_s_ext.h"
 #include "srv0file.h"
@@ -2333,6 +2334,14 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
     case DB_IO_NO_PUNCH_HOLE_FS:
     case DB_IO_NO_PUNCH_HOLE_TABLESPACE:
       return HA_ERR_UNSUPPORTED;
+    case DB_SNAPSHOT_OUT_OF_RANGE:
+      return (HA_ERR_SNAPSHOT_OUT_OF_RANGE);
+    case DB_AS_OF_INTERNAL:
+      return (HA_ERR_AS_OF_INTERNAL);
+    case DB_AS_OF_TABLE_DEF_CHANGED:
+      return (HA_ERR_AS_OF_TABLE_DEF_CHANGED);
+    case DB_SNAPSHOT_TOO_OLD:
+      return (HA_ERR_SNAPSHOT_TOO_OLD);
   }
 }
 
@@ -19055,6 +19064,14 @@ int ha_innobase::external_lock(THD *thd, /*!< in: handle to the user thread */
     ++trx->will_lock;
   }
 
+  dberr_t error = lizard::reset_prebuilt_flashback_query_ctx(m_prebuilt);
+  if (error != DB_SUCCESS) {
+    /** Lizard: Just call **my_error** here because only lock errors will
+    be expected, see unlock_external, handler::ha_external_lock. */
+    ut_ad(error == DB_SNAPSHOT_TOO_OLD);
+    my_error(ER_SNAPSHOT_TOO_OLD, 0);
+  }
+
   return 0;
 }
 
@@ -23412,6 +23429,16 @@ static MYSQL_SYSVAR_ULONG(scn_history_interval,
                           "Generate new scn record every scn_history_interval",
                           NULL, NULL, 3, 1, 10, 0);
 
+static MYSQL_SYSVAR_BOOL(rds_flashback_enabled,
+                         lizard::srv_scn_valid_enabled, PLUGIN_VAR_OPCMDARG,
+                         "Whether to enable use as of query (true by default)",
+                         NULL, NULL, TRUE);
+
+static MYSQL_SYSVAR_ULONG(rds_flashback_allow_gap,
+                          lizard::srv_scn_valid_volumn, PLUGIN_VAR_OPCMDARG,
+                          "the max tolerable lease time of a snapshot",
+                          NULL, NULL, 30, 0, 10080, 0);
+
 static MYSQL_SYSVAR_ULONG(
     scn_history_keep_days, lizard::srv_scn_history_keep_days,
     PLUGIN_VAR_OPCMDARG,
@@ -23645,6 +23672,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(data_file_purge_max_size),
     MYSQL_SYSVAR(data_file_purge_dir),
     MYSQL_SYSVAR(print_data_file_purge_process),
+    MYSQL_SYSVAR(rds_flashback_enabled),
+    MYSQL_SYSVAR(rds_flashback_allow_gap),
     MYSQL_SYSVAR(cleanout_safe_mode),
     MYSQL_SYSVAR(cleanout_disable),
     MYSQL_SYSVAR(cleanout_max_scans_on_page),

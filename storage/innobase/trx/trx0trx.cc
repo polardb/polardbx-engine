@@ -251,6 +251,8 @@ static void trx_init(trx_t *trx) {
   /** Lizard added */
   trx->txn_desc = TXN_DESC_NULL;
 
+  trx->vision.reset();
+
   ++trx->version;
 }
 

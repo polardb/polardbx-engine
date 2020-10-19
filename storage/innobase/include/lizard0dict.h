@@ -142,7 +142,8 @@ bool dd_index_fill_txn_desc(dict_index_t *index, const dd::Properties &p);
   @param[in]      trx         transaction.
   @return         true if visible
 */
-bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx);
+bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
+                                    bool is_as_of, scn_t as_of_scn);
 
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG

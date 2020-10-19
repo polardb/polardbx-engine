@@ -1350,6 +1350,11 @@ struct dict_index_t {
   @param[in] trx                transaction*/
   bool is_usable(const trx_t *trx);
 
+  /** Check whether index can be used by an as-of query
+  @param[in] trx            transaction
+  @param[in] as_of_scn      as of scn */
+  bool is_usable_as_of(const trx_t *trx, const scn_t scn);
+
   /** Check whether index has any instantly added columns.
   Possible only if table has INSTANT ADD columns and is upgraded.
   @return true if this is instant affected, otherwise false */

@@ -2432,6 +2432,8 @@ err_exit:
  @param[in]     is_temp         true if temporary, no-redo rseg.
  @param[in]     name            table name
  @param[out]    undo_rec        own: copy of the record
+ @param[in]     is_as_of        If it's a as-of query (lizard)
+ @param[in]     txn_mtr         txn mtr (lizard)
  @retval true if the undo log has been
  truncated and we cannot fetch the old version
  @retval false if the undo log record is available
@@ -2440,14 +2442,30 @@ err_exit:
                                                 txn_rec_t *txn_rec,
                                                 mem_heap_t *heap, bool is_temp,
                                                 const table_name_t &name,
-                                                trx_undo_rec_t **undo_rec) {
-  bool missing_history;
+                                                trx_undo_rec_t **undo_rec,
+                                                bool is_as_of, mtr_t *txn_mtr) {
+  bool missing_history = false;
+  txn_lookup_t txn_lookup;
 
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
-  lizard::txn_undo_hdr_lookup(txn_rec, nullptr, nullptr);
-
-  missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
+  if (is_as_of) {
+    /** precheck, if the record has been cleanout, and the TXN has been purged,
+    no need to hold TXN page latch and undo page latch */
+    if (lizard::precheck_if_txn_is_purged(txn_rec)) {
+      /** Must be cleanout, so no need to lookup again */
+      ut_ad(!lizard::lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+      missing_history = true;
+    } else {
+      /** precheck fail */
+      lizard::txn_undo_hdr_lookup(txn_rec, &txn_lookup, txn_mtr);
+      missing_history = !lizard::txn_lookup_rollptr_is_valid(&txn_lookup);
+    }
+    DBUG_EXECUTE_IF("simulate_prev_image_purged_during_query", missing_history = true;);
+  } else {
+    lizard::txn_undo_hdr_lookup(txn_rec, nullptr, nullptr);
+    missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
+  }
 
   if (!missing_history) {
     *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp);
@@ -2469,7 +2487,8 @@ bool trx_undo_prev_version_build(
     mtr_t *index_mtr ATTRIB_USED_ONLY_IN_DEBUG, const rec_t *rec,
     const dict_index_t *const index, ulint *offsets, mem_heap_t *heap,
     rec_t **old_vers, mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
-    lob::undo_vers_t *lob_undo) {
+    lob::undo_vers_t *lob_undo,
+    bool is_as_of) {
   DBUG_TRACE;
 
   trx_undo_rec_t *undo_rec = nullptr;
@@ -2490,6 +2509,8 @@ bool trx_undo_prev_version_build(
   txn_info_t txn_info;
 
   txn_rec_t txn_rec;
+
+  mtr_t txn_mtr;
 
   ut_ad(!rw_lock_own(&purge_sys->latch, RW_LOCK_S));
   ut_ad(mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_S_FIX) ||
@@ -2521,17 +2542,21 @@ bool trx_undo_prev_version_build(
 
   ut_ad(!index->table->skip_alter_undo);
 
+  mtr_start(&txn_mtr);
   if (trx_undo_get_undo_rec(roll_ptr, &txn_rec, heap, is_temp,
-                            index->table->name, &undo_rec)) {
+                            index->table->name, &undo_rec,
+                            is_as_of, &txn_mtr)) {
     if (v_status & TRX_UNDO_PREV_IN_PURGE) {
       /* We are fetching the record being purged */
       undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp);
     } else {
+      mtr_commit(&txn_mtr);
       /* The undo record may already have been purged,
       during purge or semi-consistent read. */
       return false;
     }
   }
+  mtr_commit(&txn_mtr);
 
   type_cmpl_t type_cmpl;
   ptr = trx_undo_rec_get_pars(undo_rec, &type, &cmpl_info, &dummy_extern,
