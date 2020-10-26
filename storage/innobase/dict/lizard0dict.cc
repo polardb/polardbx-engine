@@ -114,7 +114,7 @@ dberr_t dd_index_init_txn_desc(dict_index_t *index, trx_t *trx) {
       ut_ad(lizard_undo_ptr_is_active(trx->txn_desc.undo_ptr));
 
       index->txn.uba = trx->txn_desc.undo_ptr;
-      index->txn.scn = trx->txn_desc.scn.first;
+      index->txn.scn = trx->txn_desc.cmmt.scn;
     }
   }
 

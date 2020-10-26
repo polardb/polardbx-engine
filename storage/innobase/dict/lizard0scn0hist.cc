@@ -214,7 +214,7 @@ static dberr_t roll_forward_scn() {
   trx_t *trx;
 
   lizard_sys_scn_mutex_enter();
-  scn = lizard_sys->scn.new_commit_scn().first;
+  scn = lizard_sys->scn.new_commit_scn(GCN_NULL).first.scn;
   lizard_sys_scn_mutex_exit();
 
   utc = ut_time_system_us() / 1000000;

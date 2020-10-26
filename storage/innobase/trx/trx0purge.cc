@@ -287,7 +287,7 @@ void trx_purge_add_update_undo_to_history(
 
   /* Update maximum transaction scn for this rollback segment. */
   assert_trx_scn_allocated(trx);
-  mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.scn.first,
+  mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.cmmt.scn,
                  mtr);
 
   /* lizard: TRX_UNDO_TRX_NO is reserved */
@@ -306,7 +306,7 @@ void trx_purge_add_update_undo_to_history(
     rseg->last_page_no = undo->hdr_page_no;
     rseg->last_offset = undo->hdr_offset;
     rseg->last_del_marks = undo->del_marks;
-    rseg->last_scn = trx->txn_desc.scn.first;
+    rseg->last_scn = trx->txn_desc.cmmt.scn;
   }
 }
 
@@ -458,7 +458,7 @@ loop:
 
   log_hdr = undo_page + hdr_addr.boffset;
 
-  undo_trx_scn = lizard::trx_undo_hdr_read_scn(log_hdr, &mtr).first;
+  undo_trx_scn = lizard::trx_undo_hdr_read_scn(log_hdr, &mtr).scn;
 
   ut_ad(lizard::lizard_sys &&
         undo_trx_scn <= lizard::lizard_sys->scn.acquire_scn());
@@ -1639,7 +1639,7 @@ static void trx_purge_rseg_get_next_history_log(
                             handled */
 {
   mtr_t mtr;
-  commit_scn_t scn;
+  commit_scn_t cmmt;
 
   rseg->latch();
 
@@ -1711,7 +1711,7 @@ static void trx_purge_rseg_get_next_history_log(
 
   auto del_marks = mach_read_from_2(log_hdr + TRX_UNDO_DEL_MARKS);
 
-  scn = lizard::trx_undo_hdr_read_scn(log_hdr, &mtr);
+  cmmt = lizard::trx_undo_hdr_read_scn(log_hdr, &mtr);
 
   mtr_commit(&mtr);
 
@@ -1720,7 +1720,7 @@ static void trx_purge_rseg_get_next_history_log(
   rseg->last_page_no = prev_log_addr.page;
   rseg->last_offset = prev_log_addr.boffset;
   rseg->last_del_marks = del_marks;
-  rseg->last_scn = scn.first;
+  rseg->last_scn = cmmt.scn;
 
   lizard::TxnUndoRsegs elem(rseg->last_scn);
   elem.insert(rseg);
@@ -1806,15 +1806,18 @@ static void trx_purge_read_undo_rec(trx_purge_t *purge_sys,
 static bool trx_purge_choose_next_log(void) {
   bool keep_top = false;
   ut_ad(purge_sys->next_stored == false);
-  utc_t txn_scn;
+  std::pair<commit_scn_t, bool> purged_result;
 
   const page_size_t &page_size = purge_sys->rseg_iter->set_next(&keep_top);
 
   if (purge_sys->rseg != nullptr && !keep_top) {
     lizard_ut_ad(lizard::txn_undo_log_has_purged(purge_sys->rseg, page_size));
-    txn_scn = lizard::txn_undo_set_state_at_purge(purge_sys->rseg, page_size);
-    if (lizard::fsp_is_txn_tablespace_by_id(purge_sys->rseg->space_id)) {
-      lizard::trx_purge_set_purged_scn(txn_scn);
+    purged_result =
+        lizard::txn_undo_set_state_at_purge(purge_sys->rseg, page_size);
+    /** If purging txn undo log hdr correctly */
+    if (!purged_result.second) {
+      lizard::trx_purge_set_purged_scn(purged_result.first.scn);
+      purge_sys->top_undo_utc = purged_result.first.utc;
     }
     trx_purge_read_undo_rec(purge_sys, page_size);
   } else {

@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "trx0xa.h"
 #include "univ.i"
+#include "fut0lst.h"
 
 #include "lizard0undo0types.h"
 
@@ -432,8 +433,12 @@ struct trx_undo_t {
   segment are chained into lists */
 
   /*-----------------------------*/
-  commit_scn_t scn;
+  commit_scn_t cmmt;
   /*!< SCN after commit */
+
+  /** prev_image is only valid for txn undo */
+  commit_scn_t prev_image;
+  /*!< SCN last commit */
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(trx_undo_t, undo_list)
@@ -535,7 +540,10 @@ page of an update undo log segment. */
 constexpr uint32_t TRX_UNDO_TRX_ID = 0;
 /** Transaction number of the transaction; defined only if the log is in a
  history list */
-constexpr uint32_t TRX_UNDO_TRX_NO = 8;
+
+/** ATTENTION: original trx_no has been reused by GCN */
+constexpr uint32_t TRX_UNDO_TRX_NO_DUP = 8;
+
 /** Defined only in an update undo log: true if the transaction may have done
  delete markings of records, and thus purge is necessary */
 constexpr uint32_t TRX_UNDO_DEL_MARKS = 16;
@@ -568,12 +576,16 @@ constexpr uint32_t TRX_UNDO_NEXT_LOG = 30;
 constexpr uint32_t TRX_UNDO_PREV_LOG = 32;
 /** If the log is put to the history list, the file list node is here */
 constexpr uint32_t TRX_UNDO_HISTORY_NODE = 34;
+
 /** Lizard: Offset of the SCN */
 constexpr uint32_t TRX_UNDO_SCN = (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE); // = 46
 /** Lizard: Offset of the utc */
 constexpr uint32_t TRX_UNDO_UTC = (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN); // = 54
 /** Lizard: Offset of the UBA */
 constexpr uint32_t TRX_UNDO_UBA = (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN);	
+
+/** Lizard: offset of the GCN, reuse TRX_NO position */
+constexpr uint32_t TRX_UNDO_GCN = TRX_UNDO_TRX_NO_DUP;
 
 /*-------------------------------------------------------------*/
 /** Size of the undo log header without XID information */

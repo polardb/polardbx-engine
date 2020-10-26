@@ -566,8 +566,11 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
   /** Save the current image (SCN/UTC). There might be two case:
   1. prev_image->scn = 0, prev_image->utc = 0, if the first time use the space
   2. prev_image is in allocated steate, if the space is reused. */
+
   if (prev_image) {
-    *prev_image = lizard::trx_undo_hdr_read_scn(log_hdr, mtr);
+    /** Copy commit scn info */
+    commit_scn_t cmmt = lizard::trx_undo_hdr_read_scn(log_hdr, mtr);
+    if (!commit_scn_is_uninitial(cmmt)) *prev_image = cmmt;
   }
 
   /** Init the scn as NULL */
@@ -1387,8 +1390,15 @@ static trx_undo_t *trx_undo_mem_init(
   undo->size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST);
 
   /** Lizard: Confirm the undo scn */
-  undo->scn = lizard::trx_undo_hdr_read_scn(undo_header, mtr);
+  undo->cmmt = lizard::trx_undo_hdr_read_scn(undo_header, mtr);
   lizard_undo_scn_validation(undo);
+
+  if (type == TRX_UNDO_TXN) {
+    undo->prev_image = lizard::txn_undo_hdr_read_prev_scn(undo_header, mtr);
+    assert_commit_scn_allocated(undo->prev_image);
+  } else {
+    assert_commit_scn_initial(undo->prev_image);
+  }
 
   /* If the log segment is being freed, the page list is inconsistent! */
   if (state == TRX_UNDO_TO_FREE) {
@@ -1550,7 +1560,8 @@ trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
   undo->guess_block = nullptr;
 
   /** Lizard: init undo scn */
-  undo->scn = COMMIT_SCN_NULL;
+  undo->cmmt = COMMIT_SCN_NULL;
+  undo->prev_image = COMMIT_SCN_NULL;
 
   return (undo);
 }
@@ -1580,7 +1591,8 @@ static void trx_undo_mem_init_for_reuse(
   undo->empty = true;
 
   /** Lizard: init undo scn */
-  undo->scn = COMMIT_SCN_NULL;
+  undo->cmmt = COMMIT_SCN_NULL;
+  undo->prev_image = COMMIT_SCN_NULL;
 }
 
 /** Frees an undo log memory copy. */
@@ -1612,6 +1624,7 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
   ulint offset;
   ulint id;
   page_t *undo_page;
+  commit_scn_t prev_image = COMMIT_SCN_LOST;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1641,10 +1654,6 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
     gtid_storage = trx_undo_t::Gtid_storage::NONE;
   }
 
-  /** Lizard: add UBA into undo log header */
-  undo_addr_t undo_addr = {rseg->space_id, page_no, offset, lizard::SCN_NULL,
-                           true};
-
   trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                     gtid_storage);
 
@@ -1652,6 +1661,9 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
   if (type == TRX_UNDO_TXN) {
     /** Follow the XA will be txn extension information  */
     lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
+
+  /** Lizard: add UBA into undo log header */
+    undo_addr_t undo_addr = {rseg->space_id, page_no, offset, true};
 
     /** Current undo log hdr is UBA */
     lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, mtr);
@@ -1665,7 +1677,7 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
   /** Lizard: Already use txn extension, so set TRX_UNDO_FLAG_TXN in advance. */
   if (type == TRX_UNDO_TXN) {
     lizard::trx_undo_hdr_init_for_txn(*undo, undo_page, undo_page + offset,
-                                      nullptr, mtr);
+                                      prev_image, mtr);
     ut_ad((*undo)->flag == TRX_UNDO_FLAG_TXN);
 
     lizard::txn_undo_hash_insert(*undo);
@@ -1696,7 +1708,7 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
                                   trx_undo_t::Gtid_storage gtid_storage,
                                   mtr_t *mtr) {
   trx_undo_t *undo;
-  commit_scn_t prev_image;
+  commit_scn_t prev_image = COMMIT_SCN_LOST;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1772,8 +1784,7 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
     /* Lizard: special for txn undo log header */
 
     /** Lizard: add UBA into undo log header */
-    undo_addr_t undo_addr = {undo->space, undo->hdr_page_no, offset,
-                             lizard::SCN_NULL, true};
+    undo_addr_t undo_addr = {undo->space, undo->hdr_page_no, offset, true};
 
     /** Current undo log hdr is UBA */
     lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, mtr);
@@ -1788,7 +1799,7 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
 
   if (type == TRX_UNDO_TXN) {
     lizard::trx_undo_hdr_init_for_txn(undo, undo_page, undo_page + offset,
-                                      &prev_image, mtr);
+                                      prev_image, mtr);
     ut_ad(undo->flag == TRX_UNDO_FLAG_TXN);
   }
   return (undo);

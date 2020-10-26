@@ -1109,6 +1109,8 @@ struct trx_purge_t {
   /** All transactions whose scn <= purged_scn must have been purged.
   Only the purge sys coordinator thread and recover thread can modify it. */
   std::atomic<scn_t> purged_scn;
+
+  utc_t top_undo_utc;
 };
 
 #include "trx0purge.ic"

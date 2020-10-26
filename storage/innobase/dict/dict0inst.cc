@@ -266,7 +266,7 @@ bool Instant_ddl_impl<Table>::commit_instant_ddl() {
         dd::Properties &p = dd_index->se_private_data();
         p.set(dd_index_key_strings[DD_INDEX_TRX_ID], m_trx->id);
         p.set(dd_index_key_strings[DD_INDEX_UBA], m_trx->txn_desc.undo_ptr);
-        p.set(dd_index_key_strings[DD_INDEX_SCN], m_trx->txn_desc.scn.first);
+        p.set(dd_index_key_strings[DD_INDEX_SCN], m_trx->txn_desc.cmmt.scn);
       }
 
       row_mysql_lock_data_dictionary(m_trx, UT_LOCATION_HERE);
