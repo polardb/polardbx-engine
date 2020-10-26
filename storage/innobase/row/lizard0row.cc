@@ -242,8 +242,7 @@ void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
   }
 
   row_upd_rec_lizard_fields_low(rec, page_zip, index, offsets,
-                                txn_desc->scn.first,
-                                txn_desc->undo_ptr);
+                                txn_desc->cmmt.scn, txn_desc->undo_ptr);
 }
 
 /**

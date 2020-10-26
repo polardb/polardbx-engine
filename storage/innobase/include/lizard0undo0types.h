@@ -156,7 +156,7 @@ struct txn_desc_t {
   /** undo log header address */
   undo_ptr_t undo_ptr;
   /** scn number */
-  commit_scn_t scn;
+  commit_scn_t cmmt;
 };
 
 /**
@@ -219,7 +219,7 @@ struct txn_undo_ptr_t {
   TXN_UNDO_LOG_COMMITED and TXN_UNDO_LOG_PURGED) in TXN header. And also, that's
   mean these TXN headers are existing.
 
-  By contrast, TXN_STATE_REUSE / TXN_STATE_UNDO_LOST mean that the TXN headers
+  By contrast, TXN_STATE_REUSE / TXN_STATE_UNDO_CORRUPTED mean that the TXN headers
   are non-existing.
 
   * TXN_STATE_ACTIVE: A txn header is initialized as TXN_STATE_ACTIVE when the
@@ -236,8 +236,8 @@ struct txn_undo_ptr_t {
   transactions. These TXN headers are reinited as TXN_STATE_ACTIVE, but for
   those UBAs who also pointed at them, are supposed to be TXN_STATE_REUSE.
 
-  * TXN_STATE_UNDO_LOST: In fact, TXN_STATE_REUSE also lost their TXN headers,
-  but TXN_STATE_UNDO_LOST is a abnormal state for some special cases, for
+  * TXN_STATE_UNDO_CORRUPTED: In fact, TXN_STATE_REUSE also lost their TXN headers,
+  but TXN_STATE_UNDO_CORRUPTED is a abnormal state for some special cases, for
   example, page corrupt or TXN file unexpectedly removed.
 
   So the life cycle of TXN hedaer:
@@ -252,7 +252,7 @@ enum txn_state_t {
   TXN_STATE_COMMITTED,
   TXN_STATE_PURGED,
   TXN_STATE_REUSE,
-  TXN_STATE_UNDO_LOST
+  TXN_STATE_UNDO_CORRUPTED
 };
 
 struct txn_undo_hdr_t {
@@ -286,8 +286,8 @@ struct txn_lookup_t {
       * real_image == txn_undo_hdr.prev_image
 
     If the txn is unexpectedly lost:
-      * real_state: [TXN_STATE_UNDO_LOST]
-      * real_image == {SCN_UNDO_LOST, UTC_UNDO_LOST}
+      * real_state: [TXN_STATE_UNDO_CORRUPTED]
+      * real_image == {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED}
   */
   commit_scn_t real_image;
   txn_state_t real_state;

@@ -55,8 +55,11 @@ typedef byte lizard_sysf_t;
 /** The scn number which is stored here, it occupied 8 bytes */
 #define LIZARD_SYS_SCN 0
 
+/** The global commit number which is stored here. */
+#define LIZARD_SYS_GCN (LIZARD_SYS_SCN + 8)
+
 /** The purge scn number which is stored here, it occupied 8 bytes */
-#define LIZARD_SYS_PURGE_SCN (LIZARD_SYS_SCN + 8)
+#define LIZARD_SYS_PURGE_SCN (LIZARD_SYS_GCN + 8)
 
 /** The offset of file segment header */
 #define LIZARD_SYS_FSEG_HEADER (LIZARD_SYS_PURGE_SCN + 8)

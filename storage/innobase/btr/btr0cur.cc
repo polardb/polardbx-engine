@@ -3527,7 +3527,7 @@ dberr_t btr_cur_update_in_place(
   if (thr) {
     trx = thr_get_trx(thr);
     txn_rec.trx_id = trx->id;
-    txn_rec.scn = trx->txn_desc.scn.first;
+    txn_rec.scn = trx->txn_desc.cmmt.scn;
     txn_rec.undo_ptr = trx->txn_desc.undo_ptr;
   } else {
     /** We found a case: update innodb_dynamic_metadata, flags will be
@@ -4481,7 +4481,7 @@ dberr_t btr_cur_del_mark_set_clust_rec(
 
   trx = thr_get_trx(thr);
   txn_rec.trx_id = trx->id;
-  txn_rec.scn = trx->txn_desc.scn.first;
+  txn_rec.scn = trx->txn_desc.cmmt.scn;
   txn_rec.undo_ptr = trx->txn_desc.undo_ptr;
 
   /* This function must not be invoked during rollback

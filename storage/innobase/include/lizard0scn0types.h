@@ -40,8 +40,23 @@ typedef ib_uint64_t scn_t;
 /** Scn time was defined 64 bits size (microsecond) */
 typedef ib_uint64_t utc_t;
 
-/** Commit scn structure {SCN, UTC} */
-typedef std::pair<scn_t, utc_t> commit_scn_t;
+/** Global commit number */
+typedef ib_uint64_t gcn_t;
+
+/** Commit undo structure {SCN, UTC, GCN} */
+struct commit_scn_t {
+  scn_t scn;
+  utc_t utc;
+  gcn_t gcn;
+};
+
+/** Compare function */
+inline bool operator==(const commit_scn_t &lhs, const commit_scn_t &rhs) {
+  if (lhs.scn == rhs.scn && lhs.utc == rhs.utc && lhs.gcn == rhs.gcn)
+    return true;
+
+  return false;
+}
 
 /** Commit scn state */
 enum scn_state_t {

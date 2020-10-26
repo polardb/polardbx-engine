@@ -46,6 +46,10 @@ extern mysql_pfs_key_t lizard_scn_mutex_key;
 
 namespace lizard {
 
+/**------------------------------------------------------------------------*/
+/** Predefined SCN */
+/**------------------------------------------------------------------------*/
+
 /** Invalid scn number was defined as the max value of ulint */
 constexpr scn_t SCN_NULL = std::numeric_limits<scn_t>::max();
 
@@ -55,17 +59,6 @@ constexpr scn_t SCN_MAX = std::numeric_limits<scn_t>::max() - 1;
 /** For troubleshooting and readability, we use mutiple SCN FAKE in different
 scenarios */
 /**------------------------------------------------------------------------*/
-/** The minimus and valid scn number */
-constexpr scn_t SCN_FAKE = 1;
-
-/** SCN special for temporary table record */
-constexpr scn_t SCN_TEMP_TAB_REC = 2;
-
-/** SCN special for undo lost */
-constexpr scn_t SCN_UNDO_LOST = 3;
-
-/** SCN special for index */
-constexpr scn_t SCN_DICT_REC = 4;
 
 /** Initialized prev scn number in txn header. See the case:
 1. If txn undos are unexpectedly removed
@@ -74,7 +67,18 @@ some prev UBAs might point at such a txn header: in uncommitted status
 but if not really the prev UBAs try to find. And lookup by these UBAs
 might get a initialized prev scn/utc. We should set them small enough for
 visibility. */
-constexpr scn_t PREV_SCN_UNDO_LOST = 5;
+
+/** SCN special for undo corrupted */
+constexpr scn_t SCN_UNDO_CORRUPTED = 1;
+
+/** SCN special for undo lost */
+constexpr scn_t SCN_UNDO_LOST = 2;
+
+/** SCN special for temporary table record */
+constexpr scn_t SCN_TEMP_TAB_REC = 3;
+
+/** SCN special for index */
+constexpr scn_t SCN_DICT_REC = 4;
 
 /** MAX reserved scn NUMBER  */
 constexpr scn_t SCN_RESERVERD_MAX = 1024;
@@ -85,18 +89,20 @@ constexpr scn_t SCN_DYNAMIC_METADATA = SCN_MAX;
 /** The scn number for innodb log ddl */
 constexpr scn_t SCN_LOG_DDL = SCN_MAX;
 /**------------------------------------------------------------------------*/
+/** Predefined UTC */
+/**------------------------------------------------------------------------*/
 
 /** Invalid time 1970-01-01 00:00:00 +0000 (UTC) */
 constexpr utc_t UTC_NULL = std::numeric_limits<utc_t>::min();
 
+/** utc for undo corrupted:  {2020/1/1 00:00:01} */
+constexpr utc_t UTC_UNDO_CORRUPTED = 1577808000 * 1000000ULL + 1;
+
+/** Initialized utc in txn header */
+constexpr utc_t UTC_UNDO_LOST = 1577808000 * 1000000ULL + 2;
+
 /** Temporary table utc {2020/1/1 00:00:00} */
-constexpr utc_t UTC_TEMP_TAB_REC = 1577808000 * 1000000ULL;
-
-/** utc for undo lost:  {2020/1/1 00:00:01} */
-constexpr utc_t UTC_UNDO_LOST = 1577808000 * 1000000ULL + 1;
-
-/** Initialized prev utc in txn header */
-constexpr utc_t PREV_UTC_UNDO_LOST = 1577808000 * 1000000ULL + 2;
+constexpr utc_t UTC_TEMP_TAB_REC = 1577808000 * 1000000ULL + 3;
 
 /** The max local time is less than 2038 year */
 constexpr utc_t UTC_MAX = std::numeric_limits<std::int32_t>::max() * 1000000ULL;
@@ -106,6 +112,34 @@ constexpr utc_t UTC_DYNAMIC_METADATA = UTC_MAX;
 
 /** The utc for innodb log ddl */
 constexpr utc_t UTC_LOG_DDL = UTC_MAX;
+
+/**------------------------------------------------------------------------*/
+/** Predefined GCN */
+/**------------------------------------------------------------------------*/
+
+/** Invalid gcn number was defined as the max value of ulint */
+constexpr gcn_t GCN_NULL = std::numeric_limits<gcn_t>::max();
+
+/** The max of gcn number, crash direct if more than GCN_MAX */
+constexpr gcn_t GCN_MAX = std::numeric_limits<gcn_t>::max() - 1;
+
+/** Initialized prev gcn in txn header */
+constexpr gcn_t GCN_UNDO_CORRUPTED = 1;
+
+/** GCN special for undo lost */
+constexpr gcn_t GCN_UNDO_LOST = 2;
+
+/** GCN special for temporary table record */
+constexpr gcn_t GCN_TEMP_TAB_REC = 3;
+
+/** The initial global commit number value after initialize db */
+constexpr gcn_t GCN_INITIAL = 1024;
+
+/** The gcn for innodb dynamic metadata */
+constexpr gcn_t GCN_DYNAMIC_METADATA = GCN_MAX;
+
+/** The gcn for innodb log ddl */
+constexpr gcn_t GCN_LOG_DDL = GCN_MAX;
 
 /* The structure of scn number generation */
 class SCN {
@@ -121,8 +155,9 @@ class SCN {
   scn_t new_scn();
 
   /** Calculate a new scn number and consistent UTC time
-  @return   <SCN, UTC> */
-  commit_scn_t new_commit_scn();
+      or external GCN
+  @return   <SCN, UTC, GCN, Error> */
+  std::pair<commit_scn_t, bool> new_commit_scn(gcn_t gcn);
 
   /** Get m_scn
   @return     m_scn */
@@ -154,6 +189,9 @@ class SCN {
   /** Flush the scn number to system tablepace every LIZARD_SCN_NUMBER_MAGIN */
   void flush_scn();
 
+  /** Flush the global commit number to system tablepace */
+  void flush_gcn();
+
   /** Disable the copy and assign function */
   SCN(const SCN &) = delete;
   SCN(const SCN &&) = delete;
@@ -161,6 +199,7 @@ class SCN {
 
  private:
   std::atomic<scn_t> m_scn;
+  std::atomic<gcn_t> m_gcn;
   bool m_inited;
   ib_mutex_t m_mutex;
 };
@@ -176,25 +215,46 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
 
 }  // namespace lizard
 
+/** Commit scn initial value */
+#define COMMIT_SCN_NULL \
+  { lizard::SCN_NULL, lizard::UTC_NULL, lizard::GCN_NULL }
+
+#define COMMIT_SCN_LOST \
+  { lizard::SCN_UNDO_LOST, lizard::UTC_UNDO_LOST, lizard::GCN_UNDO_LOST }
+
+inline bool commit_scn_is_lost(commit_scn_t &cmmt) {
+  if (cmmt.scn == lizard::SCN_UNDO_LOST && cmmt.utc == lizard::UTC_UNDO_LOST &&
+      cmmt.gcn == lizard::GCN_UNDO_LOST) {
+    return true;
+  }
+  return false;
+}
+
+inline bool commit_scn_is_uninitial(commit_scn_t &cmmt) {
+  if (cmmt.scn == 0 && cmmt.utc == 0 && cmmt.gcn == 0) {
+    return true;
+  }
+  return false;
+}
+
 #define lizard_sys_scn_mutex_enter()      \
   do {                                    \
     ut_ad(lizard::lizard_sys != nullptr); \
     lizard::lizard_sys->scn.lock();       \
-  } while(0)
+  } while (0)
 
 #define lizard_sys_scn_mutex_exit()       \
   do {                                    \
     ut_ad(lizard::lizard_sys != nullptr); \
     lizard::lizard_sys->scn.unlock();     \
-  } while(0)
+  } while (0)
 
+/*--------------------------------------------------------------------*/
+/* DEBUG */
+/*--------------------------------------------------------------------*/
 #ifdef UNIV_DEBUG
 #define lizard_sys_scn_mutex_own() lizard::lizard_sys->scn.own_lock()
 #endif
-
-/** Commit scn initial value */
-#define COMMIT_SCN_NULL \
-  { lizard::SCN_NULL, lizard::UTC_NULL }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
@@ -215,9 +275,9 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
   } while (0)
 
 /* Debug validation of commit scn from trx->scn */
-#define assert_trx_scn_state(trx, state)                        \
-  do {                                                          \
-    ut_a(lizard::commit_scn_state(trx->txn_desc.scn) == state); \
+#define assert_trx_scn_state(trx, state)                         \
+  do {                                                           \
+    ut_a(lizard::commit_scn_state(trx->txn_desc.cmmt) == state); \
   } while (0)
 
 #define assert_trx_scn_initial(trx)               \
@@ -239,9 +299,9 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
   } while (0)
 
 /* Debug validation of commit scn from undo->scn */
-#define assert_undo_scn_state(undo, state)              \
-  do {                                                  \
-    ut_a(lizard::commit_scn_state(undo->scn) == state); \
+#define assert_undo_scn_state(undo, state)               \
+  do {                                                   \
+    ut_a(lizard::commit_scn_state(undo->cmmt) == state); \
   } while (0)
 
 #define assert_undo_scn_initial(undo)               \

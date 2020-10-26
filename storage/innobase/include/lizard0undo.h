@@ -58,6 +58,7 @@ struct SYS_VAR;
   8 bytes     SCN number
   8 bytes     UTC time
   8 bytes     UBA address
+  8 bytes     GCN
 
   Those three options will be included into all INSERT/UPDATE/TXN undo
   log header.
@@ -89,14 +90,16 @@ struct SYS_VAR;
 #define TXN_UNDO_PREV_SCN (TXN_UNDO_LOG_EXT_MAGIC + 4)
 /* Previous utc of the trx who used the same TXN */
 #define TXN_UNDO_PREV_UTC (TXN_UNDO_PREV_SCN + 8)
+/* Previous gcn of the trx who used the same TXN */
+#define TXN_UNDO_PREV_GCN (TXN_UNDO_PREV_UTC + 8)
 /* Undo log state */
-#define TXN_UNDO_LOG_STATE (TXN_UNDO_PREV_UTC + 8)
+#define TXN_UNDO_LOG_STATE (TXN_UNDO_PREV_GCN + 8)
 /* Flag how to use reserved space */
 #define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_STATE + 2)
 /* Unused space */
 #define TXN_UNDO_LOG_EXT_RESERVED (TXN_UNDO_LOG_EXT_FLAG + 1)
 /* Unused space size */
-#define TXN_UNDO_LOG_EXT_RESERVED_LEN 42
+#define TXN_UNDO_LOG_EXT_RESERVED_LEN 34
 /* txn undo log header size */
 #define TXN_UNDO_LOG_EXT_HDR_SIZE \
   (TXN_UNDO_LOG_EXT_RESERVED + TXN_UNDO_LOG_EXT_RESERVED_LEN)
@@ -138,8 +141,9 @@ constexpr undo_ptr_t UNDO_PTR_TEMP_TAB_REC =
     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_TEMP_TAB_REC;
 
 /** Temporary table txn description */
-constexpr txn_desc_t TXN_DESC_TEMP = {UNDO_PTR_TEMP_TAB_REC,
-                                      {SCN_TEMP_TAB_REC, UTC_TEMP_TAB_REC}};
+constexpr txn_desc_t TXN_DESC_TEMP = {
+    UNDO_PTR_TEMP_TAB_REC,
+    {SCN_TEMP_TAB_REC, UTC_TEMP_TAB_REC, GCN_TEMP_TAB_REC}};
 
 /** Dynamic metadata table record UBA offset */
 constexpr ulint UNDO_PTR_OFFSET_DYNAMIC_METADATA = (ulint)0xFFFF - 1;
@@ -151,7 +155,8 @@ constexpr undo_ptr_t UNDO_PTR_DYNAMIC_METADATA =
 
 /** Dynamic metadata table txn description */
 constexpr txn_desc_t TXN_DESC_DM = {
-    UNDO_PTR_DYNAMIC_METADATA, {SCN_DYNAMIC_METADATA, UTC_DYNAMIC_METADATA}};
+    UNDO_PTR_DYNAMIC_METADATA,
+    {SCN_DYNAMIC_METADATA, UTC_DYNAMIC_METADATA, GCN_DYNAMIC_METADATA}};
 
 /** Log_ddl table record UBA offset */
 constexpr ulint UNDO_PTR_OFFSET_LOG_DDL = (ulint)0xFFFF - 2;
@@ -162,7 +167,7 @@ constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
 
 /** Log ddl table txn description */
 constexpr txn_desc_t TXN_DESC_LD = {UNDO_PTR_LOG_DDL,
-                                    {SCN_LOG_DDL, UTC_LOG_DDL}};
+                                    {SCN_LOG_DDL, UTC_LOG_DDL, GCN_LOG_DDL}};
 
 /** Index UBA offset */
 constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
@@ -224,8 +229,7 @@ extern void trx_undo_hdr_init_scn(trx_ulogf_t *log_hdr, mtr_t *mtr);
   @param[in]      commit_scn    commit scn number
   @param[in]      mtr           current mtr context
 */
-extern void trx_undo_hdr_write_scn(trx_ulogf_t *log_hdr,
-                                   std::pair<scn_t, utc_t> &cmmt_scn,
+extern void trx_undo_hdr_write_scn(trx_ulogf_t *log_hdr, commit_scn_t &cmmt_scn,
                                    mtr_t *mtr);
 /**
   Read UBA.
@@ -256,8 +260,8 @@ extern void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-extern std::pair<scn_t, utc_t> trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr,
-                                                     mtr_t *mtr);
+extern commit_scn_t trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr,
+                                          mtr_t *mtr);
 
 /**
   Check if the undo log header is reused.
@@ -293,8 +297,7 @@ extern void trx_undo_hdr_add_space_for_txn(page_t *undo_page,
 */
 void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
                                trx_ulogf_t *log_hdr,
-                               const commit_scn_t *prev_image,
-                               mtr_t *mtr);
+                               const commit_scn_t &prev_image, mtr_t *mtr);
 
 /**
   Read the txn undo log header extension information.
@@ -307,6 +310,13 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
 void trx_undo_hdr_read_txn(const page_t *undo_page,
                            const trx_ulogf_t *undo_header, mtr_t *mtr,
                            txn_undo_hdr_t *txn_undo_hdr);
+/**
+  Read the scn, utc, gcn from prev image.
+
+  @param[in]      log_hdr       undo log header
+  @param[in]      mtr           current mtr context
+*/
+commit_scn_t txn_undo_hdr_read_prev_scn(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 
 /**
   Write the scn into the buffer
@@ -494,7 +504,7 @@ inline void txn_lookup_t_set(txn_lookup_t *txn_lookup,
       real_state == TXN_STATE_PURGED) {
     if (real_state != TXN_STATE_ACTIVE) {
       /** TXN reuse, current scn should be larger than prev scn */
-      ut_a(txn_undo_hdr.image.first > txn_undo_hdr.prev_image.first);
+      ut_a(txn_undo_hdr.image.scn > txn_undo_hdr.prev_image.scn);
     }
     ut_a(real_image == txn_undo_hdr.image);
   } else if (real_state == TXN_STATE_REUSE) {
@@ -577,9 +587,11 @@ inline void txn_undo_set_state(trx_ulogf_t *log_hdr, ulint state, mtr_t *mtr) {
 @param[in]  rseg txn rseg
 @param[in]  page_size
 @return     The corresponding commit_scn if it's TXN undo,
-            or {PURGED_SCN_INVALID, UTC_NULL} if it's not TXN undo */
-inline commit_scn_t txn_undo_set_state_at_purge(const trx_rseg_t *rseg,
-                                                const page_size_t &page_size) {
+            or err if it's not TXN undo */
+inline std::pair<commit_scn_t, bool> txn_undo_set_state_at_purge(
+    const trx_rseg_t *rseg, const page_size_t &page_size) {
+  commit_scn_t cmmt = COMMIT_SCN_NULL;
+
   if (fsp_is_txn_tablespace_by_id(rseg->space_id)) {
     mtr_t mtr;
     mtr_start(&mtr);
@@ -590,13 +602,13 @@ inline commit_scn_t txn_undo_set_state_at_purge(const trx_rseg_t *rseg,
 
     txn_undo_set_state(undo_header, TXN_UNDO_LOG_PURGED, &mtr);
 
-    commit_scn_t txn_scn = trx_undo_hdr_read_scn(undo_header, &mtr);
+    cmmt = trx_undo_hdr_read_scn(undo_header, &mtr);
 
     mtr_commit(&mtr);
 
-    return txn_scn;
+    return std::make_pair(cmmt, false);
   }
-  return {PURGED_SCN_INVALID, UTC_NULL};
+  return std::make_pair(cmmt, true);
 }
 
 /** Set txn undo log state when commiting.
@@ -731,14 +743,14 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
 #define assert_txn_desc_initial(trx)                                           \
   do {                                                                         \
     ut_a((trx)->txn_desc.undo_ptr == lizard::UNDO_PTR_NULL &&                  \
-         lizard::commit_scn_state((trx)->txn_desc.scn) == SCN_STATE_INITIAL);  \
+         lizard::commit_scn_state((trx)->txn_desc.cmmt) == SCN_STATE_INITIAL); \
   } while (0)
 
 /* Assert the txn_desc is allocated */
 #define assert_txn_desc_allocated(trx)                                         \
   do {                                                                         \
     ut_a((trx)->txn_desc.undo_ptr != lizard::UNDO_PTR_NULL &&                  \
-         lizard::commit_scn_state((trx)->txn_desc.scn) == SCN_STATE_INITIAL);  \
+         lizard::commit_scn_state((trx)->txn_desc.cmmt) == SCN_STATE_INITIAL); \
   } while (0)
 
 #define assert_undo_ptr_initial(undo_ptr)                                      \

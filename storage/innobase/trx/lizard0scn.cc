@@ -45,7 +45,7 @@ mysql_pfs_key_t lizard_scn_mutex_key;
 namespace lizard {
 
 /** Constructor of SCN */
-SCN::SCN() : m_scn(SCN_NULL), m_inited(false) {
+SCN::SCN() : m_scn(SCN_NULL), m_gcn(GCN_NULL), m_inited(false) {
   mutex_create(LATCH_ID_LIZARD_SCN, &m_mutex);
 }
 
@@ -66,6 +66,9 @@ void SCN::init() {
   m_scn = 2 * LIZARD_SCN_NUMBER_MAGIN +
           ut_uint64_align_up(mach_read_from_8(lzd_hdr + LIZARD_SYS_SCN),
                              LIZARD_SCN_NUMBER_MAGIN);
+
+  m_gcn = mach_read_from_8(lzd_hdr + LIZARD_SYS_GCN);
+  ut_a(m_gcn == GCN_INITIAL);
 
   lizard_sys->min_safe_scn = m_scn.load();
 
@@ -91,6 +94,21 @@ void SCN::flush_scn() {
   mtr_commit(&mtr);
 }
 
+/** Flush the global commit number to system tablepace */
+void SCN::flush_gcn() {
+  lizard_sysf_t *lzd_hdr;
+  mtr_t mtr;
+
+  ut_ad(m_mutex.is_owned());
+  ut_ad(m_inited);
+  ut_ad(m_gcn != SCN_NULL);
+
+  mtr_start(&mtr);
+  lzd_hdr = lizard_sysf_get(&mtr);
+  mlog_write_ull(lzd_hdr + LIZARD_SYS_GCN, m_gcn, &mtr);
+  mtr_commit(&mtr);
+}
+
 /** Calucalte a new scn number
 @return     scn */
 scn_t SCN::new_scn() {
@@ -110,13 +128,26 @@ scn_t SCN::new_scn() {
 }
 
 /** Calculate a new scn number and consistent UTC time
-@return   <SCN, UTC> */
-commit_scn_t SCN::new_commit_scn() {
-  scn_t scn = new_scn();
+@return   <SCN, UTC, GCN, Error> */
+std::pair<commit_scn_t, bool> SCN::new_commit_scn(gcn_t gcn) {
+  commit_scn_t cmmt = COMMIT_SCN_NULL;
 
-  ut_ad(scn > SCN_RESERVERD_MAX);
+  if (gcn != GCN_NULL) {
+    /** external gcn must be larger than local */
+    if (gcn < m_gcn)
+      return std::make_pair(cmmt, true);
+    else {
+      m_gcn = gcn;
+      flush_gcn();
+    }
+  }
 
-  return std::make_pair(scn, UTC_NULL);
+  cmmt.gcn = m_gcn;
+  cmmt.scn = new_scn();
+
+  ut_ad(cmmt.scn > SCN_RESERVERD_MAX);
+
+  return std::make_pair(cmmt, false);
 }
 
 /** Get current scn which is committed.
@@ -145,15 +176,18 @@ scn_t SCN::get_scn() { return m_scn.load(); }
   @return       scn state SCN_STATE_INITIAL, SCN_STATE_ALLOCATED or
                           SCN_STATE_INVALID
 */
-enum scn_state_t commit_scn_state(const commit_scn_t &scn) {
+enum scn_state_t commit_scn_state(const commit_scn_t &cmmt) {
   /** The init value */
-  if (scn.first == SCN_NULL && scn.second == UTC_NULL) return SCN_STATE_INITIAL;
+  if (cmmt.scn == SCN_NULL && cmmt.utc == UTC_NULL && cmmt.gcn == GCN_NULL)
+    return SCN_STATE_INITIAL;
 
-  /** The assigned comit scn value */
-  if (scn.first > 0 && scn.first < SCN_MAX && scn.second > 0 &&
-      scn.second < UTC_MAX)
+  /** The assigned commit scn value */
+  if (cmmt.scn > 0 && cmmt.scn < SCN_MAX && cmmt.utc > 0 &&
+      cmmt.utc < UTC_MAX && cmmt.gcn > 0 && cmmt.gcn < GCN_MAX) {
+    /** TODO: Replace by real GCN in future */
+    ut_ad(cmmt.gcn <= GCN_INITIAL);
     return SCN_STATE_ALLOCATED;
-
+  }
   return SCN_STATE_INVALID;
 }
 

@@ -372,7 +372,7 @@ void DDL_Log_Table::create_tuple(const DDL_Record &record) {
   /** SCN_LOG_DDL and UNDO_PTR_LOG_DDL are only for a short time, and
   the right SCN and UBA are set straight away */
   scn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_SCN_ID_LEN));
-  lizard::trx_write_scn(scn_buf, lizard::TXN_DESC_LD.scn.first);
+  lizard::trx_write_scn(scn_buf, lizard::TXN_DESC_LD.cmmt.scn);
   col = m_table->get_sys_col(DATA_SCN_ID);
   dfield = dtuple_get_nth_field(m_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, scn_buf, DATA_SCN_ID_LEN);

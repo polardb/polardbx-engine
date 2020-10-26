@@ -99,8 +99,8 @@ void lizard_sys_erase_lists(trx_t *trx) {
   if **101** erased, and then **100** erased, serialisation_list_scn []
   we also set min_safe_scn as 100 for safety */
   if (oldest_trx == trx) {
-    lizard_ut_ad(lizard_sys->min_safe_scn.load() < trx->txn_desc.scn.first);
-    lizard_sys->min_safe_scn.store(oldest_trx->txn_desc.scn.first);
+    lizard_ut_ad(lizard_sys->min_safe_scn.load() < trx->txn_desc.cmmt.scn);
+    lizard_sys->min_safe_scn.store(oldest_trx->txn_desc.cmmt.scn);
   }
 
   lizard_sys_scn_mutex_exit();
@@ -167,6 +167,9 @@ static void lizard_create_sysf(mtr_t *mtr) {
 
   /* The scan number is counting from SCN_RESERVERD_MAX */
   mach_write_to_8(lzd_hdr + LIZARD_SYS_SCN, SCN_RESERVERD_MAX);
+
+  /** The global commit number initial value */
+  mach_write_to_8(lzd_hdr + LIZARD_SYS_GCN, GCN_INITIAL);
 
   ptr = lzd_hdr + LIZARD_SYS_NOT_USED;
 
@@ -261,7 +264,7 @@ void min_safe_scn_valid() {
     trx = UT_LIST_GET_FIRST(lizard_sys->serialisation_list_scn);
     ut_a(trx);
 
-    ut_a(lizard_sys->min_safe_scn < trx->txn_desc.scn.first);
+    ut_a(lizard_sys->min_safe_scn < trx->txn_desc.cmmt.scn);
 
     ut_a(lizard_sys->min_safe_scn < sys_scn);
 
@@ -269,7 +272,7 @@ void min_safe_scn_valid() {
     prev_trx = trx;
     for (trx = UT_LIST_GET_NEXT(scn_list, trx); trx != nullptr;
          trx = UT_LIST_GET_NEXT(scn_list, trx)) {
-      ut_a(prev_trx->txn_desc.scn.first < trx->txn_desc.scn.first);
+      ut_a(prev_trx->txn_desc.cmmt.scn < trx->txn_desc.cmmt.scn);
       prev_trx = trx;
     }
   }
