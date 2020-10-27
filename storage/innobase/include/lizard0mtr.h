@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0mtr_h
 
 struct mtr_t;
+struct trx_t;
 
 namespace lizard {
 
@@ -49,6 +50,24 @@ class Mtr_wrapper {
  private:
   mtr_t *m_mtr;
   bool m_started;
+};
+
+class Trx_rseg_mutex_wrapper {
+ public:
+  Trx_rseg_mutex_wrapper(trx_t *trx);
+  ~Trx_rseg_mutex_wrapper();
+
+  void release_mutex();
+
+  bool txn_rseg_updated() const { return m_txn_rseg_locked; }
+  bool redo_rseg_updated() const { return m_redo_rseg_locked; }
+  bool temp_rseg_updated() const { return m_temp_rseg_locked; }
+
+ private:
+  trx_t *m_trx;
+  bool m_txn_rseg_locked;
+  bool m_redo_rseg_locked;
+  bool m_temp_rseg_locked;
 };
 
 }  // namespace lizard

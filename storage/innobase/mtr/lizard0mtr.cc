@@ -31,7 +31,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "mtr0mtr.h"
+#include "trx0trx.h"
 
+#include "lizard0undo.h"
 #include "lizard0mtr.h"
 
 namespace lizard {
@@ -58,6 +60,52 @@ lsn_t Mtr_wrapper::commit() {
     return lsn;
   } else {
     return lsn;
+  }
+}
+
+Trx_rseg_mutex_wrapper::Trx_rseg_mutex_wrapper(trx_t *trx)
+    : m_trx(trx),
+      m_txn_rseg_locked(false),
+      m_redo_rseg_locked(false),
+      m_temp_rseg_locked(false) {
+  ut_ad(m_trx);
+
+  if (trx->rsegs.m_txn.rseg != NULL && lizard::trx_is_txn_rseg_updated(trx)) {
+    mutex_enter(&trx->rsegs.m_txn.rseg->mutex);
+    m_txn_rseg_locked = true;
+  }
+
+  if (trx->rsegs.m_redo.rseg != NULL && trx_is_redo_rseg_updated(trx)) {
+    mutex_enter(&trx->rsegs.m_redo.rseg->mutex);
+    m_redo_rseg_locked = true;
+  }
+
+  if (trx->rsegs.m_noredo.rseg != NULL && trx_is_temp_rseg_updated(trx)) {
+    mutex_enter(&trx->rsegs.m_noredo.rseg->mutex);
+    m_temp_rseg_locked = true;
+  }
+}
+
+Trx_rseg_mutex_wrapper::~Trx_rseg_mutex_wrapper() {
+  ut_ad(!m_txn_rseg_locked);
+  ut_ad(!m_redo_rseg_locked);
+  ut_ad(!m_temp_rseg_locked);
+}
+
+void Trx_rseg_mutex_wrapper::release_mutex() {
+  if (m_txn_rseg_locked) {
+    mutex_exit(&m_trx->rsegs.m_txn.rseg->mutex);
+    m_txn_rseg_locked = false;
+  }
+
+  if (m_redo_rseg_locked) {
+    mutex_exit(&m_trx->rsegs.m_redo.rseg->mutex);
+    m_redo_rseg_locked = false;
+  }
+
+  if (m_temp_rseg_locked) {
+    mutex_exit(&m_trx->rsegs.m_noredo.rseg->mutex);
+    m_temp_rseg_locked = false;
   }
 }
 

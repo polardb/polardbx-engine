@@ -3086,7 +3086,7 @@ static lsn_t trx_prepare_low(
   ut_ad(mtr);
 
   if (undo_ptr->insert_undo != nullptr || undo_ptr->update_undo != nullptr) {
-    trx_rseg_t *rseg = undo_ptr->rseg;
+    //trx_rseg_t *rseg = undo_ptr->rseg;
 
     if (noredo_logging) {
       mtr_set_log_mode(mtr, MTR_LOG_NO_REDO);
@@ -3097,7 +3097,7 @@ static lsn_t trx_prepare_low(
     structure define the transaction as prepared in the file-based
     world, at the serialization point of lsn. */
 
-    rseg->latch();
+    // rseg->latch();
 
     if (undo_ptr->insert_undo != nullptr) {
       /* It is not necessary to obtain trx->undo_mutex here
@@ -3113,7 +3113,7 @@ static lsn_t trx_prepare_low(
       trx_undo_set_state_at_prepare(trx, undo_ptr->update_undo, false, mtr);
     }
 
-    rseg->unlatch();
+    // rseg->unlatch();
 
     /*--------------*/
     /* This mtr commit makes the transaction prepared in
@@ -3156,27 +3156,32 @@ static void trx_prepare(trx_t *trx) {
 
   DBUG_EXECUTE_IF("ib_trx_crash_during_xa_prepare_step", DBUG_SUICIDE(););
 
+  /* Acquire rseg mutex in order in advance */
+  lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+
   mtr_t mtr;
   lizard::Mtr_wrapper mtr_wrapper(&mtr);
-  if (trx->rsegs.m_txn.rseg != nullptr &&
-      lizard::trx_is_txn_rseg_updated(trx)) {
+
+  if (rseg_mutex_wrapper.txn_rseg_updated()) {
     mtr_wrapper.start();
     lsn = lizard::txn_prepare_low(trx, &trx->rsegs.m_txn, &mtr);
   }
 
-  if (trx->rsegs.m_redo.rseg != nullptr && trx_is_redo_rseg_updated(trx)) {
+  if (rseg_mutex_wrapper.redo_rseg_updated()) {
     mtr_wrapper.start();
     lsn = trx_prepare_low(trx, &trx->rsegs.m_redo, false, &mtr);
   }
 
   lsn = mtr_wrapper.commit();
 
-  if (trx->rsegs.m_noredo.rseg != nullptr && trx_is_temp_rseg_updated(trx)) {
+  if (rseg_mutex_wrapper.temp_rseg_updated()) {
     mtr_t temp_mtr;
     mtr_start_sync(&temp_mtr);
     trx_prepare_low(trx, &trx->rsegs.m_noredo, true, &temp_mtr);
     mtr_commit(&temp_mtr);
   }
+
+  rseg_mutex_wrapper.release_mutex();
 
   ut_a(trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE);
 
@@ -3211,21 +3216,29 @@ the given rollback segment.
 @param[in]     undo_ptr The rollback segment.
 @return lsn assigned for commit of scheduled rollback segment */
 static lsn_t trx_set_prepared_in_tc_low(trx_t *trx, trx_undo_ptr_t *undo_ptr) {
+  lsn_t lsn;
   mtr_t mtr;
+
+  /* Acquire rseg mutex in order in advance */
+  lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+
   lizard::Mtr_wrapper mtr_wrapper(&mtr);
 
   /* Lizard: Set prepared in tc status for TXN. */
   if (trx->rsegs.m_txn.txn_undo != nullptr) {
+    ut_ad(rseg_mutex_wrapper.txn_rseg_updated());
     mtr_wrapper.start();
-    trx_rseg_t *rseg = trx->rsegs.m_txn.rseg;
-    rseg->latch();
+    // trx_rseg_t *rseg = trx->rsegs.m_txn.rseg;
+    // rseg->latch();
     trx_undo_set_prepared_in_tc(trx, trx->rsegs.m_txn.txn_undo, &mtr);
-    rseg->unlatch();
+    // rseg->unlatch();
   }
 
   if (undo_ptr->insert_undo != nullptr || undo_ptr->update_undo != nullptr) {
+    ut_ad(rseg_mutex_wrapper.redo_rseg_updated());
+
     // mtr_t mtr;
-    trx_rseg_t *rseg = undo_ptr->rseg;
+    // trx_rseg_t *rseg = undo_ptr->rseg;
 
     // mtr_start_sync(&mtr);
     mtr_wrapper.start();
@@ -3235,7 +3248,7 @@ static lsn_t trx_set_prepared_in_tc_low(trx_t *trx, trx_undo_ptr_t *undo_ptr) {
     structure define the transaction as prepared in the file-based
     world, at the serialization point of lsn. */
 
-    rseg->latch();
+    // rseg->latch();
 
     if (undo_ptr->insert_undo != nullptr) {
       /* It is not necessary to obtain trx->undo_mutex here
@@ -3249,7 +3262,7 @@ static lsn_t trx_set_prepared_in_tc_low(trx_t *trx, trx_undo_ptr_t *undo_ptr) {
       trx_undo_set_prepared_in_tc(trx, undo_ptr->update_undo, &mtr);
     }
 
-    rseg->unlatch();
+    // rseg->unlatch();
 
     /*--------------*/
     /* This mtr commit makes the transaction prepared in
@@ -3262,7 +3275,9 @@ static lsn_t trx_set_prepared_in_tc_low(trx_t *trx, trx_undo_ptr_t *undo_ptr) {
     // return lsn;
   }
 
-  return mtr_wrapper.commit();
+  lsn = mtr_wrapper.commit();
+  rseg_mutex_wrapper.release_mutex();
+  return lsn;
 }
 
 /** Marks a transaction as prepared in the transaction coordinator.
