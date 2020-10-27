@@ -2760,7 +2760,7 @@ static lsn_t trx_prepare_low(
   ut_ad(mtr);
 
   if (undo_ptr->insert_undo != NULL || undo_ptr->update_undo != NULL) {
-    trx_rseg_t *rseg = undo_ptr->rseg;
+    //trx_rseg_t *rseg = undo_ptr->rseg;
 
     if (noredo_logging) {
       mtr_set_log_mode(mtr, MTR_LOG_NO_REDO);
@@ -2771,7 +2771,7 @@ static lsn_t trx_prepare_low(
     structure define the transaction as prepared in the file-based
     world, at the serialization point of lsn. */
 
-    mutex_enter(&rseg->mutex);
+    //mutex_enter(&rseg->mutex);
 
     if (undo_ptr->insert_undo != NULL) {
       /* It is not necessary to obtain trx->undo_mutex here
@@ -2787,7 +2787,7 @@ static lsn_t trx_prepare_low(
       trx_undo_set_state_at_prepare(trx, undo_ptr->update_undo, false, mtr);
     }
 
-    mutex_exit(&rseg->mutex);
+    //mutex_exit(&rseg->mutex);
 
     /*--------------*/
     /* This mtr commit makes the transaction prepared in
@@ -2828,26 +2828,32 @@ static void trx_prepare(trx_t *trx) /*!< in/out: transaction */
 
   DBUG_EXECUTE_IF("ib_trx_crash_during_xa_prepare_step", DBUG_SUICIDE(););
 
+  /* Acquire rseg mutex in order in advance */
+  lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+
   mtr_t mtr;
   lizard::Mtr_wrapper mtr_wrapper(&mtr);
-  if (trx->rsegs.m_txn.rseg != NULL && lizard::trx_is_txn_rseg_updated(trx)) {
+
+  if (rseg_mutex_wrapper.txn_rseg_updated()) {
     mtr_wrapper.start();
     lsn = lizard::txn_prepare_low(trx, &trx->rsegs.m_txn, &mtr);
   }
 
-  if (trx->rsegs.m_redo.rseg != NULL && trx_is_redo_rseg_updated(trx)) {
+  if (rseg_mutex_wrapper.redo_rseg_updated()) {
     mtr_wrapper.start();
     lsn = trx_prepare_low(trx, &trx->rsegs.m_redo, false, &mtr);
   }
 
   lsn = mtr_wrapper.commit();
 
-  if (trx->rsegs.m_noredo.rseg != NULL && trx_is_temp_rseg_updated(trx)) {
+  if (rseg_mutex_wrapper.temp_rseg_updated()) {
     mtr_t temp_mtr;
     mtr_start_sync(&temp_mtr);
     trx_prepare_low(trx, &trx->rsegs.m_noredo, true, &temp_mtr);
     mtr_commit(&temp_mtr);
   }
+
+  rseg_mutex_wrapper.release_mutex();
 
   /* Check and get GTID to be persisted. Do it outside trx_sys mutex. */
   auto &gtid_persistor = clone_sys->get_gtid_persistor();

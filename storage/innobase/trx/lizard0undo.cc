@@ -1321,14 +1321,14 @@ lsn_t txn_prepare_low(
     mtr_t *mtr) {
   ut_ad(mtr);
 
-  trx_rseg_t *rseg = undo_ptr->rseg;
+  //trx_rseg_t *rseg = undo_ptr->rseg;
 
   /* Change the undo log segment states from TRX_UNDO_ACTIVE to
   TRX_UNDO_PREPARED: these modifications to the file data
   structure define the transaction as prepared in the file-based
   world, at the serialization point of lsn. */
 
-  mutex_enter(&rseg->mutex);
+  //mutex_enter(&rseg->mutex);
 
   ut_ad(undo_ptr->txn_undo);
     /* It is not necessary to obtain trx->undo_mutex here
@@ -1336,7 +1336,7 @@ lsn_t txn_prepare_low(
     transaction prepare for this transaction. */
   trx_undo_set_state_at_prepare(trx, undo_ptr->txn_undo, false, mtr);
 
-  mutex_exit(&rseg->mutex);
+  //mutex_exit(&rseg->mutex);
 
   /*--------------*/
   /* This mtr commit makes the transaction prepared in
