@@ -103,7 +103,7 @@ struct SYS_VAR;
 #define TXN_UNDO_LOG_EXT_HDR_SIZE \
   (TXN_UNDO_LOG_EXT_RESERVED + TXN_UNDO_LOG_EXT_RESERVED_LEN)
 /*-------------------------------------------------------------*/
-static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == TRX_UNDO_LOG_HDR_SIZE,
+static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == TRX_UNDO_LOG_GTID_HDR_SIZE,
               "txn and trx undo log header size must be equal!");
 
 /** Pls reuse the reserved space */
@@ -714,11 +714,13 @@ void undo_retention_init();
 /*=============================================================================*/
 extern trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg,
                                          ulint type, trx_id_t trx_id,
-                                         const XID *xid, bool is_gtid,
+                                         const XID *xid,
+                                         trx_undo_t::Gtid_storage gtid_storage,
                                          mtr_t *mtr);
 
 extern dberr_t trx_undo_create(trx_t *trx, trx_rseg_t *rseg, ulint type,
-                               trx_id_t trx_id, const XID *xid, bool is_gtid,
+                               trx_id_t trx_id, const XID *xid,
+                               trx_undo_t::Gtid_storage gtid_storage,
                                trx_undo_t **undo, mtr_t *mtr);
 
 void trx_resurrect_update_in_prepared_state(trx_t *trx, const trx_undo_t *undo);
@@ -757,9 +759,10 @@ void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr, trx_ulogf_t *log_hdr,
 @param[in,out]	undo_page	undo log segment header page
 @param[in,out]	log_hdr		undo log header
 @param[in,out]	mtr		mini transaction
-@param[in]	add_gtid	add space for GTID */
+@param[in]      gtid_storage    GTID storage type */
 void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
-                                       mtr_t *mtr, bool add_gtid);
+                                       mtr_t *mtr,
+                                       trx_undo_t::Gtid_storage gtid_storage);
 
 /*=============================================================================*/
 
