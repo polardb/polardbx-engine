@@ -48,6 +48,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0sys.h"
 #include "lizard0mon.h"
+#include "lizard0cleanout.h"
 
 /** Creates a rollback segment header.
 This function is called only when a new rollback segment is created in
@@ -290,6 +291,9 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
     lizard_ut_ad(lizard::fsp_is_txn_tablespace_by_id(space_id));
     lizard::lizard_sys->txn_undo_log_free_list_len += free_list_len;
   }
+
+  /** Lizard: Init txn undo log hash table */
+  lizard::trx_rseg_init_undo_hdr_hash(rseg->space_id, rseg_header, rseg, mtr);
 
   auto len = flst_get_len(rseg_header + TRX_RSEG_HISTORY);
 

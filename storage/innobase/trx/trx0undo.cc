@@ -60,6 +60,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn.h"
 #include "lizard0mon.h"
 #include "lizard0sys.h"
+#include "lizard0cleanout.h"
 
 /* How should the old versions in the history list be managed?
    ----------------------------------------------------------
@@ -1558,6 +1559,8 @@ dberr_t trx_undo_create(trx_t *trx, trx_rseg_t *rseg, ulint type,
     lizard::trx_undo_hdr_init_for_txn(*undo, undo_page, undo_page + offset,
                                       mtr);
     ut_ad((*undo)->flag == TRX_UNDO_FLAG_TXN);
+
+    lizard::txn_undo_hash_insert(*undo);
 
     lizard::lizard_stats.txn_undo_log_create.inc();
   }

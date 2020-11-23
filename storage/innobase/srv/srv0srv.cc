@@ -107,6 +107,8 @@ bool srv_downgrade_logs = false;
 bool srv_upgrade_old_undo_found = false;
 #endif /* INNODB_DD_TABLE */
 
+#include "lizard0cleanout.h"
+
 /* The following is the maximum allowed duration of a lock wait. */
 ulong srv_fatal_semaphore_wait_threshold = 600;
 
@@ -1217,6 +1219,7 @@ static void srv_general_init() {
   que_init();
   row_mysql_init();
   undo_spaces_init();
+  lizard::txn_undo_hash_init();
 }
 
 /** Boots the InnoDB server. */

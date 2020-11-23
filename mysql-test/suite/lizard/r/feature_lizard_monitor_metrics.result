@@ -7,3 +7,6 @@ Lizard_txn_undo_log_reuse	#
 Lizard_txn_undo_log_free_list_get	#
 Lizard_txn_undo_log_free_list_put	#
 Lizard_txn_undo_log_create	#
+Lizard_txn_undo_log_hash_element	#
+Lizard_txn_undo_log_hash_hit	#
+Lizard_txn_undo_log_hash_miss	#
