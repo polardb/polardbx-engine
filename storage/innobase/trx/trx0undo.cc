@@ -58,6 +58,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0fsp.h"
 #include "lizard0scn.h"
+#include "lizard0mon.h"
+#include "lizard0sys.h"
 
 /* How should the old versions in the history list be managed?
    ----------------------------------------------------------
@@ -1339,6 +1341,8 @@ add_to_list:
       UT_LIST_ADD_LAST(rseg->txn_undo_list, undo);
     } else {
       UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
+      MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
+      LIZARD_MONITOR_INC_TXN_CACHED(1);
     }
   }
 
@@ -1554,6 +1558,8 @@ dberr_t trx_undo_create(trx_t *trx, trx_rseg_t *rseg, ulint type,
     lizard::trx_undo_hdr_init_for_txn(*undo, undo_page, undo_page + offset,
                                       mtr);
     ut_ad((*undo)->flag == TRX_UNDO_FLAG_TXN);
+
+    lizard::lizard_stats.txn_undo_log_create.inc();
   }
 
   if (*undo == NULL) {
@@ -1613,6 +1619,8 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
 
     MONITOR_DEC(MONITOR_NUM_UNDO_SLOT_CACHED);
 
+    LIZARD_MONITOR_DEC_TXN_CACHED(1);
+    lizard::lizard_stats.txn_undo_log_reuse.inc();
   }
 
   ut_ad(undo->size == 1);
@@ -2143,6 +2151,8 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
       next_undo = UT_LIST_GET_NEXT(undo_list, undo);
       UT_LIST_REMOVE(rseg->txn_undo_cached, undo);
       MONITOR_DEC(MONITOR_NUM_UNDO_SLOT_CACHED);
+
+      LIZARD_MONITOR_DEC_TXN_CACHED(1);
       trx_undo_mem_free(undo);
     }
 

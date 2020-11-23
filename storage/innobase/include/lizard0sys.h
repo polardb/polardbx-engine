@@ -74,7 +74,10 @@ struct lizard_sys_t {
   SCN scn;
 
   /** Length of txn undo log segment free list */
-  ulint rseg_free_list_len;
+  ulint txn_undo_log_free_list_len;
+
+  /** Count of txn undo log which is cached */
+  ulint txn_undo_log_cached;
 };
 
 /** Create lizard system structure. */
