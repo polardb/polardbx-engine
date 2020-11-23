@@ -53,7 +53,9 @@ void lizard_sys_create() {
   /** Placement new SCN object  */
   new (&(lizard_sys->scn)) SCN();
 
-  lizard_sys->rseg_free_list_len = 0;
+  /** Attention: it's monitor metrics, didn't promise accuration */
+  lizard_sys->txn_undo_log_free_list_len = 0;
+  lizard_sys->txn_undo_log_cached = 0;
 
   return;
 }

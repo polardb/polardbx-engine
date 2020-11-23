@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
+#include "lizard0mon.h"
 
 /**
   SCN generation strategy:
@@ -534,7 +535,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   mlog_write_ulint(rseg_header + TXN_RSEG_FREE_LIST_SIZE, free_size - seg_size,
                    MLOG_4BYTES, &mtr);
 
-  lizard_sys->rseg_free_list_len.fetch_sub(1);
+  lizard_sys->txn_undo_log_free_list_len.fetch_sub(1);
 
   /** Phase 4 : Reinit the undo log segment header page */
   trx_undo_page_init(undo_page, type, &mtr);
@@ -577,6 +578,8 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   if (*undo == NULL) {
     err = DB_OUT_OF_MEMORY;
     goto func_exit;
+  } else {
+    lizard_stats.txn_undo_log_free_list_get.inc();
   }
 
 func_exit:
@@ -614,6 +617,7 @@ static dberr_t txn_undo_assign_undo(trx_t *trx, txn_undo_ptr_t *undo_ptr,
 
   rseg = undo_ptr->rseg;
 
+  lizard_stats.txn_undo_log_request.inc();
   mtr_start(&mtr);
 
   mutex_enter(&rseg->mutex);
@@ -969,6 +973,7 @@ void trx_txn_undo_cleanup(trx_t *trx, txn_undo_ptr_t *undo_ptr,
     UT_LIST_ADD_FIRST(rseg->txn_undo_cached, undo);
 
     MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
+    LIZARD_MONITOR_INC_TXN_CACHED(1);
   } else {
     ut_ad(undo->state == TRX_UNDO_TO_PURGE);
 
@@ -1214,15 +1219,15 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
   flst_add_last(rseg_hdr + TXN_RSEG_FREE_LIST,
                 undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, &mtr);
 
-  lizard_sys->rseg_free_list_len.fetch_add(1);
+  lizard_sys->txn_undo_log_free_list_len.fetch_add(1);
 
   lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, &mtr);
 
   mutex_exit(&(rseg->mutex));
 
   mtr_commit(&mtr);
+
+  lizard_stats.txn_undo_log_free_list_put.inc();
 }
-
-
 
 }  // namespace lizard

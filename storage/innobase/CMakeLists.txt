@@ -264,6 +264,7 @@ SET(INNOBASE_SOURCES
   trx/lizard0txn.cc
   trx/lizard0undo.cc
   mtr/lizard0mtr.cc
+  srv/lizard0mon.cc
   )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753

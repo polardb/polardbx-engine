@@ -74,7 +74,10 @@ struct lizard_sys_t {
   SCN scn;
 
   /** Length of txn undo log segment free list */
-  std::atomic<uint64_t> rseg_free_list_len;
+  std::atomic<uint64_t> txn_undo_log_free_list_len;
+
+  /** Count of txn undo log which is cached */
+  std::atomic<uint64_t> txn_undo_log_cached;
 };
 
 /** Create lizard system structure. */
