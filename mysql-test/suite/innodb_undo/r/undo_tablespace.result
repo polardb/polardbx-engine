@@ -111,6 +111,16 @@ Innodb_undo_tablespaces_total	9
 Innodb_undo_tablespaces_implicit	6
 Innodb_undo_tablespaces_explicit	3
 Innodb_undo_tablespaces_active	6
+Lizard_txn_undo_log_free_list_length	0
+Lizard_txn_undo_log_cached	512
+Lizard_txn_undo_log_request	1040
+Lizard_txn_undo_log_reuse	988
+Lizard_txn_undo_log_free_list_get	0
+Lizard_txn_undo_log_free_list_put	0
+Lizard_txn_undo_log_create	52
+Lizard_txn_undo_log_hash_element	0
+Lizard_txn_undo_log_hash_hit	0
+Lizard_txn_undo_log_hash_miss	0
 SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 WHERE SPACE_TYPE = 'Undo' ORDER BY NAME;
 NAME	SPACE_TYPE	STATE
@@ -336,6 +346,16 @@ Innodb_undo_tablespaces_total	8
 Innodb_undo_tablespaces_implicit	6
 Innodb_undo_tablespaces_explicit	2
 Innodb_undo_tablespaces_active	8
+Lizard_txn_undo_log_free_list_length	0
+Lizard_txn_undo_log_cached	512
+Lizard_txn_undo_log_request	9
+Lizard_txn_undo_log_reuse	9
+Lizard_txn_undo_log_free_list_get	0
+Lizard_txn_undo_log_free_list_put	0
+Lizard_txn_undo_log_create	0
+Lizard_txn_undo_log_hash_element	0
+Lizard_txn_undo_log_hash_hit	0
+Lizard_txn_undo_log_hash_miss	0
 SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 WHERE SPACE_TYPE = 'Undo' ORDER BY NAME;
 NAME	SPACE_TYPE	STATE
@@ -360,6 +380,16 @@ Innodb_undo_tablespaces_total	8
 Innodb_undo_tablespaces_implicit	6
 Innodb_undo_tablespaces_explicit	2
 Innodb_undo_tablespaces_active	8
+Lizard_txn_undo_log_free_list_length	0
+Lizard_txn_undo_log_cached	512
+Lizard_txn_undo_log_request	7
+Lizard_txn_undo_log_reuse	7
+Lizard_txn_undo_log_free_list_get	0
+Lizard_txn_undo_log_free_list_put	0
+Lizard_txn_undo_log_create	0
+Lizard_txn_undo_log_hash_element	0
+Lizard_txn_undo_log_hash_hit	0
+Lizard_txn_undo_log_hash_miss	0
 SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 WHERE SPACE_TYPE = 'Undo' ORDER BY NAME;
 NAME	SPACE_TYPE	STATE
@@ -384,6 +414,16 @@ Innodb_undo_tablespaces_total	8
 Innodb_undo_tablespaces_implicit	6
 Innodb_undo_tablespaces_explicit	2
 Innodb_undo_tablespaces_active	8
+Lizard_txn_undo_log_free_list_length	0
+Lizard_txn_undo_log_cached	512
+Lizard_txn_undo_log_request	7
+Lizard_txn_undo_log_reuse	7
+Lizard_txn_undo_log_free_list_get	0
+Lizard_txn_undo_log_free_list_put	0
+Lizard_txn_undo_log_create	0
+Lizard_txn_undo_log_hash_element	0
+Lizard_txn_undo_log_hash_hit	0
+Lizard_txn_undo_log_hash_miss	0
 SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 WHERE SPACE_TYPE = 'Undo' ORDER BY NAME;
 NAME	SPACE_TYPE	STATE
@@ -408,6 +448,16 @@ Innodb_undo_tablespaces_total	8
 Innodb_undo_tablespaces_implicit	6
 Innodb_undo_tablespaces_explicit	2
 Innodb_undo_tablespaces_active	8
+Lizard_txn_undo_log_free_list_length	0
+Lizard_txn_undo_log_cached	512
+Lizard_txn_undo_log_request	7
+Lizard_txn_undo_log_reuse	7
+Lizard_txn_undo_log_free_list_get	0
+Lizard_txn_undo_log_free_list_put	0
+Lizard_txn_undo_log_create	0
+Lizard_txn_undo_log_hash_element	0
+Lizard_txn_undo_log_hash_hit	0
+Lizard_txn_undo_log_hash_miss	0
 SELECT NAME, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 WHERE SPACE_TYPE = 'Undo' ORDER BY NAME;
 NAME	SPACE_TYPE	STATE

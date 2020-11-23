@@ -63,6 +63,11 @@ static void export_lizard_status(void) {
       lizard_stats.txn_undo_log_free_list_put;
 
   lizard_vars.txn_undo_log_create = lizard_stats.txn_undo_log_create;
+
+  lizard_vars.txn_undo_log_hash_element =
+      lizard_stats.txn_undo_log_hash_element;
+  lizard_vars.txn_undo_log_hash_hit = lizard_stats.txn_undo_log_hash_hit;
+  lizard_vars.txn_undo_log_hash_miss = lizard_stats.txn_undo_log_hash_miss;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -89,6 +94,16 @@ static SHOW_VAR lizard_status_variables[] = {
 
     {"txn_undo_log_create", (char *)&lizard_vars.txn_undo_log_create, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_log_hash_element",
+     (char *)&lizard_vars.txn_undo_log_hash_element, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_log_hash_hit", (char *)&lizard_vars.txn_undo_log_hash_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_log_hash_miss", (char *)&lizard_vars.txn_undo_log_hash_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

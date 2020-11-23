@@ -49,6 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0sys.h"
 #include "lizard0mon.h"
+#include "lizard0cleanout.h"
 
 static std::atomic<uint32_t> active_rseg_init_threads{1};
 
@@ -295,6 +296,9 @@ static trx_rseg_t *trx_rseg_physical_initialize(trx_rseg_t *rseg,
     lizard_ut_ad(lizard::fsp_is_txn_tablespace_by_id(rseg->space_id));
     lizard::lizard_sys->txn_undo_log_free_list_len += free_list_len;
   }
+
+  /** Lizard: Init txn undo log hash table */
+  lizard::trx_rseg_init_undo_hdr_hash(rseg->space_id, rseg_header, rseg, mtr);
 
   auto len = flst_get_len(rseg_header + TRX_RSEG_HISTORY);
 

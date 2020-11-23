@@ -61,6 +61,15 @@ struct lizard_var_t {
 
   /** txn undo log segment create count */
   ulint txn_undo_log_create;
+
+  /** txn undo log hash count */
+  ulint txn_undo_log_hash_element;
+
+  /** txn undo log hash hit count */
+  ulint txn_undo_log_hash_hit;
+
+  /** txn undo log hash miss count */
+  ulint txn_undo_log_hash_miss;
 };
 
 struct lizard_stats_t {
@@ -84,6 +93,15 @@ struct lizard_stats_t {
 
   /** txn undo log segment create count */
   ulint_ctr_1_t txn_undo_log_create;
+
+  /** txn undo log hash count */
+  ulint_ctr_1_t txn_undo_log_hash_element;
+
+  /** txn undo log hash hit count */
+  ulint_ctr_1_t txn_undo_log_hash_hit;
+
+  /** txn undo log hash miss count */
+  ulint_ctr_1_t txn_undo_log_hash_miss;
 };
 
 namespace lizard {

@@ -1,0 +1,8 @@
+show global variables like 'innodb_cleanout_safe_mode';
+Variable_name	Value
+innodb_cleanout_safe_mode	ON
+show global status like 'lizard_txn_undo_log_hash%';
+Variable_name	Value
+Lizard_txn_undo_log_hash_element	#
+Lizard_txn_undo_log_hash_hit	#
+Lizard_txn_undo_log_hash_miss	#

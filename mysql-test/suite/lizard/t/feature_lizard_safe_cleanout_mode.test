@@ -1,0 +1,4 @@
+show global variables like 'innodb_cleanout_safe_mode';
+
+--replace_column 2 #
+show global status like 'lizard_txn_undo_log_hash%';

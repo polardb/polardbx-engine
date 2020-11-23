@@ -213,6 +213,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn.h"
 #include "lizard0txn.h"
 #include "lizard0mon.h"
+#include "lizard0cleanout.h"
 
 #include "handler/i_s_ext.h"
 #include "srv0file.h"
@@ -789,9 +790,9 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(row_drop_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(ahi_enabled_mutex, 0, 0,
                   "Mutex used for AHI disabling and enabling."),
+    PSI_MUTEX_KEY(file_purge_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_scn_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(file_purge_list_mutex, 0, 0, PSI_DOCUMENT_ME)
-};
+    PSI_MUTEX_KEY(lizard_undo_hdr_hash_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -23264,6 +23265,12 @@ static MYSQL_SYSVAR_BOOL(
     NULL, NULL, FALSE);
 /* End of data file purge system variables  */
 
+static MYSQL_SYSVAR_BOOL(
+    cleanout_safe_mode, lizard::opt_cleanout_safe_mode,
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+    "Whether to reboot innodb on safe cleanout mode (off by default)", NULL,
+    NULL, FALSE);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23491,6 +23498,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(data_file_purge_max_size),
     MYSQL_SYSVAR(data_file_purge_dir),
     MYSQL_SYSVAR(print_data_file_purge_process),
+    MYSQL_SYSVAR(cleanout_safe_mode),
     nullptr};
 
 mysql_declare_plugin(innobase){

@@ -24,7 +24,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file ut/lizard0ut.cc
+/** @file include/lizard0ut.h
  Lizard barious utilities (Included in ut/ut0ut.cc)
 
  Created 2023-05-04 by Jiyang.zhang
@@ -34,6 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0ut_h
 
 #include <stdint.h>
+#include <atomic>
+#include <vector>
 
 /** Number of microseconds read from the system clock */
 typedef int64_t ib_time_system_us_t;
@@ -42,5 +44,26 @@ typedef int64_t ib_time_system_us_t;
  Uses the system clock.
  @return us since epoch or 0 if failed to retrieve */
 ib_time_system_us_t ut_time_system_us(void);
+
+namespace lizard {
+
+template <typename Element_type, typename Object_type, std::size_t Prealloc>
+class Partition {
+ public:
+  using Container = std::vector<Element_type *>;
+
+  explicit Partition();
+  virtual ~Partition();
+
+  bool insert(Object_type object);
+  bool exist(Object_type object);
+
+ private:
+  std::size_t m_size;
+  std::atomic_ullong m_counter;
+  Container m_parts;
+};
+
+}  // namespace lizard
 
 #endif

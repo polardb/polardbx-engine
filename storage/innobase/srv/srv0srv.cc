@@ -113,6 +113,8 @@ bool srv_downgrade_logs = false;
 bool srv_upgrade_old_undo_found = false;
 #endif /* INNODB_DD_TABLE */
 
+#include "lizard0cleanout.h"
+
 /* Revert to old partition file name if upgrade fails. */
 bool srv_downgrade_partition_files = false;
 
@@ -1279,6 +1281,7 @@ static void srv_general_init() {
   row_mysql_init();
   undo_spaces_init();
   srv_file_purge_init();
+  lizard::txn_undo_hash_init();
 }
 
 /** Boots the InnoDB server. */
