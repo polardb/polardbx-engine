@@ -1665,7 +1665,8 @@ static void dict_load_columns(dict_table_t *table, /*!< in/out: table */
   ut_ad(table->n_t_cols == static_cast<ulint>(table->n_cols) +
                                static_cast<ulint>(table->n_v_cols));
 
-  for (i = 0; i + DATA_N_SYS_COLS < table->n_t_cols + n_skipped; i++) {
+  for (i = 0; i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS
+              < table->n_t_cols + n_skipped; i++) {
     const char *err_msg;
     const char *name = nullptr;
     ulint nth_v_col = ULINT_UNDEFINED;

@@ -1138,6 +1138,8 @@ f1	int	YES		NULL
 f2	int	YES	UNI	NULL	
 DB_TRX_ID		NO		NULL	
 DB_ROLL_PTR		NO		NULL	
+DB_SCN_ID		NO		NULL	
+DB_UNDO_PTR		NO		NULL	
 Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 t1	0	PRIMARY	1	my_row_id	A	0	NULL	NULL		BTREE			YES	NULL
 t1	0	f2	1	f2	A	0	NULL	NULL	YES	BTREE			YES	NULL
@@ -1181,6 +1183,8 @@ f1	int	YES		NULL
 f2	int	YES	UNI	NULL	
 DB_TRX_ID		NO		NULL	
 DB_ROLL_PTR		NO		NULL	
+DB_SCN_ID		NO		NULL	
+DB_UNDO_PTR		NO		NULL	
 Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 t1	0	f2	1	f2	A	0	NULL	NULL	YES	BTREE			YES	NULL
 TABLE_NAME	AUTO_INCREMENT
@@ -1263,6 +1267,8 @@ f1	int	YES		NULL
 f2	int	YES	UNI	NULL	
 DB_TRX_ID		NO		NULL	
 DB_ROLL_PTR		NO		NULL	
+DB_SCN_ID		NO		NULL	
+DB_UNDO_PTR		NO		NULL	
 Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 t1	0	f2	1	f2	A	0	NULL	NULL	YES	BTREE			YES	NULL
 TABLE_NAME	AUTO_INCREMENT

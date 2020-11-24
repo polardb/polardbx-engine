@@ -4305,12 +4305,12 @@ EXPLAIN
 -> Nested loop inner join  (cost=420.25 rows=4000)
     -> Filter: (t3.a is not null)  (cost=10.25 rows=100)
         -> Table scan on t3  (cost=10.25 rows=100)
-    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (kp1=t3.a)  (cost=34.20..34.20 rows=1)
-        -> Materialize with deduplication  (cost=33.95..33.95 rows=40)
-            -> Filter: (t1.kp1 is not null)  (cost=29.95 rows=40)
-                -> Nested loop inner join  (cost=29.95 rows=40)
-                    -> Filter: (t1.c is not null)  (cost=15.95 rows=40)
-                        -> Index range scan on t1 using kp1 over (NULL < kp1 < 20), with index condition: (t1.kp1 < 20)  (cost=15.95 rows=40)
+    -> Single-row index lookup on <subquery2> using <auto_distinct_key> (kp1=t3.a)  (cost=34.42..34.42 rows=1)
+        -> Materialize with deduplication  (cost=34.16..34.16 rows=40)
+            -> Filter: (t1.kp1 is not null)  (cost=30.16 rows=40)
+                -> Nested loop inner join  (cost=30.16 rows=40)
+                    -> Filter: (t1.c is not null)  (cost=16.16 rows=40)
+                        -> Index range scan on t1 using kp1 over (NULL < kp1 < 20), with index condition: (t1.kp1 < 20)  (cost=16.16 rows=40)
                     -> Single-row covering index lookup on t4 using PRIMARY (pk=t1.c)  (cost=0.25 rows=1)
 
 select * from t3 where a in 

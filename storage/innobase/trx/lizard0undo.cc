@@ -106,6 +106,9 @@ namespace lizard {
 void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr) {
   lizard_undo_addr_validation(&undo_addr, nullptr);
   ulint rseg_id = undo::id2num(undo_addr.space_id);
+  /** Reserved UNDO_PTR didn't need encode, so assert here */
+  /** 1. assert temporary table undo ptr */
+  lizard_ut_ad(undo_addr.offset != UNDO_PTR_OFFSET_TEMP_TAB_REC);
 
   *undo_ptr = (undo_ptr_t)(undo_addr.state) << 55 | (undo_ptr_t)rseg_id << 48 |
               (undo_ptr_t)(undo_addr.page_no) << 16 | undo_addr.offset;
@@ -119,19 +122,25 @@ void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr) {
 /** Check the UBA validation */
 bool undo_addr_validation(const undo_addr_t *undo_addr,
                           const dict_index_t *index) {
-  bool internal_table = false;
+  bool internal_dm_table = false;
   if (index) {
-    internal_table =
+    internal_dm_table =
         (my_strcasecmp(system_charset_info, index->table->name.m_name,
                        "mysql/innodb_dynamic_metadata") == 0
              ? true
              : false);
   }
 
-  if ((index && index->table->is_temporary()) || internal_table) {
+  if ((index && index->table->is_temporary())) {
+    ut_a(undo_addr->state == true);
     ut_a(undo_addr->space_id == 0);
     ut_a(undo_addr->page_no == 0);
-    ut_a(undo_addr->offset == 0);
+    ut_a(undo_addr->offset == UNDO_PTR_OFFSET_TEMP_TAB_REC);
+  } else if (internal_dm_table) {
+    ut_a(undo_addr->state == true);
+    ut_a(undo_addr->space_id == 0);
+    ut_a(undo_addr->page_no == 0);
+    ut_a(undo_addr->offset == UNDO_PTR_OFFSET_DYNAMIC_METADATA);
   } else {
     ut_a(fsp_is_txn_tablespace_by_id(undo_addr->space_id));
     ut_a(undo_addr->page_no > 0);
@@ -1233,6 +1242,100 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
   mtr_commit(&mtr);
 
   lizard_stats.txn_undo_log_free_list_put.inc();
+}
+
+/**
+  Write the scn into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void trx_write_scn(byte *ptr, const txn_desc_t *txn_desc) {
+  ut_ad(ptr && txn_desc);
+  assert_undo_ptr_allocated(&txn_desc->undo_ptr);
+  trx_write_scn(ptr, txn_desc->scn.first);
+}
+
+/**
+  Write the scn into the buffer
+  @param[in/out]    ptr     buffer
+  @param[in]        scn     scn id
+*/
+void trx_write_scn(byte *ptr, scn_id_t scn) {
+  ut_ad(ptr);
+  mach_write_to_8(ptr, scn);
+}
+
+/**
+  Write the UBA into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void trx_write_undo_ptr(byte *ptr, const txn_desc_t *txn_desc) {
+  ut_ad(ptr && txn_desc);
+  assert_undo_ptr_allocated(&txn_desc->undo_ptr);
+  trx_write_undo_ptr(ptr, txn_desc->undo_ptr);
+}
+
+/**
+  Write the UBA into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        undo_ptr  UBA
+*/
+void trx_write_undo_ptr(byte *ptr, undo_ptr_t undo_ptr) {
+  ut_ad(ptr);
+  mach_write_to_7(ptr, undo_ptr);
+}
+
+/**
+  Read the scn
+  @param[in]        ptr       buffer
+
+  @return           scn_id_t  scn
+*/
+scn_id_t trx_read_scn(const byte *ptr) {
+  ut_ad(ptr);
+  return mach_read_from_8(ptr);
+}
+
+/**
+  Read the UBA
+  @param[in]        ptr        buffer
+
+  @return           undo_ptr_t undo_ptr
+*/
+undo_ptr_t trx_read_undo_ptr(const byte *ptr) {
+  ut_ad(ptr);
+  return mach_read_from_7(ptr);
+}
+
+/**
+  Decode the undo_ptr into UBA
+  @param[in]      undo ptr
+  @param[out]     undo addr
+ */
+void undo_decode_undo_ptr(undo_ptr_t undo_ptr, undo_addr_t *undo_addr) {
+  ulint rseg_id;
+  ut_ad(undo_addr);
+  if (undo_ptr == lizard::UNDO_PTR_NULL) return;
+
+  undo_addr->offset = (ulint)undo_ptr & 0xFFFF;
+  undo_ptr >>= 16;
+  undo_addr->page_no = (ulint)undo_ptr & 0xFFFFFFFF;
+  undo_ptr >>= 32;
+  rseg_id = (ulint)undo_ptr & 0x7F;
+  undo_ptr >>= 7;
+  undo_addr->state = (bool)undo_ptr;
+
+  /**
+    It should not be trx_sys tablespace for normal table except
+    of temporary table/LOG_DDL/DYNAMIC_METADATA/DDL in-process table */
+  if (rseg_id == 0) {
+    lizard_ut_ad(undo_addr->offset == UNDO_PTR_OFFSET_TEMP_TAB_REC ||
+                 undo_addr->offset == UNDO_PTR_OFFSET_DYNAMIC_METADATA ||
+                 undo_addr->offset == UNDO_PTR_OFFSET_LOG_DDL);
+  }
+  /** It's always redo txn undo log */
+  undo_addr->space_id = trx_rseg_id_to_space_id(rseg_id, false);
 }
 
 }  // namespace lizard

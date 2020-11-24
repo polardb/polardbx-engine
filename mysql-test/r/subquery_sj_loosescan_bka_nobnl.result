@@ -4772,10 +4772,10 @@ explain select
 a, mid(filler1, 1,10), length(filler1)=length(filler2) as z 
 from t1 ot where a in (select a from t2 it);
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	it	NULL	ALL	NULL	NULL	NULL	NULL	22	100.00	Start temporary
-1	SIMPLE	ot	NULL	ALL	NULL	NULL	NULL	NULL	52	10.00	Using where; End temporary
+1	SIMPLE	ot	NULL	ALL	NULL	NULL	NULL	NULL	52	100.00	NULL
+1	SIMPLE	it	NULL	ALL	NULL	NULL	NULL	NULL	22	10.00	Using where; Start temporary; End temporary
 Warnings:
-Note	1003	/* select#1 */ select `test`.`ot`.`a` AS `a`,substr(`test`.`ot`.`filler1`,1,10) AS `mid(filler1, 1,10)`,(length(`test`.`ot`.`filler1`) = length(`test`.`ot`.`filler2`)) AS `z` from `test`.`t1` `ot` semi join (`test`.`t2` `it`) where (`test`.`ot`.`a` = `test`.`it`.`a`)
+Note	1003	/* select#1 */ select `test`.`ot`.`a` AS `a`,substr(`test`.`ot`.`filler1`,1,10) AS `mid(filler1, 1,10)`,(length(`test`.`ot`.`filler1`) = length(`test`.`ot`.`filler2`)) AS `z` from `test`.`t1` `ot` semi join (`test`.`t2` `it`) where (`test`.`it`.`a` = `test`.`ot`.`a`)
 select 
 a, mid(filler1, 1,10), length(filler1)=length(filler2) as z 
 from t1 ot where a in (select a from t2 it);

@@ -58,6 +58,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0sel.h"
 #include "trx0trx.h"
 
+#include "lizard0data0types.h"
+#include "lizard0undo.h"
+
 /** Object to handle Log_DDL */
 Log_DDL *log_ddl = nullptr;
 
@@ -357,6 +360,8 @@ void DDL_Log_Table::create_tuple(const DDL_Record &record) {
   const dict_col_t *col;
   dfield_t *dfield;
   byte *buf;
+  byte *undo_buf;
+  byte *scn_buf;
 
   m_tuple = dtuple_create(m_heap, m_table->get_n_cols());
   dict_table_copy_types(m_tuple, m_table);
@@ -376,6 +381,21 @@ void DDL_Log_Table::create_tuple(const DDL_Record &record) {
   col = m_table->get_sys_col(DATA_TRX_ID);
   dfield = dtuple_get_nth_field(m_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, buf, DATA_TRX_ID_LEN);
+
+  /** SCN_LOG_DDL and UNDO_PTR_LOG_DDL are only for a short time, and
+  the right SCN and UBA are set straight away */
+  scn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_SCN_ID_LEN));
+  lizard::trx_write_scn(scn_buf, lizard::TXN_DESC_LD.scn.first);
+  col = m_table->get_sys_col(DATA_SCN_ID);
+  dfield = dtuple_get_nth_field(m_tuple, dict_col_get_no(col));
+  dfield_set_data(dfield, scn_buf, DATA_SCN_ID_LEN);
+
+  /** Fill UNDO_PTR */
+  undo_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_UNDO_PTR_LEN));
+  lizard::trx_write_undo_ptr(undo_buf, lizard::TXN_DESC_LD.undo_ptr);
+  col = m_table->get_sys_col(DATA_UNDO_PTR);
+  dfield = dtuple_get_nth_field(m_tuple, dict_col_get_no(col));
+  dfield_set_data(dfield, undo_buf, DATA_UNDO_PTR_LEN);
 
   const ulint rec_id = record.get_id();
 
@@ -537,7 +557,8 @@ void DDL_Log_Table::convert_to_ddl_record(bool is_clustered, rec_t *rec,
       const byte *data;
       ulint len;
 
-      if (i == DATA_ROLL_PTR || i == DATA_TRX_ID) {
+      if (i == DATA_ROLL_PTR || i == DATA_TRX_ID || i == DATA_SCN_ID ||
+          i == DATA_UNDO_PTR) {
         continue;
       }
 

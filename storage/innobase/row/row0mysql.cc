@@ -84,6 +84,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 #include "my_io.h"
 
+#include "lizard0dict.h"
+
 static const char *MODIFICATIONS_NOT_ALLOWED_MSG_FORCE_RECOVERY =
     "innodb_force_recovery is on. We do not allow database modifications"
     " by the user. Shut down mysqld and edit my.cnf to set"
@@ -1424,6 +1426,8 @@ static dberr_t row_insert_for_mysql_using_cursor(const byte *mysql_rec,
   /* Step-3: Append row-id index is not unique. */
   dict_index_t *clust_index = node->table->first_index();
 
+  assert_lizard_dict_table_check(node->table);
+
   if (!dict_index_is_unique(clust_index)) {
     dict_sys_write_row_id(node->row_id_buf,
                           dict_table_get_next_table_sess_row_id(node->table));
@@ -1516,6 +1520,8 @@ static dberr_t row_insert_for_mysql_using_ins_graph(const byte *mysql_rec,
   ut_ad(trx);
   ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
+
+  assert_lizard_dict_table_check(prebuilt->table);
 
   if (dict_table_is_discarded(prebuilt->table)) {
     ib::error(ER_IB_MSG_976)
@@ -2278,6 +2284,8 @@ static dberr_t row_update_for_mysql_using_upd_graph(const byte *mysql_rec,
   ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
   UT_NOT_USED(mysql_rec);
+
+  assert_lizard_dict_table_check(table);
 
   if (prebuilt->table->ibd_file_missing) {
     ib::error(ER_IB_MSG_984)

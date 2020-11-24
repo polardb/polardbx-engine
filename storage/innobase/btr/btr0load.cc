@@ -38,6 +38,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lob0lob.h"
 #include "log0chkp.h"
 
+#include "lizard0row.h"
+
 namespace ddl {
 /** Innodb B-tree index fill factor for bulk load. */
 long fill_factor;
@@ -430,6 +432,9 @@ dberr_t Page_load::insert(const rec_t *rec, Rec_offsets offsets) noexcept {
            cmp_rec_rec(rec, old_rec, offsets, old_offsets, m_index,
                        page_is_spatial_non_leaf(old_rec, m_index)) >= 0));
   }
+
+  /** All the bulk load need to validate LIZARD attrbutes. */
+  assert_row_lizard_valid(rec, m_index, offsets);
 
   m_total_data += rec_size;
 #endif /* UNIV_DEBUG */

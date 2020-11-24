@@ -77,6 +77,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <vector>
 
+#include "lizard0data0types.h"
+
 /* Forward declaration. */
 struct ib_rbt_t;
 
@@ -2625,7 +2627,8 @@ detect this and will eventually quit sooner. */
   uint16_t get_n_sys_cols() const {
     ut_ad(magic_n == DICT_TABLE_MAGIC_N);
 
-    return (is_intrinsic() ? DATA_ITT_N_SYS_COLS : DATA_N_SYS_COLS);
+    return (is_intrinsic() ? DATA_ITT_N_SYS_COLS + DATA_ITT_N_LIZARD_COLS
+                           : DATA_N_SYS_COLS + DATA_N_LIZARD_COLS);
   }
 
   /** Gets the number of all non-virtual columns (also system) in a table

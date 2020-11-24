@@ -125,6 +125,11 @@ extern uint ibuf_debug;
 #include "ut0new.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0dict.h"
+#include "lizard0data0types.h"
+#include "lizard0scn.h"
+#include "lizard0undo.h"
+
 static_assert(DATA_ROW_ID == 0, "DATA_ROW_ID != 0");
 static_assert(DATA_TRX_ID == 1, "DATA_TRX_ID != 1");
 static_assert(DATA_ROLL_PTR == 2, "DATA_ROLL_PTR != 2");
@@ -1163,6 +1168,8 @@ void dict_table_add_system_columns(dict_table_t *table, mem_heap_t *heap) {
     /* This check reminds that if a new system column is added to
     the program, it should be dealt with here */
   }
+
+  lizard::dict_table_add_lizard_columns(table, heap);
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -2021,8 +2028,8 @@ bool dict_col_name_is_reserved(const char *name) /*!< in: column name */
   the program, it should be dealt with here. */
   static_assert(DATA_N_SYS_COLS == 3, "DATA_N_SYS_COLS != 3");
 
-  static const char *reserved_names[] = {"DB_ROW_ID", "DB_TRX_ID",
-                                         "DB_ROLL_PTR"};
+  static const char *reserved_names[] = {
+      "DB_ROW_ID", "DB_TRX_ID", "DB_ROLL_PTR", "DB_SCN_ID", "DB_UNDO_PTR"};
 
   ulint i;
 
@@ -3081,6 +3088,15 @@ static dict_index_t *dict_index_build_internal_clust(
     dict_index_add_col(new_index, table, table->get_sys_col(DATA_ROLL_PTR), 0,
                        true);
     set_phy_pos(table->get_sys_col(DATA_ROLL_PTR));
+
+    /** Lizard: Add SCN and UBA column */
+    dict_index_add_col(new_index, table, table->get_sys_col(DATA_SCN_ID), 0,
+                       true);
+    set_phy_pos(table->get_sys_col(DATA_SCN_ID));
+
+    dict_index_add_col(new_index, table, table->get_sys_col(DATA_UNDO_PTR), 0,
+                       true);
+    set_phy_pos(table->get_sys_col(DATA_UNDO_PTR));
   }
 
   /* Remember the table columns already contained in new_index */
@@ -5075,6 +5091,8 @@ void DDTableBuffer::create_tuples() {
   dfield_t *dfield;
   byte *sys_buf;
   byte *id_buf;
+  byte *undo_buf;
+  byte *scn_buf;
 
   id_buf = static_cast<byte *>(mem_heap_alloc(m_heap, 8));
   memset(id_buf, 0, sizeof *id_buf);
@@ -5110,6 +5128,20 @@ void DDTableBuffer::create_tuples() {
   col = m_index->table->get_sys_col(DATA_ROLL_PTR);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, sys_buf, DATA_ROLL_PTR_LEN);
+
+  /** SCN ID: TXN_DESC_DM */
+  scn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_SCN_ID_LEN));
+  lizard::trx_write_scn(scn_buf, &lizard::TXN_DESC_DM);
+  col = m_index->table->get_sys_col(DATA_SCN_ID);
+  dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
+  dfield_set_data(dfield, scn_buf, DATA_SCN_ID_LEN);
+
+  /** UNDO_PTR: always TXN_DESC_DM */
+  undo_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_UNDO_PTR_LEN));
+  lizard::trx_write_undo_ptr(undo_buf, &lizard::TXN_DESC_DM);
+  col = m_index->table->get_sys_col(DATA_UNDO_PTR);
+  dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
+  dfield_set_data(dfield, undo_buf, DATA_UNDO_PTR_LEN);
 }
 
 /** Initialize the in-memory index */

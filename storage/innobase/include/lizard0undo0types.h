@@ -149,4 +149,16 @@ struct txn_undo_ptr_t {
   trx_undo_t *txn_undo;
 };
 
+namespace lizard {
+
+inline bool lizard_undo_ptr_is_active(undo_ptr_t undo_ptr) {
+  return !(bool)(undo_ptr >> 55);
+}
+
+inline void lizard_undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
+  *undo_ptr |= (undo_ptr_t)1 << 55;
+}
+
+} /* namespace lizard */
+
 #endif  // lizard0undo0types_h

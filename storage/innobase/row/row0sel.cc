@@ -74,6 +74,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+#include "lizard0dict.h"
+
 /** Maximum number of rows to prefetch; MySQL interface has another parameter */
 constexpr uint32_t SEL_MAX_N_PREFETCH = 16;
 
@@ -4433,6 +4435,9 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
   ut_a(!trx->has_search_latch);
+
+  assert_lizard_dict_index_check(index);
+  assert_lizard_dict_table_check(index->table);
 
   /* We don't support FTS queries from the HANDLER interfaces, because
   we implemented FTS as reversed inverted index with auxiliary tables.

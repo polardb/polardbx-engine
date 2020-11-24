@@ -361,6 +361,9 @@ INSERT INTO dd_published_schema
 INSERT INTO dd_published_schema
   VALUES('80023', 1,
     '6e3311099b985c198bb3acbc88495825847dac79588dea4f0be2e4219ad7c52b');
+INSERT INTO dd_published_schema
+  VALUES('80032_lizard', 0,
+    'fa92d5fdef2405462d1e1f5ba979b16cff4b39c239b72a89eea3bc1eab6022b5');
 --sorted_result
 SELECT IFNULL(CONCAT('The schema checksum corresponds to DD version ',
                      version, '.'),

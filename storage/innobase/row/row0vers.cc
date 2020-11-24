@@ -56,6 +56,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+#include "lizard0row.h"
+
 /** Check whether all non-virtual columns in a index entries match
 @param[in]      index           the secondary index
 @param[in]      ientry1         first index entry to compare
@@ -1266,6 +1268,8 @@ dberr_t row_vers_build_for_consistent_read(
   ut_ad(rec_offs_validate(rec, index, *offsets));
 
   trx_id = row_get_rec_trx_id(rec, index, *offsets);
+
+  assert_row_lizard_valid(rec, index, *offsets);
 
   /* Reset the collected LOB undo information. */
   if (lob_undo != nullptr) {

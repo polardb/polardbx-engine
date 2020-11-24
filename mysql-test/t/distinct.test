@@ -899,6 +899,10 @@ INSERT INTO t1 SELECT RAND() FROM t1;  # 7224 rows; enough to fill a few sort ch
 ANALYZE TABLE t1;
 
 --skip_if_hypergraph  # Chooses a different query plan.
+# Lizard: Not sure why there are two possibilities:
+#         {(cost=722.95 rows=7172), (cost=737.05 rows=7313)}, but both of them
+#         can be considered correct estimates.
+--replace_result 737.05 {checked_valid} 7313 {checked_valid} 722.95 {checked_valid} 7172 {checked_valid}
 EXPLAIN FORMAT=tree SELECT DISTINCT COUNT(*) AS num FROM t1 GROUP BY f HAVING num=1;
 SELECT DISTINCT COUNT(*) AS num FROM t1 GROUP BY f HAVING num=1;
 

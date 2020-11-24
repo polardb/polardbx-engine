@@ -108,8 +108,8 @@ static void lizard_create_sysf(mtr_t *mtr) {
 
   lzd_hdr = lizard_sysf_get(mtr);
 
-  /* The scan number is counting from 1 */
-  mach_write_to_8(lzd_hdr + LIZARD_SYS_SCN, 1);
+  /* The scan number is counting from SCN_RESERVERD_MAX */
+  mach_write_to_8(lzd_hdr + LIZARD_SYS_SCN, SCN_RESERVERD_MAX);
 
   ptr = lzd_hdr + LIZARD_SYS_NOT_USED;
 

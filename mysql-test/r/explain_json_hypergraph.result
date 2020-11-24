@@ -155,8 +155,8 @@ EXPLAIN
   "access_type": "index",
   "estimated_rows": 8.0,
   "index_access_type": "index_range_scan",
-  "estimated_total_cost": 1.0621367521367522,
-  "estimated_first_row_cost": 0.13276709401709402
+  "estimated_total_cost": 1.063053435114504,
+  "estimated_first_row_cost": 0.132881679389313
 }
 drop table t1;
 # Index lookup. Nested loop join

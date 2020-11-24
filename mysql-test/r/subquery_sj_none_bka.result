@@ -4429,7 +4429,7 @@ EXPLAIN
   "query_block": {
     "select_id": 1,
     "cost_info": {
-      "query_cost": "104.00"
+      "query_cost": "104.25"
     },
     "nested_loop": [
       {
@@ -4463,9 +4463,9 @@ EXPLAIN
           "filtered": "79.00",
           "using_join_buffer": "hash join",
           "cost_info": {
-            "read_cost": "23.75",
+            "read_cost": "24.00",
             "eval_cost": "79.00",
-            "prefix_cost": "104.00",
+            "prefix_cost": "104.25",
             "data_read_per_join": "320K"
           },
           "used_columns": [

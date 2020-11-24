@@ -79,6 +79,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0dd.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0dict.h"
+#include "lizard0page.h"
+
 #ifndef UNIV_HOTBACKUP
 /* What kind of latch and lock can we assume when the control comes to
    -------------------------------------------------------------------
@@ -821,6 +824,7 @@ the equal ordering fields. NOTE: we compare the fields as binary strings!
 @param[in]      offsets         rec_get_offsets(rec,index), or NULL
 @param[in]      no_sys          skip the system columns
                                 DB_TRX_ID and DB_ROLL_PTR
+                                DB_SCN_ID and DB_UNDO_PTR
 @param[in]      trx             transaction (for diagnostics),
                                 or NULL
 @param[in]      heap            memory heap from which allocated
@@ -882,6 +886,16 @@ upd_t *row_upd_build_difference_binary(dict_index_t *index,
 
       /* DB_ROLL_PTR */
       if (i == trx_id_pos + 1 && !index->table->is_intrinsic()) {
+        continue;
+      }
+
+      /* DB_SCN_ID */
+      if (i == trx_id_pos + 2 && !index->table->is_intrinsic()) {
+        continue;
+      }
+
+      /* DB_UNDO_PTR */
+      if (i == trx_id_pos + 3 && !index->table->is_intrinsic()) {
         continue;
       }
     }
@@ -2782,6 +2796,8 @@ static bool row_upd_check_autoinc_counter(const upd_node_t *node, mtr_t *mtr) {
   pcur = node->pcur;
   btr_cur = pcur->get_btr_cur();
 
+  assert_lizard_page_attributes(btr_cur_get_page(btr_cur), index);
+
   ut_ad(btr_cur->index == index);
   ut_ad(!rec_get_deleted_flag(btr_cur_get_rec(btr_cur),
                               dict_table_is_comp(index->table)));
@@ -2981,6 +2997,8 @@ func_exit:
   auto referenced = row_upd_index_is_referenced(index);
 
   pcur = node->pcur;
+
+  assert_lizard_dict_index_check(index);
 
   /* We have to restore the cursor to its position */
 

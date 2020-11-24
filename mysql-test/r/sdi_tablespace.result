@@ -185,6 +185,82 @@ c1
                 "elements": [],
                 "collation_ID
                 "is_explicit_collation": false
+            },
+            {
+                "name": "DB_SCN_ID",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 4,
+                "char_length": 8,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
+            },
+            {
+                "name": "DB_UNDO_PTR",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 5,
+                "char_length": 7,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
             }
         ],
         "schema_ref": "test",
@@ -241,6 +317,20 @@ c1
                         "order": 2,
                         "hID
                         "column_opx": 2
+                    },
+                    {
+                        "ordinal_position": 4,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 3
+                    },
+                    {
+                        "ordinal_position": 5,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 4
                     }
                 ],
                 "tablespace_ref": "test/t1"
@@ -414,6 +504,82 @@ c1
                 "elements": [],
                 "collation_ID
                 "is_explicit_collation": false
+            },
+            {
+                "name": "DB_SCN_ID",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 4,
+                "char_length": 8,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
+            },
+            {
+                "name": "DB_UNDO_PTR",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 5,
+                "char_length": 7,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
             }
         ],
         "schema_ref": "test",
@@ -470,6 +636,20 @@ c1
                         "order": 2,
                         "hID
                         "column_opx": 2
+                    },
+                    {
+                        "ordinal_position": 4,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 3
+                    },
+                    {
+                        "ordinal_position": 5,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 4
                     }
                 ]
             }
@@ -769,6 +949,82 @@ c1
                 "elements": [],
                 "collation_ID
                 "is_explicit_collation": false
+            },
+            {
+                "name": "DB_SCN_ID",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 5,
+                "char_length": 8,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
+            },
+            {
+                "name": "DB_UNDO_PTR",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 6,
+                "char_length": 7,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
             }
         ],
         "schema_ref": "src",
@@ -828,6 +1084,20 @@ c1
                     },
                     {
                         "ordinal_position": 4,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 4
+                    },
+                    {
+                        "ordinal_position": 5,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 5
+                    },
+                    {
+                        "ordinal_position": 6,
                         "length": 4294967295,
                         "order": 2,
                         "hID
@@ -1286,6 +1556,82 @@ c1
                 "elements": [],
                 "collation_ID
                 "is_explicit_collation": false
+            },
+            {
+                "name": "DB_SCN_ID",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 4,
+                "char_length": 8,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
+            },
+            {
+                "name": "DB_UNDO_PTR",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 5,
+                "char_length": 7,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
             }
         ],
         "schema_ref": "test",
@@ -1342,6 +1688,20 @@ c1
                         "order": 2,
                         "hID
                         "column_opx": 2
+                    },
+                    {
+                        "ordinal_position": 4,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 3
+                    },
+                    {
+                        "ordinal_position": 5,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 4
                     }
                 ],
                 "tablespace_ref": "test/t1"
@@ -1515,6 +1875,82 @@ c1
                 "elements": [],
                 "collation_ID
                 "is_explicit_collation": false
+            },
+            {
+                "name": "DB_SCN_ID",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 4,
+                "char_length": 8,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
+            },
+            {
+                "name": "DB_UNDO_PTR",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 5,
+                "char_length": 7,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
             }
         ],
         "schema_ref": "test",
@@ -1571,6 +2007,20 @@ c1
                         "order": 2,
                         "hID
                         "column_opx": 2
+                    },
+                    {
+                        "ordinal_position": 4,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 3
+                    },
+                    {
+                        "ordinal_position": 5,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 4
                     }
                 ]
             }
@@ -1869,6 +2319,82 @@ c1
                 "elements": [],
                 "collation_ID
                 "is_explicit_collation": false
+            },
+            {
+                "name": "DB_SCN_ID",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 5,
+                "char_length": 8,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
+            },
+            {
+                "name": "DB_UNDO_PTR",
+                "type": 9,
+                "is_nullable": false,
+                "is_zerofill": false,
+                "is_unsigned": false,
+                "is_auto_increment": false,
+                "is_virtual": false,
+                "hID
+                "ordinal_position": 6,
+                "char_length": 7,
+                "numeric_precision": 0,
+                "numeric_scale": 0,
+                "numeric_scale_null": true,
+                "datetime_precision": 0,
+                "datetime_precision_null": 1,
+                "has_no_default": false,
+                "default_value_null": true,
+                "srs_ID
+                "srs_ID
+                "default_value": "",
+                "default_value_utf8_null": true,
+                "default_value_utf8": "",
+                "default_option": "",
+                "update_option": "",
+                "comment": "",
+                "generation_expression": "",
+                "generation_expression_utf8": "",
+                "options": "",
+                "se_private_data": "table_ID
+                "engine_attribute": "",
+                "secondary_engine_attribute": "",
+                "column_key": 1,
+                "column_type_utf8": "",
+                "elements": [],
+                "collation_ID
+                "is_explicit_collation": false
             }
         ],
         "schema_ref": "dst",
@@ -1928,6 +2454,20 @@ c1
                     },
                     {
                         "ordinal_position": 4,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 4
+                    },
+                    {
+                        "ordinal_position": 5,
+                        "length": 4294967295,
+                        "order": 2,
+                        "hID
+                        "column_opx": 5
+                    },
+                    {
+                        "ordinal_position": 6,
                         "length": 4294967295,
                         "order": 2,
                         "hID

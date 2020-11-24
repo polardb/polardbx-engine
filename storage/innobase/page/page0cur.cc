@@ -46,6 +46,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "rem0cmp.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0page.h"
+
 #ifdef PAGE_CUR_ADAPT
 #ifdef UNIV_SEARCH_PERF_STAT
 static ulint page_cur_short_succ = 0;
@@ -1408,6 +1410,11 @@ rec_t *page_cur_insert_rec_low(
                                   mtr);
   }
 
+  if (index->is_clustered() && !index->table->is_intrinsic() &&
+      !recv_recovery_is_on()) {
+    assert_lizard_page_attributes(page, index);
+  }
+
   return (insert_rec);
 }
 
@@ -1573,6 +1580,10 @@ rec_t *page_cur_direct_insert_rec_low(rec_t *current_rec, dict_index_t *index,
   if (mlog_open(mtr, 0, log_ptr)) {
     ut_d(ut_error);
     ut_o(mlog_close(mtr, log_ptr));
+  }
+
+  if (index->is_clustered() && !index->table->is_intrinsic()) {
+    assert_lizard_page_attributes(page, index);
   }
 
   return (insert_rec);

@@ -2357,7 +2357,7 @@ void innobase_row_to_mysql(struct TABLE *table, const dict_table_t *itab,
 
   /* The InnoDB row may contain an extra FTS_DOC_ID column at the end. */
   ut_ad(row->n_fields == itab->get_n_cols());
-  ut_ad(n_fields == row->n_fields - DATA_N_SYS_COLS +
+  ut_ad(n_fields == row->n_fields - DATA_N_SYS_COLS - DATA_N_LIZARD_COLS +
                         dict_table_get_n_v_cols(itab) -
                         DICT_TF2_FLAG_IS_SET(itab, DICT_TF2_FTS_HAS_DOC_ID));
 
@@ -2801,7 +2801,9 @@ bool innobase_fts_check_doc_id_col(
   /* Not to count the virtual columns */
   i -= *num_v;
 
-  for (; i + DATA_N_SYS_COLS < (uint)table->n_cols; i++) {
+  for (;
+       i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < (uint)table->n_cols;
+       i++) {
     const char *name = table->get_col_name(i);
 
     if (strcmp(name, FTS_DOC_ID_COL_NAME) == 0) {
@@ -3341,7 +3343,9 @@ to column numbers in altered_table */
   uint num_v = 0;
 
   /* Any dropped columns will map to ULINT_UNDEFINED. */
-  for (uint old_i = 0; old_i + DATA_N_SYS_COLS < old_table->n_cols; old_i++) {
+  for (uint old_i = 0;
+       old_i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < old_table->n_cols;
+       old_i++) {
     col_map[old_i] = ULINT_UNDEFINED;
   }
 
@@ -3393,16 +3397,18 @@ to column numbers in altered_table */
   i = table->s->fields - old_table->n_v_cols;
 
   /* Add the InnoDB hidden FTS_DOC_ID column, if any. */
-  if (i + DATA_N_SYS_COLS < old_table->n_cols) {
+  if (i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < old_table->n_cols) {
     /* There should be exactly one extra field,
     the FTS_DOC_ID. */
     assert(DICT_TF2_FLAG_IS_SET(old_table, DICT_TF2_FTS_HAS_DOC_ID));
-    assert(i + DATA_N_SYS_COLS + 1 == old_table->n_cols);
+    assert(i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS + 1 == old_table->n_cols);
     assert(!strcmp(old_table->get_col_name(i), FTS_DOC_ID_COL_NAME));
-    if (altered_table->s->fields + DATA_N_SYS_COLS - new_table->n_v_cols <
+    if (altered_table->s->fields + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS -
+            new_table->n_v_cols <
         new_table->n_cols) {
       assert(DICT_TF2_FLAG_IS_SET(new_table, DICT_TF2_FTS_HAS_DOC_ID));
-      assert(altered_table->s->fields + DATA_N_SYS_COLS + 1 ==
+      assert(altered_table->s->fields + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS +
+                 1 ==
              static_cast<ulint>(new_table->n_cols + new_table->n_v_cols));
       col_map[i] = altered_table->s->fields - new_table->n_v_cols;
     } else {

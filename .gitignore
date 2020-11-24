@@ -7,6 +7,9 @@
              .o.out.snprj/*
 .vimrc
 
+# gdb
+.gdb_history
+
 # Misc tags/ctags files
 tags
 TAGS

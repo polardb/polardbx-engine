@@ -55,7 +55,7 @@ while ($i)
 
 # Accept 83 for 64k page size, 163 for 32k page size, 329 for 16k page size,
 # 662 for 8k page size & 1392 for 4k page size
---replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
+--replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 345 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
 --eval $check_cnt
 
 # Dump
@@ -124,7 +124,7 @@ WHERE LOWER(variable_name) = 'innodb_buffer_pool_load_status';
 
 # Accept 83 for 64k page size, 163 for 32k page size, 329 for 16k page size,
 # 662 for 8k page size & 1392 for 4k page size
---replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
+--replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 345 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
 --eval $check_cnt
 
 # Add some total garbage to the dump file

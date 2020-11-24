@@ -138,6 +138,7 @@ set session group_concat_max_len = 1000000;
 # 2. The row take more space (SCN, GCN, UBA fields...)
 --echo Check limit on max total mv keys length
 --echo Should succeed
+# Lizard: more fileds will take more space.
 insert into t1 select concat('[',group_concat(val),']') from (
   select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
     from t t1, t t2, t t3

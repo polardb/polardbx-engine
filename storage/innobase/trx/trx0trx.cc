@@ -2391,9 +2391,8 @@ void trx_commit(trx_t *trx) /*!< in/out: transaction */
   DBUG_EXECUTE_IF("ib_trx_commit_crash_before_trx_commit_start",
                   DBUG_SUICIDE(););
 
-  /** Recovery maybe only has txn undo */
-  if (trx_is_rseg_updated(trx) ||
-      (trx->is_recovered && lizard::trx_is_txn_rseg_updated(trx))) {
+  /** Recovery or fts internal trx maybe only has txn undo */
+  if (trx_is_rseg_updated(trx) || lizard::trx_is_txn_rseg_updated(trx)) {
     mtr = &local_mtr;
 
     DBUG_EXECUTE_IF("ib_trx_commit_crash_rseg_updated", DBUG_SUICIDE(););

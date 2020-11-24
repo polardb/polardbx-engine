@@ -36,6 +36,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "data0type.h"
 #include "univ.i"
 
+#include "lizard0data0types.h"
+
 /* We define the physical record simply as an array of bytes */
 typedef byte rec_t;
 
@@ -52,7 +54,7 @@ system columns (again) using dict_table_add_system_columns(). The problem
 is that mlog_parse_index() cannot recognize the system columns by
 just having n_fields, n_uniq and the lengths of the columns. */
 constexpr uint32_t REC_MAX_N_USER_FIELDS =
-    REC_MAX_N_FIELDS - DATA_N_SYS_COLS * 2;
+    REC_MAX_N_FIELDS - (DATA_N_LIZARD_COLS + DATA_N_SYS_COLS) * 2;
 
 /* REC_ANTELOPE_MAX_INDEX_COL_LEN is measured in bytes and is the maximum
 indexed field length (or indexed prefix length) for indexes on tables of

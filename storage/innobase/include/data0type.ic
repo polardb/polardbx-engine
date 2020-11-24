@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ha_prototypes.h"
 #include "mach0data.h"
+#include "lizard0data0types.h"
 
 /** Gets the MySQL charset-collation code for MySQL string types.
  @return MySQL charset-collation code */
@@ -424,6 +425,12 @@ static inline ulint dtype_get_fixed_size_low(
         case DATA_ROLL_PTR:
           ut_ad(len == DATA_ROLL_PTR_LEN);
           break;
+       case DATA_SCN_ID:
+          ut_ad(len == DATA_SCN_ID_LEN);
+          break;
+       case DATA_UNDO_PTR:
+          ut_ad(len == DATA_UNDO_PTR_LEN);
+          break;
         default:
           ut_d(ut_error);
           ut_o(return (0));
@@ -497,6 +504,12 @@ static inline ulint dtype_get_min_size_low(
           break;
         case DATA_ROLL_PTR:
           ut_ad(len == DATA_ROLL_PTR_LEN);
+          break;
+       case DATA_SCN_ID:
+          ut_ad(len == DATA_SCN_ID_LEN);
+          break;
+       case DATA_UNDO_PTR:
+          ut_ad(len == DATA_UNDO_PTR_LEN);
           break;
         default:
           ut_d(ut_error);

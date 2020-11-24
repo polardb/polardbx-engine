@@ -4419,7 +4419,7 @@ EXPLAIN
   "query_block": {
     "select_id": 1,
     "cost_info": {
-      "query_cost": "1091.50"
+      "query_cost": "1091.75"
     },
     "nested_loop": [
       {
@@ -4452,9 +4452,9 @@ EXPLAIN
           "rows_produced_per_join": 790,
           "filtered": "79.00",
           "cost_info": {
-            "read_cost": "23.75",
+            "read_cost": "24.00",
             "eval_cost": "79.00",
-            "prefix_cost": "104.00",
+            "prefix_cost": "104.25",
             "data_read_per_join": "320K"
           },
           "used_columns": [
@@ -4476,7 +4476,7 @@ EXPLAIN
           "cost_info": {
             "read_cost": "197.50",
             "eval_cost": "79.00",
-            "prefix_cost": "1091.50",
+            "prefix_cost": "1091.75",
             "data_read_per_join": "6K"
           },
           "used_columns": [

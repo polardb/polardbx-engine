@@ -64,6 +64,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <debug_sync.h>
 #include "my_dbug.h"
 
+#include "lizard0row.h"
+#include "lizard0dict.h"
+#include "lizard0page.h"
+
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
 is enough space in the redo log before for that operation. This is
@@ -208,6 +212,9 @@ void ins_node_set_new_row(
   /* Allocate from entry_sys_heap buffers for sys fields */
 
   row_ins_alloc_sys_fields(node);
+
+  /* Lizard: Allocate buffers for lizard SCN and UBA fields */
+  lizard::ins_alloc_lizard_fields(node);
 
   /* As we allocated a new trx id buf, the trx id should be written
   there again: */
@@ -2360,6 +2367,8 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
 
   DBUG_TRACE;
 
+  assert_lizard_dict_index_check(index);
+
 #ifdef UNIV_DEBUG
   mtr_t temp_mtr;
   temp_mtr.start();
@@ -2383,6 +2392,8 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
   ut_ad((flags & (BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG)) ||
         !thr_get_trx(thr)->in_rollback);
   ut_ad(thr != nullptr || !dup_chk_only);
+
+  assert_lizard_dict_table_check(index->table);
 
   mtr.start();
 
@@ -2417,6 +2428,9 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
   {
     page_t *page = btr_cur_get_page(cursor);
     rec_t *first_rec = page_rec_get_next(page_get_infimum_rec(page));
+
+    assert_lizard_page_attributes(page, index);
+
     /* After INSTANT ADD/DROP, # of fields might differ from other records. */
     ut_ad(page_rec_is_supremum(first_rec) || index->has_row_versions() ||
           rec_n_fields_is_sane(index, first_rec, entry));
@@ -2796,6 +2810,9 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
   ut_ad(!index->is_clustered());
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
+  /** Lizard: There is no SCN and UBA in secondary index */
+  assert_lizard_dict_index_check(index);
+
   cursor.thr = thr;
   cursor.rtr_info = nullptr;
   ut_ad(thr_get_trx(thr)->id != 0 || index->table->is_intrinsic());
@@ -3076,6 +3093,9 @@ and return. don't execute actual insert. */
     }
   }
 
+  assert_lizard_dict_table_check(index->table);
+  assert_lizard_dict_index_check(index);
+
   n_uniq = dict_index_is_unique(index) ? index->n_uniq : 0;
 
   /* Try first optimistic descent to the B-tree */
@@ -3168,6 +3188,8 @@ and return. don't execute actual insert. */
       return (DB_LOCK_WAIT);
     }
   });
+
+  assert_lizard_dict_index_check(index);
 
   if (!index->table->foreign_set.empty()) {
     err = row_ins_check_foreign_constraints(index->table, index, entry, thr);
@@ -3424,6 +3446,10 @@ dberr_t row_ins_index_entry_set_vals(const dict_index_t *index, dtuple_t *entry,
 
   ut_ad(dtuple_check_typed(node->row));
 
+  assert_lizard_dict_table_check(node->table);
+
+  assert_lizard_dict_index_check(node->index);
+
   err = row_ins_index_entry_set_vals(node->index, node->entry, node->row);
 
   if (err != DB_SUCCESS) {
@@ -3608,6 +3634,8 @@ que_thr_t *row_ins_step(que_thr_t *thr) /*!< in: query thread */
 
   ut_ad(que_node_get_type(node) == QUE_NODE_INSERT);
   ut_ad(!node->table->is_intrinsic());
+
+  assert_lizard_dict_table_check(node->table);
 
   parent = que_node_get_parent(node);
   sel_node = node->select;

@@ -25,7 +25,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 /** @file include/lizard0dict.h
- Special Zeus tablespace definition.
+ Special Lizard tablespace definition.
 
  Created 2020-03-19 by Jianwei.zhao
  *******************************************************/
@@ -93,6 +93,69 @@ struct dict_lizard {
 
 /** Judge the undo tablespace is txn tablespace by name */
 extern bool is_txn_space_by_name(const char *name);
+
+inline bool is_lizard_column(const char *col_name) {
+  ut_ad(col_name != nullptr);
+  return (strncmp(col_name, "DB_SCN_ID", 9) == 0 ||
+          strncmp(col_name, "DB_UNDO_PTR", 11) == 0);
+}
+
+/**
+  Add the SCN and UBA column into dict_table_t, for example:
+  dict_table_t::col_names "...DB_SCN_ID\0DATA_UNDO_PTR\0..."
+
+  @param[in]      table       dict_table_t
+  @param[in]      heap        memory slice
+*/
+void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap);
+
+/**
+  Add the lizard columns into data dictionary in server
+
+  @param[in,out]	dd_table	data dictionary cache object
+  @param[in,out]  primary   data dictionary primary key
+*/
+void dd_add_lizard_columns(dd::Table *dd_table, dd::Index *primary);
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+/**
+  Check the dict_table_t object
+
+  @param[in]      table       dict_table_t
+
+  @return         true        Success
+*/
+bool lizard_dict_table_check(const dict_table_t *table);
+
+/**
+  Check the dict_incex object
+
+  @param[in]      index       dict_index_t
+
+  @return         true        Success
+*/
+bool lizard_dict_index_check(const dict_index_t *index);
+
+#endif /* UNIV_DEBUG || LIZARD_DEBUG define */
+
 }  // namespace lizard
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+#define assert_lizard_dict_table_check(table)     \
+  do {                                            \
+    ut_a(lizard::lizard_dict_table_check(table)); \
+  } while (0)
+
+#define assert_lizard_dict_index_check(index)     \
+  do {                                            \
+    ut_a(lizard::lizard_dict_index_check(index)); \
+  } while (0)
+
+#else
+
+#define assert_lizard_dict_table_check(table)
+#define assert_lizard_dict_index_check(index)
+
+#endif /* UNIV_DEBUG || lizard_DEBUG define */
 
 #endif  // lizard0dict_h

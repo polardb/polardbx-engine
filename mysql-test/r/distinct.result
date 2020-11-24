@@ -1039,7 +1039,7 @@ EXPLAIN
     -> Filter: (count(0) > 1)
         -> Table scan on <temporary>
             -> Aggregate using temporary table
-                -> Table scan on t1  (cost=154.85 rows=1536)
+                -> Table scan on t1  (cost=155.35 rows=1536)
 
 SELECT DISTINCT c2 FROM t1 GROUP BY c1 HAVING COUNT(*) > 1;
 c2
@@ -1313,7 +1313,7 @@ EXPLAIN
     -> Filter: (num = 1)
         -> Table scan on <temporary>
             -> Aggregate using temporary table
-                -> Table scan on t1  (cost=726.40 rows=7224)
+                -> Table scan on t1  (cost={checked_valid} rows={checked_valid})
 
 SELECT DISTINCT COUNT(*) AS num FROM t1 GROUP BY f HAVING num=1;
 num

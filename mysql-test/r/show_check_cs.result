@@ -1465,6 +1465,8 @@ c2	int	#	#	#	#
 c3	text	#	#	#	#
 DB_TRX_ID		#	#	#	#
 DB_ROLL_PTR		#	#	#	#
+DB_SCN_ID		#	#	#	#
+DB_UNDO_PTR		#	#	#	#
 SHOW EXTENDED FULL COLUMNS FROM t1;
 Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
 c1	int	#	#	#	#	#	#	#
@@ -1472,6 +1474,8 @@ c2	int	#	#	#	#	#	#	#
 c3	text	#	#	#	#	#	#	#
 DB_TRX_ID		#	#	#	#	#	#	#
 DB_ROLL_PTR		#	#	#	#	#	#	#
+DB_SCN_ID		#	#	#	#	#	#	#
+DB_UNDO_PTR		#	#	#	#	#	#	#
 # With fix, following statements should not show the hidden index and
 # index columns.
 SHOW INDEX FROM t1;
@@ -1497,8 +1501,10 @@ Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_par
 t1	0	PRIMARY	1	c1	A	0	NULL	NULL		BTREE			YES	NULL
 t1	0	PRIMARY	2	DB_TRX_ID	A	NULL	NULL	NULL		BTREE			YES	NULL
 t1	0	PRIMARY	3	DB_ROLL_PTR	A	NULL	NULL	NULL		BTREE			YES	NULL
-t1	0	PRIMARY	4	c2	A	NULL	NULL	NULL	YES	BTREE			YES	NULL
-t1	0	PRIMARY	5	c3	A	NULL	NULL	NULL	YES	BTREE			YES	NULL
+t1	0	PRIMARY	4	DB_SCN_ID	A	NULL	NULL	NULL		BTREE			YES	NULL
+t1	0	PRIMARY	5	DB_UNDO_PTR	A	NULL	NULL	NULL		BTREE			YES	NULL
+t1	0	PRIMARY	6	c2	A	NULL	NULL	NULL	YES	BTREE			YES	NULL
+t1	0	PRIMARY	7	c3	A	NULL	NULL	NULL	YES	BTREE			YES	NULL
 t1	1	c2d	1	c2	A	0	NULL	NULL	YES	BTREE			YES	NULL
 t1	1	c2d	2	c1	A	NULL	NULL	NULL		BTREE			YES	NULL
 DROP TABLE t1;

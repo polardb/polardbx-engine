@@ -72,8 +72,10 @@ let $operation= CREATE TABLE s.t_myisam(i int) engine myisam;
 # So the end result is that we allocate 52 objects, free 52 objects, and leave
 # 0 objects.
 
-let $object_alloc= 52;
-let $object_free= 52;
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
+let $object_alloc= 68;
+let $object_free= 68;
 let $object_count= 0;
 let $operation= CREATE TABLE s.t_innodb_1(i int) TABLESPACE innodb_system;
 --source include/dd_pfs_report_state.inc
@@ -83,8 +85,10 @@ let $operation= CREATE TABLE s.t_innodb_1(i int) TABLESPACE innodb_system;
 #
 # We get the same scenario as above.
 
-let $object_alloc= 52;
-let $object_free= 52;
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
+let $object_alloc= 68;
+let $object_free= 68;
 let $object_count= 0;
 let $operation= CREATE TABLE s.t_innodb_2(i int) TABLESPACE innodb_system;
 --source include/dd_pfs_report_state.inc
@@ -112,9 +116,11 @@ let $operation= SELECT * FROM s.t_myisam;
 # tablespace name. These uncached objects are freed when the auto releaser goes
 # out of scope. Hence, we get 12 allocations, 2 frees, and 10 objects left.
 
-let $object_alloc= 12;
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
+let $object_alloc= 16;
 let $object_free= 2;
-let $object_count= 10;
+let $object_count= 14;
 let $operation= SELECT * FROM s.t_innodb_1;
 --source include/dd_pfs_report_state.inc
 
@@ -123,9 +129,11 @@ let $operation= SELECT * FROM s.t_innodb_1;
 #
 # We get the same scenario and object counts as above.
 
-let $object_alloc= 12;
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
+let $object_alloc= 16;
 let $object_free= 2;
-let $object_count= 10;
+let $object_count= 14;
 let $operation= SELECT * FROM s.t_innodb_2;
 --source include/dd_pfs_report_state.inc
 
@@ -153,9 +161,11 @@ let $operation= SELECT * FROM s.t_innodb_1;
 # remaining uncached ones are deleted (-2). So this results in 7 allocations and
 # 17 frees, and a net change of -10.
 
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
 let $object_alloc= 7;
-let $object_free= 17;
-let $object_count= -10;
+let $object_free= 21;
+let $object_count= -14;
 let $operation= DROP TABLE s.t_innodb_1;
 --source include/dd_pfs_report_state.inc
 
@@ -164,9 +174,11 @@ let $operation= DROP TABLE s.t_innodb_1;
 #
 # We get the same scenario as above.
 
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
 let $object_alloc= 7;
-let $object_free= 17;
-let $object_count= -10;
+let $object_free= 21;
+let $object_count= -14;
 let $operation= DROP TABLE s.t_innodb_2;
 --source include/dd_pfs_report_state.inc
 
@@ -252,9 +264,11 @@ SET foreign_key_checks= DEFAULT;
 --enable_result_log
 --enable_query_log
 
-let $object_alloc= 168;
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
+let $object_alloc= 172;
 let $object_free= 0;
-let $object_count= 168;
+let $object_count= 172;
 --source include/dd_pfs_save_state.inc
 let $operation= SELECT * FROM test.tables;
 --source include/dd_pfs_report_state.inc
@@ -382,10 +396,13 @@ while ($i > 0)
 #
 # So in total this results in (2 + 2 + 1 + 1) * 100 + 1 = 601 allocations,
 # (2 + 2 + 16) * 100 + 1 + 2 * 100 + 1 = 2202 frees, and a net change of -1601.
+
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
 --source include/dd_pfs_save_state.inc
 let $object_alloc= 601;
-let $object_free= 2202;
-let $object_count= -1601;
+let $object_free= 2602;
+let $object_count= -2001;
 let $operation= DROP SCHEMA s;
 --source include/dd_pfs_report_state.inc
 
@@ -464,9 +481,12 @@ SELECT * FROM v2;
 #    version of view object (-3) during commit.
 #
 # So in total we do 19 allocations and 33 deletions of objects.
+
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
 let $object_alloc= 19;
-let $object_free= 33;
-let $object_count= -14;
+let $object_free= 37;
+let $object_count= -18;
 let $operation= DROP SCHEMA s2;
 --source include/dd_pfs_report_state.inc
 DROP VIEW v2;
@@ -503,9 +523,12 @@ SELECT * FROM s3.v3;
 #    during commit.
 #
 # So in total we do 13 allocations and 27 deletions of objects.
+
+# Lizard Revision: More dd objects (SCN column, UBA column)
+
 let $object_alloc= 13;
-let $object_free= 30;
-let $object_count= -17;
+let $object_free= 34;
+let $object_count= -21;
 let $operation= DROP SCHEMA s3;
 --source include/dd_pfs_report_state.inc
 

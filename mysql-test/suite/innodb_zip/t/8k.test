@@ -86,7 +86,7 @@ CREATE TABLE t1 (
 c01 char(200), c02 char(200), c03 char(200), c04 char(200), c05 char(200),
 c06 char(200), c07 char(200), c08 char(200), c09 char(200), c10 char(200),
 c11 char(200), c12 char(200), c13 char(200), c14 char(200), c15 char(200),
-c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(155)
+c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(130)
 ) charset latin1 ROW_FORMAT=redundant;
 DROP TABLE t1;
 # Redundant table; 4027 bytes with 20 CHAR fields
@@ -114,7 +114,7 @@ CREATE TABLE t1 (
 c01 char(200), c02 char(200), c03 char(200), c04 char(200), c05 char(200),
 c06 char(200), c07 char(200), c08 char(200), c09 char(200), c10 char(200),
 c11 char(200), c12 char(200), c13 char(200), c14 char(200), c15 char(200),
-c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(202)
+c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(178)
 ) charset latin1 ROW_FORMAT=compact;
 DROP TABLE t1;
 # Compact table; 4030 bytes with 20 CHAR fields
@@ -133,7 +133,7 @@ CREATE TABLE t1 (
 c01 char(200), c02 char(200), c03 char(200), c04 char(200), c05 char(200),
 c06 char(200), c07 char(200), c08 char(200), c09 char(200), c10 char(200),
 c11 char(200), c12 char(200), c13 char(200), c14 char(200), c15 char(200),
-c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(103)
+c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(79)
 ) ROW_FORMAT=compressed;
 DROP TABLE t1;
 --replace_regex /> [0-9]*/> max_row_size/
@@ -150,7 +150,7 @@ CREATE TABLE t1 (
 c01 char(200), c02 char(200), c03 char(200), c04 char(200), c05 char(200),
 c06 char(200), c07 char(200), c08 char(200), c09 char(200), c10 char(200),
 c11 char(200), c12 char(200), c13 char(200), c14 char(200), c15 char(200),
-c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(202)
+c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(178)
 ) ROW_FORMAT=dynamic;
 DROP TABLE t1;
 --replace_regex /> [0-9]*/> max_row_size/
@@ -487,7 +487,9 @@ drop table t1;
 CREATE TABLE t1(c text, PRIMARY KEY (c(440)))
 ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 DROP TABLE t1;
-CREATE TABLE t1(c text, PRIMARY KEY (c(438)))
+# Lizard: index info will be encoded in compressed pages, and more fields will
+# take more space.
+CREATE TABLE t1(c text, PRIMARY KEY (c(436)))
 ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 INSERT INTO t1 VALUES(REPEAT('A',512)),(REPEAT('B',512));
 DROP TABLE t1;

@@ -67,7 +67,7 @@ template <typename Element_type, typename Object_type, std::size_t Prealloc>
 bool Partition<Element_type, Object_type, Prealloc>::insert(
     Object_type object) {
   Element_type *elem;
-  bool res;
+  bool res = false;
   std::size_t i;
   for (i = 0; i < m_size; i++) {
     elem = m_parts.at(i);

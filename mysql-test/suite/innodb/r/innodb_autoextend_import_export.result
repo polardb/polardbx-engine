@@ -294,8 +294,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
 USE db_destination;
 CREATE TABLE tsource(c1 INT, c2 TEXT) AUTOEXTEND_SIZE 8M
@@ -329,11 +329,11 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
-db_destination/tsource#p#p0	20971520	8388608
-db_destination/tsource#p#p1	20971520	8388608
+db_destination/tsource#p#p0	25165824	8388608
+db_destination/tsource#p#p1	25165824	8388608
 db_destination/tsource#p#p2	4194304	8388608
 DROP TABLE tsource;
 USE db_source;
@@ -354,8 +354,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
 USE db_destination;
 CREATE TABLE tsource(c1 INT, c2 TEXT) AUTOEXTEND_SIZE 8M
@@ -386,11 +386,11 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
-db_destination/tsource#p#p0	20971520	8388608
-db_destination/tsource#p#p1	20971520	8388608
+db_destination/tsource#p#p0	25165824	8388608
+db_destination/tsource#p#p1	25165824	8388608
 db_destination/tsource#p#p2	4194304	8388608
 DROP TABLE tsource;
 USE db_source;
@@ -411,8 +411,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
 USE db_destination;
 CREATE TABLE tsource(c1 INT, c2 TEXT) AUTOEXTEND_SIZE 8M
@@ -445,11 +445,11 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
-db_destination/tsource#p#p0	20971520	8388608
-db_destination/tsource#p#p1	20971520	8388608
+db_destination/tsource#p#p0	25165824	8388608
+db_destination/tsource#p#p1	25165824	8388608
 db_destination/tsource#p#p2	4194304	8388608
 DROP TABLE tsource;
 USE db_source;
@@ -479,8 +479,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
 USE db_destination;
 CREATE TABLE tsource(c1 INT, c2 TEXT) AUTOEXTEND_SIZE 4M, ENCRYPTION='Y'
@@ -520,11 +520,11 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
-db_destination/tsource#p#p0	20971520	4194304
-db_destination/tsource#p#p1	20971520	4194304
+db_destination/tsource#p#p0	25165824	4194304
+db_destination/tsource#p#p1	25165824	4194304
 db_destination/tsource#p#p2	4194304	4194304
 DROP TABLE tsource;
 USE db_source;
@@ -547,8 +547,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
 USE db_destination;
 CREATE TABLE tsource(c1 INT, c2 TEXT) AUTOEXTEND_SIZE 4M, ENCRYPTION='Y'
@@ -625,11 +625,11 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
-db_destination/tsource#p#p0	20971520	4194304
-db_destination/tsource#p#p1	20971520	4194304
+db_destination/tsource#p#p0	25165824	4194304
+db_destination/tsource#p#p1	25165824	4194304
 db_destination/tsource#p#p2	4194304	4194304
 DROP TABLE tsource;
 USE db_source;
@@ -652,8 +652,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
 USE db_destination;
 CREATE TABLE tsource(c1 INT, c2 TEXT) AUTOEXTEND_SIZE 4M, ENCRYPTION='Y'
@@ -724,11 +724,11 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource#p#p0	20971520	4194304
-db_source/tsource#p#p1	20971520	4194304
+db_source/tsource#p#p0	25165824	4194304
+db_source/tsource#p#p1	25165824	4194304
 db_source/tsource#p#p2	4194304	4194304
-db_destination/tsource#p#p0	20971520	4194304
-db_destination/tsource#p#p1	20971520	4194304
+db_destination/tsource#p#p0	25165824	4194304
+db_destination/tsource#p#p1	25165824	4194304
 db_destination/tsource#p#p2	4194304	4194304
 DROP TABLE tsource;
 USE db_source;

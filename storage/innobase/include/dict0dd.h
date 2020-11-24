@@ -60,6 +60,8 @@ Data dictionary interface */
 #endif /* !UNIV_HOTBACKUP */
 #include "mysql_version.h"
 
+#include "lizard0dict.h"
+
 #ifndef UNIV_HOTBACKUP
 class THD;
 class MDL_ticket;
@@ -454,7 +456,8 @@ static inline bool is_system_column(const char *col_name) {
   ut_ad(col_name != nullptr);
   return (strncmp(col_name, "DB_ROW_ID", 9) == 0 ||
           strncmp(col_name, "DB_TRX_ID", 9) == 0 ||
-          strncmp(col_name, "DB_ROLL_PTR", 11) == 0);
+          strncmp(col_name, "DB_ROLL_PTR", 11) == 0 ||
+          lizard::is_lizard_column(col_name));
 }
 
 /** Set different column counters.

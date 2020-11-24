@@ -1354,8 +1354,11 @@ class DDTableBuffer {
   /** Number of user columns */
   static constexpr unsigned N_USER_COLS = METADATA_COL_NO + 1;
 
+  /** Lizard: Add DATA_SCN_ID and DATA_UNDO_PTR */
+
   /** Number of columns */
-  static constexpr unsigned N_COLS = N_USER_COLS + DATA_N_SYS_COLS;
+  static constexpr unsigned N_COLS =
+      N_USER_COLS + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS;
 
   /** Clustered index field number of
   mysql.innodb_dynamic_metadata.table_id */
@@ -1363,12 +1366,15 @@ class DDTableBuffer {
 
   /** Clustered index field number of
   mysql.innodb_dynamic_metadata.version */
-  static constexpr unsigned VERSION_FIELD_NO = VERSION_COL_NO + 2;
+  static constexpr unsigned VERSION_FIELD_NO =
+      VERSION_COL_NO + 2 + DATA_N_LIZARD_COLS;
 
   /** Clustered index field number of
   mysql.innodb_dynamic_metadata.metadata
-  Plusing 2 here skips the DATA_TRX_ID and DATA_ROLL_PTR fields */
-  static constexpr unsigned METADATA_FIELD_NO = METADATA_COL_NO + 2;
+  Plusing 2 here skips the DATA_TRX_ID and DATA_ROLL_PTR fields.
+  Lizard: Alos skips the DATA_SCN_ID and DATA_UNDO_PTR fields */
+  static constexpr unsigned METADATA_FIELD_NO =
+      METADATA_COL_NO + 2 + DATA_N_LIZARD_COLS;
 
   /** Number of fields in the clustered index */
   static constexpr unsigned N_FIELDS = METADATA_FIELD_NO + 1;

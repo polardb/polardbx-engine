@@ -76,6 +76,11 @@ Data dictionary interface */
 #include "sql_table.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0dict.h"
+#include "lizard0row.h"
+#include "lizard0page.h"
+#include "lizard0data0types.h"
+
 const char *DD_instant_col_val_coder::encode(const byte *stream, size_t in_len,
                                              size_t *out_len) {
   cleanup();
@@ -2468,6 +2473,9 @@ void dd_import_instant_add_columns(const dict_table_t *table,
     fn(DATA_ROW_ID, "DB_ROW_ID");
     fn(DATA_TRX_ID, "DB_TRX_ID");
     fn(DATA_ROLL_PTR, "DB_ROLL_PTR");
+
+    fn(DATA_SCN_ID, "DB_SCN_ID");
+    fn(DATA_UNDO_PTR, "DB_UNDO_PTR");
   }
 
   ut_d(validate_dropped_col_metadata(dd_table, table));
@@ -3577,6 +3585,10 @@ static inline void fill_dict_columns(const Table *dd_table, const TABLE *m_form,
     fn(DATA_ROW_ID, "DB_ROW_ID");
     fn(DATA_TRX_ID, "DB_TRX_ID");
     fn(DATA_ROLL_PTR, "DB_ROLL_PTR");
+
+    /** Read physical pos for lizard columns */
+    fn(DATA_SCN_ID, "DB_SCN_ID");
+    fn(DATA_UNDO_PTR, "DB_UNDO_PTR");
   }
 
   /* If table has INSTANT DROP columns, add them now. */
@@ -5294,6 +5306,10 @@ static const rec_t *dd_getnext_system_low(btr_pcur_t *pcur, mtr_t *mtr) {
   while (!rec || rec_get_deleted_flag(rec, is_comp)) {
     pcur->move_to_next_user_rec(mtr);
 
+    if (pcur->index()->is_clustered()) {
+      assert_lizard_page_attributes(pcur->get_page(), pcur->index());
+    }
+
     rec = pcur->get_rec();
 
     if (!pcur->is_on_user_rec()) {
@@ -5340,6 +5356,9 @@ const rec_t *dd_startscan_system(THD *thd, MDL_ticket **mdl, btr_pcur_t *pcur,
 
   clust_index = UT_LIST_GET_FIRST((*table)->indexes);
 
+  assert_lizard_dict_index_check(clust_index);
+  assert_lizard_dict_table_check(*table);
+
   mtr_start(mtr);
   pcur->open_at_side(true, clust_index, BTR_SEARCH_LEAF, true, 0, mtr);
 
@@ -5352,8 +5371,10 @@ const rec_t *dd_startscan_system(THD *thd, MDL_ticket **mdl, btr_pcur_t *pcur,
   All DD tables would contain DB_TRX_ID and DB_ROLL_PTR fields
   before other fields. This offset indicates the position at
   which the first DD column is located.
+
+  Lizard: In addition, Lizard also add two columns [DB_SCN_ID, DB_UNDO_PTR]
 */
-static const int DD_FIELD_OFFSET = 2;
+static const int DD_FIELD_OFFSET = 2 + DATA_N_LIZARD_COLS;
 
 /** Process one mysql.tables record and get the dict_table_t
 @param[in]      heap            Temp memory heap
@@ -5552,7 +5573,9 @@ bool dd_process_dd_columns_rec(mem_heap_t *heap, const rec_t *rec,
   pos = mach_read_from_4(field) - 1;
 
   /* Get the is_virtual attribute. */
-  field = (const byte *)rec_get_nth_field(nullptr, rec, offsets, 21, &len);
+  field = (const byte *)rec_get_nth_field(
+      nullptr, rec, offsets,
+      dd_object_table.field_number("FIELD_IS_VIRTUAL") + DD_FIELD_OFFSET, &len);
   is_virtual = mach_read_from_1(field) & 0x01;
 
   /* Get the se_private_data field. */

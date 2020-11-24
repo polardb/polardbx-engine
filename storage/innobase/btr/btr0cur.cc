@@ -92,6 +92,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0roll.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0undo.h"
+#include "lizard0row.h"
+#include "lizard0page.h"
+#include "lizard0dict.h"
+
 #include <array>
 
 /** Buffered B-tree operation types, introduced as part of delete buffering. */
@@ -2618,9 +2623,22 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
       ut_ad(roll_ptr == 0);
       roll_ptr = trx_undo_build_roll_ptr(true, 0, 0, 0);
       ut_ad(roll_ptr == (1ULL << 55));
+
+      /** Lizard: A DDL using copy-algorithm would go through here.
+      if the table is non-temporary, txn undo must be assigned.
+      else txn undo must not be assigned. */
+      if (!index->table->is_temporary()) {
+        assert_txn_desc_allocated(thr_get_trx(thr));
+      } else {
+        assert_txn_desc_initial(thr_get_trx(thr));
+      }
     }
 
     row_upd_index_entry_sys_field(entry, index, DATA_ROLL_PTR, roll_ptr);
+
+    /** If a table is temporary, fill TXN_DESC_TEMP,
+    else fill the normal scn and undo_ptr */
+    lizard::row_upd_index_entry_lizard_field(thr, entry, index);
   }
 
   return (DB_SUCCESS);
@@ -3385,6 +3403,9 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
   if (!(flags & BTR_KEEP_SYS_FLAG) && !index->table->is_intrinsic()) {
     row_upd_rec_sys_fields(rec, nullptr, index, offsets, thr_get_trx(thr),
                            roll_ptr);
+
+    lizard::row_upd_rec_lizard_fields(rec, NULL, index, offsets,
+                                      thr_get_trx(thr));
   }
 
   was_delete_marked =
@@ -3411,6 +3432,10 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
   row_upd_rec_in_place(rec, index, offsets, update, page_zip);
 
   btr_cur_update_in_place_log(flags, rec, index, update, trx_id, roll_ptr, mtr);
+
+  if (index->is_clustered() && !index->table->is_intrinsic()) {
+    assert_lizard_page_attributes(page_align(rec), index);
+  }
 
   if (was_delete_marked &&
       !rec_get_deleted_flag(rec, page_is_comp(buf_block_get_frame(block)))) {
@@ -3526,6 +3551,8 @@ dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
         thr_get_trx(thr)->id == trx_id);
   ut_ad(fil_page_index_page_check(page));
   ut_ad(btr_page_get_index_id(page) == index->id);
+
+  assert_lizard_dict_index_check(index);
 
   DBUG_EXECUTE_IF("DB_ZIP_OVERFLOW_on_btr_cur_optimistic_update",
                   return (DB_ZIP_OVERFLOW););
@@ -3692,6 +3719,10 @@ dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
   if (!(flags & BTR_KEEP_SYS_FLAG) && !index->table->is_intrinsic()) {
     row_upd_index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
     row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx_id);
+
+    /** If a table is temporary, fill TXN_DESC_TEMP,
+    else fill the normal scn and undo_ptr */
+    lizard::row_upd_index_entry_lizard_field(thr, new_entry, index);
   }
 
   /* There are no externally stored columns in new_entry */
@@ -3976,6 +4007,10 @@ dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
   if (!(flags & BTR_KEEP_SYS_FLAG) && !index->table->is_intrinsic()) {
     row_upd_index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
     row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx_id);
+
+    /** If a table is temporary, fill TXN_DESC_TEMP,
+    else fill the normal scn and undo_ptr */
+    lizard::row_upd_index_entry_lizard_field(thr, new_entry, index);
   }
 
   if (!page_zip) {
@@ -4302,6 +4337,8 @@ dberr_t btr_cur_del_mark_set_clust_rec(
     return (DB_SUCCESS);
   }
 
+  assert_lizard_page_attributes(page_align(rec), index);
+
   err = lock_clust_rec_modify_check_and_lock(BTR_NO_LOCKING_FLAG, block, rec,
                                              index, offsets, thr);
 
@@ -4346,6 +4383,10 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   }
 
   row_upd_rec_sys_fields(rec, page_zip, index, offsets, trx, roll_ptr);
+
+  lizard::row_upd_rec_lizard_fields(rec, page_zip, index, offsets, trx);
+
+  assert_lizard_page_attributes(page_align(rec), index);
 
   btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr, mtr);
 

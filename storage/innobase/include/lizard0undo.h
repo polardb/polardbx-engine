@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0undo_h
 #define lizard0undo_h
 
+#include "fut0lst.h"
 #include "trx0types.h"
 #include "trx0undo.h"
 
@@ -103,11 +104,45 @@ struct txn_undo_ext_t {
 
 namespace lizard {
 
+/**------------------------------------------------------------------------*/
 /** Initial value of undo ptr  */
 constexpr undo_ptr_t UNDO_PTR_NULL = std::numeric_limits<undo_ptr_t>::min();
 
 /** Fake UBA for internal table */
 constexpr undo_ptr_t UNDO_PTR_FAKE = (undo_ptr_t)1 << 55;
+
+/** Temporary table record UBA offset */
+constexpr ulint UNDO_PTR_OFFSET_TEMP_TAB_REC = (ulint)0xFFFF;
+
+/** Temporary table record UBA */
+constexpr undo_ptr_t UNDO_PTR_TEMP_TAB_REC =
+    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_TEMP_TAB_REC;
+
+/** Temporary table txn description */
+constexpr txn_desc_t TXN_DESC_TEMP = {UNDO_PTR_TEMP_TAB_REC,
+                                      {SCN_TEMP_TAB_REC, UTC_TEMP_TAB_REC}};
+
+/** Dynamic metadata table record UBA offset */
+constexpr ulint UNDO_PTR_OFFSET_DYNAMIC_METADATA = (ulint)0xFFFF - 1;
+
+/** Temporary table record UBA */
+constexpr undo_ptr_t UNDO_PTR_DYNAMIC_METADATA =
+    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_DYNAMIC_METADATA;
+
+/** Dynamic metadata table txn description */
+constexpr txn_desc_t TXN_DESC_DM = {
+    UNDO_PTR_DYNAMIC_METADATA, {SCN_DYNAMIC_METADATA, UTC_DYNAMIC_METADATA}};
+
+/** Log_ddl table record UBA offset */
+constexpr ulint UNDO_PTR_OFFSET_LOG_DDL = (ulint)0xFFFF - 2;
+
+/** Log_ddl record UBA */
+constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
+    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_LOG_DDL;
+
+/** Log ddl table txn description */
+constexpr txn_desc_t TXN_DESC_LD = {UNDO_PTR_LOG_DDL,
+                                    {SCN_LOG_DDL, UTC_LOG_DDL}};
 
 /* Lizard transaction undo header operation */
 /*-----------------------------------------------------------------------------*/
@@ -190,6 +225,65 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
 void trx_undo_hdr_read_txn(const page_t *undo_page,
                            const trx_ulogf_t *undo_header, mtr_t *mtr,
                            txn_undo_ext_t *txn_undo_ext);
+
+/**
+  Write the scn into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void trx_write_scn(byte *ptr, const txn_desc_t *txn_desc);
+
+/**
+  Write the scn into the buffer
+  @param[in/out]    ptr     buffer
+  @param[in]        scn     scn id
+*/
+void trx_write_scn(byte *ptr, scn_id_t scn);
+
+/**
+  Write the UBA into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void trx_write_undo_ptr(byte *ptr, const txn_desc_t *txn_desc);
+
+/**
+  Write the UBA into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        undo_ptr  UBA
+*/
+void trx_write_undo_ptr(byte *ptr, undo_ptr_t undo_ptr);
+
+/**
+  Read the scn
+  @param[in]        ptr       buffer
+
+  @return           scn_id_t  scn
+*/
+scn_id_t trx_read_scn(const byte *ptr);
+
+/**
+  Read the UBA
+  @param[in]        ptr        buffer
+
+  @return           undo_ptr_t undo_ptr
+*/
+undo_ptr_t trx_read_undo_ptr(const byte *ptr);
+
+/**
+  Decode the undo_ptr into UBA
+  @param[in]      undo ptr
+  @param[out]     undo addr
+ */
+void undo_decode_undo_ptr(undo_ptr_t undo_ptr, undo_addr_t *undo_addr);
+
+/**
+  Encode UBA into undo_ptr that need to copy into record
+  @param[in]      undo addr
+  @param[out]     undo ptr
+*/
+void undo_encode_undo_addr(const undo_addr_t &undo_addr,
+                           undo_ptr_t *undo_ptr);
 
 /*-----------------------------------------------------------------------------*/
 
@@ -330,54 +424,61 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
                                        trx_undo_t::Gtid_storage gtid_storage);
 /*=============================================================================*/
 
-#define TXN_DESC_NULL \
+#define TXN_DESC_NULL                                                          \
   { lizard::UNDO_PTR_NULL, COMMIT_SCN_NULL }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
 /* Assert the txn_desc is initial */
-#define assert_txn_desc_initial(trx)                                          \
-  do {                                                                        \
-    ut_a((trx)->txn_desc.undo_ptr == lizard::UNDO_PTR_NULL &&                 \
-         lizard::commit_scn_state((trx)->txn_desc.scn) == SCN_STATE_INITIAL); \
+#define assert_txn_desc_initial(trx)                                           \
+  do {                                                                         \
+    ut_a((trx)->txn_desc.undo_ptr == lizard::UNDO_PTR_NULL &&                  \
+         lizard::commit_scn_state((trx)->txn_desc.scn) == SCN_STATE_INITIAL);  \
   } while (0)
 
-#define assert_undo_ptr_initial(undo_ptr)         \
-  do {                                            \
-    ut_a((*(undo_ptr)) == lizard::UNDO_PTR_NULL); \
+/* Assert the txn_desc is allocated */
+#define assert_txn_desc_allocated(trx)                                         \
+  do {                                                                         \
+    ut_a((trx)->txn_desc.undo_ptr != lizard::UNDO_PTR_NULL &&                  \
+         lizard::commit_scn_state((trx)->txn_desc.scn) == SCN_STATE_INITIAL);  \
   } while (0)
 
-#define assert_undo_ptr_allocated(undo_ptr)       \
-  do {                                            \
-    ut_a((*(undo_ptr)) != lizard::UNDO_PTR_NULL); \
+#define assert_undo_ptr_initial(undo_ptr)                                      \
+  do {                                                                         \
+    ut_a((*(undo_ptr)) == lizard::UNDO_PTR_NULL);                              \
   } while (0)
 
-#define assert_trx_undo_ptr_initial(trx) \
+#define assert_undo_ptr_allocated(undo_ptr)                                    \
+  do {                                                                         \
+    ut_a((*(undo_ptr)) != lizard::UNDO_PTR_NULL);                              \
+  } while (0)
+
+#define assert_trx_undo_ptr_initial(trx)                                       \
   assert_undo_ptr_initial((&(trx)->txn_desc.undo_ptr))
 
-#define assert_trx_undo_ptr_allocated(trx) \
+#define assert_trx_undo_ptr_allocated(trx)                                     \
   assert_undo_ptr_allocated(&((trx)->txn_desc.undo_ptr))
 
-#define lizard_trx_undo_page_validation(page)     \
-  do {                                            \
-    ut_a(lizard::trx_undo_page_validation(page)); \
+#define lizard_trx_undo_page_validation(page)                                  \
+  do {                                                                         \
+    ut_a(lizard::trx_undo_page_validation(page));                              \
   } while (0)
 
-#define lizard_trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)        \
-  do {                                                                      \
-    txn_undo_ext_t txn_undo_ext;                                            \
-    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_ext); \
-    ut_a(txn_undo_ext.magic_n == TXN_MAGIC_N && txn_undo_ext.flag == 0);    \
+#define lizard_trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)           \
+  do {                                                                         \
+    txn_undo_ext_t txn_undo_ext;                                               \
+    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_ext);    \
+    ut_a(txn_undo_ext.magic_n == TXN_MAGIC_N && txn_undo_ext.flag == 0);       \
   } while (0)
 
-#define lizard_undo_addr_validation(undo_addr, index)     \
-  do {                                                    \
-    ut_a(lizard::undo_addr_validation(undo_addr, index)); \
+#define lizard_undo_addr_validation(undo_addr, index)                          \
+  do {                                                                         \
+    ut_a(lizard::undo_addr_validation(undo_addr, index));                      \
   } while (0)
 
-#define lizard_undo_scn_validation(undo)     \
-  do {                                       \
-    ut_a(lizard::undo_scn_validation(undo)); \
+#define lizard_undo_scn_validation(undo)                                       \
+  do {                                                                         \
+    ut_a(lizard::undo_scn_validation(undo));                                   \
   } while (0)
 
 #define assert_trx_in_recovery(trx)                                            \
@@ -387,14 +488,15 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
     }                                                                          \
   } while (0)
 
-#define lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)     \
-  do {                                                                   \
-    ut_a(lizard::txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)); \
+#define lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)           \
+  do {                                                                         \
+    ut_a(lizard::txn_undo_free_list_validate(rseg_hdr, undo_page, mtr));       \
   } while (0)
 #else
 
 #define lizard_trx_undo_page_validation(page)
 #define assert_txn_desc_initial(trx)
+#define assert_txn_desc_allocated(trx)
 #define assert_undo_ptr_initial(undo_ptr)
 #define assert_undo_ptr_allocated(undo_ptr)
 #define assert_trx_undo_ptr_initial(trx)

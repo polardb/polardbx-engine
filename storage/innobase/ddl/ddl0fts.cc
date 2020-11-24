@@ -44,6 +44,8 @@ Created 10/13/2010 Jimmy Yang */
 
 #include <current_thd.h>
 
+#include "lizard0undo.h"
+
 /** Parallel sort degree, must be a power of 2. */
 ulong ddl::fts_parser_threads = 2;
 
@@ -1096,22 +1098,23 @@ dberr_t FTS::Inserter::write_node(const Insert *ins_ctx,
 
   {
     /* The third and fourth fields(TRX_ID, ROLL_PTR) are filled already.*/
+    /* Lizard: The fifth and sixth fileds(SCN_ID, UNDO_PTR) are filled already.*/
     /* The fifth field is last_doc_id */
-    auto field = dtuple_get_nth_field(tuple, 4);
+    auto field = dtuple_get_nth_field(tuple, 6);
     fts_write_doc_id((byte *)&last_doc_id, node->last_doc_id);
     dfield_set_data(field, &last_doc_id, sizeof(last_doc_id));
   }
 
   {
     /* The sixth field is doc_count */
-    auto field = dtuple_get_nth_field(tuple, 5);
+    auto field = dtuple_get_nth_field(tuple, 7);
     mach_write_to_4((byte *)&doc_count, (uint32_t)node->doc_count);
     dfield_set_data(field, &doc_count, sizeof(doc_count));
   }
 
   {
     /* The seventh field is ilist */
-    auto field = dtuple_get_nth_field(tuple, 6);
+    auto field = dtuple_get_nth_field(tuple, 8);
     dfield_set_data(field, node->ilist, node->ilist_size);
   }
 
@@ -1273,6 +1276,16 @@ dberr_t FTS::Inserter::insert(Builder *builder,
 
   trx_start_if_not_started(trx, true, UT_LOCATION_HERE);
 
+  {
+    /** Allocate txn undo log hdr to commit scn, it will
+    commit by fts_commit */
+    mutex_enter(&trx->undo_mutex);
+    dberr_t error = lizard::trx_always_assign_txn_undo(trx);
+    mutex_exit(&trx->undo_mutex);
+
+    ut_a(error == DB_SUCCESS);
+  }
+
   trx->op_info = "inserting index entries";
 
   Insert ins_ctx;
@@ -1365,6 +1378,23 @@ dberr_t FTS::Inserter::insert(Builder *builder,
     auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 3);
 
     dfield_set_data(field, &roll_ptr, 7);
+  }
+
+  byte trx_scn_buf[DATA_SCN_ID_LEN];
+  byte undo_ptr_buf[DATA_UNDO_PTR_LEN];
+
+  /* Lizard: Set SCN column and UNDO_PTR column */
+  {
+    lizard::trx_write_scn(trx_scn_buf, &trx->txn_desc);
+    auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 4);
+    dfield_set_data(field, &trx_scn_buf, DATA_SCN_ID_LEN);
+  }
+
+  /* Lizard: Set the real value */
+  {
+    lizard::trx_write_undo_ptr(undo_ptr_buf, &trx->txn_desc);
+    auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 5);
+    dfield_set_data(field, &undo_ptr_buf, DATA_UNDO_PTR_LEN);
   }
 
   ut_d(ins_ctx.m_handler_id = handler->m_id);

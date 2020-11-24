@@ -2,7 +2,7 @@ CREATE PROCEDURE add_columns(table_name varchar(50), algorithm varchar(10))
 BEGIN
 DECLARE i INT DEFAULT 1;
 SET @sql_text = CONCAT('ALTER TABLE ', table_name, ' ');
-while (i < 1012) do
+while (i < 1008) do
 SET @sql_text = CONCAT(@sql_text, ' ADD COLUMN ', CONCAT('col_', i), ' INTEGER NULL DEFAULT NULL,');
 set i = i + 1;
 end while;

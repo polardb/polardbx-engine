@@ -296,6 +296,7 @@ else
   make clean
   cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
   cmake .                               \
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
       -DFORCE_INSOURCE_BUILD=1           \
       -DCMAKE_BUILD_TYPE="$build_type"   \
       -DWITH_PROTOBUF:STRING=bundled     \

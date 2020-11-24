@@ -14,6 +14,7 @@ call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Cannot add field.*");
 SET @saved_innodb_strict_mode=@@SESSION.innodb_strict_mode;
 SET SESSION innodb_strict_mode=OFF;
 
+# Lizard: we have to reduct the column because two sys columns are added
 --disable_warnings
 CREATE TABLE t1(
 c0 INT(1),
@@ -49,7 +50,7 @@ c29 ENUM('test1','test2','test3'),
 c30 INT(6),
 c31 DOUBLE,
 c32 FLOAT,
-c33 char(175),
+c33 char(152),
 c34 TEXT,
 c35 TEXT,
 c36 BLOB,

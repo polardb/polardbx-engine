@@ -7,7 +7,7 @@
 CREATE TABLE t1(id INT PRIMARY KEY, c1 CHAR(10), c2 CHAR(10)) ROW_FORMAT=REDUNDANT;;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	0	3	3	3
+test/t1	8	0	0	3	3	3
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
@@ -23,6 +23,8 @@ c1	2	MYSQL_TYPE_STRING	0	Visible	table_id=TABLE_ID;
 c2	3	MYSQL_TYPE_STRING	0	Visible	table_id=TABLE_ID;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
 INSERT INTO t1 VALUES (1, "r1c1", "r1c2");
 SELECT * FROM t1;
 id	c1	c2
@@ -31,7 +33,7 @@ id	c1	c2
 Alter table t1 add column c3 char(10), algorithm=instant;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	7	0	1	3	4	4
+test/t1	9	0	1	3	4	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
@@ -44,11 +46,13 @@ t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c2	3	MYSQL_TYPE_STRING	0	Visible	physical_pos=4;table_id=TABLE_ID;
-c3	4	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c2	3	MYSQL_TYPE_STRING	0	Visible	physical_pos=6;table_id=TABLE_ID;
+c3	4	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	5	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
+DB_SCN_ID	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	8	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
 INSERT INTO t1 VALUES (2, "r2c1", "r2c2", "r2c3");
 SELECT * FROM t1;
 id	c1	c2	c3
@@ -58,24 +62,26 @@ id	c1	c2	c3
 Alter table t1 drop column c2 , algorithm=instant;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	2	3	3	4
+test/t1	8	0	2	3	3	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
 c1	1	13	16711934	0	0	0
 c3	2	13	16711934	1	1	0
-!hidden!_dropped_v2_p4_c2	6	13	16711934	0	0	2
+!hidden!_dropped_v2_p6_c2	8	13	16711934	0	0	2
 # DD Metadata of table
 NAME	SE_PRIVATE_DATA
 t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
-!hidden!_dropped_v2_p4_c2	6	MYSQL_TYPE_STRING	0	SE	physical_pos=4;version_dropped=2;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
+!hidden!_dropped_v2_p6_c2	8	MYSQL_TYPE_STRING	0	SE	physical_pos=6;version_dropped=2;
 INSERT INTO t1 VALUES (3, "r3c1", "r3c3");
 SELECT * FROM t1;
 id	c1	c3
@@ -98,24 +104,26 @@ DELETE FROM t1 WHERE id=2;
 # Kill and restart
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	2	3	3	4
+test/t1	8	0	2	3	3	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
 c1	1	13	16711934	0	0	0
 c3	2	13	16711934	1	1	0
-!hidden!_dropped_v2_p4_c2	6	13	16711934	0	0	2
+!hidden!_dropped_v2_p6_c2	8	13	16711934	0	0	2
 # DD Metadata of table
 NAME	SE_PRIVATE_DATA
 t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
-!hidden!_dropped_v2_p4_c2	6	MYSQL_TYPE_STRING	0	SE	physical_pos=4;version_dropped=2;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
+!hidden!_dropped_v2_p6_c2	8	MYSQL_TYPE_STRING	0	SE	physical_pos=6;version_dropped=2;
 SELECT * FROM t1;
 id	c1	c3
 1	r0c0	r1c3
@@ -134,7 +142,7 @@ DROP TABLE t1;
 CREATE TABLE t1(id INT PRIMARY KEY, c1 CHAR(10), c2 CHAR(10)) ROW_FORMAT=DYNAMIC;;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	0	3	3	3
+test/t1	8	0	0	3	3	3
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
@@ -150,6 +158,8 @@ c1	2	MYSQL_TYPE_STRING	0	Visible	table_id=TABLE_ID;
 c2	3	MYSQL_TYPE_STRING	0	Visible	table_id=TABLE_ID;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
 INSERT INTO t1 VALUES (1, "r1c1", "r1c2");
 SELECT * FROM t1;
 id	c1	c2
@@ -158,7 +168,7 @@ id	c1	c2
 Alter table t1 add column c3 char(10), algorithm=instant;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	7	0	1	3	4	4
+test/t1	9	0	1	3	4	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
@@ -171,11 +181,13 @@ t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c2	3	MYSQL_TYPE_STRING	0	Visible	physical_pos=4;table_id=TABLE_ID;
-c3	4	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c2	3	MYSQL_TYPE_STRING	0	Visible	physical_pos=6;table_id=TABLE_ID;
+c3	4	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	5	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
+DB_SCN_ID	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	8	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
 INSERT INTO t1 VALUES (2, "r2c1", "r2c2", "r2c3");
 SELECT * FROM t1;
 id	c1	c2	c3
@@ -185,24 +197,26 @@ id	c1	c2	c3
 Alter table t1 drop column c2 , algorithm=instant;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	2	3	3	4
+test/t1	8	0	2	3	3	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
 c1	1	13	16711934	0	0	0
 c3	2	13	16711934	1	1	0
-!hidden!_dropped_v2_p4_c2	6	13	16711934	0	0	2
+!hidden!_dropped_v2_p6_c2	8	13	16711934	0	0	2
 # DD Metadata of table
 NAME	SE_PRIVATE_DATA
 t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
-!hidden!_dropped_v2_p4_c2	6	MYSQL_TYPE_STRING	0	SE	physical_pos=4;version_dropped=2;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
+!hidden!_dropped_v2_p6_c2	8	MYSQL_TYPE_STRING	0	SE	physical_pos=6;version_dropped=2;
 INSERT INTO t1 VALUES (3, "r3c1", "r3c3");
 SELECT * FROM t1;
 id	c1	c3
@@ -225,24 +239,26 @@ DELETE FROM t1 WHERE id=2;
 # Kill and restart
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	2	3	3	4
+test/t1	8	0	2	3	3	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
 c1	1	13	16711934	0	0	0
 c3	2	13	16711934	1	1	0
-!hidden!_dropped_v2_p4_c2	6	13	16711934	0	0	2
+!hidden!_dropped_v2_p6_c2	8	13	16711934	0	0	2
 # DD Metadata of table
 NAME	SE_PRIVATE_DATA
 t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
-!hidden!_dropped_v2_p4_c2	6	MYSQL_TYPE_STRING	0	SE	physical_pos=4;version_dropped=2;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
+!hidden!_dropped_v2_p6_c2	8	MYSQL_TYPE_STRING	0	SE	physical_pos=6;version_dropped=2;
 SELECT * FROM t1;
 id	c1	c3
 1	r0c0	r1c3
@@ -261,7 +277,7 @@ DROP TABLE t1;
 CREATE TABLE t1(id INT PRIMARY KEY, c1 CHAR(10), c2 CHAR(10)) ROW_FORMAT=COMPACT;;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	0	3	3	3
+test/t1	8	0	0	3	3	3
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
@@ -277,6 +293,8 @@ c1	2	MYSQL_TYPE_STRING	0	Visible	table_id=TABLE_ID;
 c2	3	MYSQL_TYPE_STRING	0	Visible	table_id=TABLE_ID;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	table_id=TABLE_ID;
 INSERT INTO t1 VALUES (1, "r1c1", "r1c2");
 SELECT * FROM t1;
 id	c1	c2
@@ -285,7 +303,7 @@ id	c1	c2
 Alter table t1 add column c3 char(10), algorithm=instant;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	7	0	1	3	4	4
+test/t1	9	0	1	3	4	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
@@ -298,11 +316,13 @@ t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c2	3	MYSQL_TYPE_STRING	0	Visible	physical_pos=4;table_id=TABLE_ID;
-c3	4	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c2	3	MYSQL_TYPE_STRING	0	Visible	physical_pos=6;table_id=TABLE_ID;
+c3	4	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	5	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
+DB_SCN_ID	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	8	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
 INSERT INTO t1 VALUES (2, "r2c1", "r2c2", "r2c3");
 SELECT * FROM t1;
 id	c1	c2	c3
@@ -312,24 +332,26 @@ id	c1	c2	c3
 Alter table t1 drop column c2 , algorithm=instant;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	2	3	3	4
+test/t1	8	0	2	3	3	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
 c1	1	13	16711934	0	0	0
 c3	2	13	16711934	1	1	0
-!hidden!_dropped_v2_p4_c2	6	13	16711934	0	0	2
+!hidden!_dropped_v2_p6_c2	8	13	16711934	0	0	2
 # DD Metadata of table
 NAME	SE_PRIVATE_DATA
 t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
-!hidden!_dropped_v2_p4_c2	6	MYSQL_TYPE_STRING	0	SE	physical_pos=4;version_dropped=2;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
+!hidden!_dropped_v2_p6_c2	8	MYSQL_TYPE_STRING	0	SE	physical_pos=6;version_dropped=2;
 INSERT INTO t1 VALUES (3, "r3c1", "r3c3");
 SELECT * FROM t1;
 id	c1	c3
@@ -352,24 +374,26 @@ DELETE FROM t1 WHERE id=2;
 # Kill and restart
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS	INITIAL_COLUMN_COUNTS	CURRENT_COLUMN_COUNTS	TOTAL_COLUMN_COUNTS
-test/t1	6	0	2	3	3	4
+test/t1	8	0	2	3	3	4
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT	VERSION_ADDED	VERSION_DROPPED
 id	0	6	1283	0	0	0
 c1	1	13	16711934	0	0	0
 c3	2	13	16711934	1	1	0
-!hidden!_dropped_v2_p4_c2	6	13	16711934	0	0	2
+!hidden!_dropped_v2_p6_c2	8	13	16711934	0	0	2
 # DD Metadata of table
 NAME	SE_PRIVATE_DATA
 t1	NULL
 # DD Metadata of columns in table
 NAME	ORDINAL_POSITION	TYPE	HAS_NO_DEFAULT	HIDDEN	SE_PRIVATE_DATA
 id	1	MYSQL_TYPE_LONG	1	Visible	physical_pos=0;table_id=TABLE_ID;
-c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=3;table_id=TABLE_ID;
-c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=5;table_id=TABLE_ID;version_added=1;
+c1	2	MYSQL_TYPE_STRING	0	Visible	physical_pos=5;table_id=TABLE_ID;
+c3	3	MYSQL_TYPE_STRING	0	Visible	default_null=1;physical_pos=7;table_id=TABLE_ID;version_added=1;
 DB_TRX_ID	4	MYSQL_TYPE_INT24	0	SE	physical_pos=1;table_id=TABLE_ID;
 DB_ROLL_PTR	5	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=2;table_id=TABLE_ID;
-!hidden!_dropped_v2_p4_c2	6	MYSQL_TYPE_STRING	0	SE	physical_pos=4;version_dropped=2;
+DB_SCN_ID	6	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=3;table_id=TABLE_ID;
+DB_UNDO_PTR	7	MYSQL_TYPE_LONGLONG	0	SE	physical_pos=4;table_id=TABLE_ID;
+!hidden!_dropped_v2_p6_c2	8	MYSQL_TYPE_STRING	0	SE	physical_pos=6;version_dropped=2;
 SELECT * FROM t1;
 id	c1	c3
 1	r0c0	r1c3
