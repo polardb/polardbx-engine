@@ -57,6 +57,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 #include "lizard0undo.h"
+#include "lizard0row.h"
 
 namespace dd {
 class Spatial_reference_system;
@@ -1269,6 +1270,19 @@ static ulint trx_undo_page_report_modify(
   ptr += mach_u64_write_compressed(ptr, trx_read_roll_ptr(field));
 
   /*----------------------------------------*/
+  /* Lizard: store SCN and UBA */
+  field = rec_get_nth_field(nullptr, rec, offsets,
+                            index->get_sys_col_pos(DATA_SCN_ID), &flen);
+
+  ut_ad(flen == DATA_SCN_ID_LEN);
+  ptr += mach_u64_write_compressed(ptr, lizard::trx_read_scn(field));
+
+  field = rec_get_nth_field(nullptr, rec, offsets,
+                            index->get_sys_col_pos(DATA_UNDO_PTR), &flen);
+  ut_ad(flen == DATA_UNDO_PTR_LEN);
+  ptr += mach_u64_write_compressed(ptr, lizard::trx_read_undo_ptr(field));
+
+  /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the
   record which will be modified in the clustered index */
 
@@ -1717,7 +1731,8 @@ byte *trx_undo_update_rec_get_update(const byte *ptr, const dict_index_t *index,
                                      roll_ptr_t roll_ptr, ulint info_bits,
                                      mem_heap_t *heap, upd_t **upd,
                                      lob::undo_vers_t *lob_undo,
-                                     type_cmpl_t &type_cmpl) {
+                                     type_cmpl_t &type_cmpl,
+                                     txn_info_t txn_info) {
   DBUG_TRACE;
 
   upd_field_t *upd_field;
@@ -1737,7 +1752,7 @@ byte *trx_undo_update_rec_get_update(const byte *ptr, const dict_index_t *index,
     n_fields = 0;
   }
 
-  update = upd_create(n_fields + 2, heap);
+  update = upd_create(n_fields + 2 + DATA_N_LIZARD_COLS, heap);
 
   update->table = index->table;
 
@@ -1763,6 +1778,10 @@ byte *trx_undo_update_rec_get_update(const byte *ptr, const dict_index_t *index,
   upd_field_set_field_no(upd_field, index->get_sys_col_pos(DATA_ROLL_PTR),
                          index);
   dfield_set_data(&(upd_field->new_val), buf, DATA_ROLL_PTR_LEN);
+
+  /** Lizard: Fill the lizard fields into update vector */
+  lizard::trx_undo_update_rec_by_lizard_fields(index, update, n_fields + 2,
+                                               txn_info, heap);
 
   /* Store then the updated ordinary columns to the update vector */
 
@@ -2456,11 +2475,20 @@ bool trx_undo_prev_version_build(
   bool dummy_extern;
   byte *buf;
 
+  txn_info_t txn_rec_info;
+  txn_info_t txn_info;
+
   ut_ad(!rw_lock_own(&purge_sys->latch, RW_LOCK_S));
   ut_ad(mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_S_FIX) ||
         mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_X_FIX));
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_a(index->is_clustered());
+
+  /** Lizard: field operations */
+  assert_row_lizard_valid(rec, index, offsets);
+  txn_rec_info.scn = lizard::row_get_rec_scn_id(rec, index, offsets);
+  txn_rec_info.undo_ptr = lizard::row_get_rec_undo_ptr(rec, index, offsets);
+  assert_undo_ptr_allocated(&txn_rec_info.undo_ptr);
 
   roll_ptr = row_get_rec_roll_ptr(rec, index, offsets);
 
@@ -2504,6 +2532,9 @@ bool trx_undo_prev_version_build(
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
+  /** Lizard: Retrieve txn info from undo log record */
+  ptr = lizard::trx_undo_update_rec_get_lizard_cols(ptr, &txn_info);
+
   /* (a) If a clustered index record version is such that the
   trx id stamp in it is bigger than purge_sys->view, then the
   BLOBs in that version are known to exist (the purge has not
@@ -2530,7 +2561,7 @@ bool trx_undo_prev_version_build(
 
   ptr = trx_undo_update_rec_get_update(ptr, index, type, trx_id, roll_ptr,
                                        info_bits, heap, &update, lob_undo,
-                                       type_cmpl);
+                                       type_cmpl, txn_info);
   ut_a(ptr);
 
   if (row_upd_changes_field_size_or_external(index, offsets, update)) {

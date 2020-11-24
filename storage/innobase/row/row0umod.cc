@@ -54,6 +54,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "debug_sync.h"
 
+#include "lizard0row.h"
+
 /* Considerations on undoing a modify operation.
 (1) Undoing a delete marking: all index records should be found. Some of
 them may have delete mark already false, if the delete mark operation was
@@ -1212,6 +1214,8 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
   bool dummy_extern;
   type_cmpl_t type_cmpl;
 
+  txn_info_t txn_info;
+
   ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &cmpl_info, &dummy_extern,
                               &undo_no, &table_id, type_cmpl);
   node->rec_type = type;
@@ -1243,11 +1247,13 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
+  ptr = lizard::trx_undo_update_rec_get_lizard_cols(ptr, &txn_info);
+
   ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &(node->ref), node->heap);
 
   ptr = trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id, roll_ptr,
                                        info_bits, node->heap, &(node->update),
-                                       nullptr, type_cmpl);
+                                       nullptr, type_cmpl, txn_info);
 
   node->new_trx_id = trx_id;
   node->cmpl_info = cmpl_info;

@@ -132,9 +132,21 @@ struct txn_desc_t {
    3) undo_ptr
 */
 
-struct txn_rec_t {
+struct txn_rec_info_t {
   /* trx id */
   trx_id_t trx_id;
+  /** scn number */
+  scn_id_t scn;
+  /** undo log header address */
+  undo_ptr_t undo_ptr;
+};
+
+/**
+  Lizard transaction attributes in undo log record
+   1) scn
+   2) undo_ptr
+*/
+struct txn_info_t {
   /** scn number */
   scn_id_t scn;
   /** undo log header address */

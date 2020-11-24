@@ -33,9 +33,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0row_h
 #define lizard0row_h
 
-#include "rem0types.h"
 #include "lizard0data0types.h"
 #include "lizard0undo0types.h"
+
+#include "mem0mem.h"
+#include "rem0types.h"
 
 struct ins_node_t;
 struct que_thr_t;
@@ -43,7 +45,7 @@ struct dtuple_t;
 struct dict_index_t;
 struct page_zip_des_t;
 struct trx_t;
-
+struct upd_t;
 /**
   Lizard Record Format:
 
@@ -157,6 +159,29 @@ bool row_get_rec_undo_ptr_is_active(const rec_t *rec, const dict_index_t *index,
 */
 ulint row_get_lizard_offset(const dict_index_t *index, ulint type,
                             const ulint *offsets);
+
+/**
+  Write the scn and undo ptr into the update vector
+  @param[in]      index       index object
+  @param[in]      update      update vector
+  @param[in]      field_nth   the nth from SCN id field
+  @param[in]      txn_info    txn information
+  @param[in]      heap        memory heap
+*/
+void trx_undo_update_rec_by_lizard_fields(const dict_index_t *index,
+                                          upd_t *update, ulint field_nth,
+                                          txn_info_t txn_info,
+                                          mem_heap_t *heap);
+
+/**
+  Read the scn and undo_ptr from undo record
+  @param[in]      ptr       undo record
+  @param[out]     txn_info  SCN and UBA info
+
+  @retval begin of the left undo data.
+*/
+byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,
+                                          txn_info_t *txn_info);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/

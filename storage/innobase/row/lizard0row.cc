@@ -37,10 +37,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+#include "que0que.h"
 #include "row0ins.h"
 #include "row0log.h"
 #include "row0row.h"
-#include "que0que.h"
+#include "row0upd.h"
 
 namespace lizard {
 
@@ -266,6 +267,52 @@ ulint row_get_lizard_offset(const dict_index_t *index, ulint type,
     ut_ad(0);
   }
   return offset;
+}
+
+/**
+  Write the scn and undo ptr into the update vector
+  @param[in]      trx         transaction context
+  @param[in]      index       index object
+  @param[in]      update      update vector
+  @param[in]      field_nth   the nth from SCN id field
+  @param[in]      txn_info    txn information
+  @param[in]      heap        memory heap
+*/
+void trx_undo_update_rec_by_lizard_fields(const dict_index_t *index,
+                                          upd_t *update, ulint field_nth,
+                                          txn_info_t txn_info,
+                                          mem_heap_t *heap) {
+  byte *buf;
+  upd_field_t *upd_field;
+  ut_ad(update && heap);
+
+  upd_field = upd_get_nth_field(update, field_nth);
+  buf = static_cast<byte *>(mem_heap_alloc(heap, DATA_SCN_ID_LEN));
+  trx_write_scn(buf, txn_info.scn);
+  upd_field_set_field_no(upd_field, index->get_sys_col_pos(DATA_SCN_ID), index);
+  dfield_set_data(&(upd_field->new_val), buf, DATA_SCN_ID_LEN);
+
+  upd_field = upd_get_nth_field(update, field_nth + 1);
+  buf = static_cast<byte *>(mem_heap_alloc(heap, DATA_UNDO_PTR_LEN));
+  trx_write_undo_ptr(buf, txn_info.undo_ptr);
+  upd_field_set_field_no(upd_field, index->get_sys_col_pos(DATA_UNDO_PTR),
+                         index);
+  dfield_set_data(&(upd_field->new_val), buf, DATA_UNDO_PTR_LEN);
+}
+
+/**
+  Read the scn and undo_ptr from undo record
+  @param[in]      ptr       undo record
+  @param[out]     txn_info  SCN and UBA info
+
+  @retval begin of the left undo data.
+*/
+byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,
+                                          txn_info_t *txn_info) {
+  txn_info->scn = mach_u64_read_next_compressed(&ptr);
+  txn_info->undo_ptr = mach_u64_read_next_compressed(&ptr);
+
+  return const_cast<byte *>(ptr);
 }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG

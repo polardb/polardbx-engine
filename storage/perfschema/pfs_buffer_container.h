@@ -1435,7 +1435,7 @@ class PFS_thread_allocator {
 };
 
 #ifdef USE_SCALABLE
-typedef PFS_buffer_scalable_container<PFS_thread, 256, 256, PFS_thread_array,
+typedef PFS_buffer_scalable_container<PFS_thread, 512, 512, PFS_thread_array,
                                       PFS_thread_allocator>
     PFS_thread_container;
 #else

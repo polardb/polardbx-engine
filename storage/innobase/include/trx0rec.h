@@ -47,6 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #ifndef UNIV_HOTBACKUP
 #include "que0types.h"
+#include "lizard0undo0types.h"
 
 /** Copies the undo record to the heap.
 @param[in]      undo_page       Undo Page
@@ -121,6 +122,7 @@ added to the update vector.
 @param[out] upd Update vector.
 @param[out] lob_undo LOB undo information.
 @param[out] type_cmpl Type compilation info.
+@param[in] txn information
 @return remaining part of the record, NULL if an error detected, which
 means that the record is corrupted. */
 byte *trx_undo_update_rec_get_update(const byte *ptr, const dict_index_t *index,
@@ -128,7 +130,8 @@ byte *trx_undo_update_rec_get_update(const byte *ptr, const dict_index_t *index,
                                      roll_ptr_t roll_ptr, ulint info_bits,
                                      mem_heap_t *heap, upd_t **upd,
                                      lob::undo_vers_t *lob_undo,
-                                     type_cmpl_t &type_cmpl);
+                                     type_cmpl_t &type_cmpl,
+                                     txn_info_t txn_info);
 
 /** Builds a partial row from an update undo log record, for purge.
  It contains the columns which occur as ordering in any index of the table.
