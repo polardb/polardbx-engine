@@ -2069,7 +2069,8 @@ void innobase_row_to_mysql(struct TABLE *table,      /*!< in/out: MySQL table */
   /* The InnoDB row may contain an extra FTS_DOC_ID column at the end. */
   ut_ad(row->n_fields == itab->get_n_cols());
   ut_ad(n_fields ==
-        row->n_fields - DATA_N_SYS_COLS + dict_table_get_n_v_cols(itab) -
+        row->n_fields - DATA_N_SYS_COLS - DATA_N_LIZARD_COLS +
+          dict_table_get_n_v_cols(itab) -
             !!(DICT_TF2_FLAG_IS_SET(itab, DICT_TF2_FTS_HAS_DOC_ID)));
 
   for (uint i = 0; i < n_fields; i++) {
@@ -2507,7 +2508,9 @@ bool innobase_fts_check_doc_id_col(
   /* Not to count the virtual columns */
   i -= *num_v;
 
-  for (; i + DATA_N_SYS_COLS < (uint)table->n_cols; i++) {
+  for (;
+       i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < (uint)table->n_cols;
+       i++) {
     const char *name = table->get_col_name(i);
 
     if (strcmp(name, FTS_DOC_ID_COL_NAME) == 0) {
@@ -3046,7 +3049,9 @@ static MY_ATTRIBUTE((warn_unused_result)) const ulint *innobase_build_col_map(
   uint num_v = 0;
 
   /* Any dropped columns will map to ULINT_UNDEFINED. */
-  for (uint old_i = 0; old_i + DATA_N_SYS_COLS < old_table->n_cols; old_i++) {
+  for (uint old_i = 0;
+       old_i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < old_table->n_cols;
+       old_i++) {
     col_map[old_i] = ULINT_UNDEFINED;
   }
 
@@ -3098,17 +3103,20 @@ static MY_ATTRIBUTE((warn_unused_result)) const ulint *innobase_build_col_map(
   i = table->s->fields - old_table->n_v_cols;
 
   /* Add the InnoDB hidden FTS_DOC_ID column, if any. */
-  if (i + DATA_N_SYS_COLS < old_table->n_cols) {
+  if (i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < old_table->n_cols) {
     /* There should be exactly one extra field,
     the FTS_DOC_ID. */
     DBUG_ASSERT(DICT_TF2_FLAG_IS_SET(old_table, DICT_TF2_FTS_HAS_DOC_ID));
-    DBUG_ASSERT(i + DATA_N_SYS_COLS + 1 == old_table->n_cols);
+    DBUG_ASSERT(i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS + 1
+                  == old_table->n_cols);
     DBUG_ASSERT(!strcmp(old_table->get_col_name(i), FTS_DOC_ID_COL_NAME));
-    if (altered_table->s->fields + DATA_N_SYS_COLS - new_table->n_v_cols <
-        new_table->n_cols) {
+    if (altered_table->s->fields + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS
+        - new_table->n_v_cols <
+          new_table->n_cols) {
       DBUG_ASSERT(DICT_TF2_FLAG_IS_SET(new_table, DICT_TF2_FTS_HAS_DOC_ID));
-      DBUG_ASSERT(altered_table->s->fields + DATA_N_SYS_COLS + 1 ==
-                  static_cast<ulint>(new_table->n_cols + new_table->n_v_cols));
+      DBUG_ASSERT(altered_table->s->fields + DATA_N_SYS_COLS
+                    + DATA_N_LIZARD_COLS + 1 ==
+                      static_cast<ulint>(new_table->n_cols + new_table->n_v_cols));
       col_map[i] = altered_table->s->fields - new_table->n_v_cols;
     } else {
       DBUG_ASSERT(!DICT_TF2_FLAG_IS_SET(new_table, DICT_TF2_FTS_HAS_DOC_ID));

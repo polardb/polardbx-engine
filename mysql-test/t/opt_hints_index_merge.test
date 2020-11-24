@@ -88,7 +88,7 @@ EXPLAIN SELECT /*+ INDEX_MERGE(t1) */ COUNT(*) FROM t1 WHERE f4 = 'h' AND f2 = 2
 EXPLAIN SELECT /*+ INDEX_MERGE(t1 f2, f3, f4, f7) */ COUNT(*) FROM t1 WHERE f4 = '' AND f2 = 2 AND f3 = 'b' AND f7 = '';
 # intersect(f4,f3), since it's the cheapest index merge.
 EXPLAIN SELECT /*+ INDEX_MERGE(t1) */ COUNT(*) FROM t1 WHERE f4 = 'd' AND f2 = 2 AND f3 = 'b' AND f7 = '';
-# intersect(f2,f3), since it's the cheapest index merge.
+# intersect(f2,f3,f4), since it's the cheapest index merge.
 EXPLAIN SELECT /*+ INDEX_MERGE(t1) */ COUNT(*) FROM t1 WHERE f4 = '' AND f2 = 2 AND f3 = 'b' AND f7 = '';
 
 SET optimizer_switch='index_merge=off';

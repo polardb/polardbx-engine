@@ -169,13 +169,13 @@ s_cöĿǖmň	TABLESPACE	InnoDB	NORMAL	s_cöĿǖmň	MYSQLD_DATADIR/s_utf8_b.ibd
 s_வணக்கம்	TABLESPACE	InnoDB	NORMAL	s_வணக்கம்	MYSQLD_DATADIR/ஆவணம்.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/@0023sql_1	#sql_1	161	5	Dynamic	0	General
-test/t@0020@0021@0040@0023@0024@0025@005e@0026@002a@0028@0029_@002b@002d@003d@007b@007d@005b@005d@007c@005c@003f@003c@003e@002c@002e	s_ !@#$%^&*()_+-={}[]|\?<>,. 	161	5	Dynamic	0	General
-test/t_utf8_1	s_Cöŀumň	161	5	Dynamic	0	General
-test/t_utf8_2	s_cöĿǖmň	161	5	Dynamic	0	General
-test/t_utf8_3	s_வணக்கம்	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/@0023sql_1	#sql_1	161	7	Dynamic	0	General
+test/t@0020@0021@0040@0023@0024@0025@005e@0026@002a@0028@0029_@002b@002d@003d@007b@007d@005b@005d@007c@005c@003f@003c@003e@002c@002e	s_ !@#$%^&*()_+-={}[]|\?<>,. 	161	7	Dynamic	0	General
+test/t_utf8_1	s_Cöŀumň	161	7	Dynamic	0	General
+test/t_utf8_2	s_cöĿǖmň	161	7	Dynamic	0	General
+test/t_utf8_3	s_வணக்கம்	161	7	Dynamic	0	General
 # Directory listing of MYSQLD_DATADIR/
 #sql_1.ibd
 lizard.ibd
@@ -370,9 +370,9 @@ DROP TABLESPACE `s_DEF`;
 CREATE TABLE t_single (a int, b text);
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_single	test/t_single	33	5	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_single	test/t_single	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -465,11 +465,11 @@ mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATA
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_def_in_def	s_def	161	5	Dynamic	0	General
-test/t_dyn_in_def	s_def	161	5	Dynamic	0	General
-test/t_red_in_def	s_def	128	5	Redundant	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_def_in_def	s_def	161	7	Dynamic	0	General
+test/t_dyn_in_def	s_def	161	7	Dynamic	0	General
+test/t_red_in_def	s_def	128	7	Redundant	0	General
 # Directory of MYSQLD_DATADIR/
 lizard.ibd
 mysql.ibd
@@ -494,10 +494,10 @@ ERROR 42000: You have an error in your SQL syntax; check the manual that corresp
 CREATE TABLE `test/t_def_in_def` (a int, b text) TABLESPACE s_def;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/test@002ft_def_in_def	s_def	161	5	Dynamic	0	General
-test/t_def_in_def	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/test@002ft_def_in_def	s_def	161	7	Dynamic	0	General
+test/t_def_in_def	s_def	161	7	Dynamic	0	General
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -644,10 +644,10 @@ mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATA
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/test@002ft_def_in_def	s_def	161	5	Dynamic	0	General
-test/t_def_in_def	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/test@002ft_def_in_def	s_def	161	7	Dynamic	0	General
+test/t_def_in_def	s_def	161	7	Dynamic	0	General
 DROP TABLE t_def_in_def;
 DROP TABLE `test/t_def_in_def`;
 #
@@ -674,11 +674,11 @@ mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATA
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_com_in_system	innodb_system	129	5	Compact	0	System
-test/t_dyn_in_system	innodb_system	161	5	Dynamic	0	System
-test/t_red_in_system	innodb_system	128	5	Redundant	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_com_in_system	innodb_system	129	7	Compact	0	System
+test/t_dyn_in_system	innodb_system	161	7	Dynamic	0	System
+test/t_red_in_system	innodb_system	128	7	Redundant	0	System
 CHECK TABLE t_red_in_system;
 Table	Op	Msg_type	Msg_text
 test.t_red_in_system	check	status	OK
@@ -718,12 +718,12 @@ test/t_dyn_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_dyn_as_file_per_tab
 test/t_red_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_red_as_file_per_table	MYSQLD_DATADIR/test/t_red_as_file_per_table.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_com_as_file_per_table	test/t_com_as_file_per_table	1	5	Compact	0	Single
-test/t_def_as_remote	test/t_def_as_remote	97	5	Dynamic	0	Single
-test/t_dyn_as_file_per_table	test/t_dyn_as_file_per_table	33	5	Dynamic	0	Single
-test/t_red_as_file_per_table	test/t_red_as_file_per_table	0	5	Redundant	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_com_as_file_per_table	test/t_com_as_file_per_table	1	7	Compact	0	Single
+test/t_def_as_remote	test/t_def_as_remote	97	7	Dynamic	0	Single
+test/t_dyn_as_file_per_table	test/t_dyn_as_file_per_table	33	7	Dynamic	0	Single
+test/t_red_as_file_per_table	test/t_red_as_file_per_table	0	7	Redundant	0	Single
 # Directory listing of MYSQLD_DATADIR/
 lizard.ibd
 mysql.ibd
@@ -778,12 +778,12 @@ s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 s_multiple	TABLESPACE	InnoDB	NORMAL	s_multiple	MYSQLD_DATADIR/multiple.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_com_was_file_per_table	s_multiple	129	5	Compact	0	General
-test/t_def_was_remote	s_multiple	161	5	Dynamic	0	General
-test/t_dyn_was_file_per_table	s_multiple	161	5	Dynamic	0	General
-test/t_red_was_file_per_table	s_multiple	128	5	Redundant	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_com_was_file_per_table	s_multiple	129	7	Compact	0	General
+test/t_def_was_remote	s_multiple	161	7	Dynamic	0	General
+test/t_dyn_was_file_per_table	s_multiple	161	7	Dynamic	0	General
+test/t_red_was_file_per_table	s_multiple	128	7	Redundant	0	General
 # Directory listing of MYSQLD_DATADIR/
 lizard.ibd
 multiple.ibd
@@ -822,12 +822,12 @@ test/t_dyn_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_dyn_to_file_per_tab
 test/t_red_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_red_to_file_per_table	MYSQLD_DATADIR/test/t_red_to_file_per_table.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_com_to_file_per_table	test/t_com_to_file_per_table	1	5	Compact	0	Single
-test/t_def_to_file_per_table	test/t_def_to_file_per_table	33	5	Dynamic	0	Single
-test/t_dyn_to_file_per_table	test/t_dyn_to_file_per_table	33	5	Dynamic	0	Single
-test/t_red_to_file_per_table	test/t_red_to_file_per_table	0	5	Redundant	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_com_to_file_per_table	test/t_com_to_file_per_table	1	7	Compact	0	Single
+test/t_def_to_file_per_table	test/t_def_to_file_per_table	33	7	Dynamic	0	Single
+test/t_dyn_to_file_per_table	test/t_dyn_to_file_per_table	33	7	Dynamic	0	Single
+test/t_red_to_file_per_table	test/t_red_to_file_per_table	0	7	Redundant	0	Single
 # Directory listing of MYSQLD_DATADIR/
 lizard.ibd
 multiple.ibd
@@ -982,9 +982,9 @@ t_in_def	CREATE TABLE `t_in_def` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_in_def	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_in_def	s_def	161	7	Dynamic	0	General
 ALTER TABLE t_in_def ROW_FORMAT=redundant;
 SHOW CREATE TABLE t_in_def;
 Table	Create Table
@@ -1137,9 +1137,9 @@ t	CREATE TABLE `t` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t	s_def	161	7	Dynamic	0	General
 INSERT INTO t VALUES(200, "after RENAME TABLE t_in_def TO t");
 SELECT aa, left(bb,50) FROM t;
 aa	left(bb,50)
@@ -1181,9 +1181,9 @@ t_nomad	CREATE TABLE `t_nomad` (
 ) /*!50100 TABLESPACE `s_alt1` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_nomad	s_alt1	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_nomad	s_alt1	161	7	Dynamic	0	General
 ALTER TABLE t_nomad TABLESPACE s_alt2;
 SHOW CREATE TABLE t_nomad;
 Table	Create Table
@@ -1197,9 +1197,9 @@ t_nomad	CREATE TABLE `t_nomad` (
 ) /*!50100 TABLESPACE `s_alt2` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_nomad	s_alt2	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_nomad	s_alt2	161	7	Dynamic	0	General
 ALTER TABLE t_nomad TABLESPACE s_def, DROP COLUMN bb;
 SHOW CREATE TABLE t_nomad;
 Table	Create Table
@@ -1211,9 +1211,9 @@ t_nomad	CREATE TABLE `t_nomad` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_nomad	s_def	161	4	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_nomad	s_def	161	6	Dynamic	0	General
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -1249,9 +1249,9 @@ t_system	CREATE TABLE `t_system` (
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_system	innodb_system	33	5	Dynamic	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_system	innodb_system	33	7	Dynamic	0	System
 ALTER TABLE t_system TABLESPACE s_def;
 SHOW CREATE TABLE t_system;
 Table	Create Table
@@ -1263,9 +1263,9 @@ t_system	CREATE TABLE `t_system` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_system	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_system	s_def	161	7	Dynamic	0	General
 ALTER TABLE t_system TABLESPACE=`innodb_system`;
 SHOW CREATE TABLE t_system;
 Table	Create Table
@@ -1277,9 +1277,9 @@ t_system	CREATE TABLE `t_system` (
 ) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_system	innodb_system	161	5	Dynamic	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_system	innodb_system	161	7	Dynamic	0	System
 #
 # Do a few ALTER TABLES for this table that was moved out and back into the system tablespace.
 #
@@ -1357,9 +1357,9 @@ t_still_system	CREATE TABLE `t_still_system` (
 ) /*!50100 TABLESPACE `innodb_system` */ ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_still_system	innodb_system	161	5	Dynamic	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_still_system	innodb_system	161	7	Dynamic	0	System
 DROP TABLE t_still_system;
 #
 # Try to create or move a table into the temporary tablespace.
@@ -1436,9 +1436,9 @@ t_single	CREATE TABLE `t_single` (
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_single	test/t_single	33	5	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_single	test/t_single	33	7	Dynamic	0	Single
 ALTER TABLE t_single TABLESPACE s_def;
 SHOW CREATE TABLE t_single;
 Table	Create Table
@@ -1450,9 +1450,9 @@ t_single	CREATE TABLE `t_single` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_single	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_single	s_def	161	7	Dynamic	0	General
 DROP TABLE t_single;
 #
 # Move a MyISAM table into an InnoDB General Tablespace and back.
@@ -1479,9 +1479,9 @@ t_innodb	CREATE TABLE `t_innodb` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_innodb	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_innodb	s_def	161	7	Dynamic	0	General
 ALTER TABLE t_innodb RENAME TO t_myisam, ENGINE=MyISAM;
 INSERT INTO t_myisam(b) VALUES(33);
 SELECT * FROM t_myisam;
@@ -1509,9 +1509,9 @@ t_innodb	CREATE TABLE `t_innodb` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_innodb	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_innodb	s_def	161	7	Dynamic	0	General
 DROP TABLE t_innodb;
 #
 # Move a Dynamic table from an InnoDB General tablespace to MyISAM
@@ -1530,9 +1530,9 @@ t_dyn_in_s_def	CREATE TABLE `t_dyn_in_s_def` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_dyn_in_s_def	s_def	161	7	Dynamic	0	General
 ALTER TABLE t_dyn_in_s_def ENGINE=MyISAM;
 INSERT INTO t_dyn_in_s_def(b) VALUES(22);
 SHOW CREATE TABLE t_dyn_in_s_def;
@@ -1545,8 +1545,8 @@ t_dyn_in_s_def	CREATE TABLE `t_dyn_in_s_def` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=InnoDB;
 INSERT INTO t_dyn_in_s_def(b) VALUES(33);
 SHOW CREATE TABLE t_dyn_in_s_def;
@@ -1559,9 +1559,9 @@ t_dyn_in_s_def	CREATE TABLE `t_dyn_in_s_def` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_dyn_in_s_def	s_def	161	7	Dynamic	0	General
 ALTER TABLE t_dyn_in_s_def ENGINE=Memory;
 INSERT INTO t_dyn_in_s_def(b) VALUES(44);
 SHOW CREATE TABLE t_dyn_in_s_def;
@@ -1574,8 +1574,8 @@ t_dyn_in_s_def	CREATE TABLE `t_dyn_in_s_def` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=MEMORY AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=InnoDB;
 INSERT INTO t_dyn_in_s_def(b) VALUES(55);
 SELECT * FROM t_dyn_in_s_def;
@@ -1595,9 +1595,9 @@ t_dyn_in_s_def	CREATE TABLE `t_dyn_in_s_def` (
 ) /*!50100 TABLESPACE `s_def` */ ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_dyn_in_s_def	s_def	161	7	Dynamic	0	General
 CHECK TABLE t_dyn_in_s_def;
 Table	Op	Msg_type	Msg_text
 test.t_dyn_in_s_def	check	status	OK
@@ -1619,9 +1619,9 @@ t_nomad	CREATE TABLE `t_nomad` (
 ) /*!50100 TABLESPACE `s_short_life` */ ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_nomad	s_short_life	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_nomad	s_short_life	161	7	Dynamic	0	General
 ALTER TABLE t_nomad ENGINE=MyISAM;
 INSERT INTO t_nomad(b) VALUES(22);
 SHOW CREATE TABLE t_nomad;
@@ -1634,8 +1634,8 @@ t_nomad	CREATE TABLE `t_nomad` (
 ) /*!50100 TABLESPACE `s_short_life` */ ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
 DROP TABLESPACE s_short_life;
 ALTER TABLE t_nomad ENGINE=InnoDB;
 ERROR HY000: Tablespace s_short_life doesn't exist.
@@ -1651,9 +1651,9 @@ t_nomad	CREATE TABLE `t_nomad` (
 ) /*!50100 TABLESPACE `s_shorter_life` */ ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_nomad	s_shorter_life	161	5	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_nomad	s_shorter_life	161	7	Dynamic	0	General
 DROP TABLE t_nomad;
 DROP TABLESPACE s_shorter_life;
 #
@@ -1686,14 +1686,14 @@ t_system
 USE test;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_general	s_def	161	5	Dynamic	0	General
-test/t_single	test/t_single	33	5	Dynamic	0	Single
-test/t_system	innodb_system	33	5	Dynamic	0	System
-test1/t_general	s_def	161	5	Dynamic	0	General
-test1/t_single	test1/t_single	33	5	Dynamic	0	Single
-test1/t_system	innodb_system	33	5	Dynamic	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_general	s_def	161	7	Dynamic	0	General
+test/t_single	test/t_single	33	7	Dynamic	0	Single
+test/t_system	innodb_system	33	7	Dynamic	0	System
+test1/t_general	s_def	161	7	Dynamic	0	General
+test1/t_single	test1/t_single	33	7	Dynamic	0	Single
+test1/t_system	innodb_system	33	7	Dynamic	0	System
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -1713,11 +1713,11 @@ test1/t_single	TABLESPACE	InnoDB	NORMAL	test1/t_single	MYSQLD_DATADIR/test1/t_si
 DROP DATABASE test1;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t_general	s_def	161	5	Dynamic	0	General
-test/t_single	test/t_single	33	5	Dynamic	0	Single
-test/t_system	innodb_system	33	5	Dynamic	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t_general	s_def	161	7	Dynamic	0	General
+test/t_single	test/t_single	33	7	Dynamic	0	Single
+test/t_system	innodb_system	33	7	Dynamic	0	System
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -1747,10 +1747,10 @@ INSERT INTO t1 VALUES (200);
 INSERT INTO t2 VALUES (100);
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t1	s1	161	4	Dynamic	0	General
-test/t2	innodb_system	33	4	Dynamic	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t1	s1	161	6	Dynamic	0	General
+test/t2	innodb_system	33	6	Dynamic	0	System
 SELECT * FROM t1;
 a
 100
@@ -1776,15 +1776,15 @@ ALTER TABLE t1 TABLESPACE=s1;
 END|
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t1	innodb_system	33	4	Dynamic	0	System
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t1	innodb_system	33	6	Dynamic	0	System
 CALL p1();
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-test/t1	s1	161	4	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+test/t1	s1	161	6	Dynamic	0	General
 DROP PROCEDURE p1;
 #
 # Show that DISCARD/IMPORT tablespace does not work on a general tablespace.

@@ -21,6 +21,10 @@ AND	t.name LIKE 'mysql%'
         AND     t.name NOT LIKE 'mysql/ndb_binlog_index' 
 ORDER BY t.name, i.index_id;
 table_name	n_cols	table_flags	index_name	root_page	type	n_fields	merge_threshold
+<<<<<<< HEAD
+=======
+mysql/consensus_info	15	33	PRIMARY	4	3	14	50
+>>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format
 CREATE TABLE t1 (a INT KEY, b TEXT) ROW_FORMAT=REDUNDANT ENGINE=innodb;
 CREATE TABLE t2 (a INT KEY, b TEXT) ROW_FORMAT=COMPACT ENGINE=innodb;
 CREATE TABLE t3 (a INT KEY, b TEXT) ROW_FORMAT=COMPRESSED ENGINE=innodb;
@@ -34,10 +38,10 @@ WHERE	t.table_id = i.table_id
 AND	t.name LIKE 'test%'
 	ORDER BY t.name, i.name;
 table_name	n_cols	table_flags	index_name	root_page	type	n_fields	merge_threshold
-test/t1	5	0	PRIMARY	4	3	4	50
-test/t2	5	1	PRIMARY	4	3	4	50
-test/t3	5	39	PRIMARY	4	3	4	50
-test/t4	5	33	PRIMARY	4	3	4	50
+test/t1	7	0	PRIMARY	4	3	6	50
+test/t2	7	1	PRIMARY	4	3	6	50
+test/t3	7	39	PRIMARY	4	3	6	50
+test/t4	7	33	PRIMARY	4	3	6	50
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -458,7 +462,7 @@ ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 Warnings:
 Warning	139	Row size too large (> max_row_size). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 DROP TABLE t1;
-CREATE TABLE t1(c text, PRIMARY KEY (c(438)))
+CREATE TABLE t1(c text, PRIMARY KEY (c(436)))
 ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 INSERT INTO t1 VALUES(REPEAT('A',512)),(REPEAT('B',512));
 DROP TABLE t1;

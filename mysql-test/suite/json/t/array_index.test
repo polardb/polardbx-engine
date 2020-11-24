@@ -135,15 +135,16 @@ create table t1(doc json,key i1((cast(doc->'$' as unsigned array))));
 set session group_concat_max_len = 1000000;
 --echo Check limit on max total mv keys length
 --echo Should succeed
+# Lizard: more fileds will take more space.
 insert into t1 select concat('[',group_concat(val),']') from (
   select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
     from t t1, t t2, t t3
-    having val < 1605) tt;
+    having val < 1604) tt;
 --error ER_EXCEEDED_MV_KEYS_NUM
 insert into t1 select concat('[',group_concat(val),']') from (
   select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
     from t t1, t t2, t t3
-    having val < 1606) tt;
+    having val < 1605) tt;
 create table t2(doc json,key i1((cast(doc->'$' as char(10) array))));
 --error ER_EXCEEDED_MV_KEYS_SPACE
 insert into t2 select concat('[',group_concat(val),']') from (

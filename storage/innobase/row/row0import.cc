@@ -63,6 +63,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_aes.h"
 #include "my_dbug.h"
 
+#include "lizard0row.h"
+#include "lizard0scn.h"
+#include "lizard0undo.h"
+
 extern bool lower_case_file_system;
 
 /** The size of the buffer to use for IO. Note: os_file_read() doesn't expect
@@ -1812,6 +1816,15 @@ dberr_t PageConverter::adjust_cluster_record(const dict_index_t *index,
     record. */
 
     row_upd_rec_sys_fields(rec, m_page_zip_ptr, index, m_offsets, m_trx, 0);
+
+    if (!index->table->is_temporary()) {
+      assert_txn_desc_allocated(m_trx);
+      lizard::row_upd_rec_lizard_fields(rec, m_page_zip_ptr, index, m_offsets,
+                                        m_trx);
+    } else {
+      /* An import operation with no temporary tables is expected */
+      ut_ad(0);
+    }
   }
 
   return (err);

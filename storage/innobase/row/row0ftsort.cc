@@ -47,6 +47,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+#include "lizard0undo.h"
+
 /** Read the next record to buffer N.
 @param N index into array of merge info structure */
 #define ROW_MERGE_READ_GET_NEXT(N)                                             \
@@ -1040,18 +1042,19 @@ static dberr_t row_merge_write_fts_node(const fts_psort_insert_t *ins_ctx,
   dfield_set_data(field, &write_first_doc_id, sizeof(doc_id_t));
 
   /* The third and fourth fileds(TRX_ID, ROLL_PTR) are filled already.*/
-  /* The fifth field is last_doc_id */
-  field = dtuple_get_nth_field(tuple, 4);
+  /* Lizard: The fifth and sixth fileds(SCN_ID, UNDO_PTR) are filled already.*/
+  /* The seventh field is last_doc_id */
+  field = dtuple_get_nth_field(tuple, 6);
   fts_write_doc_id((byte *)&write_last_doc_id, node->last_doc_id);
   dfield_set_data(field, &write_last_doc_id, sizeof(doc_id_t));
 
-  /* The sixth field is doc_count */
-  field = dtuple_get_nth_field(tuple, 5);
+  /* The eighth field is doc_count */
+  field = dtuple_get_nth_field(tuple, 7);
   mach_write_to_4((byte *)&write_doc_count, (ib_uint32_t)node->doc_count);
   dfield_set_data(field, &write_doc_count, sizeof(ib_uint32_t));
 
-  /* The seventh field is ilist */
-  field = dtuple_get_nth_field(tuple, 6);
+  /* The ninth field is ilist */
+  field = dtuple_get_nth_field(tuple, 8);
   dfield_set_data(field, node->ilist, node->ilist_size);
 
   ret = ins_ctx->btr_bulk->insert(tuple);
@@ -1404,6 +1407,8 @@ dberr_t row_fts_merge_insert(dict_index_t *index, dict_table_t *table,
   byte trx_id_buf[6];
   roll_ptr_t roll_ptr = 0;
   dfield_t *field;
+  byte trx_scn_buf[DATA_SCN_ID_LEN];
+  byte undo_ptr_buf[DATA_UNDO_PTR_LEN];
 
   ut_ad(index);
   ut_ad(table);
@@ -1413,6 +1418,14 @@ dberr_t row_fts_merge_insert(dict_index_t *index, dict_table_t *table,
 
   trx = trx_allocate_for_background();
   trx_start_if_not_started(trx, true);
+
+  /** Allocate txn undo log hdr to commit scn, it will
+  commit by fts_commit */
+  mutex_enter(&trx->undo_mutex);
+  error = lizard::trx_always_assign_txn_undo(trx);
+  mutex_exit(&trx->undo_mutex);
+
+  ut_a(error == DB_SUCCESS);
 
   trx->op_info = "inserting index entries";
 
@@ -1509,6 +1522,16 @@ dberr_t row_fts_merge_insert(dict_index_t *index, dict_table_t *table,
 
   field = dtuple_get_nth_field(ins_ctx.tuple, 3);
   dfield_set_data(field, &roll_ptr, 7);
+
+  /* Lizard: Set SCN column and UNDO_PTR column */
+  lizard::trx_write_scn(trx_scn_buf, &trx->txn_desc);
+  field = dtuple_get_nth_field(ins_ctx.tuple, 4);
+  dfield_set_data(field, &trx_scn_buf, DATA_SCN_ID_LEN);
+
+  /* Lizard: Set the real value */
+  lizard::trx_write_undo_ptr(undo_ptr_buf, &trx->txn_desc);
+  field = dtuple_get_nth_field(ins_ctx.tuple, 5);
+  dfield_set_data(field, &undo_ptr_buf, DATA_UNDO_PTR_LEN);
 
 #ifdef UNIV_DEBUG
   ins_ctx.aux_index_id = id;

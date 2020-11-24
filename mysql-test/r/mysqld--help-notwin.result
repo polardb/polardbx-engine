@@ -1348,6 +1348,39 @@ The following options may be given as the first argument:
  --thread-handling=name 
  Define threads usage for handling queries, one of
  one-thread-per-connection, no-threads, loaded-dynamically
+<<<<<<< HEAD
+=======
+ --thread-pool[=name] 
+ Enable or disable thread_pool plugin. Possible values are
+ ON, OFF, FORCE (don't start if the plugin fails to load).
+ --thread-pool-enabled 
+ Enable or disable thread pool for new connections
+ (Enabled by default).
+ --thread-pool-idle-timeout=# 
+ Timeout in seconds for an idle thread in the thread
+ pool.Worker thread will be shut down after timeout
+ --thread-pool-max-threads=# 
+ Maximum allowed number of worker threads in the thread
+ pool
+ --thread-pool-normal-weights=# 
+ Maximum percent of threads for autocommit dml or query
+ processing
+ --thread-pool-oversubscribe=# 
+ How many additional active worker threads in a group are
+ allowed.
+ --thread-pool-size=# 
+ Number of thread groups in the pool. This parameter is
+ roughly equivalent to maximum number of concurrently
+ executing threads (threads in a waiting state do not
+ count as executing).
+ --thread-pool-stall-limit=# 
+ Maximum query execution time in milliseconds,before an
+ executing non-yielding thread is considered stalled.If a
+ worker thread is stalled, additional worker thread may be
+ created to handle remaining clients.
+ --thread-pool-trans-weights=# 
+ Maximum percent of threads for transaction processing
+>>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format
  --thread-stack=#    The stack size for each thread
  --tls-ciphersuites=name 
  --tls-version=name  TLS version, permitted values are TLSv1, TLSv1.1,
@@ -1754,6 +1787,18 @@ temptable-max-ram 1073741824
 temptable-use-mmap TRUE
 thread-cache-size 9
 thread-handling one-thread-per-connection
+<<<<<<< HEAD
+=======
+thread-pool ON
+thread-pool-enabled FALSE
+thread-pool-idle-timeout 10
+thread-pool-max-threads 10000
+thread-pool-normal-weights 50
+thread-pool-oversubscribe 16
+thread-pool-size 8
+thread-pool-stall-limit 100
+thread-pool-trans-weights 50
+>>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format
 thread-stack 262144
 tls-ciphersuites (No default value)
 tmp-table-size 16777216

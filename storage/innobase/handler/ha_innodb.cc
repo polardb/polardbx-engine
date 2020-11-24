@@ -6308,7 +6308,8 @@ void innobase_build_v_templ(const TABLE *table, const dict_table_t *ib_table,
                             dict_vcol_templ_t *s_templ,
                             const dict_add_v_col_t *add_v, bool locked,
                             const char *share_tbl_name) {
-  ulint ncol = ib_table->n_cols - DATA_N_SYS_COLS;
+  ulint ncol = ib_table->n_cols -
+    DATA_N_SYS_COLS - DATA_N_LIZARD_COLS;
   ulint n_v_col = ib_table->n_v_cols;
   bool marker[REC_MAX_N_FIELDS];
 
@@ -7815,6 +7816,8 @@ static mysql_row_templ_t *build_template_field(
   const dict_col_t *col;
 
   ut_ad(clust_index->table == index->table);
+  assert_lizard_dict_index_check(clust_index);
+  assert_lizard_dict_index_check(index);
 
   templ = prebuilt->mysql_template + prebuilt->n_template++;
   UNIV_MEM_INVALID(templ, sizeof *templ);
@@ -8561,6 +8564,7 @@ int ha_innobase::write_row(uchar *record) /*!< in: a row in MySQL format */
   /* Increase the write count of handler */
   ha_statistic_increment(&System_status_var::ha_write_count);
 
+  assert_lizard_dict_table_check(m_prebuilt->table);
   if (m_prebuilt->table->is_intrinsic()) {
     return intrinsic_table_write_row(record);
   }
@@ -9339,6 +9343,8 @@ int ha_innobase::update_row(const uchar *old_row, uchar *new_row) {
   uvect->table = m_prebuilt->table;
   uvect->mysql_table = table;
 
+  assert_lizard_dict_table_check(m_prebuilt->table);
+
   /* Build an update vector from the modified fields in the rows
   (uses m_upd_buf of the handle) */
 
@@ -9727,6 +9733,8 @@ int ha_innobase::index_read(
     return HA_ERR_CRASHED;
   }
 
+  assert_lizard_dict_index_check(index);
+
   if (!m_prebuilt->index_usable) {
     return index->is_corrupted() ? HA_ERR_INDEX_CORRUPT
                                  : HA_ERR_TABLE_DEF_CHANGED;
@@ -10041,6 +10049,8 @@ int ha_innobase::general_fetch(
 
     return convert_error_code_to_mysql(DB_FORCED_ABORT, 0, m_user_thd);
   }
+
+  assert_lizard_dict_table_check(m_prebuilt->table);
 
   innobase_srv_conc_enter_innodb(m_prebuilt);
 
@@ -12944,6 +12954,8 @@ int create_table_info_t::create_table(const dd::Table *dd_table) {
 
   ut_ad(m_table != nullptr);
 
+  assert_lizard_dict_table_check(m_table);
+
   /* Create the keys */
 
   if (m_form->s->keys == 0 || primary_key_no == MAX_KEY) {
@@ -14121,6 +14133,9 @@ int ha_innobase::get_extra_columns_and_keys(const HA_CREATE_INFO *,
 
   dd_add_hidden_element(primary, db_trx_id);
   dd_add_hidden_element(primary, db_roll_ptr);
+
+  /* lizard columns */
+  lizard::dd_add_lizard_columns(dd_table, primary);
 
   /* Add all non-virtual columns to the clustered index,
   unless they already part of the PRIMARY KEY. */

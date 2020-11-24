@@ -113,6 +113,8 @@ scn_t SCN::new_scn() {
 commit_scn_t SCN::new_commit_scn() {
   scn_t scn = new_scn();
 
+  ut_ad(scn > SCN_RESERVERD_MAX);
+
   /** Attention: it's unnecessary to hold mutex when get time */
   utc_t utc = ut_time_monotonic_us();
   return std::make_pair(scn, utc);

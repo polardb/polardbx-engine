@@ -417,8 +417,17 @@ main.dd_upgrade_error                             : WL#000 Lizard didn't support
 main.dd_upgrade_error_cs                          : WL#000 Lizard didn't support in-place upgrade.
 main.dd_upgrade_error_debug                       : WL#000 Lizard didn't support in-place upgrade.
 innodb.bootstrap                                  : WL#000 Lizard didn't support in-place upgrade.
+<<<<<<< HEAD
 
 innodb.import_compress_encrypt                    : WL#000 Lizard didn't support in-place upgrade.
+=======
+innodb.import_5_7                                 : WL#000 Lizard didn't support in-place upgrade.
+main.dd_schema_definition_debug                   : WL#000 Lizard didn't support in-place upgrade.
+information_schema.i_s_schema_definition_debug    : WL#000 Lizard didn't support in-place upgrade.
+innodb.crc32_endianness                           : WL#000 Importing a different MySQL existing table is not supported by lizard.
+innodb.innodb-import-lctn_1                       : WL#000 Importing a different MySQL existing table is not supported by lizard.
+innodb.table_encrypt_portable_64                  : WL#000 Importing a different MySQL existing table is not supported by lizard.
+>>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format
 innodb.portability_tablespace_linux               : WL#000 Lizard didn't support in-place upgrade.
 innodb.row_format                                 : WL#000 Lizard didn't support in-place upgrade.
 rds.feature_support_tde_sm4                       : WL#000 Lizard didn't support in-place upgrade.
@@ -451,5 +460,42 @@ innodb.upgrade_fts_shared_tablespace              : WL#000 Lizard didn't support
 main.dd_upgrade_lctn_cs_lin                       : WL#000 Lizard didn't support in-place upgrade.
 main.dd_upgrade_non_debug                         : WL#000 Lizard didn't support in-place upgrade.
 main.read_only_ddl                                : WL#000 Lizard didn't support in-place upgrade.
+<<<<<<< HEAD
 clone.remote_dml_upgrade                          : WL#000 Lizard didn't support in-place upgrade.
 innodb.innodb_extend_and_initialize_debug         : WL#000 Lizard didn't support MLOG_FILE_EXTEND.
+=======
+
+# x-cluster
+binlog.binlog_rds_flush_binlog_redo_together   : WL#001 pattern to search is not printed in server code
+binlog.binlog_rds_recovery_apply_binlog        : WL#001 test does not work for x-cluster
+binlog.binlog_rds_recovery_check_inconsistency : WL#001 test does not work for x-cluster
+binlog_gtid.binlog_gtid_log_status_errors      : WL#001 'change master to' does not work for x-cluster
+binlog_gtid.binlog_gtid_show_binlog_events     : WL#001 test does not work for x-cluster (show binlog events)
+binlog_gtid.binlog_gtids_table_gcov            : WL#001 test does not work for x-cluster (show binlog events)
+binlog_gtid.binlog_gtid_table_readonly         : WL#001 test runs into core dump
+binlog_gtid.binlog_xa_empty_rollback           : WL#001 new binlog events needs to be handled
+federated.federated                            : WL#001 x-cluster does not support master / slave mode
+federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_13118                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_25714                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_35333                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_connection_attrs           : WL#001 x-cluster does not support master / slave mode
+federated.federated_debug                      : WL#001 x-cluster does not support master / slave mode
+federated.federated_get_table_share            : WL#001 x-cluster does not support master / slave mode
+federated.federated_innodb                     : WL#001 x-cluster does not support master / slave mode
+federated.federated_server                     : WL#001 x-cluster does not support master / slave mode
+federated.percona_bug1739734                   : WL#001 x-cluster does not support master / slave mode
+innodb.upgrade_fts                             : WL#001 test runs into core dump
+innodb.upgrade_partition                       : WL#001 test runs into core dump
+innodb.create_tablespace                       : WL#001 test runs into core dump
+innodb.create_tablespace_8k                    : WL#001 test runs into core dump
+
+main.all_persisted_variables                   : WL#001 test runs into core dump
+main.log_components_syslog                     : WL#001 test does not work for x-cluster
+main.log_options_cmdline                       : WL#001 test does not work for x-cluster
+main.myisam_explain_json_non_select_all        : WL#001 test does not work for x-cluster
+main.myisam_explain_json_non_select_none       : WL#001 test does not work for x-cluster
+
+main.dd_schema_definition_after_upgrade_57_debug                   : WL#001 test runs into core dump
+binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table : WL#001 test runs into core dump
+>>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format

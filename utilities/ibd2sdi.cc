@@ -77,6 +77,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0byte.h"
 #include "ut0crc32.h"
 
+#include "lizard0data0types.h"
+
 typedef enum { SUCCESS, FALIURE, NO_RECORDS } err_t;
 
 /** Length of ID field in record of SDI Index. */
@@ -121,15 +123,23 @@ static const uint32_t REC_OFF_DATA_ROLL_PTR =
     REC_OFF_DATA_TRX_ID + DATA_TRX_ID_LEN;
 // ut_ad(REC_OFF_DATA_ROLL_PTR == 18);
 
-/** 4-byte un-compressed len (25) */
-static const uint32_t REC_OFF_DATA_UNCOMP_LEN =
-    REC_OFF_DATA_ROLL_PTR + DATA_ROLL_PTR_LEN;
+/** 8-byte scn-id (25). */
+static const uint32_t REC_OFF_DATA_SCN_ID =
+    REC_OFF_DATA_ROLL_PTR + DATA_SCN_ID_LEN;
 
-/** 4-byte compressed len (29) */
+/** 7-byte undo_ptr (33) */
+static const uint32_t REC_OFF_DATA_UNDO_PTR =
+    REC_OFF_DATA_SCN_ID + DATA_UNDO_PTR_LEN;
+
+/** 4-byte un-compressed len (40) */
+static const uint32_t REC_OFF_DATA_UNCOMP_LEN =
+    REC_OFF_DATA_UNDO_PTR + DATA_ROLL_PTR_LEN;
+
+/** 4-byte compressed len (44) */
 static const uint32_t REC_OFF_DATA_COMP_LEN =
     REC_OFF_DATA_UNCOMP_LEN + REC_DATA_UNCOMP_LEN;
 
-/** Variable length Data (33). */
+/** Variable length Data (48). */
 static const uint32_t REC_OFF_DATA_VARCHAR =
     REC_OFF_DATA_COMP_LEN + REC_DATA_COMP_LEN;
 
@@ -142,7 +152,9 @@ static const uint32_t SDI_REC_SIZE = 1                     /* rec_len */
                                      + REC_DATA_TYPE_LEN   /* type field size */
                                      + REC_DATA_ID_LEN     /* id field len */
                                      + DATA_ROLL_PTR_LEN   /* roll ptr len */
-                                     + DATA_TRX_ID_LEN /* TRX_ID len */;
+                                     + DATA_TRX_ID_LEN /* TRX_ID len */
+                                     + DATA_SCN_ID_LEN /*SCN_ID len */
+                                     + DATA_UNDO_PTR_LEN /* UNDO_PTR len */;
 
 /** If page 0 is corrupted, the maximum number of pages to scan to
 determine page size. */
