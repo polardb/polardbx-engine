@@ -517,8 +517,6 @@ check_constraints=
   col31=table_id=12
   col32=table_id=12
   col33=table_id=12
-  col34=table_id=12
-  col35=table_id=12
   col4=table_id=12
   col5=table_id=12
   col6=table_id=12
@@ -1339,9 +1337,7 @@ index_stats=
   col16=table_id=19
   col17=table_id=19
   col18=table_id=19
-  col19=table_id=19
   col2=table_id=19
-  col20=table_id=19
   col3=table_id=19
   col4=table_id=19
   col5=table_id=19
@@ -2781,9 +2777,7 @@ tables=
   col36=table_id=29
   col37=table_id=29
   col38=table_id=29
-  col39=table_id=29
   col4=table_id=29
-  col40=table_id=29
   col5=table_id=29
   col6=table_id=29
   col7=table_id=29
@@ -3089,7 +3083,6 @@ tablespace_files=
 tablespaces=
   col0=table_id=31
   col1=table_id=31
-  col10=table_id=31
   col2=table_id=31
   col3=table_id=31
   col4=table_id=31

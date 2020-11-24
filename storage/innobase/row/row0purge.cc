@@ -61,6 +61,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 
+#include "lizard0row.h"
+#include "lizard0undo0types.h"
+
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
 is enough space in the redo log before for that operation. This is
@@ -837,6 +840,8 @@ static bool row_purge_parse_undo_rec(purge_node_t *node,
   ulint type;
   type_cmpl_t type_cmpl;
 
+  txn_info_t txn_info;
+
   ut_ad(node != NULL);
   ut_ad(thr != NULL);
 
@@ -852,6 +857,8 @@ static bool row_purge_parse_undo_rec(purge_node_t *node,
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
   node->table = NULL;
   node->trx_id = trx_id;
+
+  ptr = lizard::trx_undo_update_rec_get_lizard_cols(ptr, &txn_info);
 
   /* TODO: Remove all INNODB_DD_VC_SUPPORT, nest opening
   table should never happen again after new DD */
@@ -1038,9 +1045,9 @@ try_again:
 
   trx = thr_get_trx(thr);
 
-  ptr = trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id, roll_ptr,
-                                       info_bits, trx, node->heap,
-                                       &(node->update), nullptr, type_cmpl);
+  ptr = trx_undo_update_rec_get_update(
+      ptr, clust_index, type, trx_id, roll_ptr, info_bits, trx, node->heap,
+      &(node->update), NULL, type_cmpl, txn_info);
 
   /* Read to the partial row the fields that occur in indexes */
 
