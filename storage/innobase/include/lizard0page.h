@@ -34,10 +34,31 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0page_h
 
 #include "page0types.h"
+#include "lizard0scn0types.h"
+#include "lizard0undo0types.h"
 
 struct dict_index_t;
+struct txn_desc_t;
 
 namespace lizard {
+
+/**
+  Write the scn and uba of a record on a B-tree leaf node page.
+  @param[in/out]  page_zip    compressed page
+  @param[in]      index       dict_index_t
+  @param[in/out]  rec         record
+  @param[in]      offsets     rec_get_offsets(rec, index)
+  @param[in]      scn_col     column number of SCN_ID in rec
+  @param[in]      scn         transaction scn
+  @param[in]      undo_ptr    undo_ptr
+*/
+void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
+                                     const dict_index_t *index,
+                                     byte *rec,
+                                     const ulint *offsets,
+                                     ulint scn_col,
+                                     const scn_t scn,
+                                     const undo_ptr_t undo_ptr);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**

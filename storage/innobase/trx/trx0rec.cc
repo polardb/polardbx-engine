@@ -1271,6 +1271,13 @@ static ulint trx_undo_page_report_modify(
 
   /*----------------------------------------*/
   /* Lizard: store SCN and UBA */
+
+  /** Lizard: If updating a record whose last modification from the same
+  transaction, check if it has been cleanout. */
+  if (trx_id != trx->id) {
+    assert_row_lizard_has_cleanout(rec, index, offsets);
+  }
+
   field = rec_get_nth_field(nullptr, rec, offsets,
                             index->get_sys_col_pos(DATA_SCN_ID), &flen);
 
@@ -2416,7 +2423,7 @@ err_exit:
 
 /** Copies an undo record to heap.
  @param[in]     roll_ptr        roll pointer to record
- @param[in]     trx_id          id of the trx that generated
+ @param[in/out] txn_rec         txn_info of record, Liard;
                                  the roll pointer: it points to an
                                  undo log of this transaction
  @param[in]     heap            memory heap where copied
@@ -2428,7 +2435,7 @@ err_exit:
  @retval false if the undo log record is available
  NOTE: the caller must have latches on the clustered index page. */
 [[nodiscard]] static bool trx_undo_get_undo_rec(roll_ptr_t roll_ptr,
-                                                trx_id_t trx_id,
+                                                txn_rec_t *txn_rec,
                                                 mem_heap_t *heap, bool is_temp,
                                                 const table_name_t &name,
                                                 trx_undo_rec_t **undo_rec) {
@@ -2436,7 +2443,11 @@ err_exit:
 
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
-  missing_history = purge_sys->view.changes_visible(trx_id, name);
+  {
+    lizard::txn_undo_hdr_lookup(txn_rec);
+  }
+
+  missing_history = purge_sys->view.changes_visible(txn_rec->trx_id, name);
   if (!missing_history) {
     *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp);
   }
@@ -2478,17 +2489,20 @@ bool trx_undo_prev_version_build(
   txn_info_t txn_rec_info;
   txn_info_t txn_info;
 
+  txn_rec_t txn_rec;
+
   ut_ad(!rw_lock_own(&purge_sys->latch, RW_LOCK_S));
   ut_ad(mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_S_FIX) ||
         mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_X_FIX));
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_a(index->is_clustered());
 
+  /** Lizard: use txn_info_t or txn_rec_t? */
   /** Lizard: field operations */
   assert_row_lizard_valid(rec, index, offsets);
   txn_rec_info.scn = lizard::row_get_rec_scn_id(rec, index, offsets);
   txn_rec_info.undo_ptr = lizard::row_get_rec_undo_ptr(rec, index, offsets);
-  assert_undo_ptr_allocated(&txn_rec_info.undo_ptr);
+  assert_undo_ptr_allocated(txn_rec_info.undo_ptr);
 
   roll_ptr = row_get_rec_roll_ptr(rec, index, offsets);
 
@@ -2501,13 +2515,19 @@ bool trx_undo_prev_version_build(
 
   rec_trx_id = row_get_rec_trx_id(rec, index, offsets);
 
+  /** Lizard begin */
+  txn_rec.scn = lizard::row_get_rec_scn_id(rec, index, offsets);
+  txn_rec.undo_ptr = lizard::row_get_rec_undo_ptr(rec, index, offsets);
+  txn_rec.trx_id = rec_trx_id;
+  /** Lizard end */
+
   /* REDO rollback segments are used only for non-temporary objects.
   For temporary objects NON-REDO rollback segments are used. */
   bool is_temp = index->table->is_temporary();
 
   ut_ad(!index->table->skip_alter_undo);
 
-  if (trx_undo_get_undo_rec(roll_ptr, rec_trx_id, heap, is_temp,
+  if (trx_undo_get_undo_rec(roll_ptr, &txn_rec, heap, is_temp,
                             index->table->name, &undo_rec)) {
     if (v_status & TRX_UNDO_PREV_IN_PURGE) {
       /* We are fetching the record being purged */
@@ -2586,6 +2606,11 @@ bool trx_undo_prev_version_build(
       bool missing_extern;
 
       rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
+
+      {
+        txn_rec_t undo_txn_rec {trx_id, txn_info.scn, txn_info.undo_ptr};
+        lizard::txn_undo_hdr_lookup(&undo_txn_rec);
+      }
 
       missing_extern =
           purge_sys->view.changes_visible(trx_id, index->table->name);

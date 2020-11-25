@@ -42,6 +42,9 @@ Created 2018-01-27 by Sunny Bains */
 #include "sql/current_thd.h"
 #include "ppi/ppi_disable.h"
 
+#include "lizard0undo.h"
+#include "lizard0row.h"
+
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t parallel_read_thread_key;
 #endif /* UNIV_PFS_THREAD */
@@ -480,11 +483,32 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
 
     if (m_config.m_index->is_clustered()) {
       trx_id_t rec_trx_id;
+      txn_rec_t txn_rec;
 
       if (m_config.m_index->trx_id_offset > 0) {
         rec_trx_id = trx_read_trx_id(rec + m_config.m_index->trx_id_offset);
+        ulint rec_off = m_config.m_index->trx_id_offset;
+
+        txn_rec.trx_id = rec_trx_id;
+        rec_off += DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
+
+        txn_rec.scn = lizard::trx_read_scn(rec + rec_off);
+        rec_off += DATA_SCN_ID_LEN;
+
+        txn_rec.undo_ptr = lizard::trx_read_undo_ptr(rec + rec_off);
       } else {
         rec_trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
+
+        txn_rec.trx_id = rec_trx_id;
+        txn_rec.scn = lizard::row_get_rec_scn_id(rec, m_config.m_index, offsets);
+        txn_rec.undo_ptr =
+          lizard::row_get_rec_undo_ptr(rec, m_config.m_index, offsets);
+      }
+
+      {
+        if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
+          lizard::txn_undo_hdr_lookup(&txn_rec);
+        }
       }
 
       if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&

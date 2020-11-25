@@ -3131,6 +3131,14 @@ dberr_t btr_cur_pessimistic_insert(
     }
   }
 
+  /** Lizard: Do the cleanout, thr can be NULL if BTR_NO_LOCKING_FLAG */
+  if (thr != nullptr && !index->table->is_intrinsic() &&
+      !(flags & BTR_NO_UNDO_LOG_FLAG)) {
+    lizard::row_lizard_cleanout_when_modify_rec(
+        thr_get_trx(thr)->id, const_cast<rec_t *>(rec),
+        index, offsets, btr_cur_get_block(cursor), mtr);
+  }
+
   /* Append the info about the update in the undo log */
 
   return (trx_undo_report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index,
@@ -3390,6 +3398,8 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     rec = btr_cur_get_rec(cursor);
   }
 
+  assert_row_lizard_valid(rec, index, offsets);
+
   /* Do lock checking and undo logging */
   err = btr_cur_upd_lock_and_undo(flags, cursor, offsets, update, cmpl_info,
                                   thr, mtr, &roll_ptr);
@@ -3405,7 +3415,7 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
                            roll_ptr);
 
     lizard::row_upd_rec_lizard_fields(rec, NULL, index, offsets,
-                                      thr_get_trx(thr));
+                                      &(thr_get_trx(thr)->txn_desc));
   }
 
   was_delete_marked =
@@ -4346,6 +4356,14 @@ dberr_t btr_cur_del_mark_set_clust_rec(
     return (err);
   }
 
+  /** Lizard: Do the cleanout. */
+  if (thr != nullptr && !index->table->is_intrinsic() &&
+      !(flags & BTR_NO_UNDO_LOG_FLAG)) {
+    lizard::row_lizard_cleanout_when_modify_rec(
+        thr_get_trx(thr)->id, const_cast<rec_t *>(rec),
+        index, offsets, block, mtr);
+  }
+
   err =
       trx_undo_report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index,
                                     entry, nullptr, 0, rec, offsets, &roll_ptr);
@@ -4384,7 +4402,8 @@ dberr_t btr_cur_del_mark_set_clust_rec(
 
   row_upd_rec_sys_fields(rec, page_zip, index, offsets, trx, roll_ptr);
 
-  lizard::row_upd_rec_lizard_fields(rec, page_zip, index, offsets, trx);
+  lizard::row_upd_rec_lizard_fields(rec, page_zip, index, offsets,
+                                    &trx->txn_desc);
 
   assert_lizard_page_attributes(page_align(rec), index);
 

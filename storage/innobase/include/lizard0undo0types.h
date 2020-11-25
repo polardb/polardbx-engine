@@ -131,8 +131,7 @@ struct txn_desc_t {
    2) scn
    3) undo_ptr
 */
-
-struct txn_rec_info_t {
+struct txn_rec_t {
   /* trx id */
   trx_id_t trx_id;
   /** scn number */

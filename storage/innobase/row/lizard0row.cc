@@ -34,6 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0data0types.h"
 #include "lizard0undo.h"
 #include "lizard0dict.h"
+#include "lizard0cleanout.h"
+#include "lizard0page.h"
 
 #include "my_dbug.h"
 
@@ -159,13 +161,59 @@ byte *row_get_scn_ptr_in_rec(rec_t *rec, const dict_index_t *index,
 }
 
 /**
-  Modify the scn and undo_ptr of record.
-  @param[in]      ptr_scn_id  scn_id pointer
+  Write the scn and undo_ptr of the physical record.
+  @param[in]      ptr       scn pointer
   @param[in]      txn_desc  txn description
 */
-void row_upd_rec_lizard_fields(byte *ptr_scn_id, const txn_desc_t *txn_desc) {
-  trx_write_scn(ptr_scn_id, txn_desc);
-  trx_write_undo_ptr(ptr_scn_id + DATA_SCN_ID_LEN, txn_desc);
+void row_upd_rec_write_scn_and_uba(byte *ptr,
+                                   const scn_t scn,
+                                   const undo_ptr_t uba) {
+  trx_write_scn(ptr, scn);
+  trx_write_undo_ptr(ptr + DATA_SCN_ID_LEN, uba);
+}
+
+/**
+  Write the scn and undo_ptr of the physical record.
+  @param[in]      ptr       scn pointer
+  @param[in]      scn       SCN
+  @param[in]      undo_ptr  UBA
+*/
+void row_upd_rec_write_scn_and_undo_ptr(byte *ptr,
+                                        const scn_t scn,
+                                        const undo_ptr_t undo_ptr) {
+  mach_write_to_8(ptr, scn);
+  mach_write_to_7(ptr + DATA_SCN_ID_LEN, undo_ptr);
+}
+
+
+/**
+  Modify the scn and undo_ptr of record. It will handle compress pages.
+  @param[in]      rec       record
+  @param[in]      page_zip
+  @paramp[in]     index     cluster index
+  @param[in]      offsets   rec_get_offsets(rec, idnex)
+  @param[in]      txn_desc  txn description
+*/
+static void row_upd_rec_lizard_fields_low(rec_t *rec,
+                                          page_zip_des_t *page_zip,
+                                          const dict_index_t *index,
+                                          const ulint *offsets,
+                                          const scn_t scn,
+                                          const undo_ptr_t uba) {
+  byte *field;
+  ut_ad(index->is_clustered());
+  assert_undo_ptr_allocated(uba);
+
+  if (page_zip) {
+    ulint pos = index->get_sys_col_pos(DATA_SCN_ID);
+    page_zip_write_scn_and_undo_ptr(page_zip, index, rec, offsets, pos, scn,
+                                    uba);
+
+  } else {
+    /** Get pointer of scn_id in record */
+    field = row_get_scn_ptr_in_rec(rec, index, offsets);
+    row_upd_rec_write_scn_and_uba(field, scn, uba);
+  }
 }
 
 /**
@@ -174,11 +222,12 @@ void row_upd_rec_lizard_fields(byte *ptr_scn_id, const txn_desc_t *txn_desc) {
   @param[in]      page_zip
   @paramp[in]     index     cluster index
   @param[in]      offsets   rec_get_offsets(rec, idnex)
-  @param[in]      trx       current trx
+  @param[in]      txn       txn description
 */
 void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
-                               const dict_index_t *index, const ulint *offsets,
-                               const trx_t *trx) {
+                               const dict_index_t *index,
+                               const ulint *offsets,
+                               const txn_desc_t *txn) {
   const txn_desc_t *txn_desc;
   ut_ad(index->is_clustered());
   ut_ad(!index->table->skip_alter_undo);
@@ -187,72 +236,88 @@ void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
   if (index->table->is_temporary()) {
     txn_desc = &TXN_DESC_TEMP;
   } else {
-    txn_desc = &trx->txn_desc;
-    assert_undo_ptr_allocated(&txn_desc->undo_ptr);
+    txn_desc = txn;
+    assert_undo_ptr_allocated(txn_desc->undo_ptr);
   }
 
-  row_upd_rec_lizard_fields(rec, page_zip, index, offsets, txn_desc);
+  row_upd_rec_lizard_fields_low(rec, page_zip, index, offsets,
+                                txn_desc->scn.first,
+                                txn_desc->undo_ptr);
 }
 
 /**
-  Modify the scn and undo_ptr of record.
-  @param[in]      rec       record
-  @param[in]      page_zip
-  @paramp[in]     index     cluster index
+  Updates the scn and undo_ptr field in a clustered index record when
+  cleanout because of update.
+  @param[in/out]  rec       record
+  @param[in/out]  page_zip  compressed page, or NULL
+  @param[in]      pos       SCN position in rec
+  @param[in]      index     cluster index
   @param[in]      offsets   rec_get_offsets(rec, idnex)
-  @param[in]      txn_desc  txn description
+  @param[in]      scn       SCN
+  @param[in]      undo_ptr  UBA
 */
-void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
-                               const dict_index_t *index, const ulint *offsets,
-                               const txn_desc_t *txn_desc) {
-  byte *field;
+void row_upd_rec_lizard_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
+                                           const dict_index_t *index,
+                                           const ulint *offsets,
+                                           const txn_rec_t *txn_rec) {
   ut_ad(index->is_clustered());
+  ut_ad(!index->table->skip_alter_undo);
+  ut_ad(!index->table->is_temporary());
+
+  lizard_ut_ad(!lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+  row_upd_rec_lizard_fields_low(rec, page_zip, index, offsets,
+                                txn_rec->scn, txn_rec->undo_ptr);
+}
+
+/**
+  Updates the scn and undo_ptr field in a clustered index record in
+  database recovery.
+  @param[in/out]  rec       record
+  @param[in/out]  page_zip  compressed page, or NULL
+  @param[in]      pos       SCN position in rec
+  @param[in]      index     cluster index
+  @param[in]      offsets   rec_get_offsets(rec, idnex)
+  @param[in]      scn       SCN
+  @param[in]      undo_ptr  UBA
+*/
+void row_upd_rec_lizard_fields_in_recovery(rec_t *rec,
+                                           page_zip_des_t *page_zip,
+                                           const dict_index_t *index,
+                                           ulint pos,
+                                           const ulint *offsets,
+                                           const scn_t scn,
+                                           const undo_ptr_t undo_ptr) {
+  /** index->type (Log_Dummy) will not be set rightly if it's non-compact
+  format, see function **mlog_parse_index** */
+  ut_ad(!rec_offs_comp(offsets) || index->is_clustered());
+  ut_ad(rec_offs_validate(rec, NULL, offsets));
+
+  /** Lizard: This assertion is left, because we wonder if
+  there will be a false case */
+  /**
+    Revision:
+    Since 8029, because the redo of the instant ddl v2 version did not fully
+    restore the state of the data dictionary during mlog_parse_index, so
+    "index->get_sys_col_pos(DATA_SCN_ID)" may have an error.
+
+    The example found so far is:
+    modify or insert a new record after instant drop column.
+  */
+  // lizard_ut_ad(!(*rec_offs_base(offsets) & REC_OFFS_COMPACT) ||
+  //              index->get_sys_col_pos(DATA_SCN_ID) == pos);
 
   if (page_zip) {
-    byte *storage;
-#ifdef UNIV_DEBUG
-    page_t *page = page_align(rec);
-#endif /* UNIV_DEBUG */
-
-    ut_ad(page_simple_validate_new(page));
-    ut_ad(page_zip_simple_validate(page_zip));
-    ut_ad(page_zip_get_size(page_zip) >
-          PAGE_DATA + page_zip_dir_size(page_zip));
-    ut_ad(rec_offs_validate(rec, NULL, offsets));
-    ut_ad(rec_offs_comp(offsets));
-
-    ut_ad(page_zip->m_start >= PAGE_DATA);
-    ut_d(page_zip_header_cmp(page_zip, page));
-
-    ut_ad(page_is_leaf(page));
-
-    UNIV_MEM_ASSERT_RW(page_zip->data, page_zip_get_size(page_zip));
-
-    /** Get location of scn_id slot */
-    storage = page_zip_dir_start(page_zip) -
-              (rec_get_heap_no_new(rec) - 1) * PAGE_ZIP_TRX_FIELDS_SIZE +
-              DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
-
-    /** Get pointer of scn_id in record */
-    field = row_get_scn_ptr_in_rec(rec, index, offsets);
-
-#if defined UNIV_DEBUG || defined UNIV_ZIP_DEBUG
-    ut_a(!memcmp(storage, field, DATA_LIZARD_TOTAL_LEN));
-#endif /* UNIV_DEBUG || UNIV_ZIP_DEBUG */
-
-    row_upd_rec_lizard_fields(field, txn_desc);
-
-    /** Copy to compressed page */
-    memcpy(storage, field, DATA_LIZARD_TOTAL_LEN);
-
-    UNIV_MEM_ASSERT_RW(rec, rec_offs_data_size(offsets));
-    UNIV_MEM_ASSERT_RW(rec - rec_offs_extra_size(offsets),
-                       rec_offs_extra_size(offsets));
-    UNIV_MEM_ASSERT_RW(page_zip->data, page_zip_get_size(page_zip));
+    page_zip_write_scn_and_undo_ptr(page_zip, index, rec, offsets,
+                                    pos, scn, undo_ptr);
   } else {
-    /** Get pointer of scn_id in record */
-    field = row_get_scn_ptr_in_rec(rec, index, offsets);
-    row_upd_rec_lizard_fields(field, txn_desc);
+    byte *field;
+    ulint len;
+
+    field =
+        const_cast<byte *>(rec_get_nth_field(index, rec, offsets, pos, &len));
+    ut_ad(len == DATA_SCN_ID_LEN);
+
+    row_upd_rec_write_scn_and_undo_ptr(field, scn, undo_ptr);
   }
 }
 
@@ -414,6 +479,115 @@ byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,
   return const_cast<byte *>(ptr);
 }
 
+/**
+  Write redo log to the buffer about updates of scn and uba.
+  @param[in]      index     clustered index of the record
+  @param[in]      txn_rec   txn info of the record
+  @param[in]      log_ptr   pointer to a buffer opened in mlog
+  @param[in]      mtr       mtr
+
+  @return new pointer to mlog
+*/
+byte* row_upd_write_lizard_vals_to_log(const dict_index_t *index,
+                                       const txn_rec_t *txn_rec,
+                                       byte *log_ptr,
+                                       mtr_t *mtr MY_ATTRIBUTE((unused))) {
+  ut_ad(index->is_clustered());
+  ut_ad(mtr);
+  assert_undo_ptr_allocated(txn_rec->undo_ptr);
+
+  log_ptr +=
+      mach_write_compressed(log_ptr, index->get_sys_col_pos(DATA_SCN_ID));
+
+  log_ptr += mach_u64_write_compressed(log_ptr, txn_rec->scn);
+
+  trx_write_undo_ptr(log_ptr, txn_rec->undo_ptr);
+  log_ptr += DATA_UNDO_PTR_LEN;
+
+  return log_ptr;
+}
+
+/**
+  Get the real SCN of a record by UBA, and write back to records in physical page,
+  when we make a btr update / delete.
+  @param[in]      trx_id    trx_id of the transactions
+                            who updates / deletes the record
+  @param[in]      rec       record
+  @param[in]      offsets   rec_get_offsets(rec)
+  @param[in/out]  block     buffer block of the record
+  @param[in/out]  mtr       mini-transaction
+*/
+void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
+                                         const dict_index_t *index,
+                                         const ulint *offsets,
+                                         const buf_block_t *block,
+                                         mtr_t *mtr) {
+  trx_id_t rec_id;
+  bool cleanout;
+  txn_rec_t rec_txn;
+
+  ut_ad(trx_id > 0);
+
+  rec_id = row_get_rec_trx_id(rec, index, offsets);
+
+  if (trx_id == rec_id) {
+    /* update a exist row which has been modified by
+    the current active transaction */
+    return;
+  }
+
+  /** scn must be consistent with the undo_ptr */
+  row_lizard_valid(rec, index, offsets);
+  ut_ad(index->is_clustered());
+  ut_ad(!index->table->is_intrinsic());
+
+  rec_txn.scn = row_get_rec_scn_id(rec, index, offsets);
+  rec_txn.undo_ptr = row_get_rec_undo_ptr(rec, index, offsets);
+  rec_txn.trx_id = rec_id;
+
+  /** lookup the scn by UBA address */
+  cleanout = txn_undo_hdr_lookup(&rec_txn);
+
+  if (cleanout) {
+    ut_ad(mtr_memo_contains_flagged(mtr, block, MTR_MEMO_PAGE_X_FIX));
+    lizard::row_upd_rec_lizard_fields_in_cleanout(
+        const_cast<rec_t*>(rec),
+        const_cast<page_zip_des_t *>(buf_block_get_page_zip(block)),
+        index, offsets, &rec_txn);
+
+    /** Write redo log */
+    btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &rec_txn, mtr);
+  }
+}
+
+/**
+  Parses the log data of lizard field values.
+  @param[in]      ptr       buffer
+  @param[in]      end_ptr   buffer end
+  @param[out]     pos       SCN position in record
+  @param[out]     scn       scn
+  @param[out]     undo_ptr  uba
+
+  @return log data end or NULL
+*/
+byte *row_upd_parse_lizard_vals(const byte *ptr, const byte *end_ptr,
+                                ulint *pos, scn_t *scn,
+                                undo_ptr_t *undo_ptr) {
+  *pos = mach_parse_compressed(&ptr, end_ptr);
+
+  if (ptr == nullptr) return nullptr;
+
+  if (end_ptr < ptr + DATA_UNDO_PTR_LEN) return nullptr;
+
+  *scn = mach_u64_parse_compressed(&ptr, end_ptr);
+
+  *undo_ptr = trx_read_undo_ptr(ptr);
+  ptr += DATA_UNDO_PTR_LEN;
+
+  return const_cast<byte *>(ptr);
+}
+
+
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/
 /* lizard field debug */
@@ -466,6 +640,10 @@ bool row_lizard_valid(const rec_t *rec, const dict_index_t *index,
   undo_addr_t undo_addr;
   ulint comp;
 
+  /** If we are in recovery, we don't make a validation, because purge
+  sys might have not been started */
+  if (recv_recovery_is_on()) return true;
+
   comp = *rec_offs_base(offsets) & REC_OFFS_COMPACT;
 
   /** Temporary table can not be seen in other transactions */
@@ -487,6 +665,43 @@ bool row_lizard_valid(const rec_t *rec, const dict_index_t *index,
 
     /** Scn and trx state are matched */
     ut_a(is_active == (scn == SCN_NULL));
+  }
+  return true;
+}
+
+/**
+  Debug the undo_ptr and scn in record is matched.
+  @param[in]      rec       record
+  @param[in]      index     cluster index
+  @parma[in]      offsets   rec_get_offsets(rec, index)
+
+  @retval         true      Success
+*/
+bool row_lizard_has_cleanout(const rec_t *rec, const dict_index_t *index,
+                             const ulint *offsets) {
+  scn_id_t scn;
+  undo_ptr_t undo_ptr;
+  bool is_active;
+  undo_addr_t undo_addr;
+
+  if (!index->is_clustered() || index->table->is_intrinsic()) return true;
+
+  /**
+    Skip the REC_STATUS_NODE_PTR, REC_STATUS_INFIMUM, REC_STATUS_SUPREMUM
+  */
+  if (rec_get_status(rec) == REC_STATUS_ORDINARY) {
+    scn = row_get_rec_scn_id(rec, index, offsets);
+    undo_ptr = row_get_rec_undo_ptr(rec, index, offsets);
+    is_active = row_get_rec_undo_ptr_is_active(rec, index, offsets);
+
+    undo_decode_undo_ptr(undo_ptr, &undo_addr);
+
+    /** UBA is valid */
+    lizard_undo_addr_validation(&undo_addr, index);
+    /** commit */
+    ut_a(!is_active);
+    /** valid scn */
+    ut_a(scn != SCN_NULL);
   }
   return true;
 }

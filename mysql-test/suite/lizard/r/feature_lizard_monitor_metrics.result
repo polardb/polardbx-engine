@@ -10,3 +10,10 @@ Lizard_txn_undo_log_create	#
 Lizard_txn_undo_log_hash_element	#
 Lizard_txn_undo_log_hash_hit	#
 Lizard_txn_undo_log_hash_miss	#
+Lizard_txn_undo_lost_page_miss_when_safe	#
+Lizard_txn_undo_lost_page_offset_overflow	#
+Lizard_txn_undo_lost_magic_number_wrong	#
+Lizard_txn_undo_lost_ext_flag_wrong	#
+Lizard_txn_undo_lost_trx_id_mismatch	#
+Lizard_txn_undo_lookup_not_by_uba	#
+Lizard_txn_undo_lookup_by_uba	#

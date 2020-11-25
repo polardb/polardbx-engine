@@ -204,10 +204,11 @@ bool lizard_dict_table_check(const dict_table_t *table) {
   Check the dict_incex object
 
   @param[in]      index       dict_index_t
+  @param[in]      check_table false if cannot check table
 
   @return         true        Success
 */
-bool lizard_dict_index_check(const dict_index_t *index) {
+bool lizard_dict_index_check(const dict_index_t *index, bool check_table) {
   bool is_clust;
   size_t n_uniq;
   dict_field_t *field;
@@ -215,7 +216,9 @@ bool lizard_dict_index_check(const dict_index_t *index) {
   const char *col_name;
 
   ut_a(index);
-  assert_lizard_dict_table_check(index->table);
+  if (check_table) {
+    assert_lizard_dict_table_check(index->table);
+  }
   is_clust = index->is_clustered();
 
   if (is_clust) {

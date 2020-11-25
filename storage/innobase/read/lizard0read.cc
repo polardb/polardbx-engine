@@ -232,7 +232,7 @@ ulint VisionContainer::size() const {
   @retval     whether the view sees the modifications of id.
               True if visible
 */
-bool Vision::modifications_visible(txn_rec_info_t *txn_info) const {
+bool Vision::modifications_visible(txn_rec_t *txn_info) const {
   /** purge view will use m_snapshot_scn straightway */
   ut_ad(txn_info);
   ut_ad(txn_info->trx_id > 0 && txn_info->trx_id < TRX_ID_MAX);

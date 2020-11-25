@@ -45,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 // Forward declaration
 class ReadView;
+struct txn_rec_t;
 
 /** Finds out if an active transaction has inserted or modified a secondary
  index record.
@@ -67,7 +68,7 @@ trx_t *row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
                                  clustered index record; it will also hold
                                   the latch on purge_view
  @return true if earlier version should be preserved */
-bool row_vers_must_preserve_del_marked(trx_id_t trx_id,
+bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
                                        const table_name_t &name, mtr_t *mtr);
 
 /** Finds out if a version of the record, where the version >= the current

@@ -66,7 +66,7 @@ SET @num_pages_1 = num_pages_get();
 SELECT * FROM t1 force index (b);
 SET @num_pages_2= num_pages_get();
 
-SELECT @num_pages_2 - @num_pages_1 < 500;
+SELECT @num_pages_2 - @num_pages_1 < 510;
 
 --echo #
 --echo # Commit and show the final record.

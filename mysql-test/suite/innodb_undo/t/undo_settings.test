@@ -220,7 +220,7 @@ SELECT COUNT(*) FROM t3;
 --echo # Restart mysqld with these larger settings.
 --echo #
 --source include/shutdown_mysqld.inc
---remove_file $MYSQLD_DATADIR/undo_001
+--remove_file $MYSQLD_DATADIR/undo_005
 
 let $restart_parameters = restart: --innodb_rollback_segments=6;
 --source include/start_mysqld.inc
@@ -453,7 +453,8 @@ SHOW VARIABLES LIKE 'innodb_rollback_segments';
 
 SET GLOBAL innodb_fast_shutdown=0;
 --source include/shutdown_mysqld.inc
---remove_files_wildcard $MYSQLD_DATADIR undo_0*
+--remove_file $MYSQLD_DATADIR/undo_005
+--remove_file $MYSQLD_DATADIR/undo_006
 --source include/start_mysqld.inc
 SHOW VARIABLES LIKE 'innodb_rollback_segments';
 

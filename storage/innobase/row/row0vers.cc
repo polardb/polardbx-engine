@@ -57,6 +57,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 
 #include "lizard0row.h"
+#include "lizard0undo.h"
 
 /** Check whether all non-virtual columns in a index entries match
 @param[in]      index           the secondary index
@@ -576,19 +577,23 @@ trx_t *row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
 
 /** Finds out if we must preserve a delete marked earlier version of a clustered
  index record, because it is >= the purge view.
- @param[in]     trx_id          Transaction id in the version
+ @param[in]	txn_rec		transaction info in the version
  @param[in]     name            Table name
  @param[in,out] mtr             Mini-transaction holding the latch on the
                                  clustered index record; it will also hold
                                  the latch on purge_view
  @return true if earlier version should be preserved */
-bool row_vers_must_preserve_del_marked(trx_id_t trx_id,
+bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
                                        const table_name_t &name, mtr_t *mtr) {
   ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_S));
 
   mtr_s_lock(&purge_sys->latch, mtr, UT_LOCATION_HERE);
 
-  return (!purge_sys->view.changes_visible(trx_id, name));
+  {
+    lizard::txn_undo_hdr_lookup(txn_rec);
+  }
+
+  return (!purge_sys->view.changes_visible(txn_rec->trx_id, name));
 }
 
 /** Check whether all non-virtual columns in a index entries match
@@ -1319,6 +1324,15 @@ dberr_t row_vers_build_for_consistent_read(
 #endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 
     trx_id = row_get_rec_trx_id(prev_version, index, *offsets);
+
+    {
+      txn_rec_t txn_rec {
+        trx_id,
+        lizard::row_get_rec_scn_id(prev_version, index, *offsets),
+        lizard::row_get_rec_undo_ptr(prev_version, index, *offsets)
+      };
+      lizard::txn_undo_hdr_lookup(&txn_rec);
+    }
 
     if (view->changes_visible(trx_id, index->table->name)) {
       /* The view already sees this version: we can copy

@@ -374,6 +374,15 @@ lsn_t txn_prepare_low(
 */
 void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr);
 
+/**
+  Try to lookup the real scn of given records.
+
+  @param[in/out]  txn_rec    txn info of the records.
+
+  @return         bool       true if the record should be cleaned out.
+*/
+bool txn_undo_hdr_lookup(txn_rec_t *txn_rec);
+
 }  // namespace lizard
 
 
@@ -450,14 +459,14 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
 
 #define assert_undo_ptr_allocated(undo_ptr)                                    \
   do {                                                                         \
-    ut_a((*(undo_ptr)) != lizard::UNDO_PTR_NULL);                              \
+    ut_a((undo_ptr) != lizard::UNDO_PTR_NULL);                                 \
   } while (0)
 
 #define assert_trx_undo_ptr_initial(trx)                                       \
   assert_undo_ptr_initial((&(trx)->txn_desc.undo_ptr))
 
 #define assert_trx_undo_ptr_allocated(trx)                                     \
-  assert_undo_ptr_allocated(&((trx)->txn_desc.undo_ptr))
+  assert_undo_ptr_allocated((trx)->txn_desc.undo_ptr)
 
 #define lizard_trx_undo_page_validation(page)                                  \
   do {                                                                         \

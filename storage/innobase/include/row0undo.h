@@ -109,6 +109,8 @@ struct undo_node_t {
                            ... */
   trx_id_t new_trx_id;      /*!< trx id to restore to clustered index
                         record */
+  txn_rec_t txn_rec;        /*!< Lizard: used to check if we can help purge
+                            sys to purge records when rollback */
   btr_pcur_t pcur;          /*!< persistent cursor used in searching the
                             clustered index record */
   dict_table_t *table;      /*!< table where undo is done */

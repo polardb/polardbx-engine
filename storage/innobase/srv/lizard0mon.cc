@@ -68,6 +68,27 @@ static void export_lizard_status(void) {
       lizard_stats.txn_undo_log_hash_element;
   lizard_vars.txn_undo_log_hash_hit = lizard_stats.txn_undo_log_hash_hit;
   lizard_vars.txn_undo_log_hash_miss = lizard_stats.txn_undo_log_hash_miss;
+
+  lizard_vars.txn_undo_lost_page_miss_when_safe =
+      lizard_stats.txn_undo_lost_page_miss_when_safe;
+
+  lizard_vars.txn_undo_lost_page_offset_overflow =
+      lizard_stats.txn_undo_lost_page_offset_overflow;
+
+  lizard_vars.txn_undo_lost_magic_number_wrong =
+      lizard_stats.txn_undo_lost_magic_number_wrong;
+
+  lizard_vars.txn_undo_lost_ext_flag_wrong =
+      lizard_stats.txn_undo_lost_ext_flag_wrong;
+
+  lizard_vars.txn_undo_lost_trx_id_mismatch =
+      lizard_stats.txn_undo_lost_trx_id_mismatch;
+
+  lizard_vars.txn_undo_lookup_not_by_uba =
+      lizard_stats.txn_undo_lookup_not_by_uba;
+
+  lizard_vars.txn_undo_lookup_by_uba =
+      lizard_stats.txn_undo_lookup_by_uba;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -104,6 +125,34 @@ static SHOW_VAR lizard_status_variables[] = {
 
     {"txn_undo_log_hash_miss", (char *)&lizard_vars.txn_undo_log_hash_miss,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_lost_page_miss_when_safe",
+      (char *)&lizard_vars.txn_undo_lost_page_miss_when_safe,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_lost_page_offset_overflow",
+      (char *)&lizard_vars.txn_undo_lost_page_offset_overflow,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_lost_magic_number_wrong",
+      (char *)&lizard_vars.txn_undo_lost_magic_number_wrong,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_lost_ext_flag_wrong",
+      (char *)&lizard_vars.txn_undo_lost_ext_flag_wrong,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_lost_trx_id_mismatch",
+      (char *)&lizard_vars.txn_undo_lost_trx_id_mismatch,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_lookup_not_by_uba",
+      (char *)&lizard_vars.txn_undo_lookup_not_by_uba,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_lookup_by_uba",
+      (char *)&lizard_vars.txn_undo_lookup_by_uba,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

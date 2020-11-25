@@ -2375,7 +2375,7 @@ dberr_t PageConverter::adjust_cluster_record(
     if (!index->table->is_temporary()) {
       assert_txn_desc_allocated(m_trx);
       lizard::row_upd_rec_lizard_fields(rec, m_page_zip_ptr, index, m_offsets,
-                                        m_trx);
+                                        &m_trx->txn_desc);
     } else {
       /* An import operation with no temporary tables is expected */
       ut_ad(0);

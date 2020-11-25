@@ -55,6 +55,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "debug_sync.h"
 
 #include "lizard0row.h"
+#include "lizard0dbg.h"
 
 /* Considerations on undoing a modify operation.
 (1) Undoing a delete marking: all index records should be found. Some of
@@ -189,8 +190,9 @@ introduced where a call to log_free_check() is bypassed. */
   /* Find out if the record has been purged already
   or if we can remove it. */
 
+  lizard_ut_ad(node->new_trx_id == node->txn_rec.trx_id);
   if (!node->pcur.restore_position(mode, mtr, UT_LOCATION_HERE) ||
-      row_vers_must_preserve_del_marked(node->new_trx_id, node->table->name,
+      row_vers_must_preserve_del_marked(&node->txn_rec, node->table->name,
                                         mtr)) {
     return (DB_SUCCESS);
   }
@@ -1256,6 +1258,9 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
                                        nullptr, type_cmpl, txn_info);
 
   node->new_trx_id = trx_id;
+  node->txn_rec.trx_id = trx_id;
+  node->txn_rec.scn = txn_info.scn;
+  node->txn_rec.undo_ptr = txn_info.undo_ptr;
   node->cmpl_info = cmpl_info;
 
   if (!row_undo_search_clust_to_pcur(node)) {

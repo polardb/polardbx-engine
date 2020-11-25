@@ -611,6 +611,8 @@ bool dict_index_t::is_usable(const trx_t *trx) const {
     return false;
   }
 
+  /** Lizard, TODO: scn and undo_info should be acquired from se_private_data */
+
   /* Check if the specified transaction can see this index. */
   return (table->is_temporary() || trx_id == 0 ||
           !MVCC::is_view_active(trx->read_view) ||

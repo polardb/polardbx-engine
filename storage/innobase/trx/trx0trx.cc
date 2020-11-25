@@ -919,7 +919,9 @@ void trx_resurrect_update_in_prepared_state(
 
     trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
   } else {
-    /** CACHED or PURGE undo log will has a valid scn number */
+    /** Only CACHED state here, because state PURGE undo must be added
+    to history list */
+    ut_ad(undo->state == TRX_UNDO_CACHED);
     assert_undo_scn_allocated(undo);
     trx->txn_desc.scn = undo->scn;
     assert_trx_scn_allocated(trx);

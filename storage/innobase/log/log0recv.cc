@@ -81,6 +81,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "../meb/mutex.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0cleanout.h"
+
 std::list<space_id_t> recv_encr_ts_list;
 
 /** Log records are stored in the hash table in chunks at most of this size;
@@ -2053,6 +2055,21 @@ static byte *recv_parse_or_apply_log_rec_body(
                                                    index);
       }
 
+      break;
+
+    case MLOG_REC_CLUST_LIZARD_UPDATE:
+      ut_ad(!page || fil_page_type_is_index(page_type));
+      if (nullptr != (ptr = mlog_parse_index(
+                          ptr, end_ptr,
+                          &index))) {
+        ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
+
+        ptr = lizard::btr_cur_parse_lizard_fields_upd_clust_rec(ptr,
+                                                                end_ptr,
+                                                                page,
+                                                                page_zip,
+                                                                index);
+      }
       break;
 
     case MLOG_COMP_REC_SEC_DELETE_MARK:
@@ -4403,6 +4420,9 @@ const char *get_mlog_string(mlog_id_t type) {
 
     case MLOG_LIST_START_DELETE:
       return "MLOG_LIST_START_DELETE";
+
+    case MLOG_REC_CLUST_LIZARD_UPDATE:
+      return ("MLOG_REC_CLUST_LIZARD_UPDATE");
 
     case MLOG_TEST:
       return "MLOG_TEST";

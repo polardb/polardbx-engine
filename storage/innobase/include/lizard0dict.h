@@ -131,10 +131,12 @@ bool lizard_dict_table_check(const dict_table_t *table);
   Check the dict_incex object
 
   @param[in]      index       dict_index_t
+  @param[in]      check_table false if cannot check table
 
   @return         true        Success
 */
-bool lizard_dict_index_check(const dict_index_t *index);
+bool lizard_dict_index_check(const dict_index_t *index,
+                             bool check_table = true);
 
 #endif /* UNIV_DEBUG || LIZARD_DEBUG define */
 
@@ -151,10 +153,16 @@ bool lizard_dict_index_check(const dict_index_t *index);
     ut_a(lizard::lizard_dict_index_check(index)); \
   } while (0)
 
+#define assert_lizard_dict_index_check_no_check_table(index) \
+  do {                                                       \
+    ut_a(lizard::lizard_dict_index_check(index, false));     \
+  } while (0)
+
 #else
 
 #define assert_lizard_dict_table_check(table)
 #define assert_lizard_dict_index_check(index)
+#define assert_lizard_dict_index_check_no_check_table(index)
 
 #endif /* UNIV_DEBUG || lizard_DEBUG define */
 

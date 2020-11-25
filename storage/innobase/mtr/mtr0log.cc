@@ -486,6 +486,13 @@ byte *mlog_parse_index_8027(byte *ptr, const byte *end_ptr, bool comp,
       ind->fields[DATA_TRX_ID - 1 + n_uniq].col = &table->cols[n + DATA_TRX_ID];
       ind->fields[DATA_ROLL_PTR - 1 + n_uniq].col =
           &table->cols[n + DATA_ROLL_PTR];
+
+      /* Lizard: Identify DATA_SCN_ID and DATA_UNDO_PTR in the index. */
+      ut_a(DATA_SCN_ID_LEN == ind->get_col(DATA_SCN_ID - 1 + n_uniq)->len);
+      ut_a(DATA_UNDO_PTR_LEN == ind->get_col(DATA_UNDO_PTR - 1 + n_uniq)->len);
+      ind->fields[DATA_SCN_ID - 1 + n_uniq].col = &table->cols[n + DATA_SCN_ID];
+      ind->fields[DATA_UNDO_PTR - 1 + n_uniq].col =
+          &table->cols[n + DATA_UNDO_PTR];
     }
 
     if (ind->is_clustered() && ind->table->has_instant_cols()) {
@@ -1007,6 +1014,16 @@ static byte *parse_index_fields(byte *ptr, const byte *end_ptr, uint16_t n,
     ut_a(DATA_ROLL_PTR_LEN == ind->get_col(i)->len);
     ind->fields[i].col = &table->cols[n + DATA_ROLL_PTR];
     ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+
+    i = DATA_SCN_ID - 1 + n_uniq;
+    ut_a(DATA_SCN_ID_LEN == ind->get_col(i)->len);
+    ind->fields[i].col = &table->cols[n + DATA_SCN_ID];
+    ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+
+    i = DATA_UNDO_PTR - 1 + n_uniq;
+    ut_a(DATA_UNDO_PTR_LEN == ind->get_col(i)->len);
+    ind->fields[i].col = &table->cols[n + DATA_UNDO_PTR];
+    ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
   }
 
   table->initial_col_count = table->current_col_count = table->total_col_count =
@@ -1446,6 +1463,16 @@ static byte *parse_index_fields_8029(byte *ptr, const byte *end_ptr, uint16_t n,
     i = DATA_ROLL_PTR - 1 + n_uniq;
     ut_a(DATA_ROLL_PTR_LEN == ind->get_col(i)->len);
     ind->fields[i].col = &table->cols[n + DATA_ROLL_PTR];
+    ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+
+    i = DATA_SCN_ID - 1 + n_uniq;
+    ut_a(DATA_SCN_ID_LEN == ind->get_col(i)->len);
+    ind->fields[i].col = &table->cols[n + DATA_SCN_ID];
+    ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+
+    i = DATA_UNDO_PTR - 1 + n_uniq;
+    ut_a(DATA_UNDO_PTR_LEN == ind->get_col(i)->len);
+    ind->fields[i].col = &table->cols[n + DATA_UNDO_PTR];
     ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
   }
 

@@ -1245,6 +1245,8 @@ rec_t *page_cur_insert_rec_low(
 
   ut_ad(rec_offs_validate(rec, index, offsets));
 
+  assert_row_lizard_valid(rec, index, offsets);
+
   page = page_align(current_rec);
   ut_ad(dict_table_is_comp(index->table) == page_is_comp(page));
   ut_ad(fil_page_index_page_check(page));

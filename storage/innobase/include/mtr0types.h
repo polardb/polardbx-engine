@@ -258,8 +258,18 @@ enum mlog_id_t {
   MLOG_LIST_END_DELETE = 75,
   MLOG_LIST_START_DELETE = 76,
 
+  /** TODO: Compatible with previous records <01-06-23, zanye.zjy> */
+  // /** Lizard: update the lizard fields (scn, uba) in non-compact format */
+  // MLOG_REC_CLUST_LIZARD_UPDATE_80027 = 79,
+
+  // /** Lizard: update the lizard fields (scn, uba) in compact format */
+  // MLOG_COMP_REC_CLUST_LIZARD_UPDATE_80027 = 80,
+
+  /** Lizard: update the lizard fields (scn, uba) after 8029 */
+  MLOG_REC_CLUST_LIZARD_UPDATE = 100,
+
   /** biggest value (used in assertions) */
-  MLOG_BIGGEST_TYPE = MLOG_LIST_START_DELETE
+  MLOG_BIGGEST_TYPE = MLOG_REC_CLUST_LIZARD_UPDATE
 };
 
 /** @} */

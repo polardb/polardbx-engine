@@ -65,6 +65,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/plugin.h"
 #include "mysql/psi/psi_thread.h"
 
+#include "lizard0row.h"
+#include "lizard0undo.h"
+
 /* Flag to enable/disable deadlock detector. */
 bool innobase_deadlock_detect = true;
 
@@ -251,6 +254,15 @@ bool lock_clust_rec_cons_read_sees(
 
   trx_id_t trx_id = row_get_rec_trx_id(rec, index, offsets);
 
+  {
+    /** Lizard: the following codes is a check */
+    txn_rec_t txn_rec = {
+      trx_id,
+      lizard::row_get_rec_scn_id(rec, index, offsets),
+      lizard::row_get_rec_undo_ptr(rec, index, offsets),
+    };
+    lizard::txn_undo_hdr_lookup(&txn_rec);
+  }
   return (view->changes_visible(trx_id, index->table->name));
 }
 

@@ -70,6 +70,20 @@ struct lizard_var_t {
 
   /** txn undo log hash miss count */
   ulint txn_undo_log_hash_miss;
+
+  ulint txn_undo_lost_page_miss_when_safe;
+
+  ulint txn_undo_lost_page_offset_overflow;
+
+  ulint txn_undo_lost_magic_number_wrong;
+
+  ulint txn_undo_lost_ext_flag_wrong;
+
+  ulint txn_undo_lost_trx_id_mismatch;
+
+  ulint txn_undo_lookup_not_by_uba;
+
+  ulint txn_undo_lookup_by_uba;
 };
 
 struct lizard_stats_t {
@@ -102,6 +116,27 @@ struct lizard_stats_t {
 
   /** txn undo log hash miss count */
   ulint_ctr_1_t txn_undo_log_hash_miss;
+
+  /** txn undo lost when missing corresponding pages when cleanout safe mode */
+  ulint_ctr_1_t txn_undo_lost_page_miss_when_safe;
+
+  /** txn undo lost because uba.offset is out of undo page bound */
+  ulint_ctr_1_t txn_undo_lost_page_offset_overflow;
+
+  /** txn undo lost because magic number is wrong */
+  ulint_ctr_1_t txn_undo_lost_magic_number_wrong;
+
+  /** txn undo lost because ext flag is wrong */
+  ulint_ctr_1_t txn_undo_lost_ext_flag_wrong;
+
+  /** txn undo lost because trx_id is mismatch */
+  ulint_ctr_1_t txn_undo_lost_trx_id_mismatch;
+
+  /** lookup scn directly by SCN in record */
+  ulint_ctr_1_t txn_undo_lookup_not_by_uba;
+
+  /** lookup scn by uba */
+  ulint_ctr_1_t txn_undo_lookup_by_uba;
 };
 
 namespace lizard {
