@@ -58,6 +58,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0data0types.h"
 #include "lizard0undo.h"
+#include "lizard0dict.h"
 
 /** Object to handle Log_DDL */
 Log_DDL *log_ddl = nullptr;
@@ -486,6 +487,10 @@ dberr_t DDL_Log_Table::insert(const DDL_Record &record) {
   if (count++ % 64 == 0) {
     log_free_check();
   }
+
+  assert_lizard_dict_index_check(index);
+
+  assert_lizard_dict_table_check(index->table);
 
   create_tuple(record);
   entry = row_build_index_entry(m_tuple, NULL, index, m_heap);

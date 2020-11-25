@@ -61,6 +61,9 @@ constexpr scn_t SCN_FAKE = 1;
 /** SCN special for temporary table record */
 constexpr scn_t SCN_TEMP_TAB_REC = 2;
 
+/** SCN special for undo lost */
+constexpr scn_t SCN_UNDO_LOST = 3;
+
 /** MAX reserved scn NUMBER  */
 constexpr scn_t SCN_RESERVERD_MAX = 1024;
 
@@ -76,6 +79,9 @@ constexpr utc_t UTC_NULL = std::numeric_limits<utc_t>::min();
 
 /** Temporary table utc {2020/1/1 00:00:00} */
 constexpr utc_t UTC_TEMP_TAB_REC = 1577808000 * 1000000ULL;
+
+/** utc for undo lost:  {2020/1/1 00:00:01} */
+constexpr utc_t UTC_UNDO_LOST = 1577808000 * 1000000ULL + 1;
 
 /** The max local time is less than 2038 year */
 constexpr utc_t UTC_MAX = std::numeric_limits<std::int32_t>::max() * 1000000ULL;
@@ -147,12 +153,12 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
 
 #define assert_commit_scn_initial(scn)                                      \
   do {                                                                      \
-    assert_scn_state(scn, SCN_STATE_INITIAL);                               \
+    assert_commit_scn_state(scn, SCN_STATE_INITIAL);                        \
   } while (0)
 
 #define assert_commit_scn_allocated(scn)                                    \
   do {                                                                      \
-    assert_scn_state(scn, SCN_STATE_ALLOCATED);                             \
+    assert_commit_scn_state(scn, SCN_STATE_ALLOCATED);                      \
   } while (0)
 
 /* Debug validation of commit scn from trx->scn */

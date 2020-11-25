@@ -608,6 +608,13 @@ byte *mlog_parse_index(byte *ptr,            /*!< in: buffer */
       ind->fields[DATA_TRX_ID - 1 + n_uniq].col = &table->cols[n + DATA_TRX_ID];
       ind->fields[DATA_ROLL_PTR - 1 + n_uniq].col =
           &table->cols[n + DATA_ROLL_PTR];
+
+      /* Lizard: Identify DATA_SCN_ID and DATA_UNDO_PTR in the index. */
+      ut_a(DATA_SCN_ID_LEN == ind->get_col(DATA_SCN_ID - 1 + n_uniq)->len);
+      ut_a(DATA_UNDO_PTR_LEN == ind->get_col(DATA_UNDO_PTR - 1 + n_uniq)->len);
+      ind->fields[DATA_SCN_ID - 1 + n_uniq].col = &table->cols[n + DATA_SCN_ID];
+      ind->fields[DATA_UNDO_PTR - 1 + n_uniq].col =
+          &table->cols[n + DATA_UNDO_PTR];
     }
 
     if (ind->is_clustered() && ind->table->has_instant_cols()) {

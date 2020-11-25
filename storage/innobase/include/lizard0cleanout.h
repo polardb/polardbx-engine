@@ -35,9 +35,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "trx0types.h"
 #include "ut0mutex.h"
+#include "rem0types.h"
+#include "page0types.h"
+
 #include "lizard0ut.h"
 
 struct mtr_t;
+struct dict_index_t;
+struct page_zip_des_t;
+struct txn_rec_t;
 
 #ifdef UNIV_PFS_MUTEX
 /* lizard undo hdr hash mutex PFS key */
@@ -121,6 +127,33 @@ extern Partition<Undo_logs, Undo_hdr, TXN_UNDO_HASH_PARTITIONS> *txn_undo_logs;
 void txn_undo_hash_init();
 
 void txn_undo_hash_close();
+
+/**
+  Write redo log when updating scn and uba fileds in physical records.
+  @param[in]      rec        physical record
+  @param[in]      index      dict that interprets the row record
+  @param[in]      txn_rec    txn info from the record
+  @param[in]      mtr        mtr
+*/
+void btr_cur_upd_lizard_fields_clust_rec_log(const rec_t *rec,
+                                             const dict_index_t *index,
+                                             const txn_rec_t* txn_rec,
+                                             mtr_t *mtr);
+
+/**
+  Parse the txn info from redo log record, and apply it if necessary.
+  @param[in]      ptr        buffer
+  @param[in]      end        buffer end
+  @param[in]      page       page (NULL if it's just get the length)
+  @param[in]      page_zip   compressed page, or NULL
+  @param[in]      index      index corresponding to page
+
+  @return         return the end of log record or NULL
+*/
+byte *btr_cur_parse_lizard_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
+                                                page_t *page,
+                                                page_zip_des_t *page_zip,
+                                                const dict_index_t *index);
 
 }  // namespace lizard
 

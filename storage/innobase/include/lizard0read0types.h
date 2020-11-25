@@ -82,7 +82,7 @@ class Vision {
   /** Check whether the changes by id are visible.
   @param[in]	trx_zeus
   @return whether the view sees the modifications of id. True if visible */
-  bool modifications_visible(txn_rec_info_t *txn_info) const
+  bool modifications_visible(txn_rec_t *txn_info) const
       MY_ATTRIBUTE((warn_unused_result));
 
   /**

@@ -61,6 +61,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 #include "sql/table.h"
 
+#include "lizard0row.h"
+#include "lizard0undo.h"
+
 /* Ignore posix_fadvise() on those platforms where it does not exist */
 #if defined _WIN32
 #define posix_fadvise(fd, offset, len, advice) /* nothing */
@@ -1916,6 +1919,15 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
       the DML thread has updated the clustered index
       but has not yet accessed secondary index. */
       ut_ad(MVCC::is_view_active(trx->read_view));
+
+      {
+        txn_rec_t txn_rec {
+          row_get_rec_trx_id(rec, clust_index, offsets),
+          lizard::row_get_rec_scn_id(rec, clust_index, offsets),
+          lizard::row_get_rec_undo_ptr(rec, clust_index, offsets)
+        };
+        lizard::txn_undo_hdr_lookup(&txn_rec);
+      }
 
       if (!trx->read_view->changes_visible(
               row_get_rec_trx_id(rec, clust_index, offsets), old_table->name)) {
