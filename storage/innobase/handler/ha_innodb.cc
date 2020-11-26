@@ -4612,6 +4612,9 @@ static void innobase_post_ddl(THD *thd) {
 static int innodb_init(void *p) {
   DBUG_TRACE;
 
+  /* Lizard: disable AHI temporary */
+  btr_search_enabled = false;
+
   handlerton *innobase_hton = (handlerton *)p;
   innodb_hton_ptr = innobase_hton;
 
@@ -19896,11 +19899,15 @@ static void innodb_adaptive_hash_index_update(
     const void *save) /*!< in: immediate result
                       from check function */
 {
+  /* Disable AHI */
+  btr_search_enabled = false;
+  /*
   if (*(bool *)save) {
     btr_search_enable();
   } else {
     btr_search_disable(true);
   }
+  */
 }
 
 /** Update the system variable innodb_cmp_per_index using the "saved"
