@@ -5149,6 +5149,10 @@ static int innodb_init(void *p) {
 
   acquire_plugin_services();
 
+  /* Lizard: disable AHI temporary */
+  srv_btr_search_enabled = false;
+  btr_search_enabled.store(false);
+
   handlerton *innobase_hton = (handlerton *)p;
   innodb_hton_ptr = innobase_hton;
 
@@ -20778,11 +20782,15 @@ static void innodb_adaptive_hash_index_update(
     const void *save) /*!< in: immediate result
                       from check function */
 {
+  /* Disable AHI */
+  btr_search_disable();
+  /*
   if (*(bool *)save) {
     btr_search_enable();
   } else {
-    btr_search_disable();
+    btr_search_disable(true);
   }
+  */
 }
 
 /** Update the system variable innodb_cmp_per_index using the "saved"
