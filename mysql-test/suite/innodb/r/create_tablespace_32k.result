@@ -158,6 +158,7 @@ test/t_com_in_32k	s_32k	129	5	Compact	0	General
 test/t_dyn_in_32k	s_32k	161	5	Dynamic	0	General
 test/t_red_in_32k	s_32k	128	5	Redundant	0	General
 # Directory of MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_32k.ibd
 # Directory of MYSQLD_DATADIR/test/

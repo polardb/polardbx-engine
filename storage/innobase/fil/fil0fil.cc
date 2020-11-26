@@ -94,6 +94,7 @@ The tablespace memory cache */
 #include <unordered_map>
 
 #include "lizard0dict.h"
+#include "lizard0fsp.h"
 
 using Dirs = std::vector<std::string>;
 using Space_id_set = std::set<space_id_t>;
@@ -6762,6 +6763,9 @@ bool Fil_shard::space_extend(fil_space_t *space, page_no_t size) {
 
   if (space->id == TRX_SYS_SPACE) {
     srv_sys_space.set_last_file_size(size_in_pages);
+  } else if (space->id ==
+                 lizard::dict_lizard::s_lizard_space_id) {
+    lizard::srv_lizard_space.set_last_file_size(size_in_pages);
   } else if (fsp_is_system_temporary(space->id)) {
     srv_tmp_space.set_last_file_size(size_in_pages);
   }

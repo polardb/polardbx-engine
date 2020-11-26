@@ -270,6 +270,60 @@ dberr_t LizardTablespace::check_file_spec(bool create_new_db,
   return err;
 }
 
+/** Verify the size of the physical file.
+@param[in]	file	data file object
+@return DB_SUCCESS if OK else error code. */
+dberr_t LizardTablespace::check_size(Datafile &file) {
+  os_offset_t size = os_file_get_size(file.m_handle);
+  ut_a(size != (os_offset_t)-1);
+  ut_a(m_files.size() == 1);
+
+  /* Under some error conditions like disk full scenarios
+  or file size reaching filesystem limit the data file
+  could contain an incomplete extent at the end. When we
+  extend a data file and if some failure happens, then
+  also the data file could contain an incomplete extent.
+  So we need to round the size downward to a megabyte. */
+
+  page_no_t rounded_size_pages = static_cast<page_no_t>(
+      ((size / (1024 * 1024)) * ((1024 * 1024) / UNIV_PAGE_SIZE)));
+
+  /* If last file */
+  if (&file == &m_files.back() && m_auto_extend_last_file) {
+    if (file.m_size > rounded_size_pages ||
+        (m_last_file_size_max > 0 &&
+         m_last_file_size_max < rounded_size_pages)) {
+      ib::error(ER_LIZARD)
+          << "The Auto-extending " << name() << " data file '"
+          << file.filepath()
+          << "' is"
+             " of a different size "
+          << rounded_size_pages
+          << " pages (rounded down to MB) than specified"
+             " in the .cnf file: initial "
+          << file.m_size << " pages, max " << m_last_file_size_max
+          << " (relevant if non-zero) pages!";
+      return (DB_ERROR);
+    }
+
+    file.m_size = rounded_size_pages;
+  }
+
+  if (rounded_size_pages != file.m_size) {
+    ib::error(ER_LIZARD)
+        << "The " << name() << " data file '" << file.filepath()
+        << "' is of a different size " << rounded_size_pages
+        << " pages (rounded down to MB)"
+           " than the "
+        << file.m_size
+        << " pages specified in"
+           " the .cnf file!";
+    return (DB_ERROR);
+  }
+
+  return (DB_SUCCESS);
+}
+
 /**
   Open or create the lizard space
 
@@ -350,6 +404,9 @@ dberr_t LizardTablespace::open_file(Datafile &file) {
   ut_a(file.m_type == SRV_NOT_RAW);
 
   err = file.open_or_create(srv_read_only_mode);
+
+  check_size(file);
+
   return err;
 }
 
