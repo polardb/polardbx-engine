@@ -31,6 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0repl.h"
 #include "clone0api.h"
 #include "clone0clone.h"
+#include "lizard0sys.h"
 #include "sql/field.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_gtid_persist.h"
@@ -393,18 +394,18 @@ int Clone_persist_gtid::write_to_table(uint64_t flush_list_number,
   return (err);
 }
 
-void Clone_persist_gtid::update_gtid_trx_no(trx_id_t new_gtid_trx_no) {
-  auto trx_no = m_gtid_trx_no.load();
-  /* Noting to do if number hasn't increased. */
-  if (trx_no != TRX_ID_MAX && trx_no >= new_gtid_trx_no) {
-    ut_ad(trx_no == new_gtid_trx_no);
+void Clone_persist_gtid::update_gtid_trx_scn(scn_t new_gtid_trx_scn) {
+  auto trx_scn = m_gtid_trx_scn.load();
+  /* Noting to do if scn hasn't increased. */
+  if (trx_scn != lizard::SCN_NULL && trx_scn >= new_gtid_trx_scn) {
+    ut_ad(trx_scn == new_gtid_trx_scn);
     return;
   }
   /* Update in memory variable. */
-  m_gtid_trx_no.store(new_gtid_trx_no);
+  m_gtid_trx_scn.store(new_gtid_trx_scn);
 
   /* Persist to disk. This would be useful during recovery. */
-  trx_sys_persist_gtid_num(new_gtid_trx_no);
+  trx_sys_persist_gtid_scn(new_gtid_trx_scn);
 
   /* Wake up purge thread. */
   srv_purge_wakeup();
@@ -424,13 +425,10 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
   bool explicit_request = m_explicit_request.load();
 
   trx_sys_mutex_enter();
-  /* Get oldest transaction number that is yet to be committed. Any transaction
+  /* Get oldest scn that is yet to be committed. Any transaction
   with lower transaction number is committed and is added to GTID list. */
 
-  /** TODO: Replace it by SCN */
-  // auto oldest_trx_no = trx_sys_oldest_trx_no();
-  //
-  trx_id_t oldest_trx_no = 0;
+  scn_t oldest_trx_scn = lizard::lizard_sys_get_min_safe_scn();
 
   bool compress_recovery = false;
   /* Check and write if any GTID is accumulated. */
@@ -467,7 +465,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
   }
 
   /* Update trx number upto which GTID is written to table. */
-  update_gtid_trx_no(oldest_trx_no);
+  update_gtid_trx_scn(oldest_trx_scn);
 
   /* Request Compression once the counter reaches threshold. */
   bool debug_skip = debug_skip_write(true);

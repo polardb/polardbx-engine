@@ -104,8 +104,8 @@ page_no_t trx_rseg_header_create(space_id_t space_id,
     trx_rsegf_set_nth_undo(rsegf, i, FIL_NULL, mtr);
   }
 
-  /* Initialize maximum transaction number. */
-  mlog_write_ull(rsegf + TRX_RSEG_MAX_TRX_NO, 0, mtr);
+  /* Initialize maximum transaction scn. */
+  mlog_write_ull(rsegf + TRX_RSEG_MAX_TRX_SCN, lizard::SCN_NULL, mtr);
 
   if (space_id == TRX_SYS_SPACE) {
     /* All rollback segments in the system tablespace need
@@ -187,9 +187,9 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) {
   ut_free(rseg);
 }
 
-static void trx_rseg_persist_gtid(trx_rseg_t *rseg, trx_id_t gtid_trx_no) {
+static void trx_rseg_persist_gtid(trx_rseg_t *rseg, scn_t gtid_trx_scn) {
   /* Old server where GTID persistence were not enabled. */
-  if (gtid_trx_no == 0) {
+  if (gtid_trx_scn == 0) {
     return;
   }
   /* The mini transactions used in this function should not do any
@@ -202,10 +202,10 @@ static void trx_rseg_persist_gtid(trx_rseg_t *rseg, trx_id_t gtid_trx_no) {
   auto rseg_header =
       trx_rsegf_get_new(rseg->space_id, rseg->page_no, rseg->page_size, &mtr);
 
-  auto rseg_max_trx_no = mach_read_from_8(rseg_header + TRX_RSEG_MAX_TRX_NO);
+  auto rseg_max_trx_scn = mach_read_from_8(rseg_header + TRX_RSEG_MAX_TRX_SCN);
 
   /* Check if GTID for transactions in this rollback segment are persisted. */
-  if (rseg_max_trx_no < gtid_trx_no) {
+  if (rseg_max_trx_scn < gtid_trx_scn) {
     mtr_commit(&mtr);
     return;
   }
@@ -227,11 +227,11 @@ static void trx_rseg_persist_gtid(trx_rseg_t *rseg, trx_id_t gtid_trx_no) {
     /* Get undo log and trx_no for the transaction. */
     node = undo_page + node_addr.boffset;
     auto undo_log = node - TRX_UNDO_HISTORY_NODE;
-    auto undo_trx_no = mach_read_from_8(undo_log + TRX_UNDO_TRX_NO);
+    auto undo_trx_scn = mach_read_from_8(undo_log + TRX_UNDO_SCN);
 
     /* Check and exit if the transaction GTID is already persisted. We
-    don't need to check any more as history list is ordered by trx_no. */
-    if (undo_trx_no < gtid_trx_no) {
+    don't need to check any more as history list is ordered by trx_scn. */
+    if (undo_trx_scn < gtid_trx_scn) {
       mtr_commit(&mtr);
       break;
     }
@@ -245,7 +245,7 @@ static void trx_rseg_persist_gtid(trx_rseg_t *rseg, trx_id_t gtid_trx_no) {
 
 trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
                                 page_no_t page_no, const page_size_t &page_size,
-                                trx_id_t gtid_trx_no,
+                                scn_t gtid_trx_scn,
                                 lizard::purge_heap_t *purge_heap, mtr_t *mtr) {
   auto rseg = static_cast<trx_rseg_t *>(ut_zalloc_nokey(sizeof(trx_rseg_t)));
 
@@ -302,7 +302,7 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
     trx_sys->rseg_history_len += len;
 
     /* Extract GTID from history and send to GTID persister. */
-    trx_rseg_persist_gtid(rseg, gtid_trx_no);
+    trx_rseg_persist_gtid(rseg, gtid_trx_scn);
 
     auto node_addr = trx_purge_get_log_from_hist(
         flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
@@ -397,12 +397,12 @@ void trx_rsegs_init(lizard::purge_heap_t *purge_heap) {
   mtr.start();
   trx_sysf_t *sys_header = trx_sysf_get(&mtr);
   auto page = sys_header - TRX_SYS;
-  auto gtid_trx_no = mach_read_from_8(page + TRX_SYS_TRX_NUM_GTID);
+  auto gtid_trx_scn = mach_read_from_8(page + TRX_SYS_TRX_SCN_GTID);
 
   mtr.commit();
 
   auto &gtid_persistor = clone_sys->get_gtid_persistor();
-  gtid_persistor.set_oldest_trx_no_recovery(gtid_trx_no);
+  gtid_persistor.set_oldest_trx_scn_recovery(gtid_trx_scn);
 
   for (slot = 0; slot < TRX_SYS_N_RSEGS; slot++) {
     mtr.start();
@@ -418,7 +418,7 @@ void trx_rsegs_init(lizard::purge_heap_t *purge_heap) {
         Note that all tablespaces with rollback segments
         use univ_page_size. (system, temp & undo) */
         rseg = trx_rseg_mem_create(slot, space_id, page_no, univ_page_size,
-                                   gtid_trx_no, purge_heap, &mtr);
+                                   gtid_trx_scn, purge_heap, &mtr);
 
         ut_a(rseg->id == slot);
 
@@ -451,8 +451,9 @@ void trx_rsegs_init(lizard::purge_heap_t *purge_heap) {
       /* Create the trx_rseg_t object.
       Note that all tablespaces with rollback segments
       use univ_page_size. */
-      rseg = trx_rseg_mem_create(slot, undo_space->id(), page_no,
-                                 univ_page_size, gtid_trx_no, purge_heap, &mtr);
+      rseg =
+          trx_rseg_mem_create(slot, undo_space->id(), page_no, univ_page_size,
+                              gtid_trx_scn, purge_heap, &mtr);
 
       ut_a(rseg->id == slot);
 

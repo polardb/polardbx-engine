@@ -209,13 +209,10 @@ ibool trx_assert_recovered(trx_id_t trx_id) /*!< in: transaction identifier */
     MY_ATTRIBUTE((warn_unused_result));
 #endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 
-/** Persist transaction number limit below which all transaction GTIDs
+/** Persist transaction scn limit below which all transaction GTIDs
 are persisted to disk table.
-@param[in]	gtid_trx_no	transaction number */
-void trx_sys_persist_gtid_num(trx_id_t gtid_trx_no);
-
-/** @return oldest transaction number yet to be committed. */
-trx_id_t trx_sys_oldest_trx_no();
+@param[in]	gtid_trx_scn	transaction scn */
+void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn);
 
 /** Get a list of all binlog prepared transactions.
 @param[out]	trx_ids	all prepared transaction IDs. */
@@ -344,11 +341,11 @@ remains the same. */
                                   within that file */
 #define TRX_SYS_MYSQL_LOG_NAME 12 /*!< MySQL log file name */
 
-/** Reserve next 8 bytes for transaction number up to which GTIDs
+/** Reserve next 8 bytes for transaction scn up to which GTIDs
 are persisted to table */
-#define TRX_SYS_TRX_NUM_GTID \
+#define TRX_SYS_TRX_SCN_GTID \
   (TRX_SYS_MYSQL_LOG_INFO + TRX_SYS_MYSQL_LOG_NAME + TRX_SYS_MYSQL_LOG_NAME_LEN)
-#define TRX_SYS_TRX_NUM_END = (TRX_SYS_TRX_NUM_GTID + 8)
+#define TRX_SYS_TRX_NUM_END = (TRX_SYS_TRX_SCN_GTID + 8)
 
 /** Doublewrite buffer */
 /* @{ */

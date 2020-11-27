@@ -116,27 +116,16 @@ void trx_sys_flush_max_trx_id(void) {
   }
 }
 
-void trx_sys_persist_gtid_num(trx_id_t gtid_trx_no) {
+void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn) {
   mtr_t mtr;
   mtr.start();
   auto sys_header = trx_sysf_get(&mtr);
   auto page = sys_header - TRX_SYS;
   /* Update GTID transaction number. All transactions with lower
   transaction number are no longer processed for GTID. */
-  mlog_write_ull(page + TRX_SYS_TRX_NUM_GTID, gtid_trx_no, &mtr);
+  mlog_write_ull(page + TRX_SYS_TRX_SCN_GTID, gtid_trx_scn, &mtr);
   mtr.commit();
 }
-
-/** lizard: oldest trx no wil be replaced by SCN */
-// trx_id_t trx_sys_oldest_trx_no() {
-//  ut_ad(trx_sys_mutex_own());
-//  /* Get the oldest transaction from serialisation list. */
-//  if (UT_LIST_GET_LEN(trx_sys->serialisation_list) > 0) {
-//    auto trx = UT_LIST_GET_FIRST(trx_sys->serialisation_list);
-//    return (trx->no);
-//  }
-//  return (trx_sys->max_trx_id);
-//}
 
 void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids) {
   trx_sys_mutex_enter();
