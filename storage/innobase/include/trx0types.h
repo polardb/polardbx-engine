@@ -272,9 +272,6 @@ struct trx_rseg_t {
   /** Byte offset of the last not yet purged log header */
   size_t last_offset{};
 
-  /** Transaction number of the last not yet purged log */
-  // trx_id_t last_trx_no;
-
   /** true if the last not yet purged log needs purging */
   bool last_del_marks{};
 
@@ -521,92 +518,41 @@ class Rsegs {
 template <size_t N>
 using Rsegs_array = std::array<trx_rseg_t *, N>;
 
-/** Rollback segments from a given transaction with trx-no
-scheduled for purge. */
-class TrxUndoRsegs {
- public:
-  explicit TrxUndoRsegs(trx_id_t trx_no) : m_trx_no(trx_no) {
-    for (auto &rseg : m_rsegs) {
-      rseg = nullptr;
-    }
+typedef std::vector<trx_id_t, ut::allocator<trx_id_t>> trx_ids_t;
+
+/** Mapping read-write transactions from id to transaction instance, for
+creating read views and during trx id lookup for MVCC and locking. */
+struct TrxTrack {
+  explicit TrxTrack(trx_id_t id, trx_t *trx = NULL) : m_id(id), m_trx(trx) {
+    // Do nothing
   }
 
-  /** Default constructor */
-  TrxUndoRsegs() : TrxUndoRsegs(0) {}
-
-  void set_trx_no(trx_id_t trx_no) { m_trx_no = trx_no; }
-
-  /** Get transaction number
-  @return trx_id_t - get transaction number. */
-  trx_id_t get_trx_no() const { return (m_trx_no); }
-
-  /** Add rollback segment.
-  @param rseg rollback segment to add. */
-  void insert(trx_rseg_t *rseg) {
-    for (size_t i = 0; i < m_rsegs_n; ++i) {
-      if (m_rsegs[i] == rseg) {
-        return;
-      }
-    }
-    // ut_a(m_rsegs_n < 2);
-    /* Lizard: one more txn rseg. */
-    ut_a(m_rsegs_n < 2 + 1);
-    m_rsegs[m_rsegs_n++] = rseg;
-  }
-
-  /** Number of registered rsegs.
-  @return size of rseg list. */
-  size_t size() const { return (m_rsegs_n); }
-
-  /**
-  @return an iterator to the first element */
-  typename Rsegs_array<2>::iterator begin() { return m_rsegs.begin(); }
-
-  /**
-  @return an iterator to the end */
-  typename Rsegs_array<2>::iterator end() {
-    return m_rsegs.begin() + m_rsegs_n;
-  }
-
-  /** Append rollback segments from referred instance to current
-  instance. */
-  void insert(const TrxUndoRsegs &append_from) {
-    ut_ad(get_trx_no() == append_from.get_trx_no());
-    for (size_t i = 0; i < append_from.m_rsegs_n; ++i) {
-      insert(append_from.m_rsegs[i]);
-    }
-  }
-
-  /** Compare two TrxUndoRsegs based on trx_no.
-  @param lhs first element to compare
-  @param rhs second element to compare
-  @return true if elem1 > elem2 else false.*/
-  bool operator()(const TrxUndoRsegs &lhs, const TrxUndoRsegs &rhs) {
-    return (lhs.m_trx_no > rhs.m_trx_no);
-  }
-
-  /** Compiler defined copy-constructor/assignment operator
-  should be fine given that there is no reference to a memory
-  object outside scope of class object.*/
-
- private:
-  /** The rollback segments transaction number. */
-  trx_id_t m_trx_no;
-
-  size_t m_rsegs_n{};
-
-  /** Rollback segments of a transaction, scheduled for purge. */
-  // Rsegs_array<2> m_rsegs;
-  /* Lizard: one more txn rseg. */
-  Rsegs_array<3> m_rsegs;
+  trx_id_t m_id;
+  trx_t *m_trx;
 };
 
-typedef std::priority_queue<
-    TrxUndoRsegs, std::vector<TrxUndoRsegs, ut::allocator<TrxUndoRsegs>>,
-    TrxUndoRsegs>
-    purge_pq_t;
+struct TrxTrackHash {
+  size_t operator()(const TrxTrack &key) const { return (size_t(key.m_id)); }
+};
 
-typedef std::vector<trx_id_t, ut::allocator<trx_id_t>> trx_ids_t;
+/**
+Comparator for TrxMap */
+struct TrxTrackHashCmp {
+  bool operator()(const TrxTrack &lhs, const TrxTrack &rhs) const {
+    return (lhs.m_id == rhs.m_id);
+  }
+};
+
+/**
+Comparator for TrxMap */
+struct TrxTrackCmp {
+  bool operator()(const TrxTrack &lhs, const TrxTrack &rhs) const {
+    return (lhs.m_id < rhs.m_id);
+  }
+};
+
+// typedef std::unordered_set<TrxTrack, TrxTrackHash, TrxTrackHashCmp> TrxIdSet;
+typedef std::set<TrxTrack, TrxTrackCmp, ut::allocator<TrxTrack>> TrxIdSet;
 
 struct TrxVersion {
   TrxVersion(trx_t *trx);

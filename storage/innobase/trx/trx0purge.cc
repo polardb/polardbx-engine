@@ -285,8 +285,8 @@ void trx_purge_add_update_undo_to_history(
   mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.scn.first,
                  mtr);
 
-  /* Write the trx number to the undo log header */
-  mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
+  /* lizard: TRX_UNDO_TRX_NO is reserved */
+  //mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
 
   /* Write information about delete markings to the undo log header */
 
@@ -300,7 +300,6 @@ void trx_purge_add_update_undo_to_history(
   if (rseg->last_page_no == FIL_NULL) {
     rseg->last_page_no = undo->hdr_page_no;
     rseg->last_offset = undo->hdr_offset;
-    // rseg->last_trx_no = trx->no;
     rseg->last_del_marks = undo->del_marks;
     rseg->last_scn = trx->txn_desc.scn.first;
   }
@@ -419,7 +418,6 @@ static void trx_purge_truncate_rseg_history(
   trx_ulogf_t *log_hdr;
   trx_usegf_t *seg_hdr;
   mtr_t mtr;
-  // trx_id_t undo_trx_no;
   scn_t undo_trx_scn;
   const bool is_temp = fsp_is_system_temporary(rseg->space_id);
 
@@ -2160,9 +2158,6 @@ void Purge_groups_t::distribute_if_needed() {
   if (purge_sys->iter.scn > purge_sys->vision.snapshot_scn() || keep_top) {
     return nullptr;
   }
-
-  /* fprintf(stderr, "Thread %s purging trx %llu undo record %llu\n",
-  to_string(std::this_thread::get_id()), iter->trx_no, iter->undo_no); */
 
   *roll_ptr = trx_undo_build_roll_ptr(false, purge_sys->rseg->space_id,
                                       purge_sys->page_no, purge_sys->offset);

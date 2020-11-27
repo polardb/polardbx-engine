@@ -1,8 +1,8 @@
 create database lizard_db;
 use information_schema;
 select * from INNODB_TABLESPACES where space = 4294967290;
-SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
-4294967290	innodb_lizard	18432	Any	16384	0	General	4096	12582912	12582912	8.0.22	1	N	normal
+SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	AUTOEXTEND_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
+4294967290	innodb_lizard	18432	Any	16384	0	General	4096	12582912	12582912	0	8.0.32	1	N	normal
 select * from INNODB_TABLESPACES_BRIEF where space = 4294967290;
 SPACE	NAME	PATH	FLAG	SPACE_TYPE
 4294967290	innodb_lizard	lizard.ibd	18432	General
@@ -12,7 +12,7 @@ SPACE	PATH
 SET SESSION debug= '+d, skip_dd_table_access_check';
 select * from mysql.tablespaces where id = 3;
 id	name	options	se_private_data	comment	engine	engine_attribute
-3	innodb_lizard	encryption=N;	flags=18432;id=4294967290;server_version=80022;space_version=1;state=normal;		InnoDB	NULL
+3	innodb_lizard	encryption=N;	flags=18432;id=4294967290;server_version=80032;space_version=1;state=normal;		InnoDB	NULL
 select * from mysql.tablespace_files where tablespace_id = 3;
 tablespace_id	ordinal_position	file_name	se_private_data
 3	1	lizard.ibd	NULL

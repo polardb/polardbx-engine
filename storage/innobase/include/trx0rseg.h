@@ -137,17 +137,18 @@ void trx_rsegs_parallel_init(lizard::purge_heap_t *purge_queue);
 /** Create and initialize a rollback segment object.  Some of
 the values for the fields are read from the segment header page.
 The caller must insert it into the correct list.
-@param[in]      id              Rollback segment id
-@param[in]      space_id        Space where the segment is placed
-@param[in]      page_no         Page number of the segment header
-@param[in]      page_size       Page size
-@param[in]      gtid_trx_scn    Trx scn up to which GTID is persisted
-@param[in,out]  purge_queue     Rseg queue
-@param[in,out]  mtr             Mini-transaction
+@param[in]	id		rollback segment id
+@param[in]	space_id	space where the segment is placed
+@param[in]	page_no		page number of the segment header
+@param[in]	page_size	page size
+@param[in]      gtid_trx_scn	Trx scn up to which GTID is persisted
+@param[in,out]	purge_heap	rseg queue
+@param[in,out]	mtr		mini-transaction
 @return own: rollback segment object */
 trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
                                 page_no_t page_no, const page_size_t &page_size,
-                                scn_t gtid_trx_scn, purge_pq_t *purge_queue,
+                                scn_t gtid_trx_scn,
+                                lizard::purge_heap_t *purge_heap,
                                 mtr_t *mtr);
 
 /** Create a rollback segment in the given tablespace. This could be either

@@ -938,8 +938,8 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
   mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.scn.first,
                  mtr);
 
-  /* Write the trx number to the undo log header */
-  mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
+  /* lizard: TRX_UNDO_TRX_NO is reserved */
+  //mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
 
   /* Write information about delete markings to the undo log header */
   if (!undo->del_marks) {
@@ -957,7 +957,6 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
   if (rseg->last_page_no == FIL_NULL) {
     rseg->last_page_no = undo->hdr_page_no;
     rseg->last_offset = undo->hdr_offset;
-    // rseg->last_trx_no = trx->no;
     rseg->last_del_marks = undo->del_marks;
 
     /** trx->scn must be allocated  */
@@ -1087,7 +1086,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
     /* A running transaction always has the number field inited to
     TRX_ID_MAX */
 
-    trx->no = TRX_ID_MAX;
+    //trx->no = TRX_ID_MAX;
 
     assert_undo_scn_initial(undo);
     assert_trx_scn_initial(trx);

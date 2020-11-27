@@ -492,17 +492,7 @@ lizard::purge_heap_t *trx_sys_init_at_db_start(void) {
   trx_sys->next_trx_id_or_no.store(max_trx_id +
                                    2 * trx_sys_get_trx_id_write_margin());
 
-  // trx_sys->serialisation_min_trx_no.store(trx_sys->next_trx_id_or_no.load());
-
   mtr.commit();
-
-#ifdef UNIV_DEBUG
-  /* max_trx_id is the next transaction ID to assign. Initialize maximum
-  transaction number to one less if all transactions are already purged. */
-  // if (trx_sys->rw_max_trx_no == 0) {
-  //   trx_sys->rw_max_trx_no = trx_sys_get_next_trx_id_or_no() - 1;
-  // }
-#endif /* UNIV_DEBUG */
 
   trx_sys_mutex_enter();
   trx_sys_write_max_trx_id();
@@ -560,18 +550,8 @@ void trx_sys_create(void) {
   mutex_create(LATCH_ID_TRX_SYS, &trx_sys->mutex);
   mutex_create(LATCH_ID_TRX_SYS_GTIDS_MEM, &trx_sys->gtids_mem_mutex);
 
-  // UT_LIST_INIT(trx_sys->serialisation_list);
   UT_LIST_INIT(trx_sys->rw_trx_list);
   UT_LIST_INIT(trx_sys->mysql_trx_list);
-
-  // trx_sys->mvcc = ut::new_withkey<MVCC>(UT_NEW_THIS_FILE_PSI_KEY, 1024);
-
-  // trx_sys->serialisation_min_trx_no.store(0);
-
-  // ut_d(trx_sys->rw_max_trx_no = 0);
-
-  // new (&trx_sys->rw_trx_ids)
-  //     trx_ids_t(ut::allocator<trx_id_t>(mem_key_trx_sys_t_rw_trx_ids));
 
   for (auto &shard : trx_sys->shards) {
     new (&shard) Trx_shard{};
@@ -604,7 +584,6 @@ void trx_sys_close(void) {
     return;
   }
 
-  // ulint size = trx_sys->mvcc->size();
   ulint size = lizard::trx_vision_container_size();
 
   if (size > 0) {
@@ -633,11 +612,8 @@ void trx_sys_close(void) {
 
   trx_sys->tmp_rsegs.~Rsegs();
 
-  // ut::delete_(trx_sys->mvcc);
-
   ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
   ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
-  // ut_a(UT_LIST_GET_LEN(trx_sys->serialisation_list) == 0);
 
   for (auto &shard : trx_sys->shards) {
     shard.~Trx_shard();
@@ -646,8 +622,6 @@ void trx_sys_close(void) {
   /* We used placement new to create this mutex. Call the destructor. */
   mutex_free(&trx_sys->gtids_mem_mutex);
   mutex_free(&trx_sys->mutex);
-
-  // trx_sys->rw_trx_ids.~trx_ids_t();
 
   ut::free(trx_sys);
 
