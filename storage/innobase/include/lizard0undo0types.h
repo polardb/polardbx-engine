@@ -179,6 +179,11 @@ struct txn_info_t {
 };
 
 /**
+  Lizard committed transaction txn information
+  special for cleanout.
+*/
+typedef struct txn_rec_t txn_commit_t;
+/**
   Lizard transaction attributes in index (used by Vision)
    1) scn
    2) undo_ptr

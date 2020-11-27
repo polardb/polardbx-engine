@@ -23350,7 +23350,24 @@ static MYSQL_SYSVAR_BOOL(
     cleanout_safe_mode, lizard::opt_cleanout_safe_mode,
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
     "Whether to reboot innodb on safe cleanout mode (off by default)", NULL,
-    NULL, FALSE);
+    NULL, false);
+
+static MYSQL_SYSVAR_BOOL(
+    cleanout_disable, lizard::opt_cleanout_disable, PLUGIN_VAR_OPCMDARG,
+    "Whether to disable cleanout when read (off by default)", NULL, NULL,
+    false);
+
+static MYSQL_SYSVAR_ULONG(cleanout_max_scans_on_page,
+                          lizard::cleanout_max_scans_on_page,
+                          PLUGIN_VAR_OPCMDARG,
+                          "max scan record count once cleanout one page", NULL,
+                          NULL, 0, 0, 1024 * 1024, 0);
+
+static MYSQL_SYSVAR_ULONG(cleanout_max_cleans_on_page,
+                          lizard::cleanout_max_cleans_on_page,
+                          PLUGIN_VAR_OPCMDARG,
+                          "max clean record count once cleanout one page", NULL,
+                          NULL, 1, 1, 1024 * 1024, 0);
 
 static MYSQL_SYSVAR_ULONG(txn_undo_page_reuse_max_percent,
                           lizard::txn_undo_page_reuse_max_percent,
@@ -23587,8 +23604,11 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(data_file_purge_dir),
     MYSQL_SYSVAR(print_data_file_purge_process),
     MYSQL_SYSVAR(cleanout_safe_mode),
+    MYSQL_SYSVAR(cleanout_disable),
+    MYSQL_SYSVAR(cleanout_max_scans_on_page),
+    MYSQL_SYSVAR(cleanout_max_cleans_on_page),
     MYSQL_SYSVAR(txn_undo_page_reuse_max_percent),
-    NULL};
+    nullptr};
 
 mysql_declare_plugin(innobase){
     MYSQL_STORAGE_ENGINE_PLUGIN,

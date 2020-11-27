@@ -86,6 +86,10 @@ static void export_lizard_status(void) {
 
   lizard_vars.txn_undo_lookup_by_uba =
       lizard_stats.txn_undo_lookup_by_uba;
+
+  lizard_vars.cleanout_page_collect = lizard_stats.cleanout_page_collect;
+
+  lizard_vars.cleanout_record_clean = lizard_stats.cleanout_record_clean;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -124,28 +128,33 @@ static SHOW_VAR lizard_status_variables[] = {
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_lost_page_miss_when_safe",
-      (char *)&lizard_vars.txn_undo_lost_page_miss_when_safe,
-      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+     (char *)&lizard_vars.txn_undo_lost_page_miss_when_safe, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_lost_page_offset_overflow",
-      (char *)&lizard_vars.txn_undo_lost_page_offset_overflow,
-      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+     (char *)&lizard_vars.txn_undo_lost_page_offset_overflow, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_lost_magic_number_wrong",
-      (char *)&lizard_vars.txn_undo_lost_magic_number_wrong,
-      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+     (char *)&lizard_vars.txn_undo_lost_magic_number_wrong, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_lost_ext_flag_wrong",
-      (char *)&lizard_vars.txn_undo_lost_ext_flag_wrong,
-      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+     (char *)&lizard_vars.txn_undo_lost_ext_flag_wrong, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_lost_trx_id_mismatch",
-      (char *)&lizard_vars.txn_undo_lost_trx_id_mismatch,
-      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+     (char *)&lizard_vars.txn_undo_lost_trx_id_mismatch, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
 
-    {"txn_undo_lookup_by_uba",
-      (char *)&lizard_vars.txn_undo_lookup_by_uba,
-      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"txn_undo_lookup_by_uba", (char *)&lizard_vars.txn_undo_lookup_by_uba,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"cleanout_page_collect", (char *)&lizard_vars.cleanout_page_collect,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"cleanout_record_clean", (char *)&lizard_vars.cleanout_record_clean,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

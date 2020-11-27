@@ -77,6 +77,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 
 #include "lizard0dict.h"
+#include "lizard0cleanout.h"
 
 /** Maximum number of rows to prefetch; MySQL interface has another parameter */
 constexpr uint32_t SEL_MAX_N_PREFETCH = 16;
@@ -887,7 +888,8 @@ static inline bool row_sel_test_other_conds(
     old_vers = nullptr;
 
     if (!lock_clust_rec_cons_read_sees(clust_rec, index, offsets,
-                                       node->vision)) {
+                                       /** TODO: Add cleanout logic */
+                                       nullptr, node->vision)) {
       err =
           row_sel_build_prev_vers(node->vision, index, clust_rec, &offsets,
                                   &heap, &plan->old_vers_heap, &old_vers, mtr);
@@ -1392,7 +1394,9 @@ static ulint row_sel_try_search_shortcut(
                             UT_LOCATION_HERE, &heap);
 
   if (index->is_clustered()) {
-    if (!lock_clust_rec_cons_read_sees(rec, index, offsets, node->vision)) {
+    if (!lock_clust_rec_cons_read_sees(rec, index, offsets,
+                                       /**TODO: Add cleanout logic */
+                                       nullptr, node->vision)) {
       ret = SEL_RETRY;
       goto func_exit;
     }
@@ -1755,7 +1759,8 @@ skip_lock:
 
     if (index->is_clustered()) {
       if (!lock_clust_rec_cons_read_sees(rec, index, offsets,
-                                         node->vision)) {
+                                         /**TODO: cleanout logic */
+                                         nullptr, node->vision)) {
         err = row_sel_build_prev_vers(node->vision, index, rec, &offsets,
                                       &heap, &plan->old_vers_heap, &old_vers,
                                       &mtr);
@@ -3272,6 +3277,7 @@ non-clustered index. Does the necessary locking.
 
     if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
         !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets,
+                                       prebuilt->clust_pcur,
                                        trx_get_vision(trx))) {
       if (clust_rec != cached_clust_rec) {
         /* The following call returns 'offsets' associated with 'old_vers' */
@@ -3716,7 +3722,7 @@ static ulint row_sel_try_search_shortcut_for_mysql(
   *offsets = rec_get_offsets(rec, index, *offsets, ULINT_UNDEFINED,
                              UT_LOCATION_HERE, heap);
 
-  if (!lock_clust_rec_cons_read_sees(rec, index, *offsets,
+  if (!lock_clust_rec_cons_read_sees(rec, index, *offsets, pcur,
                                      trx_get_vision(trx))) {
     return (SEL_RETRY);
   }
@@ -4440,6 +4446,8 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
 
   assert_lizard_dict_index_check(index);
   assert_lizard_dict_table_check(index->table);
+
+  ut_ad(!pcur->m_cleanout_pages || pcur->m_cleanout_pages->is_empty());
 
   /* We don't support FTS queries from the HANDLER interfaces, because
   we implemented FTS as reversed inverted index with auxiliary tables.
@@ -5284,7 +5292,7 @@ rec_loop:
       by skipping this lookup */
 
       if (srv_force_recovery < 5 &&
-          !lock_clust_rec_cons_read_sees(rec, index, offsets,
+          !lock_clust_rec_cons_read_sees(rec, index, offsets, pcur,
                                          trx_get_vision(trx))) {
         rec_t *old_vers;
         /* The following call returns 'offsets' associated with 'old_vers' */
@@ -6026,6 +6034,8 @@ func_exit:
   prebuilt->lob_undo_reset();
 
   ut_a(!trx->has_search_latch);
+
+  lizard::row_cleanout_after_read(prebuilt);
 
   return err;
 }

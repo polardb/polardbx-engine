@@ -3579,7 +3579,9 @@ static ulint fts_add_doc_by_id(fts_trx_table_t *ftt, doc_id_t doc_id,
   auto is_id_cluster = (clust_index == fts_id_index);
 
   mtr_start(&mtr);
+
   pcur.init();
+  ut_ad(pcur.m_cleanout_pages == nullptr);
 
   /* Search based on Doc ID. Here, we'll need to consider the case
   when there is no primary index on Doc ID */
@@ -3619,6 +3621,8 @@ static ulint fts_add_doc_by_id(fts_trx_table_t *ftt, doc_id_t doc_id,
       ulint n_fields;
 
       clust_pcur.init();
+      ut_ad(clust_pcur.m_cleanout_pages == nullptr);
+
       n_fields = dict_index_get_n_unique(clust_index);
 
       clust_ref = dtuple_create(heap, n_fields);

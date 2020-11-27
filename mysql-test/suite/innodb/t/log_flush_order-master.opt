@@ -1,0 +1,7 @@
+# The testcase:
+# 1. prevent writing redo
+# 2. modify temporary table, which should not write redo. However, cleanout
+#    will happen when read DD (open tables), which will write redo but it
+#    cannot do.
+# disable cleanout
+--innodb_cleanout_disable=1

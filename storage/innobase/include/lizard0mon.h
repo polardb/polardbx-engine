@@ -82,6 +82,10 @@ struct lizard_var_t {
   ulint txn_undo_lost_trx_id_mismatch;
 
   ulint txn_undo_lookup_by_uba;
+
+  ulint cleanout_page_collect;
+
+  ulint cleanout_record_clean;
 };
 
 struct lizard_stats_t {
@@ -132,6 +136,10 @@ struct lizard_stats_t {
 
   /** lookup scn by uba */
   ulint_ctr_1_t txn_undo_lookup_by_uba;
+
+  ulint_ctr_1_t cleanout_page_collect;
+
+  ulint_ctr_1_t cleanout_record_clean;
 };
 
 namespace lizard {

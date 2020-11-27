@@ -37,7 +37,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0mutex.h"
 #include "rem0types.h"
 #include "page0types.h"
+#include "buf0types.h"
 
+#include "lizard0undo0types.h"
 #include "lizard0ut.h"
 
 struct mtr_t;
@@ -154,6 +156,109 @@ byte *btr_cur_parse_lizard_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
                                                 page_t *page,
                                                 page_zip_des_t *page_zip,
                                                 const dict_index_t *index);
+
+/*----------------------------------------------------------------*/
+/* Lizard cleanout structure and function. */
+/*----------------------------------------------------------------*/
+
+/** Whether disable the delayed cleanout when read */
+extern bool opt_cleanout_disable;
+
+/** Lizard max scan record count once cleanout one page.*/
+extern ulint cleanout_max_scans_on_page;
+/** Lizard max clean record count once cleanout one page.*/
+extern ulint cleanout_max_cleans_on_page;
+
+class Page {
+ public:
+  Page() : m_page_id(0, 0), m_index(nullptr) {}
+
+  Page(const page_id_t &page_id, const dict_index_t *index);
+
+  Page(const Page &);
+
+  Page(const Page &&) = delete;
+
+  Page &operator=(const Page &page);
+
+  bool operator==(const Page &page) {
+    if (m_index != nullptr && page.m_index != nullptr &&
+        m_index == page.m_index && m_page_id == page.m_page_id)
+      return true;
+
+    return false;
+  }
+
+  const page_id_t &page() const { return m_page_id; }
+
+  const dict_index_t *index() const { return m_index; }
+ private:
+  page_id_t m_page_id;
+  const dict_index_t *m_index;
+};
+
+/** All the pages need to cleanout within pcur */
+typedef std::vector<Page, ut::allocator<Page>> Pages;
+
+/** Committed txn container */
+typedef std::unordered_map<
+    trx_id_t, txn_commit_t, std::hash<trx_id_t>, std::equal_to<trx_id_t>,
+    ut::allocator<std::pair<const trx_id_t, txn_commit_t>>>
+    Txn_commits;
+
+/**
+  Collected pages that will be cleanout soon.
+ */
+class Cleanout_pages {
+ public:
+  explicit Cleanout_pages()
+      : m_pages(), m_txns(), m_page_num(0), m_txn_num(0), m_last_page() {}
+
+  virtual ~Cleanout_pages();
+
+  void init();
+
+  bool is_empty();
+
+  const Txn_commits *txns() const { return &m_txns; }
+
+  ulint page_count() const { return m_page_num; }
+
+  ulint txn_count() const { return m_txn_num; }
+
+  template <typename Func>
+  ulint iterate_page(Func &functor) {
+    ulint cleaned = 0;
+    for (auto it : m_pages) {
+      cleaned += functor(it);
+    }
+    return cleaned;
+  }
+
+  /**
+    Add the committed trx into hash map.
+    @param[in]    trx_id
+    @param[in]    trx_commit
+
+    @retval       true        Add success
+    @retval       false       Add failure
+  */
+  bool push_trx(trx_id_t trx_id, txn_commit_t txn_commit);
+  /**
+    Add the page which needed to cleanout into vector.
+
+    @param[in]      page_id
+    @param[in]      index
+  */
+  void push_page(const page_id_t &page_id, const dict_index_t *index);
+
+ private:
+  Pages m_pages;
+  Txn_commits m_txns;
+  ulint m_page_num;
+  ulint m_txn_num;
+  Page m_last_page;
+};
 
 }  // namespace lizard
 

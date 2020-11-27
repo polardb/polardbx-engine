@@ -47,6 +47,8 @@ struct page_zip_des_t;
 struct trx_t;
 struct upd_t;
 struct buf_block_t;
+struct row_prebuilt_t;
+struct btr_pcur_t;
 
 /**
   Lizard Record Format:
@@ -295,6 +297,32 @@ void row_upd_rec_lizard_fields_in_recovery(rec_t *rec,
                                            const ulint *offsets,
                                            const scn_t scn,
                                            const undo_ptr_t undo_ptr);
+
+/**
+  After search row complete, do the cleanout.
+
+  @param[in]      prebuilt
+
+  @retval         count       cleaned records count
+*/
+ulint row_cleanout_after_read(row_prebuilt_t *prebuilt);
+
+/**
+  Collect the page which need to cleanout
+
+  @param[in]        trx_id
+  @param[in]        trx_zeus        trx description and state
+  @param[in]        rec             current rec
+  @param[in]        index           cluster index
+  @parma[in]        offsets         rec_get_offsets(rec, index)
+  @param[in/out]    pcur            cursor
+
+  @retval           true            collected
+  @retval           false           didn't collect
+*/
+bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
+                          const dict_index_t *index, const ulint *offsets,
+                          btr_pcur_t *pcur);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/

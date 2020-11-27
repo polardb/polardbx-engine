@@ -31,11 +31,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "lizard0row.h"
-#include "lizard0data0types.h"
-#include "lizard0undo.h"
-#include "lizard0dict.h"
 #include "lizard0cleanout.h"
+#include "lizard0data0types.h"
+#include "lizard0dict.h"
+#include "lizard0mon.h"
 #include "lizard0page.h"
+#include "lizard0undo.h"
 
 #include "my_dbug.h"
 
@@ -44,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0log.h"
 #include "row0row.h"
 #include "row0upd.h"
+#include "row0mysql.h"
 
 #ifdef UNIV_DEBUG
 extern void page_zip_header_cmp(const page_zip_des_t *, const byte *);
@@ -591,7 +593,194 @@ byte *row_upd_parse_lizard_vals(const byte *ptr, const byte *end_ptr,
   return const_cast<byte *>(ptr);
 }
 
+/**
+  Collect the page which need to cleanout
 
+  @param[in]        trx_id
+  @param[in]        txn_rec         txn description and state
+  @param[in]        rec             current rec
+  @param[in]        index           cluster index
+  @parma[in]        offsets         rec_get_offsets(rec, index)
+  @param[in/out]    pcur            cursor
+
+  @retval           true            collected
+  @retval           false           didn't collect
+*/
+
+bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
+                          const dict_index_t *index, const ulint *offsets,
+                          btr_pcur_t *pcur) {
+  if (!pcur || pcur->m_cleanout_pages == nullptr) return false;
+
+  /** If disabled, skip it. */
+  if (opt_cleanout_disable) return false;
+
+  assert_row_lizard_valid(rec, index, offsets);
+  ut_ad(index->is_clustered());
+  ut_ad(index == pcur->get_btr_cur()->index);
+  ut_ad(rec == pcur->get_rec());
+
+  page_no_t page_no = page_get_page_no(pcur->get_page());
+  ut_ad(page_no == page_get_page_no(page_align(rec)));
+
+  page_id_t page_id(dict_index_get_space(index), page_no);
+
+  pcur->m_cleanout_pages->push_page(page_id, index);
+  pcur->m_cleanout_pages->push_trx(trx_id, txn_rec);
+
+  lizard_stats.cleanout_page_collect.inc();
+
+  return true;
+}
+
+/** Page cleanout operation */
+struct Cleanout {
+  Cleanout(const Txn_commits *txns) : m_txns(txns) {}
+
+  /**
+    Cleanout the page
+
+    @param[in]  page      target page
+
+    @retval     count     the records count that cleaned.
+  */
+  ulint operator()(const Page &cpage) {
+    dict_index_t *index = nullptr;
+    buf_block_t *block = nullptr;
+    ulint *offsets = nullptr;
+    mem_heap_t *heap = nullptr;
+    buf_frame_t *page = nullptr;
+    ulint savepoint;
+    ulint scaned = 0;
+    ulint cleaned = 0;
+    rec_t *rec;
+    trx_id_t trx_id;
+    txn_rec_t txn_rec;
+    mtr_t mtr;
+
+    ulint scan_limit = cleanout_max_scans_on_page;
+    ulint clean_limit = cleanout_max_cleans_on_page;
+
+    mtr.start();
+    index = const_cast<dict_index_t *>(cpage.index());
+    ut_ad(index);
+
+    const page_id_t page_id = cpage.page();
+    const page_size_t page_size = dict_table_page_size(index->table);
+
+    savepoint = mtr_set_savepoint(&mtr);
+    mtr_s_lock(dict_index_get_lock(index), &mtr, UT_LOCATION_HERE);
+
+    /**
+       Revision 1:
+
+       Fetch mode changed from PEEK_IF_IN_POOL to POSSIBLY_FREED,
+       Maybe the page was freed by purge system or other logic,
+       so if we got block through page_id directly other than searching tree,
+       the block maybe is under freed state.
+    */
+    block =
+        buf_page_get_gen(page_id, page_size, RW_X_LATCH, NULL,
+                         Page_fetch::POSSIBLY_FREED, UT_LOCATION_HERE, &mtr);
+
+    mtr_release_s_latch_at_savepoint(&mtr, savepoint,
+                                     dict_index_get_lock(index));
+
+    /** Maybe miss in the buffer pool */
+    if (block == nullptr) goto mtr_end;
+
+    page = buf_block_get_frame(block);
+    ut_ad(page);
+
+    /** Maybe it has been freed */
+    if (!page_is_leaf(page) || fil_page_get_type(page) != FIL_PAGE_INDEX ||
+        btr_page_get_index_id(page) != index->id)
+      goto mtr_end;
+
+    heap = mem_heap_create(UNIV_PAGE_SIZE + 200, UT_LOCATION_HERE);
+    rec = page_rec_get_next(page_get_infimum_rec(page));
+
+    while (page_rec_is_user_rec(rec)) {
+      scaned++;
+      /** Pass the limit of scan records */
+      if (scan_limit > 0 && scaned > scan_limit) goto mtr_end;
+
+      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+                                UT_LOCATION_HERE, &heap);
+      trx_id = row_get_rec_trx_id(rec, index, offsets);
+
+      /** If trx state is active ,try to cleanout */
+      if (row_get_rec_undo_ptr_is_active(rec, index, offsets)) {
+        auto it = m_txns->find(trx_id);
+        if (it != m_txns->end()) {
+          txn_rec = it->second;
+          /** Modify the scn and undo ptr */
+          row_upd_rec_lizard_fields_in_cleanout(
+              rec, buf_block_get_page_zip(block), index, offsets, &txn_rec);
+          /** Write the redo log */
+          btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &txn_rec, &mtr);
+          cleaned++;
+
+          /** Pass the limit of clean records */
+          if (cleaned > clean_limit) goto mtr_end;
+        }
+      }
+      rec = page_rec_get_next(rec);
+    }
+  mtr_end:
+    mtr.commit();
+
+    if (heap) mem_heap_free(heap);
+    return cleaned;
+  }
+
+/** All the committed txn information */
+  const Txn_commits *m_txns;
+};
+
+/**
+  Cleanout all the pages in one cursor
+
+  @param[in]      pages       page container
+
+  @retval         count       cleaned records count
+*/
+static ulint row_cleanout_pages(Cleanout_pages *pages) {
+  Cleanout op(pages->txns());
+  return pages->iterate_page<Cleanout>(op);
+}
+
+/**
+  After search row complete, do the cleanout.
+
+  @param[in]      prebuilt
+
+  @retval         count       cleaned records count
+*/
+ulint row_cleanout_after_read(row_prebuilt_t *prebuilt) {
+  ulint cleaned = 0;
+  ut_ad(prebuilt);
+  btr_pcur_t *pcur;
+
+  /** cursor maybe fixed on prebuilt->pcur or prebuilt->clust_pcur */
+
+  /** Find the collected and need cleanout pages */
+  pcur = prebuilt->pcur;
+  if (pcur && pcur->m_cleanout_pages) {
+    cleaned += row_cleanout_pages(pcur->m_cleanout_pages);
+    pcur->m_cleanout_pages->init();
+  }
+
+  pcur = prebuilt->clust_pcur;
+  if (pcur && pcur->m_cleanout_pages) {
+    cleaned += row_cleanout_pages(pcur->m_cleanout_pages);
+    pcur->m_cleanout_pages->init();
+  }
+
+  if (cleaned > 0) lizard_stats.cleanout_record_clean.add(cleaned);
+
+  return cleaned;
+}
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/
 /* lizard field debug */

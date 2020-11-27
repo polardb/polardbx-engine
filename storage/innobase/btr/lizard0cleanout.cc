@@ -317,4 +317,94 @@ byte *btr_cur_parse_lizard_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
   return ptr;
 }
 
+/*----------------------------------------------------------------*/
+/* Lizard cleanout structure and function. */
+/*----------------------------------------------------------------*/
+
+/** Whether disable the delayed cleanout when read */
+bool opt_cleanout_disable = false;
+
+/** Lizard max scan record count once cleanout one page.*/
+ulint cleanout_max_scans_on_page = 0;
+
+/** Lizard max clean record count once cleanout one page.*/
+ulint cleanout_max_cleans_on_page = 1;
+
+Page::Page(const page_id_t &page_id, const dict_index_t *index)
+    : m_page_id(page_id) {
+  ut_ad(index->is_clustered());
+  ut_ad(!index->table->is_intrinsic());
+  m_index = index;
+}
+
+Page &Page::operator=(const Page &page) {
+  if (this != &page) {
+    m_page_id = page.m_page_id;
+    m_index = page.m_index;
+  }
+  return *this;
+}
+
+Page::Page(const Page &page) : m_page_id(page.m_page_id) {
+  if (this != &page) {
+    m_index = page.m_index;
+  }
+}
+
+/**
+  Add the committed trx into hash map.
+  @param[in]    trx_id
+  @param[in]    trx_commit
+
+  @retval       true        Add success
+  @retval       false       Add failure
+*/
+bool Cleanout_pages::push_trx(trx_id_t trx_id, txn_commit_t txn_commit) {
+  auto it =
+      m_txns.insert(std::pair<trx_id_t, txn_commit_t>(trx_id, txn_commit));
+
+  if (it.second) m_txn_num++;
+  return it.second;
+}
+
+/**
+  Put the page that needed to cleanout into vector.
+
+  @param[in]      page_id
+  @param[in]      index
+*/
+void Cleanout_pages::push_page(const page_id_t &page_id,
+                               const dict_index_t *index) {
+  Page page(page_id, index);
+  if (m_page_num == 0 || (m_page_num > 0 && !(page == m_last_page))) {
+    m_pages.push_back(page);
+    m_page_num++;
+    m_last_page = page;
+  }
+}
+
+bool Cleanout_pages::is_empty() {
+  if (m_page_num == 0 && m_txn_num == 0) return true;
+
+  return false;
+}
+
+void Cleanout_pages::init() {
+  if (m_page_num > 0) {
+    m_pages.clear();
+    m_page_num = 0;
+  }
+  if (m_txn_num > 0) {
+    m_txns.clear();
+    m_txn_num = 0;
+  }
+}
+
+Cleanout_pages::~Cleanout_pages() {
+  m_pages.clear();
+  m_txns.clear();
+  m_page_num = 0;
+  m_txn_num = 0;
+}
+
 }  // namespace lizard

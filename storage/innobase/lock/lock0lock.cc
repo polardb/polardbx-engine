@@ -234,6 +234,7 @@ bool lock_clust_rec_cons_read_sees(
                             passed over by a read cursor */
     dict_index_t *index,    /*!< in: clustered index */
     const ulint *offsets,   /*!< in: rec_get_offsets(rec, index) */
+    btr_pcur_t *pcur,       /*!< in: current pcursor that define position */
     lizard::Vision *vision) /*!< in: consistent read view */
 {
   ut_ad(index->is_clustered());
@@ -261,7 +262,11 @@ bool lock_clust_rec_cons_read_sees(
       lizard::row_get_rec_scn_id(rec, index, offsets),
       lizard::row_get_rec_undo_ptr(rec, index, offsets),
   };
-  lizard::txn_undo_hdr_lookup(&txn_rec);
+  bool cleanout = lizard::txn_undo_hdr_lookup(&txn_rec);
+
+  if (cleanout) {
+    lizard::row_cleanout_collect(trx_id, txn_rec, rec, index, offsets, pcur);
+  }
 
   return (vision->modifications_visible(&txn_rec, index->table->name));
 }

@@ -40,6 +40,12 @@ init_replica
 init_replica
 init_slave
 init_slave
+innodb_cleanout_disable
+innodb_cleanout_disable
+innodb_cleanout_max_cleans_on_page
+innodb_cleanout_max_cleans_on_page
+innodb_cleanout_max_scans_on_page
+innodb_cleanout_max_scans_on_page
 innodb_cleanout_safe_mode
 innodb_cleanout_safe_mode
 innodb_data_file_purge

@@ -599,6 +599,7 @@ bool lock_clust_rec_cons_read_sees(
                              passed over by a read cursor */
     dict_index_t *index,     /*!< in: clustered index */
     const ulint *offsets,    /*!< in: rec_get_offsets(rec, index) */
+    btr_pcur_t *pcur,        /*!< in: current pcur that define position */
     lizard::Vision *vision); /*!< in: consistent read view */
 /** Checks that a non-clustered index record is seen in a consistent read.
 

@@ -1362,6 +1362,7 @@ static void rtr_non_leaf_insert_stack_push(
       ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(*my_cursor)));
 
   my_cursor->init();
+  ut_ad(my_cursor->m_cleanout_pages == nullptr);
 
   page_cur_position(rec, block, my_cursor->get_page_cur());
 

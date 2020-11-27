@@ -46,6 +46,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "gis0rtree.h"
 #endif /* UNIV_HOTBACKUP */
 
+#include "lizard0cleanout.h"
+
 /** Relative positions for a stored cursor position */
 enum btr_pcur_pos_t {
   BTR_PCUR_UNSET = 0,
@@ -500,6 +502,13 @@ struct btr_pcur_t {
   /* NOTE that the following field is initialized only during import
   tablespace, otherwise undefined */
   import_ctx_t *import_ctx{nullptr};
+
+  /** Collected pages that need to cleanout */
+  lizard::Cleanout_pages *m_cleanout_pages{nullptr};
+
+  /** Add constructor to init m_cleanout_pages, otherwise we have to init it
+  at many place.*/
+  btr_pcur_t() { m_cleanout_pages = nullptr; }
 };
 
 inline void btr_pcur_t::init(size_t read_level) {
@@ -512,6 +521,8 @@ inline void btr_pcur_t::init(size_t read_level) {
   m_read_level = read_level;
   import_ctx = nullptr;
   m_block_when_stored.clear();
+
+  m_cleanout_pages = nullptr;
 }
 
 inline void btr_pcur_t::open(dict_index_t *index, ulint level,
@@ -546,6 +557,8 @@ inline void btr_pcur_t::open(dict_index_t *index, ulint level,
   m_pos_state = BTR_PCUR_IS_POSITIONED;
 
   m_trx_if_known = nullptr;
+
+  ut_ad(!m_cleanout_pages || m_cleanout_pages->is_empty());
 }
 
 inline void btr_pcur_t::open_at_side(bool from_left, dict_index_t *index,
@@ -904,6 +917,8 @@ inline void btr_pcur_t::reset() {
   m_old_rec = nullptr;
   m_old_n_fields = 0;
   m_old_stored = false;
+
+  if (m_cleanout_pages) m_cleanout_pages->init();
 
   m_latch_mode = BTR_NO_LATCHES;
   m_pos_state = BTR_PCUR_NOT_POSITIONED;

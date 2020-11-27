@@ -882,6 +882,10 @@ row_prebuilt_t *row_create_prebuilt(
       mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
   prebuilt->clust_pcur = static_cast<btr_pcur_t *>(
       mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
+
+  prebuilt->pcur->m_cleanout_pages = ut::new_<lizard::Cleanout_pages>();
+  prebuilt->clust_pcur->m_cleanout_pages = ut::new_<lizard::Cleanout_pages>();
+
   prebuilt->pcur->reset();
   prebuilt->clust_pcur->reset();
 
@@ -946,6 +950,11 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
 
   prebuilt->pcur->reset();
   prebuilt->clust_pcur->reset();
+
+  ut::delete_(prebuilt->pcur->m_cleanout_pages);
+  ut::delete_(prebuilt->clust_pcur->m_cleanout_pages);
+  prebuilt->pcur->m_cleanout_pages = nullptr;
+  prebuilt->clust_pcur->m_cleanout_pages = nullptr;
 
   ut::free(prebuilt->mysql_template);
 
