@@ -32,6 +32,7 @@ Created 2020-04-24 by Mayank Prasad */
 #include "dict0dd.h"
 #include "dict0dict.h"
 #include "ha_innodb.h"
+#include "lizard0undo.h"
 
 static void populate_to_be_instant_columns_low(
     const Alter_inplace_info *ha_alter_info, const TABLE *old_table,
@@ -232,6 +233,13 @@ bool Instant_ddl_impl<Table>::commit_instant_ddl() {
       break;
     case Instant_Type::INSTANT_ADD_DROP_COLUMN:
       trx_start_if_not_started(m_trx, true, UT_LOCATION_HERE);
+      mutex_enter(&m_trx->undo_mutex);
+      if (lizard::trx_always_assign_txn_undo(m_trx) != DB_SUCCESS) {
+        mutex_exit(&m_trx->undo_mutex);
+        return true;
+      }
+      mutex_exit(&m_trx->undo_mutex);
+
       dd_copy_private(*m_new_dd_tab, *m_old_dd_tab);
 
       /* Fetch the columns which are to be added or dropped */
@@ -257,6 +265,8 @@ bool Instant_ddl_impl<Table>::commit_instant_ddl() {
       for (auto dd_index : *m_new_dd_tab->indexes()) {
         dd::Properties &p = dd_index->se_private_data();
         p.set(dd_index_key_strings[DD_INDEX_TRX_ID], m_trx->id);
+        p.set(dd_index_key_strings[DD_INDEX_UBA], m_trx->txn_desc.undo_ptr);
+        p.set(dd_index_key_strings[DD_INDEX_SCN], m_trx->txn_desc.scn.first);
       }
 
       row_mysql_lock_data_dictionary(m_trx, UT_LOCATION_HERE);

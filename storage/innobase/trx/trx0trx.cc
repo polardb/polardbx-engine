@@ -2088,7 +2088,7 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
   become purged (because trx->no would no longer protect them). */
 
   if (serialised) {
-    trx_sys_serialisation_mutex_enter();
+    trx_sys_gtids_mem_mutex_enter();
 
     /* Add GTID to be persisted to disk table. It must be done ...
     1.After the transaction is marked committed in undo. Otherwise
@@ -2105,7 +2105,7 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
 
     // trx_erase_from_serialisation_list_low(trx);
 
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
 
     lizard::lizard_sys_erase_lists(trx);
   }
@@ -3335,9 +3335,9 @@ static void trx_set_prepared_in_tc(trx_t *trx) {
   /* Add GTID to be persisted to disk table, if needed. */
   if (gtid_desc.m_is_set) {
     /* The gtid_persistor.add() might release and re-acquire the mutex. */
-    trx_sys_serialisation_mutex_enter();
+    trx_sys_gtids_mem_mutex_enter();
     gtid_persistor.add(gtid_desc);
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
   }
 
   /* Reset after successfully adding GTID to in memory table. */

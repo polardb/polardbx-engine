@@ -233,7 +233,7 @@ inline trx_id_t trx_sys_get_trx_id_write_margin() {
 /** Allocates a new transaction id or transaction number.
 @return new, allocated trx id or trx no */
 inline trx_id_t trx_sys_allocate_trx_id_or_no() {
-  ut_ad(trx_sys_mutex_own() || trx_sys_serialisation_mutex_own());
+  ut_ad(trx_sys_mutex_own() || trx_sys_gtids_mem_mutex_own());
 
   trx_id_t trx_id = trx_sys->next_trx_id_or_no.fetch_add(1);
 
@@ -259,10 +259,10 @@ inline trx_id_t trx_sys_allocate_trx_id() {
   return trx_sys_allocate_trx_id_or_no();
 }
 
-inline trx_id_t trx_sys_allocate_trx_no() {
-  ut_ad(trx_sys_serialisation_mutex_own());
-  return trx_sys_allocate_trx_id_or_no();
-}
+// inline trx_id_t trx_sys_allocate_trx_no() {
+//   ut_ad(trx_sys_gtids_mem_mutex_own());
+//   return trx_sys_allocate_trx_id_or_no();
+// }
 
 /** Reads trx->no up to which all transactions have been serialised.
  @return minimum value which is still possibly not serialised */

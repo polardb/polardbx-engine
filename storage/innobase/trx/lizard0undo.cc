@@ -933,8 +933,10 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
     }
   }
 
-  /* Update maximum transaction number for this rollback segment. */
-  mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_NO, trx->no, mtr);
+  /* Update maximum transaction scn for this rollback segment. */
+  assert_trx_scn_allocated(trx);
+  mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.scn.first,
+                 mtr);
 
   /* Write the trx number to the undo log header */
   mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);

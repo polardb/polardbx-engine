@@ -39,6 +39,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0sys.h"
+#include "lizard0scn.h"
 
 class Clone_persist_gtid;
 
@@ -72,7 +73,7 @@ class Clone_persist_gtid {
     m_event = os_event_create();
     /* No background is created yet. */
     m_thread_active.store(false);
-    m_gtid_trx_no.store(0);
+    m_gtid_trx_scn.store(0);
     m_flush_number.store(0);
     m_explicit_request.store(false);
     m_active_number.store(m_flush_number.load() + 1);
@@ -110,15 +111,15 @@ class Clone_persist_gtid {
   /**@return true, if GTID thread is active. */
   bool is_thread_active() const { return (m_thread_active.load()); }
 
-  /** Get oldest transaction number for which GTID is not persisted to table.
+  /** Get oldest transaction scn for which GTID is not persisted to table.
   Transactions committed after this point should not be purged.
-  @return oldest transaction number. */
-  trx_id_t get_oldest_trx_no() {
-    trx_id_t ret_no = m_gtid_trx_no.load();
+  @return oldest transaction scn. */
+  scn_t get_oldest_trx_scn() {
+    scn_t ret_scn = m_gtid_trx_scn.load();
     /* Should never be zero. It can be set to max only before
     GTID persister is active and no GTID is persisted. */
-    ut_ad(ret_no > 0 || srv_force_recovery >= SRV_FORCE_NO_UNDO_LOG_SCAN);
-    if (ret_no == TRX_ID_MAX) {
+    ut_ad(ret_scn > 0 || srv_force_recovery >= SRV_FORCE_NO_UNDO_LOG_SCAN);
+    if (ret_scn == lizard::SCN_NULL) {
       ut_ad(!is_thread_active());
       ut_ad(m_num_gtid_mem.load() == 0);
     } else if (m_num_gtid_mem.load() == 0) {
@@ -127,24 +128,24 @@ class Clone_persist_gtid {
       progress" is sufficient but not necessary condition here. This is mainly
       for cases when there is no GTID and purge doesn't need to wait. */
       if (!m_flush_in_progress.load()) {
-        ret_no = TRX_ID_MAX;
+        ret_scn = lizard::SCN_NULL;
       }
     }
-    return (ret_no);
+    return (ret_scn);
   }
 
-  /** Set oldest transaction number for which GTID is not persisted to table.
+  /** Set oldest transaction scn for which GTID is not persisted to table.
   This is set during recovery from persisted value.
-  @param[in]    max_trx_no      transaction number */
-  void set_oldest_trx_no_recovery(trx_id_t max_trx_no) {
+  @param[in]    max_trx_scn     transaction scn */
+  void set_oldest_trx_scn_recovery(scn_t max_trx_scn) {
     ib::info(ER_IB_CLONE_GTID_PERSIST)
-        << "GTID recovery trx_no: " << max_trx_no;
+        << "GTID recovery trx_scn: " << max_trx_scn;
     /* Zero is special value. It is from old database without GTID
     persistence. */
-    if (max_trx_no == 0) {
-      max_trx_no = TRX_ID_MAX;
+    if (max_trx_scn == 0) {
+      max_trx_scn = lizard::SCN_NULL;
     }
-    m_gtid_trx_no.store(max_trx_no);
+    m_gtid_trx_scn.store(max_trx_scn);
   }
 
   /** Get transaction GTID information.
@@ -232,7 +233,7 @@ class Clone_persist_gtid {
 
   /** @return current active GTID list */
   Gitd_info_list &get_active_list() {
-    ut_ad(trx_sys_serialisation_mutex_own());
+    ut_ad(trx_sys_gtids_mem_mutex_own());
     return (get_list(m_active_number));
   }
 
@@ -253,7 +254,7 @@ class Clone_persist_gtid {
   @param[in]    compress        request compression of GTID table
   @return flush list number to track and wait for flush to complete. */
   uint64_t request_immediate_flush(bool compress) {
-    trx_sys_serialisation_mutex_enter();
+    trx_sys_gtids_mem_mutex_enter();
     /* We want to flush all GTIDs. */
     uint64_t request_number = m_active_number.load();
     /* If no GTIDs added to active, wait for previous index. */
@@ -262,7 +263,7 @@ class Clone_persist_gtid {
       --request_number;
     }
     m_flush_request_number = request_number;
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
 
     if (compress) {
       m_explicit_request.store(true);
@@ -289,7 +290,7 @@ class Clone_persist_gtid {
   /** Switch active GTID list. */
   uint64_t switch_active_list() {
     /* Switch active list under transaction system mutex. */
-    ut_ad(trx_sys_serialisation_mutex_own());
+    ut_ad(trx_sys_gtids_mem_mutex_own());
     uint64_t flush_number = m_active_number;
     ++m_active_number;
     m_compression_gtid_counter += m_num_gtid_mem;
@@ -311,8 +312,8 @@ class Clone_persist_gtid {
                      Sid_map &sid_map);
 
   /** Update transaction number up to which GTIDs are flushed to table.
-  @param[in]    new_gtid_trx_no GTID transaction number */
-  void update_gtid_trx_no(trx_id_t new_gtid_trx_no);
+  @param[in]    new_gtid_trx_scn GTID transaction number */
+  void update_gtid_trx_scn(scn_t new_gtid_trx_scn);
 
   /** Write all GTIDs to table and update GTID transaction number.
   @param[in,out]        thd     current session thread */
@@ -365,7 +366,7 @@ class Clone_persist_gtid {
   uint32_t m_compression_gtid_counter{0};
 
   /* Oldest transaction number for which GTID is not persisted. */
-  std::atomic<uint64_t> m_gtid_trx_no;
+  std::atomic<scn_t> m_gtid_trx_scn;
 
   /** Number of GTID accumulated in memory */
   std::atomic<int> m_num_gtid_mem;

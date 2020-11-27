@@ -280,8 +280,10 @@ void trx_purge_add_update_undo_to_history(
     }
   }
 
-  /* Update maximum transaction number for this rollback segment. */
-  mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_NO, trx->no, mtr);
+  /* Update maximum transaction scn for this rollback segment. */
+  assert_trx_scn_allocated(trx);
+  mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.scn.first,
+                 mtr);
 
   /* Write the trx number to the undo log header */
   mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
@@ -2338,7 +2340,7 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
 {
   que_thr_t *thr = nullptr;
   ulint n_pages_handled;
-  scn_t old_scn;
+  //scn_t old_scn;
 
   ut_a(n_purge_threads > 0);
 
@@ -2351,9 +2353,13 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
 
   purge_sys->view_active = false;
 
-  old_scn = purge_sys->vision.snapshot_scn();
+  //old_scn = purge_sys->vision.snapshot_scn();
   lizard::trx_clone_oldest_vision(&purge_sys->vision);
-  ut_a(old_scn <= purge_sys->vision.snapshot_scn());
+  /* In the following special case, the purge view will back down:
+  If all transactions are with no GTIDs within a GTID persistence cycle,
+  and then one transation has GTID, Clone_persist_gtid will return an older
+  scn which leading to purge view fallback.*/
+  //ut_a(old_scn <= purge_sys->vision.snapshot_scn());
 
   purge_sys->view_active = true;
 

@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "univ.i"
 #include "trx0sys.h"
+#include "clone0clone.h"
 
 #include "lizard0read0read.h"
 #include "lizard0read0types.h"
@@ -187,22 +188,21 @@ void VisionContainer::clone_oldest_vision(Vision *vision) {
   ut_ad(vision && vision->m_list_idx == VISION_LIST_IDX_NULL);
   ut_ad(vision->m_in_list == false);
 
-  scn_t oldest_scn = SCN_NULL;
-
-  scn_t sys_scn = lizard_sys_get_min_safe_scn();
+  scn_t oldest_scn = lizard_sys_get_min_safe_scn();
 
   for (ulint i = 0; i < m_n_lists; i++) {
     scn_t first_scn = m_lists[i].first_element_scn();
     if (first_scn != SCN_NULL) {
       oldest_scn = std::min(oldest_scn, first_scn);
-    } else {
-      oldest_scn = std::min(oldest_scn, sys_scn);
     }
   }
 
-  oldest_scn = std::min(oldest_scn, sys_scn);
-  vision->m_snapshot_scn = oldest_scn;
+  /* Update to block purging transaction till GTID is persisted. */
+  auto &gtid_persistor = clone_sys->get_gtid_persistor();
+  auto gtid_oldest_trxscn = gtid_persistor.get_oldest_trx_scn();
+  oldest_scn = std::min(oldest_scn, gtid_oldest_trxscn);
 
+  vision->m_snapshot_scn = oldest_scn;
   ut_ad(vision->m_snapshot_scn <= lizard_sys_get_scn());
 
   /** This vision didn't put into list */

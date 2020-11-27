@@ -67,6 +67,9 @@ constexpr scn_t SCN_UNDO_LOST = 3;
 /** SCN special for index */
 constexpr scn_t SCN_DICT_REC = 4;
 
+/** SCN special for index upgraded from old version. */
+constexpr scn_t SCN_INDEX_UPGRADE = 5;
+
 /** MAX reserved scn NUMBER  */
 constexpr scn_t SCN_RESERVERD_MAX = 1024;
 

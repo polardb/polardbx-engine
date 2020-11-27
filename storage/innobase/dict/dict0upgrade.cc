@@ -45,6 +45,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0sel.h"
 #include "srv0start.h"
 
+#include "lizard0undo.h"
+
 /* This is used only during upgrade. We don't use ids
 from DICT_HDR during upgrade because unlike bootstrap case,
 the ids are moved after user table creation.  Since we
@@ -665,6 +667,8 @@ static void dd_upgrade_process_index(Index dd_index, dict_index_t *index,
   p.set(dd_index_key_strings[DD_INDEX_ID], index->id);
   p.set(dd_index_key_strings[DD_TABLE_ID], index->table->id);
   p.set(dd_index_key_strings[DD_INDEX_TRX_ID], 0);
+  p.set(dd_index_key_strings[DD_INDEX_UBA], lizard::UNDO_PTR_INDEX_UPGRADE);
+  p.set(dd_index_key_strings[DD_INDEX_SCN], lizard::SCN_INDEX_UPGRADE);
 
   if (has_auto_inc) {
     ut_ad(auto_inc_index_name != nullptr);

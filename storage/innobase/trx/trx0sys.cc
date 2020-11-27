@@ -114,7 +114,7 @@ void trx_sys_write_max_trx_id(void) {
   acquiring the x-lock and it will again read the newest max_trx_id,
   and possibly re-write it. */
 
-  ut_ad(trx_sys_mutex_own() || trx_sys_serialisation_mutex_own());
+  ut_ad(trx_sys_mutex_own() || trx_sys_gtids_mem_mutex_own());
 
   if (!srv_read_only_mode) {
     DBUG_EXECUTE_IF(
@@ -122,7 +122,7 @@ void trx_sys_write_max_trx_id(void) {
         while (true) { std::this_thread::sleep_for(std::chrono::seconds(1)); });
 
 #ifdef UNIV_DEBUG
-    if (trx_sys_serialisation_mutex_own()) {
+    if ((trx_sys_gtids_mem_mutex_own())) {
       DEBUG_SYNC_C("trx_sys_write_max_trx_id__ser");
     }
 #endif /* UNIV_DEBUG */
@@ -139,27 +139,16 @@ void trx_sys_write_max_trx_id(void) {
   }
 }
 
-void trx_sys_persist_gtid_num(trx_id_t gtid_trx_no) {
+void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn) {
   mtr_t mtr;
   mtr.start();
   auto sys_header = trx_sysf_get(&mtr);
   auto page = sys_header - TRX_SYS;
   /* Update GTID transaction number. All transactions with lower
   transaction number are no longer processed for GTID. */
-  mlog_write_ull(page + TRX_SYS_TRX_NUM_GTID, gtid_trx_no, &mtr);
+  mlog_write_ull(page + TRX_SYS_TRX_SCN_GTID, gtid_trx_scn, &mtr);
   mtr.commit();
 }
-
-/** lizard: oldest trx no wil be replaced by SCN */
-// trx_id_t trx_sys_oldest_trx_no() {
-//   ut_ad(trx_sys_serialisation_mutex_own());
-//   /* Get the oldest transaction from serialisation list. */
-//   if (UT_LIST_GET_LEN(trx_sys->serialisation_list) > 0) {
-//     auto trx = UT_LIST_GET_FIRST(trx_sys->serialisation_list);
-//     return (trx->no);
-//   }
-//   return trx_sys_get_next_trx_id_or_no();
-// }
 
 void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids) {
   trx_sys_mutex_enter();
@@ -569,7 +558,7 @@ void trx_sys_create(void) {
       ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(*trx_sys)));
 
   mutex_create(LATCH_ID_TRX_SYS, &trx_sys->mutex);
-  mutex_create(LATCH_ID_TRX_SYS_SERIALISATION, &trx_sys->serialisation_mutex);
+  mutex_create(LATCH_ID_TRX_SYS_GTIDS_MEM, &trx_sys->gtids_mem_mutex);
 
   // UT_LIST_INIT(trx_sys->serialisation_list);
   UT_LIST_INIT(trx_sys->rw_trx_list);
@@ -655,7 +644,7 @@ void trx_sys_close(void) {
   }
 
   /* We used placement new to create this mutex. Call the destructor. */
-  mutex_free(&trx_sys->serialisation_mutex);
+  mutex_free(&trx_sys->gtids_mem_mutex);
   mutex_free(&trx_sys->mutex);
 
   // trx_sys->rw_trx_ids.~trx_ids_t();

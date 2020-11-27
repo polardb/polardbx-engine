@@ -698,9 +698,9 @@ void trx_undo_gtid_read_and_persist(trx_ulogf_t *undo_header) {
 
     /* No concurrency is involved during recovery but satisfy
     the interface requirement. */
-    trx_sys_serialisation_mutex_enter();
+    trx_sys_gtids_mem_mutex_enter();
     gtid_persistor.add(gtid_desc);
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
   }
 
   if ((flag & TRX_UNDO_FLAG_GTID) == 0) {
@@ -719,9 +719,9 @@ void trx_undo_gtid_read_and_persist(trx_ulogf_t *undo_header) {
 
   /* No concurrency is involved during recovery but satisfy
   the interface requirement. */
-  trx_sys_serialisation_mutex_enter();
+  trx_sys_gtids_mem_mutex_enter();
   gtid_persistor.add(gtid_desc);
-  trx_sys_serialisation_mutex_exit();
+  trx_sys_gtids_mem_mutex_exit();
 }
 
 void trx_undo_gtid_write(trx_t *trx, trx_ulogf_t *undo_header, trx_undo_t *undo,

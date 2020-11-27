@@ -151,6 +151,13 @@ constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
 constexpr undo_ptr_t UNDO_PTR_DICT_REC =
     (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
 
+/** Index UBA that upgraded from old version. */
+constexpr ulint UNDO_PTR_OFFSET_INDEX_UPGRADE = (ulint)0xFFFF - 5;
+
+/** Index UBA that upgraded from old version. */
+constexpr undo_ptr_t UNDO_PTR_INDEX_UPGRADE =
+    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_INDEX_UPGRADE;
+
 /* Lizard transaction undo header operation */
 /*-----------------------------------------------------------------------------*/
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG

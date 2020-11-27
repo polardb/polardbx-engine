@@ -141,13 +141,13 @@ The caller must insert it into the correct list.
 @param[in]      space_id        Space where the segment is placed
 @param[in]      page_no         Page number of the segment header
 @param[in]      page_size       Page size
-@param[in]      gtid_trx_no     Trx number up to which GTID is persisted
+@param[in]      gtid_trx_scn    Trx scn up to which GTID is persisted
 @param[in,out]  purge_queue     Rseg queue
 @param[in,out]  mtr             Mini-transaction
 @return own: rollback segment object */
 trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
                                 page_no_t page_no, const page_size_t &page_size,
-                                trx_id_t gtid_trx_no, purge_pq_t *purge_queue,
+                                scn_t gtid_trx_scn, purge_pq_t *purge_queue,
                                 mtr_t *mtr);
 
 /** Create a rollback segment in the given tablespace. This could be either
@@ -231,7 +231,7 @@ constexpr uint32_t TRX_RSEG_UNDO_SLOTS =
 /* Maximum transaction number ever added to this rollback segment history
 list. It is always increasing number over lifetime starting from zero.
 The size is 8 bytes. */
-#define TRX_RSEG_MAX_TRX_NO TRX_RSEG_SLOT_END
+#define TRX_RSEG_MAX_TRX_SCN TRX_RSEG_SLOT_END
 
 /*-------------------------------------------------------------*/
 

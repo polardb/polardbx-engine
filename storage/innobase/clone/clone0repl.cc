@@ -31,6 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0repl.h"
 #include "clone0api.h"
 #include "clone0clone.h"
+#include "lizard0sys.h"
 #include "sql/field.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_gtid_persist.h"
@@ -49,18 +50,18 @@ void Clone_persist_gtid::add(const Gtid_desc &gtid_desc) {
   if (!is_active() || gtid_table_persistor == nullptr) {
     return;
   }
-  ut_ad(trx_sys_serialisation_mutex_own());
+  ut_ad(trx_sys_gtids_mem_mutex_own());
 
   /* If too many GTIDs are accumulated, wait for all to get flushed. Ignore
   timeout and loop to avoid possible hang. The insert should already be
   slowed down by the wait here. */
   if (check_max_gtid_threshold() && is_thread_active()) {
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
     wait_flush(false, false, nullptr);
-    trx_sys_serialisation_mutex_enter();
+    trx_sys_gtids_mem_mutex_enter();
   }
 
-  ut_ad(trx_sys_serialisation_mutex_own());
+  ut_ad(trx_sys_gtids_mem_mutex_own());
   /* Get active GTID list */
   auto &current_gtids = get_active_list();
 
@@ -76,9 +77,9 @@ void Clone_persist_gtid::add(const Gtid_desc &gtid_desc) {
 
   DBUG_EXECUTE_IF("dont_compress_gtid_table", {
     /* For predictable outcome of mtr test we flush the GTID immediately. */
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
     wait_flush(false, false, nullptr);
-    trx_sys_serialisation_mutex_enter();
+    trx_sys_gtids_mem_mutex_enter();
   });
 }
 
@@ -458,18 +459,18 @@ int Clone_persist_gtid::write_to_table(uint64_t flush_list_number,
   return (err);
 }
 
-void Clone_persist_gtid::update_gtid_trx_no(trx_id_t new_gtid_trx_no) {
-  auto trx_no = m_gtid_trx_no.load();
-  /* Noting to do if number hasn't increased. */
-  if (trx_no != TRX_ID_MAX && trx_no >= new_gtid_trx_no) {
-    ut_ad(trx_no == new_gtid_trx_no);
+void Clone_persist_gtid::update_gtid_trx_scn(scn_t new_gtid_trx_scn) {
+  auto trx_scn = m_gtid_trx_scn.load();
+  /* Noting to do if scn hasn't increased. */
+  if (trx_scn != lizard::SCN_NULL && trx_scn >= new_gtid_trx_scn) {
+    ut_ad(trx_scn == new_gtid_trx_scn);
     return;
   }
   /* Update in memory variable. */
-  m_gtid_trx_no.store(new_gtid_trx_no);
+  m_gtid_trx_scn.store(new_gtid_trx_scn);
 
   /* Persist to disk. This would be useful during recovery. */
-  trx_sys_persist_gtid_num(new_gtid_trx_no);
+  trx_sys_persist_gtid_scn(new_gtid_trx_scn);
 
   /* Wake up purge thread. */
   srv_purge_wakeup();
@@ -490,14 +491,11 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
 
   bool explicit_request = m_explicit_request.load();
 
-  trx_sys_serialisation_mutex_enter();
-  /* Get oldest transaction number that is yet to be committed. Any transaction
+  trx_sys_gtids_mem_mutex_enter();
+  /* Get oldest scn that is yet to be committed. Any transaction
   with lower transaction number is committed and is added to GTID list. */
 
-  /** TODO: Replace it by SCN */
-  // auto oldest_trx_no = trx_sys_oldest_trx_no();
-  //
-  trx_id_t oldest_trx_no = 0;
+  scn_t oldest_trx_scn = lizard::lizard_sys_get_min_safe_scn();
 
   bool compress_recovery = false;
   /* Check and write if any GTID is accumulated. */
@@ -506,7 +504,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
     /* Switch active list and get the previous list to write to disk table. */
     auto flush_list_number = switch_active_list();
     /* Exit trx mutex during write to table. */
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
     err = write_to_table(flush_list_number, table_gtid_set, sid_map);
     m_flush_in_progress.store(false);
     /* Compress always after recovery, if GTIDs are added. */
@@ -515,7 +513,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
       ib::info(ER_IB_CLONE_GTID_PERSIST) << "GTID compression after recovery. ";
     }
   } else {
-    trx_sys_serialisation_mutex_exit();
+    trx_sys_gtids_mem_mutex_exit();
   }
 
   if (is_recovery) {
@@ -534,7 +532,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
   }
 
   /* Update trx number up to which GTID is written to table. */
-  update_gtid_trx_no(oldest_trx_no);
+  update_gtid_trx_scn(oldest_trx_scn);
 
   /* Request Compression once the counter reaches threshold. */
   bool debug_skip = debug_skip_write(true);
@@ -559,7 +557,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
 }
 
 bool Clone_persist_gtid::check_max_gtid_threshold() {
-  ut_ad(trx_sys_serialisation_mutex_own());
+  ut_ad(trx_sys_gtids_mem_mutex_own());
   /* Allow only one GTID to flush at a time. */
   DBUG_EXECUTE_IF("dont_compress_gtid_table",
                   { return m_num_gtid_mem.load() > 0; });

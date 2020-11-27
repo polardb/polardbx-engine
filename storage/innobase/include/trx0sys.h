@@ -134,10 +134,10 @@ the trx_sys_mutex must be acquired.
 @return new, allocated trx id */
 inline trx_id_t trx_sys_allocate_trx_id();
 
-/** Allocates a new transaction number (for trx->no). Before calling,
-the trx_sys_serialisation_mutex must be acquired.
-@return new, allocated trx no */
-inline trx_id_t trx_sys_allocate_trx_no();
+// /** Allocates a new transaction number (for trx->no). Before calling,
+// the trx_sys_serialisation_mutex must be acquired.
+// @return new, allocated trx no */
+// inline trx_id_t trx_sys_allocate_trx_no();
 
 /** Retrieves a next value that will be allocated if trx_sys_allocate_trx_id()
 or trx_sys_allocate_trx_id_trx_no() was called.
@@ -178,13 +178,10 @@ or latching order violation in case of holding trx->mutex.
 @return transaction instance if active, or NULL; */
 static inline trx_t *trx_rw_is_active(trx_id_t trx_id, bool do_ref_count);
 
-/** Persist transaction number limit below which all transaction GTIDs
+/** Persist transaction scn limit below which all transaction GTIDs
 are persisted to disk table.
-@param[in]      gtid_trx_no     transaction number */
-void trx_sys_persist_gtid_num(trx_id_t gtid_trx_no);
-
-/** @return oldest transaction number yet to be committed. */
-trx_id_t trx_sys_oldest_trx_no();
+@param[in]      gtid_trx_scn    transaction scn */
+void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn);
 
 /** Get a list of all binlog prepared transactions.
 @param[out]     trx_ids all prepared transaction IDs. */
@@ -307,11 +304,11 @@ constexpr uint32_t TRX_SYS_MYSQL_LOG_OFFSET_LOW = 8;
 /** MySQL log file name */
 constexpr uint32_t TRX_SYS_MYSQL_LOG_NAME = 12;
 
-/** Reserve next 8 bytes for transaction number up to which GTIDs
+/** Reserve next 8 bytes for transaction scn up to which GTIDs
 are persisted to table */
-#define TRX_SYS_TRX_NUM_GTID \
+#define TRX_SYS_TRX_SCN_GTID \
   (TRX_SYS_MYSQL_LOG_INFO + TRX_SYS_MYSQL_LOG_NAME + TRX_SYS_MYSQL_LOG_NAME_LEN)
-#define TRX_SYS_TRX_NUM_END (TRX_SYS_TRX_NUM_GTID + 8)
+#define TRX_SYS_TRX_NUM_END (TRX_SYS_TRX_SCN_GTID + 8)
 /** Doublewrite buffer */
 /** @{ */
 /** The offset of the doublewrite buffer header on the trx system header page */
@@ -503,7 +500,19 @@ struct trx_sys_t {
   /** @{ */
 
   /** Mutex to protect serialisation_list. */
-  TrxSysMutex serialisation_mutex;
+  /**
+    Lizard:
+
+    For 8.0.32, serialisation_mutex protect two memory structs:
+    1. serialisation_list and trx_no allocating
+    2. gtid flush list related.
+
+    Now the *1* is replaced by serialisation_list_scn and SCN, and proteced by
+    an another mutex. The serialisation_mutex only protects gtid flush list
+    related, so we rename it to **gtids_mem_mutex**.
+  */
+  // TrxSysMutex serialisation_mutex;
+  TrxSysMutex gtids_mem_mutex;
 
   // Lizard: comment out
   // /** Tracks minimal transaction id which has received trx->no, but has
@@ -610,19 +619,19 @@ static inline void trx_sys_mutex_exit() { trx_sys->mutex.exit(); }
 static inline bool trx_sys_mutex_own() { return trx_sys->mutex.is_owned(); }
 
 /** Test if trx_sys->serialisation_mutex is owned. */
-static inline bool trx_sys_serialisation_mutex_own() {
-  return trx_sys->serialisation_mutex.is_owned();
+static inline bool trx_sys_gtids_mem_mutex_own() {
+  return trx_sys->gtids_mem_mutex.is_owned();
 }
 #endif
 
 /** Acquire the trx_sys->serialisation_mutex. */
-static inline void trx_sys_serialisation_mutex_enter() {
-  mutex_enter(&trx_sys->serialisation_mutex);
+static inline void trx_sys_gtids_mem_mutex_enter() {
+  mutex_enter(&trx_sys->gtids_mem_mutex);
 }
 
 /** Release the trx_sys->serialisation_mutex. */
-static inline void trx_sys_serialisation_mutex_exit() {
-  trx_sys->serialisation_mutex.exit();
+static inline void trx_sys_gtids_mem_mutex_exit() {
+  trx_sys->gtids_mem_mutex.exit();
 }
 
 #endif /* !UNIV_HOTBACKUP */
