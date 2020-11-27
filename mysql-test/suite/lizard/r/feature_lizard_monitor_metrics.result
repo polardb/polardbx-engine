@@ -15,5 +15,6 @@ Lizard_txn_undo_lost_page_offset_overflow	#
 Lizard_txn_undo_lost_magic_number_wrong	#
 Lizard_txn_undo_lost_ext_flag_wrong	#
 Lizard_txn_undo_lost_trx_id_mismatch	#
-Lizard_txn_undo_lookup_not_by_uba	#
 Lizard_txn_undo_lookup_by_uba	#
+Lizard_cleanout_page_collect	#
+Lizard_cleanout_record_clean	#

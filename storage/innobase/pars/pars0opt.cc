@@ -557,6 +557,9 @@ static void opt_search_plan_for_table(
 
   btr_pcur_init(&(plan->pcur));
   btr_pcur_init(&(plan->clust_pcur));
+
+  ut_ad(plan->pcur.m_cleanout_pages == nullptr);
+  ut_ad(plan->clust_pcur.m_cleanout_pages == nullptr);
 }
 
 /** Looks at a comparison condition and decides if it can, and need, be tested

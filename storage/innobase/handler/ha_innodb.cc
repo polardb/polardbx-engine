@@ -22384,6 +22384,23 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to reboot innodb on safe cleanout mode (off by default)", NULL,
     NULL, FALSE);
 
+static MYSQL_SYSVAR_BOOL(
+    cleanout_disable, lizard::opt_cleanout_disable, PLUGIN_VAR_OPCMDARG,
+    "Whether to disable cleanout when read (off by default)", NULL, NULL,
+    FALSE);
+
+static MYSQL_SYSVAR_ULONG(cleanout_max_scans_on_page,
+                          lizard::cleanout_max_scans_on_page,
+                          PLUGIN_VAR_OPCMDARG,
+                          "max scan record count once cleanout one page", NULL,
+                          NULL, 0, 0, 1024 * 1024, 0);
+
+static MYSQL_SYSVAR_ULONG(cleanout_max_cleans_on_page,
+                          lizard::cleanout_max_cleans_on_page,
+                          PLUGIN_VAR_OPCMDARG,
+                          "max clean record count once cleanout one page", NULL,
+                          NULL, 1, 1, 1024 * 1024, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -22594,6 +22611,9 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(parallel_read_threads),
     MYSQL_SYSVAR(fatal_semaphore_wait_threshold),
     MYSQL_SYSVAR(cleanout_safe_mode),
+    MYSQL_SYSVAR(cleanout_disable),
+    MYSQL_SYSVAR(cleanout_max_scans_on_page),
+    MYSQL_SYSVAR(cleanout_max_cleans_on_page),
     NULL};
 
 mysql_declare_plugin(innobase){

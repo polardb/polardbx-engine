@@ -880,6 +880,11 @@ Max size Secondary index: 16 * 8 bytes + PK = 256 bytes. */
       mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
   prebuilt->clust_pcur = static_cast<btr_pcur_t *>(
       mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
+
+  prebuilt->pcur->m_cleanout_pages = UT_NEW_NOKEY(lizard::Cleanout_pages());
+  prebuilt->clust_pcur->m_cleanout_pages =
+      UT_NEW_NOKEY(lizard::Cleanout_pages());
+
   btr_pcur_reset(prebuilt->pcur);
   btr_pcur_reset(prebuilt->clust_pcur);
 
@@ -945,6 +950,11 @@ void row_prebuilt_free(
 
   btr_pcur_reset(prebuilt->pcur);
   btr_pcur_reset(prebuilt->clust_pcur);
+
+  UT_DELETE(prebuilt->pcur->m_cleanout_pages);
+  UT_DELETE(prebuilt->clust_pcur->m_cleanout_pages);
+  prebuilt->pcur->m_cleanout_pages = nullptr;
+  prebuilt->clust_pcur->m_cleanout_pages = nullptr;
 
   ut_free(prebuilt->mysql_template);
 
