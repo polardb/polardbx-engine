@@ -2488,6 +2488,7 @@ bool trx_undo_prev_version_build(
   byte *buf;
 
   txn_info_t txn_rec_info;
+
   txn_info_t txn_info;
 
   txn_rec_t txn_rec;
@@ -2504,6 +2505,7 @@ bool trx_undo_prev_version_build(
   txn_rec_info.scn = lizard::row_get_rec_scn_id(rec, index, offsets);
   txn_rec_info.undo_ptr = lizard::row_get_rec_undo_ptr(rec, index, offsets);
   assert_undo_ptr_allocated(txn_rec_info.undo_ptr);
+  (void)txn_rec_info;
 
   roll_ptr = row_get_rec_roll_ptr(rec, index, offsets);
 

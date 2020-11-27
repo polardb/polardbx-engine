@@ -190,7 +190,7 @@ void min_safe_scn_valid();
 
 #else
 
-#define assert_min_safe_scn_valid()
+#define assert_lizard_min_safe_scn_valid()
 
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
