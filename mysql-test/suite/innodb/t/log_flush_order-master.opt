@@ -1,0 +1,2 @@
+# disable cleanout
+--innodb_cleanout_disable=1

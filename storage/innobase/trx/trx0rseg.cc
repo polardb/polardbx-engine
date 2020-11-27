@@ -105,7 +105,7 @@ page_no_t trx_rseg_header_create(space_id_t space_id,
   }
 
   /* Initialize maximum transaction scn. */
-  mlog_write_ull(rsegf + TRX_RSEG_MAX_TRX_SCN, lizard::SCN_NULL, mtr);
+  mlog_write_ull(rsegf + TRX_RSEG_MAX_TRX_SCN, 0, mtr);
 
   if (space_id == TRX_SYS_SPACE) {
     /* All rollback segments in the system tablespace need
@@ -224,7 +224,7 @@ static void trx_rseg_persist_gtid(trx_rseg_t *rseg, scn_t gtid_trx_scn) {
     page_id_t undo_page_id(rseg->space_id, node_addr.page);
     auto undo_page = trx_undo_page_get(undo_page_id, rseg->page_size, &mtr);
 
-    /* Get undo log and trx_no for the transaction. */
+    /* Get undo log and trx_scn for the transaction. */
     node = undo_page + node_addr.boffset;
     auto undo_log = node - TRX_UNDO_HISTORY_NODE;
     auto undo_trx_scn = mach_read_from_8(undo_log + TRX_UNDO_SCN);
@@ -315,20 +315,10 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
                           rseg->page_size, mtr) +
         node_addr.boffset;
 
-    /** Replace last_trx_no by scn */
-    // rseg->last_trx_no = mach_read_from_8(undo_log_hdr + TRX_UNDO_TRX_NO);
-
     /** Lizard: Retrieve the lowest SCN from history list. */
     commit_scn_t scn = lizard::trx_undo_hdr_read_scn(undo_log_hdr, mtr);
     assert_commit_scn_allocated(scn);
     rseg->last_scn = scn.first;
-
-#ifdef UNIV_DEBUG
-    /* Update last transaction number during recovery. */
-    // if (rseg->last_trx_no > trx_sys->rw_max_trx_no) {
-    //  trx_sys->rw_max_trx_no = rseg->last_trx_no;
-    // }
-#endif /* UNIV_DEBUG */
 
     rseg->last_del_marks =
         mtr_read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);

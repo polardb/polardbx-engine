@@ -153,8 +153,6 @@ static void trx_init(trx_t *trx) {
 
   trx->id = 0;
 
-  trx->no = TRX_ID_MAX;
-
   trx->persists_gtid = false;
 
   trx->skip_lock_inheritance = false;
@@ -840,22 +838,8 @@ static trx_t *trx_resurrect_insert(
 
       trx->state = TRX_STATE_COMMITTED_IN_MEMORY;
     }
-
-    /* We give a dummy value for the trx no; this should have no
-    relevance since purge is not interested in committed
-    transaction numbers, unless they are in the history
-    list, in which case it looks the number from the disk based
-    undo log structure */
-
-    trx->no = trx->id;
-
   } else {
     trx->state = TRX_STATE_ACTIVE;
-
-    /* A running transaction always has the number
-    field inited to TRX_ID_MAX */
-
-    trx->no = TRX_ID_MAX;
   }
 
   /* trx_start_low() is not called with resurrect, so need to initialize
@@ -955,17 +939,8 @@ static void trx_resurrect_update(
   if (undo->state != TRX_UNDO_ACTIVE) {
     trx_resurrect_update_in_prepared_state(trx, undo);
 
-    /* We give a dummy value for the trx number */
-
-    trx->no = trx->id;
-
   } else {
     trx->state = TRX_STATE_ACTIVE;
-
-    /* A running transaction always has the number field inited to
-    TRX_ID_MAX */
-
-    trx->no = TRX_ID_MAX;
 
     assert_undo_scn_initial(undo);
     assert_trx_scn_initial(trx);
@@ -1359,11 +1334,6 @@ static void trx_start_low(
     trx->ddl_operation = thd_is_dd_update_stmt(trx->mysql_thd);
   }
 
-  /* The initial value for trx->no: TRX_ID_MAX is used in
-  read_view_open_now: */
-
-  trx->no = TRX_ID_MAX;
-
   ut_a(ib_vector_is_empty(trx->lock.autoinc_locks));
   ut_a(trx->lock.table_locks.empty());
 
@@ -1458,92 +1428,6 @@ static void trx_start_low(
   MONITOR_INC(MONITOR_TRX_ACTIVE);
 }
 
-/** Set the transaction serialisation number.
- @return true if the transaction number was added to the serialisation_list. */
-// static bool trx_serialisation_number_get(
-//    trx_t *trx,                         /*!< in/out: transaction */
-//    trx_undo_ptr_t *redo_rseg_undo_ptr, /*!< in/out: Set trx
-//                                        serialisation number in
-//                                        referred undo rseg. */
-//    trx_undo_ptr_t *temp_rseg_undo_ptr, /*!< in/out: Set trx
-//                                        serialisation number in
-//                                        referred undo rseg. */
-//    txn_undo_ptr_t *txn_rseg_undo_ptr) {
-//  bool added_trx_no;
-//  trx_rseg_t *redo_rseg = 0;
-//  trx_rseg_t *temp_rseg = 0;
-//  trx_rseg_t *txn_rseg = 0;
-//
-//  if (redo_rseg_undo_ptr != NULL) {
-//    ut_ad(mutex_own(&redo_rseg_undo_ptr->rseg->mutex));
-//    redo_rseg = redo_rseg_undo_ptr->rseg;
-//  }
-//
-//  if (temp_rseg_undo_ptr != NULL) {
-//    ut_ad(mutex_own(&temp_rseg_undo_ptr->rseg->mutex));
-//    temp_rseg = temp_rseg_undo_ptr->rseg;
-//  }
-//
-//  if (txn_rseg_undo_ptr != NULL) {
-//    ut_ad(mutex_own(&txn_rseg_undo_ptr->rseg->mutex));
-//    txn_rseg = txn_rseg_undo_ptr->rseg;
-//  }
-//
-//  trx_sys_mutex_enter();
-//
-//  trx->no = trx_sys_get_new_trx_id();
-//
-//  /* Update the latest transaction number. */
-//  ut_d(trx_sys->rw_max_trx_no = trx->no);
-//
-//  /* Track the minimum serialisation number. */
-//  if (!trx->read_only) {
-//    UT_LIST_ADD_LAST(trx_sys->serialisation_list, trx);
-//    added_trx_no = true;
-//  } else {
-//    added_trx_no = false;
-//  }
-//
-//  /* If the rollack segment is not empty then the
-//  new trx_t::no can't be less than any trx_t::no
-//  already in the rollback segment. User threads only
-//  produce events when a rollback segment is empty. */
-//  if ((redo_rseg != NULL && redo_rseg->last_page_no == FIL_NULL) ||
-//      (temp_rseg != NULL && temp_rseg->last_page_no == FIL_NULL) ||
-//      (txn_rseg != NULL && txn_rseg->last_page_no == FIL_NULL)) {
-//    TrxUndoRsegs elem(trx->no);
-//
-//    if (redo_rseg != NULL && redo_rseg->last_page_no == FIL_NULL) {
-//      elem.push_back(redo_rseg);
-//    }
-//
-//    if (temp_rseg != NULL && temp_rseg->last_page_no == FIL_NULL) {
-//      elem.push_back(temp_rseg);
-//    }
-//
-//    if (txn_rseg != NULL && txn_rseg->last_page_no == FIL_NULL) {
-//      elem.push_back(txn_rseg);
-//    }
-//
-//    mutex_enter(&purge_sys->pq_mutex);
-//
-//    /* This is to reduce the pressure on the trx_sys_t::mutex
-//    though in reality it should make very little (read no)
-//    difference because this code path is only taken when the
-//    rbs is empty. */
-//
-//    trx_sys_mutex_exit();
-//
-//    purge_sys->purge_queue->push(elem);
-//
-//    mutex_exit(&purge_sys->pq_mutex);
-//  } else {
-//    trx_sys_mutex_exit();
-//  }
-//
-//  return (added_trx_no);
-//}
-
 /** Assign the transaction its history serialisation number and write the
  update UNDO log record to the assigned rollback segment.
  @return true if a serialisation log was written */
@@ -1626,10 +1510,6 @@ static bool trx_write_serialisation_history(
 
     trx_undo_ptr_t *temp_rseg_undo_ptr =
         trx->rsegs.m_noredo.update_undo != NULL ? &trx->rsegs.m_noredo : NULL;
-
-    /* Will set trx->no and will add rseg to purge queue. */
-    //    serialised = trx_serialisation_number_get(
-    //        trx, redo_rseg_undo_ptr, temp_rseg_undo_ptr, txn_rseg_undo_ptr);
 
     if (!trx->read_only) serialised = true;
 

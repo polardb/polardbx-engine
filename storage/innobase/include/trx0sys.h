@@ -434,20 +434,6 @@ struct trx_sys_t {
                                 volatile because it can be accessed
                                 without holding any mutex during
                                 AC-NL-RO view creation. */
-  //  std::atomic<trx_id_t> min_active_id;
-  /*!< Minimal transaction id which is
-  still in active state. */
-
-  // Lizard: comment out
-  // trx_ut_list_t serialisation_list;
-
-  /*!< Ordered on trx_t::no of all the
-  currenrtly active RW transactions */
-#ifdef UNIV_DEBUG
-  // trx_id_t rw_max_trx_no;
-                            /*!< Max trx number of read-write
-                            transactions added for purge. */
-#endif                    /* UNIV_DEBUG */
 
   char pad1[64];             /*!< To avoid false sharing */
   trx_ut_list_t rw_trx_list; /*!< List of active and committed in
@@ -465,15 +451,6 @@ struct trx_sys_t {
                                 mysql_trx_list may additionally contain
                                 transactions that have not yet been
                                 started in InnoDB. */
-
-//  trx_ids_t rw_trx_ids; /*!< Array of Read write transaction IDs
-//                        for MVCC snapshot. A ReadView would take
-//                        a snapshot of these transactions whose
-//                        changes are not visible to it. We should
-//                        remove transactions from the list before
-//                        committing in memory and releasing locks
-//                        to ensure right order of removal and
-//                        consistent snapshot. */
 
   char pad3[64]; /*!< To avoid false sharing */
 

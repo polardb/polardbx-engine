@@ -655,9 +655,17 @@ struct Cleanout {
     savepoint = mtr_set_savepoint(&mtr);
     mtr_s_lock(dict_index_get_lock(index), &mtr);
 
+    /**
+       Revision 1:
+
+       Fetch mode changed from PEEK_IF_IN_POOL to POSSIBLY_FREED,
+       Maybe the page was freed by purge system or other logic,
+       so if we got block through page_id directly other than searching tree,
+       the block maybe is under freed state.
+    */
     block =
         buf_page_get_gen(page_id, page_size, RW_X_LATCH, NULL,
-                         Page_fetch::PEEK_IF_IN_POOL, __FILE__, __LINE__, &mtr);
+                         Page_fetch::POSSIBLY_FREED, __FILE__, __LINE__, &mtr);
 
     mtr_release_s_latch_at_savepoint(&mtr, savepoint,
                                      dict_index_get_lock(index));
@@ -669,7 +677,8 @@ struct Cleanout {
     ut_ad(page);
 
     /** Maybe it has been freed */
-    if (!page_is_leaf(page) || fil_page_get_type(page) != FIL_PAGE_INDEX)
+    if (!page_is_leaf(page) || fil_page_get_type(page) != FIL_PAGE_INDEX ||
+        btr_page_get_index_id(page) != index->id)
       goto mtr_end;
 
     heap = mem_heap_create(UNIV_PAGE_SIZE + 200);

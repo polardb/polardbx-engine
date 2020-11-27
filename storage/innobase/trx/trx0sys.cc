@@ -442,15 +442,6 @@ lizard::purge_heap_t *trx_sys_init_at_db_start(void) {
 
   mtr.commit();
 
-#ifdef UNIV_DEBUG
-  /* max_trx_id is the next transaction ID to assign. Initialize maximum
-  transaction number to one less if all transactions are already purged. */
-
-//  if (trx_sys->rw_max_trx_no == 0) {
-//    trx_sys->rw_max_trx_no = trx_sys->max_trx_id - 1;
-//  }
-#endif /* UNIV_DEBUG */
-
   trx_dummy_sess = sess_open();
 
   trx_lists_init_at_db_start();
@@ -506,15 +497,6 @@ void trx_sys_create(void) {
   // UT_LIST_INIT(trx_sys->serialisation_list, &trx_t::no_list);
   UT_LIST_INIT(trx_sys->rw_trx_list, &trx_t::trx_list);
   UT_LIST_INIT(trx_sys->mysql_trx_list, &trx_t::mysql_trx_list);
-
-  // trx_sys->mvcc = UT_NEW_NOKEY(MVCC(1024));
-
-  // trx_sys->min_active_id = 0;
-
-  // ut_d(trx_sys->rw_max_trx_no = 0);
-
-  // new (&trx_sys->rw_trx_ids)
-  //    trx_ids_t(ut_allocator<trx_id_t>(mem_key_trx_sys_t_rw_trx_ids));
 
   new (&trx_sys->rw_trx_set) TrxIdSet();
 
