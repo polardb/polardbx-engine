@@ -503,11 +503,12 @@ namespace ib {
 #if !defined(UNIV_HOTBACKUP) && !defined(UNIV_NO_ERR_MSGS)
 
 void logger::log_event(std::string msg) {
+  ut_ad(m_subsys_name != nullptr);
   LogEvent()
       .type(LOG_TYPE_ERROR)
       .prio(m_level)
       .errcode(m_err)
-      .subsys("InnoDB")
+      .subsys(m_subsys_name)
       .verbatim(msg.c_str());
 }
 logger::~logger() { log_event(m_oss.str()); }

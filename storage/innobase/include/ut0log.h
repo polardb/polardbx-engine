@@ -30,6 +30,8 @@
 #include "mysql/components/services/log_shared.h"
 #include "ut0core.h"
 
+#include "lizard0log.h"
+
 /** Get the format string for the logger.
 @param[in]      errcode         The error code from share/errmsg-*.txt
 @return the message string or nullptr */
@@ -58,6 +60,8 @@ class logger {
     m_err = err;
 
     m_oss << msg(err, std::forward<Args>(args)...);
+
+    m_subsys_name = INNODB_LOG_SYS;
 
     return (*this);
   }
@@ -89,6 +93,9 @@ class logger {
  public:
   /** For converting the message into a string. */
   std::ostringstream m_oss;
+
+   /** Log subsys name */
+  const char *m_subsys_name{nullptr};
 
 #ifndef UNIV_NO_ERR_MSGS
   /** Error code in errmsg-*.txt */
@@ -142,7 +149,8 @@ class logger {
   /** Constructor.
   @param[in]    level           Logging level
   @param[in]    err             Error message code. */
-  logger(loglevel level, int err) : m_err(err), m_level(level) {
+  logger(loglevel level, int err)
+      : m_subsys_name(INNODB_LOG_SYS), m_err(err), m_level(level) {
     /* Note: Dummy argument to avoid the warning:
 
     "format not a string literal and no format arguments"
@@ -161,14 +169,32 @@ class logger {
   @param[in]    err             Error message code.
   @param[in]    args            Variable length argument list */
   template <class... Args>
-  explicit logger(loglevel level, int err, Args &&... args)
-      : m_err(err), m_level(level) {
+  explicit logger(loglevel level, int err, Args &&...args)
+      : m_subsys_name(INNODB_LOG_SYS), m_err(err), m_level(level) {
     m_oss << msg(err, std::forward<Args>(args)...);
   }
 
   /** Constructor
   @param[in]    level           Log error level */
-  explicit logger(loglevel level) : m_err(ER_IB_MSG_0), m_level(level) {}
+  explicit logger(loglevel level)
+      : m_subsys_name(INNODB_LOG_SYS), m_err(ER_IB_MSG_0), m_level(level) {}
+
+  /*----------------------------------------------------------------------*/
+  /** Override by lizard */
+  logger(const char *subsys, loglevel level, int err)
+      : m_subsys_name(subsys), m_err(err), m_level(level) {
+    m_oss << msg(err, "");
+  }
+ 
+  template <class... Args>
+  explicit logger(const char *subsys, loglevel level, int err, Args &&... args)
+      : m_subsys_name(subsys), m_err(err), m_level(level) {
+    m_oss << msg(err, std::forward<Args>(args)...);
+  }
+ 
+  explicit logger(const char *subsys, loglevel level)
+      : m_subsys_name(subsys), m_err(ER_IB_MSG_0), m_level(level) {}
+  /*----------------------------------------------------------------------*/
 
 #endif /* !UNIV_NO_ERR_MSGS */
 };
@@ -197,6 +223,13 @@ class info : public logger {
   template <class... Args>
   explicit info(int err, Args &&... args)
       : logger(INFORMATION_LEVEL, err, std::forward<Args>(args)...) {}
+
+  /** Constructor.
+  @param[in]	err		Error code from errmsg-*.txt.
+  @param[in]	args		Variable length argument list */
+  template <class... Args>
+  explicit info(const char *subsys, int err, Args &&...args)
+      : logger(subsys, INFORMATION_LEVEL, err, std::forward<Args>(args)...) {}
 #else
   /** Destructor */
   ~info() override;
@@ -218,6 +251,13 @@ class warn : public logger {
   explicit warn(int err, Args &&... args)
       : logger(WARNING_LEVEL, err, std::forward<Args>(args)...) {}
 
+  /** Constructor.
+  @param[in]	err		Error code from errmsg-*.txt.
+  @param[in]	args		Variable length argument list */
+  template <class... Args>
+  explicit warn(const char *subsys, int err, Args &&...args)
+      : logger(subsys, WARNING_LEVEL, err, std::forward<Args>(args)...) {}
+
 #else
   /** Destructor */
   ~warn() override;
@@ -238,6 +278,13 @@ class error : public logger {
   template <class... Args>
   explicit error(int err, Args &&... args)
       : logger(ERROR_LEVEL, err, std::forward<Args>(args)...) {}
+
+  /** Constructor.
+  @param[in]	err		Error code from errmsg-*.txt.
+  @param[in]	args		Variable length argument list */
+  template <class... Args>
+  explicit error(const char *subsys, int err, Args &&...args)
+      : logger(subsys, ERROR_LEVEL, err, std::forward<Args>(args)...) {}
 
 #else
   /** Destructor */

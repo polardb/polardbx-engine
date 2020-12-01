@@ -5412,13 +5412,14 @@ static int innodb_init(void *p) {
   }
 
   if (!lizard::srv_lizard_space.interpret_file()) {
-    ib::error(ER_LIZARD) << "Unable to interpret lizard tablespace configure";
+    lizard_error(ER_LIZARD)
+        << "Unable to interpret lizard tablespace configure";
     return innodb_init_abort();
   }
   if (lizard::srv_lizard_space.intersection(&srv_sys_space) ||
       lizard::srv_lizard_space.intersection(&srv_tmp_space)) {
-    ib::error(ER_LIZARD) << "Lizard tablespace has the same name with "
-                               << "sys_space or tmp_space";
+    lizard_error(ER_LIZARD) << "Lizard tablespace has the same name with "
+                            << "sys_space or tmp_space";
     return innodb_init_abort();
   }
 
@@ -5602,7 +5603,7 @@ static int innobase_init_files(dict_init_mode_t dict_init_mode,
 
   /** Lizard didn't support upgrade from 5.7 */
   if (dict_init_mode == DICT_INIT_UPGRADE_57_FILES) {
-    ib::error(ER_LIZARD) << "Didn't support upgrade from 5.7.";
+    lizard_error(ER_LIZARD) << "Didn't support upgrade from 5.7.";
     return innodb_init_abort();
   }
 

@@ -77,7 +77,7 @@ Vision *VisionContainer::VisionList::new_element() {
   vision = ut::new_<Vision>();
 
   if (vision == nullptr) {
-    ib::error(ER_LIZARD) << "Failed to allocate vision";
+    lizard_error(ER_LIZARD) << "Failed to allocate vision";
     return nullptr;
   }
 

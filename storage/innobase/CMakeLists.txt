@@ -267,6 +267,8 @@ SET(INNOBASE_SOURCES
   row/lizard0row.cc
   srv/lizard0mon.cc
   btr/lizard0cleanout.cc
+  trx/lizard0purge.cc
+  ut/lizard0log.cc
   ut/lizard0ut.cc
   page/lizard0page.cc
   read/lizard0read.cc

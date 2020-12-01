@@ -176,7 +176,7 @@ static void lizard_create_sysf(mtr_t *mtr) {
 
   mlog_log_string(lzd_hdr, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - lzd_hdr,
                   mtr);
-  ib::info(ER_LIZARD) << "Initialize lizard system";
+  lizard_info(ER_LIZARD) << "Initialize lizard system";
 }
 
 /** Create lizard system pages within system tablespace */

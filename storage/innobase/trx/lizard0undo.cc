@@ -717,7 +717,7 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx){
     undo = undo_ptr->txn_undo;
 
     if (undo == nullptr) {
-      ib::error(ER_LIZARD) << "Could not allocate transaction undo log";
+      lizard_error(ER_LIZARD) << "Could not allocate transaction undo log";
       ut_ad(err != DB_SUCCESS);
     } else {
       /** Only allocate log header, */
