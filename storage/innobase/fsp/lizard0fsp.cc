@@ -159,21 +159,21 @@ dberr_t LizardTablespace::check_file_status(const Datafile &file,
   reason_if_failed = FILE_STATUS_VOID;
   switch (err) {
   case DB_FAIL:
-    ib::error(ER_LIZARD) << "Check file failed on " << file.name();
+    lizard_error(ER_LIZARD) << "Check file failed on " << file.name();
     err = DB_ERROR;
     reason_if_failed = FILE_STATUS_RW_PERMISSION_ERROR;
     break;
   case DB_SUCCESS:
     if (stat.type == OS_FILE_TYPE_FILE) {
       if (!stat.rw_perm) {
-        ib::error(ER_LIZARD) << "The " << file.name()
-                                 << " must be writable or readable";
+        lizard_error(ER_LIZARD)
+            << "The " << file.name() << " must be writable or readable";
         err = DB_ERROR;
         reason_if_failed = FILE_STATUS_READ_WRITE_ERROR;
       }
     } else {
-      ib::error(ER_LIZARD) << "The " << file.name() << " file is not "
-                               << " a regular InnoDB data file";
+      lizard_error(ER_LIZARD) << "The " << file.name() << " file is not "
+                              << " a regular InnoDB data file";
       err = DB_ERROR;
       reason_if_failed = FILE_STATUS_NOT_REGULAR_FILE_ERROR;
     }
@@ -209,12 +209,12 @@ dberr_t LizardTablespace::file_not_found(Datafile &file, bool create_new_db) {
   file.m_exists = false;
 
   if (!create_new_db) {
-    ib::error(ER_LIZARD)
+    lizard_error(ER_LIZARD)
         << "Data file " << file.name() << " didn't found when boot InnoDB";
     return DB_ERROR;
   }
-  ib::info(ER_LIZARD)
-      << "Create new data file " << file.name() << " in " << name();
+  lizard_info(ER_LIZARD) << "Create new data file " << file.name() << " in "
+                         << name();
   file.set_open_flags(OS_FILE_CREATE);
   return DB_SUCCESS;
 }
@@ -235,15 +235,15 @@ dberr_t LizardTablespace::check_file_spec(bool create_new_db,
 
   /** Data file amount limit check */
   if (m_files.size() >= 2) {
-    ib::error(ER_LIZARD) << "It must be less than 2 files in " << name()
-                               << " But actually has " << m_files.size();
+    lizard_error(ER_LIZARD) << "It must be less than 2 files in " << name()
+                            << " But actually has " << m_files.size();
     return DB_ERROR;
   }
 
   /** Data file size check */
   if (get_sum_of_sizes() < min_expected_size / UNIV_PAGE_SIZE) {
-    ib::error(ER_LIZARD) << "Tablespace files size is less than "
-                               << min_expected_size / 1024 / 1024 << "MB";
+    lizard_error(ER_LIZARD) << "Tablespace files size is less than "
+                            << min_expected_size / 1024 / 1024 << "MB";
     return DB_ERROR;
   }
 
@@ -256,11 +256,11 @@ dberr_t LizardTablespace::check_file_spec(bool create_new_db,
       if (err != DB_SUCCESS)
         break;
     } else if (err != DB_SUCCESS) {
-      ib::error(ER_LIZARD)
+      lizard_error(ER_LIZARD)
           << "Check file status " << it->name() << " failed ";
       break;
     } else if (create_new_db) {
-      ib::error(ER_LIZARD)
+      lizard_error(ER_LIZARD)
           << "Find the data file " << it->name() << " when create database";
       err = DB_ERROR;
       break;
@@ -294,7 +294,7 @@ dberr_t LizardTablespace::check_size(Datafile &file) {
     if (file.m_size > rounded_size_pages ||
         (m_last_file_size_max > 0 &&
          m_last_file_size_max < rounded_size_pages)) {
-      ib::error(ER_LIZARD)
+      lizard_error(ER_LIZARD)
           << "The Auto-extending " << name() << " data file '"
           << file.filepath()
           << "' is"
@@ -311,7 +311,7 @@ dberr_t LizardTablespace::check_size(Datafile &file) {
   }
 
   if (rounded_size_pages != file.m_size) {
-    ib::error(ER_LIZARD)
+    lizard_error(ER_LIZARD)
         << "The " << name() << " data file '" << file.filepath()
         << "' is of a different size " << rounded_size_pages
         << " pages (rounded down to MB)"

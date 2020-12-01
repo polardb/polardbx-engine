@@ -19873,7 +19873,7 @@ ER_SERVER_AUTOUPGRADE_RENAME_PARTITION_TABLE_FAILED
   eng "Server rename partition table %s failed due to %s. Please rename it manually"
 
 ER_LIZARD
-  eng "Lizard : %s"
+  eng "%s"
 
 #
 # End of RDS error messages intended to be logged to the server error log.
