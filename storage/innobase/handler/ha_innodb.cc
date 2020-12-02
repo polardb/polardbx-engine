@@ -22402,6 +22402,13 @@ static MYSQL_SYSVAR_ULONG(cleanout_max_cleans_on_page,
                           "max clean record count once cleanout one page", NULL,
                           NULL, 1, 1, 1024 * 1024, 0);
 
+static MYSQL_SYSVAR_ULONG(txn_undo_page_reuse_max_percent,
+                          lizard::txn_undo_page_reuse_max_percent,
+                          PLUGIN_VAR_OPCMDARG,
+                          "The max percent of txn undo page that can be reused",
+                          NULL, NULL, TXN_UNDO_PAGE_REUSE_MAX_PERCENT, 0,
+                          TXN_UNDO_PAGE_REUSE_MAX_PERCENT, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -22615,6 +22622,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(cleanout_disable),
     MYSQL_SYSVAR(cleanout_max_scans_on_page),
     MYSQL_SYSVAR(cleanout_max_cleans_on_page),
+    MYSQL_SYSVAR(txn_undo_page_reuse_max_percent),
     NULL};
 
 mysql_declare_plugin(innobase){
