@@ -111,8 +111,10 @@ void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr) {
   /** 1. assert temporary table undo ptr */
   lizard_ut_ad(undo_addr.offset != UNDO_PTR_OFFSET_TEMP_TAB_REC);
 
-  *undo_ptr = (undo_ptr_t)(undo_addr.state) << 55 | (undo_ptr_t)rseg_id << 48 |
-              (undo_ptr_t)(undo_addr.page_no) << 16 | undo_addr.offset;
+  *undo_ptr = (undo_ptr_t)(undo_addr.state) << UBA_POS_STATE |
+              (undo_ptr_t)rseg_id << UBA_POS_SPACE_ID |
+              (undo_ptr_t)(undo_addr.page_no) << UBA_POS_PAGE_NO |
+              undo_addr.offset;
 }
 
 /* Lizard transaction undo header operation */
@@ -1315,7 +1317,7 @@ void trx_write_undo_ptr(byte *ptr, const txn_desc_t *txn_desc) {
 */
 void trx_write_undo_ptr(byte *ptr, undo_ptr_t undo_ptr) {
   ut_ad(ptr);
-  mach_write_to_7(ptr, undo_ptr);
+  mach_write_to_8(ptr, undo_ptr);
 }
 
 /**
@@ -1337,7 +1339,7 @@ scn_id_t trx_read_scn(const byte *ptr) {
 */
 undo_ptr_t trx_read_undo_ptr(const byte *ptr) {
   ut_ad(ptr);
-  return mach_read_from_7(ptr);
+  return mach_read_from_8(ptr);
 }
 
 /**
@@ -1351,11 +1353,15 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
   ut_ad(undo_addr);
 
   undo_addr->offset = (ulint)undo_ptr & 0xFFFF;
-  undo_ptr >>= 16;
+  undo_ptr >>= UBA_WIDTH_OFSET;
   undo_addr->page_no = (ulint)undo_ptr & 0xFFFFFFFF;
-  undo_ptr >>= 32;
+  undo_ptr >>= UBA_WIDTH_PAGE_NO;
   rseg_id = (ulint)undo_ptr & 0x7F;
-  undo_ptr >>= 7;
+
+  /* Confirm the reserved bits */
+  ut_ad(((ulint)undo_ptr & 0x7f80) == 0);
+
+  undo_ptr >>= (UBA_WIDTH_SPACE_ID + UBA_WIDTH_UNUSED);
   undo_addr->state = (bool)undo_ptr;
 
   /**

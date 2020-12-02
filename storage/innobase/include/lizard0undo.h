@@ -109,14 +109,14 @@ namespace lizard {
 constexpr undo_ptr_t UNDO_PTR_NULL = std::numeric_limits<undo_ptr_t>::min();
 
 /** Fake UBA for internal table */
-constexpr undo_ptr_t UNDO_PTR_FAKE = (undo_ptr_t)1 << 55;
+constexpr undo_ptr_t UNDO_PTR_FAKE = (undo_ptr_t)1 << UBA_POS_STATE;
 
 /** Temporary table record UBA offset */
 constexpr ulint UNDO_PTR_OFFSET_TEMP_TAB_REC = (ulint)0xFFFF;
 
 /** Temporary table record UBA */
 constexpr undo_ptr_t UNDO_PTR_TEMP_TAB_REC =
-    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_TEMP_TAB_REC;
+    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_TEMP_TAB_REC;
 
 /** Temporary table txn description */
 constexpr txn_desc_t TXN_DESC_TEMP = {UNDO_PTR_TEMP_TAB_REC,
@@ -127,7 +127,8 @@ constexpr ulint UNDO_PTR_OFFSET_DYNAMIC_METADATA = (ulint)0xFFFF - 1;
 
 /** Temporary table record UBA */
 constexpr undo_ptr_t UNDO_PTR_DYNAMIC_METADATA =
-    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_DYNAMIC_METADATA;
+    (undo_ptr_t)1 << UBA_POS_STATE |
+    (undo_ptr_t)UNDO_PTR_OFFSET_DYNAMIC_METADATA;
 
 /** Dynamic metadata table txn description */
 constexpr txn_desc_t TXN_DESC_DM = {
@@ -138,7 +139,7 @@ constexpr ulint UNDO_PTR_OFFSET_LOG_DDL = (ulint)0xFFFF - 2;
 
 /** Log_ddl record UBA */
 constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
-    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_LOG_DDL;
+    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_LOG_DDL;
 
 /** Log ddl table txn description */
 constexpr txn_desc_t TXN_DESC_LD = {UNDO_PTR_LOG_DDL,
@@ -149,14 +150,14 @@ constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
 
 /** Index UBA */
 constexpr undo_ptr_t UNDO_PTR_DICT_REC =
-    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
+    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
 
 /** Index UBA that upgraded from old version. */
 constexpr ulint UNDO_PTR_OFFSET_INDEX_UPGRADE = (ulint)0xFFFF - 5;
 
 /** Index UBA that upgraded from old version. */
 constexpr undo_ptr_t UNDO_PTR_INDEX_UPGRADE =
-    (undo_ptr_t)1 << 55 | (undo_ptr_t)UNDO_PTR_OFFSET_INDEX_UPGRADE;
+    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_INDEX_UPGRADE;
 
 /* Lizard transaction undo header operation */
 /*-----------------------------------------------------------------------------*/

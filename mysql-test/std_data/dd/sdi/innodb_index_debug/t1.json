@@ -255,7 +255,7 @@
                 "is_virtual": false,
                 "hidden": 2,
                 "ordinal_position": 7,
-                "char_length": 7,
+                "char_length": 8,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,

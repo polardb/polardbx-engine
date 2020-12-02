@@ -43,7 +43,7 @@ constexpr size_t DATA_SCN_ID_LEN = 8;
 /** lizard UBA, the fourth system column */
 constexpr size_t DATA_UNDO_PTR = 4;
 /** lizard UBA occupy 7 bytes */
-constexpr size_t DATA_UNDO_PTR_LEN = 7;
+constexpr size_t DATA_UNDO_PTR_LEN = 8;
 
 /* The sum of SCN and UBA length */
 constexpr size_t DATA_LIZARD_TOTAL_LEN = DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN;

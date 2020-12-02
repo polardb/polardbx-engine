@@ -62,7 +62,7 @@ bool is_txn_space_by_name(const char *name) {
 static_assert(DATA_SCN_ID == 3, "DATA_SCN_ID != 3");
 static_assert(DATA_SCN_ID_LEN == 8, "DATA_SCN_ID_LEN != 8");
 static_assert(DATA_UNDO_PTR == 4, "DATA_UNDO_PTR != 4");
-static_assert(DATA_UNDO_PTR_LEN == 7, "DATA_UNDO_PTR_LEN != 7");
+static_assert(DATA_UNDO_PTR_LEN == 8, "DATA_UNDO_PTR_LEN != 8");
 
 /**
   Add the SCN and UBA column into dict_table_t, for example:

@@ -182,7 +182,7 @@ void row_upd_rec_write_scn_and_undo_ptr(byte *ptr,
                                         const scn_t scn,
                                         const undo_ptr_t undo_ptr) {
   mach_write_to_8(ptr, scn);
-  mach_write_to_7(ptr + DATA_SCN_ID_LEN, undo_ptr);
+  mach_write_to_8(ptr + DATA_SCN_ID_LEN, undo_ptr);
 }
 
 

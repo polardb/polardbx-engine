@@ -73,6 +73,9 @@ struct trx_undo_t;
 
 /** Size of UTC within undo log header */
 #define TRX_UNDO_UTC_LEN 8
+
+/** Size of UBA within undo log header */
+#define TRX_UNDO_UBA_LEN 8
 /*-------------------------------------------------------------*/
 
 /** Undo block address (UBA) */
@@ -101,10 +104,33 @@ typedef struct undo_addr_t undo_addr_t;
   2) Format of undo log address in record:
 
    1  bit     active/commit state (0:active 1:commit)
+   8  bit     reserved unused
    7  bit     undo space number (1-127)
    32 bit     page no (4 bytes)
    16 bit     Offset of undo log header (2 bytes)
 */
+
+#define UBA_POS_OFFSET 0
+#define UBA_WIDTH_OFSET 16
+
+#define UBA_POS_PAGE_NO (UBA_POS_OFFSET + UBA_WIDTH_OFSET)
+#define UBA_WIDTH_PAGE_NO 32
+
+#define UBA_POS_SPACE_ID (UBA_POS_PAGE_NO + UBA_WIDTH_PAGE_NO)
+#define UBA_WIDTH_SPACE_ID 7
+
+#define UBA_POS_UNUSED (UBA_POS_SPACE_ID + UBA_WIDTH_SPACE_ID)
+#define UBA_WIDTH_UNUSED 8
+
+#define UBA_POS_STATE (UBA_POS_UNUSED + UBA_WIDTH_UNUSED)
+#define UBA_WIDTH_STATE 1
+
+static_assert((UBA_POS_STATE + UBA_WIDTH_STATE) == 64,
+              "UBA length must be 8 bytes");
+
+static_assert(UBA_POS_PAGE_NO == 16, "UBA page no from 16th bits");
+
+static_assert(UBA_POS_SPACE_ID == 48, "UBA space id from 48th bits");
 
 /** Undo log header address in record */
 typedef ib_id_t undo_ptr_t;
@@ -176,11 +202,11 @@ struct txn_undo_ptr_t {
 namespace lizard {
 
 inline bool lizard_undo_ptr_is_active(undo_ptr_t undo_ptr) {
-  return !(bool)(undo_ptr >> 55);
+  return !(bool)(undo_ptr >> UBA_POS_STATE);
 }
 
 inline void lizard_undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
-  *undo_ptr |= (undo_ptr_t)1 << 55;
+  *undo_ptr |= (undo_ptr_t)1 << UBA_POS_STATE;
 }
 
 /**

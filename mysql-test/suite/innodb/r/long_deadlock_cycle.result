@@ -52,7 +52,7 @@ Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (1) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -62,7 +62,7 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) TRANSACTION:
@@ -79,7 +79,7 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -89,7 +89,7 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) TRANSACTION:
@@ -106,7 +106,7 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -116,7 +116,7 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) TRANSACTION:
@@ -133,7 +133,7 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -143,7 +143,7 @@ Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 *** WE ROLL BACK TRANSACTION (2)
 ------------
@@ -210,7 +210,7 @@ Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (1) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -220,7 +220,7 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) TRANSACTION:
@@ -237,7 +237,7 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -247,7 +247,7 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) TRANSACTION:
@@ -264,7 +264,7 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -274,7 +274,7 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) TRANSACTION:
@@ -291,7 +291,7 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) WAITING FOR THIS LOCK TO BE GRANTED:
@@ -301,7 +301,7 @@ Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
- 4: len 7; hex %HEXADECIMAL%; asc %ASC%;;
+ 4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 *** WE ROLL BACK TRANSACTION (1)
 ------------
