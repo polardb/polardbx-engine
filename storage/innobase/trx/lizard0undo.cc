@@ -237,6 +237,23 @@ static bool trx_undo_hdr_scn_committed(trx_ulogf_t *log_hdr, mtr_t *mtr) {
   return false;
 }
 
+/** Confirm the UBA is valid in undo log header */
+bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
+  undo_addr_t undo_addr;
+  undo_ptr_t undo_ptr = trx_undo_hdr_read_uba(log_hdr, mtr);
+  undo_decode_undo_ptr(undo_ptr, &undo_addr);
+  /**
+    Maybe the UBA in undo log header is fixed and predefined UBA
+    or a meaningful UBA.
+  */
+  if (undo_ptr == UNDO_PTR_UNDO_HDR ||
+      (undo_addr.state == true &&
+       (fsp_is_txn_tablespace_by_id(undo_addr.space_id))))
+    return true;
+
+  return false;
+}
+
 #endif
 
 /**
@@ -259,6 +276,7 @@ void trx_undo_hdr_init_scn(trx_ulogf_t *log_hdr, mtr_t *mtr) {
 
   mach_write_to_8(log_hdr + TRX_UNDO_SCN, SCN_NULL);
   mach_write_to_8(log_hdr + TRX_UNDO_UTC, UTC_NULL);
+  mach_write_to_8(log_hdr + TRX_UNDO_UBA, UNDO_PTR_NULL);
 }
 
 /**
@@ -362,6 +380,69 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
 
   /** Write the undo flag when create undo log header */
   mlog_write_ulint(log_hdr + TRX_UNDO_FLAGS, undo->flag, MLOG_1BYTE, mtr);
+}
+
+/**
+  Read UBA.
+
+  @param[in]      log_hdr       undo log header
+  @param[in]      mtr           current mtr context
+*/
+undo_ptr_t trx_undo_hdr_read_uba(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
+  /** Here must hold the S/SX/X lock on the page */
+  ut_ad(mtr_memo_contains_page_flagged(
+      mtr, log_hdr,
+      MTR_MEMO_PAGE_S_FIX | MTR_MEMO_PAGE_X_FIX | MTR_MEMO_PAGE_SX_FIX));
+
+  /** Validate the undo page */
+  lizard_trx_undo_page_validation(page_align(log_hdr));
+
+  return mach_read_from_8(log_hdr + TRX_UNDO_UBA);
+}
+
+/**
+  Write the UBA address into undo log header
+  @param[in]      undo log header
+  @param[in]      UBA
+  @param[in]      mtr
+*/
+void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const undo_addr_t &undo_addr,
+                            mtr_t *mtr) {
+  /** Here must hold the SX/X lock on the page */
+  ut_ad(mtr_memo_contains_page_flagged(
+      mtr, log_hdr, MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
+
+  undo_ptr_t undo_ptr;
+  undo_encode_undo_addr(undo_addr, &undo_ptr);
+
+  mlog_write_ull(log_hdr + TRX_UNDO_UBA, undo_ptr, mtr);
+}
+
+/**
+  Write the UBA address into undo log header
+  @param[in]      undo log header
+  @param[in]      trx
+  @param[in]      mtr
+*/
+void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
+                            mtr_t *mtr) {
+  /** Here must hold the SX/X lock on the page */
+  ut_ad(mtr_memo_contains_page_flagged(
+      mtr, log_hdr, MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
+
+  if (trx_is_txn_rseg_updated(trx)) {
+    assert_trx_undo_ptr_allocated(trx);
+    /** Modify the state as commit, then write into log header */
+    mlog_write_ull(log_hdr + TRX_UNDO_UBA,
+                   trx->txn_desc.undo_ptr | (undo_ptr_t)1 << UBA_POS_STATE,
+                   mtr);
+  } else {
+    /**
+      If it's temporary table, didn't have txn undo, but it will have
+      update/insert undo log header.
+    */
+    mlog_write_ull(log_hdr + TRX_UNDO_UBA, UNDO_PTR_UNDO_HDR, mtr);
+  }
 }
 
 /**
@@ -486,6 +567,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   fil_addr_t node_addr;
   ulint seg_size;
   ulint free_size;
+  undo_addr_t undo_addr;
 
   ulint slot_no = ULINT_UNDEFINED;
   dberr_t err = DB_SUCCESS;
@@ -580,6 +662,12 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
 
   ut_ad(offset == TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE);
 
+  /** Lizard: add UBA into undo log header */
+  undo_addr = {rseg->space_id, page_no, offset, SCN_NULL, true};
+
+  /** Current undo log hdr is UBA */
+  lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, &mtr);
+
   trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, &mtr,
                                     trx_undo_t::Gtid_storage::NONE);
 
@@ -652,7 +740,7 @@ static dberr_t txn_undo_assign_undo(trx_t *trx, txn_undo_ptr_t *undo_ptr,
           ? nullptr
           :
 #endif
-          trx_undo_reuse_cached(rseg, type, trx->id, trx->xid,
+          trx_undo_reuse_cached(trx, rseg, type, trx->id, trx->xid,
                                 trx_undo_t::Gtid_storage::NONE, &mtr);
 
   if (undo == nullptr) {
@@ -664,7 +752,7 @@ static dberr_t txn_undo_assign_undo(trx_t *trx, txn_undo_ptr_t *undo_ptr,
   }
 
   if (undo == nullptr) {
-    err = trx_undo_create(rseg, type, trx->id, trx->xid,
+    err = trx_undo_create(trx, rseg, type, trx->id, trx->xid,
                           trx_undo_t::Gtid_storage::NONE, &undo, &mtr);
 
     if (err != DB_SUCCESS) {
@@ -881,6 +969,8 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
                               undo->rseg->page_size, mtr);
 
   undo_header = undo_page + undo->hdr_offset;
+
+  lizard_trx_undo_hdr_uba_validation(undo_header, mtr);
 
   if (undo->state != TRX_UNDO_CACHED) {
     ulint hist_size;
@@ -1367,10 +1457,17 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
   /**
     It should not be trx_sys tablespace for normal table except
     of temporary table/LOG_DDL/DYNAMIC_METADATA/DDL in-process table */
+
+  /**
+    Revision:
+    We give a fixed UBA in undo log header if didn't allocate txn undo
+    for temporary table.
+  */
   if (rseg_id == 0) {
     lizard_ut_ad(undo_addr->offset == UNDO_PTR_OFFSET_TEMP_TAB_REC ||
                  undo_addr->offset == UNDO_PTR_OFFSET_DYNAMIC_METADATA ||
-                 undo_addr->offset == UNDO_PTR_OFFSET_LOG_DDL);
+                 undo_addr->offset == UNDO_PTR_OFFSET_LOG_DDL ||
+                 undo_addr->offset == UNDO_PTR_OFFSET_UNDO_HDR);
   }
   /** It's always redo txn undo log */
   undo_addr->space_id = trx_rseg_id_to_space_id(rseg_id, false);

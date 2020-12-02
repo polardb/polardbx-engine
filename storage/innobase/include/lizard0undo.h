@@ -56,8 +56,9 @@ struct trx_undo_t;
 
   8 bytes     SCN number
   8 bytes     UTC time
+  8 bytes     UBA address
 
-  Those two option will be included into all INSERT/UPDATE/TXN undo
+  Those three options will be included into all INSERT/UPDATE/TXN undo
   log header.
 
 
@@ -72,6 +73,11 @@ struct trx_undo_t;
      0x01 TRX_UNDO_FLAG_XID
      0x02 TRX_UNDO_FLAG_GTID
      0x80 TRX_UNDO_FLAG_TXN
+
+
+  Attention:
+    The UBA in undo log header only demonstrate the address, the state within UBA
+    always is committed,  didn't use state to judge the transaction state.
 */
 
 /** Those will only exist in txn undo log header*/
@@ -92,7 +98,7 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == TRX_UNDO_LOG_GTID_HDR_SIZE,
               "txn and trx undo log header size must be equal!");
 
 /** Pls reuse the reserved space */
-static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 267,
+static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
               "txn undo log header size cann't change!");
 /** txn magic number */
 #define TXN_MAGIC_N 91118498
@@ -152,6 +158,13 @@ constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
 constexpr undo_ptr_t UNDO_PTR_DICT_REC =
     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
 
+/** UBA offset in undo log hdr */
+constexpr ulint UNDO_PTR_OFFSET_UNDO_HDR = (ulint)0xFFFF - 4;
+
+/** UBA in undo log hdr */
+constexpr undo_ptr_t UNDO_PTR_UNDO_HDR =
+    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_UNDO_HDR;
+
 /** Index UBA that upgraded from old version. */
 constexpr ulint UNDO_PTR_OFFSET_INDEX_UPGRADE = (ulint)0xFFFF - 5;
 
@@ -175,6 +188,8 @@ bool trx_undo_page_validation(const page_t *page);
 
 /** Confirm the consistent of scn, undo type, undo state. */
 bool undo_scn_validation(const trx_undo_t *undo);
+
+bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 
 #endif  // UNIV_DEBUG || LIZARD_DEBUG
 
@@ -200,7 +215,29 @@ extern void trx_undo_hdr_init_scn(trx_ulogf_t *log_hdr, mtr_t *mtr);
 extern void trx_undo_hdr_write_scn(trx_ulogf_t *log_hdr,
                                    std::pair<scn_t, utc_t> &cmmt_scn,
                                    mtr_t *mtr);
+/**
+  Read UBA.
 
+  @param[in]      log_hdr       undo log header
+  @param[in]      mtr           current mtr context
+*/
+undo_ptr_t trx_undo_hdr_read_uba(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+/**
+  Write the UBA address into undo log header
+  @param[in]      undo log header
+  @param[in]      UBA
+  @param[in]      mtr
+*/
+extern void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr,
+                                   const undo_addr_t &undo_addr, mtr_t *mtr);
+/**
+  Write the UBA address into undo log header
+  @param[in]      undo log header
+  @param[in]      trx
+  @param[in]      mtr
+*/
+extern void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
+                                   mtr_t *mtr);
 /**
   Read the scn and utc.
 
@@ -428,13 +465,14 @@ void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem);
 
 /** Delcare the functions which were defined in other cc files.*/
 /*=============================================================================*/
-extern trx_undo_t *trx_undo_reuse_cached(trx_rseg_t *rseg, ulint type,
-                                         trx_id_t trx_id, const XID *xid,
+extern trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg,
+                                         ulint type, trx_id_t trx_id,
+                                         const XID *xid,
                                          trx_undo_t::Gtid_storage gtid_storage,
                                          mtr_t *mtr);
 
 [[nodiscard]] extern dberr_t trx_undo_create(
-    trx_rseg_t *rseg, ulint type, trx_id_t trx_id, const XID *xid,
+    trx_t *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, const XID *xid,
     trx_undo_t::Gtid_storage gtid_storage, trx_undo_t **undo, mtr_t *mtr);
 
 void trx_resurrect_update_in_prepared_state(trx_t *trx, const trx_undo_t *undo);
@@ -514,6 +552,11 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
     ut_a(lizard::trx_undo_page_validation(page));                              \
   } while (0)
 
+#define lizard_trx_undo_hdr_uba_validation(undo_hdr, mtr)     \
+  do {                                                        \
+    ut_a(lizard::trx_undo_hdr_uba_validation(undo_hdr, mtr)); \
+  } while (0)
+
 #define lizard_trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)           \
   do {                                                                         \
     txn_undo_ext_t txn_undo_ext;                                               \
@@ -557,6 +600,7 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
 #define lizard_undo_scn_validation(undo)
 #define assert_trx_in_recovery(trx)
 #define lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)
+#define lizard_trx_undo_hdr_uba_validation(undo_hdr, mtr)
 
 #endif
 

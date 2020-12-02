@@ -572,9 +572,12 @@ constexpr uint32_t TRX_UNDO_HISTORY_NODE = 34;
 constexpr uint32_t TRX_UNDO_SCN = (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE); // = 46
 /** Lizard: Offset of the utc */
 constexpr uint32_t TRX_UNDO_UTC = (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN); // = 54
+/** Lizard: Offset of the UBA */
+constexpr uint32_t TRX_UNDO_UBA = (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN);	
+
 /*-------------------------------------------------------------*/
 /** Size of the undo log header without XID information */
-constexpr uint32_t TRX_UNDO_LOG_OLD_HDR_SIZE = TRX_UNDO_UTC + TRX_UNDO_UTC_LEN;
+constexpr uint32_t TRX_UNDO_LOG_OLD_HDR_SIZE = TRX_UNDO_UBA + TRX_UNDO_UBA_LEN;
 
 /* Note: the writing of the undo log old header is coded by a log record
 MLOG_UNDO_HDR_CREATE or MLOG_UNDO_HDR_REUSE. The appending of an XID to the
