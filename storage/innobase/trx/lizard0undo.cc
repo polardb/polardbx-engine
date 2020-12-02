@@ -99,6 +99,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace lizard {
 
+/** The max percent of txn undo page that can be reused */
+ulint txn_undo_page_reuse_max_percent = TXN_UNDO_PAGE_REUSE_MAX_PERCENT;
+
 /**
   Encode UBA into undo_ptr that need to copy into record
   @param[in]      undo addr

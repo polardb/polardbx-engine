@@ -110,6 +110,12 @@ struct txn_undo_ext_t {
 
 namespace lizard {
 
+/** The max percent of txn undo page that can be reused */
+extern ulint txn_undo_page_reuse_max_percent;
+
+#define TXN_UNDO_PAGE_REUSE_MAX_PERCENT \
+  ((TRX_UNDO_PAGE_REUSE_LIMIT * 100) / UNIV_PAGE_SIZE)
+
 /**------------------------------------------------------------------------*/
 /** Initial value of undo ptr  */
 constexpr undo_ptr_t UNDO_PTR_NULL = std::numeric_limits<undo_ptr_t>::min();

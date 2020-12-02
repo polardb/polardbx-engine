@@ -23350,6 +23350,13 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to reboot innodb on safe cleanout mode (off by default)", NULL,
     NULL, FALSE);
 
+static MYSQL_SYSVAR_ULONG(txn_undo_page_reuse_max_percent,
+                          lizard::txn_undo_page_reuse_max_percent,
+                          PLUGIN_VAR_OPCMDARG,
+                          "The max percent of txn undo page that can be reused",
+                          NULL, NULL, TXN_UNDO_PAGE_REUSE_MAX_PERCENT, 0,
+                          TXN_UNDO_PAGE_REUSE_MAX_PERCENT, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23578,7 +23585,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(data_file_purge_dir),
     MYSQL_SYSVAR(print_data_file_purge_process),
     MYSQL_SYSVAR(cleanout_safe_mode),
-    nullptr};
+    MYSQL_SYSVAR(txn_undo_page_reuse_max_percent),
+    NULL};
 
 mysql_declare_plugin(innobase){
     MYSQL_STORAGE_ENGINE_PLUGIN,
