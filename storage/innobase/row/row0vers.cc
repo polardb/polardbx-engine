@@ -1281,7 +1281,6 @@ dberr_t row_vers_build_for_consistent_read(
   mem_heap_t *heap = NULL;
   byte *buf;
   dberr_t err;
-  txn_lookup_t txn_lookup;
 
   ut_ad(index->is_clustered());
   ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) ||

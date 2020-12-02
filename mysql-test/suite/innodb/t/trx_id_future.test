@@ -31,6 +31,10 @@ die unless read(FILE, $_, 2) == 2;
 my $record_offset  =  unpack("n*", $_);
 
 #In this case the first record should be at offset 135
+# die unless $record_offset == 135;
+# Lizard fix: In redundant format, the offsets of all fields are recorded
+# in the offset array, and every field takes up one byte of space. We add
+# two fields so the $record_offset should be 137.
 die unless $record_offset == 137;
 
 my $trx_id_of_rec = 4*$page_size + $record_offset + 6;
@@ -59,5 +63,8 @@ EOF
 call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* A transaction id in a record of table `\.\.*`\.`\.\.*` is newer than the system-wide maximum.");
 --enable_query_log
 
+# Lizard: In the past, trx_id was used to check visibility, so it shows
+# nothing in the following SQL. For now, scn is used, so we can still see
+# the record.
 SELECT * FROM t1;
 DROP TABLE t1;
