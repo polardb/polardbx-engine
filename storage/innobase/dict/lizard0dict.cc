@@ -47,7 +47,7 @@ const char *dict_lizard::s_lizard_space_file_name = "lizard.ibd";
 static_assert(DATA_SCN_ID == 3, "DATA_SCN_ID != 3");
 static_assert(DATA_SCN_ID_LEN == 8, "DATA_SCN_ID_LEN != 8");
 static_assert(DATA_UNDO_PTR == 4, "DATA_UNDO_PTR != 4");
-static_assert(DATA_UNDO_PTR_LEN == 7, "DATA_UNDO_PTR_LEN != 7");
+static_assert(DATA_UNDO_PTR_LEN == 8, "DATA_UNDO_PTR_LEN != 8");
 
 
 /** Lizard: First two undo tablespaces will be treated as txn tablespace */

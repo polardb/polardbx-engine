@@ -31,7 +31,7 @@ die unless read(FILE, $_, 2) == 2;
 my $record_offset  =  unpack("n*", $_);
 
 #In this case the first record should be at offset 135
-die unless $record_offset == 135;
+die unless $record_offset == 137;
 
 my $trx_id_of_rec = 4*$page_size + $record_offset + 6;
 
