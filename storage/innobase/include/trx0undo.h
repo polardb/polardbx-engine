@@ -569,12 +569,15 @@ page of an update undo log segment. */
 /** Lizard: Offset of the SCN */
 #define TRX_UNDO_SCN (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE)
 
-/** Lizard: Offset of the utc */
+/** Lizard: Offset of the UTC */
 #define TRX_UNDO_UTC (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN)
+
+/** Lizard: Offset of the UBA */
+#define TRX_UNDO_UBA (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN)
 
 /*-------------------------------------------------------------*/
 /** Size of the undo log header without XID information */
-#define TRX_UNDO_LOG_OLD_HDR_SIZE (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN)
+#define TRX_UNDO_LOG_OLD_HDR_SIZE (TRX_UNDO_UBA + TRX_UNDO_UBA_LEN)
 
 /* Note: the writing of the undo log old header is coded by a log record
 MLOG_UNDO_HDR_CREATE or MLOG_UNDO_HDR_REUSE. The appending of an XID to the
