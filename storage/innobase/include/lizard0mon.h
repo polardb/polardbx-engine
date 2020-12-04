@@ -73,8 +73,6 @@ struct lizard_var_t {
 
   ulint txn_undo_lost_page_miss_when_safe;
 
-  ulint txn_undo_lost_page_offset_overflow;
-
   ulint txn_undo_lost_magic_number_wrong;
 
   ulint txn_undo_lost_ext_flag_wrong;
@@ -125,9 +123,6 @@ struct lizard_stats_t {
 
   /** txn undo lost when missing corresponding pages when cleanout safe mode */
   ulint_ctr_1_t txn_undo_lost_page_miss_when_safe;
-
-  /** txn undo lost because uba.offset is out of undo page bound */
-  ulint_ctr_1_t txn_undo_lost_page_offset_overflow;
 
   /** txn undo lost because magic number is wrong */
   ulint_ctr_1_t txn_undo_lost_magic_number_wrong;
