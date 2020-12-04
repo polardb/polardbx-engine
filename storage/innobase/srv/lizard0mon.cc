@@ -72,9 +72,6 @@ static void export_lizard_status(void) {
   lizard_vars.txn_undo_lost_page_miss_when_safe =
       lizard_stats.txn_undo_lost_page_miss_when_safe;
 
-  lizard_vars.txn_undo_lost_page_offset_overflow =
-      lizard_stats.txn_undo_lost_page_offset_overflow;
-
   lizard_vars.txn_undo_lost_magic_number_wrong =
       lizard_stats.txn_undo_lost_magic_number_wrong;
 
@@ -134,10 +131,6 @@ static SHOW_VAR lizard_status_variables[] = {
 
     {"txn_undo_lost_page_miss_when_safe",
      (char *)&lizard_vars.txn_undo_lost_page_miss_when_safe, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
-
-    {"txn_undo_lost_page_offset_overflow",
-     (char *)&lizard_vars.txn_undo_lost_page_offset_overflow, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_lost_magic_number_wrong",

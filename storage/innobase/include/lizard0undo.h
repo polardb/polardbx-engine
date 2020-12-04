@@ -84,12 +84,16 @@ struct trx_undo_t;
 /*-------------------------------------------------------------*/
 /* Random magic number */
 #define TXN_UNDO_LOG_EXT_MAGIC (TRX_UNDO_LOG_XA_HDR_SIZE)
+/* Previous scn of the trx who used the same TXN */
+#define TXN_UNDO_PREV_SCN (TXN_UNDO_LOG_EXT_MAGIC + 4)
+/* Previous utc of the trx who used the same TXN */
+#define TXN_UNDO_PREV_UTC (TXN_UNDO_PREV_SCN + 8)
 /* Flag how to use reserved space */
-#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_EXT_MAGIC + 4)
+#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_PREV_UTC + 8)
 /* Unused space */
 #define TXN_UNDO_LOG_EXT_RESERVED (TXN_UNDO_LOG_EXT_FLAG + 1)
 /* Unused space size */
-#define TXN_UNDO_LOG_EXT_RESERVED_LEN 60
+#define TXN_UNDO_LOG_EXT_RESERVED_LEN 44
 /* txn undo log header size */
 #define TXN_UNDO_LOG_EXT_HDR_SIZE \
   (TXN_UNDO_LOG_EXT_RESERVED + TXN_UNDO_LOG_EXT_RESERVED_LEN)
@@ -105,6 +109,8 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
 
 struct txn_undo_ext_t {
   ulint magic_n;
+  /* Previous scn/utc of the trx who used the same TXN */
+  commit_scn_t prev_image;
   ulint flag;
 };
 
@@ -250,8 +256,22 @@ extern void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-extern std::pair<scn_t, utc_t> trx_undo_hdr_read_scn(trx_ulogf_t *log_hdr,
+extern std::pair<scn_t, utc_t> trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr,
                                                      mtr_t *mtr);
+
+/**
+  Check if the undo log header is reused.
+
+  @param[in]      undo_page     undo log header page
+  @param[out]     commit_scn    commit scn if have, otherwise 0
+  @param[in]      mtr
+
+  @return         bool          ture if the undo log header is reused
+*/
+bool txn_undo_header_reuse_if_need(
+    const page_t *undo_page,
+    commit_scn_t *commit_scn,
+    mtr_t *mtr);
 
 /**
   Add the space for the txn especially.
@@ -265,13 +285,17 @@ extern void trx_undo_hdr_add_space_for_txn(page_t *undo_page,
 /**
   Init the txn extension information.
 
-  @param[in]      undo
+  @param[in]      undo          undo memory struct
   @param[in]      undo_page     undo log header page
   @param[in]      log_hdr       undo log hdr
+  @param[in]      prev_image    prev scn/utc if the undo log header is reused
   @param[in]      mtr
 */
 void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
-                               trx_ulogf_t *log_hdr, mtr_t *mtr);
+                               trx_ulogf_t *log_hdr,
+                               const commit_scn_t *prev_image,
+                               mtr_t *mtr);
+
 /**
   Read the txn undo log header extension information.
 
@@ -500,7 +524,13 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
                                                 TRX_UNDO_LOG_HDR_SIZE bytes
                                                 free space on it */
                              trx_id_t trx_id,   /*!< in: transaction id */
+                             commit_scn_t *prev_image,
+                                                /*!< out: previous scn/utc
+                                                if have. Only used in TXN
+                                                undo header. Pass in as NULL
+                                                if don't care. */
                              mtr_t *mtr);       /*!< in: mtr */
+
 /** Remove an rseg header from the history list.
 @param[in,out]	rseg_hdr	rollback segment header
 @param[in]	log_hdr		undo log segment header

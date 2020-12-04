@@ -70,6 +70,15 @@ constexpr scn_t SCN_DICT_REC = 4;
 /** SCN special for index upgraded from old version. */
 constexpr scn_t SCN_INDEX_UPGRADE = 5;
 
+/** Initialized prev scn number in txn header. See the case:
+1. If txn undos are unexpectedly removed
+2. the mysql run with cleanout_safe_mode again
+some prev UBAs might point at such a txn header: in uncommitted status
+but if not really the prev UBAs try to find. And lookup by these UBAs
+might get a initialized prev scn/utc. We should set them small enough for
+visibility. */
+constexpr scn_t PREV_SCN_UNDO_LOST = 5;
+
 /** MAX reserved scn NUMBER  */
 constexpr scn_t SCN_RESERVERD_MAX = 1024;
 
@@ -88,6 +97,9 @@ constexpr utc_t UTC_TEMP_TAB_REC = 1577808000 * 1000000ULL;
 
 /** utc for undo lost:  {2020/1/1 00:00:01} */
 constexpr utc_t UTC_UNDO_LOST = 1577808000 * 1000000ULL + 1;
+
+/** Initialized prev utc in txn header */
+constexpr utc_t PREV_UTC_UNDO_LOST = 1577808000 * 1000000ULL + 2;
 
 /** The max local time is less than 2038 year */
 constexpr utc_t UTC_MAX = std::numeric_limits<std::int32_t>::max() * 1000000ULL;
