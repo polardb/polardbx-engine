@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 
 #include "lizard0scn0types.h"
+#include "lizard0txn.h"
 
 struct trx_rseg_t;
 struct trx_undo_t;
@@ -236,6 +237,28 @@ class TxnUndoRsegs {
   Rseg_Iterator begin() { return m_rsegs.begin(); }
 
   Rseg_Iterator end() { return m_rsegs.end(); }
+
+  Rseg_Iterator arrange_txn_first() {
+    ut_ad(m_rsegs.size() > 0);
+
+    Rseg_Iterator iter = m_rsegs.begin();
+    while (iter != m_rsegs.end()) {
+      bool is_txn_rseg = fsp_is_txn_tablespace_by_id((*iter)->space_id);
+      if (is_txn_rseg) {
+        if (iter != m_rsegs.begin()) {
+          /* Move txn rseg to position 0 */
+          std::swap(*iter, m_rsegs.front());
+        }
+        break;
+      }
+      ++iter;
+    }
+
+    /* If no txn rseg, then only one temp rseg */
+    ut_ad(iter != m_rsegs.end() || m_rsegs.size() == 1);
+
+    return m_rsegs.begin();
+  }
 
   void append(const TxnUndoRsegs &append_from) {
     ut_ad(get_scn() == append_from.get_scn());

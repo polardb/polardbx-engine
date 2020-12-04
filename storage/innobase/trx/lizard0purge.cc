@@ -90,7 +90,10 @@ const page_size_t TxnUndoRsegsIterator::set_next(bool *keep_top) {
       m_purge_sys->purge_heap->pop();
     }
 
-    m_iter = m_txn_undo_rsegs.begin();
+    /* In order for 'AS OF' to correctly determine whether the undo log
+     * is still available, we should ensure that the txn rseg of a transaction
+     * beging purged before the other rsegs. */
+    m_iter = m_txn_undo_rsegs.arrange_txn_first();
   } else {
     /* Queue is empty, reset iterator. */
     m_txn_undo_rsegs = NullElement;
