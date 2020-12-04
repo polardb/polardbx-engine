@@ -276,8 +276,7 @@ bool txn_undo_log_has_purged(const trx_rseg_t *rseg,
 
   undo_addr_t undo_addr;
   undo_ptr_t uba_ptr;
-  bool found;
-  trx_id_t txn_trx_id; 
+  trx_id_t txn_trx_id;
   ulint txn_state;
   trx_ulogf_t *txn_hdr;
 
@@ -305,9 +304,8 @@ bool txn_undo_log_has_purged(const trx_rseg_t *rseg,
   /* Get the txn undo log header */
   txn_hdr = trx_undo_page_get_s_latched(
                 page_id_t(undo_addr.space_id, undo_addr.page_no),
-                fil_space_get_page_size(undo_addr.space_id, &found), &mtr) +
+                univ_page_size, &mtr) +
             undo_addr.offset;
-  ut_ad(found);
 
   txn_trx_id = mach_read_from_8(txn_hdr + TRX_UNDO_TRX_ID);
   txn_state = mach_read_from_2(txn_hdr + TXN_UNDO_LOG_STATE);
