@@ -245,6 +245,11 @@ ib_time_monotonic_ms_t ut_time_monotonic_ms(void);
  @return us since epoch or 0 if failed to retrieve */
 ib_time_monotonic_t ut_time_monotonic(void);
 
+/** Returns the number of microseconds since 1970/1/1 00:00:00.
+ Uses the system clock.
+ @return us since epoch or 0 if failed to retrieve */
+ib_time_monotonic_t ut_time_system_us(void);
+
 /** Returns the difference of two times in seconds.
  @return time2 - time1 expressed in seconds */
 double ut_difftime(ib_time_t time2,  /*!< in: time */

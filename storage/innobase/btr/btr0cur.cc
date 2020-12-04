@@ -3188,7 +3188,7 @@ void btr_cur_update_in_place_log(
       page_is_comp(page) ? MLOG_COMP_REC_UPDATE_IN_PLACE
                          : MLOG_REC_UPDATE_IN_PLACE,
       1 + DATA_ROLL_PTR_LEN + 14 + 2 + MLOG_BUF_MARGIN +
-      DATA_ROLL_PTR_LEN + 14);
+      DATA_UNDO_PTR_LEN + 14);
 
   if (!log_ptr) {
     /* Logging in mtr is switched off during crash recovery */
@@ -4296,7 +4296,7 @@ void btr_cur_del_mark_set_clust_rec_log(
                                           ? MLOG_COMP_REC_CLUST_DELETE_MARK
                                           : MLOG_REC_CLUST_DELETE_MARK,
                                       1 + 1 + DATA_ROLL_PTR_LEN + 14 + 2 +
-                                      DATA_ROLL_PTR_LEN + 14);
+                                      DATA_UNDO_PTR_LEN + 14);
 
   if (!log_ptr) {
     /* Logging in mtr is switched off during crash recovery */
