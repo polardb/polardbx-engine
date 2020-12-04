@@ -325,31 +325,6 @@ std::pair<scn_t, utc_t> trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr,
   return std::make_pair(scn, utc);
 }
 
-static bool check_txn_hdr_valid(const page_t *undo_page,
-                                const trx_ulogf_t *undo_hdr, mtr_t *mtr)
-{
-  ulint hdr_flag;
-  txn_undo_ext_t txn_undo_ext;
-
-  hdr_flag = mtr_read_ulint(undo_hdr + TRX_UNDO_FLAGS, MLOG_1BYTE, mtr);
-  if (!(hdr_flag & TRX_UNDO_FLAG_TXN)) {
-    return false;
-  }
-
-  trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_ext);
-  if (txn_undo_ext.magic_n != TXN_MAGIC_N) {
-    /** The header might be raw */
-    return false;
-  }
-
-  if (txn_undo_ext.flag != 0) {
-    /** The header might be raw */
-    return false;
-  }
-
-  return true;
-}
-
 /**
   Add the space for the txn especially.
 
@@ -416,8 +391,6 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
     mlog_write_ull(log_hdr + TXN_UNDO_PREV_SCN, prev_image->first, mtr);
     /* Write the prev utc */
     mlog_write_ull(log_hdr + TXN_UNDO_PREV_UTC, prev_image->second, mtr);
-    /* check if valid */
-    lizard_ut_ad(check_txn_hdr_valid(undo_page, log_hdr, mtr));
   }
 
   /* Write the txn undo extension flag */
