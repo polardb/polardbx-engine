@@ -999,6 +999,12 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
     /** Generate a new scn */
     scn = lizard_sys->scn.new_commit_scn();
 
+    assert_trx_scn_initial(trx);
+    /** We don't want to call **ut_time_system_us** within the scope
+    of the lizard_sys mutex protection. So we just only set
+    trx->txn_desc.scn.first here */
+    trx->txn_desc.scn.first = scn.first;
+
     /** If a read only transaction (for example: start transaction read only),
     temporary table can be also modified. It doesn't matter if purge_sys purges
     them */
@@ -1013,15 +1019,10 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
     ut_ad(*serialised == false);
     *serialised = true;
 
-    trx_mutex_enter(trx);
-
     lizard_sys_scn_mutex_exit();
 
-    assert_trx_scn_initial(trx);
+    trx->txn_desc.scn.second = scn.second = ut_time_system_us();
 
-    trx->txn_desc.scn = scn;
-
-    trx_mutex_exit(trx);
   } else {
     assert_trx_scn_allocated(trx);
     scn = *scn_ptr;
