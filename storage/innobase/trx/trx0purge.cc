@@ -1805,6 +1805,8 @@ static bool trx_purge_choose_next_log(void) {
   const page_size_t &page_size = purge_sys->rseg_iter->set_next(&keep_top);
 
   if (purge_sys->rseg != nullptr && !keep_top) {
+    lizard_ut_ad(lizard::txn_undo_log_has_purged(purge_sys->rseg, page_size));
+    lizard::txn_undo_set_state_at_purge(purge_sys->rseg, page_size);
     trx_purge_read_undo_rec(purge_sys, page_size);
   } else {
     /* There is nothing to do yet. */

@@ -257,6 +257,71 @@ bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
   return false;
 }
 
+/** Check if an update undo log has been marked as purged.
+@param[in]  rseg txn rseg
+@param[in]  page_size
+@return     true   if purged */
+bool txn_undo_log_has_purged(const trx_rseg_t *rseg,
+                             const page_size_t &page_size) {
+  if (fsp_is_txn_tablespace_by_id(rseg->space_id)) {
+    ut_ad(!rseg->last_del_marks);
+    /* Txn rseg is considered to be purged */
+    return true;
+  }
+
+  page_t *page;
+  trx_ulogf_t *log_hdr;
+  ulint type, flag;
+  trx_id_t trx_id;
+
+  undo_addr_t undo_addr;
+  undo_ptr_t uba_ptr;
+  bool found;
+  trx_id_t txn_trx_id; 
+  ulint txn_state;
+  trx_ulogf_t *txn_hdr;
+
+  mtr_t mtr;
+  mtr_start(&mtr);
+
+  /* Get current undo log header */
+  page = trx_undo_page_get_s_latched(
+      page_id_t(rseg->space_id, rseg->last_page_no), page_size, &mtr);
+
+  log_hdr = page + rseg->last_offset;
+  type = mach_read_from_2(page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE);
+  flag = mach_read_from_1(log_hdr + TRX_UNDO_FLAGS);
+  trx_id = mach_read_from_8(log_hdr + TRX_UNDO_TRX_ID);
+  ut_ad(type == TRX_UNDO_UPDATE);
+  ut_ad(!(flag & TRX_UNDO_FLAG_TXN));
+
+  /* Get addr of the corresponding txn undo log header */
+  uba_ptr = trx_undo_hdr_read_uba(log_hdr, &mtr);
+  if (uba_ptr == UNDO_PTR_UNDO_HDR) goto no_txn;
+
+  undo_decode_undo_ptr(uba_ptr, &undo_addr);
+  ut_ad(undo_addr.state && fsp_is_txn_tablespace_by_id(undo_addr.space_id));
+
+  /* Get the txn undo log header */
+  txn_hdr = trx_undo_page_get_s_latched(
+                page_id_t(undo_addr.space_id, undo_addr.page_no),
+                fil_space_get_page_size(undo_addr.space_id, &found), &mtr) +
+            undo_addr.offset;
+  ut_ad(found);
+
+  txn_trx_id = mach_read_from_8(txn_hdr + TRX_UNDO_TRX_ID);
+  txn_state = mach_read_from_2(txn_hdr + TXN_UNDO_LOG_STATE);
+
+no_txn:
+  mtr_commit(&mtr);
+
+  /* No txn, so it is a tempory rseg, no need to check. */
+  if (uba_ptr == UNDO_PTR_UNDO_HDR) return true;
+
+  /* State of the txn undo log should be PURGED if not reused yet. */
+  return (txn_trx_id != trx_id || txn_state == TXN_UNDO_LOG_PURGED);
+}
+
 #endif
 
 /**
@@ -392,6 +457,9 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
     /* Write the prev utc */
     mlog_write_ull(log_hdr + TXN_UNDO_PREV_UTC, prev_image->second, mtr);
   }
+
+  /* Write initial state */
+  txn_undo_set_state_at_init(log_hdr, mtr);
 
   /* Write the txn undo extension flag */
   mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, 0, MLOG_1BYTE, mtr);

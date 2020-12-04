@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace undo {
 class Tablespace;
+class Tablespaces;
 }  // namespace undo
 
 namespace lizard {

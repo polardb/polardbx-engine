@@ -88,12 +88,14 @@ struct trx_undo_t;
 #define TXN_UNDO_PREV_SCN (TXN_UNDO_LOG_EXT_MAGIC + 4)
 /* Previous utc of the trx who used the same TXN */
 #define TXN_UNDO_PREV_UTC (TXN_UNDO_PREV_SCN + 8)
+/* Undo log state */
+#define TXN_UNDO_LOG_STATE (TXN_UNDO_PREV_UTC + 8)
 /* Flag how to use reserved space */
-#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_PREV_UTC + 8)
+#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_STATE + 2)
 /* Unused space */
 #define TXN_UNDO_LOG_EXT_RESERVED (TXN_UNDO_LOG_EXT_FLAG + 1)
 /* Unused space size */
-#define TXN_UNDO_LOG_EXT_RESERVED_LEN 44
+#define TXN_UNDO_LOG_EXT_RESERVED_LEN 42
 /* txn undo log header size */
 #define TXN_UNDO_LOG_EXT_HDR_SIZE \
   (TXN_UNDO_LOG_EXT_RESERVED + TXN_UNDO_LOG_EXT_RESERVED_LEN)
@@ -106,6 +108,11 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
               "txn undo log header size cann't change!");
 /** txn magic number */
 #define TXN_MAGIC_N 91118498
+
+/* States of an txn undo log header */
+#define TXN_UNDO_LOG_ACTIVE   1
+#define TXN_UNDO_LOG_COMMITED 2
+#define TXN_UNDO_LOG_PURGED   3
 
 struct txn_undo_ext_t {
   ulint magic_n;
@@ -202,6 +209,12 @@ bool trx_undo_page_validation(const page_t *page);
 bool undo_scn_validation(const trx_undo_t *undo);
 
 bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+
+/** Check if an update undo log has been marked as purged.
+@param[in]  rseg txn rseg
+@param[in]  page_size
+@return     true   if purged */
+bool txn_undo_log_has_purged(const trx_rseg_t *rseg, const page_size_t &page_size);
 
 #endif  // UNIV_DEBUG || LIZARD_DEBUG
 
@@ -491,6 +504,71 @@ bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
 
 /** Add the rseg into the purge queue heap */
 void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem);
+
+/** Set txn undo log state.
+@param[in,out]  log_hdr undo log header
+@param[in,out]  mtr     mini transaction
+@param[in]      state	  state */
+inline void txn_undo_set_state(trx_ulogf_t *log_hdr, ulint state, mtr_t *mtr) {
+  /* When creating a new page, hold SX latch, otherwise X latch */
+  ut_ad(mtr_memo_contains_page(mtr, page_align(log_hdr),
+        MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+  auto page = page_align(log_hdr);
+  auto type = mach_read_from_2(page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE);
+  auto flag = mach_read_from_1(log_hdr + TRX_UNDO_FLAGS);
+  ulint old_state = mach_read_from_2(log_hdr + TXN_UNDO_LOG_STATE);
+
+  ut_a(type == TRX_UNDO_TXN);
+
+  /* It must be TXN undo log, or be initializing */
+  ut_a(state == TXN_UNDO_LOG_ACTIVE || (flag & TRX_UNDO_FLAG_TXN) != 0);
+
+  if (state == TXN_UNDO_LOG_COMMITED)
+    ut_a(old_state == TXN_UNDO_LOG_ACTIVE);
+  else if (state == TXN_UNDO_LOG_PURGED)
+    ut_a(old_state == TXN_UNDO_LOG_COMMITED || /* Normal case */
+         old_state == TXN_UNDO_LOG_PURGED);    /* Crash recovery */
+  else
+    ut_a(state == TXN_UNDO_LOG_ACTIVE);
+#endif
+
+  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_STATE, state, MLOG_2BYTES, mtr);
+}
+
+/** Set txn undo log state to purged.
+@param[in]  rseg txn rseg
+@param[in]  page_size */
+inline void txn_undo_set_state_at_purge(const trx_rseg_t *rseg,
+                                        const page_size_t &page_size) {
+  if (fsp_is_txn_tablespace_by_id(rseg->space_id)) {
+    mtr_t mtr;
+    mtr_start(&mtr);
+
+    const page_id_t page_id(rseg->space_id, rseg->last_page_no);
+    page_t *undo_page = trx_undo_page_get(page_id, page_size, &mtr);
+    trx_ulogf_t *undo_header = undo_page + rseg->last_offset;
+
+    txn_undo_set_state(undo_header, TXN_UNDO_LOG_PURGED, &mtr);
+
+    mtr_commit(&mtr);
+  }
+}
+
+/** Set txn undo log state when commiting.
+@param[in,out]  log_hdr undo log header
+@param[in,out]  mtr     mini transaction */
+inline void txn_undo_set_state_at_finish(trx_ulogf_t *log_hdr, mtr_t *mtr) {
+  txn_undo_set_state(log_hdr, TXN_UNDO_LOG_COMMITED, mtr);
+}
+
+/** Set txn undo log state when initializing.
+@param[in,out]  log_hdr undo log header
+@param[in,out]  mtr     mini transaction */
+inline void txn_undo_set_state_at_init(trx_ulogf_t *log_hdr, mtr_t *mtr) {
+  txn_undo_set_state(log_hdr, TXN_UNDO_LOG_ACTIVE, mtr);
+}
 
 }  // namespace lizard
 

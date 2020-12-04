@@ -1582,6 +1582,9 @@ static bool trx_write_serialisation_history(
       auto undo_ptr = &trx->rsegs.m_txn;
       undo_hdr_page =
           trx_undo_set_state_at_finish(trx->rsegs.m_txn.txn_undo, mtr);
+      /** Update state */
+      lizard::txn_undo_set_state_at_finish(undo_hdr_page + txn_undo->hdr_offset,
+                                           mtr);
       /** Generate SCN */
       scn = lizard::trx_commit_scn(trx, nullptr, txn_undo, undo_hdr_page,
                                    txn_undo->hdr_offset, &serialised, mtr);

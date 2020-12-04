@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 
 #include "lizard0scn0types.h"
+#include "lizard0txn.h"
 
 struct trx_rseg_t;
 struct trx_undo_t;
@@ -244,6 +245,28 @@ class TxnUndoRsegs {
     /* Lizard: one more txn rseg. */
     ut_a(m_rsegs_n < 2 + 1);
     m_rsegs[m_rsegs_n++] = rseg;
+  }
+
+  Rsegs_array<3>::iterator arrange_txn_first() {
+    ut_ad(m_rsegs.size() > 0);
+
+    auto iter = begin();
+    while (iter != end()) {
+      bool is_txn_rseg = fsp_is_txn_tablespace_by_id((*iter)->space_id);
+      if (is_txn_rseg) {
+        if (iter != begin()) {
+          /* Move txn rseg to position 0 */
+          std::swap(*iter, m_rsegs.front());
+        }
+        break;
+      }
+      ++iter;
+    }
+
+    /* If no txn rseg, then only one temp rseg */
+    ut_ad(iter != end() || size() == 1);
+
+    return begin();
   }
 
   /** Number of registered rsegs.
