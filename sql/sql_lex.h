@@ -94,6 +94,12 @@
 #include "thr_lock.h"  // thr_lock_type
 #include "violite.h"   // SSL_type
 
+#include "sql/sql_lex_ext.h"
+
+namespace im {
+class Lex_optimizer_hint;
+}
+
 class Item_cond;
 class Item_sum;
 class Event_parse_data;
@@ -3752,6 +3758,12 @@ struct LEX : public Query_tables_list {
     See SELECT_LEX::find_common_table_expr().
    */
   bool force_iterator_executor = false;
+
+  /**
+    Members used by Snapshot.
+  */
+  bool is_update_stmt{false};
+  int table_snap_expr_count_to_evaluate{0};
 };
 
 /**

@@ -61,6 +61,8 @@
 
 #include "sql/mem_root_array.h"
 
+#include "sql/table_ext.h"
+
 class Field;
 
 namespace histograms {
@@ -2162,6 +2164,20 @@ struct TABLE {
             set or not
   */
   bool should_binlog_drop_if_temp(void) const;
+<<<<<<< HEAD
+=======
+
+  /* The Entity guard that is cloned from TABLE_SHARE */
+  im::Entity_guard *entity_guard;
+  /**
+    Sequence scan mode only affect one table but not all query lex,
+    so We define this option within TABLE object.
+  */
+  Sequence_scan sequence_scan;
+
+  /* Snapshot information */
+  im::Snapshot_info_t snapshot;
+>>>>>>> ea52410f281... [feature] Add 'as of' syntactic
 };
 
 static inline void empty_record(TABLE *table) {
@@ -3525,6 +3541,17 @@ struct TABLE_LIST {
   enum_table_ref_type m_table_ref_type{TABLE_REF_NULL};
   /** See comments for TABLE_SHARE::get_table_ref_version() */
   ulonglong m_table_ref_version{0};
+<<<<<<< HEAD
+=======
+
+ public:
+  /** Represent the sequence query scan mode */
+  Sequence_scan sequence_scan;
+
+  /** Snapshot struct.
+  Note that the table may be a view or a derived table (sub query). */
+  im::Table_snapshot snapshot_expr{0, 0};
+>>>>>>> ea52410f281... [feature] Add 'as of' syntactic
 };
 
 /*

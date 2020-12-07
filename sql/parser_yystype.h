@@ -44,6 +44,7 @@
 #include "trigger_def.h"          // enum_trigger_order_type
 #include "window_lex.h"           // enum_window_frame_unit
 #include "xa.h"                   // xa_option_words
+#include "sql/sql_lex_ext.h"      // Table_snapshot, Table_snapshot_and_alias
 
 class PT_ddl_table_option;
 class PT_json_table_column;
@@ -585,6 +586,8 @@ union YYSTYPE {
   } load_set_list;
   ts_alter_tablespace_type alter_tablespace_type;
   Sql_cmd_srs_attributes *sql_cmd_srs_attributes;
+  struct im::Table_snapshot table_snapshot;
+  struct im::Table_snapshot_and_alias table_snapshot_and_alias;
 };
 
 static_assert(sizeof(YYSTYPE) <= 32, "YYSTYPE is too big");

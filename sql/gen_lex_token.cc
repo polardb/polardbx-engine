@@ -85,8 +85,8 @@
   - likewise for sql/sql_hints.yy
 */
 
-int start_token_range_for_sql_hints = 1000;
-int start_token_range_for_digests = 1100;
+int start_token_range_for_sql_hints = 1200;
+int start_token_range_for_digests = 1300;
 /*
   This is a tool used during build only,
   so MY_MAX_TOKEN does not need to be exact,
@@ -99,7 +99,7 @@ int start_token_range_for_digests = 1100;
   - DIGEST special tokens.
   See also YYMAXUTOK.
 */
-#define MY_MAX_TOKEN 1200
+#define MY_MAX_TOKEN 1400
 /** Generated token. */
 struct gen_lex_token_string {
   const char *m_token_string;

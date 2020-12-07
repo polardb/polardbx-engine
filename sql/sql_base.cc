@@ -2941,6 +2941,12 @@ bool open_table(THD *thd, TABLE_LIST *table_list, Open_table_context *ot_ctx) {
           return true;
         }
 
+        /* Snapshot not allowed for view */
+        if (table_list->snapshot_expr.is_set()) {
+          my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
+          return true;
+        }
+
         if (!tdc_open_view(thd, table_list, key, key_length)) {
           DBUG_ASSERT(table_list->is_view());
           return false;  // VIEW
@@ -3175,6 +3181,14 @@ retry_share : {
     because view shares are always up to date.
   */
   if (share->is_view) {
+    /* Snapshot not allowed for view */
+    if (table_list->snapshot_expr.is_set()) {
+      release_table_share(share);
+      mysql_mutex_unlock(&LOCK_open);
+      my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
+      return true;
+    }
+
     bool view_open_result = true;
     /*
       If parent_l of the table_list is non null then a merge table
@@ -7024,6 +7038,12 @@ bool open_temporary_table(THD *thd, TABLE_LIST *tl) {
       return true;
     }
     return false;
+  }
+
+  /* Snapshot not allowed for temp table */
+  if (tl->snapshot_expr.is_set()) {
+    my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), tl->table_name);
+    return true;
   }
 
   if (tl->partition_names) {

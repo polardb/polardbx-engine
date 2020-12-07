@@ -4124,6 +4124,9 @@ void TABLE::init(THD *thd, TABLE_LIST *tl) {
     bool error MY_ATTRIBUTE((unused)) = refix_value_generator_items(thd);
     DBUG_ASSERT(!error);
   }
+
+  /** Reset snapshot */
+  im::init_table_snapshot(this, thd);
 }
 
 /**

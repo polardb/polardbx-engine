@@ -475,6 +475,8 @@ void LEX::reset() {
 
   clear_privileges();
   grant_as.cleanup();
+  is_update_stmt = false;
+  table_snap_expr_count_to_evaluate = 0;
 }
 
 /**

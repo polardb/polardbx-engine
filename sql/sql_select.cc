@@ -700,6 +700,9 @@ bool Sql_cmd_dml::execute(THD *thd) {
     if (lock_tables(thd, lex->query_tables, lex->table_count, 0)) goto err;
   }
 
+  /* Evaluate snapshot expressions */
+  if (im::evaluate_snapshot(thd, lex)) goto err;
+
   // Perform statement-specific execution
   res = execute_inner(thd);
 
