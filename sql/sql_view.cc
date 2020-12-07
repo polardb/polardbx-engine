@@ -1208,6 +1208,8 @@ bool parse_view_definition(THD *thd, Table_ref *view_ref) {
 
   Table_ref *const top_view = view_ref->top_table();
 
+  assert(!view_ref->snapshot_expr.is_set()); /* View not surpported asof yet */
+
   if (view_ref->is_view()) {
     /*
       It's an execution of a PS/SP and the view has already been unfolded

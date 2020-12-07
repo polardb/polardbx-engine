@@ -94,8 +94,17 @@
 #include "sql_string.h"
 #include "thr_lock.h"  // thr_lock_type
 #include "violite.h"   // SSL_type
+		       //
+#include "sql/sql_lex_ext.h"
 
 class Alter_info;
+
+namespace im {
+class Lex_optimizer_hint;
+}
+
+class Item_cond;
+class Item_sum;
 class Event_parse_data;
 class Field;
 class Item_cond;
@@ -4409,6 +4418,12 @@ struct LEX : public Query_tables_list {
   void set_rewrite_required() { rewrite_required = true; }
   void reset_rewrite_required() { rewrite_required = false; }
   bool is_rewrite_required() { return rewrite_required; }
+
+  /**
+    Members used by Snapshot.
+  */
+  bool is_update_stmt{false};
+  int table_snap_expr_count_to_evaluate{0};
 };
 
 /**

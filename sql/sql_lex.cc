@@ -489,6 +489,7 @@ void LEX::reset() {
 
   clear_privileges();
   grant_as.cleanup();
+
   alter_user_attribute = enum_alter_user_attribute::ALTER_USER_COMMENT_NOT_USED;
   m_is_replication_deprecated_syntax_used = false;
   m_was_replication_command_executed = false;
@@ -496,6 +497,9 @@ void LEX::reset() {
   grant_if_exists = false;
   ignore_unknown_user = false;
   reset_rewrite_required();
+
+  is_update_stmt = false;
+  table_snap_expr_count_to_evaluate = 0;
 }
 
 /**

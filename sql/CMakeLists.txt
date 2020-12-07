@@ -610,6 +610,7 @@ SET(SQL_SHARED_SOURCES
   sys_vars_resource_mgr.cc
   system_variables.cc
   table.cc
+  table_ext.cc
   table_cache.cc
   table_function.cc
   table_trigger_dispatcher.cc

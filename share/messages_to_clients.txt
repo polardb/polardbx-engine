@@ -9968,6 +9968,24 @@ start-error-number 7500
 ER_NATIVE_PROC_PARAMETER_MISMATCH
   eng "The %dth parameter didn't match for native procedure %s"
 
+ER_AS_OF_EXPR_NOT_CONSTANT
+  eng "Snapshot (as of) item must be a 'const for execution' expression"
+
+ER_AS_OF_BAD_TIMESTAMP_TYPE
+  eng "Snapshot (as of) 'timestamp' must be of type timestamp"
+
+ER_AS_OF_BAD_SCN_TYPE
+  eng "Snapshot (as of) 'scn' must be of type integer"
+
+ER_AS_OF_CONFLICT_LOCK_CLAUSE
+  eng "Snapshot (as of) expression not allowed for '%s', cause it is with LOCK clause"
+
+ER_AS_OF_NOT_INNODB_TABLE
+  eng "Snapshot (as of) expression not allowed for '%s', cause it is not a innodb base table"
+
+ER_AS_OF_NOT_SELECT
+  eng "Snapshot (as of) expression can only be appear in select from list tables"
+
 
 
 ################################################################################

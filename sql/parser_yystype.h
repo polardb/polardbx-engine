@@ -31,7 +31,6 @@
 #include "field_types.h"
 #include "lex_string.h"
 #include "my_base.h"
-
 #include "my_inttypes.h"  // TODO: replace with cstdint
 #include "my_time.h"      // interval_type
 #include "mysql_time.h"
@@ -58,6 +57,8 @@
 #include "sql/window_lex.h"           // enum_window_frame_unit
 #include "sql/xa.h"                   // xa_option_words
 #include "thr_lock.h"                 // thr_lock_type
+				      //
+#include "sql/sql_lex_ext.h"      // Table_snapshot, Table_snapshot_and_alias
 
 class Index_hint;
 class Item;
@@ -708,6 +709,8 @@ union YYSTYPE {
   my_thread_id query_id;
   Bipartite_name bipartite_name;
   Set_operator query_operator;
+  struct im::Table_snapshot table_snapshot;
+  struct im::Table_snapshot_and_alias table_snapshot_and_alias;
 };
 
 static_assert(sizeof(YYSTYPE) <= 32, "YYSTYPE is too big");

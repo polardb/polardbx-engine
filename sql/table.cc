@@ -4136,6 +4136,9 @@ void TABLE::init(THD *thd, Table_ref *tl) {
   if (!pos_in_table_list->prelocking_placeholder) {
     bind_value_generators_to_fields();
   }
+
+  /** Reset snapshot */
+  im::init_table_snapshot(this, thd);
 }
 
 /**

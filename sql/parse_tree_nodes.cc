@@ -2145,6 +2145,11 @@ bool PT_query_block_locking_clause::set_lock_for_tables(Parse_context *pc) {
         return true;
       }
 
+      if (table_list->snapshot_expr.is_set()) {
+        my_error(ER_AS_OF_CONFLICT_LOCK_CLAUSE, MYF(0), table_list->alias);
+        return true;
+      }
+
       pc->select->set_lock_for_table(get_lock_descriptor(), table_list);
     }
   return false;
@@ -2315,6 +2320,9 @@ bool PT_table_locking_clause::set_lock_for_tables(Parse_context *pc) {
 
     if (table_list == nullptr)
       return raise_error(thd, table_ident, ER_UNRESOLVED_TABLE_LOCK);
+
+    if (table_list->snapshot_expr.is_set())
+      return raise_error(thd, table_ident, ER_AS_OF_CONFLICT_LOCK_CLAUSE);
 
     if (table_list->lock_descriptor().type != TL_READ_DEFAULT)
       return raise_error(thd, table_ident, ER_DUPLICATE_TABLE_LOCK);
@@ -3627,6 +3635,7 @@ bool PT_table_factor_table_ident::contextualize(Parse_context *pc) {
       opt_key_definition, opt_use_partition, nullptr, pc);
   if (m_table_ref == nullptr) return true;
   if (pc->select->add_joined_table(m_table_ref)) return true;
+  if (opt_snapshot.itemize(pc, m_table_ref)) return true; /* Itemize snapshot */
   return false;
 }
 
