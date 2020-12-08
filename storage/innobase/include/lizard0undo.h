@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dbg.h"
 #include "lizard0scn.h"
 #include "lizard0undo0types.h"
+#include "ut0dbg.h"
 
 #include <atomic>
 #include <queue>
@@ -113,13 +114,6 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
 #define TXN_UNDO_LOG_ACTIVE   1
 #define TXN_UNDO_LOG_COMMITED 2
 #define TXN_UNDO_LOG_PURGED   3
-
-struct txn_undo_ext_t {
-  ulint magic_n;
-  /* Previous scn/utc of the trx who used the same TXN */
-  commit_scn_t prev_image;
-  ulint flag;
-};
 
 namespace lizard {
 
@@ -319,7 +313,7 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
 */
 void trx_undo_hdr_read_txn(const page_t *undo_page,
                            const trx_ulogf_t *undo_header, mtr_t *mtr,
-                           txn_undo_ext_t *txn_undo_ext);
+                           txn_undo_hdr_t *txn_undo_hdr);
 
 /**
   Write the scn into the buffer
@@ -473,26 +467,71 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr);
 /**
   Try to lookup the real scn of given records.
 
+  @param[in/out]  txn_rec       txn info of the records.
+  @param[out]     txn_lookup    txn lookup info, nullptr if don't care.
+  @param[in]      txn_mtr       Non-nullptr if use external mtr, the caller is
+                                responsible for committing mtr;
+                                If passing nullptr, it will use a temporary mtr.
+
+  @return         bool       true if the record should be cleaned out.
+*/
+bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
+                             txn_lookup_t *txn_lookup,
+                             mtr_t *txn_mtr);
+
+/**
+  set txn_undo_hdr_t
+
   @param[in/out]  txn_rec    txn info of the records.
 
   @return         bool       true if the record should be cleaned out.
 */
-bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec);
+inline void txn_lookup_t_set(txn_lookup_t *txn_lookup,
+                             const txn_undo_hdr_t &txn_undo_hdr,
+                             const commit_scn_t &real_image,
+                             const txn_state_t &real_state) {
+  if (txn_lookup == nullptr)  return;
+
+  txn_lookup->txn_undo_hdr = txn_undo_hdr;
+  txn_lookup->real_image = real_image;
+  txn_lookup->real_state = real_state;
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+  if (real_state == TXN_STATE_ACTIVE ||
+      real_state == TXN_STATE_COMMITTED ||
+      real_state == TXN_STATE_PURGED) {
+    if (real_state != TXN_STATE_ACTIVE) {
+      /** TXN reuse, current scn should be larger than prev scn */
+      ut_a(txn_undo_hdr.image.first > txn_undo_hdr.prev_image.first);
+    }
+    ut_a(real_image == txn_undo_hdr.image);
+  } else if (real_state == TXN_STATE_REUSE) {
+    ut_a(real_image == txn_undo_hdr.prev_image);
+  }
+#endif /* UNIV_DEBUG || LIZARD_DEBUG */
+}
 
 /**
   Try to lookup the real scn of given records.
 
-  @param[in/out]  txn_rec    txn info of the records.
+  @param[in/out]  txn_rec       txn info of the records.
+  @param[out]     txn_lookup    txn lookup info, nullptr if don't care.
+  @param[in]      txn_mtr       Non-nullptr if use external mtr, the caller is
+                                responsible for committing mtr;
+                                If passing nullptr, it will use a temporary mtr.
 
   @return         bool       true if the record should be cleaned out.
 */
-inline bool txn_undo_hdr_lookup(txn_rec_t *txn_rec) {
-  if (!lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
+inline bool txn_undo_hdr_lookup(txn_rec_t *txn_rec,
+                                txn_lookup_t *txn_lookup,
+                                mtr_t *txn_mtr) {
+  /* If txn_mtr != nullptr, it forces to hold txn header s-latch for
+  a while. */
+  if (!txn_lookup && !lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
     /** scn must allocated */
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
     return false;
   } else {
-    return txn_undo_hdr_lookup_low(txn_rec);
+    return txn_undo_hdr_lookup_low(txn_rec, txn_lookup, txn_mtr);
   }
 }
 
@@ -681,9 +720,9 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
 
 #define lizard_trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)           \
   do {                                                                         \
-    txn_undo_ext_t txn_undo_ext;                                               \
-    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_ext);    \
-    ut_a(txn_undo_ext.magic_n == TXN_MAGIC_N && txn_undo_ext.flag == 0);       \
+    txn_undo_hdr_t txn_undo_hdr;                                               \
+    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_hdr);    \
+    ut_a(txn_undo_hdr.magic_n == TXN_MAGIC_N && txn_undo_hdr.ext_flag == 0);   \
   } while (0)
 
 #define lizard_undo_addr_validation(undo_addr, index)                          \

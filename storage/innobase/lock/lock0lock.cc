@@ -237,6 +237,7 @@ bool lock_clust_rec_cons_read_sees(
     btr_pcur_t *pcur,       /*!< in: current pcursor that define position */
     lizard::Vision *vision) /*!< in: consistent read view */
 {
+  bool cleanout = false;
   ut_ad(index->is_clustered());
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
@@ -262,7 +263,7 @@ bool lock_clust_rec_cons_read_sees(
       lizard::row_get_rec_scn_id(rec, index, offsets),
       lizard::row_get_rec_undo_ptr(rec, index, offsets),
   };
-  bool cleanout = lizard::txn_undo_hdr_lookup(&txn_rec);
+  cleanout = lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
 
   if (cleanout) {
     lizard::row_cleanout_collect(trx_id, txn_rec, rec, index, offsets, pcur);

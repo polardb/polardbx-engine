@@ -139,7 +139,7 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx) {
   rec_txn.scn = scn;
 
   if (scn == SCN_NULL) {
-    lizard::txn_undo_hdr_lookup(&rec_txn);
+    lizard::txn_undo_hdr_lookup(&rec_txn, nullptr, nullptr);
     /** It might be stored many times but they should be the same value */
     index->txn.scn.store(rec_txn.scn);
   }

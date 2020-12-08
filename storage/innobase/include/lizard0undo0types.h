@@ -79,6 +79,13 @@ struct trx_undo_t;
 #define TRX_UNDO_UBA_LEN 8
 /*-------------------------------------------------------------*/
 
+/** Flag determine that if it is active in UBA */
+/*-------------------------------------------------------------*/
+/**  */
+#define UNDO_ADDR_T_ACTIVE   0
+#define UNDO_ADDR_T_COMMITED 1
+/*-------------------------------------------------------------*/
+
 /** Undo block address (UBA) */
 struct undo_addr_t {
   /* undo tablespace id */
@@ -203,6 +210,87 @@ struct txn_undo_ptr_t {
   trx_rseg_t *rseg;
   /* transaction undo log segment */
   trx_undo_t *txn_undo;
+};
+
+/**
+  Unlike normal UNDOs (insert undo / update undo), there are 5 kinds of states
+  of TXN. Among them, TXN_STATE_ACTIVE, TXN_STATE_COMMITTED and TXN_STATE_PURGED
+  are specified by TXN_UNDO_LOG_STATE flag (respectively, TXN_UNDO_LOG_ACTIVE,
+  TXN_UNDO_LOG_COMMITED and TXN_UNDO_LOG_PURGED) in TXN header. And also, that's
+  mean these TXN headers are existing.
+
+  By contrast, TXN_STATE_REUSE / TXN_STATE_UNDO_LOST mean that the TXN headers
+  are non-existing.
+
+  * TXN_STATE_ACTIVE: A txn header is initialized as TXN_STATE_ACTIVE when the
+  transaction begins.
+
+  * TXN_STATE_COMMITTED: The state of txn header is set as TXN_STATE_COMMITTED
+  at the moment that the transaction commits.
+
+  * TXN_STATE_PURGED: At the moment that the purge sys start purging it. Notes
+  that: Access to the binding normal UNDOs (insert undo / update undo) is not
+  safe from then on.
+
+  * TXN_STATE_REUSE: At the moment that the TXN headers are reused by another
+  transactions. These TXN headers are reinited as TXN_STATE_ACTIVE, but for
+  those UBAs who also pointed at them, are supposed to be TXN_STATE_REUSE.
+
+  * TXN_STATE_UNDO_LOST: In fact, TXN_STATE_REUSE also lost their TXN headers,
+  but TXN_STATE_UNDO_LOST is a abnormal state for some special cases, for
+  example, page corrupt or TXN file unexpectedly removed.
+
+  So the life cycle of TXN hedaer:
+
+  TXN_STATE_ACTIVE (Trx_A) ==> TXN_STATE_COMMITTED (Trx_A) ==>
+    TXN_STATE_PURGED (Trx_A) ==>
+      * TXN_STATE_REUSE  (from Trx_A's point of view)
+      * TXN_STATE_ACTIVE (from Trx_B's point of view)
+*/
+enum txn_state_t {
+  TXN_STATE_ACTIVE,
+  TXN_STATE_COMMITTED,
+  TXN_STATE_PURGED,
+  TXN_STATE_REUSE,
+  TXN_STATE_UNDO_LOST
+};
+
+struct txn_undo_hdr_t {
+  /** commit image in txn undo header */
+  commit_scn_t image;
+  /** undo log header address */
+  undo_ptr_t undo_ptr;
+  /** current trx who own the txn header */
+  trx_id_t trx_id;
+  /** A magic number, check if the page is corrupt */
+  ulint magic_n;
+  /* Previous scn/utc of the trx who used the same TXN */
+  commit_scn_t prev_image;
+  /** txn undo header state: TXN_UNDO_LOG_ACTIVE, TXN_UNDO_LOG_COMMITED,
+  or TXN_UNDO_LOG_PURGED */
+  ulint state;
+  /** A flag determining how to explain the txn extension */
+  ulint ext_flag;
+};
+
+struct txn_lookup_t {
+  /** The raw data in txn header */
+  txn_undo_hdr_t txn_undo_hdr;
+  /**
+    If the txn is still existing:
+      * real_state: [TXN_STATE_ACTIVE, TXN_STATE_COMMITTED, TXN_STATE_PURGED]
+      * real_image == txn_undo_hdr.image
+
+    If the txn is non-existing:
+      * real_state: [TXN_STATE_REUSE]
+      * real_image == txn_undo_hdr.prev_image
+
+    If the txn is unexpectedly lost:
+      * real_state: [TXN_STATE_UNDO_LOST]
+      * real_image == {SCN_UNDO_LOST, UTC_UNDO_LOST}
+  */
+  commit_scn_t real_image;
+  txn_state_t real_state;
 };
 
 namespace lizard {

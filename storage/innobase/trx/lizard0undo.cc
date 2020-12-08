@@ -539,11 +539,11 @@ void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
   @param[in]      undo page
   @param[in]      undo log header
   @param[in]      mtr
-  @param[out]     txn_undo_ext
+  @param[out]     txn_undo_hdr
 */
 void trx_undo_hdr_read_txn(const page_t *undo_page,
                            const trx_ulogf_t *undo_header, mtr_t *mtr,
-                           txn_undo_ext_t *txn_undo_ext) {
+                           txn_undo_hdr_t *txn_undo_hdr) {
   ulint type;
   type = mtr_read_ulint(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE,
                         MLOG_2BYTES, mtr);
@@ -554,19 +554,31 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   /** If in cleanout safe mode,  */
   ut_a((flag & TRX_UNDO_FLAG_TXN) != 0 || opt_cleanout_safe_mode);
 
-  txn_undo_ext->magic_n =
+  /** read commit image in txn undo header */
+  txn_undo_hdr->image.first = mach_read_from_8(undo_header + TRX_UNDO_SCN);
+
+  txn_undo_hdr->image.second = mach_read_from_8(undo_header + TRX_UNDO_UTC);
+
+  txn_undo_hdr->undo_ptr = mach_read_from_8(undo_header + TRX_UNDO_UBA);
+
+  txn_undo_hdr->trx_id = mach_read_from_8(undo_header + TRX_UNDO_TRX_ID);
+
+  txn_undo_hdr->magic_n =
       mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_MAGIC, MLOG_4BYTES, mtr);
 
-  txn_undo_ext->prev_image.first =
+  txn_undo_hdr->prev_image.first =
       mach_read_from_8(undo_header + TXN_UNDO_PREV_SCN);
 
-  txn_undo_ext->prev_image.second =
+  txn_undo_hdr->prev_image.second =
       mach_read_from_8(undo_header + TXN_UNDO_PREV_UTC);
 
-  txn_undo_ext->flag =
+  txn_undo_hdr->state = mtr_read_ulint(undo_header + TXN_UNDO_LOG_STATE,
+                                       MLOG_2BYTES, mtr);
+
+  txn_undo_hdr->ext_flag =
       mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
 
-  ut_a(txn_undo_ext->magic_n == TXN_MAGIC_N && txn_undo_ext->flag == 0);
+  ut_ad(txn_undo_hdr->magic_n == TXN_MAGIC_N && txn_undo_hdr->ext_flag == 0);
 }
 
 /* Lizard transaction rollback segment operation */
@@ -1582,39 +1594,50 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
   Try to lookup the real scn of given records. Address directly to the
   corresponding txn undo header by UBA.
 
-  @param[in/out]  txn_rec    txn info of the records.
+  @param[in/out]  txn_rec       txn info of the records.
+  @param[out]     txn_lookup    txn lookup result, nullptr if don't care.
 
-  @return         bool       true if the record should be cleaned out.
+  @return         bool          true if the record should be cleaned out.
 */
-static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec) {
+static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec,
+                                      txn_lookup_t *txn_lookup,
+                                      mtr_t *txn_mtr) {
   undo_addr_t undo_addr;
   page_t *undo_page;
-  mtr_t mtr;
   ulint fil_type;
   ulint undo_page_start;
-  ulint last_log_offset;
   trx_upagef_t *page_hdr;
   ulint undo_page_type;
   ulint real_trx_state;
   trx_id_t real_trx_id;
   trx_usegf_t *seg_hdr;
   trx_ulogf_t *undo_hdr;
-  commit_scn_t commit_scn;
-  txn_undo_ext_t txn_undo_ext;
+  txn_undo_hdr_t txn_undo_hdr;
   ulint hdr_flag;
+  bool rec_active;
+  bool have_mtr = false;
+  mtr_t temp_mtr;
+  mtr_t *mtr;
+
+  have_mtr = (txn_mtr != nullptr);
+
+  mtr = have_mtr ? txn_mtr : &temp_mtr;
+
+  ut_ad(mtr);
 
   /** ----------------------------------------------------------*/
   /** Phase 1: Read the undo header page */
   undo_decode_undo_ptr(txn_rec->undo_ptr, &undo_addr);
-  ut_ad(undo_addr.state == 0);
   ut_ad(undo_addr.offset <= UNIV_PAGE_SIZE_MAX);
 
   const page_id_t page_id(undo_addr.space_id, undo_addr.page_no);
 
-  mtr.start();
+  if (!have_mtr) mtr_start(mtr);
+
+  rec_active = (undo_addr.state == UNDO_ADDR_T_ACTIVE);
 
   /** Undo tablespace always univ_page_size */
-  undo_page = trx_undo_page_get_s_latched(page_id, univ_page_size, &mtr);
+  undo_page = trx_undo_page_get_s_latched(page_id, univ_page_size, mtr);
 
   /** transaction tablespace didn't allowed to be truncated */
   ut_a(undo_page);
@@ -1666,15 +1689,15 @@ static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec) {
   /** Phase 7: Check the flag in undo hdr, should be TRX_UNDO_FLAG_TXN,
   unless it's in cleanout_safe_mode. */
   undo_hdr = undo_page + undo_addr.offset;
-  hdr_flag = mtr_read_ulint(undo_hdr + TRX_UNDO_FLAGS, MLOG_1BYTE, &mtr);
+  hdr_flag = mtr_read_ulint(undo_hdr + TRX_UNDO_FLAGS, MLOG_1BYTE, mtr);
   if (!(hdr_flag & TRX_UNDO_FLAG_TXN)) {
     goto undo_lost;
   }
 
   /** ----------------------------------------------------------*/
   /** Phase 8: check the txn extension fields in txn undo header */
-  trx_undo_hdr_read_txn(undo_page, undo_hdr, &mtr, &txn_undo_ext);
-  if (txn_undo_ext.magic_n != TXN_MAGIC_N) {
+  trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_hdr);
+  if (txn_undo_hdr.magic_n != TXN_MAGIC_N) {
     /** The header might be raw */
     lizard_stats.txn_undo_lost_magic_number_wrong.inc();
     goto undo_lost;
@@ -1683,7 +1706,7 @@ static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec) {
   /** NOTES: If the extent flag is used, there might be some records's flag
   that is equal to 0, and there also might be other records's flag that's not
   equal to 0 at the same time. */
-  if (txn_undo_ext.flag != 0) {
+  if (txn_undo_hdr.ext_flag != 0) {
     /** The header might be raw */
     lizard_stats.txn_undo_lost_ext_flag_wrong.inc();
     goto undo_lost;
@@ -1691,7 +1714,7 @@ static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec) {
 
   /** ----------------------------------------------------------*/
   /** Phase 9: check the trx_id in txn undo header */
-  real_trx_id = mach_read_from_8(undo_hdr + TRX_UNDO_TRX_ID);
+  real_trx_id = txn_undo_hdr.trx_id;
   if (real_trx_id != txn_rec->trx_id) {
     lizard_stats.txn_undo_lost_trx_id_mismatch.inc();
     goto undo_reuse;
@@ -1703,33 +1726,57 @@ static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec) {
     but the remain txn hdrs might still be valid. */
 
   /** ----------------------------------------------------------*/
-  /** Phase 10: get scn in txn undo header, and determine the scn state. */
-  last_log_offset = mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG);
-  commit_scn = trx_undo_hdr_read_scn(undo_hdr, &mtr);
-  if (last_log_offset == undo_addr.offset) {
-    if (real_trx_state == TRX_UNDO_ACTIVE ||
-       real_trx_state == TRX_UNDO_PREPARED_80028 ||
-        real_trx_state == TRX_UNDO_PREPARED ||
-        real_trx_state == TRX_UNDO_PREPARED_IN_TC) {
-      /** SCN hasn't been set as commit state */
-      goto still_active;
-    } else {
-      /** When commit, produce a new scn, change memory struct
-      (as TRX_UNDO_TO_PURGE/TRX_UNDO_CACHED) and write redo must
-      complete at the same time */
-      goto already_commit;
-    }
-  } else {
-    /** If a undo segment page is reused, the state of those trx whose
-    undo log header is not the last (up to date) header in the page,
-    must be commit state */
+  /** Phase 10: Here the txn header is the exactly header belongs to the
+  record. Then, we get txn state in txn undo header to determine what's
+  the real state of the transaction. */
+  if (txn_undo_hdr.state == TXN_UNDO_LOG_ACTIVE) {
+    lizard_ut_ad(mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG)
+                   == undo_addr.offset);
+    lizard_ut_ad(real_trx_state == TRX_UNDO_ACTIVE ||
+                 real_trx_state == TRX_UNDO_PREPARED_80028 ||
+                 real_trx_state == TRX_UNDO_PREPARED ||
+                 real_trx_state == TRX_UNDO_PREPARED_IN_TC);
+    goto still_active;
+  } else if (txn_undo_hdr.state == TXN_UNDO_LOG_COMMITED) {
     goto already_commit;
+  } else {
+    lizard_ut_ad(txn_undo_hdr.state == TXN_UNDO_LOG_PURGED);
+    goto undo_purged;
   }
 
 still_active:
-  assert_commit_scn_initial(commit_scn);
-  mtr.commit();
+  assert_commit_scn_initial(txn_undo_hdr.image);
+  txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
+                   txn_state_t::TXN_STATE_ACTIVE);
+  if (!have_mtr) mtr_commit(mtr);
   return false;
+
+already_commit:
+  assert_commit_scn_allocated(txn_undo_hdr.image);
+  txn_rec->scn = txn_undo_hdr.image.first;
+  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
+                   txn_state_t::TXN_STATE_COMMITTED);
+  if (!have_mtr) mtr_commit(mtr);
+  return rec_active;
+
+undo_purged:
+  assert_commit_scn_allocated(txn_undo_hdr.image);
+  txn_rec->scn = txn_undo_hdr.image.first;
+  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
+                   txn_state_t::TXN_STATE_PURGED);
+  if (!have_mtr) mtr_commit(mtr);
+  return rec_active;
+
+undo_reuse:
+  assert_commit_scn_allocated(txn_undo_hdr.prev_image);
+  txn_rec->scn = txn_undo_hdr.prev_image.first;
+  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.prev_image,
+                   txn_state_t::TXN_STATE_REUSE);
+  if (!have_mtr) mtr_commit(mtr);
+  return rec_active;
 
 undo_lost:
   /** Can't never be lost if cleanout_safe_mode isn't taken into
@@ -1737,22 +1784,10 @@ undo_lost:
   ut_a(opt_cleanout_safe_mode);
   txn_rec->scn = SCN_UNDO_LOST;
   lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
-  mtr.commit();
-  return true;
-
-undo_reuse:
-  assert_commit_scn_allocated(txn_undo_ext.prev_image);
-  txn_rec->scn = txn_undo_ext.prev_image.first;
-  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
-  mtr.commit();
-  return true;
-
-already_commit:
-  assert_commit_scn_allocated(commit_scn);
-  txn_rec->scn = commit_scn.first;
-  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
-  mtr.commit();
-  return true;
+  txn_lookup_t_set(txn_lookup, txn_undo_hdr, {SCN_UNDO_LOST, UTC_UNDO_LOST},
+                   txn_state_t::TXN_STATE_UNDO_LOST);
+  if (!have_mtr) mtr_commit(mtr);
+  return rec_active;
 }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
@@ -1766,11 +1801,14 @@ static bool txn_undo_hdr_lookup_strict(txn_rec_t *txn_rec) {
 /**
   Try to lookup the real scn of given records.
 
-  @param[in/out]  txn_rec    txn info of the records.
+  @param[in/out]  txn_rec       txn info of the records.
+  @param[out]     txn_lookup    txn lookup result, nullptr if don't care
 
-  @return         bool       true if the record should be cleaned out.
+  @return         bool          true if the record should be cleaned out.
 */
-bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec) {
+bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
+                             txn_lookup_t *txn_lookup,
+                             mtr_t *txn_mtr) {
   bool ret;
   undo_addr_t undo_addr;
   bool exist;
@@ -1783,14 +1821,27 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec) {
     undo_decode_undo_ptr(txn_rec->undo_ptr, &undo_addr);
     exist = txn_undo_logs->exist({undo_addr.space_id, undo_addr.page_no});
     if (!exist) {
+      txn_undo_hdr_t txn_undo_hdr = {
+        {SCN_UNDO_LOST, UTC_UNDO_LOST},
+        /** txn_undo_hdr.undo_ptr should be from txn undo header, and it
+        must be active state when coming here */
+        txn_rec->undo_ptr,
+        txn_rec->trx_id,
+        TXN_MAGIC_N,
+        {SCN_UNDO_LOST, UTC_UNDO_LOST},
+        TXN_UNDO_LOG_PURGED,
+        0,
+      };
       txn_rec->scn = SCN_UNDO_LOST;
       lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
       lizard_stats.txn_undo_lost_page_miss_when_safe.inc();
-      return true;
+      txn_lookup_t_set(txn_lookup, txn_undo_hdr, {SCN_UNDO_LOST, UTC_UNDO_LOST},
+                       txn_state_t::TXN_STATE_UNDO_LOST);
+      return (undo_addr.state == UNDO_ADDR_T_ACTIVE);
     }
   }
 
-  ret = txn_undo_hdr_lookup_loose(txn_rec);
+  ret = txn_undo_hdr_lookup_loose(txn_rec, txn_lookup, txn_mtr);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
   /*
