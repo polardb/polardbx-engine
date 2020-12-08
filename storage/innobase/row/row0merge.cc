@@ -1926,7 +1926,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
           lizard::row_get_rec_scn_id(rec, clust_index, offsets),
           lizard::row_get_rec_undo_ptr(rec, clust_index, offsets)};
 
-      lizard::txn_undo_hdr_lookup(&txn_rec);
+      lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
 
       if (!trx->vision.modifications_visible(&txn_rec, old_table->name)) {
         rec_t *old_vers;
