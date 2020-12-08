@@ -2790,7 +2790,8 @@ void srv_worker_thread() {
 /** Do the actual purge operation.
  @return length of history list before the last purge batch. */
 static ulint srv_do_purge(
-    ulint *n_total_purged) /*!< in/out: total pages purged */
+    ulint *n_total_purged, /*!< in/out: total pages purged */
+    bool *is_blocked_by_retention)
 {
   ulint n_pages_purged;
 
@@ -2850,7 +2851,8 @@ static ulint srv_do_purge(
         static_cast<ulint>(srv_purge_rseg_truncate_frequency), undo_trunc_freq);
 
     n_pages_purged = trx_purge(n_use_threads, srv_purge_batch_size,
-                               (++count % rseg_truncate_frequency) == 0);
+                               (++count % rseg_truncate_frequency) == 0,
+                               is_blocked_by_retention);
 
     *n_total_purged += n_pages_purged;
 
@@ -2864,8 +2866,9 @@ static ulint srv_do_purge(
 static void srv_purge_coordinator_suspend(
     srv_slot_t *slot,       /*!< in/out: Purge coordinator
                             thread slot */
-    ulint rseg_history_len) /*!< in: history list length
+    ulint rseg_history_len, /*!< in: history list length
                             before last purge */
+    bool is_blocked_by_retention)
 {
   ut_ad(!srv_read_only_mode);
   ut_a(slot->type == SRV_PURGE);
@@ -2956,6 +2959,12 @@ static void srv_purge_coordinator_suspend(
       }
     }
 
+    /* lizard: If blocked by undo retention, wait */
+    if (!stop && is_blocked_by_retention) {
+      stop = true;
+      is_blocked_by_retention = false;
+    }
+
   } while (stop);
 
   srv_sys_mutex_enter();
@@ -2996,6 +3005,7 @@ void srv_purge_coordinator_thread() {
   slot = srv_reserve_slot(SRV_PURGE);
 
   ulint rseg_history_len = trx_sys->rseg_history_len;
+  bool is_blocked_by_retention = false;
 
   do {
     /* If there are no records to purge or the last
@@ -3003,7 +3013,8 @@ void srv_purge_coordinator_thread() {
 
     if (srv_shutdown_state.load() == SRV_SHUTDOWN_NONE &&
         (purge_sys->state == PURGE_STATE_STOP || n_total_purged == 0)) {
-      srv_purge_coordinator_suspend(slot, rseg_history_len);
+      srv_purge_coordinator_suspend(slot, rseg_history_len,
+                                    is_blocked_by_retention);
     }
 
     if (srv_purge_should_exit(n_total_purged)) {
@@ -3013,7 +3024,7 @@ void srv_purge_coordinator_thread() {
 
     n_total_purged = 0;
 
-    rseg_history_len = srv_do_purge(&n_total_purged);
+    rseg_history_len = srv_do_purge(&n_total_purged, &is_blocked_by_retention);
 
   } while (!srv_purge_should_exit(n_total_purged));
 

@@ -48,6 +48,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 struct trx_rseg_t;
 struct trx_undo_t;
+struct SYS_VAR;
 
 /**
   Lizard transaction system undo format:
@@ -611,6 +612,60 @@ inline void txn_undo_set_state_at_finish(trx_ulogf_t *log_hdr, mtr_t *mtr) {
 inline void txn_undo_set_state_at_init(trx_ulogf_t *log_hdr, mtr_t *mtr) {
   txn_undo_set_state(log_hdr, TXN_UNDO_LOG_ACTIVE, mtr);
 }
+
+/*
+  Undo retention controller.
+*/
+class Undo_retention {
+ public:
+  // user configurations
+  static ulint retention_time; // in seconds
+  static ulint space_limit;    // in MiB
+  static ulint space_reserve;  // in MiB
+  // show status
+  static char status[128];
+
+  static int check_limit(THD *thd, SYS_VAR *var, void *save,
+                         struct st_mysql_value *value);
+  static int check_reserve(THD *thd, SYS_VAR *var, void *save,
+                           struct st_mysql_value *value);
+  static void on_update(THD *, SYS_VAR *, void *var_ptr, const void *save);
+
+ protected:
+  volatile bool m_stat_done;
+
+  volatile ulint m_last_top_utc; // to output status
+
+  std::atomic<ulint> m_total_used_size;
+
+  Undo_retention () :
+      m_stat_done(false),
+      m_last_top_utc(0),
+      m_total_used_size(0) {}
+
+  Undo_retention &operator=(const Undo_retention&) = delete;
+  Undo_retention(const Undo_retention&) = delete;
+
+  static Undo_retention inst; // global instance
+
+  static ulint current_utc() { return  ut_time_system_us() / 1000000; }
+
+  static ulint mb_to_pages(ulint size) {
+    return (ulint)(1024.0 * 1024.0 / univ_page_size.physical() * size);
+  }
+
+ public:
+  static Undo_retention *instance() { return &inst; }
+
+  /* Collect latest undo space sizes periodically */
+  void refresh_stat_data();
+
+  /* Decide whether to block purge or not based on the current
+  undo tablespace size and retention configuration.
+
+  @return     true     if blocking purge */
+  bool purge_advise();
+};
 
 }  // namespace lizard
 

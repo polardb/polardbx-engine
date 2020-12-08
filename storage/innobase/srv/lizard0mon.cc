@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0mon.h"
 #include "lizard0sys.h"
+#include "lizard0undo.h"
 
 namespace lizard {
 
@@ -160,6 +161,9 @@ static SHOW_VAR lizard_status_variables[] = {
     {"cleanout_cursor_restore_failed",
      (char *)&lizard_vars.cleanout_cursor_restore_failed, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+
+    {"undo_retention_stats", Undo_retention::status, SHOW_CHAR,
+    SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

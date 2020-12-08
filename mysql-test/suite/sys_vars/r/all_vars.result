@@ -75,9 +75,24 @@ innodb_log_wait_for_flush_spin_hwm
 =======
 innodb_print_data_file_purge_process
 innodb_print_data_file_purge_process
+innodb_scn_h_interval
+innodb_scn_h_interval
+innodb_scn_h_keep_days
+innodb_scn_h_keep_days
+innodb_scn_h_task_enabled
+innodb_scn_h_task_enabled
 innodb_txn_undo_page_reuse_max_percent
 innodb_txn_undo_page_reuse_max_percent
+<<<<<<< HEAD
 >>>>>>> 034f166df63... [Perf] Adjust default txn tablespace
+=======
+innodb_undo_retention
+innodb_undo_retention
+innodb_undo_space_reserved_size
+innodb_undo_space_reserved_size
+innodb_undo_space_supremum_size
+innodb_undo_space_supremum_size
+>>>>>>> 2e1c1651486... [feature] surpport undo retention
 keyring_operations
 keyring_operations
 mandatory_roles

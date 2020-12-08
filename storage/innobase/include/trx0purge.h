@@ -92,7 +92,8 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks to
                                        submit to task queue. */
                 ulint limit,           /*!< in: the maximum number of
                                        records to purge in one batch */
-                bool truncate);        /*!< in: truncate history if true */
+                bool truncate,         /*!< in: truncate history if true */
+                bool *blocked = NULL); /*!< out: is blocked by retention */
 
 /** Stop purge and wait for it to stop, move to PURGE_STATE_STOP. */
 void trx_purge_stop(void);
@@ -1061,6 +1062,8 @@ struct trx_purge_t {
   /** All transactions whose scn <= purged_scn must have been purged.
   Only the purge sys coordinator thread and recover thread can modify it. */
   std::atomic<scn_t> purged_scn;
+
+  utc_t top_undo_utc;
 };
 
 #include "trx0purge.ic"
