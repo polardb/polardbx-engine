@@ -23445,6 +23445,29 @@ static MYSQL_SYSVAR_ULONG(
     "how many days will records keep in scn_history_interval", NULL, NULL, 7, 1,
     30, 0);
 
+static MYSQL_SYSVAR_ULONG(undo_retention,
+                          lizard::Undo_retention::retention_time,
+                          PLUGIN_VAR_OPCMDARG,
+                          "Retention time of undo data in seconds", NULL,
+                          lizard::Undo_retention::on_update,
+                          0, 0, UINT_MAX32, 0);
+
+static MYSQL_SYSVAR_ULONG(undo_space_supremum_size,
+                          lizard::Undo_retention::space_limit,
+                          PLUGIN_VAR_OPCMDARG,
+                          "Upper limitation size of undo file space in MiB",
+                          lizard::Undo_retention::check_limit,
+                          lizard::Undo_retention::on_update,
+                          100 * 1024, 0, UINT_MAX32, 0);
+
+static MYSQL_SYSVAR_ULONG(undo_space_reserved_size,
+                          lizard::Undo_retention::space_reserve,
+                          PLUGIN_VAR_OPCMDARG,
+                          "Reserved (infimum) size of undo file space in MiB",
+                          lizard::Undo_retention::check_reserve,
+                          lizard::Undo_retention::on_update,
+                          0, 0, UINT_MAX32, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23683,6 +23706,9 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(scn_history_interval),
     MYSQL_SYSVAR(scn_history_task_enabled),
     MYSQL_SYSVAR(scn_history_keep_days),
+    MYSQL_SYSVAR(undo_retention),
+    MYSQL_SYSVAR(undo_space_supremum_size),
+    MYSQL_SYSVAR(undo_space_reserved_size),
     nullptr};
 
 mysql_declare_plugin(innobase){

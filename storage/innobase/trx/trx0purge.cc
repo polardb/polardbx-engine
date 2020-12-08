@@ -93,6 +93,9 @@ bool srv_purge_view_update_only_debug;
 undo log which can be skipped by purge */
 static trx_undo_rec_t trx_purge_ignore_rec;
 
+/** lizard: a sentinel undo record to identify the BLOCKED record */
+static trx_undo_rec_t trx_purge_blocked_rec;
+
 /** Builds a purge 'query' graph. The actual purge is performed by executing
 this query graph.
 @param[in]   trx               transaction
@@ -177,6 +180,9 @@ void trx_purge_sys_initialize(uint32_t n_purge_threads,
 
   /* reload purged_scn from heap */
   lizard::trx_purge_set_purged_scn(lizard::trx_purge_reload_purged_scn());
+
+  /* undo retention */
+  purge_sys->top_undo_utc = 0;
 }
 
 void trx_purge_sys_close() {
@@ -2175,6 +2181,10 @@ void Purge_groups_t::distribute_if_needed() {
     return nullptr;
   }
 
+  if (lizard::Undo_retention::instance()->purge_advise()) {
+    return &trx_purge_blocked_rec;
+  }
+
   *roll_ptr = trx_undo_build_roll_ptr(false, purge_sys->rseg->space_id,
                                       purge_sys->page_no, purge_sys->offset);
 
@@ -2189,13 +2199,17 @@ void Purge_groups_t::distribute_if_needed() {
 /** This function runs a purge batch.
 @param[in]      n_purge_threads  number of purge threads
 @param[in]      batch_size       number of pages to purge
+@param[out]     blocked          is blocked by retention
 @return number of undo log pages handled in the batch */
 static ulint trx_purge_attach_undo_recs(const ulint n_purge_threads,
-                                        ulint batch_size) {
+                                        ulint batch_size,
+                                        bool *blocked) {
   ulint n_pages_handled = 0;
 
   ut_a(n_purge_threads > 0);
   ut_a(n_purge_threads <= MAX_PURGE_THREADS);
+
+  if (blocked) *blocked = false; // lizard
 
   purge_sys->limit = purge_sys->iter;
 
@@ -2252,6 +2266,9 @@ static ulint trx_purge_attach_undo_recs(const ulint n_purge_threads,
       continue;
 
     } else if (rec.undo_rec == nullptr) {
+      break;
+    } else if (rec.undo_rec == &trx_purge_blocked_rec) {
+      if (blocked) *blocked = true; // lizard
       break;
     }
 
@@ -2347,7 +2364,8 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
                                        to submit to the work queue */
                 ulint batch_size,      /*!< in: the maximum number of records
                                        to purge in one batch */
-                bool truncate)         /*!< in: truncate history if true */
+                bool truncate,         /*!< in: truncate history if true */
+                bool *blocked)         /*!< out: is blocked by retention */
 {
   que_thr_t *thr = nullptr;
   ulint n_pages_handled;
@@ -2383,7 +2401,8 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
 #endif /* UNIV_DEBUG */
 
   /* Fetch the UNDO recs that need to be purged. */
-  n_pages_handled = trx_purge_attach_undo_recs(n_purge_threads, batch_size);
+  n_pages_handled =
+      trx_purge_attach_undo_recs(n_purge_threads, batch_size, blocked);
 
   /* Do we do an asynchronous purge or not ? */
   if (n_purge_threads > 1) {

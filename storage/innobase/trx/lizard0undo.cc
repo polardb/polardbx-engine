@@ -35,6 +35,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0rseg.h"
 #include "page0types.h"
 
+#include "sql_plugin_var.h"
+#include "sql_error.h"
+
 #include "lizard0scn.h"
 #include "lizard0sys.h"
 #include "lizard0txn.h"
@@ -873,6 +876,7 @@ static dberr_t txn_undo_assign_undo(trx_t *trx, txn_undo_ptr_t *undo_ptr,
   rseg = undo_ptr->rseg;
 
   lizard_stats.txn_undo_log_request.inc();
+
   mtr_start(&mtr);
 
   mutex_enter(&rseg->mutex);
@@ -1954,6 +1958,128 @@ bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
     has = true;
   }
   return has;
+}
+
+/*
+  static members.
+*/
+ulint Undo_retention::retention_time = 0;
+ulint Undo_retention::space_limit = 100 * 1024;
+ulint Undo_retention::space_reserve = 0;
+char Undo_retention::status[128] = {0};
+Undo_retention Undo_retention::inst;
+
+int Undo_retention::check_limit(THD *thd, SYS_VAR *var, void *save,
+                                struct st_mysql_value *value) {
+  if (check_func_long(thd, var, save, value)) return 1;
+
+  if (*(ulong *)save < space_reserve) {
+    push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
+                        "InnoDB: innodb_undo_space_limit should more than"
+                        " innodb_undo_space_reserve.");
+    return 1;
+  }
+
+  return 0;
+}
+
+int Undo_retention::check_reserve(THD *thd, SYS_VAR *var, void *save,
+                                  struct st_mysql_value *value) {
+  if (check_func_long(thd, var, save, value)) return 1;
+
+  if (*(ulong *)save > space_limit) {
+    push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
+                        "InnoDB: innodb_undo_space_reserve should less than"
+                        " innodb_undo_space_limit.");
+    return 1;
+  }
+
+  return 0;
+}
+
+void Undo_retention::on_update(THD *, SYS_VAR *, void *var_ptr,
+                               const void *save) {
+  *static_cast<ulong *>(var_ptr) = *static_cast<const ulong *>(save);
+  srv_purge_wakeup(); /* notify purge thread to try again */
+}
+
+/*
+  Collect latest undo space sizes periodically.
+*/
+void Undo_retention::refresh_stat_data() {
+  ulint used_size = 0;
+  ulint file_size = 0;
+  std::vector<space_id_t> undo_spaces;
+
+  if (retention_time == 0) {
+    m_stat_done = false;
+    return;
+  }
+
+  /* Actual used size */
+  undo::spaces->s_lock();
+  for (auto undo_space : undo::spaces->m_spaces) {
+    ulint size = 0;
+
+    for (auto rseg : *undo_space->rsegs()) {
+      size += rseg->get_curr_size();
+    }
+
+    used_size += size;
+    undo_spaces.push_back(undo_space->id());
+  }
+  undo::spaces->s_unlock();
+
+  /* Physical file size */
+  for (auto id : undo_spaces) {
+    auto size = fil_space_get_size(id);
+    file_size += size;
+  }
+
+  m_total_used_size = used_size;
+
+  m_stat_done = true;
+
+  snprintf(status, sizeof(status),
+           "space:{file:%lu, used:%lu, limit:%lu, reserved:%lu}, "
+           "time:{top:%lu, now:%lu}", file_size, used_size,
+           mb_to_pages(space_limit), mb_to_pages(space_reserve),
+           m_last_top_utc, current_utc());
+}
+
+/*
+  Decide whether to block purge or not based on the current
+  undo tablespace size and retention configuration.
+
+  @return     true     if blocking purge
+*/
+bool Undo_retention::purge_advise() {
+  m_last_top_utc = (ulint)(purge_sys->top_undo_utc / 1000000);
+
+  /* Retention turned off or stating not done, can not advise */
+  if (retention_time == 0 || !m_stat_done) return false;
+
+  /* During recovery, purge_sys::top_undo_utc may be not initialized,
+  because txn_rseg of this transaction has been processed. */
+  if (m_last_top_utc == 0) return false;
+
+  ulint used_size = m_total_used_size.load();
+
+  if (space_limit > 0) {
+    /* Rule_1: reach space limit, do purge */
+    if (used_size > mb_to_pages(space_limit)) return false;
+  }
+
+  /* Rule_2: retention time not satisfied, block purge */
+  if ((m_last_top_utc + retention_time) > current_utc()) return true;
+
+  if (space_reserve > 0) {
+    /* Rule_3: below reserved size yet, can hold more history data */
+    if (used_size < mb_to_pages(space_reserve)) return true;
+  }
+
+  /* Rule_4: time satisfied and exceeded the reserved, just do purge */
+  return false;
 }
 
 }  // namespace lizard

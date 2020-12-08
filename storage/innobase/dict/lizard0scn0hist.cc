@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql_thd_internal_api.h"
 
 #include "lizard0scn0hist.h"
+#include "lizard0undo.h"
 #include "sql/dd/types/object_table.h"
 #include "sql/dd/types/object_table_definition.h"
 
@@ -293,6 +294,8 @@ void srv_scn_history_thread(void) {
   while (!scn_history_start_shutdown) {
     os_event_wait_time(scn_history_event,
                        std::chrono::seconds{srv_scn_history_interval});
+
+    Undo_retention::instance()->refresh_stat_data();
 
     if (srv_scn_history_task_enabled)
       err = roll_forward_scn();

@@ -95,7 +95,8 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks to
                                        submit to task queue. */
                 ulint limit,           /*!< in: the maximum number of
                                        records to purge in one batch */
-                bool truncate);        /*!< in: truncate history if true */
+                bool truncate,         /*!< in: truncate history if true */
+                bool *blocked = NULL); /*!< out: is blocked by retention */
 
 /** Stop purge and wait for it to stop, move to PURGE_STATE_STOP. */
 void trx_purge_stop(void);
