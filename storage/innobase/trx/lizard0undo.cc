@@ -298,8 +298,14 @@ bool txn_undo_log_has_purged(const trx_rseg_t *rseg,
   uba_ptr = trx_undo_hdr_read_uba(log_hdr, &mtr);
   if (uba_ptr == UNDO_PTR_UNDO_HDR) goto no_txn;
 
+  /** The insert/update undo should be released first, otherwise
+  it will be deadlocked */
+  mtr_commit(&mtr);
+
   undo_decode_undo_ptr(uba_ptr, &undo_addr);
   ut_ad(undo_addr.state && fsp_is_txn_tablespace_by_id(undo_addr.space_id));
+
+  mtr_start(&mtr);
 
   /* Get the txn undo log header */
   txn_hdr = trx_undo_page_get_s_latched(

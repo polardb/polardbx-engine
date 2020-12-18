@@ -4842,7 +4842,7 @@ void lock_trx_print_wait_and_mvcc_state(FILE *file, const trx_t *trx) {
 
   const lizard::Vision *vision = trx_get_vision(trx);
 
-  if (vision != nullptr) {
+  if (vision != nullptr && vision->is_active()) {
     vision->print_limits(file);
   }
 
