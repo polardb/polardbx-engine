@@ -1,0 +1,64 @@
+create procedure print_idx_image(in image_idx int)
+begin
+set @time_stamp = (select image_time from foo_history where id = image_idx);
+select image_idx, foo.* from foo as of timestamp @time_stamp;
+end //
+create procedure print_all_images(in n_image int)
+begin
+declare image_idx int default 1;
+while image_idx <= n_image DO
+call print_idx_image(image_idx);
+set image_idx = image_idx + 1;
+end while;
+end //
+create procedure update_foo_history()
+begin
+do sleep(1.5);
+set @image_number = @image_number + 1;
+insert into foo_history (id) values (@image_number);
+do sleep(1.5);
+end //
+create table foo_history (id int, image_time datetime not null default now(),
+primary key(id));
+create table foo (id int, sec int, primary key(id), index sec (sec));
+set @image_number = 0;
+insert into foo values (1, 10);
+call update_foo_history();
+insert into foo values (2, 20);
+call update_foo_history();
+delete from foo where id = 2;
+call update_foo_history();
+update foo set id = 3 where id = 2;
+call update_foo_history();
+call print_all_images(@image_number);
+image_idx	id	sec
+1	1	10
+image_idx	id	sec
+2	1	10
+2	2	20
+image_idx	id	sec
+3	1	10
+image_idx	id	sec
+4	1	10
+# restart
+select @@global.innodb_undo_retention;
+@@global.innodb_undo_retention
+1800
+select @@global.innodb_undo_space_reserved_size;
+@@global.innodb_undo_space_reserved_size
+1024
+call print_all_images(4);
+image_idx	id	sec
+1	1	10
+image_idx	id	sec
+2	1	10
+2	2	20
+image_idx	id	sec
+3	1	10
+image_idx	id	sec
+4	1	10
+drop table foo;
+drop table foo_history;
+drop procedure print_idx_image;
+drop procedure print_all_images;
+drop procedure update_foo_history;

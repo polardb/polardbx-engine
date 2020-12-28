@@ -688,6 +688,9 @@ class Undo_retention {
   bool purge_advise();
 };
 
+/* Init undo_retention */
+void undo_retention_init();
+
 }  // namespace lizard
 
 /** Delcare the functions which were defined in other cc files.*/

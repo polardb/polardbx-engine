@@ -2082,4 +2082,10 @@ bool Undo_retention::purge_advise() {
   return false;
 }
 
+/* Init undo_retention */
+void undo_retention_init() {
+  /* Force to refrese once at starting */
+  Undo_retention::instance()->refresh_stat_data();
+}
+
 }  // namespace lizard
