@@ -75,6 +75,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
+#include "lizard0gp.h"
+
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
 
@@ -244,6 +246,9 @@ static void trx_init(trx_t *trx) {
   trx->txn_desc = TXN_DESC_NULL;
   trx->prev_image = COMMIT_SCN_NULL;
 
+  trx->gp_state = GP_STATE_NULL;
+  trx->gp_wait.reset();
+
   trx->vision.reset();
 
   ++trx->version;
@@ -268,6 +273,8 @@ struct TrxFactory {
     new (&trx->lock.table_pool) lock_pool_t();
 
     new (&trx->lock.table_locks) lock_pool_t();
+
+    new (&trx->gp_wait) gp_wait_t();
 
     trx_init(trx);
 
@@ -307,6 +314,8 @@ struct TrxFactory {
 
     ut_a(trx->dict_operation_lock_mode == 0);
 
+    assert_gp_state_initial(trx);
+
     if (trx->lock.lock_heap != NULL) {
       mem_heap_free(trx->lock.lock_heap);
       trx->lock.lock_heap = NULL;
@@ -344,6 +353,8 @@ struct TrxFactory {
     trx->lock.table_pool.~lock_pool_t();
 
     trx->lock.table_locks.~lock_pool_t();
+
+    trx->gp_wait.~gp_wait_t();
   }
 
   /** Enforce any invariants here, this is called before the transaction
@@ -388,6 +399,8 @@ struct TrxFactory {
 
     assert_trx_scn_initial(trx);
     assert_txn_desc_initial(trx);
+
+    assert_gp_state_initial(trx);
 
     return (true);
   }
@@ -1932,6 +1945,14 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialized) {
     Here the minimum safe scn is prepared for RO node and Purge system.
     so delayed to the later of phase there.
   */
+
+  /**
+     Modify gp_sys structure:
+
+     Wake up global query thread if blocked by myself.
+  */
+  lizard::gp_wait_cancel_all_when_commit(trx);
+
   if (serialized) lizard::lizard_sys_erase_lists(trx);
 }
 

@@ -62,6 +62,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/table.h"
 
 #include "lizard0row.h"
+#include "lizard0scn.h"
 #include "lizard0undo.h"
 
 /* Ignore posix_fadvise() on those platforms where it does not exist */
@@ -1921,10 +1922,12 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 
       ut_ad(trx->vision.is_active());
 
-      txn_rec_t txn_rec{
+      txn_rec_t txn_rec = {
           row_get_rec_trx_id(rec, clust_index, offsets),
           lizard::row_get_rec_scn_id(rec, clust_index, offsets),
-          lizard::row_get_rec_undo_ptr(rec, clust_index, offsets)};
+          lizard::row_get_rec_undo_ptr(rec, clust_index, offsets),
+          lizard::GCN_NULL,
+      };
 
       lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
 

@@ -3534,7 +3534,7 @@ struct TABLE_LIST {
  public:
   /** Snapshot struct.
   Note that the table may be a view or a derived table (sub query). */
-  im::Table_snapshot snapshot_expr{0, 0};
+  im::Table_snapshot snapshot_expr{0, 0, 0};
 };
 
 /*

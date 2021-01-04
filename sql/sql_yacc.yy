@@ -1248,6 +1248,7 @@ void warn_about_deprecated_binary(THD *thd)
 
 /* Tokens for snapshot */
 %token<lexer.keyword>  SCN_SYM                       /* MYSQL */
+%token<lexer.keyword>  GCN_SYM                       /* MYSQL */
 
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
@@ -1305,7 +1306,7 @@ void warn_about_deprecated_binary(THD *thd)
         sp_opt_label
 
 %type <table_snapshot>
-        scn_or_timestamp
+        scn_or_timestamp_or_gcn
 
 %type <table_snapshot_and_alias>
         opt_table_snapshot_alias
@@ -11391,16 +11392,17 @@ opt_table_alias:
         ;
 
 opt_table_snapshot_alias:
-          /* empty */ { $$ = {NULL_CSTR, {0, 0}}; }
-        | ident       { $$ = {to_lex_cstring($1), {0, 0}}; }
-        | AS ident    { $$ = {to_lex_cstring($2), {0, 0}}; }
-        | AS OF_SYM scn_or_timestamp { $$ = {NULL_CSTR, $3}; }
-        | AS OF_SYM scn_or_timestamp ident { $$ = {to_lex_cstring($4), $3}; }
-        | AS OF_SYM scn_or_timestamp AS ident { $$ = {to_lex_cstring($5), $3}; }
+          /* empty */ { $$ = {NULL_CSTR, {0, 0, 0}}; }
+        | ident       { $$ = {to_lex_cstring($1), {0, 0, 0}}; }
+        | AS ident    { $$ = {to_lex_cstring($2), {0, 0, 0}}; }
+        | AS OF_SYM scn_or_timestamp_or_gcn { $$ = {NULL_CSTR, $3}; }
+        | AS OF_SYM scn_or_timestamp_or_gcn ident { $$ = {to_lex_cstring($4), $3}; }
+        | AS OF_SYM scn_or_timestamp_or_gcn AS ident { $$ = {to_lex_cstring($5), $3}; }
 
-scn_or_timestamp:
-          TIMESTAMP_SYM expr { $$ = {$2, 0}; }
-        | SCN_SYM expr { $$ = {0, $2}; }
+scn_or_timestamp_or_gcn:
+          TIMESTAMP_SYM expr { $$ = {$2, 0, 0}; }
+        | SCN_SYM expr { $$ = {0, $2, 0}; }
+        | GCN_SYM expr { $$ = {0, 0,$2}; }
         ;
 
 opt_all:
@@ -14492,6 +14494,7 @@ ident_keywords_unambiguous:
         | SCHEDULE_SYM
         | SCHEMA_NAME_SYM
         | SCN_SYM
+        | GCN_SYM
         | SECONDARY_ENGINE_SYM
         | SECONDARY_LOAD_SYM
         | SECONDARY_SYM

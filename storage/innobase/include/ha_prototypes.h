@@ -209,6 +209,8 @@ ulong thd_lock_wait_timeout(THD *thd); /*!< in: thread handle, or NULL to query
 void thd_set_lock_wait_time(THD *thd,     /*!< in/out: thread handle */
                             ulint value); /*!< in: time waited for the lock */
 
+ulong thd_global_query_wait_timeout(THD *thd);
+
 /** Get status of innodb_tmpdir.
 @param[in]	thd	thread handle, or NULL to query
                         the global innodb_tmpdir.

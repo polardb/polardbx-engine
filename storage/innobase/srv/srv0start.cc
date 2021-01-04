@@ -128,6 +128,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 #include "lizard0scn0hist.h"
 #include "lizard0undo.h"
+#include "lizard0gp.h"
 
 /** fil_space_t::flags for hard-coded tablespaces */
 extern uint32_t predefined_flags;
@@ -2152,6 +2153,7 @@ dberr_t srv_start(bool create_new_db, const std::string &scan_directories) {
   srv_start_state_set(SRV_START_STATE_LOCK_SYS);
 
   lizard::lizard_sys_create();
+  lizard::gp_sys_create();
 
   /* Create i/o-handler threads: */
 
@@ -2806,6 +2808,11 @@ files_checked:
     srv_threads.m_monitor.start();
 
     srv_start_state_set(SRV_START_STATE_MONITOR);
+
+    srv_threads.m_gp_wait_timeout = os_thread_create(
+        srv_gp_wait_timeout_thread_key, lizard::gp_wait_timeout_thread);
+
+    srv_threads.m_gp_wait_timeout.start();
   }
 
   srv_sys_tablespaces_open = true;
@@ -3302,6 +3309,9 @@ static void srv_shutdown_background_threads() {
       {"lock_wait_timeout", srv_threads.m_lock_wait_timeout,
        lock_set_timeout_event, SRV_SHUTDOWN_CLEANUP},
 
+      {"gp_wait_timeout", srv_threads.m_gp_wait_timeout,
+       lock_set_timeout_event, SRV_SHUTDOWN_CLEANUP},
+
       {"error_monitor", srv_threads.m_error_monitor,
        std::bind(os_event_set, srv_error_event), SRV_SHUTDOWN_CLEANUP},
 
@@ -3638,6 +3648,7 @@ void srv_shutdown() {
 
   lizard::txn_undo_hash_close();
   lizard::lizard_sys_close();
+  lizard::gp_sys_destroy();
   dict_close();
   dict_persist_close();
   btr_search_sys_free();

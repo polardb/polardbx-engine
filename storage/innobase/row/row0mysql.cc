@@ -83,6 +83,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_io.h"
 
 #include "lizard0dict.h"
+#include "lizard0gp.h"
 
 static const char *MODIFICATIONS_NOT_ALLOWED_MSG_FORCE_RECOVERY =
     "innodb_force_recovery is on. We do not allow database modifications"
@@ -720,6 +721,17 @@ handle_new_error:
 
       return (true);
 
+    case DB_GP_WAIT:
+      lizard::gp_wait_suspend_thread(trx);
+      if (trx->error_state != DB_SUCCESS) {
+        ut_ad(trx->error_state == DB_LOCK_WAIT_TIMEOUT);
+        goto handle_new_error;
+      }
+
+      *new_err = err;
+      ut_ad(trx->error_state == DB_SUCCESS);
+      return true;
+
     case DB_DEADLOCK:
     case DB_LOCK_TABLE_FULL:
       /* Roll back the whole transaction; this resolution was added
@@ -950,7 +962,7 @@ Max size Secondary index: 16 * 8 bytes + PK = 256 bytes. */
   prebuilt->m_no_prefetch = false;
   prebuilt->m_read_virtual_key = false;
 
-  prebuilt->m_scn_query.reset();
+  prebuilt->m_asof_query.reset();
 
   return prebuilt;
 }

@@ -49,9 +49,9 @@ a
 select * from tt as of scn (select sum(a) from pp);
 a
 select * from tt as of scn (select avg(a) from pp);
-ERROR HY000: Snapshot (as of) 'scn' must be of type integer
+ERROR HY000: Snapshot (as of) 'scn/gcn' must be of type integer
 select * from tt as of scn 0.11;
-ERROR HY000: Snapshot (as of) 'scn' must be of type integer
+ERROR HY000: Snapshot (as of) 'scn/gcn' must be of type integer
 select * from tt as of timestamp (1<2);
 ERROR HY000: Snapshot (as of) 'timestamp' must be of type timestamp
 select * from tt as of scn (a<b);

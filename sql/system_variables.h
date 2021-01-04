@@ -398,6 +398,8 @@ struct System_variables {
     @sa Sys_var_generated_random_password_length
   */
   uint32_t generated_random_password_length;
+
+  ulonglong global_query_wait_timeout;
 };
 
 /**
