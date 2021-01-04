@@ -79,6 +79,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
+#include "lizard0gp.h"
+
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
 
@@ -251,6 +253,9 @@ static void trx_init(trx_t *trx) {
   /** Lizard added */
   trx->txn_desc = TXN_DESC_NULL;
 
+  trx->gp_state = GP_STATE_NULL;
+  trx->gp_wait.reset();
+
   trx->vision.reset();
 
   ++trx->version;
@@ -269,6 +274,8 @@ struct TrxFactory {
     ut::zalloc_withkey() in Pool::Pool() which would not call
     the constructors of the trx_t members. */
     new (trx) trx_t();
+
+    new (&trx->gp_wait) gp_wait_t();
 
     trx_init(trx);
 
@@ -305,6 +312,8 @@ struct TrxFactory {
 
     ut_a(trx->dict_operation_lock_mode == 0);
 
+    assert_gp_state_initial(trx);
+
     if (trx->lock.lock_heap != nullptr) {
       mem_heap_free(trx->lock.lock_heap);
       trx->lock.lock_heap = nullptr;
@@ -340,6 +349,8 @@ struct TrxFactory {
     trx->lock.rec_pool.~lock_pool_t();
 
     trx->lock.table_pool.~lock_pool_t();
+
+    trx->gp_wait.~gp_wait_t();
   }
 
   /** Enforce any invariants here, this is called before the transaction
@@ -381,6 +392,8 @@ struct TrxFactory {
 
     assert_trx_scn_initial(trx);
     assert_txn_desc_initial(trx);
+
+    assert_gp_state_initial(trx);
 
     return (true);
   }
@@ -2001,6 +2014,13 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
   }
 
   lock_trx_release_locks(trx);
+
+  /**
+     Modify gp_sys structure:
+
+     Wake up global query thread if blocked by myself.
+  */
+  lizard::gp_wait_cancel_all_when_commit(trx);
 }
 
 /** Commits a transaction in memory. */
@@ -2956,6 +2976,32 @@ void trx_before_mutex_enter(const trx_t *trx, bool first_of_two) {
     trx_first_latched_trx = trx;
     if (first_of_two) {
       trx_allowed_two_latches = true;
+    }
+  } else if (gp_mutex_own()) {
+    trx_t *trx1 = const_cast<trx_t *>(trx_first_latched_trx);
+    trx_t *trx2 = const_cast<trx_t *>(trx);
+
+    trx_mutex_own(trx1);
+    gp_wait_t *gp_wait = trx_gp_wait(trx1);
+    gp_state_t *state = trx_gp_state(trx1);
+
+    /**
+      Now it is necessary to prove that it is impossible for two trxs to
+      form a blocking relationship at the same time because of gp_wait and
+      transaction locks.
+
+      More precisely, now the blocking relationship between trx1 and trx2 is
+      only possible because of gp_wait.
+    */
+    if (state->waiting == true) {
+      /** Case 1: See @gp_wait_check_and_cancel */
+      ut_a(trx1->lock.wait_lock == nullptr);
+      ut_a(state->blocking_trx == trx2);
+    } else {
+      /** Case 2: See @gp_wait_cancel_all_when_commit */
+      ut_a(trx1->lock.trx_locks.get_length() == 0);
+      ut_a(gp_wait->blocked_trxs.find(const_cast<trx_t *>(trx2)) !=
+           gp_wait->blocked_trxs.end());
     }
   } else {
     ut_a(!first_of_two);

@@ -250,6 +250,8 @@ struct Srv_threads {
   /** Thread for scn history */
   IB_thread m_scn_hist;
 
+  IB_thread m_gp_wait_timeout;
+
 #ifdef UNIV_DEBUG
   /** Used in test scenario to delay threads' cleanup until the pre_dd_shutdown
   is ended and final plugin's shutdown is started (when plugin is DELETED).

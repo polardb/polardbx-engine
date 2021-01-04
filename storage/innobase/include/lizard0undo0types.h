@@ -170,6 +170,13 @@ struct txn_rec_t {
   scn_id_t scn;
   /** undo log header address */
   undo_ptr_t undo_ptr;
+
+  /**
+    Although gcn isn't saved on record, but Global query still use gcn as
+    visible judgement, and it can be retrieved by txn undo header, so defined
+    gcn as txn record attribute.
+  */
+  gcn_t gcn;
 };
 
 /**
@@ -193,14 +200,16 @@ typedef struct txn_rec_t txn_commit_t;
   Lizard transaction attributes in index (used by Vision)
    1) scn
    2) undo_ptr
+   3) gcn
 */
 struct txn_index_t {
-  /** scn number */
-  undo_ptr_t uba;
   /** undo log header address */
+  undo_ptr_t uba;
+  /** scn number */
   std::atomic<scn_id_t> scn;
+  /** gcn number */
+  std::atomic<gcn_t> gcn;
 };
-
 
 /** The struct of transaction undo for UBA */
 struct txn_undo_ptr_t {

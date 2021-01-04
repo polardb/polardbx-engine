@@ -31,7 +31,12 @@ struct LEX;
 
 namespace im {
 
-typedef enum { SNAPSHOT_NONE, AS_OF_TIMESTAMP, AS_OF_SCN } Snapshot_type;
+typedef enum {
+  SNAPSHOT_NONE,
+  AS_OF_TIMESTAMP,
+  AS_OF_SCN,
+  AS_OF_GCN
+} Snapshot_type;
 
 /*
   Snapshot clause info.
@@ -42,6 +47,7 @@ class Snapshot_info_t {
   union {
     uint64_t ts;
     uint64_t scn;
+    uint64_t gcn;
   } value;
 
  public:
@@ -61,6 +67,11 @@ class Snapshot_info_t {
     return value.scn;
   }
 
+  uint64_t get_asof_gcn() const {
+    assert(type == AS_OF_GCN);
+    return value.gcn;
+  }
+
   void reset() { type = SNAPSHOT_NONE; }
 
   void set_timestamp(uint64_t ts) {
@@ -73,6 +84,12 @@ class Snapshot_info_t {
     assert(type == SNAPSHOT_NONE);
     type = AS_OF_SCN;
     value.scn = scn;
+  }
+
+  void set_gcn(uint64_t gcn) {
+    assert(type == SNAPSHOT_NONE);
+    type = AS_OF_GCN;
+    value.gcn = gcn;
   }
 };
 

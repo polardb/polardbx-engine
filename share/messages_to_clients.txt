@@ -9975,7 +9975,7 @@ ER_AS_OF_BAD_TIMESTAMP_TYPE
   eng "Snapshot (as of) 'timestamp' must be of type timestamp"
 
 ER_AS_OF_BAD_SCN_TYPE
-  eng "Snapshot (as of) 'scn' must be of type integer"
+  eng "Snapshot (as of) 'scn/gcn' must be of type integer"
 
 ER_AS_OF_CONFLICT_LOCK_CLAUSE
   eng "Snapshot (as of) expression not allowed for '%s', cause it is with LOCK clause"

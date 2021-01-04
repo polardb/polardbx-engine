@@ -501,6 +501,8 @@ struct System_variables {
   Explain_format_type explain_format;
 
   char *client_endpoint_ip;
+
+  ulonglong global_query_wait_timeout;
 };
 
 /**

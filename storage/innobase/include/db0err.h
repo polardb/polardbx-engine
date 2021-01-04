@@ -211,6 +211,8 @@ enum dberr_t {
   /** Lizard: The snapshot is so old that the required historical data has
   been deleted */
   DB_SNAPSHOT_TOO_OLD,
+  /** Lizard: Blocking global query */
+  DB_GP_WAIT,
 
   /* The following are partial failure codes */
 

@@ -713,6 +713,6 @@ union YYSTYPE {
   struct im::Table_snapshot_and_alias table_snapshot_and_alias;
 };
 
-static_assert(sizeof(YYSTYPE) <= 32, "YYSTYPE is too big");
+static_assert(sizeof(YYSTYPE) <= 40, "YYSTYPE is too big");
 
 #endif  // PARSER_YYSTYPE_INCLUDED

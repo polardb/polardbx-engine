@@ -79,6 +79,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "lizard0cleanout.h"
 #include "lizard0undo.h"
+#include "lizard0gp.h"
 
 /** Maximum number of rows to prefetch; MySQL interface has another parameter */
 constexpr uint32_t SEL_MAX_N_PREFETCH = 16;
@@ -3276,10 +3277,64 @@ non-clustered index. Does the necessary locking.
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
 
-    if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
-        !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets,
-                                       prebuilt->clust_pcur,
-                                       trx_get_vision(trx))) {
+    if (trx_get_vision(trx)->is_asof_gcn()) {
+      dberr_t gp_error = DB_SUCCESS;
+      bool see = lizard::gp_clust_rec_cons_read_sees(
+          trx, clust_rec, clust_index, *offsets, prebuilt->clust_pcur,
+          trx_get_vision(trx), &gp_error);
+      if (gp_error != DB_SUCCESS) {
+        err = gp_error;
+        goto err_exit;
+      } else {
+        if (!see) {
+          if (clust_rec != cached_clust_rec) {
+            /* The following call returns 'offsets' associated with 'old_vers'
+             */
+            err = row_sel_build_prev_vers_for_mysql(
+                &trx->vision, clust_index, prebuilt, clust_rec, offsets,
+                offset_heap, &old_vers, vrow, mtr, lob_undo);
+
+            if (err != DB_SUCCESS) {
+              goto err_exit;
+            }
+            cached_clust_rec = clust_rec;
+            cached_old_vers = old_vers;
+          } else {
+            err = DB_SUCCESS;
+            old_vers = cached_old_vers;
+
+            if (old_vers != nullptr) {
+              DBUG_EXECUTE_IF("innodb_cached_old_vers_offsets", {
+                rec_offs_make_valid(old_vers, clust_index, *offsets);
+                if (!lob::rec_check_lobref_space_id(clust_index, old_vers,
+                                                    *offsets)) {
+                  DBUG_SUICIDE();
+                }
+              });
+
+              /* The offsets need not be same for the latest version of
+              clust_rec and its old version old_vers.  Re-calculate the offsets
+              for old_vers. */
+              *offsets = rec_get_offsets(old_vers, clust_index, *offsets,
+                                         ULINT_UNDEFINED, UT_LOCATION_HERE,
+                                         offset_heap);
+              ut_ad(lob::rec_check_lobref_space_id(clust_index, old_vers,
+                                                   *offsets));
+            }
+          }
+
+          if (old_vers == nullptr) {
+            goto err_exit;
+          }
+
+          clust_rec = old_vers;
+        }
+      }
+
+    } else if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
+               !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets,
+                                              prebuilt->clust_pcur,
+                                              trx_get_vision(trx))) {
       if (clust_rec != cached_clust_rec) {
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
@@ -5305,9 +5360,41 @@ rec_loop:
       high force recovery level set, we try to avoid crashes
       by skipping this lookup */
 
-      if (srv_force_recovery < 5 &&
-          !lock_clust_rec_cons_read_sees(rec, index, offsets, pcur,
-                                         trx_get_vision(trx))) {
+      if (trx_get_vision(trx)->is_asof_gcn()) {
+        dberr_t gp_error = DB_SUCCESS;
+        bool see = lizard::gp_clust_rec_cons_read_sees(
+            trx, rec, index, offsets, pcur, trx_get_vision(trx), &gp_error);
+        if (gp_error != DB_SUCCESS) {
+          err = gp_error;
+          goto lock_wait_or_error;
+        } else {
+          if (!see) {
+            rec_t *old_vers;
+            /* The following call returns 'offsets' associated with 'old_vers'
+             */
+            err = row_sel_build_prev_vers_for_mysql(
+                &trx->vision, clust_index, prebuilt, rec, &offsets, &heap,
+                &old_vers, need_vrow ? &vrow : NULL, &mtr,
+                prebuilt->get_lob_undo());
+
+            if (err != DB_SUCCESS) {
+              goto lock_wait_or_error;
+            }
+
+            if (old_vers == NULL) {
+              /* The row did not exist yet in
+              the read view */
+
+              goto next_rec;
+            }
+
+            rec = old_vers;
+            prev_rec = rec;
+          }
+        }
+      } else if (srv_force_recovery < 5 &&
+                 !lock_clust_rec_cons_read_sees(rec, index, offsets, pcur,
+                                                trx_get_vision(trx))) {
         rec_t *old_vers;
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
@@ -5907,7 +5994,7 @@ lock_table_wait:
 
   /* The following is a patch for MySQL */
 
-  if (thr->is_active) {
+  if (thr->is_active && err != DB_GP_WAIT) {
     que_thr_stop_for_mysql(thr);
   }
 

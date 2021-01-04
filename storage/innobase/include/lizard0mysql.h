@@ -20,39 +20,44 @@ class Vision;
 /**
   as of query context in row_prebuilt_t
 */
-struct scn_query_context_t {
+struct asof_query_context_t {
   /** If it has been set, only set once */
   bool m_is_set;
 
   /** Determine if it is a as of query */
-  bool m_is_scn_query;
+  bool m_is_asof_query;
 
   /** SCN_NULL if it's not a as-of query */
   scn_t m_scn;
 
+  gcn_t m_gcn;
+
   /** TODO: ban constructor <16-10-20, zanye.zjy> */
-  explicit scn_query_context_t()
-    : m_is_set(false),
-      m_is_scn_query(false),
-      m_scn(SCN_NULL)
-  {}
+  explicit asof_query_context_t()
+      : m_is_set(false),
+        m_is_asof_query(false),
+        m_scn(SCN_NULL),
+        m_gcn(GCN_NULL) {}
 
-  ~scn_query_context_t() {
-    reset();
-  }
+  ~asof_query_context_t() { reset(); }
 
-  bool is_set() {
-    return m_is_set;
-  }
+  bool is_set() { return m_is_set; }
 
-  bool is_scn_query() const {
-    return m_is_scn_query;
-  }
+  bool is_asof_query() const { return m_is_asof_query; }
 
-  void set(scn_t scn) {
+  bool is_asof_scn() const { return m_is_asof_query && m_scn != SCN_NULL; }
+  bool is_asof_gcn() const { return m_is_asof_query && m_gcn != GCN_NULL; }
+
+  void set(scn_t scn, gcn_t gcn) {
+    ut_ad(scn == SCN_NULL || gcn == GCN_NULL);
+
     if (scn != SCN_NULL) {
-      m_is_scn_query = true;
+      m_is_asof_query = true;
       m_scn = scn;
+    }
+    if (gcn != GCN_NULL) {
+      m_is_asof_query = true;
+      m_gcn = gcn;
     }
     /** Only set once */
     m_is_set = true;
@@ -60,8 +65,9 @@ struct scn_query_context_t {
 
   void reset() {
     m_is_set = false;
-    m_is_scn_query = false;
+    m_is_asof_query = false;
     m_scn = SCN_NULL;
+    m_gcn = GCN_NULL;
   }
 };
 

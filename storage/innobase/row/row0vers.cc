@@ -1305,12 +1305,11 @@ dberr_t row_vers_build_for_consistent_read(
     /* If purge can't see the record then we can't rely on
     the UNDO log record. */
 
-    bool purge_sees =
-        trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap,
-                                    &prev_version, nullptr, vrow, 0, lob_undo,
-                                    vision->is_as_of());
+    bool purge_sees = trx_undo_prev_version_build(
+        rec, mtr, version, index, *offsets, heap, &prev_version, nullptr, vrow,
+        0, lob_undo, vision->is_asof());
 
-    if (vision->is_as_of()) {
+    if (vision->is_asof()) {
       err = (purge_sees) ? DB_SUCCESS : DB_SNAPSHOT_TOO_OLD;
     } else {
       err = (purge_sees) ? DB_SUCCESS : DB_MISSING_HISTORY;
@@ -1336,10 +1335,19 @@ dberr_t row_vers_build_for_consistent_read(
 
     trx_id = row_get_rec_trx_id(prev_version, index, *offsets);
 
-    txn_rec_t txn_rec{
-        trx_id, lizard::row_get_rec_scn_id(prev_version, index, *offsets),
-        lizard::row_get_rec_undo_ptr(prev_version, index, *offsets)};
-    lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
+    txn_rec_t txn_rec = {
+        trx_id,
+        lizard::row_get_rec_scn_id(prev_version, index, *offsets),
+        lizard::row_get_rec_undo_ptr(prev_version, index, *offsets),
+        lizard::GCN_NULL,
+    };
+
+    if (vision->is_asof_gcn()) {
+      txn_lookup_t txn_lookup;
+      lizard::txn_undo_hdr_lookup(&txn_rec, &txn_lookup, nullptr);
+    } else {
+      lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
+    }
 
     if (vision->modifications_visible(&txn_rec, index->table->name)) {
       /* The view already sees this version: we can copy

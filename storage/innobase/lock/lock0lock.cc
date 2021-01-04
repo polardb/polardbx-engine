@@ -252,6 +252,10 @@ bool lock_clust_rec_cons_read_sees(
     return (true);
   }
 
+  /* All gcn query visible or not,
+     pls use lizard::gp_clust_rec_cons_read_sees */
+  ut_a(!vision->is_asof_gcn());
+
   /* NOTE that we call this function while holding the search
   system latch. */
 
@@ -262,6 +266,7 @@ bool lock_clust_rec_cons_read_sees(
       trx_id,
       lizard::row_get_rec_scn_id(rec, index, offsets),
       lizard::row_get_rec_undo_ptr(rec, index, offsets),
+      lizard::GCN_NULL,
   };
   cleanout = lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
 

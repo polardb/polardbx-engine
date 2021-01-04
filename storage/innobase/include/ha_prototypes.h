@@ -218,6 +218,8 @@ std::chrono::seconds thd_lock_wait_timeout(
     THD *thd); /*!< in: thread handle, or NULL to query
 the global innodb_lock_wait_timeout */
 
+std::chrono::seconds thd_global_query_wait_timeout(THD *thd);
+
 /** Set the time waited for the lock for the current query.
 @param[in,out] thd Thread handle.
 @param[in] value Time waited for the lock. */

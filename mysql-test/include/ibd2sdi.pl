@@ -20,7 +20,7 @@ sub ibd2sdi_replace() {
     $_=~ s/("created": )[0-9]+/$1NNN/g;
 
     # Remove se_private_data: id & trx_id output. retain the root page number value
-    $_=~ s/("se_private_data":) "id=[0-9]+;root=[0-9]+;scn=[0-9]+;space_id=[0-9]+;table_id=[0-9]+;trx_id=[0-9]+;uba=[0-9]+;"/$1 "id=A;root=B;space_id=C;table_id=D;trx_id=E"/g;
+    $_=~ s/("se_private_data":) "gcn=[0-9]+;id=[0-9]+;root=[0-9]+;scn=[0-9]+;space_id=[0-9]+;table_id=[0-9]+;trx_id=[0-9]+;uba=[0-9]+;"/$1 "gcn=F;id=A;root=B;space_id=C;table_id=D;trx_id=E"/g;
 
     # Remove se_private_data: id & trx_id output. retain the root page number value
     $_=~ s/("se_private_data":) "id=[0-9]+;root=[0-9]+;trx_id=[0-9]+;"/$1 "id=X;root=Y;trx_id=Z"/g;

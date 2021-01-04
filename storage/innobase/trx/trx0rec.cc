@@ -2626,7 +2626,13 @@ bool trx_undo_prev_version_build(
 
       rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
-      txn_rec_t undo_txn_rec{trx_id, txn_info.scn, txn_info.undo_ptr};
+      txn_rec_t undo_txn_rec = {
+          trx_id,
+          txn_info.scn,
+          txn_info.undo_ptr,
+          lizard::GCN_NULL,
+      };
+
       lizard::txn_undo_hdr_lookup(&undo_txn_rec, nullptr, nullptr);
 
       missing_extern = purge_sys->vision.modifications_visible(

@@ -868,8 +868,8 @@ struct row_prebuilt_t {
   /** Undo information for LOB mvcc */
   lob::undo_vers_t m_lob_undo;
 
-  /** query only by scn context */
-  lizard::scn_query_context_t m_scn_query;
+  /** query only by scn/gcn context */
+  lizard::asof_query_context_t m_asof_query;
 
   lob::undo_vers_t *get_lob_undo() { return (&m_lob_undo); }
 

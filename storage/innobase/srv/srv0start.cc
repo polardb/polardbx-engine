@@ -132,6 +132,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 #include "lizard0scn0hist.h"
 #include "lizard0undo.h"
+#include "lizard0gp.h"
 
 #include "srv0file.h"
 
@@ -1387,6 +1388,9 @@ static const Thread_to_stop threads_to_stop[]{
     {"lock_wait_timeout", srv_threads.m_lock_wait_timeout,
      lock_set_timeout_event, SRV_SHUTDOWN_CLEANUP},
 
+    {"gp_wait_timeout", srv_threads.m_gp_wait_timeout,
+     lock_set_timeout_event, SRV_SHUTDOWN_CLEANUP},
+
     {"error_monitor", srv_threads.m_error_monitor,
      []() { os_event_set(srv_error_event); }, SRV_SHUTDOWN_CLEANUP},
 
@@ -1807,6 +1811,7 @@ dberr_t srv_start(bool create_new_db) {
   lock_sys_create(srv_lock_table_size);
 
   lizard::lizard_sys_create();
+  lizard::gp_sys_create();
 
   /* Create i/o-handler threads: */
 
@@ -3334,6 +3339,7 @@ void srv_shutdown() {
 
   lizard::txn_undo_hash_close();
   lizard::lizard_sys_close();
+  lizard::gp_sys_destroy();
   dict_close();
   dict_persist_close();
   btr_search_sys_free();

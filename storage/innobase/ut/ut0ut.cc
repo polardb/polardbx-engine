@@ -497,6 +497,8 @@ const char *ut_strerr(dberr_t num) {
 
     case DB_SNAPSHOT_TOO_OLD:
       return ("Snapshot too old");
+    case DB_GP_WAIT:
+      return ("Global query wait");
 
     case DB_ERROR_UNSET:;
       /* Fall through. */

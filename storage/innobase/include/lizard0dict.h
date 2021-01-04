@@ -143,8 +143,8 @@ bool dd_index_fill_txn_desc(dict_index_t *index, const dd::Properties &p);
   @return         true if visible
 */
 bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
-                                    bool is_as_of, scn_t as_of_scn);
-
+                                    bool is_as_of, scn_t as_of_scn,
+                                    gcn_t as_of_gcn);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**

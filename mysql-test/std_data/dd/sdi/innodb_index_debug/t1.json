@@ -309,7 +309,7 @@
                 "ordinal_position": 1,
                 "comment": "",
                 "options": "flags=0;",
-                "se_private_data": "id=A;root=B;space_id=C;table_id=D;trx_id=E",
+                "se_private_data": "gcn=F;id=A;root=B;space_id=C;table_id=D;trx_id=E",
                 "type": 1,
                 "algorithm": 2,
                 "is_algorithm_explicit": false,

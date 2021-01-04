@@ -260,6 +260,8 @@ enum dd_index_keys {
   DD_INDEX_UBA,
   /** SCN */
   DD_INDEX_SCN,
+  /** GCN */
+  DD_INDEX_GCN,
   /** Sentinel */
   DD_INDEX__LAST
 };
@@ -267,7 +269,7 @@ enum dd_index_keys {
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */
 const char *const dd_index_key_strings[DD_INDEX__LAST] = {
-    "id", "space_id", "table_id", "root", "trx_id", "uba", "scn"};
+    "id", "space_id", "table_id", "root", "trx_id", "uba", "scn", "gcn"};
 
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */
