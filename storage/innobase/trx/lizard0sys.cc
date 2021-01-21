@@ -171,6 +171,9 @@ static void lizard_create_sysf(mtr_t *mtr) {
   /** The global commit number initial value */
   mach_write_to_8(lzd_hdr + LIZARD_SYS_GCN, GCN_INITIAL);
 
+  /** The max GCN number whose transaction has been purged */
+  mach_write_to_8(lzd_hdr + LIZARD_SYS_PURGE_GCN, GCN_INITIAL);
+
   ptr = lzd_hdr + LIZARD_SYS_NOT_USED;
 
   memset(ptr, 0, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - ptr);

@@ -151,6 +151,74 @@ const page_size_t TxnUndoRsegsIterator::set_next(bool *keep_top) {
   return (page_size);
 }
 
+template <typename XCN, unsigned long long POS>
+XCN Purged_cnum<XCN, POS>::read() {
+  XCN num;
+  ut_ad(sizeof(XCN) == 8);
+  lizard_sysf_t *lzd_hdr;
+  mtr_t mtr;
+
+  mtr_start(&mtr);
+  lzd_hdr = lizard_sysf_get(&mtr);
+
+  num = mach_read_from_8(lzd_hdr + POS);
+
+  /** If lizard version is low, purge_gcn has not been saved. */
+  if (num == 0 && POS == LIZARD_SYS_PURGE_GCN) {
+    num = GCN_INITIAL;
+  } else {
+    ut_a(num >= GCN_INITIAL);
+  }
+
+  mtr_commit(&mtr);
+
+  return num;
+}
+
+template <typename XCN, unsigned long long POS>
+void Purged_cnum<XCN, POS>::write(XCN num) {
+  ut_ad(m_inited == true);
+  lizard_sysf_t *lzd_hdr;
+  mtr_t mtr;
+
+  mtr_start(&mtr);
+  lzd_hdr = lizard_sysf_get(&mtr);
+  mlog_write_ull(lzd_hdr + POS, num, &mtr);
+  mtr_commit(&mtr);
+}
+
+template <typename XCN, unsigned long long POS>
+void Purged_cnum<XCN, POS>::init() {
+  ut_ad(m_inited == false);
+
+  m_purged_xcn = read();
+  m_inited = true;
+}
+
+template <typename XCN, unsigned long long POS>
+XCN Purged_cnum<XCN, POS>::get() {
+  ut_ad(m_inited == true);
+  return m_purged_xcn.load();
+}
+
+/**
+  Flush the bigger commit number to lizard tbs,
+  Only one single thread to persist.
+*/
+template <typename XCN, unsigned long long POS>
+void Purged_cnum<XCN, POS>::flush(XCN num) {
+  ut_ad(m_inited == true);
+  if (num > m_purged_xcn) {
+    m_purged_xcn.store(num);
+    write(m_purged_xcn);
+  }
+}
+template void Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::init();
+template void Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::flush(gcn_t num);
+template gcn_t Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::read();
+template gcn_t Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::get();
+template void Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::write(gcn_t num);
+
 /**
   Initialize / reload purged_scn from purge_sys->purge_heap
 
