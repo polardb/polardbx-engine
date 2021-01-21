@@ -64,8 +64,17 @@ typedef byte lizard_sysf_t;
 /** The offset of file segment header */
 #define LIZARD_SYS_FSEG_HEADER (LIZARD_SYS_PURGE_SCN + 8)
 
+/**
+   Revision history:
+   ------------------------------------------------------
+   1. Add purged_gcn
+*/
+
+#define LIZARD_SYS_PURGE_GCN (LIZARD_SYS_FSEG_HEADER + FSEG_HEADER_SIZE)
+
 /** The start of not used */
-#define LIZARD_SYS_NOT_USED (LIZARD_SYS_FSEG_HEADER + FSEG_HEADER_SIZE)
+#define LIZARD_SYS_NOT_USED (LIZARD_SYS_PURGE_GCN + 8)
+/**-----------------------------------------------------------------------*/
 
 /** The page number of lizard system header in lizard tablespace */
 #define LIZARD_SYS_PAGE_NO 3

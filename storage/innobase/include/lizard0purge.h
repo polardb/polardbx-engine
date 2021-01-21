@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 #include "lizard0scn.h"
 #include "page0size.h"
+#include "lizard0sys.h"
 
 struct trx_purge_t;
 struct mtr_t;
@@ -104,6 +105,37 @@ struct TxnUndoRsegsIterator {
   static const TxnUndoRsegs NullElement;
 };
 
+/** Persistence of purged commit number. For scn or gcn */
+template <typename XCN, unsigned long long POS>
+class Purged_cnum {
+ public:
+  Purged_cnum() : m_purged_xcn(0), m_inited(false) {}
+  virtual ~Purged_cnum() {}
+
+  void init();
+  /**
+    Attention:
+
+    If flush commit number > m_purged_xcn, it will flush commit number into
+    lizard tablespace, but it didn't sync the redo of modification.  if
+    related undo content has been purged, it mean that those undo's redo
+    has been synced, because the redo of flushing commit number is prior of
+    undo's redo. so it's unnecessary to sync it specially.
+  */
+  void flush(XCN num);
+
+  XCN get();
+
+ private:
+  XCN read();
+
+  void write(XCN num);
+
+ private:
+  std::atomic<XCN> m_purged_xcn;
+  bool m_inited;
+};
+
 /**
   Initialize / reload purged_scn from purge_sys->purge_heap
 
@@ -139,6 +171,8 @@ bool purged_scn_validation();
 #endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
 
 }  // namespace lizard
+
+using Purged_gcn = lizard::Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>;
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 

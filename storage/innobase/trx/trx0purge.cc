@@ -65,6 +65,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0sys.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
+#include "lizard0purge.h"
 
 /** Maximum allowable purge history length.  <=0 means 'infinite'. */
 ulong srv_max_purge_lag = 0;
@@ -125,6 +126,7 @@ void trx_purge_sys_create(ulint n_purge_threads,
   new (&purge_sys->done) purge_iter_t;
 #endif /* UNIV_DEBUG */
 
+
   /* Take ownership of purge_heap, we are responsible for freeing it. */
   purge_sys->purge_heap = purge_heap;
 
@@ -166,6 +168,9 @@ void trx_purge_sys_create(ulint n_purge_threads,
 
   /* undo retention */
   purge_sys->top_undo_utc = 0;
+
+  new (&purge_sys->purged_gcn) Purged_gcn;
+  purge_sys->purged_gcn.init();
 }
 
 /************************************************************************
@@ -199,6 +204,8 @@ void trx_purge_sys_close(void) {
   purge_sys->heap = nullptr;
 
   UT_DELETE(purge_sys->rseg_iter);
+
+  purge_sys->purged_gcn.~Purged_gcn();
 
   ut_free(purge_sys);
 
@@ -1736,6 +1743,7 @@ static bool trx_purge_choose_next_log(void) {
     /** If purging txn undo log hdr correctly */
     if (!purged_result.second) {
       lizard::trx_purge_set_purged_scn(purged_result.first.scn);
+      purge_sys->purged_gcn.flush(purged_result.first.gcn);
       purge_sys->top_undo_utc = purged_result.first.utc;
     }
     trx_purge_read_undo_rec(purge_sys, page_size);
