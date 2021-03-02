@@ -221,7 +221,12 @@ class Sql_cmd_recycle_proc_restore : public Sql_cmd_recycle_proc_base {
  public:
   explicit Sql_cmd_recycle_proc_restore(THD *thd, mem_root_deque<Item *> *list,
                                         const Proc *proc)
-      : Sql_cmd_recycle_proc_base(thd, list, proc) {}
+      : Sql_cmd_recycle_proc_base(thd, list, proc) {
+    /**
+      Require not any privileges
+    */
+    set_priv_type(Priv_type::PRIV_SUPER_ACL);
+  }
 
   /**
     Implementation of Proc execution body.

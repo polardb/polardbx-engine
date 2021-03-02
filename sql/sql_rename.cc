@@ -148,11 +148,12 @@ static void find_and_set_explicit_duration_for_schema_mdl(
   @param thd          Thread context.
   @param table_list   Every two entries in the table_list form
                       a pair of original name and the new name.
+  @param is_restore   Is restore table, default false.
 
   @return True - on failure, false - on success.
 */
 
-bool mysql_rename_tables(THD *thd, Table_ref *table_list) {
+bool mysql_rename_tables(THD *thd, Table_ref *table_list, bool is_restore) {
   Table_ref *ren_table = nullptr;
   DBUG_TRACE;
 
@@ -498,7 +499,7 @@ bool mysql_rename_tables(THD *thd, Table_ref *table_list) {
     }
   }
 
-  if (!error) my_ok(thd);
+  if (!error && !is_restore) my_ok(thd);
 
   return error;
 }

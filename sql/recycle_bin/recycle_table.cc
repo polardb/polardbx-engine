@@ -390,7 +390,7 @@ static ulonglong string_to_number(const char *str) {
   @retval         true        failure
 */
 static bool prepare_recycle_table(THD *thd, Table_ref *table_list,
-                                  char **new_table) {
+                                  const char **new_table) {
   char buff[128];
   DBUG_ENTER("prepare_recycle_table");
   /**
@@ -599,7 +599,7 @@ recycle_base_table(THD *thd, std::set<handlerton *> *post_ddl_htons,
   const char *old_db = nullptr;
   const char *old_table = nullptr;
   const char *new_db = nullptr;
-  char *new_table = nullptr;
+  const char *new_table = nullptr;
   DBUG_ENTER("recycle_base_table");
 
   old_db = table_list->db;
@@ -607,8 +607,7 @@ recycle_base_table(THD *thd, std::set<handlerton *> *post_ddl_htons,
   new_db = RECYCLE_BIN_SCHEMA.str;
 
   /* Check state */
-  if (check_state(thd, table_list))
-    DBUG_RETURN(Recycle_result::CONTINUE);
+  if (check_state(thd, table_list)) DBUG_RETURN(Recycle_result::CONTINUE);
 
   /* Prepare the target table and lock it */
   if (prepare_recycle_table(thd, table_list, &new_table))

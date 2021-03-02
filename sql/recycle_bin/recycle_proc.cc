@@ -246,10 +246,12 @@ void Sql_cmd_recycle_proc_restore::send_result(THD *thd, bool error) {
 
 /* Override the default check_access. */
 bool Sql_cmd_recycle_proc_restore::check_access(THD *thd) {
+  DBUG_ENTER("Sql_cmd_recycle_proc_restore::check_access");
+  if (Sql_cmd_proc::check_access(thd)) DBUG_RETURN(true);
+
   char buff[128];
   String str(buff, sizeof(buff), system_charset_info);
   String *res;
-  DBUG_ENTER("Sql_cmd_recycle_proc_restore::check_access");
   Recycle_process_context recycle_context(thd);
   /* Special privilege flag for ddl on recycle schema */
   thd->recycle_state->set_priv_relax();
@@ -385,6 +387,7 @@ bool Sql_cmd_recycle_proc_restore::check_access(THD *thd) {
 bool Sql_cmd_recycle_proc_restore::pc_execute(THD *thd) {
   DBUG_ENTER("Sql_cmd_recycle_proc_restore::pc_execute");
 
+  Disable_binlog_guard binlog_guard(thd);
   /*
     For statements which need this, prevent InnoDB from automatically
     committing InnoDB transaction each time data-dictionary tables are
@@ -397,7 +400,15 @@ bool Sql_cmd_recycle_proc_restore::pc_execute(THD *thd) {
   Table_ref *const first_table = select_lex->get_table_list();
 
   /* Reuse the rename process */
-  DBUG_RETURN(mysql_rename_tables(thd, first_table));
+  bool ret = mysql_rename_tables(thd, first_table, true);
+  if (!ret) {
+    std::stringstream ss;
+    ss << " only restore table " << first_table->table_name
+       << " on current node, other replicas should be handled separately.";
+    my_error(ER_PREPARE_RECYCLE_TABLE_ERROR, MYF(0), ss.str().c_str());
+  }
+
+  DBUG_RETURN(true);
 }
 
 } /* namespace recycle_bin */

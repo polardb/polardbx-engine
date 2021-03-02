@@ -26,6 +26,7 @@
 class THD;
 class Table_ref;
 
-bool mysql_rename_tables(THD *thd, Table_ref *table_list);
+bool mysql_rename_tables(THD *thd, Table_ref *table_list,
+                         bool is_restore = false);
 
 #endif /* SQL_RENAME_INCLUDED */
