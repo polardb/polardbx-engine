@@ -67,7 +67,6 @@ connection m_super_1;
 set global recycle_scheduler=off;
 
 
-connection m_normal_1;
 use db_recycle;
 create table t1(id int);
 drop table t1;
@@ -75,10 +74,13 @@ drop table t1;
 call dbms_recycle.show_tables();
 
 show grants;
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
 call dbms_recycle.restore_table("__innodb_165", "", "");
 show tables;
 
+set sql_log_bin = 0;
 drop table t1;
+set sql_log_bin = 1;
 
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
@@ -89,17 +91,23 @@ call dbms_recycle.restore_table("__innodb_165", "");
 --error ER_SP_WRONG_NO_OF_ARGS
 call dbms_recycle.restore_table("__innodb_165", "", "", "");
 
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
 call dbms_recycle.restore_table("__innodb_165");
+set sql_log_bin = 0;
 drop table t1;
+set sql_log_bin = 1;
 
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
 
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
 call dbms_recycle.restore_table("__innodb_165", "db_recycle", "t2");
 show tables;
 
 set recycle_bin = 0;
+set sql_log_bin = 0;
 drop table t2;
+set sql_log_bin = 1;
 set recycle_bin = 1;
 
 
@@ -117,7 +125,6 @@ connection m_super_1;
 set global recycle_scheduler=off;
 
 
-connection m_normal_1;
 use db_recycle;
 create table t1(id int);
 drop table t1;
@@ -134,13 +141,15 @@ create table t1(id int);
 --error ER_TABLE_EXISTS_ERROR
 call dbms_recycle.restore_table("__innodb_165", "", "");
 
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
 
 show tables;
-call dbms_recycle.purge_table("__innodb_165");
 set recycle_bin = 0;
 drop table t1;
+set sql_log_bin = 0;
+drop table db_recycle_2.t1;
+set sql_log_bin = 1;
 set recycle_bin = 1;
 
 
@@ -151,15 +160,13 @@ set global recycle_scheduler=on;
 
 --echo ------------------------------------------------------
 --echo 3. Privileges
---echo    -- Restore table need ALTER_ACL | DROP_ACL of origin table and
---echo       INSERT_ACL | CREATE_ACL of dest table;
+--echo    -- Restore table need SUPER_ACL
 --echo ------------------------------------------------------
 
 connection m_super_1;
 set global recycle_scheduler=off;
 
 
-connection m_normal_1;
 use db_recycle;
 create table t1(id int);
 create table t2(id int);
@@ -168,45 +175,45 @@ drop table t2;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
 
---error ER_TABLEACCESS_DENIED_ERROR
+
+connection m_normal_1;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
 
 
 connection m_normal_2;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
 
 
 connection m_normal_3;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
 
 
 connection m_normal_4;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
 call dbms_recycle.restore_table("__innodb_166", "db_recycle_2", "t1");
 
 
 connection m_normal_5;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
 
 
-connection m_normal_4;
+connection m_super_1;
 use db_recycle_2;
 show tables;
 set recycle_bin = 0;
-drop table t1;
-drop table t2;
 set recycle_bin = 1;
-
-connection m_super_1;
 set global recycle_scheduler=on;
 
 
@@ -252,7 +259,6 @@ set global recycle_scheduler=on;
 connection m_super_1;
 set global recycle_scheduler=off;
 
-connection m_normal_1;
 use db_recycle;
 
 CREATE TABLE p1 (
@@ -274,13 +280,16 @@ drop table c1;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
 
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
 call dbms_recycle.restore_table("__innodb_148", "", "");
 show create table c1;
 
 
 set recycle_bin = 0;
 drop table p1;
+set sql_log_bin = 0;
 drop table c1;
+set sql_log_bin = 1;
 set recycle_bin = 1;
 
 

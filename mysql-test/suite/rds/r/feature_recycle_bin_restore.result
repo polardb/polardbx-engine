@@ -46,16 +46,17 @@ call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
 show grants;
-Grants for normal_1@%
-GRANT CREATE TABLESPACE ON *.* TO `normal_1`@`%`
-GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO `normal_1`@`%`
-GRANT ALL PRIVILEGES ON `__recycle_bin__`.* TO `normal_1`@`%`
-GRANT ALL PRIVILEGES ON `db_recycle`.* TO `normal_1`@`%`
+Grants for super_1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, SUPER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO `super_1`@`%`
+GRANT APPLICATION_PASSWORD_ADMIN,AUDIT_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,GROUP_REPLICATION_ADMIN,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_USER_ID,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,XA_RECOVER_ADMIN ON *.* TO `super_1`@`%`
 call dbms_recycle.restore_table("__innodb_165", "", "");
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
 show tables;
 Tables_in_db_recycle
 t1
+set sql_log_bin = 0;
 drop table t1;
+set sql_log_bin = 1;
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
@@ -64,16 +65,22 @@ ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_recycle.restore_ta
 call dbms_recycle.restore_table("__innodb_165", "", "", "");
 ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_recycle.restore_table; expected 3, got 4
 call dbms_recycle.restore_table("__innodb_165");
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
+set sql_log_bin = 0;
 drop table t1;
+set sql_log_bin = 1;
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
 call dbms_recycle.restore_table("__innodb_165", "db_recycle", "t2");
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
 show tables;
 Tables_in_db_recycle
 t2
 set recycle_bin = 0;
+set sql_log_bin = 0;
 drop table t2;
+set sql_log_bin = 1;
 set recycle_bin = 1;
 set global recycle_scheduler=on;
 ------------------------------------------------------
@@ -95,19 +102,20 @@ create table t1(id int);
 call dbms_recycle.restore_table("__innodb_165", "", "");
 ERROR 42S01: Table 't1' already exists
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
-ERROR 42000: INSERT, CREATE command denied to user 'normal_1'@'localhost' for table 't1'
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
 show tables;
 Tables_in_db_recycle
 t1
-call dbms_recycle.purge_table("__innodb_165");
 set recycle_bin = 0;
 drop table t1;
+set sql_log_bin = 0;
+drop table db_recycle_2.t1;
+set sql_log_bin = 1;
 set recycle_bin = 1;
 set global recycle_scheduler=on;
 ------------------------------------------------------
 3. Privileges
--- Restore table need ALTER_ACL | DROP_ACL of origin table and
-INSERT_ACL | CREATE_ACL of dest table;
+-- Restore table need SUPER_ACL
 ------------------------------------------------------
 set global recycle_scheduler=off;
 use db_recycle;
@@ -120,36 +128,35 @@ SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
 __recycle_bin__	__innodb_166	db_recycle	t2	#	#
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
-ERROR 42000: INSERT, CREATE command denied to user 'normal_1'@'localhost' for table 't1'
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
 __recycle_bin__	__innodb_166	db_recycle	t2	#	#
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
-ERROR 42000: DROP, ALTER command denied to user 'normal_2'@'localhost' for table '__innodb_165'
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
 __recycle_bin__	__innodb_166	db_recycle	t2	#	#
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
-ERROR 42000: INSERT, CREATE command denied to user 'normal_3'@'localhost' for table 't2'
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
 __recycle_bin__	__innodb_166	db_recycle	t2	#	#
 call dbms_recycle.restore_table("__innodb_166", "db_recycle_2", "t1");
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
 call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
 use db_recycle_2;
 show tables;
 Tables_in_db_recycle_2
-t1
-t2
 set recycle_bin = 0;
-drop table t1;
-drop table t2;
 set recycle_bin = 1;
 set global recycle_scheduler=on;
 ------------------------------------------------------
@@ -162,6 +169,7 @@ drop table t1;
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
 show grants;
 Grants for normal_1@%
 GRANT CREATE TABLESPACE ON *.* TO `normal_1`@`%`
@@ -199,7 +207,9 @@ drop table c1;
 call dbms_recycle.show_tables();
 SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
 __recycle_bin__	__innodb_148	db_recycle	c1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
 call dbms_recycle.restore_table("__innodb_148", "", "");
+ERROR HY000: Recycle table failed :  only restore table __innodb_148 on current node, other replicas should be handled separately.
 show create table c1;
 Table	Create Table
 c1	CREATE TABLE `c1` (
@@ -209,7 +219,9 @@ c1	CREATE TABLE `c1` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 set recycle_bin = 0;
 drop table p1;
+set sql_log_bin = 0;
 drop table c1;
+set sql_log_bin = 1;
 set recycle_bin = 1;
 set global recycle_scheduler=on;
 ------------------------------------------------------
