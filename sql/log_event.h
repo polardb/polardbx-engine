@@ -429,6 +429,9 @@ struct PRINT_EVENT_INFO {
   bool thread_id_printed;
   uint8_t default_table_encryption;
 
+  bool commit_gcn_assigned;
+  uint64_t commit_gcn;
+
   PRINT_EVENT_INFO();
 
   ~PRINT_EVENT_INFO() {

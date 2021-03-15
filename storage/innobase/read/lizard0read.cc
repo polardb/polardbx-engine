@@ -41,6 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0sys.h"
 #include "lizard0undo.h"
 
+#include "sql_class.h"
+
 #ifdef UNIV_PFS_MUTEX
 /* Vision container list mutex key */
 mysql_pfs_key_t lizard_vision_list_mutex_key;
@@ -193,6 +195,12 @@ void VisionContainer::vision_open(trx_t *trx) {
   vision->m_list_idx = idx;
 
   vision_collect_trx_group_ids(trx, vision);
+
+  gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
+  if (gcn < GCN_MAX) {
+    vision->m_is_asof_gcn = true;
+    vision->m_asof_gcn = gcn;
+  }
 }
 
 /**

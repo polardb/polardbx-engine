@@ -82,6 +82,7 @@ convert_flashback_query_timestamp_to_scn(row_prebuilt_t *prebuilt,
 */
 dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   TABLE *table;
+  trx_t *trx;
   dict_index_t *clust_index;
   scn_t fbq_scn = SCN_NULL;
   gcn_t fbq_gcn = GCN_NULL;
@@ -89,16 +90,20 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   ut_ad(prebuilt);
 
   table = prebuilt->m_mysql_table;
+  trx = prebuilt->trx;
 
   /* forbid as-of query */
   if (!srv_scn_valid_enabled) return DB_SUCCESS;
 
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_set()) return DB_SUCCESS;
+  
+  if (trx && trx->vision.is_asof_gcn()) {
+    prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
+    return DB_SUCCESS;
+  }
 
-    /* If testing as-of query, we turn all non-as-of search to as-of search in
-    row_search_mvcc */
-#if defined UNIV_DEBUG && defined TURN_MVCC_SEARCH_TO_AS_OF
+#if defined TURN_MVCC_SEARCH_TO_AS_OF
 
   if (!table || !table->snapshot.valid()) {
     ut_ad(prebuilt->trx->vision.is_active());

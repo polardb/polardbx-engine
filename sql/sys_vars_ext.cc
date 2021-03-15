@@ -266,4 +266,14 @@ static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
                                        DEFAULT(FALSE), NO_MUTEX_GUARD,
                                        NOT_IN_BINLOG, ON_CHECK(0),
                                        ON_UPDATE(0));
+
+static Sys_var_ulong Sys_innodb_snapshot_seq(
+    "innodb_snapshot_seq", "Innodb snapshot sequence.",
+    HINT_UPDATEABLE SESSION_VAR(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, __UINT64_MAX__), DEFAULT(__UINT64_MAX__), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_innodb_commit_seq(
+    "innodb_commit_seq", "Innodb commit sequence",
+    HINT_UPDATEABLE SESSION_VAR(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, __UINT64_MAX__), DEFAULT(__UINT64_MAX__), BLOCK_SIZE(1));
 /* RDS DEFINED */

@@ -88,6 +88,9 @@ struct lizard_var_t {
   ulint cleanout_cursor_collect;
 
   ulint cleanout_cursor_restore_failed;
+
+  ulint commit_gcn;
+  ulint purged_gcn;
 };
 
 struct lizard_stats_t {

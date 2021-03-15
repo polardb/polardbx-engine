@@ -68,7 +68,7 @@ void SCN::init() {
                              LIZARD_SCN_NUMBER_MAGIN);
 
   m_gcn = mach_read_from_8(lzd_hdr + LIZARD_SYS_GCN);
-  ut_a(m_gcn == GCN_INITIAL);
+  ut_a(m_gcn >= GCN_INITIAL && m_gcn < GCN_NULL);
 
   lizard_sys->min_safe_scn = m_scn.load();
 
@@ -133,6 +133,7 @@ std::pair<commit_scn_t, bool> SCN::new_commit_scn(gcn_t gcn) {
   commit_scn_t cmmt = COMMIT_SCN_NULL;
 
   if (gcn != GCN_NULL) {
+    // TODO:
     /** external gcn must be larger than local */
     if (gcn < m_gcn)
       return std::make_pair(cmmt, true);
@@ -169,6 +170,8 @@ scn_t SCN::acquire_scn(bool mutex_hold) {
 
 scn_t SCN::get_scn() { return m_scn.load(); }
 
+gcn_t SCN::get_gcn() { return m_gcn.load(); }
+
 /**
   Check the commit scn state
 
@@ -185,7 +188,7 @@ enum scn_state_t commit_scn_state(const commit_scn_t &cmmt) {
   if (cmmt.scn > 0 && cmmt.scn < SCN_MAX && cmmt.utc > 0 &&
       cmmt.utc < UTC_MAX && cmmt.gcn > 0 && cmmt.gcn < GCN_MAX) {
     /** TODO: Replace by real GCN in future */
-    ut_ad(cmmt.gcn <= GCN_INITIAL);
+    ut_ad(cmmt.gcn <= lizard_sys->scn.get_gcn());
     return SCN_STATE_ALLOCATED;
   }
   return SCN_STATE_INVALID;

@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql_plugin_var.h"
 #include "sql_error.h"
+#include "sql_class.h"
 
 #include "lizard0scn.h"
 #include "lizard0sys.h"
@@ -1057,9 +1058,12 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
   if (cmmt_ptr == nullptr) {
     lizard_sys_scn_mutex_enter();
 
+    /** Fetch commit gcn */
+    gcn_t gcn = thd_get_commit_gcn(trx->mysql_thd);
+
     /** Generate a new scn */
     std::pair<commit_scn_t, bool> cmmt_result =
-        lizard_sys->scn.new_commit_scn(GCN_NULL);
+        lizard_sys->scn.new_commit_scn(gcn);
 
     cmmt = cmmt_result.first;
     ut_a(!cmmt_result.second);

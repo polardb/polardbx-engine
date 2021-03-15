@@ -135,6 +135,8 @@ extern lizard_sys_t *lizard_sys;
 /** Get current SCN number */
 extern scn_t lizard_sys_get_scn();
 
+extern gcn_t lizard_sys_get_gcn();
+
 /**
   Modify the min active trx id
 

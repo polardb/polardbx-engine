@@ -447,6 +447,8 @@ void cleanup_trans_state(THD *thd) {
   thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
   transaction_cache_delete(thd->get_transaction());
+
+  thd->reset_gcn();
 }
 
 /**

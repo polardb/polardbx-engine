@@ -411,6 +411,10 @@ struct System_variables {
 
   /* Used to switch ON/OFF auto savepoint */
   bool auto_savepoint;
+
+
+  ulonglong innodb_snapshot_gcn;
+  ulonglong innodb_commit_gcn;
 };
 
 /**

@@ -1643,6 +1643,8 @@ void srv_export_innodb_status(void) {
         (ulint)(max_trx_scn - low_limit_scn + 1);
   }
 
+  export_vars.commit_gcn = lizard::lizard_sys_get_gcn();
+
 #endif /* UNIV_DEBUG */
 
   mutex_exit(&srv_innodb_monitor_mutex);

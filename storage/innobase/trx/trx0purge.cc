@@ -212,6 +212,13 @@ void trx_purge_sys_close(void) {
   purge_sys = NULL;
 }
 
+/** Get current purged GCN number */
+gcn_t lizard_sys_get_purged_gcn() {
+  ut_a(purge_sys);
+
+  return purge_sys->purged_gcn.get();
+}
+
 /*================ UNDO LOG HISTORY LIST =============================*/
 
 /** Adds the update undo log as the first log in the history list. Removes the

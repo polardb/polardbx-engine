@@ -165,6 +165,8 @@ class SCN {
 
   scn_t get_scn();
 
+  gcn_t get_gcn();
+
   /** lock mutex */
   void lock() {
     ut_ad(m_inited);

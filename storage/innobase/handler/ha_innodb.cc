@@ -1099,6 +1099,8 @@ static SHOW_VAR innodb_status_variables[] = {
     {"ahi_drop_lookups", (char *)&export_vars.innodb_ahi_drop_lookups,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 #endif /* UNIV_DEBUG */
+    {"max_sequence",
+     (char *)&export_vars.commit_gcn, SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 /** Handling the shared INNOBASE_SHARE structure that is needed to provide table
@@ -5518,6 +5520,8 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
 
   innobase_srv_conc_force_exit_innodb(trx);
 
+  if (will_commit) thd_reset_gcn(thd);
+
   return 0;
 }
 
@@ -5583,6 +5587,8 @@ static int innobase_rollback(handlerton *hton, /*!< in: InnoDB handlerton */
   } else {
     error = trx_rollback_last_sql_stat_for_mysql(trx);
   }
+
+  if (error == DB_SUCCESS && rollback_trx) thd_reset_gcn(thd);
 
   return convert_error_code_to_mysql(error, 0, trx->mysql_thd);
 }
@@ -19611,6 +19617,8 @@ static xa_status_code innobase_commit_by_xid(
     ut_ad(!trx->will_lock); /* trx cache requirement */
     trx_free_for_background(trx);
 
+    thd_reset_gcn(trx->mysql_thd);
+
     return (XA_OK);
   } else {
     return (XAER_NOTA);
@@ -19637,6 +19645,8 @@ static xa_status_code innobase_rollback_by_xid(
     trx_deregister_from_2pc(trx);
     ut_ad(!trx->will_lock);
     trx_free_for_background(trx);
+
+    if (ret == 0) thd_reset_gcn(trx->mysql_thd);
 
     return (ret != 0 ? XAER_RMERR : XA_OK);
   } else {

@@ -1796,6 +1796,13 @@ err:
 int binlog_cache_data::finalize(THD *thd, Log_event *end_event) {
   DBUG_TRACE;
   if (!is_binlog_empty()) {
+    if (end_event && thd && thd->get_commit_gcn() != __UINT64_MAX__) {
+      // TODO:
+      Query_log_event qinfo(thd, "/* Record commit GCN */", 23, false, false,
+                            true, 0);
+      write_event(&qinfo);
+    }
+
     DBUG_ASSERT(!flags.finalized);
     if (int error = flush_pending_event(thd)) return error;
     if (int error = write_event(end_event)) return error;

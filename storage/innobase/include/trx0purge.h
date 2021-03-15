@@ -72,6 +72,8 @@ void trx_purge_sys_create(ulint n_purge_threads,
 /** Frees the global purge system control structure. */
 void trx_purge_sys_close(void);
 
+gcn_t lizard_sys_get_purged_gcn();
+
 /************************************************************************
 Adds the update undo log as the first log in the history list. Removes the
 update undo log segment from the rseg slot if it is too big for reuse. */

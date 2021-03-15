@@ -3566,6 +3566,12 @@ bool Query_log_event::write(Basic_ostream *ostream) {
     *start++ = thd->variables.default_table_encryption;
   }
 
+  if (thd && thd->get_commit_gcn() != __UINT64_MAX__) {
+    *start++ = Q_LIZARD_COMMIT_GCN;
+    int8store(start, thd->get_commit_gcn());
+    start += 8;
+  }
+
   /*
     NOTE: When adding new status vars, please don't forget to update
     the MAX_SIZE_LOG_EVENT_STATUS in log_event.h
@@ -4290,6 +4296,15 @@ void Query_log_event::print_query_header(
                 "/*!80016 SET @@session.default_table_encryption=%d*/%s\n",
                 default_table_encryption, print_event_info->delimiter);
   }
+
+  if (likely(commit_gcn_assigned) &&
+      (unlikely(print_event_info->commit_gcn != commit_gcn ||
+                !print_event_info->commit_gcn_assigned))) {
+    my_b_printf(file, "SET @@session.innodb_commit_seq=%llu%s\n",
+                (ulonglong)commit_gcn, print_event_info->delimiter);
+    print_event_info->commit_gcn = commit_gcn;
+    print_event_info->commit_gcn_assigned = 1;
+  }
 }
 
 void Query_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
@@ -4658,6 +4673,11 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
           goto end;
         }
         thd->variables.default_table_encryption = default_table_encryption;
+      }
+
+      if (commit_gcn_assigned) {
+        DBUG_ASSERT(commit_gcn != __UINT64_MAX__);
+        thd->variables.innodb_commit_gcn = commit_gcn;
       }
 
       thd->table_map_for_update = (table_map)table_map_for_update;
@@ -13503,6 +13523,8 @@ PRINT_EVENT_INFO::PRINT_EVENT_INFO()
       thread_id(0),
       thread_id_printed(false),
       default_table_encryption(0xff),
+      commit_gcn_assigned(0),
+      commit_gcn(__UINT64_MAX__),
       base64_output_mode(BASE64_OUTPUT_UNSPEC),
       printed_fd_event(false),
       have_unflushed_events(false),
