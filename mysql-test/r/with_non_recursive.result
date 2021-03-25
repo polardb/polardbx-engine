@@ -507,8 +507,8 @@ View	Create View	character_set_client	collation_connection
 v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS with `qn` (`foo`,`bar`) as (select 1 AS `1`,1 AS `1`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from `qn`	utf8mb4	utf8mb4_0900_ai_ci
 show fields from v1;
 Field	Type	Null	Key	Default	Extra
-foo	int(1)	NO		0	
-bar	int(1)	NO		0	
+foo	int(2)	NO		0	
+bar	int(2)	NO		0	
 select * from v1;
 foo	bar
 1	1
@@ -1620,8 +1620,8 @@ View	Create View	character_set_client	collation_connection
 v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS with `qn` (`foo`,`bar`) as (select 1 AS `1`,1 AS `1`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from `qn`	utf8mb4	utf8mb4_0900_ai_ci
 show fields from v1;
 Field	Type	Null	Key	Default	Extra
-foo	int(1)	NO		0	
-bar	int(1)	NO		0	
+foo	int(2)	NO		0	
+bar	int(2)	NO		0	
 select * from v1;
 foo	bar
 1	1

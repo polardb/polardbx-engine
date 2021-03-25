@@ -9,7 +9,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   fractional_digits: 0
-  length: 1
+  length: 2
   flags: 16
   original_type: MYSQL_TYPE_LONGLONG
 }

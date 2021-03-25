@@ -122,12 +122,12 @@ CREATE TABLE t1 LIKE information_schema.processlist;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `ID` bigint(21) unsigned NOT NULL DEFAULT '0',
+  `ID` bigint(22) unsigned NOT NULL DEFAULT '0',
   `USER` varchar(32) NOT NULL DEFAULT '',
   `HOST` varchar(261) NOT NULL DEFAULT '',
   `DB` varchar(64) DEFAULT NULL,
   `COMMAND` varchar(16) NOT NULL DEFAULT '',
-  `TIME` int(7) NOT NULL DEFAULT '0',
+  `TIME` int(8) NOT NULL DEFAULT '0',
   `STATE` varchar(64) DEFAULT NULL,
   `INFO` longtext
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8

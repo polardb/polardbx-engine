@@ -3069,14 +3069,6 @@ void Item_func_between::print(const THD *thd, String *str,
   str->append(')');
 }
 
-uint Item_func_ifnull::decimal_precision() const {
-  int arg0_int_part = args[0]->decimal_int_part();
-  int arg1_int_part = args[1]->decimal_int_part();
-  int max_int_part = max(arg0_int_part, arg1_int_part);
-  int precision = max_int_part + decimals;
-  return min<uint>(precision, DECIMAL_MAX_PRECISION);
-}
-
 Field *Item_func_ifnull::tmp_table_field(TABLE *table) {
   return tmp_table_field_from_field_type(table, 0);
 }
@@ -3212,13 +3204,6 @@ bool Item_func_if::resolve_type(THD *) {
     aggregate_num_type(cached_result_type, args + 1, 2);
   }
   return false;
-}
-
-uint Item_func_if::decimal_precision() const {
-  int arg1_prec = args[1]->decimal_int_part();
-  int arg2_prec = args[2]->decimal_int_part();
-  int precision = max(arg1_prec, arg2_prec) + decimals;
-  return min<uint>(precision, DECIMAL_MAX_PRECISION);
 }
 
 double Item_func_if::val_real() {
@@ -3690,16 +3675,6 @@ bool Item_func_case::resolve_type(THD *thd) {
           item_cmp_type(left_result_type, args[i]->result_type());
   }
   return false;
-}
-
-uint Item_func_case::decimal_precision() const {
-  int max_int_part = 0;
-  for (uint i = 0; i < ncases; i += 2)
-    set_if_bigger(max_int_part, args[i + 1]->decimal_int_part());
-
-  if (else_expr_num != -1)
-    set_if_bigger(max_int_part, args[else_expr_num]->decimal_int_part());
-  return min<uint>(max_int_part + decimals, DECIMAL_MAX_PRECISION);
 }
 
 /**

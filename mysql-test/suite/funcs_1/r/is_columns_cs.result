@@ -118,8 +118,8 @@ def	db_datadict	t2	f1	1	NULL	NO	char	10	40	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_a
 def	db_datadict	t2	f2	2	NULL	YES	text	65535	65535	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	text			select,insert,update,references			NULL
 def	db_datadict	t2	f3	3	NULL	YES	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
 def	db_datadict	t2	f4	4	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(11)	PRI		select,insert,update,references			NULL
-def	db_datadict	v1	f1	1	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(1)			select,insert,update,references			NULL
-def	db_datadict	v1	f2	2	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(1)			select,insert,update,references			NULL
+def	db_datadict	v1	f1	1	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(2)			select,insert,update,references			NULL
+def	db_datadict	v1	f2	2	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(2)			select,insert,update,references			NULL
 SHOW COLUMNS FROM db_datadict.t1;
 Field	Type	Null	Key	Default	Extra
 f1	char(10)	YES	MUL	NULL	
@@ -134,8 +134,8 @@ f3	date	YES		NULL
 f4	int(11)	NO	PRI	NULL	
 SHOW COLUMNS FROM db_datadict.v1;
 Field	Type	Null	Key	Default	Extra
-f1	int(1)	NO		0	
-f2	int(1)	NO		0	
+f1	int(2)	NO		0	
+f2	int(2)	NO		0	
 # Establish connection testuser1 (user=testuser1)
 SELECT * FROM information_schema.columns
 WHERE table_schema = 'db_datadict'
@@ -143,7 +143,7 @@ ORDER BY table_schema, table_name, ordinal_position;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION	SRS_ID
 def	db_datadict	t1	f1	1	NULL	YES	char	10	40	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	char(10)	MUL		select			NULL
 def	db_datadict	t1	f2	2	NULL	YES	text	65535	65535	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	text			select			NULL
-def	db_datadict	v1	f2	2	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(1)			select			NULL
+def	db_datadict	v1	f2	2	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(2)			select			NULL
 SHOW COLUMNS FROM db_datadict.t1;
 Field	Type	Null	Key	Default	Extra
 f1	char(10)	YES	MUL	NULL	
@@ -152,7 +152,7 @@ SHOW COLUMNS FROM db_datadict.t2;
 ERROR 42000: SELECT command denied to user 'testuser1'@'localhost' for table 't2'
 SHOW COLUMNS FROM db_datadict.v1;
 Field	Type	Null	Key	Default	Extra
-f2	int(1)	NO		0	
+f2	int(2)	NO		0	
 # Establish connection testuser2 (user=testuser2)
 SELECT * FROM information_schema.columns
 WHERE table_schema = 'db_datadict'
@@ -415,7 +415,7 @@ NUMERIC_SCALE	0
 DATETIME_PRECISION	NULL
 CHARACTER_SET_NAME	NULL
 COLLATION_NAME	NULL
-COLUMN_TYPE	int(1)
+COLUMN_TYPE	int(2)
 COLUMN_KEY	
 EXTRA	
 PRIVILEGES	select,insert,update,references

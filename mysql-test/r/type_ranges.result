@@ -300,7 +300,7 @@ create table t2 (primary key (auto)) select auto+1 as auto,1 as t1, 'a' as t2, r
 show full columns from t2;
 Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
 auto	int(11) unsigned	NULL	NO	PRI	NULL		select,insert,update,references	
-t1	int(1)	NULL	NO		0		select,insert,update,references	
+t1	int(2)	NULL	NO		0		select,insert,update,references	
 t2	varchar(1)	utf8mb4_0900_ai_ci	NO				select,insert,update,references	
 t3	varchar(256)	utf8mb4_0900_ai_ci	NO				select,insert,update,references	
 t4	blob	NULL	NO		NULL		select,insert,update,references	
@@ -328,7 +328,7 @@ show full columns from t3;
 Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
 c1	int(11)	NULL	YES		NULL		select,insert,update,references	
 c2	int(11)	NULL	YES		NULL		select,insert,update,references	
-const	int(1)	NULL	NO		0		select,insert,update,references	
+const	int(2)	NULL	NO		0		select,insert,update,references	
 drop table t1,t2,t3;
 create table t1 ( myfield INT NOT NULL, UNIQUE INDEX (myfield), unique (myfield), index(myfield));
 Warnings:

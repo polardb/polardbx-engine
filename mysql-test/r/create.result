@@ -746,7 +746,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `b` int(11) NOT NULL,
   `a` varchar(12) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
-  `c` int(1) NOT NULL DEFAULT '0',
+  `c` int(2) NOT NULL DEFAULT '0',
   PRIMARY KEY (`a`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
@@ -762,7 +762,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `b` int(11) DEFAULT NULL,
   `a` varchar(12) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
-  `c` int(1) NOT NULL DEFAULT '0',
+  `c` int(2) NOT NULL DEFAULT '0',
   PRIMARY KEY (`a`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
@@ -1146,12 +1146,12 @@ create table t1 like information_schema.processlist;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `ID` bigint(21) unsigned NOT NULL DEFAULT '0',
+  `ID` bigint(22) unsigned NOT NULL DEFAULT '0',
   `USER` varchar(32) NOT NULL DEFAULT '',
   `HOST` varchar(261) NOT NULL DEFAULT '',
   `DB` varchar(64) DEFAULT NULL,
   `COMMAND` varchar(16) NOT NULL DEFAULT '',
-  `TIME` int(7) NOT NULL DEFAULT '0',
+  `TIME` int(8) NOT NULL DEFAULT '0',
   `STATE` varchar(64) DEFAULT NULL,
   `INFO` longtext
 ) ENGINE=TMP_TABLE_ENGINE DEFAULT CHARSET=utf8
@@ -1160,12 +1160,12 @@ create temporary table t1 like information_schema.processlist;
 show create table t1;
 Table	Create Table
 t1	CREATE TEMPORARY TABLE `t1` (
-  `ID` bigint(21) unsigned NOT NULL DEFAULT '0',
+  `ID` bigint(22) unsigned NOT NULL DEFAULT '0',
   `USER` varchar(32) NOT NULL DEFAULT '',
   `HOST` varchar(261) NOT NULL DEFAULT '',
   `DB` varchar(64) DEFAULT NULL,
   `COMMAND` varchar(16) NOT NULL DEFAULT '',
-  `TIME` int(7) NOT NULL DEFAULT '0',
+  `TIME` int(8) NOT NULL DEFAULT '0',
   `STATE` varchar(64) DEFAULT NULL,
   `INFO` longtext
 ) ENGINE=TMP_TABLE_ENGINE DEFAULT CHARSET=utf8

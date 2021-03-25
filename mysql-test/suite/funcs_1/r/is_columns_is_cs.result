@@ -327,7 +327,7 @@ def	information_schema	SCHEMA_PRIVILEGES	IS_GRANTABLE	5		NO	varchar	1	3	NULL	NUL
 def	information_schema	STATISTICS	TABLE_CATALOG	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	STATISTICS	TABLE_SCHEMA	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	STATISTICS	TABLE_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
-def	information_schema	STATISTICS	NON_UNIQUE	4	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(1)			select			NULL
+def	information_schema	STATISTICS	NON_UNIQUE	4	0	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(2)			select			NULL
 def	information_schema	STATISTICS	INDEX_SCHEMA	5	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	STATISTICS	INDEX_NAME	6	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	STATISTICS	SEQ_IN_INDEX	7	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(10) unsigned			select			NULL
@@ -364,7 +364,7 @@ def	information_schema	TABLES	TABLE_SCHEMA	2	NULL	NO	varchar	64	192	NULL	NULL	NU
 def	information_schema	TABLES	TABLE_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	TABLES	TABLE_TYPE	4	NULL	NO	enum	11	33	NULL	NULL	NULL	utf8	utf8_bin	enum('BASE TABLE','VIEW','SYSTEM VIEW')			select			NULL
 def	information_schema	TABLES	ENGINE	5	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
-def	information_schema	TABLES	VERSION	6	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int(2)			select			NULL
+def	information_schema	TABLES	VERSION	6	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int(3)			select			NULL
 def	information_schema	TABLES	ROW_FORMAT	7	NULL	YES	enum	10	30	NULL	NULL	NULL	utf8	utf8_bin	enum('Fixed','Dynamic','Compressed','Redundant','Compact','Paged')			select			NULL
 def	information_schema	TABLES	TABLE_ROWS	8	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(21) unsigned			select			NULL
 def	information_schema	TABLES	AVG_ROW_LENGTH	9	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(21) unsigned			select			NULL
@@ -860,7 +860,7 @@ NULL	information_schema	SCHEMATA	SQL_PATH	binary	0	0	NULL	NULL	binary(0)
 3.0000	information_schema	STATISTICS	TABLE_CATALOG	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	information_schema	STATISTICS	TABLE_SCHEMA	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	information_schema	STATISTICS	TABLE_NAME	varchar	64	192	utf8	utf8_bin	varchar(64)
-NULL	information_schema	STATISTICS	NON_UNIQUE	int	NULL	NULL	NULL	NULL	int(1)
+NULL	information_schema	STATISTICS	NON_UNIQUE	int	NULL	NULL	NULL	NULL	int(2)
 3.0000	information_schema	STATISTICS	INDEX_SCHEMA	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	information_schema	STATISTICS	INDEX_NAME	varchar	64	192	utf8	utf8_bin	varchar(64)
 NULL	information_schema	STATISTICS	SEQ_IN_INDEX	int	NULL	NULL	NULL	NULL	int(10) unsigned
@@ -897,7 +897,7 @@ NULL	information_schema	ST_UNITS_OF_MEASURE	CONVERSION_FACTOR	double	NULL	NULL	N
 3.0000	information_schema	TABLES	TABLE_NAME	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	information_schema	TABLES	TABLE_TYPE	enum	11	33	utf8	utf8_bin	enum('BASE TABLE','VIEW','SYSTEM VIEW')
 3.0000	information_schema	TABLES	ENGINE	varchar	64	192	utf8	utf8_general_ci	varchar(64)
-NULL	information_schema	TABLES	VERSION	int	NULL	NULL	NULL	NULL	int(2)
+NULL	information_schema	TABLES	VERSION	int	NULL	NULL	NULL	NULL	int(3)
 3.0000	information_schema	TABLES	ROW_FORMAT	enum	10	30	utf8	utf8_bin	enum('Fixed','Dynamic','Compressed','Redundant','Compact','Paged')
 NULL	information_schema	TABLES	TABLE_ROWS	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 NULL	information_schema	TABLES	AVG_ROW_LENGTH	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned

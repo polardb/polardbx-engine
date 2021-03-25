@@ -569,9 +569,6 @@ The following options may be given as the first argument:
  --generated-random-password-length=# 
  Determines the length randomly generated passwords in
  CREATE USER-,SET PASSWORD- or ALTER USER statements
- --global-query-wait-timeout=# 
- Timeout in seconds to wait for XA prepared  before
- returning an error.
  --group-concat-max-len=# 
  The maximum length of the result of function 
  GROUP_CONCAT()
@@ -1969,7 +1966,6 @@ gcn-write-event TRUE
 gdb FALSE
 general-log FALSE
 generated-random-password-length 20
-global-query-wait-timeout 31536000
 group-concat-max-len 1024
 group-replication-consistency EVENTUAL
 gtid-executed-compression-period 1000

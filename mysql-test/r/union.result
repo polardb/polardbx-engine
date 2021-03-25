@@ -698,7 +698,7 @@ aa
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` varchar(2) NOT NULL DEFAULT ''
+  `a` varchar(3) NOT NULL DEFAULT ''
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 SELECT 12 as a UNION select 12.2 as a;
@@ -2920,9 +2920,9 @@ My_exp_1	bigint(2)	NO		0
 My_exp_1_1	bigint(2)	NO		0	
 DESCRIBE v2;
 Field	Type	Null	Key	Default	Extra
-1	int(1)	NO		0	
-My_exp_1	int(1)	NO		0	
-My_exp_1_1	int(1)	NO		0	
+1	int(2)	NO		0	
+My_exp_1	int(2)	NO		0	
+My_exp_1_1	int(2)	NO		0	
 -1	int(2)	NO		0	
 My_exp_-1	int(2)	NO		0	
 My_exp_1_-1	int(2)	NO		0	
@@ -3316,4 +3316,50 @@ Handler_read_next	0
 Handler_read_prev	0
 Handler_read_rnd	0
 Handler_read_rnd_next	3
+DROP TABLE t1;
+# Bug#31348202: Wrong result is returned with UNION syntax
+SELECT 19 AS c UNION ALL SELECT 2.9;
+c
+19.0
+2.9
+CREATE TABLE t1 AS SELECT 19 AS c UNION ALL SELECT 2.9;
+DESCRIBE t1;
+Field	Type	Null	Key	Default	Extra
+c	decimal(3,1)	NO		0.0	
+DROP TABLE t1;
+SELECT 19 AS c UNION ALL SELECT 'XX';
+c
+19
+XX
+CREATE TABLE t1 AS SELECT 19 AS c UNION ALL SELECT 'XX';
+DESCRIBE t1;
+Field	Type	Null	Key	Default	Extra
+c	varchar(3)	NO			
+DROP TABLE t1;
+SELECT -19 AS c UNION ALL SELECT 'XX';
+c
+-19
+XX
+CREATE TABLE t1 AS SELECT -19 AS c UNION ALL SELECT 'XX';
+DESCRIBE t1;
+Field	Type	Null	Key	Default	Extra
+c	varchar(3)	NO			
+DROP TABLE t1;
+SELECT 19.0 AS c UNION ALL SELECT 'XX';
+c
+19.0
+XX
+CREATE TABLE t1 AS SELECT 19.0 AS c UNION ALL SELECT 'XX';
+DESCRIBE t1;
+Field	Type	Null	Key	Default	Extra
+c	varchar(5)	NO			
+DROP TABLE t1;
+SELECT -19.0 AS c UNION ALL SELECT 'XX';
+c
+-19.0
+XX
+CREATE TABLE t1 AS SELECT -19.0 AS c UNION ALL SELECT 'XX';
+DESCRIBE t1;
+Field	Type	Null	Key	Default	Extra
+c	varchar(5)	NO			
 DROP TABLE t1;

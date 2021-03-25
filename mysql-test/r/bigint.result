@@ -181,7 +181,7 @@ create table t1 select 1 as 'a';
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(1) NOT NULL DEFAULT '0'
+  `a` int(2) NOT NULL DEFAULT '0'
 ) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
 create table t1 select 9223372036854775809 as 'a';
@@ -407,7 +407,7 @@ def					-((9223372036854775808))	8	20	20	N	32897	0	63
 -9223372036854775808
 select -(-(9223372036854775808));
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					-(-(9223372036854775808))	246	21	19	N	32897	0	63
+def					-(-(9223372036854775808))	246	20	19	N	32897	0	63
 -(-(9223372036854775808))
 9223372036854775808
 select --9223372036854775808, ---9223372036854775808, ----9223372036854775808;

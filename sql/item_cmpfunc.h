@@ -1310,7 +1310,6 @@ class Item_func_ifnull final : public Item_func_coalesce {
   bool val_json(Json_wrapper *result) override;
   const char *func_name() const override { return "ifnull"; }
   Field *tmp_table_field(TABLE *table) override;
-  uint decimal_precision() const override;
 };
 
 /**
@@ -1351,7 +1350,6 @@ class Item_func_if final : public Item_func {
   bool resolve_type(THD *) override;
   void fix_after_pullout(SELECT_LEX *parent_select,
                          SELECT_LEX *removed_select) override;
-  uint decimal_precision() const override;
   const char *func_name() const override { return "if"; }
   enum Functype functype() const override { return IF_FUNC; }
 };
@@ -1371,11 +1369,11 @@ class Item_func_nullif final : public Item_bool_func2 {
   bool val_json(Json_wrapper *wr) override;
   Item_result result_type() const override { return cached_result_type; }
   bool resolve_type(THD *thd) override;
-  uint decimal_precision() const override {
-    return args[0]->decimal_precision();
-  }
   const char *func_name() const override { return "nullif"; }
   enum Functype functype() const override { return NULLIF_FUNC; }
+
+  // No, we should NOT inherit from Item_bool_func2
+  uint decimal_precision() const override { return Item::decimal_precision(); }
 
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override {
@@ -1854,7 +1852,6 @@ class Item_func_case final : public Item_func {
   bool get_time(MYSQL_TIME *ltime) override;
   bool fix_fields(THD *thd, Item **ref) override;
   bool resolve_type(THD *) override;
-  uint decimal_precision() const override;
   enum Item_result result_type() const override { return cached_result_type; }
   const char *func_name() const override { return "case"; }
   void print(const THD *thd, String *str,

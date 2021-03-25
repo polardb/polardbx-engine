@@ -1129,9 +1129,6 @@ class Item_func_neg final : public Item_func_num1 {
   enum Functype functype() const override { return NEG_FUNC; }
   bool resolve_type(THD *thd) override;
   void fix_num_length_and_dec() override;
-  uint decimal_precision() const override {
-    return args[0]->decimal_precision();
-  }
   bool check_partition_func_processor(uchar *) override { return false; }
   bool check_function_as_value_generator(uchar *) override { return false; }
 };
@@ -2151,7 +2148,6 @@ class Item_func_get_lock final : public Item_int_func {
     func_arg->banned_function_name = func_name();
     return true;
   }
-  uint decimal_precision() const override { return max_length; }
 };
 
 class Item_func_release_lock final : public Item_int_func {
@@ -2178,7 +2174,6 @@ class Item_func_release_lock final : public Item_int_func {
     func_arg->banned_function_name = func_name();
     return true;
   }
-  uint decimal_precision() const override { return max_length; }
 };
 
 class Item_func_release_all_locks final : public Item_int_func {
