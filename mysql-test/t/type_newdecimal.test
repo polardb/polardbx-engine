@@ -1871,3 +1871,12 @@ CREATE TABLE t1(a DECIMAL(10,0));
 INSERT INTO t1 VALUES(0);
 SELECT * FROM t1 AS alias1 NATURAL JOIN t1 AS alias2;
 DROP TABLE t1;
+
+--echo # Bug#32802251: decimal_bin_size_inline: assertion `scale >= 0 &&
+--echo #               precision > 0 && scale <= precision' failed
+
+CREATE TABLE t(a DECIMAL(14,14) DEFAULT NULL);
+INSERT INTO t VALUES
+ (-0.99999999999999), (-0.99999999999999), (0.15610000000000);
+SELECT WEIGHT_STRING(TRUNCATE((SELECT a FROM t), -17410));
+DROP TABLE t;
