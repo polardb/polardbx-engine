@@ -252,7 +252,13 @@ SET(INNOBASE_SOURCES
   ut/ut0test.cc
   ut/ut0ut.cc
   ut/ut0vec.cc
-  ut/ut0wqueue.cc)
+  ut/ut0wqueue.cc
+  trx/lizard0scn.cc
+  trx/lizard0sys.cc
+  dict/lizard0dict.cc
+  fil/lizard0fil.cc
+  fsp/lizard0fsp.cc
+  )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
 IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11)

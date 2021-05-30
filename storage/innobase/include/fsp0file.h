@@ -54,6 +54,10 @@ extern int meb_key_fetch(const char *key_id, char **key_type,
                          const char *user_id, void **key, size_t *key_length);
 #endif /* UNIV_HOTBACKUP */
 
+namespace lizard {
+class LizardTablespace;
+}  // namespace lizard
+
 /** Types of raw partitions in innodb_data_file_path */
 enum device_t {
 
@@ -71,6 +75,8 @@ enum device_t {
 class Datafile {
   friend class Tablespace;
   friend class SysTablespace;
+
+  friend class lizard::LizardTablespace;
 
  public:
   Datafile()

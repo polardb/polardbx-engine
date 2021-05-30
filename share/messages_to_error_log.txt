@@ -12087,6 +12087,17 @@ ER_IB_INDEX_BUILDER_DONE
 #
 
 ################################################################################
+#
+# Start of RDS error messages intended to be logged to the server error log.
+# 25000 - 29999
+################################################################################
+
+start-error-number 25000
+
+ER_LIZARD
+  eng "%s"
+
+################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
 ################################################################################

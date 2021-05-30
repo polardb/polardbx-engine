@@ -1128,7 +1128,8 @@ struct dict_sys_t {
   static constexpr dd::Object_id s_dd_sys_space_id = 2;
 
   /** The dd::Tablespace::id of innodb_temporary. */
-  static constexpr dd::Object_id s_dd_temp_space_id = 3;
+  /** Lizard: lizard tbs will ocuppy the 3th tbs */
+  static constexpr dd::Object_id s_dd_temp_space_id = 4;
 
   /** The name of the data dictionary tablespace. */
   static const char *s_dd_space_name;

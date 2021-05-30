@@ -183,6 +183,7 @@ test/t_utf8_2	s_cöĿǖmň	161	5	Dynamic	0	General
 test/t_utf8_3	s_வணக்கம்	161	5	Dynamic	0	General
 # Directory listing of MYSQLD_DATADIR/
 #sql_1.ibd
+lizard.ibd
 mysql.ibd
 s_utf8.ibd
 s_utf8_a.ibd
@@ -345,6 +346,7 @@ s2_remote	TABLESPACE	InnoDB	NORMAL	s2_remote	MYSQL_TMP_DIR/s2_#_dir/s2.ibd
 s4_def	TABLESPACE	InnoDB	NORMAL	s4_def	MYSQL_TMP_DIR/tablespace.ibd/s4.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 # Directory listing of MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s1_#_hash.ibd
 s_def.ibd
@@ -494,6 +496,7 @@ test/t_def_in_def	s_def	161	5	Dynamic	0	General
 test/t_dyn_in_def	s_def	161	5	Dynamic	0	General
 test/t_red_in_def	s_def	128	5	Redundant	0	General
 # Directory of MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_def.ibd
 # Directory of MYSQLD_DATADIR/test/
@@ -537,6 +540,7 @@ mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_g
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 # Directory listing of MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_def.ibd
 # Directory listing of MYSQLD_DATADIR/test/
@@ -774,6 +778,7 @@ test/t_def_as_remote	test/t_def_as_remote	97	5	Dynamic	0	Single
 test/t_dyn_as_file_per_table	test/t_dyn_as_file_per_table	33	5	Dynamic	0	Single
 test/t_red_as_file_per_table	test/t_red_as_file_per_table	0	5	Redundant	0	Single
 # Directory listing of MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_def.ibd
 # Directory listing of MYSQLD_DATADIR/test/
@@ -839,6 +844,7 @@ test/t_def_was_remote	s_multiple	161	5	Dynamic	0	General
 test/t_dyn_was_file_per_table	s_multiple	161	5	Dynamic	0	General
 test/t_red_was_file_per_table	s_multiple	128	5	Redundant	0	General
 # Directory listing of MYSQLD_DATADIR/
+lizard.ibd
 multiple.ibd
 mysql.ibd
 s_def.ibd
@@ -888,6 +894,7 @@ test/t_def_to_file_per_table	test/t_def_to_file_per_table	33	5	Dynamic	0	Single
 test/t_dyn_to_file_per_table	test/t_dyn_to_file_per_table	33	5	Dynamic	0	Single
 test/t_red_to_file_per_table	test/t_red_to_file_per_table	0	5	Redundant	0	Single
 # Directory listing of MYSQLD_DATADIR/
+lizard.ibd
 multiple.ibd
 mysql.ibd
 s_def.ibd

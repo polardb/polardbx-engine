@@ -151,3 +151,65 @@ x.system_variable_bind_address	 : BUG#000 We don't support IPv6
 auth_sec.host_sort	 : BUG#000 We don't support IPv6
 
 main.mysql_load_data_local_dir  : BUG#0000 mysql failed
+
+# Lizard didn't support in-place upgrade.
+rds.feature_auto_upgrade_8017_issue76399        : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_partition                       : WL#000 Lizard didn't support in-place upgrade.
+innodb.redo_log_archive_02                      : WL#000 Lizard didn't support in-place upgrade.
+main.dictionary_tablespace                      : WL#000 Lizard didn't support in-place upgrade.
+innodb.portability_tablespace                   : WL#000 Lizard didn't support in-place upgrade.
+sysschema.fn_format_path                        : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_fts                              : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_orphan                           : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_partition                        : WL#000 Lizard didn't support in-place upgrade.
+encryption.upgrade                              : WL#000 Lizard didn't support in-place upgrade.
+rds.recovery_inconsistency_check_upgraded_server : WL#000 Lizard didn't support in-place upgrade.
+innodb.log_corruption                             : WL#000 Lizard didn't support in-place upgrade.
+innodb.log_corruption_1                           : WL#000 Lizard didn't support in-place upgrade.
+main.dd_schema_definition_after_upgrade_57_debug  : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_compressed_recv                    : WL#000 Lizard didn't support in-place upgrade.
+innodb.mysqldump_max_recordsize                   : WL#000 Lizard didn't support in-place upgrade.
+main.mysql_57_inplace_upgrade                     : WL#000 Lizard didn't support in-place upgrade.
+main.mysql_80_inplace_upgrade                     : WL#000 Lizard didn't support in-place upgrade.
+main.mysql_inplace_upgrade                        : WL#000 Lizard didn't support in-place upgrade.
+innodb.innodb_pagesize_max_recordsize             : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_cs                                : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_error                             : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_error_cs                          : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_error_debug                       : WL#000 Lizard didn't support in-place upgrade.
+innodb.bootstrap                                  : WL#000 Lizard didn't support in-place upgrade.
+
+innodb.import_compress_encrypt                    : WL#000 Lizard didn't support in-place upgrade.
+innodb.portability_tablespace_linux               : WL#000 Lizard didn't support in-place upgrade.
+innodb.row_format                                 : WL#000 Lizard didn't support in-place upgrade.
+rds.feature_support_tde_sm4                       : WL#000 Lizard didn't support in-place upgrade.
+information_schema.upgrade_cs                     : WL#000 Lizard didn't support in-place upgrade.
+innodb.discarded_partition_upgrade_from_57        : WL#000 Lizard didn't support in-place upgrade.
+innodb.discarded_partition_upgrade_from_80        : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_5727_lin_lctn_0_debug    : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_5727_lin_lctn_1_debug    : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8013_debug               : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8015_debug               : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8017_debug               : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_lin_lctn_0_debug    : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_lin_lctn_1_debug    : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_mac_lctn_1_debug    : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_win_lctn_1_debug    : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_index_stats                        : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_unknown_directory                  : WL#000 Lizard didn't support in-place upgrade.
+main.partition_prefixkey_upgrade                  : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_5727_lin_lctn_0          : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_5727_lin_lctn_1          : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8013                     : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8015                     : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8017                     : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_lin_lctn_0          : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_lin_lctn_1          : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_mac_lctn_1          : WL#000 Lizard didn't support in-place upgrade.
+innodb.partition_upgrade_8019_win_lctn_1          : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_fts_aux                            : WL#000 Lizard didn't support in-place upgrade.
+innodb.upgrade_fts_shared_tablespace              : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_lctn_cs_lin                       : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_non_debug                         : WL#000 Lizard didn't support in-place upgrade.
+main.read_only_ddl                                : WL#000 Lizard didn't support in-place upgrade.
+clone.remote_dml_upgrade                          : WL#000 Lizard didn't support in-place upgrade.

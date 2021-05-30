@@ -1,0 +1,50 @@
+--source include/have_debug.inc
+
+connection default;
+create database lizard_db;
+
+
+use information_schema;
+select * from INNODB_TABLESPACES where space = 4294967290;
+select * from INNODB_TABLESPACES_BRIEF where space = 4294967290;
+select * from INNODB_DATAFILES where space = 4294967290;
+
+SET SESSION debug= '+d, skip_dd_table_access_check';
+select * from mysql.tablespaces where id = 3;
+select * from mysql.tablespace_files where tablespace_id = 3;
+
+
+use lizard_db;
+
+#
+# 1. create the lizard table that have the same name with lizard tbs.
+#
+--error ER_WRONG_TABLESPACE_NAME
+create table t(id int) engine=innodb tablespace=innodb_lizard;
+
+#
+# 2. Alter tablespace
+#
+
+--error ER_WRONG_TABLESPACE_NAME
+CREATE TABLESPACE `innodb_lizard` ADD DATAFILE 'lizard.ibd' Engine=InnoDB;
+
+--error ER_WRONG_TABLESPACE_NAME
+CREATE TABLESPACE `innodb_lizard` ADD DATAFILE 'xx.ibd' Engine=InnoDB;
+
+--error ER_TABLESPACE_DUP_FILENAME
+CREATE TABLESPACE `xx` ADD DATAFILE 'lizard.ibd' Engine=InnoDB;
+
+create table t(id int)engine =innodb;
+--error ER_WRONG_TABLESPACE_NAME
+alter table t tablespace innodb_lizard;
+drop table t;
+
+--error ER_WRONG_TABLESPACE_NAME
+alter tablespace innodb_lizard rename to xxxx;
+
+--error ER_WRONG_TABLESPACE_NAME
+drop tablespace innodb_lizard;
+
+connection default;
+drop database lizard_db;

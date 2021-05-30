@@ -208,6 +208,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <unistd.h>
 #endif /* HAVE_UNISTD_H */
 
+#include "lizard0dict.h"
+#include "lizard0fsp.h"
+#include "lizard0scn.h"
+
 #ifndef UNIV_HOTBACKUP
 
 namespace innobase {
@@ -778,7 +782,9 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(sync_array_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(row_drop_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(ahi_enabled_mutex, 0, 0,
-                  "Mutex used for AHI disabling and enabling.")};
+                  "Mutex used for AHI disabling and enabling."),
+    PSI_MUTEX_KEY(lizard_scn_mutex, 0, 0, PSI_DOCUMENT_ME)
+};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -5031,6 +5037,15 @@ static int innodb_init_params() {
   srv_sys_space.set_name(dict_sys_t::s_sys_space_name);
   srv_sys_space.set_path(srv_data_home);
 
+  /**
+    Lizard:
+    Init the hardcode lizard tablespace configure(name, patch, flags, space id
+  */
+  lizard::srv_lizard_space.set_name(lizard::dict_lizard::s_lizard_space_name);
+  lizard::srv_lizard_space.set_path(srv_data_home);
+  lizard::srv_lizard_space.set_flags(predefined_flags);
+  lizard::srv_lizard_space.set_space_id(lizard::dict_lizard::s_lizard_space_id);
+
   /* We set the temporary tablspace id later, after recovery.
   The temp tablespace doesn't support raw devices.
   Set the name and path. */
@@ -5362,6 +5377,17 @@ static int innodb_init(void *p) {
     return innodb_init_abort();
   }
 
+  if (!lizard::srv_lizard_space.interpret_file()) {
+    ib::error(ER_LIZARD) << "Unable to interpret lizard tablespace configure";
+    return innodb_init_abort();
+  }
+  if (lizard::srv_lizard_space.intersection(&srv_sys_space) ||
+      lizard::srv_lizard_space.intersection(&srv_tmp_space)) {
+    ib::error(ER_LIZARD) << "Lizard tablespace has the same name with "
+                               << "sys_space or tmp_space";
+    return innodb_init_abort();
+  }
+
   /* Check for keyring plugin if UNDO/REDO logs are intended to be encrypted */
   if ((srv_undo_log_encrypt || srv_redo_log_encrypt) &&
       Encryption::check_keyring() == false) {
@@ -5469,6 +5495,12 @@ static int innobase_init_files(dict_init_mode_t dict_init_mode,
     return innodb_init_abort();
   }
 
+  err = lizard::srv_lizard_space.check_file_spec(create,
+                                                 MIN_EXPECTED_TABLESPACE_SIZE);
+  if (err != DB_SUCCESS) {
+    return innodb_init_abort();
+  }
+
   srv_is_upgrade_mode = (dict_init_mode == DICT_INIT_UPGRADE_57_FILES);
 
   /* Start the InnoDB server. */
@@ -5534,6 +5566,12 @@ static int innobase_init_files(dict_init_mode_t dict_init_mode,
                : dd_open_hardcoded(dict_sys_t::s_dict_space_id,
                                    dict_sys_t::s_dd_space_file_name);
 
+  /** Lizard didn't support upgrade from 5.7 */
+  if (dict_init_mode == DICT_INIT_UPGRADE_57_FILES) {
+    ib::error(ER_LIZARD) << "Didn't support upgrade from 5.7.";
+    return innodb_init_abort();
+  }
+
   /* Once hardcoded tablespace mysql is created or opened,
   prepare it along with innodb system tablespace for server.
   Tell server that these two hardcoded tablespaces exist.  */
@@ -5544,12 +5582,16 @@ static int innobase_init_files(dict_init_mode_t dict_init_mode,
         "id=%u;flags=%u;server_version=%u;space_version=%u;state=normal";
     static char se_private_data_innodb_system[len];
     static char se_private_data_dd[len];
+    static char se_private_data_lizard[len];
     snprintf(se_private_data_innodb_system, len, fmt, TRX_SYS_SPACE,
              predefined_flags, DD_SPACE_CURRENT_SRV_VERSION,
              DD_SPACE_CURRENT_SPACE_VERSION);
     snprintf(se_private_data_dd, len, fmt, dict_sys_t::s_dict_space_id,
              predefined_flags, DD_SPACE_CURRENT_SRV_VERSION,
              DD_SPACE_CURRENT_SPACE_VERSION);
+    snprintf(se_private_data_lizard, len, fmt,
+             lizard::dict_lizard::s_lizard_space_id, predefined_flags,
+             DD_SPACE_CURRENT_SRV_VERSION, DD_SPACE_CURRENT_SPACE_VERSION);
 
     static Plugin_tablespace dd_space(dict_sys_t::s_dd_space_name, "",
                                       se_private_data_dd, "",
@@ -5571,6 +5613,14 @@ static int innobase_init_files(dict_init_mode_t dict_init_mode,
       innodb.add_file(innobase_sys_files.back());
     }
     tablespaces->push_back(&innodb);
+    /** Lizard tablespace */
+    static Plugin_tablespace lizard_space(
+        lizard::dict_lizard::s_lizard_space_name, "", se_private_data_lizard,
+        "", innobase_hton_name);
+    static Plugin_tablespace::Plugin_tablespace_file lizard_file(
+        lizard::dict_lizard::s_lizard_space_file_name, "");
+    lizard_space.add_file(&lizard_file);
+    tablespaces->push_back(&lizard_space);
 
   } else {
     return innodb_init_abort();
@@ -12294,10 +12344,18 @@ static int validate_tablespace_name(ts_command_type ts_command,
   if (strlen(name) >= sizeof(reserved_space_name_prefix) - 1 &&
       0 == memcmp(name, reserved_space_name_prefix,
                   sizeof(reserved_space_name_prefix) - 1)) {
+    /* Lizard: didn't allow operate on lizard tablespace */
+    if (0 == strcmp(name, lizard::dict_lizard::s_lizard_space_name)) {
+      my_printf_error(ER_WRONG_TABLESPACE_NAME,
+                      "InnoDB: `%s` is a reserved"
+                      " tablespace name.",
+                      MYF(0), name);
+      err = HA_WRONG_CREATE_OPTION;
+    }
     /* Use a different message for reserved names */
-    if (0 == strcmp(name, dict_sys_t::s_file_per_table_name) ||
-        0 == strcmp(name, dict_sys_t::s_sys_space_name) ||
-        0 == strcmp(name, dict_sys_t::s_temp_space_name)) {
+    else if (0 == strcmp(name, dict_sys_t::s_file_per_table_name) ||
+             0 == strcmp(name, dict_sys_t::s_sys_space_name) ||
+             0 == strcmp(name, dict_sys_t::s_temp_space_name)) {
       /* Allow these names if the caller is putting a
       table into one of these by CREATE/ALTER TABLE */
       if (ts_command != TS_CMD_NOT_DEFINED) {
@@ -17790,6 +17848,8 @@ static bool innobase_get_tablespace_type(const dd::Tablespace &space,
     *space_type = Tablespace_type::SPACE_TYPE_SHARED;
   } else if (fsp_is_file_per_table(id, flags)) {
     *space_type = Tablespace_type::SPACE_TYPE_IMPLICIT;
+  } else if (lizard::fsp_is_lizard_tablespace(id)) {
+    *space_type = Tablespace_type::SPACE_TYPE_LIZARD;
   } else {
     ut_d(ut_error);
     ut_o(return true);
@@ -17831,6 +17891,9 @@ static bool innobase_get_tablespace_type_by_name(const char *tablespace_name,
       future for completeness.
      */
     *space_type = Tablespace_type::SPACE_TYPE_UNDO;
+  } else if (0 == strcmp(tablespace_name,
+                         lizard::dict_lizard::s_lizard_space_name)) {
+    *space_type = Tablespace_type::SPACE_TYPE_LIZARD;
   } else {
     *space_type = Tablespace_type::SPACE_TYPE_SHARED;
   }

@@ -508,6 +508,9 @@ struct fil_space_t {
   /** System tablespace */
   static fil_space_t *s_sys_space;
 
+  /** Lizard tablespace */
+  static fil_space_t *s_lizard_space;
+
   /** Check if the tablespace is compressed.
   @return true if compressed, false otherwise. */
   [[nodiscard]] bool is_compressed() const noexcept {
@@ -1098,6 +1101,12 @@ class Fil_path {
 
   /** A full absolute path to the same file. */
   std::string m_abs_path;
+
+ public:
+  /** Check if the name is an lizard tablespace name.
+  @param[in]	name		Tablespace name
+  @return true if it is an lizard tablespace name */
+  static bool is_lizard_tablespace_name(const std::string &name);
 };
 
 /** The MySQL server --datadir value */
