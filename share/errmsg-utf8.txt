@@ -19733,6 +19733,153 @@ ER_IB_MSG_SKIP_HIDDEN_DIR
 #
 
 ################################################################################
+#
+# Start of RDS error messages intended to be logged to the server error log.
+# 25000 - 29999
+################################################################################
+
+start-error-number 25000
+
+ER_AUDIT_LOG_INIT_LOG_BUF
+  eng "Allocated %lluMB memory for audit log buffer."
+
+ER_AUDIT_LOG_RESIZE_LOG_BUF
+  eng "Resizing log buffer from %lluMB to %lluMB."
+
+ER_AUDIT_LOG_FAILED_TO_WRITE_TO_FILE
+  eng "Error writing %u bytes to file \'%-.200s\' at offset %llu. (errno: %d - %s)."
+
+ER_AUDIT_LOG_FAILED_TO_CREATE_FILE
+  eng "Could not create '%s' file for audit logging (errno: %d - %s)."
+
+ER_AUDIT_LOG_AUDIT_LOG_TOO_LONG
+  eng "Audit log too long or RDS_AUDIT_FLUSH_MAX_LEN too small, some audit logs may lost."
+
+ER_AUDIT_LOG_INIT_FLUSH_THREAD
+  eng "Log flushing thread created successfully."
+
+ER_AUDIT_LOG_FAILED_TO_INIT_FLUSH_THREAD
+  eng "Failed to create log flushing thread."
+
+ER_AUDIT_LOG_DEINIT_FLUSH_THREAD
+  eng "Log flushing thread exited successfully."
+
+ER_AUDIT_LOG_FAILED_TO_DEINIT_FLUSH_THREAD
+  eng "Log flushing thread exited unsuccessfully, some audit logs may be lost."
+
+ER_AUDIT_LOG_BEGIN_LOST_LOG
+   eng "Some audit logs have lost before this timestamp."
+
+ER_AUDIT_LOG_END_LOST_LOG
+   eng "Some audit logs are lost because audit log buffer is full."
+
+ER_AUDIT_LOG_SWITCH_LOG_STRATEGY
+  eng "Log strategy switched from %s to %s."
+
+ER_AUDIT_LOG_SWITCH_LOG_POLICY
+  eng "Log strategy switched from [%s] connection [%s] query [%s] to [%s] connection [%s] query [%s]."
+
+ER_AUDIT_LOG_ENABLE_OR_DISABLE
+  eng "Audit log is %s."
+
+ER_IB_MSG_FILE_PURGE
+  eng "%s"
+
+ER_IB_MSG_FP_CLEANUP
+  eng "Data File Purge : cleanup tmp data files, still have %lu"
+
+ER_IB_MSG_FP_COMPLETE
+  eng "Data File Purge : complete cleanup"
+
+ER_SERVER_UPGRADE_EXTRA_STATUS
+  eng "Server upgrade extra from '%d' to '%d' %s."
+
+ER_CCL
+  eng "Concurrency control : %s"
+
+ER_OUTLINE
+  eng "Statement outline : %s"
+
+ER_IB_MSG_1286
+  eng "%s"
+
+ER_IB_MSG_1287
+  eng "%s"
+
+ER_PERFORMANCE_AGENT_FAILED_TO_INIT_THREAD
+  eng "Failed to create performance agent thread."
+
+ER_PERFORMANCE_AGENT_FAILED_TO_DEINIT_THREAD
+  eng "Performance agent thread exited unsuccessfully."
+
+ER_TCP_READ_WRITE
+  eng "TCP send or receive package exception: %s"
+
+ER_RECOVERY_FIRST_START
+  eng "Recovery: It is the first start since OS started"
+
+ER_RECOVERY_LOG_STATUS
+  eng "Recovery: The last binlog is %s:%llu, Innodb's binlog offset is %s:%llu"
+
+ER_RECOVERY_VALID_LOG_POS
+  eng "Recovery: Found valid binlog position %s:%llu"
+
+ER_RECOVERY_APPLY_BINLOG
+  eng "Recovery: Apply binlog after %s:%llu"
+
+ER_RECOVERY_ADJUST_VALID_LOG_POS
+  eng "Recovery: Adjust valid binlog position to %llu"
+
+ER_RECOVERY_INCONSISTENCY_ERR
+  eng "Recovery: Binlog lost some transactions which has been committed in engine"
+
+ER_RECOVERY_APPLY_BINLOG_ERR
+  eng "Recovery: Failed to apply binlog at %s:%llu"
+
+ER_RECOVERY_READ_BINLOG_ERR
+  eng "Recovery: Failed to read binlog at %s:%llu"
+
+ER_CANT_OPEN_SHM
+  eng "Failed to open shared memory on %s"
+
+ER_CANT_UNLINK_SHM
+  eng "Failed to unlink shared memory on %s"
+
+ER_RECOVERY_OTHER_ENGINES_NOT_SUPPORT
+  eng "Recovery: 2PC storage engines other than InnoDB are not supported. Could not do consistency check when any other 2PC storage engine is enabled."
+
+ER_RECYCLE_BIN_SCHEMA_INIT_FAILED
+  eng "Recycle_bin schema initialization failed"
+
+ER_RECYCLE_BIN
+  eng "Recycle_bin : %s"
+
+ER_RECYCLE_SCHEDULER
+  eng "Recycle scheduler : %s"
+
+ER_JEMALLOC_PROFILING_STATE
+  eng "[RDS Diagnose] Jemalloc memory profiling is %s"
+
+ER_JEMALLOC_API_MISTAKE
+  eng "[RDS Diagnose] Jemalloc API is used by mistake"
+
+ER_SERVER_AUTOUPGRADE_REPAIR_PARTITION_TABLE_STATUS
+  eng "Server repair tablespace file name of partition table %s."
+
+ER_SERVER_AUTOUPGRADE_RENAME_PARTITION_TABLE_INFO
+  eng "Server rename partition table %s using tmp table %s."
+
+ER_SERVER_AUTOUPGRADE_RENAME_PARTITION_TABLE_FAILED
+  eng "Server rename partition table %s failed due to %s. Please rename it manually"
+
+ER_LIZARD
+  eng "Lizard : %s"
+
+#
+# End of RDS error messages intended to be logged to the server error log.
+#
+
+################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
 ################################################################################

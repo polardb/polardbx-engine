@@ -15,6 +15,7 @@ Space_Name	File_Type	Engine	Status	Tablespace_Name	Path
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
 # MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 DROP TABLESPACE s_def;
 ERROR HY000: Tablespace s_def doesn't exist.
@@ -42,6 +43,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s1	161	4	Dynamic	0	General
 # MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s1.ibd
 show tables;

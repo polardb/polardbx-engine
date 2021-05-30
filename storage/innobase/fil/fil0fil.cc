@@ -84,6 +84,8 @@ The tablespace memory cache */
 #include <tuple>
 #include <unordered_map>
 
+#include "lizard0dict.h"
+
 using Dirs = std::vector<std::string>;
 using Space_id_set = std::set<space_id_t>;
 
@@ -1915,6 +1917,16 @@ size_t Tablespace_files::add(space_id_t space_id, const std::string &name) {
 
     names = &m_undo_paths[space_id];
 
+  } else if (Fil_path::is_lizard_tablespace_name(name)) {
+    if (space_id != lizard::dict_lizard::s_lizard_space_id) {
+      ib::warn(ER_LIZARD)
+          << "Tablespace " << name
+          << " has the same name with lizard tablespace"
+          << " But the space id is not equal with reserved id";
+    }
+    ut_ad(Fil_path::has_suffix(IBD, name.c_str()));
+    names = &m_ibd_paths[space_id];
+
   } else {
     ut_ad(Fil_path::has_suffix(IBD, name.c_str()));
 
@@ -3076,6 +3088,10 @@ fil_space_t *fil_space_create(const char *name, space_id_t space_id,
          fil_space_t::s_redo_space == space);
 
     fil_space_t::s_redo_space = space;
+  } else if (space->id == lizard::dict_lizard::s_lizard_space_id) {
+    ut_a(fil_space_t::s_lizard_space == nullptr ||
+         fil_space_t::s_lizard_space == space);
+    fil_space_t::s_lizard_space = space;
   }
 
   fil_system->mutex_release_all();
@@ -9712,6 +9728,8 @@ byte *fil_tablespace_redo_create(byte *ptr, const byte *end,
   /* We never recreate the system tablespace. */
   ut_a(page_id.space() != TRX_SYS_SPACE);
 
+  ut_a(page_id.space() != lizard::dict_lizard::s_lizard_space_id);
+
   ut_a(parsed_bytes != ULINT_UNDEFINED);
 
   /* Where 6 = flags (uint32_t) + name len (uint16_t). */
@@ -9815,6 +9833,8 @@ byte *fil_tablespace_redo_rename(byte *ptr, const byte *end,
 
   /* We never recreate the system tablespace. */
   ut_a(page_id.space() != TRX_SYS_SPACE);
+
+  ut_a(page_id.space() != lizard::dict_lizard::s_lizard_space_id);
 
   ut_a(parsed_bytes != ULINT_UNDEFINED);
 
@@ -9938,6 +9958,7 @@ byte *fil_tablespace_redo_delete(byte *ptr, const byte *end,
 
   /* We never recreate the system tablespace. */
   ut_a(page_id.space() != TRX_SYS_SPACE);
+  ut_a(page_id.space() != lizard::dict_lizard::s_lizard_space_id);
 
   ut_a(parsed_bytes != ULINT_UNDEFINED);
 

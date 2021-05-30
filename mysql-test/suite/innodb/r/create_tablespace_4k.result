@@ -297,6 +297,7 @@ test/t_zip2k_in_2k_as	s_2k	165	5	Compressed	2048	General
 test/t_zip2k_in_2k_from_1k	s_2k	165	5	Compressed	2048	General
 test/t_zip2k_in_2k_like	s_2k	165	5	Compressed	2048	General
 # Directory of MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_1k.ibd
 s_2k.ibd
@@ -344,6 +345,7 @@ test/t_zip2k_in_2k_as	s_2k	165	5	Compressed	2048	General
 test/t_zip2k_in_2k_from_1k	s_2k	165	5	Compressed	2048	General
 test/t_zip2k_in_2k_like	s_2k	165	5	Compressed	2048	General
 # Directory of MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_1k.ibd
 s_2k.ibd
@@ -435,6 +437,7 @@ test/t_zip2k_as_remote	test/t_zip2k_as_remote	101	5	Compressed	2048	Single
 test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	5	Compressed	4096	Single
 test/t_zip4k_as_remote	test/t_zip4k_as_remote	103	5	Compressed	4096	Single
 # MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_1k.ibd
 s_2k.ibd
@@ -555,6 +558,7 @@ test/t_zip2k_in_s_2k	s_2k	165	5	Compressed	2048	General
 test/t_zip2k_remote_in_s_2k	s_2k	165	5	Compressed	2048	General
 test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	5	Compressed	4096	Single
 # MYSQLD_DATADIR/
+lizard.ibd
 mysql.ibd
 s_1k.ibd
 s_2k.ibd

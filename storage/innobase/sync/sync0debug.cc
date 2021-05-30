@@ -56,6 +56,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ut0new.h"
 
+#include "srv0file.h"
+
+#include "lizard0scn.h"
+
 #ifdef UNIV_DEBUG
 
 bool srv_sync_debug;
@@ -1491,6 +1495,8 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
                   PFS_NOT_INSTRUMENTED);
 
   LATCH_ADD_MUTEX(TEST_MUTEX, SYNC_NO_ORDER_CHECK, PFS_NOT_INSTRUMENTED);
+
+  LATCH_ADD_MUTEX(LIZARD_SCN, SYNC_NO_ORDER_CHECK, lizard_scn_mutex_key);
 
   latch_id_t id = LATCH_ID_NONE;
 
