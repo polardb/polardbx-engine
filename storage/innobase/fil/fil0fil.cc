@@ -368,7 +368,8 @@ class Tablespace_files {
     ut_ad(space_id != TRX_SYS_SPACE);
 
     if (dict_sys_t::is_reserved(space_id) &&
-        space_id != dict_sys_t::s_space_id) {
+        space_id != dict_sys_t::s_space_id &&
+        space_id != lizard::dict_lizard::s_lizard_space_id) {
       auto it = m_undo_paths.find(space_id);
 
       if (it != m_undo_paths.end()) {
@@ -393,7 +394,8 @@ class Tablespace_files {
     ut_ad(space_id != TRX_SYS_SPACE);
 
     if (dict_sys_t::is_reserved(space_id) &&
-        space_id != dict_sys_t::s_space_id) {
+        space_id != dict_sys_t::s_space_id &&
+        space_id != lizard::dict_lizard::s_lizard_space_id) {
       auto n_erased = m_undo_paths.erase(space_id);
 
       return (n_erased == 1);

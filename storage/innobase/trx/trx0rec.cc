@@ -2615,8 +2615,8 @@ bool trx_undo_prev_version_build(
   ptr = trx_undo_rec_skip_row_ref(ptr, index);
 
   ptr = trx_undo_update_rec_get_update(ptr, index, type, trx_id, roll_ptr,
-                                       info_bits, NULL, heap, &update,
-                                       lob_undo, type_cmpl, txn_info);
+                                       info_bits, NULL, heap, &update, lob_undo,
+                                       type_cmpl, txn_info);
   ut_a(ptr);
 
   if (row_upd_changes_field_size_or_external(index, offsets, update)) {

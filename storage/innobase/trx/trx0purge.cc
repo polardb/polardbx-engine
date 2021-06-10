@@ -1090,8 +1090,8 @@ static bool trx_purge_mark_undo_for_truncate() {
     num_inactive_explicit += (undo_ts->is_inactive_explicit() ? 1 : 0);
   }
   undo::spaces->s_unlock();
-  ut_ad(num_active > 0 + FSP_IMPLICIT_TXN_TABLESPACES);
-  if (num_active == 1 + FSP_IMPLICIT_TXN_TABLESPACES &&
+  ut_ad(num_active > (0 + FSP_IMPLICIT_TXN_TABLESPACES));
+  if (num_active == (1 + FSP_IMPLICIT_TXN_TABLESPACES) &&
       num_inactive_explicit == 0) {
     return (false);
   }

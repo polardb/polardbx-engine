@@ -2223,9 +2223,7 @@ dberr_t srv_start(bool create_new_db, const std::string &scan_directories) {
   err = lizard::srv_lizard_space.open_or_create(create_new_db,
                                                 &sum_of_lizard_sizes);
 
-  if (err != DB_SUCCESS) {
-    srv_init_abort(err);
-  }
+  if (err != DB_SUCCESS) srv_init_abort(err);
 
   dirnamelen = strlen(srv_log_group_home_dir);
   ut_a(dirnamelen < (sizeof logfilename) - 10 - sizeof "ib_logfile");
