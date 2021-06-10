@@ -1900,9 +1900,7 @@ dberr_t srv_start(bool create_new_db) {
   err = lizard::srv_lizard_space.open_or_create(create_new_db,
                                                 &sum_of_lizard_sizes);
 
-  if (err != DB_SUCCESS) {
-    srv_init_abort(err);
-  }
+  if (err != DB_SUCCESS) srv_init_abort(err);
 
   if (dblwr::is_enabled() && ((err = dblwr::open()) != DB_SUCCESS)) {
     return srv_init_abort(err);

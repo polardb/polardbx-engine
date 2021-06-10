@@ -1207,8 +1207,8 @@ static bool trx_purge_mark_undo_for_truncate(size_t truncate_count) {
       Skip if there is noly one active undo tablespace left besides TXN
       tablespaces.
     */
-    ut_ad(num_active > 0 + FSP_IMPLICIT_TXN_TABLESPACES);
-    if (num_active == 1 + FSP_IMPLICIT_TXN_TABLESPACES) {
+    ut_ad(num_active > (0 + FSP_IMPLICIT_TXN_TABLESPACES));
+    if (num_active == (1 + FSP_IMPLICIT_TXN_TABLESPACES)) {
       return (false);
     }
 
