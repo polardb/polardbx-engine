@@ -43,6 +43,10 @@ DROP TABLE tab1;
 # Drop existing UNDO tablespaces
 undo_001
 undo_002
+undo_003
+undo_004
+undo_005
+undo_006
 # Drop existing auto.cnf
 auto.cnf
 # Restart server with keyring plugin and innodb_undo_log_encrypt=ON

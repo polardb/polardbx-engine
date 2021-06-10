@@ -139,7 +139,7 @@ set session group_concat_max_len = 1000000;
 insert into t1 select concat('[',group_concat(val),']') from (
   select conv(concat(t1.f, t2.f, t3.f), 16, 10) val
     from t t1, t t2, t t3
-    having val < 1604) tt;
+    having val < 1603) tt;
 --error ER_EXCEEDED_MV_KEYS_NUM
 insert into t1 select concat('[',group_concat(val),']') from (
   select conv(concat(t1.f, t2.f, t3.f), 16, 10) val

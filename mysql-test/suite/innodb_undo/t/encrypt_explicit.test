@@ -97,13 +97,18 @@ LET $MYSQL_DATA_DIR = `select @@datadir`;
 --list_files $MYSQL_DATA_DIR/ undo_00*
 --remove_file $MYSQL_DATA_DIR/undo_001
 --remove_file $MYSQL_DATA_DIR/undo_002
+--remove_file $MYSQL_DATA_DIR/undo_003
+--remove_file $MYSQL_DATA_DIR/undo_004
+--remove_file $MYSQL_DATA_DIR/undo_005
+--remove_file $MYSQL_DATA_DIR/undo_006
 
 --echo # Drop existing auto.cnf
 --list_files $MYSQL_DATA_DIR/ auto*
 --remove_file $MYSQL_DATA_DIR/auto.cnf
 
 --echo # Restart server with keyring plugin and innodb_undo_log_encrypt=ON
---let $restart_parameters="restart: --log_error_verbosity=3 --early-plugin-load="keyring_file=$KEYRING_PLUGIN" $KEYRING_PLUGIN_OPT --keyring_file_data=$MYSQL_TMP_DIR/my_keyfile --innodb_undo_log_encrypt=1"
+# Lizard: innodb_cleanout_safe_mode must be set because we drop undo_001, undo_002
+--let $restart_parameters="restart: --log_error_verbosity=3 --early-plugin-load="keyring_file=$KEYRING_PLUGIN" $KEYRING_PLUGIN_OPT --keyring_file_data=$MYSQL_TMP_DIR/my_keyfile --innodb_undo_log_encrypt=1 --innodb_cleanout_safe_mode=1"
 --source include/start_mysqld_no_echo.inc
 
 --echo # Show that a master key with a blank Server UUID is not used.
