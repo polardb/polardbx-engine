@@ -428,6 +428,9 @@ The following options may be given as the first argument:
  --global-connection-memory-tracking 
  Enable updating the global memory counter and checking
  the global connection memory limit exceeding
+ --global-query-wait-timeout=# 
+ Timeout in seconds to wait for XA prepared  before
+ returning an error.
  --group-concat-max-len=# 
  The maximum length of the result of function 
  GROUP_CONCAT()
@@ -1808,6 +1811,7 @@ general-log FALSE
 generated-random-password-length 20
 global-connection-memory-limit 18446744073709551615
 global-connection-memory-tracking FALSE
+global-query-wait-timeout 31536000
 group-concat-max-len 1024
 group-replication-consistency EVENTUAL
 gtid-executed-compression-period 0
