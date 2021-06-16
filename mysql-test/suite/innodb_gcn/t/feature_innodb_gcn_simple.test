@@ -1,3 +1,6 @@
+set global innodb_undo_retention=1800;
+set global innodb_undo_space_reserved_size=1024;
+
 --disable_warnings
 DROP TABLE IF EXISTS t1;
 --enable_warnings
@@ -11,9 +14,9 @@ CREATE TABLE t1 (
 INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
 
 connect (conn1,localhost,root,,);
---source suite/innodb_cts/include/init_conn_base_seq.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
 connect (conn2,localhost,root,,);
---source suite/innodb_cts/include/init_conn_base_seq.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
 
 --echo *** TEST: read with timestamp should see transaction or not
 
@@ -28,7 +31,7 @@ select * from t1;
 update t1 set value = 'UPDATED!' where id % 2 = 0;
 set innodb_commit_seq = @base_seq + 103;
 commit;
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
 begin;
@@ -54,7 +57,7 @@ select * from t1;
 update t1 set value = 'UPDATED!' where id % 2 = 0;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 
 connection conn2;
 begin;
@@ -64,7 +67,7 @@ send select * from t1;
 connection conn1;
 set innodb_commit_seq = @base_seq + 204; # commit with ts > read ts
 xa commit 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
 reap;
@@ -82,7 +85,7 @@ select * from t1;
 update t1 set value = 'UPDATED!' where id % 2 = 0;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 
 connection conn2;
 begin;
@@ -92,7 +95,7 @@ send select * from t1;
 connection conn1;
 set innodb_commit_seq = @base_seq + 302; # commit with ts < read ts
 xa commit 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
 reap;
@@ -111,7 +114,7 @@ select * from t1;
 update t1 set value = 'UPDATED!' where id % 2 = 0;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 
 connection conn2;
 begin;
@@ -120,7 +123,7 @@ send select * from t1;
 
 connection conn1;
 xa rollback 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
 reap;
@@ -147,7 +150,7 @@ rollback;
 connection conn1;
 set innodb_commit_seq = @base_seq + 503;
 commit;
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 
 if (!$enable_reconnect) { # FIXME: XA bug (XAER_RMERR)
@@ -164,10 +167,10 @@ set innodb_snapshot_seq = @base_seq + 601;
 select * from t1;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 set innodb_commit_seq = @base_seq + 604;
 xa commit 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 
 --echo *** TEST: XA commit empty transaction
@@ -181,10 +184,10 @@ xa begin 't';
 set innodb_snapshot_seq = @base_seq + 701;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 set innodb_commit_seq = @base_seq + 704;
 xa commit 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 
 --echo *** TEST: XA rollback read-only transaction
@@ -199,9 +202,9 @@ set innodb_snapshot_seq = @base_seq + 801;
 select * from t1;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 xa rollback 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 
 --echo *** TEST: XA rollback empty transaction
@@ -215,9 +218,9 @@ xa begin 't';
 set innodb_snapshot_seq = @base_seq + 901;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 xa rollback 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 } # FIXME: XA bug (XAER_RMERR)
 
@@ -234,7 +237,7 @@ select * from t1;
 update t1 set value = 'UPDATED!' where id % 2 = 0;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 
 connection conn2;
 set session innodb_global_query_wait_timeout=2;
@@ -246,7 +249,7 @@ connection conn1;
 set innodb_commit_seq = @base_seq +  1004;
 --sleep 5
 xa commit 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
 --error ER_LOCK_WAIT_TIMEOUT
@@ -277,7 +280,7 @@ select * from t2;
 update t2 set value = 'UPDATED!' where sec = 2;
 xa end 't';
 xa prepare 't';
---source suite/innodb_cts/include/reconnect_conn1_if_enabled.inc
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
 
 connection conn2;
 set session innodb_global_query_wait_timeout=2;
@@ -289,15 +292,13 @@ connection conn1;
 set innodb_commit_seq = @base_seq + 1504;
 --sleep 5
 xa commit 't';
---source suite/innodb_cts/include/assert_session_seq_cleared.inc
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
 --error ER_LOCK_WAIT_TIMEOUT
 reap;
 select * from t2;
 rollback;
-
-set session innodb_global_query_wait_timeout=default;
 
 #
 # Cleanup
@@ -309,3 +310,5 @@ connection default;
 DROP TABLE t1;
 DROP TABLE t2;
 
+set global innodb_undo_space_reserved_size=default;
+set global innodb_undo_retention = default;

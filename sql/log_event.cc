@@ -162,6 +162,7 @@ Error_log_throttle slave_ignored_err_throttle(
 #include "sql/rpl_record.h"  // enum_row_image_type, Bit_reader
 #include "sql/rpl_utility.h"
 #include "sql/xa_aux.h"
+#include "sql/xa.h"
 
 #include "sql/common/reload.h"
 
@@ -3566,9 +3567,18 @@ bool Query_log_event::write(Basic_ostream *ostream) {
     *start++ = thd->variables.default_table_encryption;
   }
 
-  if (thd && thd->get_commit_gcn() != __UINT64_MAX__) {
+  /* Lizard store variable commit_gcn in binlog. */
+  if (thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
     *start++ = Q_LIZARD_COMMIT_GCN;
     int8store(start, thd->get_commit_gcn());
+    start += 8;
+  }
+
+  /* Lizard store variable prepare_gcn in binlog. */
+  if (thd && thd->get_prepare_gcn() != MYSQL_GCN_NULL) {
+    *start++ = Q_LIZARD_PREPARE_GCN;
+    int8store(start, thd->get_prepare_gcn());
+    thd->reset_prepare_gcn();
     start += 8;
   }
 
@@ -4297,6 +4307,7 @@ void Query_log_event::print_query_header(
                 default_table_encryption, print_event_info->delimiter);
   }
 
+  /* Lizard print commit_gcn stored in binlog. */
   if (likely(commit_gcn_assigned) &&
       (unlikely(print_event_info->commit_gcn != commit_gcn ||
                 !print_event_info->commit_gcn_assigned))) {
@@ -4304,6 +4315,16 @@ void Query_log_event::print_query_header(
                 (ulonglong)commit_gcn, print_event_info->delimiter);
     print_event_info->commit_gcn = commit_gcn;
     print_event_info->commit_gcn_assigned = 1;
+  }
+
+  /* Lizard print prepare_gcn stored in binlog. */
+  if (likely(prepare_gcn_assigned) &&
+      (unlikely(print_event_info->prepare_gcn != prepare_gcn ||
+                !print_event_info->prepare_gcn_assigned))) {
+    my_b_printf(file, "SET @@session.innodb_prepare_seq=%llu%s\n",
+                (ulonglong)prepare_gcn, print_event_info->delimiter);
+    print_event_info->prepare_gcn = prepare_gcn;
+    print_event_info->prepare_gcn_assigned = 1;
   }
 }
 
@@ -4675,9 +4696,16 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
         thd->variables.default_table_encryption = default_table_encryption;
       }
 
+      /* Set commit_gcn to Query_log_event for recovery and slave apply. */
       if (commit_gcn_assigned) {
-        DBUG_ASSERT(commit_gcn != __UINT64_MAX__);
+        DBUG_ASSERT(commit_gcn != MYSQL_GCN_NULL);
         thd->variables.innodb_commit_gcn = commit_gcn;
+      }
+
+      /* Set prepare_gcn to Query_log_event. */
+      if (prepare_gcn_assigned) {
+        DBUG_ASSERT(prepare_gcn != MYSQL_GCN_NULL);
+        thd->variables.innodb_prepare_gcn = prepare_gcn;
       }
 
       thd->table_map_for_update = (table_map)table_map_for_update;
@@ -13524,7 +13552,9 @@ PRINT_EVENT_INFO::PRINT_EVENT_INFO()
       thread_id_printed(false),
       default_table_encryption(0xff),
       commit_gcn_assigned(0),
-      commit_gcn(__UINT64_MAX__),
+      prepare_gcn_assigned(0),
+      commit_gcn(MYSQL_GCN_NULL),
+      prepare_gcn(MYSQL_GCN_NULL),
       base64_output_mode(BASE64_OUTPUT_UNSPEC),
       printed_fd_event(false),
       have_unflushed_events(false),

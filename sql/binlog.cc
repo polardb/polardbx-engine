@@ -1778,6 +1778,10 @@ err:
   return true;
 }
 
+
+static const LEX_CSTRING COMMIT_EXTRA_QEVENT_STR = {
+    STRING_WITH_LEN("/* Record commit GCN */")};
+
 /**
   This function finalizes the cache preparing for commit or rollback.
 
@@ -1796,9 +1800,10 @@ err:
 int binlog_cache_data::finalize(THD *thd, Log_event *end_event) {
   DBUG_TRACE;
   if (!is_binlog_empty()) {
-    if (end_event && thd && thd->get_commit_gcn() != __UINT64_MAX__) {
-      // TODO:
-      Query_log_event qinfo(thd, "/* Record commit GCN */", 23, false, false,
+    /* Add an query event before commit to store commit_gcn in binlog. */
+    if (end_event && thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
+      Query_log_event qinfo(thd, COMMIT_EXTRA_QEVENT_STR.str,
+                            COMMIT_EXTRA_QEVENT_STR.length, false, false,
                             true, 0);
       write_event(&qinfo);
     }
@@ -9021,17 +9026,40 @@ static int binlog_recover(Binlog_file_reader *binlog_file_reader,
 
   {
     MEM_ROOT mem_root(key_memory_binlog_recover_exec, memory_page_size);
-    memroot_unordered_set<my_xid> xids(&mem_root);
+    memroot_unordered_map<my_xid, my_commit_gcn> xids(&mem_root);
+    ulonglong current_commit_gcn = MYSQL_GCN_NULL;
 
     while ((ev = binlog_file_reader->read_event_object())) {
       if (ev->get_type_code() == binary_log::QUERY_EVENT &&
-          !strcmp(((Query_log_event *)ev)->query, "BEGIN"))
+          !strcmp(((Query_log_event *)ev)->query, "BEGIN")) {
         in_transaction = true;
+        current_commit_gcn = MYSQL_GCN_NULL;
+      }
+
+      if (ev->get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) {
+        current_commit_gcn = MYSQL_GCN_NULL;
+      }
+
+      if (ev->get_type_code() == binary_log::QUERY_EVENT) {
+        if (((Query_log_event *)ev)->commit_gcn_assigned) {
+          current_commit_gcn = ((Query_log_event *)ev)->commit_gcn;
+        }
+        if (!strncmp(((Query_log_event *)ev)->query, "XA START",
+                     strlen("XA START"))) {
+           current_commit_gcn = MYSQL_GCN_NULL;
+        }
+
+        if (!strncmp(((Query_log_event *)ev)->query, "XA COMMIT",
+                     strlen("XA COMMIT"))) {
+          current_commit_gcn = MYSQL_GCN_NULL;
+        }
+      }
 
       if (ev->get_type_code() == binary_log::QUERY_EVENT &&
           !strcmp(((Query_log_event *)ev)->query, "COMMIT")) {
         DBUG_ASSERT(in_transaction == true);
         in_transaction = false;
+        current_commit_gcn = MYSQL_GCN_NULL;
       } else if (ev->get_type_code() == binary_log::XID_EVENT ||
                  is_atomic_ddl_event(ev)) {
         my_xid xid;
@@ -9045,7 +9073,8 @@ static int binlog_recover(Binlog_file_reader *binlog_file_reader,
           xid = ((Query_log_event *)ev)->ddl_xid;
         }
 
-        if (!xids.insert(xid).second) goto err1;
+        if (!xids.insert(std::make_pair(xid, current_commit_gcn)).second)
+          goto err1;
       }
 
       /*

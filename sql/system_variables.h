@@ -412,9 +412,14 @@ struct System_variables {
   /* Used to switch ON/OFF auto savepoint */
   bool auto_savepoint;
 
-
+  /** Gcn to read a snapshot by asof select. */
   ulonglong innodb_snapshot_gcn;
+
+  /** Commit gcn for next transition. */
   ulonglong innodb_commit_gcn;
+
+  /** Prepare gcn for next xa prepare. */
+  ulonglong innodb_prepare_gcn;
 };
 
 /**

@@ -428,9 +428,10 @@ struct PRINT_EVENT_INFO {
   my_thread_id thread_id;
   bool thread_id_printed;
   uint8_t default_table_encryption;
-
   bool commit_gcn_assigned;
+  bool prepare_gcn_assigned;
   uint64_t commit_gcn;
+  uint64_t prepare_gcn;
 
   PRINT_EVENT_INFO();
 
@@ -1653,6 +1654,7 @@ class Rand_log_event : public binary_log::Rand_event, public Log_event {
 */
 #ifndef MYSQL_SERVER
 typedef ulonglong my_xid;  // this line is the same as in handler.h
+typedef ulonglong my_commit_gcn;
 #endif
 
 class Xid_apply_log_event : public Log_event {

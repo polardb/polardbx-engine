@@ -5520,8 +5520,6 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
 
   innobase_srv_conc_force_exit_innodb(trx);
 
-  if (will_commit) thd_reset_gcn(thd);
-
   return 0;
 }
 
@@ -5587,8 +5585,6 @@ static int innobase_rollback(handlerton *hton, /*!< in: InnoDB handlerton */
   } else {
     error = trx_rollback_last_sql_stat_for_mysql(trx);
   }
-
-  if (error == DB_SUCCESS && rollback_trx) thd_reset_gcn(thd);
 
   return convert_error_code_to_mysql(error, 0, trx->mysql_thd);
 }
@@ -19610,14 +19606,18 @@ static xa_status_code innobase_commit_by_xid(
   if (trx != NULL) {
     TrxInInnoDB trx_in_innodb(trx);
 
+    /* Set xid commit_gcn to trx. */
+    ut_a(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
+
+    if (xid->get_commit_gcn() != lizard::GCN_NULL)
+      trx->txn_desc.cmmt.gcn = xid->get_commit_gcn();
+
     innobase_commit_low(trx);
     ut_ad(trx->mysql_thd == NULL);
     /* use cases are: disconnected xa, slave xa, recovery */
     trx_deregister_from_2pc(trx);
     ut_ad(!trx->will_lock); /* trx cache requirement */
     trx_free_for_background(trx);
-
-    thd_reset_gcn(trx->mysql_thd);
 
     return (XA_OK);
   } else {
@@ -19645,8 +19645,6 @@ static xa_status_code innobase_rollback_by_xid(
     trx_deregister_from_2pc(trx);
     ut_ad(!trx->will_lock);
     trx_free_for_background(trx);
-
-    if (ret == 0) thd_reset_gcn(trx->mysql_thd);
 
     return (ret != 0 ? XAER_RMERR : XA_OK);
   } else {

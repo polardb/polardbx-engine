@@ -83,6 +83,8 @@ void trans_reset_one_shot_chistics(THD *thd) {
 
   thd->tx_isolation = (enum_tx_isolation)thd->variables.transaction_isolation;
   thd->tx_read_only = thd->variables.transaction_read_only;
+  /* Reset commit and snapshot gcn when transition end. */
+  thd->reset_gcn();
 }
 
 /**
@@ -223,6 +225,7 @@ bool trans_begin(THD *thd, uint flags) {
 #endif
 
 
+  /* This is a defensive action, reset gcn when explicit transaction begin. */
   thd->reset_gcn();
 
   return res;
@@ -300,8 +303,6 @@ bool trans_commit(THD *thd, bool ignore_global_read_lock) {
   }
 
   thd->locked_tables_list.adjust_renamed_tablespace_mdls(&thd->mdl_context);
-
-  thd->reset_gcn();
 
   return res;
 }
@@ -432,8 +433,6 @@ bool trans_rollback(THD *thd) {
 
   thd->locked_tables_list.discard_renamed_tablespace_mdls();
 
-  thd->reset_gcn();
-
   return res;
 }
 
@@ -490,8 +489,6 @@ bool trans_rollback_implicit(THD *thd) {
     thd->dd_client()->rollback_modified_objects();
 
   thd->locked_tables_list.discard_renamed_tablespace_mdls();
-
-  thd->reset_gcn();
 
   return res;
 }

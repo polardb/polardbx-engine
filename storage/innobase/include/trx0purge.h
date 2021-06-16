@@ -72,6 +72,7 @@ void trx_purge_sys_create(ulint n_purge_threads,
 /** Frees the global purge system control structure. */
 void trx_purge_sys_close(void);
 
+/** Get current purged GCN number */
 gcn_t lizard_sys_get_purged_gcn();
 
 /************************************************************************

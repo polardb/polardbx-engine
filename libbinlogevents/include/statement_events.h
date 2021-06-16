@@ -530,7 +530,8 @@ class Query_event : public Binary_log_event {
     */
     Q_DEFAULT_TABLE_ENCRYPTION,
 
-    Q_LIZARD_COMMIT_GCN = 200
+    Q_LIZARD_COMMIT_GCN = 200,
+    Q_LIZARD_PREPARE_GCN
   };
   const char *query;
   const char *db;
@@ -649,7 +650,9 @@ class Query_event : public Binary_log_event {
   uint8_t default_table_encryption;
 
   bool commit_gcn_assigned;
+  bool prepare_gcn_assigned;
   uint64_t commit_gcn;
+  uint64_t prepare_gcn;
 
   /**
     The constructor will be used while creating a Query_event, to be

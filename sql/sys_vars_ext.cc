@@ -267,13 +267,19 @@ static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
                                        NOT_IN_BINLOG, ON_CHECK(0),
                                        ON_UPDATE(0));
 
-static Sys_var_ulong Sys_innodb_snapshot_seq(
+static Sys_var_ulonglong Sys_innodb_snapshot_seq(
     "innodb_snapshot_seq", "Innodb snapshot sequence.",
-    HINT_UPDATEABLE SESSION_VAR(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1, __UINT64_MAX__), DEFAULT(__UINT64_MAX__), BLOCK_SIZE(1));
+    HINT_UPDATEABLE SESSION_ONLY(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
 
-static Sys_var_ulong Sys_innodb_commit_seq(
+static Sys_var_ulonglong Sys_innodb_commit_seq(
     "innodb_commit_seq", "Innodb commit sequence",
-    HINT_UPDATEABLE SESSION_VAR(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1, __UINT64_MAX__), DEFAULT(__UINT64_MAX__), BLOCK_SIZE(1));
+    HINT_UPDATEABLE SESSION_ONLY(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+
+static Sys_var_ulonglong Sys_innodb_prepare_seq(
+    "innodb_prepare_seq", "Innodb xa prepare sequence",
+    HINT_UPDATEABLE SESSION_ONLY(innodb_prepare_gcn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+
 /* RDS DEFINED */

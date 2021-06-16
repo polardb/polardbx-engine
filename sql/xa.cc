@@ -242,7 +242,7 @@ MEM_ROOT *Recovered_xa_transactions::get_allocated_memroot() {
 struct xarecover_st {
   int len, found_foreign_xids, found_my_xids;
   XA_recover_txn *list;
-  const memroot_unordered_set<my_xid> *commit_list;
+  const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list;
   bool dry_run;
 };
 
@@ -347,6 +347,10 @@ static bool xarecover_handlerton(THD *, plugin_ref plugin, void *arg) {
           XID *xid = &info->list[i].id;
           LogErr(INFORMATION_LEVEL, ER_XA_COMMITTING_XID, xid->xid_to_str(buf));
 #endif
+          /* Use the commit_gcn read from binlog to commit. */
+          XID *xxid = &info->list[i].id;
+          xxid->set_commit_gcn(info->commit_list->at(x));
+
           hton->commit_by_xid(hton, &info->list[i].id);
         } else {
 #ifndef DBUG_OFF
@@ -364,7 +368,7 @@ static bool xarecover_handlerton(THD *, plugin_ref plugin, void *arg) {
   return false;
 }
 
-int ha_recover(const memroot_unordered_set<my_xid> *commit_list) {
+int ha_recover(const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list) {
   xarecover_st info;
   DBUG_TRACE;
   info.found_foreign_xids = info.found_my_xids = 0;
@@ -447,8 +451,6 @@ void cleanup_trans_state(THD *thd) {
   thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
   transaction_cache_delete(thd->get_transaction());
-
-  thd->reset_gcn();
 }
 
 /**
@@ -649,6 +651,9 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
     xid_state->set_binlogged();
   else
     xid_state->unset_binlogged();
+
+  /* external_xid do not have mysql_thd, so give it current commit_gcn. */
+  external_xid->set_commit_gcn(thd->get_commit_gcn());
 
   res = ha_commit_or_rollback_by_xid(thd, external_xid, !res) || res;
 

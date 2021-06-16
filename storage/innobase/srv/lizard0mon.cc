@@ -95,6 +95,7 @@ static void export_lizard_status(void) {
       lizard_stats.cleanout_cursor_restore_failed;
 
   lizard_vars.commit_gcn = lizard_sys_get_gcn();
+
   lizard_vars.purged_gcn = lizard_sys_get_purged_gcn();
 }
 

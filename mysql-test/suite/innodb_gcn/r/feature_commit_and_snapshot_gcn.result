@@ -1,0 +1,55 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+create table t1 (n int);
+set global innodb_undo_retention = 100;
+show status like "lizard_commit_gcn";
+Variable_name	Value
+Lizard_commit_gcn	1024
+set innodb_commit_seq = @base_seq + 1;
+insert into t1 values(5);
+show variables like "innodb_commit_seq";
+Variable_name	Value
+innodb_commit_seq	18446744073709551615
+set innodb_commit_seq = @base_seq + 3;
+insert into t1 values(7);
+select /*+ SET_VAR(innodb_snapshot_seq=1026) */ * from t1;
+n
+5
+show variables like "innodb_snapshot_seq";
+Variable_name	Value
+innodb_snapshot_seq	18446744073709551615
+set transaction_isolation = "READ-COMMITTED";
+begin;
+select * from t1;
+n
+5
+7
+set innodb_snapshot_seq = @base_seq + 2;
+select * from t1;
+n
+5
+set innodb_snapshot_seq = @base_seq;
+select * from t1;
+n
+commit;
+set transaction_isolation = "REPEATABLE-READ";
+begin;
+select * from t1;
+n
+5
+7
+set innodb_snapshot_seq = @base_seq + 2;
+select * from t1;
+n
+5
+set innodb_snapshot_seq = @base_seq;
+select * from t1;
+n
+commit;
+begin;
+set innodb_commit_seq = @base_seq + 5;
+commit and chain;
+show variables like "innodb_commit_seq";
+Variable_name	Value
+innodb_commit_seq	18446744073709551615
+drop table t1;
+set global innodb_undo_retention = default;

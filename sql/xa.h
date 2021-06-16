@@ -194,6 +194,11 @@ class Sql_cmd_xa_rollback : public Sql_cmd {
 };
 
 typedef ulonglong my_xid;  // this line is the same as in log_event.h
+typedef ulonglong my_commit_gcn;
+
+// this line is the same as in sql_class.h
+const my_commit_gcn MYSQL_GCN_NULL = __UINT64_MAX__;
+
 #define MYSQL_XID_PREFIX "MySQLXid"
 
 /*
@@ -232,8 +237,14 @@ typedef struct xid_t {
   */
   char data[XIDDATASIZE];
 
+  /**
+    The gcn used to commit in innodb of this xid.
+  */
+  my_commit_gcn commit_gcn;
+
  public:
-  xid_t() : formatID(-1), gtrid_length(0), bqual_length(0) {
+  xid_t() : formatID(-1), gtrid_length(0), bqual_length(0),
+            commit_gcn(MYSQL_GCN_NULL) {
     memset(data, 0, XIDDATASIZE);
   }
 
@@ -261,11 +272,16 @@ typedef struct xid_t {
     memcpy(data, v, l);
   }
 
+  my_commit_gcn get_commit_gcn() const { return commit_gcn; }
+
+  void set_commit_gcn(my_commit_gcn v) { commit_gcn = v; }
+
   void reset() {
     formatID = -1;
     gtrid_length = 0;
     bqual_length = 0;
     memset(data, 0, XIDDATASIZE);
+    commit_gcn = MYSQL_GCN_NULL;
   }
 
   void set(long f, const char *g, long gl, const char *b, long bl) {
@@ -336,6 +352,7 @@ typedef struct xid_t {
  public:
   void set(const xid_t *xid) {
     memcpy(this, xid, sizeof(xid->formatID) + xid->key_length());
+    commit_gcn = xid->commit_gcn;
   }
 
   void set(my_xid xid);

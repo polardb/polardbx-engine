@@ -70,6 +70,7 @@
 #include "sql/sql_plugin_ref.h"  // plugin_ref
 #include "thr_lock.h"            // thr_lock_type
 #include "typelib.h"
+#include "sql/xa.h"
 
 #include "sql/sql_statistics_common.h"  // Stats_data
 
@@ -6841,7 +6842,7 @@ int ha_prepare(THD *thd);
 */
 
 typedef ulonglong my_xid;  // this line is the same as in log_event.h
-int ha_recover(const memroot_unordered_set<my_xid> *commit_list);
+int ha_recover(const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list);
 
 /**
   Perform SE-specific cleanup after recovery of transactions.

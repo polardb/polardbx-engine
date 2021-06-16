@@ -1612,6 +1612,8 @@ void srv_export_innodb_status(void) {
   }
   undo::spaces->s_unlock();
 
+  export_vars.commit_gcn = lizard::lizard_sys_get_gcn();
+
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch);
   scn_t done_trx_scn = purge_sys->done.scn;
@@ -1642,8 +1644,6 @@ void srv_export_innodb_status(void) {
     export_vars.innodb_purge_view_trx_scn_age =
         (ulint)(max_trx_scn - low_limit_scn + 1);
   }
-
-  export_vars.commit_gcn = lizard::lizard_sys_get_gcn();
 
 #endif /* UNIV_DEBUG */
 

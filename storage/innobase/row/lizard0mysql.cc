@@ -6,6 +6,7 @@
 #include "lizard0mysql.h"
 #include "lizard0scn0hist.h"
 #include "lizard0sys.h"
+#include "sql/sql_class.h"
 
 namespace lizard {
 
@@ -97,10 +98,17 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
 
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_set()) return DB_SUCCESS;
-  
-  if (trx && trx->vision.is_asof_gcn()) {
-    prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
-    return DB_SUCCESS;
+
+  if (trx) {
+    /* Change gcn on vision to current snapshot gcn. */
+    gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
+    if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
+
+    /* Set gcn on m_asof_query if exist. */
+    if (trx->vision.is_asof_gcn()) {
+      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
+      return DB_SUCCESS;
+    }
   }
 
 #if defined TURN_MVCC_SEARCH_TO_AS_OF

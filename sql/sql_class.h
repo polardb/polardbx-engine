@@ -4221,29 +4221,31 @@ class THD : public MDL_context_owner,
   Sequence_last_value_hash *seq_thd_hash;
 
   void reset_gcn() {
-    variables.innodb_snapshot_gcn = __UINT64_MAX__;
-    variables.innodb_commit_gcn = __UINT64_MAX__;
+    variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
+    variables.innodb_commit_gcn = MYSQL_GCN_NULL;
+  }
+
+  void reset_prepare_gcn() {
+    variables.innodb_prepare_gcn = MYSQL_GCN_NULL;
   }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
 
   ulonglong get_commit_gcn() { return variables.innodb_commit_gcn; }
-};
 
-inline void thd_reset_gcn(THD *thd) {
-  if (thd) thd->reset_gcn();
-}
+  ulonglong get_prepare_gcn() { return variables.innodb_prepare_gcn; }
+};
 
 inline ulonglong thd_get_snapshot_gcn(THD *thd) {
   if (thd) return thd->get_snapshot_gcn();
 
-  return __UINT64_MAX__;
+  return MYSQL_GCN_NULL;
 }
 
 inline ulonglong thd_get_commit_gcn(THD *thd) {
   if (thd) return thd->get_commit_gcn();
 
-  return __UINT64_MAX__;
+  return MYSQL_GCN_NULL;
 }
 
 /**

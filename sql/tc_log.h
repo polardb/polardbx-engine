@@ -37,6 +37,7 @@
 class THD;
 
 typedef ulonglong my_xid;
+typedef ulonglong my_commit_gcn;
 
 #define TC_LOG_MIN_PAGES 6
 
