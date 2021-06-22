@@ -48,6 +48,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <set>
 #include <vector>
 
+#ifdef UNIV_PFS_MUTEX
+/* Lizard undo retention start mutex PFS key */
+extern mysql_pfs_key_t lizard_undo_retention_mutex_key;
+#endif
+
 struct trx_rseg_t;
 struct trx_undo_t;
 struct SYS_VAR;
@@ -652,6 +657,11 @@ class Undo_retention {
                            struct st_mysql_value *value);
   static void on_update(THD *, SYS_VAR *, void *var_ptr, const void *save);
 
+  static void on_update_and_start(THD *thd, SYS_VAR *var,
+                                  void *var_ptr, const void *save);
+
+  ib_mutex_t m_mutex;
+
  protected:
   volatile bool m_stat_done;
 
@@ -686,6 +696,15 @@ class Undo_retention {
 
   @return     true     if blocking purge */
   bool purge_advise();
+
+  /* Create the lizard undo retention mutex. */
+  inline void init_mutex() {
+    mutex_create(LATCH_ID_LIZARD_UNDO_RETENTION, &m_mutex);
+  }
+
+  /* Free the lizard undo retention mutex. */
+  static inline void destroy() { mutex_free(&(instance()->m_mutex)); }
+
 };
 
 /* Init undo_retention */

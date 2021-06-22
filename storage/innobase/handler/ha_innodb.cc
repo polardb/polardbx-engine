@@ -804,7 +804,8 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_sys_mtx_id_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME)};
+    PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(lizard_undo_retention_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -23495,7 +23496,7 @@ static MYSQL_SYSVAR_ULONG(undo_retention,
                           lizard::Undo_retention::retention_time,
                           PLUGIN_VAR_OPCMDARG,
                           "Retention time of undo data in seconds", NULL,
-                          lizard::Undo_retention::on_update,
+                          lizard::Undo_retention::on_update_and_start,
                           0, 0, UINT_MAX32, 0);
 
 static MYSQL_SYSVAR_ULONG(undo_space_supremum_size,

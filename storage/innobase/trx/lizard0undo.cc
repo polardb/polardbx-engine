@@ -100,6 +100,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
   segment.
 */
 
+#ifdef UNIV_PFS_MUTEX
+/* Lizard undo retention start mutex PFS key */
+mysql_pfs_key_t lizard_undo_retention_mutex_key;
+#endif
+
 namespace lizard {
 
 /** The max percent of txn undo page that can be reused */
@@ -2008,16 +2013,30 @@ void Undo_retention::on_update(THD *, SYS_VAR *, void *var_ptr,
   srv_purge_wakeup(); /* notify purge thread to try again */
 }
 
+void Undo_retention::on_update_and_start(THD *thd, SYS_VAR *var, void *var_ptr,
+                                         const void *save) {
+  ulong old_value = *static_cast<const ulong *>(var_ptr);
+  ulong new_value = *static_cast<const ulong *>(save);
+  on_update(thd, var, var_ptr, save);
+
+  /* If open the undo retention, refresh stat data synchronously. */
+  if (new_value > 0 && old_value == 0) {
+    instance()->refresh_stat_data();
+  }
+}
+
 /*
   Collect latest undo space sizes periodically.
 */
 void Undo_retention::refresh_stat_data() {
+  mutex_enter(&m_mutex);
   ulint used_size = 0;
   ulint file_size = 0;
   std::vector<space_id_t> undo_spaces;
 
   if (retention_time == 0) {
     m_stat_done = false;
+    mutex_exit(&m_mutex);
     return;
   }
 
@@ -2050,6 +2069,7 @@ void Undo_retention::refresh_stat_data() {
            "time:{top:%lu, now:%lu}", file_size, used_size,
            mb_to_pages(space_limit), mb_to_pages(space_reserve),
            m_last_top_utc, current_utc());
+  mutex_exit(&m_mutex);
 }
 
 /*
@@ -2089,6 +2109,10 @@ bool Undo_retention::purge_advise() {
 
 /* Init undo_retention */
 void undo_retention_init() {
+
+  /* Init the lizard undo retention mutex. */
+  Undo_retention::instance()->init_mutex();
+
   /* Force to refrese once at starting */
   Undo_retention::instance()->refresh_stat_data();
 }

@@ -3340,6 +3340,7 @@ void srv_shutdown() {
   lock_sys_close();
   trx_pool_close();
 
+  lizard::Undo_retention::destroy();
   lizard::txn_undo_hash_close();
   lizard::lizard_sys_close();
   lizard::gp_sys_destroy();
