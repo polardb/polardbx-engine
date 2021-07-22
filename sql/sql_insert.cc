@@ -101,6 +101,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "sql/trans_proc/returning_parse.h"
 
 namespace dd {
 class Table;
@@ -475,6 +476,12 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
                                       insert_table, insert_table->write_set))
     return true; /* purecov: inspected */
 
+  /* Initialize returning statement */
+  im::Update_returning_statement returning_stmt(thd);
+  /* Setup returning fields and prepare the result set*/
+  returning_stmt.setup(thd, const_cast<SELECT_LEX *>(select_lex));
+  if(thd->is_error()) return true;
+
   // Current error state inside and after the insert loop
   bool has_error = false;
 
@@ -615,6 +622,13 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
         has_error = true;
         break;
       }
+
+      /* Send data if it is returning clause */
+      if (returning_stmt.send_data(thd)) {
+        has_error = true;
+        break;
+      }
+
       thd->get_stmt_da()->inc_current_row_for_condition();
     }
   }  // Statement plan is available within these braces
@@ -723,12 +737,16 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
   if (insert_many_values.elements == 1 &&
       (!(thd->variables.option_bits & OPTION_WARNINGS) ||
        !thd->num_truncated_fields)) {
-    my_ok(thd,
-          info.stats.copied + info.stats.deleted +
-              (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-                   ? info.stats.touched
-                   : info.stats.updated),
-          id);
+    /* Send eof if it is returning clause */
+    if (returning_stmt.is_returning())
+      returning_stmt.send_eof(thd);
+    else
+      my_ok(thd,
+            info.stats.copied + info.stats.deleted +
+                (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                     ? info.stats.touched
+                     : info.stats.updated),
+            id);
   } else {
     char buff[160];
     ha_rows updated =
@@ -744,7 +762,13 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
       snprintf(buff, sizeof(buff), ER_THD(thd, ER_INSERT_INFO),
                (long)info.stats.records, (long)(info.stats.deleted + updated),
                (long)thd->get_stmt_da()->current_statement_cond_count());
-    my_ok(thd, info.stats.copied + info.stats.deleted + updated, id, buff);
+    /* Send eof if it is returning clause */
+    if (returning_stmt.is_returning()) {
+      returning_stmt.send_eof(thd);
+      thd->set_row_count_func(info.stats.copied + info.stats.deleted + updated);
+    }
+    else
+      my_ok(thd, info.stats.copied + info.stats.deleted + updated, id, buff);
   }
 
   /*
@@ -1045,6 +1069,13 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
     if (!select->first_execution && table_list->is_merged() &&
         fix_join_cond_for_insert(thd, table_list))
       return true; /* purecov: inspected */
+
+    /* Returning error if inserting into a view */
+    if (thd->get_lex_returning()->is_returning_call()) {
+      my_error(ER_NOT_SUPPORT_RETURNING_CLAUSE, MYF(0));
+      return true;
+    }
+
   }
 
   /*

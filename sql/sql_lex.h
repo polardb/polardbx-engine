@@ -1880,8 +1880,10 @@ class SELECT_LEX {
   }
   bool is_in_select_list(Item *i);
 
- private:
+ /* change setup_wild to public because we need to call it */
+ public:
   bool setup_wild(THD *thd);
+ private:
   bool setup_order_final(THD *thd);
   bool setup_group(THD *thd);
   void remove_redundant_subquery_clauses(THD *thd,

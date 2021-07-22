@@ -9252,6 +9252,9 @@ ER_AS_OF_TABLE_DEF_CHANGED
 ER_SNAPSHOT_TOO_OLD
   eng "Snapshot too old"
 
+ER_NOT_SUPPORT_RETURNING_CLAUSE
+  eng "Statement didn't support RETURNING clause"
+
 #
 #  End of RDS error message.
 #

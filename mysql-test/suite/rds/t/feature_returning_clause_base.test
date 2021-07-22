@@ -1,0 +1,141 @@
+--source include/have_binlog_format_row.inc
+
+call mtr.add_suppression("Unsafe statement written to the binary log");
+
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+
+create table t1(id int, col1 varchar(100))engine =innodb;
+create table t2(id int, col1 varchar(100))engine =innodb;
+insert into t1 values(1, 'galaxysql1');
+insert into t2 values(1, 'galaxysql1');
+
+
+#
+#test update/delete
+#
+
+# 1. didn't returning any column
+begin;
+call dbms_trans.returning("", "update t1 set col1='galaxysql2' where id = 1");
+select * from t1;
+commit;
+
+
+# 2. transactional test
+begin;
+call dbms_trans.returning("*", "update t1 set col1='galaxysql3' where id = 1");
+call dbms_trans.returning("*", "delete from t1 where id = 1");
+rollback;
+select * from t1;
+
+#
+#test multi-table operation
+#
+begin;
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "update t1 , t2 set t1.col1=t2.col1 where t1.id = t2.id");
+commit;
+
+#
+# test error
+#
+# 1. unsupport command
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "select * from t1");
+
+# 2. syntax error
+--error 1064
+call dbms_trans.returning("*", "uppppdate t1 seet");
+
+# 3. unknown column
+--error ER_BAD_FIELD_ERROR
+call dbms_trans.returning("*", "update t1 set col5='xx'");
+
+--error ER_BAD_FIELD_ERROR
+call dbms_trans.returning("xxxx,xxx", "update t1 set col1 = 'xx'");
+
+--error ER_BAD_FIELD_ERROR
+call dbms_trans.returning("xxxx,xxx", "delete from t1");
+
+--error ER_BAD_FIELD_ERROR
+call dbms_trans.returning("xxxx,xxx", "insert into t1 values(10, 'galaxysql10')");
+
+#
+#test insert
+#
+create table t3(id int primary key auto_increment,  col1 int default 1, col2
+                timestamp default '2019-01-01 00:00:01');
+call dbms_trans.returning("*", "insert into t3(id)  values(NULL)");
+call dbms_trans.returning("*", "insert into t3(id)  values(NULL), (NULL)");
+call dbms_trans.returning("", "insert into t3(id)  values(NULL)");
+commit;
+select * from t3;
+
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "insert into t3 select * from t3");
+
+
+#
+#test explain
+#
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "explain select * from t1");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "explain insert into t3(id)  values(NULL)");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "explain update t1 set col1='galaxysql3' where id = 1");
+
+#
+#test multi-table delete/update
+#
+
+create table m_1(id1 int, col1 int);
+create table m_2(id2 int, col2 int);
+insert into m_1 values(1, 1);
+insert into m_2 values(1, 2);
+create view v_1 as select * from m_1, m_2 where id1 = id2;
+
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "update v_1 set col1 = 10");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "delete m_1, m_2 from m_1 inner join m_2");
+
+
+CREATE TABLE table_a (id int, value int);
+CREATE TABLE table_b (id int, ta_id int, value int);
+
+INSERT INTO table_a VALUES (1, 10);
+INSERT INTO table_a VALUES (2, 20);
+INSERT INTO table_a VALUES (3, 30);
+
+INSERT INTO table_b VALUES (1, 1, 100);
+INSERT INTO table_b VALUES (2, 1, 200);
+INSERT INTO table_b VALUES (3, 2, 300);
+INSERT INTO table_b VALUES (4, 2, 400);
+
+
+CREATE VIEW v AS
+    SELECT      a.id a_id, b.id b_id, b.ta_id, a.value v1, b.value v2
+        FROM    table_a a
+            INNER JOIN  table_b b ON (b.ta_id = a.id);
+
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "INSERT INTO v (a_id, v1) VALUES (3, 30)");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning("*", "INSERT INTO v (b_id, ta_id, v2) VALUES (5, 3, 500)");
+
+drop table m_1;
+drop table m_2;
+drop view v_1;
+
+drop table table_a;
+drop table table_b;
+drop view v;
+
+drop table t1;
+drop table t2;
+drop table t3;
+
+

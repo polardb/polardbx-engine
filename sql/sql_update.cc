@@ -102,6 +102,7 @@
 #include "sql/trigger_def.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "sql/trans_proc/returning_parse.h"
 
 class COND_EQUAL;
 class Item_exists_subselect;
@@ -550,6 +551,12 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
   table->mark_columns_per_binlog_row_image(thd);
 
   if (table->setup_partial_update()) return true; /* purecov: inspected */
+  
+  /* Initialize returning statement */
+  im::Update_returning_statement returning_stmt(thd);
+  /* Setup returning fields and prepare the result set*/
+  returning_stmt.setup(thd, const_cast<SELECT_LEX *>(select_lex));
+  if(thd->is_error()) return true;
 
   ha_rows updated_rows = 0;
   ha_rows found_rows = 0;
@@ -917,6 +924,12 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
         }
       }
 
+      /* Send data if it is returning clause */
+      if (!error && returning_stmt.send_data(thd)) {
+        error = 1;
+        break;
+      }
+
       if (!error && has_after_triggers &&
           table->triggers->process_triggers(thd, TRG_EVENT_UPDATE,
                                             TRG_ACTION_AFTER, true)) {
@@ -1065,11 +1078,15 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
     snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
-    my_ok(thd,
-          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-              ? found_rows
-              : updated_rows,
-          id, buff);
+    /* Send eof if it is returning clause */
+    if (returning_stmt.is_returning())
+      returning_stmt.send_eof(thd);
+    else
+      my_ok(thd,
+            thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                ? found_rows
+                : updated_rows,
+            id, buff);
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
@@ -1392,6 +1409,11 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
     // Identify the single table to be updated
     single_table_updated = table_list->updatable_base_table();
   } else {
+    /* Return error if updating multitable tables */
+    if (thd->get_lex_returning()->is_returning_call()) {
+      my_error(ER_NOT_SUPPORT_RETURNING_CLAUSE, MYF(0));
+      return true;
+    }
     // At this point the update is known to be a multi-table operation.
     select->make_active_options(SELECT_NO_JOIN_CACHE | SELECT_NO_UNLOCK,
                                 OPTION_BUFFER_RESULT);

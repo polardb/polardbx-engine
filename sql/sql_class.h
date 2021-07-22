@@ -109,6 +109,7 @@
 #include "sql_string.h"
 #include "thr_lock.h"
 #include "violite.h"
+#include "sql/trans_proc/returning_parse.h"
 
 enum enum_check_fields : int;
 enum enum_tx_isolation : int;
@@ -4155,6 +4156,12 @@ class THD : public MDL_context_owner,
  public:
   bool is_system_user();
   void set_system_user(bool system_user_flag);
+
+  /** Returning clause lex */
+  std::unique_ptr<im::Lex_returning> lex_returning;
+
+  /** Get returning lex */
+  im::Lex_returning *get_lex_returning() { return lex_returning.get(); }
 };
 
 /**

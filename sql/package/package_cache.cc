@@ -28,6 +28,7 @@
 #include "sql/package/package_common.h"
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
+#include "sql/trans_proc/returning.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -122,6 +123,8 @@ void package_context_init() {
   register_package<Proc, im::Jemalloc_profile_proc>(im::JEMALLOC_PROC_SCHEMA);
 #endif
   register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
+  /* dbms_trans.returning() */
+  register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
 }
 
 } /* namespace im */

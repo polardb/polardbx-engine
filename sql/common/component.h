@@ -62,6 +62,37 @@ class Disable_copy_base {
   Disable_copy_base &operator=(const Disable_copy_base &);
 };
 
+/**
+  String fundamental function, trim space of it's left and right
+  T has to be std::basic_string type.
+*/
+template <typename T, bool NEED>
+T &trim(T &s) {
+  if (NEED) {
+    s.erase(0, s.find_first_not_of(" "));
+    s.erase(s.find_last_not_of(" ") + 1);
+  }
+  return s;
+}
+/* Split str by separator and push them into container */
+template <typename T, typename C, bool TRIM>
+void split(const char *str, const char *separator, C *container) {
+  typename T::size_type pos1, pos2;
+  if (str == nullptr || str[0] == '\0' || separator == nullptr) return;
+  T t_str(str), sub;
+  pos1 = 0;
+  pos2 = t_str.find(separator);
+  while (pos2 != T::npos) {
+    sub = t_str.substr(pos1, pos2 - pos1);
+    container->push_back(trim<T, TRIM>(sub));
+    pos1 = pos2 + strlen(separator);
+    pos2 = t_str.find(separator, pos1);
+  }
+  sub = t_str.substr(pos1);
+  container->push_back(trim<T, TRIM>(sub));
+  return;
+}
+
 /*
   Pair key map definition
 */

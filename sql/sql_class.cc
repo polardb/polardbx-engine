@@ -92,6 +92,8 @@
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
 #include "thr_mutex.h"
+#include "sql/trans_proc/common.h"
+
 
 using std::max;
 using std::min;
@@ -433,7 +435,8 @@ THD::THD(bool enable_plugins)
       m_stmt_da(&main_da),
       duplicate_slave_id(false),
       is_a_srv_session_thd(false),
-      m_is_plugin_fake_ddl(false) {
+      m_is_plugin_fake_ddl(false),
+      lex_returning(new im::Lex_returning(false)) {
   main_lex->reset();
   set_psi(NULL);
   mdl_context.init(this);
