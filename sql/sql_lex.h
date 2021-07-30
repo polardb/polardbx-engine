@@ -96,6 +96,8 @@
 
 #include "sql/sql_lex_ext.h"
 
+#include "sql/sequence_common.h"  // Sequence_scan
+
 namespace im {
 class Lex_optimizer_hint;
 }
@@ -106,6 +108,7 @@ class Event_parse_data;
 class Item_func_match;
 class Parse_tree_root;
 class Window;
+class Sequence_info;
 class sp_pcontext;
 enum class enum_jt_column;
 enum class enum_jtc_on : uint16;
@@ -246,6 +249,7 @@ enum class enum_view_create_mode {
 #define TL_OPTION_FORCE_INDEX 2
 #define TL_OPTION_IGNORE_LEAVES 4
 #define TL_OPTION_ALIAS 8
+#define TL_OPTION_SEQUENCE 16
 
 /* Structure for db & table in sql_yacc */
 extern LEX_CSTRING EMPTY_CSTR;
@@ -1458,7 +1462,8 @@ class SELECT_LEX {
       THD *thd, Table_ident *table, const char *alias, ulong table_options,
       thr_lock_type flags = TL_UNLOCK, enum_mdl_type mdl_type = MDL_SHARED_READ,
       List<Index_hint> *hints = 0, List<String> *partition_names = 0,
-      LEX_STRING *option = 0, Parse_context *pc = NULL);
+      LEX_STRING *option = 0, Parse_context *pc = NULL,
+      Sequence_scan_mode seq_scan_mode = Sequence_scan_mode::ORIGINAL_SCAN);
   TABLE_LIST *get_table_list() const { return table_list.first; }
   bool init_nested_join(THD *thd);
   TABLE_LIST *end_nested_join();
@@ -3727,6 +3732,11 @@ struct LEX : public Query_tables_list {
   void clear_privileges();
 
   bool make_sql_cmd(Parse_tree_root *parse_tree);
+
+  /**
+    Information for creating sequence.
+  */
+  Sequence_info *sequence_info;
 
  private:
   /**

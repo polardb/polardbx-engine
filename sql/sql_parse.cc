@@ -4198,6 +4198,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
           DBUG_ASSERT(thd->slave_thread == 1);
           thd->security_context()->restore_security_context(thd, backup);
         }
+        if (lex->sphead->m_type == enum_sp_type::FUNCTION)
+          on_user_sp_status_changed(lex->sphead->m_db.str, name, true);
         my_ok(thd);
       }
       break; /* break super switch */
@@ -5830,6 +5832,7 @@ bool PT_common_table_expr::match_table_ref(TABLE_LIST *tl, bool in_self,
   @param partition_names
   @param option
   @param pc             Current parsing context, if available.
+  @param seq_scan_mode  Mode used to scan sequence table
 
   @return Pointer to TABLE_LIST element added to the total table list
   @retval
@@ -5840,11 +5843,13 @@ TABLE_LIST *SELECT_LEX::add_table_to_list(
     THD *thd, Table_ident *table_name, const char *alias, ulong table_options,
     thr_lock_type lock_type, enum_mdl_type mdl_type,
     List<Index_hint> *index_hints_arg, List<String> *partition_names,
-    LEX_STRING *option, Parse_context *pc) {
+    LEX_STRING *option, Parse_context *pc, Sequence_scan_mode seq_scan_mode) {
   TABLE_LIST *previous_table_ref =
       NULL; /* The table preceding the current one. */
   LEX *lex = thd->lex;
   DBUG_TRACE;
+
+  bool sequence_query;
 
   DBUG_ASSERT(table_name != nullptr);
   // A derived table has no table name, only an alias.
@@ -5904,6 +5909,8 @@ TABLE_LIST *SELECT_LEX::add_table_to_list(
     if (find_common_table_expr(thd, table_name, ptr, pc, &found_cte)) return 0;
     if (!found_cte && lex->copy_db_to(&ptr->db, &ptr->db_length)) return 0;
   }
+
+  sequence_query = (table_options & TL_OPTION_SEQUENCE);
 
   ptr->set_tableno(0);
   ptr->set_lock({lock_type, THR_DEFAULT});
@@ -5992,7 +5999,7 @@ TABLE_LIST *SELECT_LEX::add_table_to_list(
     }
   }
   /* Store the table reference preceding the current one. */
-  if (table_list.elements > 0) {
+  if (table_list.elements > 0 && !sequence_query) {
     /*
       table_list.next points to the last inserted TABLE_LIST->next_local'
       element
@@ -6017,7 +6024,8 @@ TABLE_LIST *SELECT_LEX::add_table_to_list(
     previous table reference to 'ptr'. Here we also add one element to the
     list 'table_list'.
   */
-  table_list.link_in_list(ptr, &ptr->next_local);
+  if (!sequence_query) table_list.link_in_list(ptr, &ptr->next_local);
+
   ptr->next_name_resolution_table = NULL;
   ptr->partition_names = partition_names;
   /* Link table in global list (all used tables) */
@@ -6064,6 +6072,8 @@ TABLE_LIST *SELECT_LEX::add_table_to_list(
       if (thd->is_error()) return nullptr;
     }
   }
+
+  ptr->sequence_scan.set(seq_scan_mode);
 
   return ptr;
 }

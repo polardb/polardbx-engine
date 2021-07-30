@@ -6769,4 +6769,10 @@ static Sys_var_ulong Sys_global_query_wait_timeout(
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, LONG_TIMEOUT), DEFAULT(LONG_TIMEOUT),
     BLOCK_SIZE(1));
 
+static Sys_var_bool Sys_sequence_read_skip_cache(
+    "sequence_read_skip_cache",
+    "Skip sequence cache, read the based table directly.",
+    SESSION_ONLY(sequence_read_skip_cache), NO_CMD_LINE, DEFAULT(FALSE),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
+
 #include "sys_vars_ext.cc"

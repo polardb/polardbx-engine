@@ -713,6 +713,7 @@ The documentation is based on the source files such as:
 
 #include "sql/package/package_interface.h"
 #include "sql/ccl/ccl_interface.h"
+#include "sql/sequence_common.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -2344,6 +2345,13 @@ static void clean_up(bool print_message) {
   udf_deinit_globals();
 
   im::ccl_destroy();
+
+  /*
+    Cleanup for user defined functions with the same names as sequence
+    engine
+  */
+  user_seq_sp_exit();
+
   /*
     The following lines may never be executed as the main thread may have
     killed us
@@ -6866,6 +6874,9 @@ int mysqld_main(int argc, char **argv)
     flush_error_log_messages();
     return 1;
   }
+
+  /* Init user defined sequence function status. */
+  if (user_seq_sp_init()) unireg_abort(MYSQLD_ABORT_EXIT);
 
   /*
     Activate loadable error logging components, if any.

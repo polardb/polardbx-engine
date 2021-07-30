@@ -55,6 +55,8 @@
 #include "sql/system_variables.h"
 #include "sql_string.h"
 
+#include "sql/item_sequence_func.h"
+
 class PT_subquery;
 class PT_window;
 struct udf_func;
@@ -128,6 +130,7 @@ class PTI_comp_op_all : public Parse_tree_item {
 
 class PTI_simple_ident_ident : public Parse_tree_item {
   typedef Parse_tree_item super;
+  friend class Item_seq_func;
 
   LEX_CSTRING ident;
   Symbol_location raw;
@@ -144,6 +147,7 @@ class PTI_simple_ident_ident : public Parse_tree_item {
 */
 class PTI_simple_ident_q_3d : public Parse_tree_item {
   typedef Parse_tree_item super;
+  friend class Item_seq_func;
 
  protected:
   const char *db;
@@ -223,6 +227,7 @@ class PTI_function_call_nonkeyword_sysdate : public Parse_tree_item {
 
 class PTI_udf_expr : public Parse_tree_item {
   typedef Parse_tree_item super;
+  friend class Item_seq_func;
 
   Item *expr;
   LEX_STRING select_alias;

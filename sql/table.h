@@ -62,6 +62,7 @@
 #include "sql/mem_root_array.h"
 
 #include "sql/table_ext.h"
+#include "sql/sequence_common.h"  // Sequence_property, Sequence_scan, Sequence_last_value
 
 class Field;
 
@@ -110,6 +111,7 @@ struct TABLE_LIST;
 struct TABLE_SHARE;
 struct handlerton;
 typedef int8 plan_idx;
+class Sequence_property;
 
 namespace dd {
 class Table;
@@ -1175,6 +1177,10 @@ struct TABLE_SHARE {
 
   /// Does this TABLE_SHARE represent a table in a secondary storage engine?
   bool m_secondary_engine{false};
+
+ public:
+  /** Sequence attributes represent that it is sequence table */
+  Sequence_property *sequence_property;
 };
 
 /**
@@ -2173,6 +2179,12 @@ struct TABLE {
 
   /* Snapshot information */
   im::Snapshot_info_t snapshot;
+
+  /**
+    Sequence scan mode only affect one table but not all query lex,
+    so We define this option within TABLE object.
+  */
+  Sequence_scan sequence_scan;
 };
 
 static inline void empty_record(TABLE *table) {
@@ -3541,6 +3553,9 @@ struct TABLE_LIST {
   /** Snapshot struct.
   Note that the table may be a view or a derived table (sub query). */
   im::Table_snapshot snapshot_expr{0, 0, 0};
+
+  /** Represent the sequence query scan mode */
+  Sequence_scan sequence_scan;
 };
 
 /*

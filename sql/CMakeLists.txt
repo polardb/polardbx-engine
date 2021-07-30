@@ -571,6 +571,11 @@ SET(SQL_SHARED_SOURCES
   ccl/ccl_hint.cc
   ccl/ccl_bucket.cc
   galaxy/service_galaxy.cc
+  ha_sequence.cc
+  item_sequence_func.cc
+  sequence_common.cc
+  sequence_transaction.cc
+  sql_sequence.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 
@@ -1148,6 +1153,10 @@ IF(WIN32)
     PROPERTIES LINK_FLAGS
     "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/locking_service.def")
 ENDIF()
+
+#Sequence engine will be registered as mandatory plugin
+MYSQL_ADD_PLUGIN(sequence ha_sequence.cc STORAGE_ENGINE MANDATORY DEFAULT
+                     STATIC_ONLY MODULE_OUTPUT_NAME "sequence")
 
 FOREACH(tool gtar tar git)
   STRING(TOUPPER ${tool}  TOOL)

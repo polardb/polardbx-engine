@@ -9216,6 +9216,9 @@ ER_SEQUENCE_NOT_DEFINED
 ER_TABLE_IS_NOT_SEQUENCE
    eng "Table '%-.192s.%-.192s' should be sequence"
 
+ER_SEQUENCE_RETRY_TIMEOUT
+  eng "Sequence '%-.192s.%-.192s' roll forward retry timeout"
+
 ER_ROTATE_REQUIRE_LOG_TABLE
    eng "Rotate command must be working on log table"
 

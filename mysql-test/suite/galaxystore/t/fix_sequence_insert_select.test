@@ -1,0 +1,62 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+--echo
+--echo ** Prepare **
+
+--source include/rpl_connection_master.inc
+
+create database seq_test;
+use seq_test;
+
+create sequence s1;
+create table mt1 (id int key, c1 int);
+
+update s1 set cache = 3;
+insert into mt1 values (1, 0);
+
+# expect 1
+select s1.nextval;
+
+--source include/sync_slave_sql_with_master.inc
+
+
+
+--echo
+--echo ** Insert Select **
+
+--source include/rpl_connection_master.inc
+
+use seq_test;
+
+insert into mt1 select s1.nextval, id from mt1;
+
+insert into mt1 select s1.nextval, id from mt1;
+
+insert into mt1 select s1.nextval, id from mt1;
+
+insert into mt1 select s1.nextval, id from mt1;
+
+select * from mt1;
+select * from s1;
+
+--source include/sync_slave_sql_with_master.inc
+
+--source include/rpl_connection_slave.inc
+
+use seq_test;
+select * from mt1;
+select * from s1;
+
+
+
+--echo
+--echo ** Cleanup **
+
+--source include/rpl_connection_master.inc
+
+use mysql;
+drop database seq_test;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_end.inc

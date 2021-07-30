@@ -161,6 +161,10 @@ class Check_constraints_adjusted_names_map;
 typedef struct user_conn USER_CONN;
 struct MYSQL_LOCK;
 
+class Sequence_last_value;
+typedef collation_unordered_map<std::string, Sequence_last_value *>
+    Sequence_last_value_hash;
+
 extern "C" void thd_enter_cond(void *opaque_thd, mysql_cond_t *cond,
                                mysql_mutex_t *mutex,
                                const PSI_stage_info *stage,
@@ -1570,6 +1574,7 @@ class THD : public MDL_context_owner,
 
   uint get_binlog_table_maps() const { return binlog_table_maps; }
   void clear_binlog_table_maps() { binlog_table_maps = 0; }
+  void set_binlog_table_maps(uint count) { binlog_table_maps = count; }
 
   /*
     MTS: accessor to binlog_accessed_db_names list
@@ -1667,6 +1672,7 @@ class THD : public MDL_context_owner,
       return m_prev_attachable_trx;
     }
     virtual bool is_read_only() const { return true; }
+    bool is_autonomous() const { return m_is_autonomous; }
 
    protected:
     /// THD instance.
@@ -1674,6 +1680,7 @@ class THD : public MDL_context_owner,
 
     enum_reset_lex m_reset_lex;
 
+    bool m_is_autonomous;
     /**
       Attachable_trx which was active for the THD before when this
       transaction was started (NULL in most cases).
@@ -1710,6 +1717,22 @@ class THD : public MDL_context_owner,
    private:
     Attachable_trx_rw(const Attachable_trx_rw &);
     Attachable_trx_rw &operator=(const Attachable_trx_rw &);
+  };
+
+  class Autonomous_trx_rw : public Attachable_trx {
+   public:
+    virtual bool is_read_only() const { return false; }
+    Autonomous_trx_rw(THD *thd, Attachable_trx *prev_trx);
+    ~Autonomous_trx_rw();
+
+    void init_autonomous();
+
+   private:
+    Autonomous_trx_rw(const Autonomous_trx_rw &);
+    Autonomous_trx_rw &operator=(const Autonomous_trx_rw &);
+
+   private:
+    uint m_binlog_table_maps;
   };
 
   Attachable_trx *m_attachable_trx;
@@ -3000,6 +3023,10 @@ class THD : public MDL_context_owner,
     return m_attachable_trx != nullptr && !m_attachable_trx->is_read_only();
   }
 
+  void begin_autonomous_rw_transaction();
+  void end_autonomous_rw_transaction();
+  bool is_autonomous_transaction() const;
+
  public:
   /*
     @todo Make these methods private or remove them completely.  Only
@@ -4169,6 +4196,12 @@ class THD : public MDL_context_owner,
  public:
   std::unique_ptr<im::Ccl_comply> ccl_comply;
   std::vector<im::Ccl_comply_handler *> ccl_comply_handlers;
+
+  Sequence_last_value_hash *get_sequence_hash() { return seq_thd_hash; }
+
+ private:
+  /** Hash table to save last CURRVAL value of sequence table */
+  Sequence_last_value_hash *seq_thd_hash;
 };
 
 /**

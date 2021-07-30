@@ -2887,6 +2887,10 @@ bool Prepared_statement::execute_server_runnable(
 
   if (!(lex = new (m_arena.mem_root) st_lex_local)) return true;
 
+  // Reset member field to avoid junk memory value, otherwise it will run into
+  // CREATE TABLE / SEQUENCE code path.
+  lex->create_info = nullptr;
+
   Statement_backup stmt_backup;
   stmt_backup.set_thd_to_ps(thd, this);
   stmt_backup.save_rlb(thd);

@@ -400,6 +400,8 @@ struct System_variables {
   uint32_t generated_random_password_length;
 
   ulonglong global_query_wait_timeout;
+
+  bool sequence_read_skip_cache;
 };
 
 /**

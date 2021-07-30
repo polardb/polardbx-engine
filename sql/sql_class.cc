@@ -95,6 +95,8 @@
 #include "sql/trans_proc/common.h"
 
 
+#include "sql/sequence_common.h"  // Sequence_last_value_hash
+
 using std::max;
 using std::min;
 using std::unique_ptr;
@@ -240,6 +242,8 @@ THD::Attachable_trx::Attachable_trx(THD *thd, Attachable_trx *prev_trx)
     influencing attachable transaction we are initiating.
   */
   m_thd->transaction_rollback_request = false;
+
+  m_is_autonomous = false;
 }
 
 THD::Attachable_trx::~Attachable_trx() {
@@ -258,7 +262,7 @@ THD::Attachable_trx::~Attachable_trx() {
   // (for example, when statement is killed just after tables are locked but
   // before any other operations on the table happes). We try not to rely on
   // it in other places on SQL-layer as well.
-  trans_commit_attachable(m_thd);
+  if (!m_is_autonomous) trans_commit_attachable(m_thd);
 
   // Close all the tables that are open till now.
 
@@ -558,10 +562,14 @@ THD::THD(bool enable_plugins)
   debug_binlog_xid_last.reset();
 #endif
   set_system_user(false);
+
+  /* Create the hash table to save the last CURRVAL value of sequence table */
+  seq_thd_hash = new Sequence_last_value_hash(system_charset_info,
+                                              key_memory_sequence_last_value);
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {
-  DBUG_ASSERT(is_attachable_ro_transaction_active());
+  DBUG_ASSERT(is_attachable_ro_transaction_active() || is_autonomous_transaction());
 
   delete m_transaction.release();
   m_transaction.reset(transaction_ctx);
@@ -901,6 +909,9 @@ void THD::cleanup_connection(void) {
   }
   /* DEBUG code only (end) */
 #endif
+
+  /* Clear the hash table used to save last CURRVAL value of sequence table */
+  clear_hash(seq_thd_hash);
 }
 
 /*
@@ -993,6 +1004,8 @@ void THD::cleanup(void) {
   */
   session_tracker.deinit();
 
+  /* Clear the hash table used to save last CURRVAL value of sequence table */
+  clear_hash(seq_thd_hash);
   /*
     If we have a Security_context, make sure it is "logged out"
   */
@@ -1119,6 +1132,10 @@ THD::~THD() {
   if (m_token_array != NULL) {
     my_free(m_token_array);
   }
+
+  /* Destroy the hash table used to save last CURRVAL value of sequence table */
+  destroy_hash(seq_thd_hash);
+  seq_thd_hash = nullptr;
 }
 
 /**

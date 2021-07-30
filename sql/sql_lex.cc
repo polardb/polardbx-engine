@@ -477,6 +477,7 @@ void LEX::reset() {
   grant_as.cleanup();
   is_update_stmt = false;
   table_snap_expr_count_to_evaluate = 0;
+  sequence_info = nullptr;
 }
 
 /**
