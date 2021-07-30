@@ -119,7 +119,7 @@ void Clone_persist_gtid::set_persist_gtid(trx_t *trx, bool set) {
   static_cast<void>(has_gtid(trx, thd, thd_check));
 
   /* For attachable transaction, skip both set and reset. */
-  if (thd == nullptr || thd->is_attachable_transaction_active() ||
+  if (thd == nullptr || (thd->is_attachable_transaction_active() && !thd->is_autonomous_transaction()) ||
       trx->internal) {
     return;
   }
@@ -308,7 +308,7 @@ bool Clone_persist_gtid::has_gtid(trx_t *trx, THD *&thd, bool &passed_check) {
   /* Attachable transactions can be started and committed while
   the main transaction is in progress. We don't want to consider
   GTID persistence for such transactions. */
-  if (thd->is_attachable_transaction_active()) {
+  if ((thd->is_attachable_transaction_active() && !thd->is_autonomous_transaction())) {
     return (false);
   }
 

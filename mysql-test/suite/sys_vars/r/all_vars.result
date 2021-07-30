@@ -224,6 +224,7 @@ select_into_disk_sync
 select_into_disk_sync
 select_into_disk_sync_delay
 select_into_disk_sync_delay
+sequence_read_skip_cache
 skip_replica_start
 skip_replica_start
 skip_slave_start

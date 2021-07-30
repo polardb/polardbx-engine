@@ -3506,6 +3506,19 @@ reset:
 
   table->init(thd, table_list);
 
+  /**
+    1. NEXTVAL() or CURRVAL() function only worked on sequence table.
+    2. Iteration scan on sequence will release MDL lock when statement end.
+  */
+  if (table->sequence_scan.get() == Sequence_scan_mode::ITERATION_SCAN) {
+    if (!table->s->sequence_property->is_sequence()) {
+      my_error(ER_TABLE_IS_NOT_SEQUENCE, MYF(0), table_list->db,
+               table_list->table_name);
+      return true;
+    }
+    table->mdl_ticket->set_autonomous(true);
+  }
+
   /* Request a read lock for implicitly opened P_S tables. */
   if (in_LTM(thd) && table_list->table->file->get_lock_type() == F_UNLCK &&
       belongs_to_p_s(table_list)) {
@@ -6602,7 +6615,8 @@ bool open_and_lock_tables(THD *thd, Table_ref *tables, uint flags,
   */
   assert(!thd->is_attachable_ro_transaction_active() &&
          (!thd->is_attachable_rw_transaction_active() ||
-          !strcmp(tables->table_name, "gtid_executed")));
+          !strcmp(tables->table_name, "gtid_executed") ||
+               thd->is_autonomous_transaction()));
 
   if (open_tables(thd, &tables, &counter, flags, prelocking_strategy)) goto err;
 

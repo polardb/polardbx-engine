@@ -114,6 +114,7 @@
 #include "thr_mutex.h"
 #include "ppi/ppi_statement.h"
 #include "ppi/ppi_transaction.h"
+#include "sql/sequence_common.h"  // Sequence_last_value_hash
 
 class Parse_tree_root;
 
@@ -490,6 +491,8 @@ THD::Attachable_trx::Attachable_trx(THD *thd, Attachable_trx *prev_trx)
   m_thd->ppi_transaction = nullptr;
 
   PPI_TRANSACTION_CALL(backup_transaction)(m_thd->ppi_thread);
+
+  m_is_autonomous = false;
 }
 
 THD::Attachable_trx::~Attachable_trx() {
@@ -508,7 +511,7 @@ THD::Attachable_trx::~Attachable_trx() {
   // (for example, when statement is killed just after tables are locked but
   // before any other operations on the table happes). We try not to rely on
   // it in other places on SQL-layer as well.
-  trans_commit_attachable(m_thd);
+  if (!m_is_autonomous) trans_commit_attachable(m_thd);
 
   // Close all the tables that are open till now.
 
@@ -859,6 +862,10 @@ THD::THD(bool enable_plugins)
   m_mem_cnt.set_thd(this);
 
   rds_audit_event_buf = nullptr;
+
+  /* Create the hash table to save the last CURRVAL value of sequence table */
+  seq_thd_hash = new Sequence_last_value_hash(system_charset_info,
+                                              key_memory_sequence_last_value);
 }
 
 void THD::copy_table_access_properties(THD *thd) {
@@ -869,7 +876,7 @@ void THD::copy_table_access_properties(THD *thd) {
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {
-  assert(is_attachable_ro_transaction_active());
+  assert(is_attachable_ro_transaction_active() || is_autonomous_transaction());
 
   delete m_transaction.release();
   m_transaction.reset(transaction_ctx);
@@ -1216,6 +1223,9 @@ void THD::cleanup_connection(void) {
   }
   /* DEBUG code only (end) */
 #endif
+
+  /* Clear the hash table used to save last CURRVAL value of sequence table */
+  clear_hash(seq_thd_hash);
 }
 
 bool THD::is_cleanup_done() {
@@ -1315,6 +1325,8 @@ void THD::cleanup(void) {
   */
   session_tracker.deinit();
 
+  /* Clear the hash table used to save last CURRVAL value of sequence table */
+  clear_hash(seq_thd_hash);
   /*
     If we have a Security_context, make sure it is "logged out"
   */
@@ -1482,6 +1494,10 @@ THD::~THD() {
   }
 
   m_thd_life_cycle_stage = enum_thd_life_cycle_stages::DISPOSED;
+
+  /* Destroy the hash table used to save last CURRVAL value of sequence table */
+  destroy_hash(seq_thd_hash);
+  seq_thd_hash = nullptr;
 }
 
 /**

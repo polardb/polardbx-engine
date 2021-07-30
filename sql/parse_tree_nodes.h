@@ -90,6 +90,7 @@ class Window;
 class sp_head;
 class sp_name;
 struct CHARSET_INFO;
+class Sequence_info;
 
 /**
   @defgroup ptn  Parse tree nodes
@@ -191,6 +192,9 @@ struct Table_ddl_parse_context final : public Parse_context {
   HA_CREATE_INFO *const create_info;
   Alter_info *const alter_info;
   KEY_CREATE_INFO *const key_create_info;
+
+  /// Information used for sequence engine
+  Sequence_info *const sequence_info;
 };
 
 /**
@@ -2793,7 +2797,8 @@ class PT_column_def : public PT_table_element {
 
   @ingroup ptn_create_table
 */
-class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
+class PT_create_table_stmt : public PT_table_ddl_stmt_base {
+ protected:
   bool is_temporary;
   bool only_if_not_exists;
   Table_ident *table_name;

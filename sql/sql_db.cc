@@ -916,6 +916,9 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
       }
       return true;
     }
+
+    // Update the existence status of routines in cache
+    on_user_sp_status_changed(db.str, nullptr, false);
   }
 
   /*

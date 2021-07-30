@@ -1,0 +1,125 @@
+
+Case 1: normal cases
+
+# restart: --lower_case_table_names=0
+use test;
+create sequence s2 start with 1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+create function nextval(a int) returns int begin return 0; end $$
+create function currval(a varchar(100)) returns int begin return 0; end $$
+select 1 + nextval(0);
+1 + nextval(0)
+1
+select 1 + currval('a');
+1 + currval('a')
+1
+select 1 + `nextval`(0);
+1 + `nextval`(0)
+1
+select 1 + `currval`('a');
+1 + `currval`('a')
+1
+select 1 + nextval(s2);
+ERROR 42S22: Unknown column 's2' in 'field list'
+select 1 + nextval(test.s2);
+ERROR 42S02: Unknown table 'test' in field list
+select 1 + currval(s2);
+ERROR 42S22: Unknown column 's2' in 'field list'
+select 1 + currval(test.s2);
+ERROR 42S02: Unknown table 'test' in field list
+select database();
+database()
+mysql
+set session sql_log_bin=off;
+select 1 + nextval(test.s2);
+1 + nextval(test.s2)
+2
+select 1 + currval(test.s2);
+1 + currval(test.s2)
+2
+select 1 + nextval(0);
+ERROR 42000: Incorrect parameters in the call to native function 'nextval'
+select 1 + currval('1');
+ERROR 42000: Incorrect parameters in the call to native function 'currval'
+select 1 + currval('1', 2);
+ERROR 42000: Incorrect parameter count in the call to native function 'currval'
+select 1 + test.nextval(0);
+1 + test.nextval(0)
+1
+select 1 + test.currval('a');
+1 + test.currval('a')
+1
+select 1 + test.nextval('a');
+ERROR HY000: Incorrect integer value: 'a' for column 'a' at row 1
+select 1 + test.currval(a);
+ERROR 42S22: Unknown column 'a' in 'field list'
+set session sql_log_bin=default;
+create database Test;
+use Test;
+select 1 + nextval(0);
+ERROR 42000: Incorrect parameters in the call to native function 'nextval'
+select 1 + currval('a');
+ERROR 42000: Incorrect parameters in the call to native function 'currval'
+use test;
+drop sequence s2;
+drop function nextval;
+drop function currval;
+drop database Test;
+
+Case 2: drop function + create function
+
+use test;
+select 1 + nextval(0);
+ERROR 42000: Incorrect parameters in the call to native function 'nextval'
+select 1 + currval('a');
+ERROR 42000: Incorrect parameters in the call to native function 'currval'
+create function nextval(a int) returns int begin return 0; end $$
+create function currval(a varchar(100)) returns int begin return 0; end $$
+select 1 + nextval(0);
+1 + nextval(0)
+1
+select 1 + currval('a');
+1 + currval('a')
+1
+drop function nextval;
+drop function currval;
+select 1 + nextval(0);
+ERROR 42000: Incorrect parameters in the call to native function 'nextval'
+select 1 + currval('a');
+ERROR 42000: Incorrect parameters in the call to native function 'currval'
+
+Case 3: Drop database
+
+create database Test;
+use Test;
+select 1 + nextval(0);
+ERROR 42000: Incorrect parameters in the call to native function 'nextval'
+select 1 + currval('a');
+ERROR 42000: Incorrect parameters in the call to native function 'currval'
+create function nextval(a int) returns int begin return 0; end $$
+create function currval(a varchar(100)) returns int begin return 0; end $$
+select 1 + nextval(0);
+1 + nextval(0)
+1
+select 1 + currval('a');
+1 + currval('a')
+1
+use mysql;
+drop database Test;
+create database Test;
+use Test;
+select 1 + nextval(0);
+ERROR 42000: Incorrect parameters in the call to native function 'nextval'
+select 1 + currval('a');
+ERROR 42000: Incorrect parameters in the call to native function 'currval'
+use mysql;
+drop database Test;

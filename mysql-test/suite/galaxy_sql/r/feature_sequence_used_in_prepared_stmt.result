@@ -1,0 +1,233 @@
+prepare stmt from 'create sequence s1';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select s1.nextval;
+s1.nextval
+1
+drop sequence s1;
+prepare stmt from 'create sequence s1 start with 1';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select s1.nextval;
+s1.nextval
+1
+drop sequence s1;
+prepare stmt from 'create sequence s1 start with 1 minvalue 1 maxvalue 20 increment by 1 cache 5 cycle';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select s1.nextval;
+s1.nextval
+1
+drop sequence s1;
+prepare stmt from 'create sequence s1 nocache';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select s1.nextval;
+s1.nextval
+1
+drop sequence s1;
+prepare stmt from 'create sequence s1 cache 5';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select s1.nextval;
+s1.nextval
+1
+drop sequence s1;
+prepare stmt from 'create sequence s1 timestamp';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select currval, nextval from s1;
+currval	nextval
+#	#
+drop sequence s1;
+prepare stmt from 'create sequence s1 cycle timestamp';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select currval, nextval from s1;
+currval	nextval
+#	#
+drop sequence s1;
+prepare stmt from 'create sequence s1 cache 5 timestamp';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+execute stmt;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select currval, nextval from s1;
+currval	nextval
+#	#
+drop sequence s1;
+DEALLOCATE PREPARE stmt;

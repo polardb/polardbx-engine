@@ -580,6 +580,9 @@ union YYSTYPE {
   PT_column_def *column_def;
   PT_table_element *table_element;
   Mem_root_array<PT_table_element *> *table_element_list;
+  // CREATE SEQUENCE options
+  class PT_create_table_option *opt_sequence_option;
+  Mem_root_array<PT_create_table_option *> *opt_sequence_options;
   struct {
     Mem_root_array<PT_create_table_option *> *opt_create_table_options;
     PT_partition *opt_partitioning;

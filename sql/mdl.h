@@ -1051,7 +1051,8 @@ class MDL_ticket : public MDL_wait_for_subgraph {
         m_lock(nullptr),
         m_is_fast_path(false),
         m_hton_notified(false),
-        m_psi(nullptr) {
+        m_psi(nullptr),
+        m_autonomous(false) {
   }
 
   ~MDL_ticket() override { assert(m_psi == nullptr); }
@@ -1104,6 +1105,20 @@ class MDL_ticket : public MDL_wait_for_subgraph {
  private:
   MDL_ticket(const MDL_ticket &);            /* not implemented */
   MDL_ticket &operator=(const MDL_ticket &); /* not implemented */
+
+ public:
+  // Check or set autonomous type
+  bool is_autonomous() { return m_autonomous; }
+  void set_autonomous(bool type) { m_autonomous = type; }
+
+ private:
+  /**
+    Mark the MDL lock is taken on sequence table when running NEXTVAL() or
+    CURRVAL(), thus it will not be released when autonomous transaction
+    (used to flush cache value to table) commits, it needs to be held until
+    the end of statement.
+  */
+  bool m_autonomous;
 };
 
 /**
@@ -1483,6 +1498,8 @@ class MDL_context {
   void release_statement_locks();
   void release_transactional_locks();
   void rollback_to_savepoint(const MDL_savepoint &mdl_savepoint);
+
+  void release_autonomous_transactional_locks();
 
   MDL_context_owner *get_owner() const { return m_owner; }
 

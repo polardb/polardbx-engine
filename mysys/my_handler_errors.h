@@ -124,15 +124,17 @@ static const char *handler_error_messages[] = {
     "Path is too long for the OS",
     "Histogram sampling initialization failed",
     "Too many nested sub-expressions in a full-text search",
-    "Sequence has run out",
-    "Sequence structure or number is invalid",
-    "Sequence is not yet defined in current session",
-    "Sequence access failure",
     "Invalid use of null",
     "The snapshot to find is out of range, please adjust scn history configuration",
     "Flashback-like query encountered an internal error",
     "The definition of the table required by the query has changed",
-    "Snapshot too old"};
+    "Snapshot too old",
+    "Sequence has run out",
+    "Sequence structure or number is invalid",
+    "Sequence is not yet defined in current session",
+    "Sequence access failure",
+    "Sequence roll forward retry timeout"
+};
 
 extern void my_handler_error_register(void);
 extern void my_handler_error_unregister(void);

@@ -58,7 +58,7 @@ class Sql_cmd_ddl_table : public Sql_cmd {
 
 inline Sql_cmd_ddl_table::~Sql_cmd_ddl_table() = default;
 
-class Sql_cmd_create_table final : public Sql_cmd_ddl_table {
+class Sql_cmd_create_table : public Sql_cmd_ddl_table {
  public:
   Sql_cmd_create_table(Alter_info *alter_info,
                        Table_ref *query_expression_tables)

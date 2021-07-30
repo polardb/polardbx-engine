@@ -31,7 +31,7 @@ CREATE TABLE t1 (f1 INT);
 
 # mysql.func
 --replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
-eval CREATE FUNCTION sequence RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+eval CREATE FUNCTION sequence_alias RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
 RENAME TABLE mysql.func TO mysql.func_bkp;
 CREATE TABLE mysql.func ENGINE='MyISAM' AS SELECT * FROM mysql.func_bkp;
 --echo # Without the fix, following statement results in the assert
@@ -39,17 +39,17 @@ CREATE TABLE mysql.func ENGINE='MyISAM' AS SELECT * FROM mysql.func_bkp;
 --error ER_UNSUPPORTED_ENGINE
 CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
 --error ER_UNSUPPORTED_ENGINE
-DROP FUNCTION sequence;
+DROP FUNCTION sequence_alias;
 
 ALTER TABLE mysql.func ENGINE='InnoDB',
                        DROP COLUMN ret;
 --error ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2
 CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
 --error ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2
-DROP FUNCTION sequence;
+DROP FUNCTION sequence_alias;
 DROP TABLE mysql.func;
 RENAME TABLE mysql.func_bkp TO mysql.func;
-DROP FUNCTION sequence;
+DROP FUNCTION sequence_alias;
 
 # mysql.plugin
 RENAME TABLE mysql.plugin TO mysql.plugin_bkp;

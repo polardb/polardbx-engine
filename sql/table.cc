@@ -426,6 +426,9 @@ TABLE_SHARE *alloc_table_share(const char *db, const char *table_name,
            table_cache_instances * sizeof(*cache_element_array));
     share->cache_element = cache_element_array;
 
+    /** Must destruct it without free */
+    share->sequence_property = new (&mem_root) Sequence_property();
+
     share->mem_root = std::move(mem_root);
     mysql_mutex_init(key_TABLE_SHARE_LOCK_ha_data, &share->LOCK_ha_data,
                      MY_MUTEX_INIT_FAST);
@@ -491,6 +494,8 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
   share->table_map_id = (ulonglong)thd->query_id;
 
   share->m_flush_tickets.clear();
+
+  share->sequence_property = new (&share->mem_root) Sequence_property();
 }
 
 Key_map TABLE_SHARE::usable_indexes(const THD *thd) const {
@@ -573,6 +578,7 @@ void TABLE_SHARE::destroy() {
 #ifdef HAVE_PSI_TABLE_INTERFACE
   PSI_TABLE_CALL(release_table_share)(m_psi);
 #endif
+  ::destroy(sequence_property);
 
   /*
     Make a copy since the share is allocated in its own root,
@@ -4139,6 +4145,12 @@ void TABLE::init(THD *thd, Table_ref *tl) {
 
   /** Reset snapshot */
   im::init_table_snapshot(this, thd);
+
+  /**
+    Inherit the sequence scan mode every TABLE::init() from TABLE_LIST
+    for each statement.
+  */
+  sequence_scan = tl->sequence_scan;
 }
 
 /**

@@ -90,6 +90,8 @@
 #include "sql/thd_raii.h"
 #include "typelib.h"
 
+#include "sql/sequence_common.h"  // Sequence_property
+
 namespace histograms {
 class Histogram;
 }  // namespace histograms
@@ -589,6 +591,9 @@ static bool fill_share_from_dd(THD *thd, TABLE_SHARE *share,
 
     plugin_unlock(nullptr, share->db_plugin);
     share->db_plugin = my_plugin_lock(nullptr, &tmp_plugin);
+
+    /* Flag the sequence property if it is sequence table */
+    share->sequence_property->configure(share->db_plugin);
   } else {
     my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), engine_name.str);
     return true;

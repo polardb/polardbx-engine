@@ -502,6 +502,8 @@ struct System_variables {
 
   char *client_endpoint_ip;
 
+  bool sequence_read_skip_cache;
+
   ulonglong global_query_wait_timeout;
 
   /** Gcn to read a snapshot by asof select. */

@@ -1,0 +1,145 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+create database s_db;
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+create user normal_4@'%' identified by 'pass';
+grant all on s_db.* to normal_1@'%' ;
+grant all on test.* to normal_2@'%' ;
+grant all on s_db.* to normal_3@'%' ;
+grant all on test.* to normal_4@'%' ;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+###########################################
+master and slave sync sequence.
+###########################################
+use s_db;
+create sequence s1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+use s_db;
+show create table s1;
+Table	Create Table
+s1	CREATE TABLE `s1` (
+  `currval` bigint NOT NULL COMMENT 'current value',
+  `nextval` bigint NOT NULL COMMENT 'next value',
+  `minvalue` bigint NOT NULL COMMENT 'min value',
+  `maxvalue` bigint NOT NULL COMMENT 'max value',
+  `start` bigint NOT NULL COMMENT 'start value',
+  `increment` bigint NOT NULL COMMENT 'increment value',
+  `cache` bigint NOT NULL COMMENT 'cache size',
+  `cycle` bigint NOT NULL COMMENT 'cycle state',
+  `round` bigint NOT NULL COMMENT 'already how many round'
+) ENGINE=Sequence DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+use s_db;
+drop sequence s1;
+###########################################
+invalid timestamp sequence
+###########################################
+use s_db;
+create sequence s1 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+create sequence s2 cache 10000 timestamp;
+ERROR HY000: Sequence 's_db.s2' structure or number is invalid.
+create sequence s3 cycle timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+drop sequence s1;
+drop sequence s3;
+create sequence s1 cache 5 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+select nextval(s1);
+nextval(s1)
+#
+select currval(s1);
+currval(s1)
+#
+drop sequence s1;
+###########################################
+simulate error
+###########################################
+use s_db;
+create sequence s1 cache 5 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+SET @@SESSION.debug = "+d,sequence_reload_retry_timeout";
+select nextval(s1);
+ERROR HY000: Sequence 's_db.s1' roll forward retry timeout
+SET @@SESSION.debug = "-d,sequence_reload_retry_timeout";
+select nextval(s1);
+nextval(s1)
+#
+SET @@SESSION.debug = "+d,sequence_quick_read_retry_timeout";
+select nextval(s1);
+ERROR HY000: Sequence 's_db.s1' roll forward retry timeout
+SET @@SESSION.debug = "-d,sequence_quick_read_retry_timeout";
+select nextval(s1);
+nextval(s1)
+#
+drop sequence s1;
+drop database s_db;
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+drop user normal_4@'%';
+set global read_only = @start_read_only;
+include/rpl_end.inc

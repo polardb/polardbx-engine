@@ -1024,6 +1024,10 @@ enum_sp_return_code sp_drop_routine(THD *thd, enum_sp_type type,
     }
   }
 
+  // Update the existence status of this routine in cache
+  if (type == enum_sp_type::FUNCTION)
+    on_user_sp_status_changed(name->m_db.str, name->m_name.str, false);
+
   return SP_OK;
 
 err_with_rollback:

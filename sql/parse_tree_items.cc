@@ -263,7 +263,15 @@ bool PTI_function_call_generic_ident_sys::itemize(Parse_context *pc,
 
       *res = Create_udf_func::s_singleton.create(thd, udf, opt_udf_expr_list);
     } else {
-      builder = find_qualified_function_builder(thd);
+      /*
+        Special handling for functions with the same name as sequence
+        engine's native API (NEXTVAL() or CURRVAL()).
+      */
+      if (is_seq_func_name(ident.str) && !user_seq_sp_exist(thd, ident))
+        builder = find_sequence_function_builder(ident);
+      else
+        builder = find_qualified_function_builder(thd);
+
       assert(builder);
       *res = builder->create_func(thd, ident, opt_udf_expr_list);
     }
@@ -395,8 +403,17 @@ bool PTI_simple_ident_q_3d::itemize(Parse_context *pc, Item **res) {
     my_error(ER_TABLENAME_NOT_ALLOWED_HERE, MYF(0), table, thd->where);
     return true;
   }
-  if ((pc->select->parsing_place != CTX_HAVING) ||
-      (pc->select->get_in_sum_expr() > 0)) {
+
+  /*
+    Check whether it has the same name as sequence engine's native API
+    NEXTVAL() or CURRVAL().
+  */
+  if (is_seq_nextval_func_name(field)) {
+    *res = new (pc->mem_root) Item_func_nextval(POS(), thd, schema, table);
+  } else if (is_seq_currval_func_name(field)) {
+    *res = new (pc->mem_root) Item_func_currval(POS(), thd, schema, table);
+  } else if ((pc->select->parsing_place != CTX_HAVING) ||
+             (pc->select->get_in_sum_expr() > 0)) {
     *res = new (pc->mem_root) Item_field(POS(), schema, table, field);
   } else {
     *res = new (pc->mem_root) Item_ref(POS(), schema, table, field);

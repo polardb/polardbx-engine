@@ -171,6 +171,9 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 
 #include "sql/package/package_interface.h"  // find_native_proc_and_evoke
 
+#include "sql/item_sequence_func.h"              // Item_func_nextval, Item_func_currval
+#include "sql/sql_sequence.h"                    // Sql_cmd_create_sequence
+
 /* this is to get the bison compilation windows warnings out */
 #ifdef _MSC_VER
 /* warning C4065: switch statement contains 'default' but no 'case' labels */
@@ -1412,6 +1415,14 @@ void warn_about_deprecated_binary(THD *thd)
 %token<lexer.keyword>  SCN_SYM                      1204 /* MYSQL */
 %token<lexer.keyword>  GCN_SYM                      1205 /* MYSQL */
 
+/* Tokens for Sequence object */
+%token<lexer.keyword> INCREMENT_SYM                 1206 /* MYSQL */
+%token<lexer.keyword> CYCLE_SYM                     1207 /* MYSQL */
+%token<lexer.keyword> MINVALUE_SYM                  1208 /* MYSQL */
+%token<lexer.keyword> NOCACHE_SYM                   1209 /* MYSQL */
+%token<lexer.keyword> NOCYCLE_SYM                   1210 /* MYSQL */
+%token<lexer.keyword> SEQUENCE_SYM                  1211 /* MYSQL */
+
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
   simple "UNIQUE" and "KEY" attributes:
@@ -2107,6 +2118,9 @@ void warn_about_deprecated_binary(THD *thd)
         opt_create_partitioning_etc opt_duplicate_as_qe
 
 %type <wild_or_where> opt_wild_or_where
+
+%type <opt_sequence_options> opt_sequence opt_sequence_options
+%type <opt_sequence_option> opt_sequence_option
 
 // used by JSON_TABLE
 %type <jtc_list> columns_clause columns_list
@@ -3416,7 +3430,79 @@ create_table_stmt:
           {
             $$= NEW_PTN PT_create_table_stmt(YYMEM_ROOT, $2, $4, $5, $8);
           }
+        | CREATE SEQUENCE_SYM opt_if_not_exists table_ident opt_sequence
+          {
+          $$ = NEW_PTN PT_create_sequence_stmt(YYMEM_ROOT, $3, $4,
+                                               On_duplicate::ERROR, $5);
+          }
         ;
+
+opt_sequence:
+         /* empty */ { $$= NULL; }
+        | opt_sequence_options
+         {
+           $$= $1;
+         }
+
+opt_sequence_options:
+          opt_sequence_option
+          {
+            $$= NEW_PTN Mem_root_array<PT_create_table_option *>(YYMEM_ROOT);
+            if ($$ == NULL || $$->push_back($1))
+              MYSQL_YYABORT;
+          }
+        | opt_sequence_options opt_sequence_option
+          {
+            $$= $1;
+            if ($$->push_back($2))
+              MYSQL_YYABORT;
+          }
+
+opt_sequence_option:
+          MINVALUE_SYM ulonglong_num
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_MINVALUE>($2);
+          }
+        | MAX_VALUE_SYM ulonglong_num
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_MAXVALUE>($2);
+          }
+        | START_SYM WITH ulonglong_num
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_START>($3);
+          }
+        | INCREMENT_SYM BY ulonglong_num
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_INCREMENT>($3);
+          }
+        | CACHE_SYM ulonglong_num
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_CACHE>($2);
+          }
+        | NOCACHE_SYM
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_CACHE>(0);
+          }
+        | CYCLE_SYM
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_CYCLE>(1);
+          }
+        | NOCYCLE_SYM
+          {
+            $$= NEW_PTN PT_values_create_sequence_option<
+                Sequence_field::FIELD_NUM_CYCLE>(0);
+          }
+        | TIMESTAMP_SYM
+          {
+            $$ = NEW_PTN PT_values_create_sequence_type(Sequence_type::TIMESTAMP);
+          }
 
 create_role_stmt:
           CREATE ROLE_SYM opt_if_not_exists role_list
@@ -15331,6 +15417,7 @@ ident_keywords_unambiguous:
         | CPU_SYM
         | CURRENT_SYM /* not reserved in MySQL per WL#2111 specification */
         | CURSOR_NAME_SYM
+        | CYCLE_SYM
         | DATAFILE_SYM
         | DATA_SYM
         | DATETIME_SYM
@@ -15406,6 +15493,7 @@ ident_keywords_unambiguous:
         | HOUR_SYM
         | IDENTIFIED_SYM
         | IGNORE_SERVER_IDS_SYM
+        | INCREMENT_SYM
         | INACTIVE_SYM
         | INDEXES
         | INITIAL_SIZE_SYM
@@ -15474,6 +15562,7 @@ ident_keywords_unambiguous:
         | MIGRATE_SYM
         | MINUTE_SYM
         | MIN_ROWS
+        | MINVALUE_SYM
         | MODE_SYM
         | MODIFY_SYM
         | MONTH_SYM
@@ -15491,6 +15580,8 @@ ident_keywords_unambiguous:
         | NEVER_SYM
         | NEW_SYM
         | NEXT_SYM
+        | NOCACHE_SYM
+        | NOCYCLE_SYM
         | NODEGROUP_SYM
         | NOWAIT_SYM
         | NO_WAIT_SYM
@@ -15592,6 +15683,7 @@ ident_keywords_unambiguous:
         | SECONDARY_SYM
         | SECONDARY_UNLOAD_SYM
         | SECOND_SYM
+        | SEQUENCE_SYM
         | SECURITY_SYM
         | SERIALIZABLE_SYM
         | SERIAL_SYM
@@ -16146,6 +16238,7 @@ lock:
 table_or_tables:
           TABLE_SYM
         | TABLES
+        | SEQUENCE_SYM
         ;
 
 table_lock_list:

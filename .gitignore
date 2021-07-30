@@ -216,6 +216,7 @@ sql/libslave.a
 sql/libsql_dd.a
 sql/libsql_gis.a
 sql/libsql_main.a
+sql/libsequence.a
 sql/protobuf/generated/
 sql/protobuf/librpl_protobuf_lite.a
 sql/server_component/libmysql_server_component_services.a

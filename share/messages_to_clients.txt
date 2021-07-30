@@ -9998,6 +9998,27 @@ ER_AS_OF_TABLE_DEF_CHANGED
 ER_SNAPSHOT_TOO_OLD
   eng "Snapshot too old"
 
+ER_SEQUENCE_RUN_OUT
+  eng "Sequence '%-.192s.%-.192s' has run out."
+
+ER_SEQUENCE_INVALID
+  eng "Sequence '%-.192s.%-.192s' structure or number is invalid."
+
+ER_SEQUENCE_ACCESS_FAILURE
+  eng "Sequence '%-.192s.%-.192s' access failure."
+
+ER_SEQUENCE_BINLOG_FORMAT
+  eng "Sequence requires binlog_format = row"
+
+ER_SEQUENCE_NOT_DEFINED
+   eng "Sequence '%-.192s.%-.192s' is not yet defined in current session"
+
+ER_TABLE_IS_NOT_SEQUENCE
+   eng "Table '%-.192s.%-.192s' should be sequence"
+
+ER_SEQUENCE_RETRY_TIMEOUT
+  eng "Sequence '%-.192s.%-.192s' roll forward retry timeout"
+
 ER_XA_PROC_WRONG_XID
   eng "Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed %d bytes, and bqual cannot exceed %d bytes."
 

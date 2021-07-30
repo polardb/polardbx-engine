@@ -97,6 +97,8 @@
 		       //
 #include "sql/sql_lex_ext.h"
 
+#include "sql/sequence_common.h"  // Sequence_scan
+
 class Alter_info;
 
 namespace im {
@@ -134,6 +136,7 @@ class Window;
 class partition_info;
 class sp_head;
 class sp_name;
+class Sequence_info;
 class sp_pcontext;
 struct LEX;
 struct NESTED_JOIN;
@@ -296,6 +299,7 @@ enum class enum_alter_user_attribute {
 #define TL_OPTION_UPDATING 0x01
 #define TL_OPTION_IGNORE_LEAVES 0x02
 #define TL_OPTION_ALIAS 0x04
+#define TL_OPTION_SEQUENCE 0x08
 
 /* Structure for db & table in sql_yacc */
 class Table_function;
@@ -1349,7 +1353,9 @@ class Query_block : public Query_term {
                                List<Index_hint> *hints = nullptr,
                                List<String> *partition_names = nullptr,
                                LEX_STRING *option = nullptr,
-                               Parse_context *pc = nullptr);
+                               Parse_context *pc = nullptr,
+                               Sequence_scan_mode seq_scan_mode = 
+                               Sequence_scan_mode::ORIGINAL_SCAN);
 
   /**
     Add item to the hidden part of select list
@@ -4355,6 +4361,11 @@ struct LEX : public Query_tables_list {
   void clear_privileges();
 
   bool make_sql_cmd(Parse_tree_root *parse_tree);
+
+  /**
+    Information for creating sequence.
+  */
+  Sequence_info *sequence_info;
 
  private:
   /**

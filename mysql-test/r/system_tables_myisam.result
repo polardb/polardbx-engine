@@ -328,7 +328,7 @@ DROP TABLE system_tables;
 #-----------------------------------------------------------------------
 CREATE USER 'user1'@'%';
 CREATE TABLE t1 (f1 INT);
-CREATE FUNCTION sequence RETURNS INTEGER SONAME "UDF_EXAMPLE_LIB";
+CREATE FUNCTION sequence_alias RETURNS INTEGER SONAME "UDF_EXAMPLE_LIB";
 RENAME TABLE mysql.func TO mysql.func_bkp;
 CREATE TABLE mysql.func ENGINE='MyISAM' AS SELECT * FROM mysql.func_bkp;
 Warnings:
@@ -337,17 +337,17 @@ Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.func
 # condition failure.
 CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
 ERROR HY000: Storage engine 'MyISAM' does not support system tables. [mysql.func]
-DROP FUNCTION sequence;
+DROP FUNCTION sequence_alias;
 ERROR HY000: Storage engine 'MyISAM' does not support system tables. [mysql.func]
 ALTER TABLE mysql.func ENGINE='InnoDB',
 DROP COLUMN ret;
 CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
 ERROR HY000: Column count of mysql.func is wrong. Expected 4, found 3. The table is probably corrupted
-DROP FUNCTION sequence;
+DROP FUNCTION sequence_alias;
 ERROR HY000: Column count of mysql.func is wrong. Expected 4, found 3. The table is probably corrupted
 DROP TABLE mysql.func;
 RENAME TABLE mysql.func_bkp TO mysql.func;
-DROP FUNCTION sequence;
+DROP FUNCTION sequence_alias;
 RENAME TABLE mysql.plugin TO mysql.plugin_bkp;
 CREATE TABLE mysql.plugin ENGINE='MyISAM' AS SELECT * FROM mysql.plugin_bkp;
 Warnings:

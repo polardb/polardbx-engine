@@ -140,7 +140,8 @@ Table_ddl_parse_context::Table_ddl_parse_context(THD *thd_arg,
     : Parse_context(thd_arg, select_arg),
       create_info(thd_arg->lex->create_info),
       alter_info(alter_info),
-      key_create_info(&thd_arg->lex->key_create_info) {}
+      key_create_info(&thd_arg->lex->key_create_info),
+      sequence_info(thd_arg->lex->sequence_info) {}
 
 PT_joined_table *PT_table_reference::add_cross_join(PT_cross_join *cj) {
   cj->add_rhs(this);
