@@ -32,7 +32,7 @@
 namespace im {
 
 /* The schema of dummy and dummy_2 proc */
-extern const LEX_STRING PROC_DUMMY_SCHEMA;
+extern LEX_CSTRING PROC_DUMMY_SCHEMA;
 
 /**
   Dummy proc sql command class.

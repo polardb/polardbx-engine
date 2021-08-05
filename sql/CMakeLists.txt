@@ -570,6 +570,7 @@ SET(SQL_SHARED_SOURCES
   ccl/ccl_hint_parse.cc
   ccl/ccl_hint.cc
   ccl/ccl_bucket.cc
+  galaxy/service_galaxy.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

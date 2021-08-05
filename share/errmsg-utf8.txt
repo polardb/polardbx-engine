@@ -19981,6 +19981,9 @@ ER_STOP_SCN_HOSTORY_THREAD
 ER_ROLL_FORWARD_SCN
    eng "%s"
 
+ER_GALAXY_PLUGIN
+  eng "Galaxy Plugin : %s"
+
 #
 # End of RDS error messages intended to be logged to the server error log.
 #

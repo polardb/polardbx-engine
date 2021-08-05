@@ -303,6 +303,10 @@ static struct mysql_keyring_service_st mysql_keyring_handler = {
 static struct plugin_registry_service_st plugin_registry_handler = {
     mysql_plugin_registry_acquire, mysql_plugin_registry_release};
 
+static struct mysql_galaxy_service_st galaxy_service_handler = {
+    mysql_launch_bloomfilter,
+};
+
 static struct st_service_ref list_of_services[] = {
     {"srv_session_service", VERSION_srv_session_service,
      &srv_session_service_handler},
@@ -331,4 +335,5 @@ static struct st_service_ref list_of_services[] = {
      &mysql_keyring_handler},
     {"plugin_registry_service", VERSION_plugin_registry_service,
      &plugin_registry_handler},
+    {"mysql_galaxy_service", VERSION_galaxy_service, &galaxy_service_handler},
 };

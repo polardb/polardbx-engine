@@ -26,7 +26,7 @@ class sys_var;
 class THD;
 
 namespace im {
-extern const LEX_STRING ADMIN_PROC_SCHEMA;
+extern LEX_CSTRING ADMIN_PROC_SCHEMA;
 
 class Sql_cmd_show_native_procedure : public Sql_cmd_admin_proc {
  public:

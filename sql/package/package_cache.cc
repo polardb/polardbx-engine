@@ -61,7 +61,7 @@ static void init_package_psi_key() {
 
 /* Register all the native package element */
 template <typename K, typename T>
-static void register_package(const LEX_STRING &schema) {
+static void register_package(LEX_CSTRING &schema) {
   if (package_inited) {
     Package::instance()->register_element<K>(
         std::string(schema.str), T::instance()->str(), T::instance());

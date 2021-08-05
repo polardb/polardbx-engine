@@ -43,6 +43,7 @@
 #include <mysql/service_thd_alloc.h>
 #include <mysql/service_thd_wait.h>
 #include <mysql/service_thread_scheduler.h>
+#include <mysql/galaxy/service_galaxy.h>
 
 #define MYSQL_SERVICES_INCLUDED
 #endif /* MYSQL_SERVICES_INCLUDED */
