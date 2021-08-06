@@ -4465,15 +4465,19 @@ funct_exit:
 @param[in]  indexes             Indexes to scan.
 @param[in]  max_threads         Maximum number of threads to use.
 @param[out] n_rows              Number of rows seen.
+@param[out] n_del_mark          RDS add, Number of rows read with delete marked.
 @return DB_SUCCESS or error code. */
 dberr_t row_mysql_parallel_select_count_star(
     trx_t *trx, std::vector<dict_index_t *> &indexes, size_t max_threads,
-    ulint *n_rows) {
+    ulint *n_rows, ulonglong *n_del_mark) {
   ut_a(!indexes.empty());
   using Shards = Counter::Shards<Parallel_reader::MAX_THREADS>;
 
   Shards n_recs;
   Counter::clear(n_recs);
+
+  Shards n_rows_read_del_mark{};
+  Counter::clear(n_rows_read_del_mark);
 
   struct Check_interrupt {
     byte m_pad[INNOBASE_CACHE_LINE_SIZE - (sizeof(size_t) + sizeof(void *))];
@@ -4494,6 +4498,8 @@ dberr_t row_mysql_parallel_select_count_star(
 
   for (auto index : indexes) {
     Parallel_reader::Config config(FULL_SCAN, index);
+
+    config.m_ptr_n_rows_read_del_mark = &n_rows_read_del_mark;
 
     success =
       reader.add_scan(trx, config, [&](const Parallel_reader::Ctx *ctx) {
@@ -4530,6 +4536,12 @@ dberr_t row_mysql_parallel_select_count_star(
     });
   }
 
+  if (n_del_mark != nullptr && err == DB_SUCCESS) {
+    Counter::for_each(n_rows_read_del_mark, [=](const Counter::Type n) {
+      if (n > 0) *n_del_mark += n;
+    });
+  }
+
   return (err);
 }
 
@@ -4538,9 +4550,11 @@ dberr_t row_mysql_parallel_select_count_star(
 @param[in] index                (Cluster) Index to scan.
 @param[in] max_threads          Maximum threads to use for the scan.
 @param[out] n_rows              Number of rows seen.
+@param[out] n_del_mark          RDS add, Number of rows read with delete marked.
 @return DB_SUCCESS or error code. */
 static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
-                                    size_t max_threads, ulint *n_rows) {
+                                    size_t max_threads, ulint *n_rows,
+                                    ulonglong *n_del_mark = nullptr) {
   using Shards = Counter::Shards<Parallel_reader::MAX_THREADS>;
 
   Shards n_recs{};
@@ -4550,6 +4564,9 @@ static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
   Counter::clear(n_dups);
   Counter::clear(n_recs);
   Counter::clear(n_corrupt);
+
+  Shards n_rows_read_del_mark{};
+  Counter::clear(n_rows_read_del_mark);
 
   using Tuples = std::vector<dtuple_t *, ut_allocator<dtuple_t *>>;
   using Heaps = std::vector<mem_heap_t *, ut_allocator<mem_heap_t *>>;
@@ -4573,6 +4590,8 @@ static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
   Parallel_reader::Scan_range full_scan;
 
   Parallel_reader::Config config(full_scan, index);
+
+  config.m_ptr_n_rows_read_del_mark = &n_rows_read_del_mark;
 
   // clang-format off
   auto success = reader.add_scan(
@@ -4691,6 +4710,11 @@ static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
   }
 
   *n_rows = Counter::total(n_recs);
+  if (n_del_mark != nullptr) {
+    Counter::for_each(n_rows_read_del_mark, [=](const Counter::Type n) {
+      if (n > 0) *n_del_mark += n;
+    });
+  }
 
   return (err);
 }
@@ -4740,6 +4764,19 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
       std::vector<dict_index_t*> indexes;
 
       indexes.push_back(index);
+
+      if (!prebuilt->table->is_temporary()) {
+        ulonglong *n_del_mark = &(prebuilt->rds_rows_read_del_mark);
+
+        if (!check_keys) {
+          return (row_mysql_parallel_select_count_star(trx, indexes, n_threads,
+                                                       n_rows,
+                                                       n_del_mark/* RDS add*/));
+        }
+
+        return (parallel_check_table(trx, index, n_threads, n_rows,
+                                     n_del_mark /* RDS add */));
+      }
 
       if (!check_keys) {
         return (row_mysql_parallel_select_count_star(trx, indexes, n_threads,

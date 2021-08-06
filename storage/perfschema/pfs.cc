@@ -6131,6 +6131,17 @@ void pfs_set_statement_no_good_index_used_v2(PSI_statement_locker *locker) {
   SET_STATEMENT_ATTR_BODY(locker, m_no_good_index_used, 1);
 }
 
+static PPI_stat *pfs_get_ppi_statement_stat() {
+  THD *thd = nullptr;
+  PFS_thread *thread = my_thread_get_THR_PFS();
+
+  if (thread) thd = thread->m_thd;
+
+  if (thd) return thd->ppi_statement_stat.get();
+
+  return nullptr;
+}
+
 void pfs_end_statement_v2(PSI_statement_locker *locker, void *stmt_da) {
   PSI_statement_locker_state *state =
       reinterpret_cast<PSI_statement_locker_state *>(locker);
@@ -6368,6 +6379,9 @@ void pfs_end_statement_v2(PSI_statement_locker *locker, void *stmt_da) {
     digest_stat->m_stat.m_sort_scan += state->m_sort_scan;
     digest_stat->m_stat.m_no_index_used += state->m_no_index_used;
     digest_stat->m_stat.m_no_good_index_used += state->m_no_good_index_used;
+
+    digest_stat->m_ppi_stat.aggregate(pfs_get_ppi_statement_stat());
+
   } else {
     if (flags & STATE_FLAG_TIMED) {
       time_normalizer *normalizer = time_normalizer::get_statement();

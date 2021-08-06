@@ -75,6 +75,8 @@
 #include "sql/system_variables.h"
 #include "thr_mutex.h"
 
+#include "ppi/ppi_statement.h"
+
 struct decimal_t;
 
 /**
@@ -1105,6 +1107,10 @@ int Srv_session::execute_command(enum enum_server_command command,
   thd.m_statement_psi =
       MYSQL_START_STATEMENT(&thd.m_statement_state, stmt_info_new_packet.m_key,
                             thd.db().str, thd.db().length, thd.charset(), NULL);
+
+  PPI_STATEMENT_CALL(start_statement)
+  (thd.ppi_thread, thd.ppi_statement_stat.get());
+
   int ret = dispatch_command(&thd, data, command);
 
   thd.pop_protocol();

@@ -33,7 +33,7 @@
 #include "sql/malloc_allocator.h"
 #include "sql/stateless_allocator.h"
 
-namespace im  {
+namespace im {
 
 /**
   PSI memory detect interface;
@@ -56,7 +56,7 @@ class PSI_memory_base {
 
 /* Allocate the object */
 template <typename T, typename... Args>
-T *allocate_object(PSI_memory_key key, Args &&... args) {
+T *allocate_object(PSI_memory_key key, Args &&...args) {
   void *ptr = nullptr;
   T *obj = nullptr;
 
@@ -74,7 +74,6 @@ void destroy_object(T *obj) {
     my_free(obj);
   }
 }
-
 
 /* Disable the copy and assign construct */
 class Disable_copy_base {
@@ -232,6 +231,5 @@ struct hash<im::Pair_key_type<F, S>> {
 };
 
 } /* namespace std */
-
 
 #endif

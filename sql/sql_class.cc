@@ -95,6 +95,8 @@
 #include "sql/trans_proc/common.h"
 #include "sql/recycle_bin/recycle.h"
 
+#include "ppi/ppi_statement.h"
+
 using std::max;
 using std::min;
 using std::unique_ptr;
@@ -438,6 +440,8 @@ THD::THD(bool enable_plugins)
       duplicate_slave_id(false),
       is_a_srv_session_thd(false),
       m_is_plugin_fake_ddl(false),
+      ppi_thread(nullptr),
+      ppi_statement_stat(new PPI_stat()),
       lex_returning(new im::Lex_returning(false)),
       ccl_comply(new im::Ccl_comply(this)),
       is_recycle_command(false) {

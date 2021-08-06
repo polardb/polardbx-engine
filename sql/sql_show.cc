@@ -83,6 +83,8 @@
 #include "sql/trigger.h"                     // Trigger
 #include "sql/tztime.h"                      // my_tz_SYSTEM
 
+#include "sql/sql_statistics_common.h"
+
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
                                     std::function<bool(const char *)> action);
@@ -4014,6 +4016,10 @@ ST_SCHEMA_TABLE schema_tables[] = {
     {"TMP_TABLE_KEYS", tmp_table_keys_fields_info, create_schema_table,
      show_temporary_tables, make_old_format, get_schema_tmp_table_keys_record,
      -1, -1, true, 0},
+    {"TABLE_STATISTICS", table_stats_fields_info, create_schema_table,
+     fill_schema_table_stats, make_old_format, nullptr, -1, -1, false, 0},
+    {"INDEX_STATISTICS", index_stats_fields_info, create_schema_table,
+     fill_schema_index_stats, make_old_format, nullptr, -1, -1, false, 0},
     {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, false, 0}};
 
 int initialize_schema_table(st_plugin_int *plugin) {

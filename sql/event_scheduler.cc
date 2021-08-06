@@ -67,6 +67,8 @@
 #include "sql_string.h"
 #include "thr_mutex.h"
 
+#include "ppi/ppi_statement.h"
+
 /**
   @addtogroup Event_Scheduler
   @{
@@ -345,6 +347,10 @@ void Event_worker_thread::run(THD *thd, Event_queue_element_for_exec *event) {
       &state, event->get_psi_info()->m_key, event->dbname.str,
       event->dbname.length, thd->charset(), NULL);
 #endif
+
+  PPI_STATEMENT_CALL(start_statement)
+  (thd->ppi_thread, thd->ppi_statement_stat.get());
+
   /*
     We must make sure the schema is released and unlocked in the right
     order. Fail if we are unable to get a meta data lock on the schema
@@ -387,6 +393,9 @@ void Event_worker_thread::run(THD *thd, Event_queue_element_for_exec *event) {
            job_data.m_schema_name.str, job_data.m_event_name.str);
 
 end:
+  PPI_STATEMENT_CALL(end_statement)
+  (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
+
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
   MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
   thd->m_statement_psi = NULL;

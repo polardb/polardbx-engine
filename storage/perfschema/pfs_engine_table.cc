@@ -149,6 +149,8 @@
 #include "thr_lock.h"
 #include "thr_mutex.h"
 
+#include "storage/perfschema/table_esms_by_digest_supplement.h"
+
 /* clang-format off */
 /**
   @page PAGE_PFS_NEW_TABLE Implementing a new performance_schema table
@@ -669,8 +671,8 @@ static PFS_engine_table_share *all_shares[] = {
     &table_variables_info::m_share,
     &table_persisted_variables::m_share,
     &table_user_defined_functions::m_share,
-
-    NULL};
+    &table_esms_by_digest_supplement::m_share,
+    nullptr};
 
 static PSI_mutex_key key_LOCK_pfs_share_list;
 static PSI_mutex_info info_LOCK_pfs_share_list = {

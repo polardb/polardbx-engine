@@ -795,6 +795,12 @@ The following options may be given as the first argument:
  The minimum number of days that need to pass before a
  password can be reused. Set to 0 (the default) to turn
  the checks off
+ --performance-point-dbug-enabled 
+ Enable Performance Point debug mode. 
+ --performance-point-lock-rwlock-enabled 
+ Enable Performance Point statement level rwlock
+ aggregation (enabled by default). 
+ (Defaults to on; use --skip-performance-point-lock-rwlock-enabled to disable.)
  --performance-schema 
  Enable the performance schema.
  (Defaults to on; use --skip-performance-schema to disable.)
@@ -1031,6 +1037,7 @@ The following options may be given as the first argument:
  optimization of a query, index range scan will not be
  considered for this query. A value of 0 means range
  optimizer does not have any cap on memory. 
+ --rds-version[=#]   The mysql patch version
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
  buffer of this size for each table it scans. If you do
@@ -1639,6 +1646,8 @@ partial-revokes ####
 password-history 0
 password-require-current FALSE
 password-reuse-interval 0
+performance-point-dbug-enabled FALSE
+performance-point-lock-rwlock-enabled TRUE
 performance-schema TRUE
 performance-schema-accounts-size -1
 performance-schema-consumer-events-stages-current FALSE
@@ -1711,6 +1720,7 @@ query-alloc-block-size 8192
 query-prealloc-size 8192
 range-alloc-block-size 4096
 range-optimizer-max-mem-size 8388608
+rds-version 25
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144

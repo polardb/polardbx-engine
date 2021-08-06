@@ -594,6 +594,9 @@ SET(SQL_SHARED_SOURCES
   outline/outline_digest.cc
   common/reload.cc
   outline/outline_reload.cc
+  sql_statistics.cc
+  ppi/ppi.cc
+  ppi/ppi_noop.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 
@@ -950,6 +953,10 @@ TARGET_LINK_LIBRARIES(sql_main rpl master slave binlog)
 IF(WITH_ICU STREQUAL "bundled")
   TARGET_LINK_LIBRARIES(sql_main ${ICU_LIBRARIES})
 ENDIF()
+
+# build as static library
+SET (PPI_SOURCE ppi/ppi.cc ppi/ppi_noop.cc)
+ADD_CONVENIENCE_LIBRARY(ppi ${PPI_SOURCE})
 
 IF(WIN32)
   SET(MYSQLD_SOURCE main.cc nt_servc.cc nt_servc.h message.rc)

@@ -5085,7 +5085,12 @@ static MY_ATTRIBUTE((warn_unused_result)) ssize_t
   (void)os_atomic_increment_ulint(&os_n_pending_writes, 1);
   MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_WRITES);
 
+  PPI_statement *ppi_statement = PPI_STATEMENT_CALL(
+      start_statement_IO_operation)(ppi_io_request_conversion(type));
+
   ssize_t n_bytes = os_file_io(type, file, (void *)buf, n, offset, err);
+
+  PPI_STATEMENT_CALL(end_statement_IO_operation)(ppi_statement, 1);
 
   (void)os_atomic_decrement_ulint(&os_n_pending_writes, 1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_WRITES);
@@ -5164,7 +5169,12 @@ static MY_ATTRIBUTE((warn_unused_result)) ssize_t
   (void)os_atomic_increment_ulint(&os_n_pending_reads, 1);
   MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_READS);
 
+  PPI_statement *ppi_statement = PPI_STATEMENT_CALL(
+      start_statement_IO_operation)(ppi_io_request_conversion(type));
+
   ssize_t n_bytes = os_file_io(type, file, buf, n, offset, err);
+
+  PPI_STATEMENT_CALL(end_statement_IO_operation)(ppi_statement, 1);
 
   (void)os_atomic_decrement_ulint(&os_n_pending_reads, 1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_READS);

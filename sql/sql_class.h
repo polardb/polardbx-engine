@@ -120,6 +120,8 @@ class Recycle_state;
 }
 }
 
+#include "ppi/ppi_statement.h"
+
 enum enum_check_fields : int;
 enum enum_tx_isolation : int;
 enum ha_notification_type : int;
@@ -170,6 +172,9 @@ struct MYSQL_LOCK;
 class Sequence_last_value;
 typedef collation_unordered_map<std::string, Sequence_last_value *>
     Sequence_last_value_hash;
+
+struct PPI_thread;
+struct PPI_stat;
 
 extern "C" void thd_enter_cond(void *opaque_thd, mysql_cond_t *cond,
                                mysql_mutex_t *mutex,
@@ -4150,6 +4155,9 @@ class THD : public MDL_context_owner,
   void set_secondary_engine_optimization(Secondary_engine_optimization state) {
     m_secondary_engine_optimization = state;
   }
+
+  PPI_thread *ppi_thread;
+  std::unique_ptr<PPI_stat> ppi_statement_stat;
 
   /**
     Can secondary storage engines be used for query execution in

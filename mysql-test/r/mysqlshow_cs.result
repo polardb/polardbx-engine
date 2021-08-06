@@ -89,6 +89,7 @@ Database: information_schema
 | ENGINES                               |
 | EVENTS                                |
 | FILES                                 |
+| INDEX_STATISTICS                      |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |
 | INNODB_BUFFER_POOL_STATS              |
@@ -142,6 +143,7 @@ Database: information_schema
 | TABLESPACES                           |
 | TABLE_CONSTRAINTS                     |
 | TABLE_PRIVILEGES                      |
+| TABLE_STATISTICS                      |
 | TRIGGERS                              |
 | USER_PRIVILEGES                       |
 | VIEWS                                 |
@@ -162,6 +164,7 @@ Database: INFORMATION_SCHEMA
 | ENGINES                               |
 | EVENTS                                |
 | FILES                                 |
+| INDEX_STATISTICS                      |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |
 | INNODB_BUFFER_POOL_STATS              |
@@ -215,6 +218,7 @@ Database: INFORMATION_SCHEMA
 | TABLESPACES                           |
 | TABLE_CONSTRAINTS                     |
 | TABLE_PRIVILEGES                      |
+| TABLE_STATISTICS                      |
 | TRIGGERS                              |
 | USER_PRIVILEGES                       |
 | VIEWS                                 |

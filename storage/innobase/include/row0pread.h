@@ -154,7 +154,8 @@ class Parallel_reader {
         : m_scan_range(scan_range),
           m_index(index),
           m_is_compact(dict_table_is_comp(index->table)),
-          m_page_size(dict_tf_to_fsp_flags(index->table->flags)) {}
+          m_page_size(dict_tf_to_fsp_flags(index->table->flags)),
+          m_ptr_n_rows_read_del_mark(nullptr) {}
 
     /** Copy constructor.
     @param[in] config           Instance to copy from. */
@@ -162,7 +163,8 @@ class Parallel_reader {
         : m_scan_range(config.m_scan_range),
           m_index(config.m_index),
           m_is_compact(config.m_is_compact),
-          m_page_size(config.m_page_size) {}
+          m_page_size(config.m_page_size),
+          m_ptr_n_rows_read_del_mark(config.m_ptr_n_rows_read_del_mark) {}
 
     /** Range to scan. */
     const Scan_range m_scan_range;
@@ -178,6 +180,9 @@ class Parallel_reader {
 
     /** if true then enable separate read ahead threads. */
     bool m_read_ahead{true};
+
+    /** For RDS count the n_rows_read_del_mark */
+    Counter::Shards<Parallel_reader::MAX_THREADS> *m_ptr_n_rows_read_del_mark;
   };
 
   /** Constructor.

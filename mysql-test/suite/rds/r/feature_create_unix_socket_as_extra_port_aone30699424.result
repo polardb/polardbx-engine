@@ -1,0 +1,60 @@
+create database extra_socket_test;
+use extra_socket_test;
+SET GLOBAL max_connections=3;
+SET GLOBAL max_user_connections=2;
+SET GLOBAL max_unix_admin_connections=3;
+create user 'test1'@'%';
+create user 'test2'@'%';
+ERROR 42000: User test1 already has more than 'max_user_connections' active connections
+ERROR 08004: Too many connections
+ERROR HY000: Too many connections
+ERROR HY000: Too many connections
+ERROR HY000: User root already has more than Maintain_user active conections
+ERROR HY000: Too many connections
+SET GLOBAL max_unix_admin_connections=3;
+grant select, process on *.* to 'test2'@'%';
+grant select on *.* to 'test1'@'%';
+SET GLOBAL rds_kill_user_list = "test2";
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	test1	localhost	extra_socket_test	#	#	#	#
+select * from information_schema.processlist where DB = "extra_socket_test";
+ID	USER	HOST	DB	COMMAND	TIME	STATE	INFO
+#	test1	localhost	extra_socket_test	#	#	#	#
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	event_scheduler	localhost	NULL	#	#	#	#
+#	root	localhost	test	#	#	#	#
+#	test1	localhost	extra_socket_test	#	#	#	#
+#	test2	localhost	extra_socket_test	#	#	#	#
+select * from information_schema.processlist where DB = "extra_socket_test";
+ID	USER	HOST	DB	COMMAND	TIME	STATE	INFO
+#	test1	localhost	extra_socket_test	#	#	#	#
+#	test2	localhost	extra_socket_test	#	#	#	#
+SELECT id INTO @id FROM information_schema.processlist WHERE user='test1' LIMIT 1;
+kill @id;
+SELECT id INTO @id FROM information_schema.processlist WHERE user='test1' LIMIT 1;
+kill @id;
+SELECT id INTO @id FROM information_schema.processlist WHERE user='test2' LIMIT 1;
+kill @id;
+SET GLOBAL rds_data_protect_control= 'MAINTAIN';
+SET GLOBAL rds_data_protect_level= 'ALL';
+grant all on *.* to 'test1'@'%';
+grant all on *.* to 'test2'@'%';
+SET GLOBAL maintain_user_list = "root,test1";
+CREATE DATABASE db_test1;
+DROP DATABASE db_test1;
+ERROR HY000: Operation rejected by RDS data protection policy
+DROP DATABASE db_test1;
+SET GLOBAL max_connections= default;
+SET GLOBAL max_user_connections= default;
+SET GLOBAL opt_enable_rds_priv_strategy= default;
+SET GLOBAL max_unix_admin_connections= default;
+SET GLOBAL maintain_max_connections= default;
+SET GLOBAL maintain_user_list= default;
+SET GLOBAL rds_kill_user_list= default;
+SET GLOBAL rds_data_protect_control= default;
+SET GLOBAL rds_data_protect_level= default;
+drop user test1;
+drop user test2;
+drop database extra_socket_test;

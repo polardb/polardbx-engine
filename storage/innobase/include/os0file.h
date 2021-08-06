@@ -2015,4 +2015,19 @@ class Dir_Walker {
 
 #include "os0file.ic"
 
+/**
+  Convert the InnoDB Engine IO request to PPI defined IO type.
+*/
+inline PPI_IO_TYPE ppi_io_request_conversion(IORequest &type) {
+  if (type.is_read()) {
+    if (type.is_log()) return PPI_IO_NONE;  // Didn't record log read.
+    return PPI_IO_DATAFILE_READ;
+  } else if (type.is_write()) {
+    if (type.is_log()) return PPI_IO_LOG_WRITE;
+    return PPI_IO_DATAFILE_WRITE;
+  }
+
+  return PPI_IO_NONE;
+}
+
 #endif /* os0file_h */

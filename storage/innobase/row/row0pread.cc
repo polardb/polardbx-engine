@@ -557,6 +557,15 @@ dberr_t Parallel_reader::Ctx::traverse() {
       }
     }
 
+    /* increase the counter if rec is delete marked. */
+    if (m_scan_ctx->m_config.m_ptr_n_rows_read_del_mark != nullptr &&
+        rec != nullptr &&
+        rec_get_deleted_flag(rec, m_scan_ctx->m_config.m_is_compact)) {
+      DBUG_ASSERT(m_thread_id < Parallel_reader::MAX_THREADS);
+      Counter::inc(*(m_scan_ctx->m_config.m_ptr_n_rows_read_del_mark),
+                   m_thread_id);
+    }
+
     if (!skip) {
       m_rec = rec;
       err = m_scan_ctx->m_f(this);

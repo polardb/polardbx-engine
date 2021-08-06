@@ -5488,6 +5488,7 @@ rec_loop:
 
   if (rec_get_deleted_flag(rec, comp)) {
     /* The record is delete-marked: we can skip it */
+    if (!prebuilt->table->is_temporary()) prebuilt->rds_rows_read_del_mark++;
 
     if (trx->allow_semi_consistent() &&
         prebuilt->select_lock_type != LOCK_NONE && !did_semi_consistent_read) {
@@ -5588,6 +5589,7 @@ rec_loop:
     if (rec_get_deleted_flag(clust_rec, comp)) {
       /* The record is delete marked: we can skip it */
 
+      if (!prebuilt->table->is_temporary()) prebuilt->rds_rows_read_del_mark++;
       if (trx->allow_semi_consistent() &&
           prebuilt->select_lock_type != LOCK_NONE) {
         /* No need to keep a lock on a delete-marked

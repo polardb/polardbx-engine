@@ -58,6 +58,9 @@
 #include "sql/sql_sort.h"  // Sort_result
 #include "thr_lock.h"
 #include "typelib.h"
+#include "sql/mem_root_array.h"
+
+#include "sql/sql_statistics_common.h"  // Stats_data
 
 #include "sql/mem_root_array.h"
 
@@ -1189,6 +1192,8 @@ struct TABLE_SHARE {
 
   /** Sequence attributes represent that it is sequence table */
   Sequence_property *sequence_property;
+
+  Stats_data stats_data;
 };
 
 /**

@@ -351,6 +351,7 @@ void **thd_ha_data(const MYSQL_THD thd, const struct handlerton *hton) {
 
 void thd_storage_lock_wait(MYSQL_THD thd, long long value) {
   thd->utime_after_lock += value;
+  PPI_STATEMENT_CALL(inc_statement_transaction_lock_time)(value);
 }
 
 /**

@@ -2364,6 +2364,8 @@ static void clean_up(bool print_message) {
   */
   user_seq_sp_exit();
 
+  object_statistics_context_destroy();
+
   /*
     The following lines may never be executed as the main thread may have
     killed us
@@ -6334,6 +6336,9 @@ int mysqld_main(int argc, char **argv)
   im::outline_init();
 
   im::package_context_init();
+
+  object_statistics_context_init();
+
   /*
     Now that some instrumentation is in place,
     recreate objects which were initialised early,

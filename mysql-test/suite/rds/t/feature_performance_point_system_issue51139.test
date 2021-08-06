@@ -1,0 +1,75 @@
+--source include/master-slave.inc
+
+
+connection master;
+
+#
+-- echo "test all performance_point variables.
+#
+
+show global variables like '%performance_point%';
+
+#
+-- echo "test performance_point table
+#
+show create table performance_schema.events_statements_summary_by_digest_supplement;
+
+create database pps_db;
+
+use pps_db;
+
+create table pps_0_table(id int, col1
+                       varchar(100));
+
+create table pps_0_extra(id int, col1
+                       varchar(100));
+
+insert into pps_0_table(id, col1) values(1, 'xpchild');
+commit;
+select count(*) from pps_0_table;
+
+
+#
+-- echo "test proc"
+#
+
+delimiter //;
+
+create procedure pps_0_proc()
+begin
+  insert into pps_0_table(id, col1) values(2, 'xpchild');
+  commit;
+end//
+
+delimiter  ;//
+
+call pps_0_proc();
+
+
+
+delimiter //;
+CREATE TRIGGER pps_0_triggier
+  before INSERT ON pps_0_table FOR EACH ROW
+BEGIN
+  INSERT INTO pps_0_extra(id, col1) values(1, 'xpchild');
+END//
+delimiter  ;//
+
+
+insert into pps_0_table(id, col1) values(3, 'xpchild');
+
+commit;
+select count(*) from pps_0_extra;
+
+#
+#it's very unstable when parallel mtr.
+#select sleep(5);
+#select schema_name, digest, digest_text from performance_schema.events_statements_summary_by_digest_supplement where digest_text like '%pps_0_%';
+
+drop table pps_0_table;
+drop table pps_0_extra;
+drop procedure pps_0_proc;
+drop database pps_db;
+
+sync_slave_with_master;
+--source include/rpl_end.inc

@@ -982,8 +982,10 @@ void warn_on_deprecated_charset(THD *thd, const CHARSET_INFO *cs,
                                 const char *alias, const char *option) {
   if (cs == &my_charset_utf8_general_ci) {
     if (native_strcasecmp(alias, "utf8") == 0) {
-      if (option == nullptr)
+      if (option == nullptr) {
         push_warning(thd, ER_DEPRECATED_UTF8_ALIAS);
+        //abort();
+        }
       else
         LogErr(WARNING_LEVEL, ER_WARN_DEPRECATED_UTF8_ALIAS_OPTION, option);
     } else {

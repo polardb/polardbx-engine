@@ -67,6 +67,8 @@
 #include "thr_lock.h"            // thr_lock_type
 #include "typelib.h"
 
+#include "sql/sql_statistics_common.h"  // Stats_data
+
 class Alter_info;
 class Candidate_table_order;
 class Create_field;
@@ -894,7 +896,9 @@ enum enum_schema_tables : int {
   SCH_USER_PRIVILEGES,
   SCH_TMP_TABLE_COLUMNS,
   SCH_TMP_TABLE_KEYS,
-  SCH_LAST = SCH_TMP_TABLE_KEYS
+  SCH_TABLE_STATISTICS,
+  SCH_INDEX_STATISTICS,
+  SCH_LAST = SCH_INDEX_STATISTICS
 };
 
 enum ha_stat_type { HA_ENGINE_STATUS, HA_ENGINE_LOGS, HA_ENGINE_MUTEX };
@@ -4274,6 +4278,7 @@ class handler {
         m_unique(nullptr) {
     DBUG_PRINT("info", ("handler created F_UNLCK %d F_RDLCK %d F_WRLCK %d",
                         F_UNLCK, F_RDLCK, F_WRLCK));
+    stats_data.reset();
   }
 
   virtual ~handler(void) {
@@ -6576,6 +6581,16 @@ class handler {
                                HA_CREATE_INFO *) {
     return;
   }
+
+ private:
+  void update_table_statistics();
+  void update_index_statistics();
+
+ protected:
+  Stats_data stats_data;
+
+ public:
+  void update_statistics();
 };
 
 /**

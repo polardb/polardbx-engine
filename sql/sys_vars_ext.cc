@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2018, Alibaba and/or its affiliates. All rights reserved.
+/* Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -7,9 +7,10 @@
    This program is also distributed with certain software (including
    but not limited to OpenSSL) that is licensed under separate terms,
    as designated in a particular file or component or in included license
-   documentation.  The authors of MySQL hereby grant you an additional
-   permission to link the program and your derivative works with the
-   separately licensed software that they have included with MySQL.
+   documentation.  The authors of MySQL/Apsara GalaxySQL hereby grant you an
+   additional permission to link the program and your derivative works with the
+   separately licensed software that they have included with
+   MySQL/Apsara GalaxySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -37,14 +38,14 @@
   (for example in storage/myisam/ha_myisam.cc) !
 */
 
-#include "sql/sys_vars.h"
 #include "my_config.h"
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_bucket.h"
 #include "sql/ccl/ccl_interface.h"
+#include "sql/outline/outline_interface.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
-#include "sql/outline/outline_interface.h"
+#include "sql/sys_vars.h"
 
 static Sys_var_ulong Sys_ccl_wait_timeout(
     "ccl_wait_timeout", "Timeout in seconds to wait when concurrency control.",
@@ -54,9 +55,8 @@ static Sys_var_ulong Sys_ccl_wait_timeout(
 static Sys_var_ulong Sys_ccl_max_waiting(
     "ccl_max_waiting_count", "max waiting count in one ccl rule or bucket",
     GLOBAL_VAR(im::ccl_max_waiting_count), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(0, INT_MAX64),
-    DEFAULT(CCL_DEFAULT_WAITING_COUNT), BLOCK_SIZE(1), NO_MUTEX_GUARD,
-    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    VALID_RANGE(0, INT_MAX64), DEFAULT(CCL_DEFAULT_WAITING_COUNT),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static bool update_ccl_queue(sys_var *, THD *, enum_var_type) {
   im::System_ccl::instance()->get_queue_buckets()->init_queue_buckets(
@@ -81,8 +81,8 @@ static Sys_var_ulong Sys_ccl_queue_bucket(
 
 static Sys_var_bool Sys_recycle_bin(
     "recycle_bin", "Whether recycle the table which is going to be dropped",
-    SESSION_VAR(recycle_bin), CMD_LINE(OPT_ARG), DEFAULT(false),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    SESSION_VAR(recycle_bin), CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_ulong Sys_recycle_scheduler_interval(
     "recycle_scheduler_interval", "Interval in seconds for recycle scheduler.",
@@ -133,9 +133,11 @@ static Sys_var_bool Sys_recycle_scheduler_purge_table_print(
     GLOBAL_VAR(im::recycle_bin::recycle_scheduler_purge_table_print),
     CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(0), ON_UPDATE(0));
+
+using namespace im;
 static Sys_var_ulong Sys_outline_partitions(
-    "outline_partitions", "How many parititon of system outline structure.",
-    READ_ONLY GLOBAL_VAR(im::outline_partitions), CMD_LINE(REQUIRED_ARG),
+    "outline_partitions", "How many partitions of system outline structure.",
+    READ_ONLY GLOBAL_VAR(outline_partitions), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(1, 256), DEFAULT(16), BLOCK_SIZE(1));
 
 static Sys_var_bool Sys_opt_outline_enabled(
@@ -148,8 +150,112 @@ static Sys_var_bool Sys_opt_outline_enabled(
 static Sys_var_bool Sys_outline_allowed_sql_digest_truncate(
     "outline_allowed_sql_digest_truncate",
     "Whether allowed the incomplete of sql digest when add outline",
-    SESSION_VAR(outline_allowed_sql_digest_truncate),
-    CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD,
-    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    SESSION_VAR(outline_allowed_sql_digest_truncate), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+/**
+  @file
+  Definitions of extra RDS server's session or global variables.
 
+  How to add new variables:
+
+  1. copy one of the existing variables, and edit the declaration.
+  2. if you need special behavior on assignment or additional checks
+     use ON_CHECK and ON_UPDATE callbacks.
+  3. *Don't* add new Sys_var classes or uncle Occam will come
+     with his razor to haunt you at nights
+
+  Note - all storage engine variables (for example myisam_whatever)
+  should go into the corresponding storage engine sources
+  (for example in storage/myisam/ha_myisam.cc) !
+*/
+
+#include "sql/sql_statistics_common.h"
+#include "sql/sys_vars.h"
+#include "sql/sys_vars_ext.h"
+
+#include "my_config.h"
+#include "mysqld.h"
+
+#include <assert.h>
+#include <limits.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <zlib.h>
+#include <atomic>
+
+/* Global scope variables */
+char innodb_version[SERVER_VERSION_LENGTH];
+
+/* Local scope variables */
+static uint rds_version = 0;
+
+/**
+  Customize mysqld server version
+
+  MYSQL_VERSION_PATCH that's among version string can be reset
+  by "rds_version" variable dynamically.
+
+  @returns void.
+*/
+void customize_server_version() {
+  char tmp_version[SERVER_VERSION_LENGTH];
+  uint version_patch;
+  size_t size;
+  char *end;
+
+  memset(tmp_version, '\0', SERVER_VERSION_LENGTH);
+  version_patch =
+      rds_version > MYSQL_VERSION_PATCH ? rds_version : MYSQL_VERSION_PATCH;
+
+  size = snprintf(tmp_version, SERVER_VERSION_LENGTH, "%d.%d.%d%s",
+                  MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, version_patch,
+                  MYSQL_VERSION_EXTRA);
+
+  strxmov(innodb_version, tmp_version, NullS);
+
+  end = strstr(server_version, "-");
+  if (end && (size < SERVER_VERSION_LENGTH)) {
+    snprintf(tmp_version + size, (SERVER_VERSION_LENGTH - size), "%s", end);
+  }
+  strxmov(server_version, tmp_version, NullS);
+}
+
+static bool fix_server_version(sys_var *, THD *, enum_var_type) {
+  customize_server_version();
+  return false;
+}
+
+/**
+  RDS DEFINED variables
+*/
+static Sys_var_uint Sys_rds_version("rds_version", "The mysql patch version",
+                                    GLOBAL_VAR(rds_version), CMD_LINE(OPT_ARG),
+                                    VALID_RANGE(1, 999),
+                                    DEFAULT(MYSQL_VERSION_PATCH), BLOCK_SIZE(1),
+                                    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+                                    ON_UPDATE(fix_server_version));
+
+static Sys_var_bool Sys_opt_tablestat("opt_tablestat",
+                                      "When this option is enabled,"
+                                      "it will accumulate the table statistics",
+                                      GLOBAL_VAR(opt_tablestat),
+                                      CMD_LINE(OPT_ARG), DEFAULT(true),
+                                      NO_MUTEX_GUARD, NOT_IN_BINLOG,
+                                      ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_opt_indexstat("opt_indexstat",
+                                      "When this option is enabled,"
+                                      "it will accumulate the index statistics",
+                                      GLOBAL_VAR(opt_indexstat),
+                                      CMD_LINE(OPT_ARG), DEFAULT(true),
+                                      NO_MUTEX_GUARD, NOT_IN_BINLOG,
+                                      ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_opt_performance_point_enabled(
+    "opt_performance_point_enabled",
+    "whether open the performance point system plugin",
+    READ_ONLY GLOBAL_VAR(opt_performance_point_enabled), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 /* RDS DEFINED */
