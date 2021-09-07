@@ -21,10 +21,6 @@ AND	t.name LIKE 'mysql%'
         AND     t.name NOT LIKE 'mysql/ndb_binlog_index'
 	ORDER BY t.name, i.index_id;
 table_name	n_cols	table_flags	index_name	root_page	type	n_fields	merge_threshold
-<<<<<<< HEAD
-=======
-mysql/consensus_info	15	33	PRIMARY	4	3	14	50
->>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format
 CREATE TABLE t1 (a INT KEY, b TEXT) ROW_FORMAT=REDUNDANT ENGINE=innodb;
 CREATE TABLE t2 (a INT KEY, b TEXT) ROW_FORMAT=COMPACT ENGINE=innodb;
 CREATE TABLE t3 (a INT KEY, b TEXT) ROW_FORMAT=COMPRESSED ENGINE=innodb;

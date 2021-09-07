@@ -165,7 +165,7 @@ OK: Result set: Non-empty  Expected: Non-empty
 
 OK: Extra rows: 0  Missing rows: 0
 ========
-SELECT * FROM performance_schema.socket_instances WHERE IP = '::' and port is null
+SELECT * FROM performance_schema.socket_instances WHERE IP = '0.0.0.0' and port is null
 
 OK: Handler_read_key
 
@@ -173,7 +173,7 @@ OK: Result set: Empty  Expected: Empty
 
 OK: Extra rows: 0  Missing rows: 0
 ========
-SELECT * FROM performance_schema.socket_instances WHERE IP = '::' and port is not null
+SELECT * FROM performance_schema.socket_instances WHERE IP = '0.0.0.0' and port is not null
 
 OK: Handler_read_key
 
@@ -181,7 +181,7 @@ OK: Result set: Non-empty  Expected: Non-empty
 
 OK: Extra rows: 0  Missing rows: 0
 ========
-SELECT * FROM performance_schema.socket_instances WHERE IP = '::'
+SELECT * FROM performance_schema.socket_instances WHERE IP = '0.0.0.0'
 
 OK: Handler_read_key
 
@@ -197,7 +197,7 @@ OK: Result set: Empty  Expected: Empty
 
 OK: Extra rows: 0  Missing rows: 0
 ========
-SELECT * FROM performance_schema.socket_instances WHERE IP = '::' AND port = @target_port
+SELECT * FROM performance_schema.socket_instances WHERE IP = '0.0.0.0' AND port = @target_port
 
 OK: Handler_read_key
 
@@ -205,7 +205,7 @@ OK: Result set: Non-empty  Expected: Non-empty
 
 OK: Extra rows: 0  Missing rows: 0
 ========
-SELECT * FROM performance_schema.socket_instances WHERE IP = '::' AND port = 9999999
+SELECT * FROM performance_schema.socket_instances WHERE IP = '0.0.0.0' AND port = 9999999
 
 OK: Handler_read_key
 

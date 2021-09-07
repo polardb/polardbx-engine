@@ -28,18 +28,10 @@ disabled_storage_engines
 disabled_storage_engines
 generated_random_password_length
 generated_random_password_length
+global_query_wait_timeout
+global_query_wait_timeout
 group_replication_consistency
 group_replication_consistency
-<<<<<<< HEAD
-=======
-ignore_index_hint_error
-ignore_index_hint_error
-implicit_primary_key
-implicit_primary_key
-inner_schema_list
-inner_schema_list
-inner_user_list
-inner_user_list
 innodb_cleanout_disable
 innodb_cleanout_disable
 innodb_cleanout_max_cleans_on_page
@@ -50,31 +42,22 @@ innodb_cleanout_mode
 innodb_cleanout_mode
 innodb_cleanout_safe_mode
 innodb_cleanout_safe_mode
-innodb_data_file_purge
-innodb_data_file_purge
-innodb_data_file_purge_all_at_shutdown
-innodb_data_file_purge_all_at_shutdown
-innodb_data_file_purge_dir
-innodb_data_file_purge_dir
-innodb_data_file_purge_immediate
-innodb_data_file_purge_immediate
-innodb_data_file_purge_interval
-innodb_data_file_purge_interval
-innodb_data_file_purge_max_size
-innodb_data_file_purge_max_size
->>>>>>> 034f166df63... [Perf] Adjust default txn tablespace
 innodb_dedicated_server
 innodb_dedicated_server
+innodb_fatal_semaphore_wait_threshold
+innodb_fatal_semaphore_wait_threshold
+innodb_global_query_wait_timeout
+innodb_global_query_wait_timeout
 innodb_log_spin_cpu_abs_lwm
 innodb_log_spin_cpu_abs_lwm
 innodb_log_spin_cpu_pct_hwm
 innodb_log_spin_cpu_pct_hwm
 innodb_log_wait_for_flush_spin_hwm
 innodb_log_wait_for_flush_spin_hwm
-<<<<<<< HEAD
-=======
-innodb_print_data_file_purge_process
-innodb_print_data_file_purge_process
+innodb_rds_flashback_allow_gap
+innodb_rds_flashback_allow_gap
+innodb_rds_flashback_enabled
+innodb_rds_flashback_enabled
 innodb_scn_h_interval
 innodb_scn_h_interval
 innodb_scn_h_keep_days
@@ -83,16 +66,12 @@ innodb_scn_h_task_enabled
 innodb_scn_h_task_enabled
 innodb_txn_undo_page_reuse_max_percent
 innodb_txn_undo_page_reuse_max_percent
-<<<<<<< HEAD
->>>>>>> 034f166df63... [Perf] Adjust default txn tablespace
-=======
 innodb_undo_retention
 innodb_undo_retention
 innodb_undo_space_reserved_size
 innodb_undo_space_reserved_size
 innodb_undo_space_supremum_size
 innodb_undo_space_supremum_size
->>>>>>> 2e1c1651486... [feature] surpport undo retention
 keyring_operations
 keyring_operations
 mandatory_roles

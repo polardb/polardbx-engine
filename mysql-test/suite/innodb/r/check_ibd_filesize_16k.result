@@ -7,23 +7,13 @@ CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
 Empty table:
 The size of file 'test/t1.ibd' is 114688 bytes.
 Rows inserted: 5000
-<<<<<<< HEAD
-The size of file 'test/t1.ibd' is 229376 bytes.
-=======
 The size of file 'test/t1.ibd' is 327680 bytes.
->>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format
 Rows inserted: 10000
-The size of file 'test/t1.ibd' is 540672 bytes.
+The size of file 'test/t1.ibd' is 524288 bytes.
 Rows inserted: 15000
-<<<<<<< HEAD
-The size of file 'test/t1.ibd' is 475136 bytes.
-Rows inserted: 20000
-The size of file 'test/t1.ibd' is 606208 bytes.
-=======
 The size of file 'test/t1.ibd' is 9437184 bytes.
 Rows inserted: 20000
 The size of file 'test/t1.ibd' is 9437184 bytes.
->>>>>>> 0bf0ec78d5a... [Feature] Lizard Record Format
 Rows inserted: 25000
 The size of file 'test/t1.ibd' is 9437184 bytes.
 DROP TABLE t1;

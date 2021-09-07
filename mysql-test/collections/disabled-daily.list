@@ -457,3 +457,4 @@ main.myisam_explain_json_non_select_none       : WL#001 test does not work for x
 
 main.dd_schema_definition_after_upgrade_57_debug                   : WL#001 test runs into core dump
 binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table : WL#001 test runs into core dump
+main.multiaddress_bind                         : WL#001 ipv6
