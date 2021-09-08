@@ -352,6 +352,15 @@ class Protocol_impl : public XProtocol,
 
   z_stream m_out_stream;
   std::unique_ptr<XCompression> m_compression;
+
+ private:
+  /** Galaxy related attributes */
+  gx::GHeader m_ghdr;
+  bool is_galaxy() { return m_ghdr.is_galaxy(); }
+
+ public:
+  /** Getter function */
+  gx::GHeader *get_gheader() { return &m_ghdr; }
 };
 
 template <typename Auth_continue_handler>

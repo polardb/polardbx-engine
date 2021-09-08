@@ -18,3 +18,5 @@ EOF
 --source $MYSQL_TMP_DIR/mysqlxtest_macro_dir.tmp.inc
 --remove_file $MYSQL_TMP_DIR/mysqlxtest_macro_dir.tmp.inc
 --let $MYSQLXTEST = $MYSQLXTEST --import="$MYSQLXTEST_MACRO_DIR" $MYSQLXTEST_EXTRA_ARGS
+
+--let $GALAXYXTEST = $GALAXYXTEST --import="$MYSQLXTEST_MACRO_DIR" $MYSQLXTEST_EXTRA_ARGS

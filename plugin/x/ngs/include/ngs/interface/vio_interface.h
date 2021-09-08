@@ -34,6 +34,9 @@
 
 #include "plugin/x/src/io/connection_type.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
+
+
 namespace ngs {
 
 class Vio_interface {
@@ -59,6 +62,9 @@ class Vio_interface {
   virtual MYSQL_SOCKET &get_mysql_socket() = 0;
 
   virtual ~Vio_interface() = default;
+
+  /** Galaxy X-protocol */
+  virtual gx::Protocol_type get_ptype() = 0;
 };
 
 }  // namespace ngs

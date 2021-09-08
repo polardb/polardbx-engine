@@ -55,7 +55,7 @@ class Listener_tcp : public ngs::Listener_interface {
   void loop() override;
   void report_properties(On_report_properties on_status) override;
 
- private:
+ protected:
   std::string choose_property_value(const std::string &value) const;
   Socket_interface_ptr create_socket();
 

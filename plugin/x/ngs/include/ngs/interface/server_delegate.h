@@ -46,7 +46,7 @@ class Server_delegate {
       std::shared_ptr<Vio_interface> sock) = 0;
   virtual std::shared_ptr<Session_interface> create_session(
       Client_interface &client, Protocol_encoder_interface &proto,
-      const int session_id) = 0;
+      const int session_id, const gx::GSession_id gsession_id) = 0;
 
   virtual void on_client_closed(const Client_interface &client) = 0;
   virtual bool is_terminating() const = 0;

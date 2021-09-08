@@ -422,6 +422,9 @@ void Client::on_accept() {
     return;
   }
 
+  /** Galaxy X-protocol */
+  m_encoder->build_header(m_connection->get_ptype(), m_session->gsession_id());
+
   if (xpl::Plugin_system_variables::m_enable_hello_notice)
     m_encoder->send_notice(Frame_type::k_server_hello, Frame_scope::k_global,
                            "", true);
@@ -453,6 +456,12 @@ void Client::on_session_reset(Session_interface &s MY_ATTRIBUTE((unused))) {
     m_state = State::k_closing;
     return;
   }
+
+  /** Galaxy X-protocol */
+  if (m_encoder)
+    m_encoder->build_header(m_connection->get_ptype(),
+                            m_session->gsession_id());
+
   m_state = State::k_accepted_with_session;
   m_encoder->send_ok();
 }
@@ -557,7 +566,7 @@ xpl::iface::Waiting_for_io *Client::get_idle_processing() {
 
 bool Client::create_session() {
   std::shared_ptr<Session_interface> session(
-      m_server.create_session(*this, *m_encoder, 1));
+      m_server.create_session(*this, *m_encoder, 1, gx::DEFAULT_GSESSION_ID));
   if (!session) {
     log_warning(ER_XPLUGIN_FAILED_TO_CREATE_SESSION_FOR_CONN, client_id(),
                 m_client_addr.c_str());

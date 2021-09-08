@@ -249,7 +249,8 @@ class Tcp_creator {
   ngs::System_interface::Shared_ptr m_system_interface;
 };
 
-Listener_tcp::Listener_tcp(Factory_ptr operations_factory,
+Listener_tcp::Listener_tcp(
+Factory_ptr operations_factory,
                            std::string &bind_address,
                            const std::string &network_namespace,
                            const uint16 port, const uint32 port_open_timeout,

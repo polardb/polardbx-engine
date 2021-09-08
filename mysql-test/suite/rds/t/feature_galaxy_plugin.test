@@ -5,6 +5,8 @@
 eval INSTALL PLUGIN galaxy SONAME "$GALAXY_PLUGIN";
 
 --echo galax plugin status
+
+--replace_column 2 #
 show global status like '%galaxy%';
 
 --echo performance_schema metrics

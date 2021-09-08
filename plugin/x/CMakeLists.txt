@@ -27,6 +27,8 @@ SET(MYSQLX_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 SET(MYSQLX_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 SET(MYSQLX_PLUGIN_NAME "mysqlx")
 
+SET(GALAXYX_PLUGIN_NAME "galaxyx")
+
 # Protobuf 3 will generate #if PROTOBUF_INLINE_NOT_IN_HEADERS
 # which may fail with -Werror=undef
 ADD_DEFINITIONS(-DPROTOBUF_INLINE_NOT_IN_HEADERS=0)
@@ -43,6 +45,7 @@ SET(XPLUGIN_LOG_PROTOBUF 1 CACHE STRING "Enable logging of protobuf messages")
 
 INCLUDE(utils.cmake)
 INCLUDE(variables.cmake)
+INCLUDE(galaxy.cmake)
 INCLUDE(configure.cmake)
 
 ADD_SUBDIRECTORY(protocol)

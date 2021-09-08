@@ -119,7 +119,21 @@ Protocol_decoder::Decode_error Protocol_decoder::read_and_decode_impl(
 
   m_vio_input_stream.reset_byte_count();
 
-  if (!read_header(&message_type, &message_size, wait_for_io)) {
+  /** Galaxy X-protocol */
+  bool result;
+  gx::GSession_id gsession_id;
+  gx::GVersion gversion;
+  switch (m_vio->get_ptype()) {
+    case gx::Protocol_type::MYSQLX:
+      result = read_header(&message_type, &message_size, wait_for_io);
+      break;
+    case gx::Protocol_type::GALAXYX:
+      result = read_header(&gsession_id, &gversion, &message_type,
+                           &message_size, wait_for_io);
+      break;
+  }
+
+  if (!result) {
     m_vio_input_stream.was_io_error(&io_error);
 
     if (0 == io_error) return Decode_error(true);
@@ -154,9 +168,13 @@ Protocol_decoder::Decode_error Protocol_decoder::read_and_decode_impl(
 
   const int k_header = 4;
 
+  int k_gheader = 0;
+  if (m_vio->get_ptype() == gx::Protocol_type::GALAXYX)
+    k_gheader += gx::GREQUEST_SIZE;
+
   // Skip rest of the data
   const auto bytes_to_skip =
-      message_size + k_header - m_vio_input_stream.ByteCount();
+      message_size + k_header + k_gheader - m_vio_input_stream.ByteCount();
 
   m_vio_input_stream.Skip(bytes_to_skip);
 
@@ -172,3 +190,5 @@ void Protocol_decoder::set_read_timeout(const uint32 read_timeout_in_seconds) {
 }
 
 }  // namespace ngs
+
+#include "plugin/x/ngs/src/galaxy_protocol_decoder.cc"

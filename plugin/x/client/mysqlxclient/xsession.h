@@ -33,6 +33,8 @@
 #include "mysqlxclient/xerror.h"
 #include "mysqlxclient/xprotocol.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 namespace xcl {
 
 /**
@@ -596,6 +598,20 @@ class XSession {
    sending it as capability to the server.
    */
   virtual Argument_uobject get_connect_attrs() const = 0;
+
+  /**
+    Get the galaxy session id
+
+    @retval       GSesssion id
+   */
+  virtual gx::GSession_id gsession_id() const = 0;
+  /**
+    Build the protocol galaxy header content before connection since
+    the first packet need the header format.
+
+   @param     type      protocol type
+  */
+  virtual void build_protocol_header(gx::Protocol_type ptype) = 0;
 };
 
 /**

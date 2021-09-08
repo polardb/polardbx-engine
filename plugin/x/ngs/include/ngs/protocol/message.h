@@ -28,6 +28,8 @@
 #include "plugin/x/ngs/include/ngs/memory.h"
 #include "plugin/x/ngs/include/ngs/protocol/protocol_protobuf.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 namespace ngs {
 
 #ifdef USE_MYSQLX_FULL_PROTO
@@ -65,6 +67,8 @@ class Message_request {
   Message *m_message = nullptr;
   uint8 m_message_type{0};
   bool m_must_be_deleted{false};
+
+  gx::GRequest grequest;
 };
 
 }  // namespace ngs

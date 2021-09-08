@@ -44,7 +44,7 @@ class Listener_factory : public ngs::Listener_factory_interface {
       const unsigned short port, const uint32 port_open_timeout,
       ngs::Socket_events_interface &event, const uint32 backlog);
 
- private:
+ protected:
   ngs::Operations_factory_interface::Shared_ptr m_operations_factory;
 };
 

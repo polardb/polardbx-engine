@@ -2526,6 +2526,30 @@ sub mysql_client_test_arguments() {
   return mtr_args2str($exe, @$args);
 }
 
+sub galaxyxtest_arguments() {
+  my $exe;
+  # mysqlxtest executable may _not_ exist
+  $exe = mtr_exe_maybe_exists("$path_client_bindir/mysqlxtest");
+  return "" unless $exe;
+
+  my $args;
+  mtr_init_args(\$args);
+
+  if ($opt_valgrind_clients) {
+    valgrind_client_arguments($args, \$exe);
+  }
+
+  if ($opt_debug) {
+    mtr_add_arg($args, "--debug=$debug_d:t:i:A,%s/log/%s.trace",
+                $path_vardir_trace, "mysqlxtest");
+  }
+
+  mtr_add_arg($args, "--port=%d", $mysqlx_baseport + 1);
+  mtr_add_arg($args, "--protocol-type=GALAXYX");
+  return mtr_args2str($exe, @$args);
+}
+
+
 sub mysqlxtest_arguments() {
   my $exe;
   # mysqlxtest executable may _not_ exist
@@ -2822,6 +2846,7 @@ sub environment_setup {
   $ENV{'MYSQL_UPGRADE'}       = client_arguments("mysql_upgrade");
   $ENV{'MYSQLADMIN'}          = native_path($exe_mysqladmin);
   $ENV{'MYSQLXTEST'}          = mysqlxtest_arguments();
+  $ENV{'GALAXYXTEST'}         = galaxyxtest_arguments();
   $ENV{'PATH_CONFIG_FILE'}    = $path_config_file;
 
   $ENV{'MYSQLBACKUP'} = mysqlbackup_arguments()

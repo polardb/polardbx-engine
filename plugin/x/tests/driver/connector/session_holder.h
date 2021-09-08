@@ -39,6 +39,8 @@
 #include "plugin/x/client/mysqlxclient/xsession.h"
 #include "plugin/x/tests/driver/formatters/console.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
+
 struct Connection_options {
   std::string socket;
   std::string host;
@@ -75,6 +77,9 @@ struct Connection_options {
     return !ssl_ca.empty() || !ssl_ca_path.empty() || !ssl_cert.empty() ||
            !ssl_cipher.empty() || !ssl_key.empty();
   }
+
+  /** Galaxy X-protocol */
+  gx::Protocol_type ptype{gx::Protocol_type::MYSQLX};
 };
 
 class Session_holder {

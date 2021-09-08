@@ -59,6 +59,9 @@ xcl::XError Session_holder::connect(const bool is_raw_connection) {
   setup_msg_callbacks();
   setup_other_options();
 
+  /** Setup protocol type before connect */
+  m_session->build_protocol_header(m_options.ptype);
+
   m_is_raw_connection = is_raw_connection;
 
   return reconnect();

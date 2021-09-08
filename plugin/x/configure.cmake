@@ -45,6 +45,9 @@ CONFIGURE_FILE(${MYSQLX_PROJECT_DIR}/src/config/mysqlx_ername.h.in
 CONFIGURE_FILE(${MYSQLX_PROJECT_DIR}/src/config/mysqlx_version.h.in
                ${MYSQLX_GENERATE_DIR}/mysqlx_version.h )
 
+CONFIGURE_FILE(${MYSQLX_PROJECT_DIR}/src/config/galaxyx_version.h.in
+               ${MYSQLX_GENERATE_DIR}/galaxyx_version.h )
+
 INSTALL(FILES ${MYSQLX_GENERATE_DIR}/mysqlx_error.h
         DESTINATION ${INSTALL_INCLUDEDIR}
         COMPONENT Development)
@@ -54,5 +57,9 @@ INSTALL(FILES ${MYSQLX_GENERATE_DIR}/mysqlx_ername.h
         COMPONENT Development)
 
 INSTALL(FILES ${MYSQLX_GENERATE_DIR}/mysqlx_version.h
+        DESTINATION ${INSTALL_INCLUDEDIR}
+        COMPONENT Development)
+
+INSTALL(FILES ${MYSQLX_GENERATE_DIR}/galaxyx_version.h
         DESTINATION ${INSTALL_INCLUDEDIR}
         COMPONENT Development)

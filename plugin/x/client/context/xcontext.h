@@ -38,6 +38,8 @@
 #include "plugin/x/client/mysqlxclient/xerror.h"
 #include "plugin/x/client/mysqlxclient/xprotocol.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 namespace xcl {
 
 enum class Auth {
@@ -61,6 +63,9 @@ class Context {
   uint32_t m_datetime_length_discriminator = 10;
   Internet_protocol m_internet_protocol{Internet_protocol::Any};
   std::vector<Auth> m_use_auth_methods;
+
+  /** Galaxy X-protocol, maybe it will be changed by server packet */
+  gx::GSession_id m_gsid{gx::DEFAULT_GSESSION_ID};
 };
 
 }  // namespace xcl

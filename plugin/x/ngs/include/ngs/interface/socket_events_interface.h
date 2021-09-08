@@ -32,6 +32,8 @@
 #include "plugin/x/ngs/include/ngs/interface/socket_interface.h"
 #include "plugin/x/ngs/include/ngs/thread.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
+
 namespace ngs {
 
 class Connection_acceptor_interface;
@@ -48,6 +50,12 @@ class Socket_events_interface {
                          std::function<bool()> callback) = 0;
   virtual void loop() = 0;
   virtual void break_loop() = 0;
+
+  /** Galaxy X-protocol */
+  virtual bool listen(
+      Socket_interface::Shared_ptr s,
+      std::function<void(Connection_acceptor_interface &)> callback,
+      gx::Protocol_type ptype) = 0;
 };
 
 }  // namespace ngs

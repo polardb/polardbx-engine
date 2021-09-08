@@ -41,11 +41,16 @@ Socket_acceptors_task::Socket_acceptors_task(
     const std::string &tcp_bind_address, const std::string &network_namespace,
     const uint16 tcp_port, const uint32 tcp_port_open_timeout,
     const std::string &unix_socket_file, const uint32 backlog,
-    const std::shared_ptr<Socket_events_interface> &event)
+    const std::shared_ptr<Socket_events_interface> &event,
+    Listener_factory_interface &galaxy_listener_factory,
+    const uint16 galaxy_port)
     : m_event(event),
       m_bind_address(tcp_bind_address),
       m_tcp_socket(listener_factory.create_tcp_socket_listener(
           m_bind_address, network_namespace, tcp_port, tcp_port_open_timeout,
+          *m_event, backlog)),
+      m_galaxy_socket(galaxy_listener_factory.create_tcp_socket_listener(
+          m_bind_address, network_namespace, galaxy_port, tcp_port_open_timeout,
           *m_event, backlog)),
 #if defined(HAVE_SYS_UN_H)
       m_unix_socket(listener_factory.create_unix_socket_listener(
@@ -167,6 +172,8 @@ Socket_acceptors_task::get_array_of_listeners() {
   if (m_tcp_socket) result.push_back(m_tcp_socket.get());
 
   if (m_unix_socket) result.push_back(m_unix_socket.get());
+
+  if (m_galaxy_socket) result.push_back(m_galaxy_socket.get());
 
   return result;
 }

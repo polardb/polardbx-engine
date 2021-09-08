@@ -47,6 +47,8 @@
 #include "plugin/x/client/xpriority_list.h"
 #include "plugin/x/generated/mysqlx_version.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 namespace xcl {
 
 using StringOutputStream = google::protobuf::io::StringOutputStream;
@@ -423,6 +425,22 @@ XError Protocol_impl::send(const Header_message_type_id mid,
   if (buffer_length + 1 > std::numeric_limits<uint32>::max())
     return XError{CR_MALFORMED_PACKET, ER_TEXT_DATA_TOO_LARGE};
 
+  /** Galaxy X-protocol */
+  if (is_galaxy()) {
+    uint8_t hdr[9];
+
+    uint64_t *ptr = reinterpret_cast<uint64_t *>(hdr);
+    *ptr = static_cast<uint64_t>(m_ghdr.sid);
+#ifdef WORDS_BIGENDIAN
+    std::swap(hdr[0], hdr[7]);
+    std::swap(hdr[1], hdr[6]);
+    std::swap(hdr[2], hdr[5]);
+    std::swap(hdr[3], hdr[4]);
+#endif
+    hdr[8] = m_ghdr.version;
+    m_connection->write(hdr, 9);
+  }
+
   XError error = m_connection->write(header, 5);
   if (!error) {
     if (0 != buffer_length) error = m_connection->write(buffer, buffer_length);
@@ -439,6 +457,12 @@ bool Protocol_impl::send_impl(const Client_message_type_id mid,
   const int header_message_type_size = sizeof(Header_message_type_id);
   const std::size_t header_whole_message_size =
       msg.ByteSize() + header_message_type_size;
+
+  /** Galaxy X-protocol */
+  if (is_galaxy()) {
+    cos.WriteLittleEndian64(m_ghdr.sid);
+    cos.WriteRaw(&(m_ghdr.version), gx::GVERSION_SIZE);
+  }
 
   cos.WriteLittleEndian32(header_whole_message_size);
   cos.WriteRaw(&header_mesage_id, header_message_type_size);
@@ -643,8 +667,35 @@ XError Protocol_impl::recv_header(Header_message_type_id *out_mid,
 
   *out_mid = 0;
 
-  m_connection_input_stream->AllowedRead(5);
+  /** Galaxy X-procotol */
+  gx::GSession_id sid;
+  gx::GVersion version;
+  uint8_t size = 5 + (is_galaxy() ? gx::GREQUEST_SIZE : 0);
+
+  m_connection_input_stream->AllowedRead(size);
+
   google::protobuf::io::CodedInputStream cis(m_connection_input_stream.get());
+
+  if (is_galaxy()) {
+    if (!cis.ReadLittleEndian64(&sid)) {
+      const auto error = m_connection_input_stream->GetIOError();
+
+      if (details::is_timeout_error(error))
+        m_connection_input_stream->ClearIOError();
+
+      return error;
+    }
+
+    if (!cis.ReadRaw(&version, gx::GVERSION_SIZE)) {
+    const auto error = m_connection_input_stream->GetIOError();
+
+    if (details::is_timeout_error(error))
+      m_connection_input_stream->ClearIOError();
+
+    return error;
+    }
+  }
+  /** Galaxy X-procotol */
 
   /* Clearing timeout error make sense only in case when
      the client is waiting for X Client header.

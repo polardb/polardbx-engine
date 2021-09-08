@@ -40,6 +40,8 @@
 #include "plugin/x/client/mysqlxclient/xargument.h"
 #include "plugin/x/client/mysqlxclient/xsession.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 namespace xcl {
 
 class Result;
@@ -103,6 +105,25 @@ class Session_impl : public XSession {
   void close() override;
 
   Argument_uobject get_connect_attrs() const override;
+
+  /** Galaxy X-protocol */
+  /**
+    Get the galaxy session id
+
+    @retval       GSesssion id
+   */
+  gx::GSession_id gsession_id() const override { return m_context->m_gsid; }
+
+  /**
+    Build the protocol galaxy header content before connection since
+    the first packet need the header format.
+
+   @param     type      protocol type
+  */
+  void build_protocol_header(gx::Protocol_type type) override {
+    gx::GHeader *hdr = m_protocol->get_gheader();
+    hdr->init(type, gsession_id());
+  }
 
  private:
   using Context_ptr = std::shared_ptr<Context>;

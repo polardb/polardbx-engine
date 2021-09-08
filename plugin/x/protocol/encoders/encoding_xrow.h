@@ -35,6 +35,8 @@
 #include "decimal.h"
 #include "mysql_time.h"
 
+#include "plugin/x/protocol/encoders/galaxy_encoding_xprotocol.h"
+
 #include "plugin/x/client/mysqlxclient/xdecimal.h"
 #include "plugin/x/protocol/encoders/encoding_xmessages.h"
 
@@ -282,9 +284,9 @@ class XRow_encoder_base {
   }
 };
 
-class XRow_encoder : public XRow_encoder_base<XProtocol_encoder> {
+class XRow_encoder : public XRow_encoder_base<GProtocol_encoder> {
  public:
-  using Base = XRow_encoder_base<XProtocol_encoder>;
+  using Base = XRow_encoder_base<GProtocol_encoder>;
   using Base::Base;
 };
 

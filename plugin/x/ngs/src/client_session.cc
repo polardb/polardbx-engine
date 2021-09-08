@@ -45,7 +45,8 @@ namespace ngs {
 // ------------------------------------------------------------------------------------------------
 
 Session::Session(Client_interface *client, Protocol_encoder_interface *proto,
-                 const Session_id session_id)
+                 const Session_id session_id,
+                 const gx::GSession_id gsession_id)
     : m_client(client),  // don't hold a real reference to the parent to avoid
                          // circular reference
       m_encoder(proto),
@@ -54,7 +55,8 @@ Session::Session(Client_interface *client, Protocol_encoder_interface *proto,
       m_state_before_close(k_authenticating),
       m_id(session_id),
       m_thread_pending(0),
-      m_thread_active(0) {
+      m_thread_active(0),
+      m_gsid(gsession_id) {
   log_debug("%s.%i: New session allocated by client", client->client_id(),
             session_id);
 

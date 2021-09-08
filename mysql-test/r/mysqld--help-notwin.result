@@ -372,6 +372,10 @@ The following options may be given as the first argument:
  Number of best matches to use for query expansion
  --ft-stopword-file=name 
  Use stopwords from this file instead of built-in list
+ --galaxyx[=name]    Enable or disable galaxyx plugin. Possible values are ON,
+ OFF, FORCE (don't start if the plugin fails to load).
+ --galaxyx-port[=#]  Port on which Galaxy X-protocol is going to accept
+ incoming connections.
  --gdb               Set up signals usable for debugging.
  --general-log       Log connections and queries to a table or log file.
  Defaults to logging to a file hostname.log, or if
@@ -1498,6 +1502,8 @@ ft-max-word-len 84
 ft-min-word-len 4
 ft-query-expansion-limit 20
 ft-stopword-file (No default value)
+galaxyx ON
+galaxyx-port 33070
 gdb FALSE
 general-log FALSE
 generated-random-password-length 20

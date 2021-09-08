@@ -129,7 +129,8 @@ class Server : public ngs::Server_delegate {
       std::shared_ptr<ngs::Vio_interface> connection);
   virtual std::shared_ptr<ngs::Session_interface> create_session(
       ngs::Client_interface &client, ngs::Protocol_encoder_interface &proto,
-      const ngs::Session_interface::Session_id session_id);
+      const ngs::Session_interface::Session_id session_id,
+      const gx::GSession_id gsession_id);
 
   virtual bool will_accept_client(const ngs::Client_interface &client);
   virtual void did_accept_client(const ngs::Client_interface &client);

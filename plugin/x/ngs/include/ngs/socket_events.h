@@ -31,6 +31,8 @@
 #include "plugin/x/src/helper/multithread/mutex.h"
 #include "plugin/x/src/xpl_performance_schema.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
+
 struct event_base;
 
 namespace ngs {
@@ -52,6 +54,11 @@ class Socket_events : public Socket_events_interface {
   void add_timer(const std::size_t delay_ms, std::function<bool()> callback);
   void loop();
   void break_loop();
+
+  /** Galaxy X-protocol */
+  bool listen(Socket_interface::Shared_ptr s,
+              std::function<void(Connection_acceptor_interface &)> callback,
+              gx::Protocol_type ptype);
 
  private:
   static void timeout_call(socket_type sock, short which, void *arg);

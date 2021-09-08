@@ -33,6 +33,8 @@ let $start_page_size= `select @@innodb_page_size`;
 let $other_page_size_k= `SELECT $start_page_size DIV 1024`;
 let $other_page_size_nk= `SELECT CONCAT($other_page_size_k,'k')`;
 
+let $GALAXYX_PORT= `SELECT @@galaxyx_port`;
+
 # mysqld_path to be passed to --ledir
 # use test;
 perl;
@@ -58,7 +60,7 @@ EOF
 --shutdown_server
 --source include/wait_until_disconnected.inc
 
---exec sh $MYSQLD_SAFE --defaults-file=$MYSQLTEST_VARDIR/my.cnf --server_id=$_server_id --log-error=$MYSQLTEST_VARDIR/log/mysqld.$_server_id.err --basedir=$MYSQL_BASEDIR --ledir=$mysqld_path --mysqld=$mysqld_bin --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --mysqlx_socket=$MYSQLX_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --mysqlx_port=$MYSQLX_PORT --timezone=SYSTEM --log-output=file --loose-debug-sync-timeout=600 --default-storage-engine=InnoDB --default-tmp-storage-engine=InnoDB  --secure-file-priv="" --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --innodb-page-size=$other_page_size_nk --log-error-verbosity=3 --plugin-dir=$MYSQL_PLUGINDIR --plugin-load=$plugin_list $mysqld_extra_settings  < /dev/null > /dev/null 2>&1 &
+--exec sh $MYSQLD_SAFE --defaults-file=$MYSQLTEST_VARDIR/my.cnf --server_id=$_server_id --log-error=$MYSQLTEST_VARDIR/log/mysqld.$_server_id.err --basedir=$MYSQL_BASEDIR --ledir=$mysqld_path --mysqld=$mysqld_bin --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --mysqlx_socket=$MYSQLX_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --mysqlx_port=$MYSQLX_PORT --galaxyx_port=$GALAXYX_PORT --timezone=SYSTEM --log-output=file --loose-debug-sync-timeout=600 --default-storage-engine=InnoDB --default-tmp-storage-engine=InnoDB  --secure-file-priv="" --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --innodb-page-size=$other_page_size_nk --log-error-verbosity=3 --plugin-dir=$MYSQL_PLUGINDIR --plugin-load=$plugin_list $mysqld_extra_settings  < /dev/null > /dev/null 2>&1 &
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc

@@ -31,8 +31,8 @@
 
 namespace ngs {
 
-Vio_wrapper::Vio_wrapper(Vio *vio)
-    : m_vio(vio), m_shutdown_mutex(KEY_mutex_x_vio_shutdown) {}
+Vio_wrapper::Vio_wrapper(Vio *vio, gx::Protocol_type ptype)
+    : m_vio(vio), m_shutdown_mutex(KEY_mutex_x_vio_shutdown), m_ptype(ptype) {}
 
 ssize_t Vio_wrapper::read(uchar *buffer, ssize_t bytes_to_send) {
   return vio_read(m_vio, buffer, bytes_to_send);

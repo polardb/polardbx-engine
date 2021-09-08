@@ -27,6 +27,8 @@
 
 #include "violite.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
+
 namespace ngs {
 
 class Connection_acceptor_interface {
@@ -34,6 +36,8 @@ class Connection_acceptor_interface {
   virtual ~Connection_acceptor_interface() = default;
 
   virtual Vio *accept() = 0;
+
+  virtual gx::Protocol_type get_ptype() = 0;
 };
 
 }  // namespace ngs

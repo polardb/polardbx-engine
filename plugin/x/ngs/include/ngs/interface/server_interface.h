@@ -64,7 +64,7 @@ class Server_interface {
 
   virtual std::shared_ptr<Session_interface> create_session(
       Client_interface &client, Protocol_encoder_interface &proto,
-      const int session_id) = 0;
+      const int session_id, const gx::GSession_id gsession_id) = 0;
 
   virtual bool is_running() = 0;
 

@@ -30,11 +30,13 @@
 #include "plugin/x/src/helper/multithread/mutex.h"
 #include "plugin/x/src/io/connection_type.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
+
 namespace ngs {
 
 class Vio_wrapper : public Vio_interface {
  public:
-  Vio_wrapper(Vio *vio);
+  Vio_wrapper(Vio *vio, gx::Protocol_type ptype);
 
   ssize_t read(uchar *buffer, ssize_t bytes_to_send) override;
   ssize_t write(const uchar *buffer, ssize_t bytes_to_send) override;
@@ -58,6 +60,12 @@ class Vio_wrapper : public Vio_interface {
  private:
   Vio *m_vio;
   xpl::Mutex m_shutdown_mutex;
+
+  /** Galaxy X-protocol */
+  gx::Protocol_type m_ptype;
+
+ public:
+  gx::Protocol_type get_ptype() { return m_ptype; }
 };
 
 }  // namespace ngs

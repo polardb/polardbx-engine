@@ -120,13 +120,31 @@ class Protocol_encoder : public Protocol_encoder_interface {
   Metadata_builder m_metadata_builder;
   protocol::Encoding_pool m_pool;
   protocol::Encoding_buffer m_xproto_buffer{&m_pool};
-  protocol::XMessage_encoder m_xproto_encoder{&m_xproto_buffer};
+
+  /** Galaxy X-protocol */
+  gx::GHeader m_gheader;
+  protocol::XMessage_encoder m_xproto_encoder{&m_xproto_buffer, &m_gheader};
+
   protocol::XRow_encoder m_row_builder{&m_xproto_encoder};
   std::unique_ptr<xpl::iface::Protocol_flusher> m_flusher;
   uint32_t m_messages_sent{0};
 
   bool on_message(const uint8_t type);
   bool send_raw_buffer(const uint8_t type);
+
+ public:
+  gx::GHeader *get_gheader() { return &m_gheader; }
+
+  /**
+    Build protocol header
+
+    @param[in]      ptype   protocol type
+    @param[in]      gsid    session id
+  */
+  void build_header(gx::Protocol_type ptype, gx::GSession_id gsid) {
+    m_gheader.init(ptype, gsid);
+    m_xproto_encoder.rebuild_header();
+  }
 };  // namespace ngs
 
 #ifdef XPLUGIN_LOG_PROTOBUF

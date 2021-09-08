@@ -271,6 +271,7 @@ my @mysqld_rules = (
   { 'general_log'                                  => 1 },
   { 'general_log_file'                             => \&fix_log },
   { 'loose-mysqlx-port'                            => \&fix_x_port },
+  { 'galaxyx-port'                                 => \&fix_x_port },
   { 'loose-mysqlx-socket'                          => \&fix_x_socket },
   { 'loose-mysqlx-ssl'                             => \&fix_ssl_disabled },
   { 'loose-mysqlx-ssl-ca'                          => "" },

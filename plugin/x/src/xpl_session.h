@@ -48,7 +48,7 @@ class Client;
 class Session : public ngs::Session {
  public:
   Session(ngs::Client_interface *client, ngs::Protocol_encoder_interface *proto,
-          const Session_id session_id);
+          const Session_id session_id, const gx::GSession_id gsession_id);
   ~Session() override;
 
  public:  // impl ngs::Session_interface

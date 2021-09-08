@@ -42,6 +42,9 @@
 #include "mysqlxclient/xerror.h"
 #include "mysqlxclient/xquery_result.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 #ifdef USE_MYSQLX_FULL_PROTO
 #define HAVE_MYSQLX_FULL_PROTO(Y, N) Y
 #else
@@ -878,6 +881,7 @@ class XProtocol {
                                       const std::string &pass,
                                       const std::string &schema,
                                       const std::string &method = "") = 0;
+  virtual gx::GHeader *get_gheader() = 0;
 };
 
 }  // namespace xcl

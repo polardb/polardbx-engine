@@ -80,6 +80,11 @@ class Protocol_decoder {
   Decode_error read_and_decode_impl(xpl::iface::Waiting_for_io *wait_for_io);
   bool read_header(uint8 *message_type, uint32 *message_size,
                    xpl::iface::Waiting_for_io *wait_for_io);
+
+  /** Galaxy X-protocol */
+  bool read_header(gx::GSession_id *gsession_id, gx::GVersion *gversion,
+                   uint8 *message_type, uint32 *message_size,
+                   xpl::iface::Waiting_for_io *wait_for_io);
 };
 
 }  // namespace ngs

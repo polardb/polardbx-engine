@@ -115,6 +115,17 @@ class Protocol_encoder_interface {
   virtual bool send_protobuf_message(const uint8_t type, const Message &message,
                                      bool force_buffer_flush = false) = 0;
   virtual void on_error(int error) = 0;
+
+  virtual gx::GHeader *get_gheader() = 0;
+
+  /**
+    Build protocol header
+
+    @param[in]      ptype   protocol type
+    @param[in]      gsid    session id
+  */
+  virtual void build_header(gx::Protocol_type ptype, gx::GSession_id gs_id) = 0;
+
 };
 
 }  // namespace ngs

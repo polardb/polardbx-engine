@@ -37,6 +37,8 @@
 #include "plugin/x/tests/driver/processor/commands/command.h"
 #include "plugin/x/tests/driver/processor/commands/mysqlxtest_error_names.h"
 
+#include "plugin/x/client/galaxy_protocol_string.h"
+
 void Driver_command_line_options::print_version() { ::print_version(); }
 
 void Driver_command_line_options::print_help() {
@@ -132,6 +134,8 @@ void Driver_command_line_options::print_help() {
   std::cout << "--help                Show command line help\n";
   std::cout << "--help-commands       Show help for input commands\n";
   std::cout << "-V, --version         Show version of mysqlxtest\n";
+  std::cout << "--protocol_type=[MYSQLX|GALAXYX] "
+               "specify the protocol type\n";
   std::cout << "\nOnly one option that changes run mode is allowed.\n";
 }
 
@@ -222,6 +226,9 @@ Driver_command_line_options::Driver_command_line_options(const int argc,
       m_connection_options.password = value;
     } else if (check_arg_with_value(argv, i, "--socket", "-S", value)) {
       m_connection_options.socket = value;
+      /** Galaxy X-protocol */
+    } else if (check_arg_with_value(argv, i, "--protocol-type", nullptr, value)) {
+      m_connection_options.ptype = gx::convert_to_protocol_type(value);
     } else if (check_arg(argv, i, "--mysql57-compatible", nullptr)) {
       m_connection_options.compatible = true;
     } else if (check_arg_with_value(argv, i, nullptr, "-v", value)) {

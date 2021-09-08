@@ -128,6 +128,13 @@ SET(xplugin_SRC
   src/index_field.cc
   src/index_array_field.cc
 
+  src/variables/galaxy_variables.cc
+  src/galaxyx_plugin.cc
+  src/io/galaxy_listener_tcp.cc
+  src/io/galaxy_listener_factory.cc
+  ngs/src/galaxy_session.cc
+  src/variables/galaxy_status.cc
+
   ${ngs_SRC}
 )
 

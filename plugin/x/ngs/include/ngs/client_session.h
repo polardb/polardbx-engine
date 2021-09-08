@@ -42,7 +42,7 @@ class Session : public Session_interface {
   typedef int32_t Session_id;
 
   Session(Client_interface *client, Protocol_encoder_interface *proto,
-          const Session_id session_id);
+          const Session_id session_id, const gx::GSession_id gsession_id);
   ~Session() override;
 
   Session_id session_id() const override { return m_id; }
@@ -101,6 +101,14 @@ class Session : public Session_interface {
 #ifndef WIN32
   pthread_t mdbg_my_thread;
 #endif
+
+  /** Galaxy X-protocol */
+ private:
+  const gx::GSession_id m_gsid;
+
+ public:
+  /** Getter function */
+  gx::GSession_id gsession_id() const override { return m_gsid; }
 };
 
 }  // namespace ngs

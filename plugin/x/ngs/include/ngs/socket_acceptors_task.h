@@ -49,7 +49,9 @@ class Socket_acceptors_task : public Server_task_interface {
                         const uint32 tcp_port_open_timeout,
                         const std::string &unix_socket_file,
                         const uint32 backlog,
-                        const std::shared_ptr<Socket_events_interface> &event);
+                        const std::shared_ptr<Socket_events_interface> &event,
+                        Listener_factory_interface &galaxy_listener_factory,
+                        const uint16 galaxy_port);
 
   bool prepare(Task_context *context) override;
   void stop(const Stop_cause cause = Stop_cause::k_normal_shutdown) override;
@@ -77,6 +79,7 @@ class Socket_acceptors_task : public Server_task_interface {
   std::shared_ptr<Socket_events_interface> m_event;
   std::string m_bind_address;
   Listener_interface_ptr m_tcp_socket;
+  Listener_interface_ptr m_galaxy_socket;
   Listener_interface_ptr m_unix_socket;
 
   Listener_interface::Sync_variable_state m_time_and_event_state;

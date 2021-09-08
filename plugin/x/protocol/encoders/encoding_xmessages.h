@@ -32,6 +32,8 @@
 
 #include "my_dbug.h"
 
+#include "plugin/x/protocol/encoders/galaxy_encoding_xprotocol.h"
+
 #include "plugin/x/generated/encoding_descriptors.h"
 #include "plugin/x/ngs/include/ngs/protocol/encode_column_info.h"
 #include "plugin/x/ngs/include/ngs/protocol/protocol_protobuf.h"
@@ -365,9 +367,9 @@ class XMessage_encoder_base : public Base_type {
   }
 };
 
-class XMessage_encoder : public XMessage_encoder_base<XProtocol_encoder> {
+class XMessage_encoder : public XMessage_encoder_base<GProtocol_encoder> {
  public:
-  using XMessage_encoder_base<XProtocol_encoder>::XMessage_encoder_base;
+  using XMessage_encoder_base<GProtocol_encoder>::XMessage_encoder_base;
 };
 
 }  // namespace protocol

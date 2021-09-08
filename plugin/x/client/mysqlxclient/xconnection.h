@@ -33,6 +33,8 @@
 #include "mysql.h"
 #include "mysqlxclient/xerror.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 namespace xcl {
 
 /**

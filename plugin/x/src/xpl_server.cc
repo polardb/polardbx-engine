@@ -63,6 +63,9 @@
 #include "plugin/x/src/xpl_session.h"
 #include "plugin/x/src/xpl_system_variables.h"
 
+#include "plugin/x/src/interface/galaxy_listener_factory.h"
+#include "plugin/x/src/variables/galaxy_variables.h"
+
 extern bool check_address_is_wildcard(const char *address_value,
                                       size_t address_length);
 
@@ -227,9 +230,9 @@ std::shared_ptr<ngs::Client_interface> Server::create_client(
 
 std::shared_ptr<ngs::Session_interface> Server::create_session(
     ngs::Client_interface &client, ngs::Protocol_encoder_interface &proto,
-    const Session::Session_id session_id) {
+    const Session::Session_id session_id, const gx::GSession_id gsession_id) {
   return std::shared_ptr<ngs::Session>(
-      ngs::allocate_shared<Session>(&client, &proto, session_id));
+      ngs::allocate_shared<Session>(&client, &proto, session_id, gsession_id));
 }
 
 void Server::on_client_closed(const ngs::Client_interface &) {
@@ -348,6 +351,8 @@ int Server::plugin_main(MYSQL_PLUGIN p) {
         Plugin_system_variables::socket, "MYSQLX_UNIX_PORT", MYSQLX_UNIX_ADDR);
 
     Listener_factory listener_factory;
+    gx::Galaxy_listener_factory galaxy_listener_factory;
+
     auto config(ngs::allocate_shared<ngs::Protocol_global_config>());
     auto events(ngs::allocate_shared<ngs::Socket_events>());
     auto timeout_callback(ngs::allocate_shared<ngs::Timeout_callback>(events));
@@ -372,7 +377,9 @@ int Server::plugin_main(MYSQL_PLUGIN p) {
         std::ref(listener_factory), address_value, network_namespace,
         Plugin_system_variables::port,
         Plugin_system_variables::port_open_timeout,
-        Plugin_system_variables::socket, listen_backlog, events));
+        Plugin_system_variables::socket, listen_backlog, events,
+        std::ref(galaxy_listener_factory),
+        gx::Galaxy_system_variables::m_port));
 
     instance_rwl.wlock();
 

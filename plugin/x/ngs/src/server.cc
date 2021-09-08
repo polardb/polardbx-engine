@@ -276,7 +276,9 @@ void Server::on_accept(Connection_acceptor_interface &connection_acceptor) {
     return;
   }
 
-  std::shared_ptr<Vio_interface> connection(allocate_shared<Vio_wrapper>(vio));
+  std::shared_ptr<Vio_interface> connection(
+      allocate_shared<Vio_wrapper>(vio, connection_acceptor.get_ptype()));
+
   std::shared_ptr<Client_interface> client(
       m_delegate->create_client(connection));
 
@@ -317,10 +319,10 @@ bool Server::on_check_terminated_workers() {
 
 std::shared_ptr<Session_interface> Server::create_session(
     Client_interface &client, Protocol_encoder_interface &proto,
-    const int session_id) {
+    const int session_id, const gx::GSession_id gsession_id) {
   if (is_terminating()) return std::shared_ptr<Session_interface>();
 
-  return m_delegate->create_session(client, proto, session_id);
+  return m_delegate->create_session(client, proto, session_id, gsession_id);
 }
 
 void Server::on_client_closed(const Client_interface &client) {

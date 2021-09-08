@@ -43,6 +43,8 @@
 #include "plugin/x/src/xpl_session.h"
 #include "plugin/x/src/xpl_system_variables.h"
 
+#include "plugin/x/src/galaxyx_plugin.h"
+
 #define BYTE(X) (X)
 #define KBYTE(X) ((X)*1024)
 #define MBYTE(X) ((X)*1024 * 1024)
@@ -770,6 +772,8 @@ mysql_declare_plugin(mysqlx){
     NULL,                        /* options    */
     0                            /* flags      */
 },
+    gx::galaxyx_plugin,
+
     {
         MYSQL_AUDIT_PLUGIN,      /* plugin type                   */
         &xpl_sha2_cache_cleaner, /* type specific descriptor      */

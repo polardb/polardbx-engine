@@ -37,6 +37,8 @@
 #include "plugin/x/ngs/include/ngs/notice_descriptor.h"
 #include "plugin/x/ngs/include/ngs/session_status_variables.h"
 
+#include "plugin/x/ngs/include/ngs/galaxy_session.h"
+
 namespace ngs {
 
 class Client_interface;
@@ -100,6 +102,9 @@ class Session_interface {
       Common_status_variables::Variable Common_status_variables::*variable) = 0;
 
   virtual Document_id_aggregator_interface &get_document_id_aggregator() = 0;
+
+  /** Galaxy X-protocol */
+  virtual gx::GSession_id gsession_id() const = 0;
 };
 
 }  // namespace ngs

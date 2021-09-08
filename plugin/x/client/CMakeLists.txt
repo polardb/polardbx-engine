@@ -36,6 +36,7 @@ SET(CLIENT_SRC
   xcompression_impl.cc
   xrow.cc
   validator/capability_compression_validator.cc
+  galaxy_protocol_string.cc
   ${CMAKE_SOURCE_DIR}/sql-common/net_ns.cc
 )
 
