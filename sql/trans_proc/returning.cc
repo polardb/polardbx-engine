@@ -28,7 +28,7 @@ namespace im {
 
 static constexpr const char *FIELD_SEPARATOR = ",";
 
-const LEX_STRING TRANS_PROC_SCHEMA = {STRING_WITH_LEN(const_cast<char *>("dbms_trans"))};
+LEX_CSTRING TRANS_PROC_SCHEMA = {STRING_WITH_LEN("dbms_trans")};
 
 /* Backup current thd lex_returning */
 Thd_lex_returning_context::Thd_lex_returning_context(THD *thd)

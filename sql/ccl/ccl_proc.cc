@@ -32,7 +32,7 @@
 namespace im {
 
 /* The uniform schema name for ccl */
-const LEX_STRING CCL_PROC_SCHEMA = {STRING_WITH_LEN(const_cast<char *>("dbms_ccl"))};
+LEX_CSTRING CCL_PROC_SCHEMA = {STRING_WITH_LEN("dbms_ccl")};
 
 /* Singleton instance for add_ccl_rule */
 Proc *Ccl_proc_add::instance() {

@@ -31,7 +31,7 @@
 */
 namespace im {
 
-extern const LEX_STRING TRANS_PROC_SCHEMA;
+extern LEX_CSTRING TRANS_PROC_SCHEMA;
 
 class Trans_proc_base : public Proc {
  public:

@@ -39,7 +39,7 @@
 
 namespace im {
 
-extern const LEX_STRING CCL_PROC_SCHEMA;
+extern LEX_CSTRING CCL_PROC_SCHEMA;
 
 /**
   Proc base for dbms_ccl
