@@ -160,8 +160,8 @@ bool Sql_cmd_proc::check_parameter() {
     Item *item;
     while ((item = it++)) {
       if (item->data_type() != m_proc->get_parameters()->at(i)) {
-        my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0),
-                 m_proc->qname().c_str(), i + 1);
+        my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), i + 1,
+                 m_proc->qname().c_str());
         return true;
       }
       i++;

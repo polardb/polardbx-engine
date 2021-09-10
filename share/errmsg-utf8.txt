@@ -9223,7 +9223,7 @@ ER_ROTATE_REQUIRE_LOG_TABLE
    eng "Rotate command must be working on log table"
 
 ER_NATIVE_PROC_PARAMETER_MISMATCH
-   eng "Native procedure %s the %dth parameter mismatch"
+  eng "The %dth parameter didn't match for native procedure %s"
 
 ER_AS_OF_EXPR_NOT_CONSTANT
   eng "Snapshot (as of) item must be a 'const for execution' expression"
