@@ -114,9 +114,15 @@ void Sql_cmd_proc::send_result(THD *thd, bool error) {
 */
 bool Sql_cmd_proc::check_access(THD *thd) {
   Security_context *sctx = thd->security_context();
-  if (!sctx->check_access(SUPER_ACL)) {
-    my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "SUPER");
-    return true;
+
+  if (m_priv_type == Priv_type::PRIV_NONE_ACL) {
+    return false;
+  } else if (m_priv_type == Priv_type::PRIV_SUPER_ACL) {
+    if (!sctx->check_access(SUPER_ACL)) {
+      my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "SUPER");
+      return true;
+    }
+    return false;
   }
   return false;
 }

@@ -93,7 +93,7 @@ Warnings:
 Warning	1064	Optimizer hint syntax error near '1) */  into t values(1, 1, 'xpchild')' at line 1
 insert /*+ ccl_queue_field(NULL) */  into t values(1, 1, 'xpchild');
 Warnings:
-Warning	7528	Didn't found suitable field condition when apply ccl queue
+Warning	7530	Didn't found suitable field condition when apply ccl queue
 call dbms_ccl.show_ccl_queue();
 ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 1	QUEUE	64	1	0	0
@@ -116,7 +116,7 @@ ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 4	QUEUE	64	0	0	0
 update /*+ ccl_queue_field("col1") */ t  set col1 = col1+1 where id =1;
 Warnings:
-Warning	7528	Didn't found suitable field condition when apply ccl queue
+Warning	7530	Didn't found suitable field condition when apply ccl queue
 call dbms_ccl.show_ccl_queue();
 ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 1	QUEUE	64	2	0	0
@@ -125,7 +125,7 @@ ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 4	QUEUE	64	0	0	0
 update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id+1 = 1;
 Warnings:
-Warning	7528	Didn't found suitable field condition when apply ccl queue
+Warning	7530	Didn't found suitable field condition when apply ccl queue
 call dbms_ccl.show_ccl_queue();
 ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 1	QUEUE	64	3	0	0
@@ -134,7 +134,7 @@ ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 4	QUEUE	64	0	0	0
 update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id = 1+1;
 Warnings:
-Warning	7528	Didn't found suitable field condition when apply ccl queue
+Warning	7530	Didn't found suitable field condition when apply ccl queue
 call dbms_ccl.show_ccl_queue();
 ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 1	QUEUE	64	4	0	0
@@ -143,7 +143,7 @@ ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 4	QUEUE	64	0	0	0
 update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id is NULL;
 Warnings:
-Warning	7528	Didn't found suitable field condition when apply ccl queue
+Warning	7530	Didn't found suitable field condition when apply ccl queue
 call dbms_ccl.show_ccl_queue();
 ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 1	QUEUE	64	5	0	0
@@ -163,7 +163,7 @@ id	col1	col2
 1	4	xpchild
 1	4	xpchild
 Warnings:
-Warning	7528	Didn't found suitable field condition when apply ccl queue
+Warning	7530	Didn't found suitable field condition when apply ccl queue
 call dbms_ccl.show_ccl_queue();
 ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
 1	QUEUE	64	6	0	0

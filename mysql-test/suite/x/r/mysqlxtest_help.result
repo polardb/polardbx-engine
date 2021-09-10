@@ -71,6 +71,7 @@ Options:
 --help                Show command line help
 --help-commands       Show help for input commands
 -V, --version         Show version of mysqlxtest
+--protocol_type=[MYSQLX|GALAXYX] specify the protocol type
 
 Only one option that changes run mode is allowed.
 

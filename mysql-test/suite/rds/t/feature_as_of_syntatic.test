@@ -76,7 +76,7 @@ select * from tmp as of scn 1;
 drop table tmp;
 
 # now bypass, do not raise error for non-innnodb table
-select * from information_schema.INNODB_TABLESPACE_MASTER_KEY as of scn 1;
+select * from information_schema.INNODB_TABLESPACES as of scn 1 limit 0;
 
 --error ER_AS_OF_CONFLICT_LOCK_CLAUSE
 select * from tt as of scn 1 as alias for update;

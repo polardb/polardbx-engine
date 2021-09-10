@@ -408,7 +408,7 @@ void Recycle_scheduler::run(THD *thd) {
 void static pre_init_recycle_thread(THD *thd) {
   DBUG_ENTER("pre_init_recycle_thread");
   thd->security_context()->set_master_access(~0ULL);
-  thd->security_context()->set_host_or_ip_ptr((char *)my_localhost,
+  thd->security_context()->set_host_or_ip_ptr(my_localhost,
                                               strlen(my_localhost));
   thd->get_protocol_classic()->init_net(NULL);
   thd->security_context()->set_user_ptr(C_STRING_WITH_LEN("recycle_scheduler"));

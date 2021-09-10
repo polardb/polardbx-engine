@@ -15,7 +15,7 @@ WHERE (rc.constraint_schema = DATABASE()
 AND kcu.table_schema = DATABASE()
 AND rc.table_name = 'prefix_special_activity'
                       AND kcu.table_name = 'prefix_special_activity');
-CONSTRAINT_NAME	COLUMN_NAME	REFERENCED_TABLE_NAME	REFERENCED_COLUMN_NAME
+constraint_name	column_name	referenced_table_name	referenced_column_name
 call dbms_ccl.show_ccl_rule();
 ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
 #	SELECT	information_schema	referential_constraints	Y	N	1	1	0	0	

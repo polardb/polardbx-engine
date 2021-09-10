@@ -3,9 +3,11 @@ INSTALL PLUGIN galaxy SONAME "galaxy.so";
 galax plugin status
 show global status like '%galaxy%';
 Variable_name	Value
-galaxy_bloomfilter_call_count	0
-galaxy_hllndv_call_count	0
-galaxy_hyperloglog_call_count	0
+Galaxyx_address	#
+Galaxyx_port	#
+galaxy_bloomfilter_call_count	#
+galaxy_hllndv_call_count	#
+galaxy_hyperloglog_call_count	#
 performance_schema metrics
 select * from performance_schema.user_defined_functions where UDF_NAME in ('hyperloglog', 'hllndv', 'bloomfilter');
 UDF_NAME	UDF_RETURN_TYPE	UDF_TYPE	UDF_LIBRARY	UDF_USAGE_COUNT

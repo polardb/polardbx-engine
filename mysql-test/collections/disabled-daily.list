@@ -392,7 +392,6 @@ xengine_ext.xengine_charset          : WL#24852289  test is created by init thre
 xengine_perfschema.show_aggregate    : WL#24852289  test is created by init thread, so use default charset.
 
 # Lizard didn't support in-place upgrade.
-rds.feature_auto_upgrade_8017_issue76399        : WL#000 Lizard didn't support in-place upgrade.
 main.dd_upgrade_partition                       : WL#000 Lizard didn't support in-place upgrade.
 innodb.redo_log_archive_02                      : WL#000 Lizard didn't support in-place upgrade.
 main.dictionary_tablespace                      : WL#000 Lizard didn't support in-place upgrade.
@@ -402,7 +401,6 @@ innodb.upgrade_fts                              : WL#000 Lizard didn't support i
 innodb.upgrade_orphan                           : WL#000 Lizard didn't support in-place upgrade.
 innodb.upgrade_partition                        : WL#000 Lizard didn't support in-place upgrade.
 encryption.upgrade                              : WL#000 Lizard didn't support in-place upgrade.
-rds.recovery_inconsistency_check_upgraded_server : WL#000 Lizard didn't support in-place upgrade.
 innodb.log_corruption                             : WL#000 Lizard didn't support in-place upgrade.
 innodb.log_corruption_1                           : WL#000 Lizard didn't support in-place upgrade.
 main.dd_schema_definition_after_upgrade_57_debug  : WL#000 Lizard didn't support in-place upgrade.
@@ -424,7 +422,6 @@ innodb.crc32_endianness                           : WL#000 Importing a different
 innodb.innodb-import-lctn_1                       : WL#000 Importing a different MySQL existing table is not supported by lizard.
 innodb.table_encrypt_portable_64                  : WL#000 Importing a different MySQL existing table is not supported by lizard.
 innodb.portability_tablespace_linux               : WL#000 Lizard didn't support in-place upgrade.
-rds.feature_support_tde_sm4                       : WL#000 Lizard didn't support in-place upgrade.
 information_schema.upgrade_cs                     : WL#000 Lizard didn't support in-place upgrade.
 main.read_only_ddl                                : WL#000 Lizard didn't support in-place upgrade.
 # x-cluster

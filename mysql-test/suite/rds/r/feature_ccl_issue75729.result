@@ -9,11 +9,11 @@ grant all privileges on mysql.* to 'u1'@'%';
 show create table mysql.concurrency_control;
 Table	Create Table
 concurrency_control	CREATE TABLE `concurrency_control` (
-  `Id` bigint NOT NULL AUTO_INCREMENT,
+  `Id` bigint(20) NOT NULL AUTO_INCREMENT,
   `Type` enum('SELECT','UPDATE','INSERT','DELETE') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL DEFAULT 'SELECT',
   `Schema_name` varchar(64) COLLATE utf8_bin DEFAULT NULL,
   `Table_name` varchar(64) COLLATE utf8_bin DEFAULT NULL,
-  `Concurrency_count` bigint NOT NULL,
+  `Concurrency_count` bigint(20) NOT NULL,
   `Keywords` text COLLATE utf8_bin,
   `State` enum('N','Y') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL DEFAULT 'Y',
   `Ordered` enum('N','Y') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL DEFAULT 'N',
@@ -34,7 +34,7 @@ ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ccl.add_ccl_rule; 
 call dbms_ccl.add_ccl_rule("ccl_db", 10, 10, "key1;key2;key3");
 ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ccl.add_ccl_rule; expected 5, got 4
 call dbms_ccl.add_ccl_rule(10, "ccl_db", 10, 10, "key1;key2;key3");
-ERROR HY000: The 1th parameter didn't match for native procedure dbms_ccl.add_ccl_rule
+ERROR HY000: Native procedure dbms_ccl.add_ccl_rule the 1th parameter mismatch
 call dbms_ccl.add_ccl_rule("select", "ccl_db", "", 10, "key1;key2;key3");
 ERROR HY000: Concurrency control rule 0 is not valid when add rule
 call dbms_ccl.add_ccl_rule("select", "", "t1", 10, "key1;key2;key3");
@@ -75,8 +75,8 @@ alter table mysql.concurrency_control drop column col1;
 2.4 test delete warning
 call dbms_ccl.del_ccl_rule(1234567);
 Warnings:
-Warning	7514	Concurrency control rule 1234567 is not found in table
-Warning	7514	Concurrency control rule 1234567 is not found in cache
+Warning	7526	Concurrency control rule 1234567 is not found in table
+Warning	7526	Concurrency control rule 1234567 is not found in cache
 2.5 test rule conflicit
 call dbms_ccl.add_ccl_rule("select", "", "", 10, "");
 call dbms_ccl.show_ccl_rule();

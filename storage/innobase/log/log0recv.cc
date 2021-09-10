@@ -4264,6 +4264,9 @@ const char *get_mlog_string(mlog_id_t type) {
     case MLOG_COMP_PAGE_CREATE_SDI:
       return ("MLOG_COMP_PAGE_CREATE_SDI");
 
+    case MLOG_FILE_EXTEND:
+      return ("MLOG_FILE_EXTEND");
+
     case MLOG_REC_CLUST_LIZARD_UPDATE:
       return ("MLOG_REC_CLUST_LIZARD_UPDATE");
 
