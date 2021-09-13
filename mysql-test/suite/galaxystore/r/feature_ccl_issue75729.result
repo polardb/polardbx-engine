@@ -34,7 +34,7 @@ ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ccl.add_ccl_rule; 
 call dbms_ccl.add_ccl_rule("ccl_db", 10, 10, "key1;key2;key3");
 ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ccl.add_ccl_rule; expected 5, got 4
 call dbms_ccl.add_ccl_rule(10, "ccl_db", 10, 10, "key1;key2;key3");
-ERROR HY000: Native procedure dbms_ccl.add_ccl_rule the 1th parameter mismatch
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_ccl.add_ccl_rule
 call dbms_ccl.add_ccl_rule("select", "ccl_db", "", 10, "key1;key2;key3");
 ERROR HY000: Concurrency control rule 0 is not valid when add rule
 call dbms_ccl.add_ccl_rule("select", "", "t1", 10, "key1;key2;key3");

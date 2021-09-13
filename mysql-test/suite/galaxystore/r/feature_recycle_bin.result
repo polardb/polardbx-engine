@@ -57,7 +57,7 @@ information_schema
 test
 use __recycle_bin__;
 create table t1 (id int);
-ERROR 42000: Access denied for user 'normal_1'@'%' to database '__recycle_bin__'
+drop table t1;
 show tables;
 Tables_in___recycle_bin__
 1.1 dbms_recycle.purge_table still require db.table privileges;

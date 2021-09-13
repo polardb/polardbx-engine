@@ -75,8 +75,8 @@ show databases;
 
 connection m_normal_1;
 use __recycle_bin__;
---error ER_DBACCESS_DENIED_ERROR
 create table t1 (id int);
+drop table t1;
 show tables;
 
 --echo 1.1 dbms_recycle.purge_table still require db.table privileges;

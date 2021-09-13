@@ -4,6 +4,7 @@ Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
 Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 call mtr.add_suppression("table already exists in recycle_bin");
+call mtr.add_suppression("Fail to recycle table");
 create database db_recycle;
 create database db_recycle_dummy;
 create user super_1@'%' identified by 'pass';
@@ -57,7 +58,7 @@ information_schema
 test
 use __recycle_bin__;
 create table t1 (id int);
-ERROR 42000: Access denied for user 'normal_1'@'%' to database '__recycle_bin__'
+drop table t1;
 show tables;
 Tables_in___recycle_bin__
 1.1 dbms_recycle.purge_table still require db.table privileges;
