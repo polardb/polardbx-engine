@@ -671,6 +671,7 @@ handle_new_error:
   trx->error_state = DB_SUCCESS;
 
   switch (err) {
+    case DB_GP_WAIT_TIMEOUT:
     case DB_LOCK_WAIT_TIMEOUT:
       if (row_rollback_on_timeout) {
         trx_rollback_to_savepoint(trx, nullptr);
@@ -725,7 +726,7 @@ handle_new_error:
     case DB_GP_WAIT:
       lizard::gp_wait_suspend_thread(trx);
       if (trx->error_state != DB_SUCCESS) {
-        ut_ad(trx->error_state == DB_LOCK_WAIT_TIMEOUT);
+        ut_ad(trx->error_state == DB_GP_WAIT_TIMEOUT);
         que_thr_stop_for_mysql(thr);
 
         goto handle_new_error;

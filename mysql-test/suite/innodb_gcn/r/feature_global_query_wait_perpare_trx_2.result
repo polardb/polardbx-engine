@@ -1,4 +1,5 @@
 SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+set global innodb_undo_retention = 9000;
 SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 set global innodb_rds_flashback_enabled = on;
@@ -30,7 +31,8 @@ XA END 'xatest';
 XA PREPARE 'xatest';
 set session innodb_global_query_wait_timeout=2;
 XA COMMIT 'xatest';
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 INSERT INTO t VALUES(4, 1);
 set global innodb_rds_flashback_enabled=default;
 drop table t;
+set global innodb_undo_retention = default;

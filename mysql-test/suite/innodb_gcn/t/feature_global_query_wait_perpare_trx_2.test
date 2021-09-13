@@ -2,6 +2,8 @@
 --source include/have_binlog_format_row.inc
 --source suite/innodb_gcn/include/init_conn_base_seq.inc
 
+set global innodb_undo_retention = 9000;
+
 connect (con1,localhost,root,,);
 --source suite/innodb_gcn/include/init_conn_base_seq.inc
 
@@ -20,6 +22,8 @@ begin;
 insert into t values(1, 1);
 commit;
 --let $my_gcn = `select @base_seq + 2048`
+--let $my_commit_gcn = `select @base_seq + 3048`
+--let $my_snapshot_gcn = `select @base_seq + 4048`
 --disable_query_log
 --eval select * from t as of gcn $my_gcn
 --enable_query_log
@@ -54,10 +58,14 @@ XA PREPARE 'xatest';
 
 connection con2;
 --disable_query_log
---send_eval select * from t as of gcn $my_gcn;
+--send_eval select * from t as of gcn $my_snapshot_gcn;
 --enable_query_log
 
 connection con1;
+# read after write(snapshot_gcn > commit_gcn), so the modification of the trx must be seen.
+--disable_query_log
+--eval set innodb_commit_seq = $my_commit_gcn
+--enable_query_log
 XA COMMIT 'xatest';
 
 connection con2;
@@ -77,7 +85,7 @@ XA PREPARE 'xatest';
 connection con2;
 set session innodb_global_query_wait_timeout=2;
 --disable_query_log
---send_eval select * from t as of gcn $my_gcn;
+--send_eval select * from t as of gcn $my_snapshot_gcn;
 --enable_query_log
 
 sleep 5;
@@ -85,10 +93,9 @@ connection con1;
 XA COMMIT 'xatest';
 
 connection con2;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 --reap;
 INSERT INTO t VALUES(4, 1);
-
 
 connection con1;
 set global innodb_rds_flashback_enabled=default;
@@ -97,3 +104,6 @@ drop table t;
 
 disconnect con1;
 disconnect con2;
+
+connection default;
+set global innodb_undo_retention = default;

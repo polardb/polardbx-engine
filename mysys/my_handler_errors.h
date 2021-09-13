@@ -134,7 +134,8 @@ static const char *handler_error_messages[] = {
     "Sequence is not yet defined in current session",
     "Sequence access failure",
     "Sequence roll forward retry timeout",
-    "Nextval skipped to is not valid"
+    "Nextval skipped to is not valid",
+    "Prepare wait timeout",
 };
 
 extern void my_handler_error_register(void);

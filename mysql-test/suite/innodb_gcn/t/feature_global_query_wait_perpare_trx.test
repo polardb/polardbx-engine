@@ -57,25 +57,20 @@ select * from tt as of gcn (a<b);
 # Not surpported  ==========================
 
 create temporary table tmp(a int);
---error ER_AS_OF_NOT_INNODB_TABLE
 select * from tmp as of gcn 1;
 drop table tmp;
 
 # now bypass, do not raise error for non-innnodb table
---disable_result_log
-select * from information_schema.PLUGINS as of gcn 1;
---enable_result_log
+select * from information_schema.INNODB_TABLESPACES as of gcn 1 limit 0;
 
 --error ER_AS_OF_CONFLICT_LOCK_CLAUSE
 select * from tt as of gcn 1 as alias for update;
 --error ER_AS_OF_CONFLICT_LOCK_CLAUSE
 select * from tt as of gcn 1 as alias LOCK IN SHARE MODE;
 
---error ER_AS_OF_NOT_INNODB_TABLE
 select * from vv as of gcn 1;
 
 lock tables vv read;
---error ER_AS_OF_NOT_INNODB_TABLE
 select * from vv as of gcn 1;
 unlock tables;
 

@@ -42,18 +42,19 @@ select * from tt as of gcn (a<b);
 ERROR 42S22: Unknown column 'b' in 'field list'
 create temporary table tmp(a int);
 select * from tmp as of gcn 1;
-ERROR HY000: Snapshot (as of) expression not allowed for 'tmp', cause it is not a innodb base table
+a
 drop table tmp;
-select * from information_schema.PLUGINS as of gcn 1;
+select * from information_schema.INNODB_TABLESPACES as of gcn 1 limit 0;
+SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
 select * from tt as of gcn 1 as alias for update;
 ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
 select * from tt as of gcn 1 as alias LOCK IN SHARE MODE;
 ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
 select * from vv as of gcn 1;
-ERROR HY000: Snapshot (as of) expression not allowed for 'vv', cause it is not a innodb base table
+a
 lock tables vv read;
 select * from vv as of gcn 1;
-ERROR HY000: Snapshot (as of) expression not allowed for 'vv', cause it is not a innodb base table
+a
 unlock tables;
 update tt as of gcn 1 as alias set a=0;
 ERROR HY000: Snapshot (as of) expression can only be appear in select from list tables

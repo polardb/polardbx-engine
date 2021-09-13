@@ -443,7 +443,7 @@ void gp_wait_suspend_thread(trx_t *trx) {
   gp_release_slot(slot);
 
   if (wait_time > wait_timeout) {
-    trx->error_state = DB_LOCK_WAIT_TIMEOUT;
+    trx->error_state = DB_GP_WAIT_TIMEOUT;
   } else {
     trx->error_state = DB_SUCCESS;
   }

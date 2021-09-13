@@ -1020,10 +1020,13 @@ Information in the data-dictionary needs to be updated. */
 /* The snapshot is so old that the required historical data has been deleted */
 #define HA_ERR_SNAPSHOT_TOO_OLD 220
 
+/* Prepare wait timeout */
+#define HA_ERR_GP_WAIT_TIMEOUT 221
+
 /* lizard errors end */
 
 /** Copy of last error number */
-#define HA_ERR_LAST 220
+#define HA_ERR_LAST 221
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

@@ -2380,6 +2380,8 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
       return (HA_ERR_AS_OF_TABLE_DEF_CHANGED);
     case DB_SNAPSHOT_TOO_OLD:
       return (HA_ERR_SNAPSHOT_TOO_OLD);
+    case DB_GP_WAIT_TIMEOUT:
+      return (HA_ERR_GP_WAIT_TIMEOUT);
   }
 }
 
