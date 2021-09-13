@@ -195,6 +195,7 @@ enum dberr_t {
   DB_SNAPSHOT_TOO_OLD,
   /** Lizard: Blocking global query */
   DB_GP_WAIT,
+  DB_GP_WAIT_TIMEOUT,
 
   /* The following are partial failure codes */
 

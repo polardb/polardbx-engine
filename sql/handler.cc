@@ -708,6 +708,7 @@ int ha_init_errors(void) {
   SETMSG(HA_ERR_AS_OF_INTERNAL, ER_DEFAULT(ER_FLASHBACK_INTERNAL_ERROR));
   SETMSG(HA_ERR_AS_OF_TABLE_DEF_CHANGED, ER_DEFAULT(ER_AS_OF_TABLE_DEF_CHANGED));
   SETMSG(HA_ERR_SNAPSHOT_TOO_OLD, ER_DEFAULT(ER_SNAPSHOT_TOO_OLD));
+  SETMSG(HA_ERR_GP_WAIT_TIMEOUT, ER_DEFAULT(ER_GP_WAIT_TIMEOUT));
   /* Register the error messages for use with my_error(). */
   return my_error_register(get_handler_errmsg, HA_ERR_FIRST, HA_ERR_LAST);
 }
@@ -4349,6 +4350,9 @@ void handler::print_error(int error, myf errflag) {
       break;
     case HA_ERR_SNAPSHOT_TOO_OLD:
       textno = ER_SNAPSHOT_TOO_OLD;
+      break;
+    case HA_ERR_GP_WAIT_TIMEOUT:
+      textno = ER_GP_WAIT_TIMEOUT;
       break;
     default: {
       /* The error was "unknown" to this function.

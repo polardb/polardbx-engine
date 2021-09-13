@@ -136,7 +136,8 @@ static const char *handler_error_messages[] = {
     "Flashback-like query encountered an internal error",
     "The definition of the table required by the query has changed",
     "Snapshot too old",
-    "Nextval skipped to is not valid"
+    "Nextval skipped to is not valid",
+    "Prepare wait timeout"
 };
 
 extern void my_handler_error_register(void);

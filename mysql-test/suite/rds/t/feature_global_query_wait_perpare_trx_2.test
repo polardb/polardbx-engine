@@ -1,0 +1,86 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+
+connection con1;
+set global innodb_rds_flashback_enabled = on;
+create table t (id int primary key, col1 int, key(col1))engine = innodb;
+
+
+#-----------------------------------------------
+# normal gcn query
+#-----------------------------------------------
+begin;
+insert into t values(1, 1);
+commit;
+select * from t as of gcn 2048;
+
+#-----------------------------------------------
+# simultate table def change
+#-----------------------------------------------
+set session debug = "+d,simulate_gcn_def_changed_error";
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from t as of gcn 1;
+set session debug = "-d,simulate_gcn_def_changed_error";
+
+
+#-----------------------------------------------
+# simultate previous image has purged
+#-----------------------------------------------
+set session debug = "+d, simulate_prev_image_purged_during_query";
+select * from t as of gcn 2048;
+set session debug = "-d, simulate_prev_image_purged_during_query";
+
+#-----------------------------------------------
+# block test
+#-----------------------------------------------
+connection con1;
+XA START 'xatest';
+INSERT INTO t VALUES(2, 1);
+XA END 'xatest';
+XA PREPARE 'xatest';
+
+
+connection con2;
+--send select * from t as of gcn 2048;
+
+connection con1;
+XA COMMIT 'xatest';
+
+connection con2;
+--reap;
+
+#-----------------------------------------------
+# block timeout
+#-----------------------------------------------
+
+connection con1;
+XA START 'xatest';
+INSERT INTO t VALUES(3, 1);
+XA END 'xatest';
+XA PREPARE 'xatest';
+
+
+connection con2;
+set session innodb_global_query_wait_timeout=2;
+--send select * from t as of gcn 2048;
+
+sleep 5;
+connection con1;
+XA COMMIT 'xatest';
+
+connection con2;
+--error ER_GP_WAIT_TIMEOUT
+--reap;
+
+
+
+connection con1;
+set global innodb_rds_flashback_enabled=default;
+drop table t;
+
+
+disconnect con1;
+disconnect con2;

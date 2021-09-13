@@ -9380,6 +9380,9 @@ ER_POLARX_RPC_CACHE_MISS
 ER_POLARX_RPC_ERROR_MSG
   eng "%s"
 
+ER_GP_WAIT_TIMEOUT
+  eng "Prepare wait timeout exceeded; try restarting global query"
+
 #
 # End of PolarDB-X special error messages intended to be return to CN.
 #

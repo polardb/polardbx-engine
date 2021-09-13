@@ -526,6 +526,9 @@ const char *ut_strerr(dberr_t num) {
     case DB_GP_WAIT:
       return ("Global query wait");
 
+    case DB_GP_WAIT_TIMEOUT:
+      return ("Prepare wait timeout");
+
     case DB_ERROR_UNSET:;
       /* Fall through. */
 
