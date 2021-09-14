@@ -279,8 +279,8 @@ bool txn_undo_log_has_purged(const trx_rseg_t *rseg,
 
   undo_addr_t undo_addr;
   undo_ptr_t uba_ptr;
-  trx_id_t txn_trx_id;
-  ulint txn_state;
+  trx_id_t txn_trx_id = TRX_ID_MAX;
+  ulint txn_state = TXN_UNDO_LOG_PURGED;
   trx_ulogf_t *txn_hdr;
 
   mtr_t mtr;

@@ -648,6 +648,7 @@ SET(SQL_SHARED_SOURCES
   ppi/ppi.cc
   ppi/ppi_noop.cc
   ppi/ppi_table_iostat.cc
+  xa_handler.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)

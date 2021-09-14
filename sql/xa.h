@@ -267,7 +267,7 @@ typedef struct xid_t {
    */
   friend std::ostream &operator<<(std::ostream &out, struct xid_t const &in);
 
- private:
+ public:
   void set(const xid_t *xid) {
     memcpy(this, xid, sizeof(xid->formatID) + xid->key_length());
   }
@@ -277,6 +277,9 @@ typedef struct xid_t {
   void null() { formatID = -1; }
 
   friend class XID_STATE;
+
+  friend bool trx_group_match_by_xid(const struct xid_t *lhs,
+                                     const struct xid_t *rhs);
 } XID;
 
 struct st_handler_tablename;

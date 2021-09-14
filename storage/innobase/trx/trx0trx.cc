@@ -80,6 +80,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
 #include "lizard0gp.h"
+#include "lizard0xa.h"
 
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
@@ -258,6 +259,8 @@ static void trx_init(trx_t *trx) {
 
   trx->vision.reset();
 
+  trx->xad.reset();
+
   ++trx->version;
 }
 
@@ -276,6 +279,10 @@ struct TrxFactory {
     new (trx) trx_t();
 
     new (&trx->gp_wait) gp_wait_t();
+
+    new (&trx->xad) XAD();
+
+    new (&trx->vision) lizard::Vision();
 
     trx_init(trx);
 
@@ -351,6 +358,10 @@ struct TrxFactory {
     trx->lock.table_pool.~lock_pool_t();
 
     trx->gp_wait.~gp_wait_t();
+
+    trx->xad.~XAD();
+
+    trx->vision.~Vision();
   }
 
   /** Enforce any invariants here, this is called before the transaction

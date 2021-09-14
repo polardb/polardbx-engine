@@ -1,0 +1,170 @@
+--source include/have_binlog_format_row.inc
+
+--connect(con1,localhost,root,,test)
+--connect(con2,localhost,root,,test)
+--connect(con3,localhost,root,,test)
+
+--connection con1
+set session transaction_isolation= 'READ-COMMITTED';
+
+--connection con2
+set session transaction_isolation= 'READ-COMMITTED';
+
+--connection con3
+set session transaction_isolation= 'READ-COMMITTED';
+
+--echo # --------- case 1 ---------
+
+--connection con1
+create table t1 (id int) engine = innodb;
+insert into t1 values (1);
+
+
+# start the first XA transaction and do some chagnes
+xa start 'xa', 'test@0001';
+select * from t1;
+insert into t1 values (2);
+
+--connection con2
+
+# transaction group mode should be disabled
+
+show variables like "innodb_transaction_group";
+
+# normal trx cannot see other trx's changes
+start transaction;
+select * from t1;
+commit;
+
+
+# unless from XA transaction of the same group
+xa start 'xa', 'test@0002';
+
+# transaction group mode is not enabled, still cannot see the changes
+select * from t1;
+
+# unless it's enabled explicitely
+set innodb_transaction_group = ON;
+select * from t1;
+
+
+--connection con3
+
+# XA transaction with unexpected BQUAL name cannot join the group
+xa start 'xa', 'test@123a';
+
+# so the changes are not visible
+select * from t1;
+
+# even transaction group mode is enabled
+set innodb_transaction_group = ON;
+select * from t1;
+
+xa end 'xa', 'test@123a';
+xa commit 'xa', 'test@123a' one phase;
+
+# check the current setting
+show variables like "innodb_transaction_group";
+
+# now start a new XA transaction with expected BQUAL name in format of
+# "value@xxxx" where "x" is digit
+
+xa start 'xa', 'test@0003';
+
+# the changes are visible now
+select * from t1;
+xa end 'xa', 'test@0003';
+xa commit 'xa', 'test@0003' one phase;
+
+--echo # --------- case 2 ---------
+
+--connection con1
+
+# now do more changes with the first XA transaction
+insert into t1 values (3);
+
+--connection con2
+
+# XA transaction in the same group can see the new changes
+select * from t1;
+
+
+
+--echo # --------- case 3 ---------
+
+--connection con1
+
+# commit the first XA transaction
+xa end 'xa', 'test@0001';
+xa commit 'xa', 'test@0001' one phase;
+
+--connection con2
+# even first XA transaction commits, can still see the changes
+
+select * from t1;
+# commit this XA transaction
+
+xa end 'xa', 'test@0002';
+xa commit 'xa', 'test@0002' one phase;
+
+
+
+--echo # --------- case 4 ---------
+
+--connection con1
+xa start 'xa', 'test@0004';
+insert into t1 values(4);
+
+
+--connection con3
+# use isolation level other than REPATABLE READ
+#
+# SELECT still uses read view when using READ COMMITTED, can still see the changes
+
+set session transaction isolation level READ COMMITTED;
+
+set innodb_transaction_group = ON;
+
+show variables like "%isolation%";
+
+xa start 'xa', 'test@0005';
+
+# the changes are visible
+select * from t1;
+
+# commit this XA transaction
+xa end 'xa', 'test@0005';
+xa commit 'xa', 'test@0005' one phase;
+
+
+# SELECT uses lock when using SERIALIZABLE, cannot see the changes
+set session transaction isolation level SERIALIZABLE;
+
+show variables like "%isolation%";
+
+xa start 'xa', 'test@0006';
+
+# this statement will be blocked until lock timeout
+
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1;
+
+# commit this XA transaction
+xa end 'xa', 'test@0006';
+xa commit 'xa', 'test@0006' one phase;
+
+
+--connection con1
+# commit this XA transaction
+xa end 'xa', 'test@0004';
+xa commit 'xa', 'test@0004' one phase;
+
+
+--connection con1
+drop table t1;
+
+
+
+disconnect con1;
+disconnect con2;
+disconnect con3;

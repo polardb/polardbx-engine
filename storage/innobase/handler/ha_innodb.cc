@@ -224,6 +224,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "handler/i_s_ext.h"
 #include "srv0file.h"
+#include "lizard0xa.h"
 
 #ifndef UNIV_HOTBACKUP
 
@@ -1157,6 +1158,11 @@ static MYSQL_THDVAR_ULONG(ddl_threads, PLUGIN_VAR_RQCMDARG,
                           nullptr, 4, /* Default. */
                           1,          /* Minimum. */
                           64, 0);     /* Maximum. */
+
+static MYSQL_THDVAR_BOOL(transaction_group, PLUGIN_VAR_OPCMDARG,
+                         "Enable transaction group mode, data changes are "
+                         "visible to all transactions in the same group",
+                         nullptr, nullptr, FALSE);
 
 static SHOW_VAR innodb_status_variables[] = {
     {"buffer_pool_dump_status",
@@ -2968,6 +2974,7 @@ static inline void trx_register_for_2pc(trx_t *trx) /* in: transaction */
 
 static inline void trx_deregister_from_2pc(trx_t *trx) {
   trx->is_registered = false;
+  trx->xad.reset();
 }
 
 /** Copy table flags from MySQL's HA_CREATE_INFO into an InnoDB table object.
@@ -5178,6 +5185,28 @@ static void innobase_post_ddl(THD *thd) {
   }
 }
 
+/**
+  Copy server XA attributes into innobase.
+
+  @param[in]      thd       connection handler.
+*/
+static void innobase_register_xa_attributes(THD *thd) {
+  trx_t *&trx = thd_to_trx(thd);
+  ut_ad(trx != nullptr);
+
+  if (!trx_is_registered_for_2pc(trx)) {
+    /** Note: Other session will compare trx group when assign readview. */
+    trx_mutex_enter(trx);
+
+    thd_get_xid(thd, (MYSQL_XID *)trx->xad.my_xid());
+    trx->xad.build_group();
+
+    ut_ad(!trx->xad.is_null());
+
+    trx_mutex_exit(trx);
+  }
+}
+
 /** Initialize the InnoDB storage engine plugin.
 @param[in,out]  p       InnoDB handlerton
 @return error code
@@ -5318,6 +5347,8 @@ static int innodb_init(void *p) {
   innobase_hton->page_track.get_num_page_ids =
       innobase_page_track_get_num_page_ids;
   innobase_hton->page_track.get_status = innobase_page_track_get_status;
+
+  innobase_hton->register_xa_attributes = innobase_register_xa_attributes;
 
   static_assert(DATA_MYSQL_TRUE_VARCHAR == (ulint)MYSQL_TYPE_VARCHAR);
 
@@ -23725,6 +23756,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(undo_space_supremum_size),
     MYSQL_SYSVAR(undo_space_reserved_size),
     MYSQL_SYSVAR(global_query_wait_timeout),
+    MYSQL_SYSVAR(transaction_group),
     nullptr};
 
 mysql_declare_plugin(innobase){
@@ -24556,3 +24588,7 @@ static bool innobase_check_reserved_file_name(handlerton *, const char *name) {
   return (true);
 }
 #endif /* !UNIV_HOTBACKUP */
+
+bool thd_get_transaction_group(THD *thd) {
+  return THDVAR(thd, transaction_group);
+}

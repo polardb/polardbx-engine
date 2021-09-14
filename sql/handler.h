@@ -109,6 +109,8 @@ typedef struct xid_t XID;
 typedef struct st_xarecover_txn XA_recover_txn;
 struct MDL_key;
 
+typedef struct xa_desc_t XAD;
+
 namespace dd {
 enum class enum_column_types;
 class Table;
@@ -2586,6 +2588,8 @@ struct Page_track_t {
   page_track_get_status_t get_status;
 };
 
+typedef void (*register_xa_attributes_t)(THD *thd);
+
 /**
   handlerton is a singleton structure - one instance per storage engine -
   to provide access to storage engine functionality that works on the
@@ -2818,6 +2822,8 @@ struct handlerton {
 
   /** Page tracking interface */
   Page_track_t page_track;
+
+  register_xa_attributes_t register_xa_attributes;
 };
 
 /* Possible flags of a handlerton (there can be 32 of them) */

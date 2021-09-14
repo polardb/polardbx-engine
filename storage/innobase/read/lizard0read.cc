@@ -60,7 +60,8 @@ Vision::Vision()
       m_is_asof_scn(false),
       m_asof_scn(SCN_NULL),
       m_is_asof_gcn(false),
-      m_asof_gcn(GCN_NULL) {}
+      m_asof_gcn(GCN_NULL),
+      group_ids() {}
 
 /** Reset as initialzed values */
 void Vision::reset() {
@@ -73,6 +74,7 @@ void Vision::reset() {
   m_asof_scn = SCN_NULL;
   m_is_asof_gcn = false;
   m_asof_gcn = GCN_NULL;
+  group_ids.clear();
 }
 
 VisionContainer::VisionList::VisionList() {
@@ -189,6 +191,8 @@ void VisionContainer::vision_open(trx_t *trx) {
   m_size.fetch_add(1);
 
   vision->m_list_idx = idx;
+
+  vision_collect_trx_group_ids(trx, vision);
 }
 
 /**
@@ -275,10 +279,12 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
     }
     return true;
   } else if (txn_rec->scn == SCN_NULL) {
+    if (group_ids.has(txn_rec->trx_id)) return true;
     /** If transaction still active,  not seen */
     ut_ad(!check_consistent || lizard_undo_ptr_is_active(txn_rec->undo_ptr));
     return false;
   } else {
+    if (group_ids.has(txn_rec->trx_id)) return true;
     /**
       Modification scn is less than snapshot mean that
       the trx commit is prior the query lanuch.
@@ -304,6 +310,8 @@ bool Vision::modifications_visible_asof_scn(txn_rec_t *txn_rec) const {
     return true;
   }
 #endif
+
+  if (group_ids.has(txn_rec->trx_id)) return true;
 
   if (txn_rec->scn == SCN_NULL) {
     /* flash back query can never see the un-committed modifications */
@@ -338,6 +346,8 @@ bool Vision::modifications_visible_asof_gcn(txn_rec_t *txn_rec) const {
   if (txn_rec->trx_id == m_creator_trx_id) {
     return true;
   }
+
+  if (group_ids.has(txn_rec->trx_id)) return true;
 
   if (txn_rec->gcn == GCN_NULL) {
     ut_ad(txn_rec->scn == SCN_NULL);

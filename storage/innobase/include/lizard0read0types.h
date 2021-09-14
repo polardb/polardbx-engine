@@ -46,6 +46,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "dict0mem.h"
 
+#include "lizard0xa0types.h"
+
 struct row_prebuilt_t;
 
 namespace lizard {
@@ -237,6 +239,10 @@ class Vision {
   UT_LIST_NODE_T(Vision) list;
 
   friend class VisionContainer;
+
+ public:
+  /** The trx id container that belong to the same trx group */
+  trx_group_ids group_ids;
 };
 
 /**
