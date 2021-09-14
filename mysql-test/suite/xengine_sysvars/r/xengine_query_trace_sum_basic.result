@@ -1,0 +1,50 @@
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES('ON');
+INSERT INTO valid_values VALUES('OFF');
+INSERT INTO valid_values VALUES('RESET');
+CREATE TABLE invalid_values (value varchar(255));
+SET @start_global_value = @@global.XENGINE_QUERY_TRACE_SUM;
+SELECT @start_global_value;
+@start_global_value
+OFF
+'# Setting to valid values in global scope#'
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_SUM to ON"
+SET @@global.XENGINE_QUERY_TRACE_SUM   = ON;
+SELECT @@global.XENGINE_QUERY_TRACE_SUM;
+@@global.XENGINE_QUERY_TRACE_SUM
+ON
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_QUERY_TRACE_SUM = DEFAULT;
+SELECT @@global.XENGINE_QUERY_TRACE_SUM;
+@@global.XENGINE_QUERY_TRACE_SUM
+OFF
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_SUM to OFF"
+SET @@global.XENGINE_QUERY_TRACE_SUM   = OFF;
+SELECT @@global.XENGINE_QUERY_TRACE_SUM;
+@@global.XENGINE_QUERY_TRACE_SUM
+OFF
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_QUERY_TRACE_SUM = DEFAULT;
+SELECT @@global.XENGINE_QUERY_TRACE_SUM;
+@@global.XENGINE_QUERY_TRACE_SUM
+OFF
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_SUM to RESET"
+SET @@global.XENGINE_QUERY_TRACE_SUM   = RESET;
+SELECT @@global.XENGINE_QUERY_TRACE_SUM;
+@@global.XENGINE_QUERY_TRACE_SUM
+OFF
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_QUERY_TRACE_SUM = DEFAULT;
+SELECT @@global.XENGINE_QUERY_TRACE_SUM;
+@@global.XENGINE_QUERY_TRACE_SUM
+OFF
+"Trying to set variable @@session.XENGINE_QUERY_TRACE_SUM to 444. It should fail because it is not session."
+SET @@session.XENGINE_QUERY_TRACE_SUM   = 444;
+ERROR HY000: Variable 'xengine_query_trace_sum' is a GLOBAL variable and should be set with SET GLOBAL
+'# Testing with invalid values in global scope #'
+SET @@global.XENGINE_QUERY_TRACE_SUM = @start_global_value;
+SELECT @@global.XENGINE_QUERY_TRACE_SUM;
+@@global.XENGINE_QUERY_TRACE_SUM
+OFF
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

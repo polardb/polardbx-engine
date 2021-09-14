@@ -1,0 +1,32 @@
+call mtr.add_suppression("Did not write failed ");
+call mtr.add_suppression("Can't open and lock privilege tables");
+SET @ORIG_EVENT_SCHEDULER = @@EVENT_SCHEDULER;
+CREATE DATABASE IF NOT EXISTS rqg_ddl_dml_concurrent;
+=================================
+# Test with utf8 and utf8_general_ci
+=================================
+CREATE TABLE rqg_ddl_dml_concurrent.ddl_dml_concurrent (
+col1 INT, col2 INT, col3 INT,
+col4 TEXT, col5 CHAR(80), col6 VARCHAR(1200)
+)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+SHOW CREATE TABLE rqg_ddl_dml_concurrent.ddl_dml_concurrent;
+Table	Create Table
+ddl_dml_concurrent	CREATE TABLE `ddl_dml_concurrent` (
+  `col1` int(11) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `col3` int(11) DEFAULT NULL,
+  `col4` text,
+  `col5` char(80) DEFAULT NULL,
+  `col6` varchar(1200) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+Running test with grammar file ddl_dml_concurrent.yy
+rqg test success!
+DROP TABLE rqg_ddl_dml_concurrent.ddl_dml_concurrent;
+DROP DATABASE rqg_ddl_dml_concurrent;
+DROP TABLE IF EXISTS test.executors;
+DROP DATABASE IF EXISTS testdb_N;
+DROP DATABASE IF EXISTS testdb_S;
+SET GLOBAL EVENT_SCHEDULER = @ORIG_EVENT_SCHEDULER;

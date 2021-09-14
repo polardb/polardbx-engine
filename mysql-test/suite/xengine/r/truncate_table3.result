@@ -1,0 +1,17 @@
+DROP TABLE IF EXISTS t1;
+# restart
+CREATE TABLE t1 (
+a int not null,
+b int not null,
+c varchar(500) not null,
+primary key (a,b) comment 'cf1',
+key (b) comment 'cf2'
+) ENGINE=XEngine;
+DELETE FROM t1;
+select variable_value into @a from performance_schema.global_status where variable_name='xengine_compact_read_bytes';
+Warnings:
+Warning	1329	No data - zero rows fetched, selected, or processed
+truncate table t1;
+select case when variable_value-@a < 500000 then 'true' else 'false' end  from performance_schema.global_status where variable_name='xengine_compact_read_bytes';
+case when variable_value-@a < 500000 then 'true' else 'false' end
+DROP TABLE IF EXISTS t1;

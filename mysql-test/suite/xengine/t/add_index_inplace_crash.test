@@ -1,0 +1,117 @@
+--source suite/xengine/include/have_xengine.inc
+
+--source include/have_debug.inc
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+#
+# test crash recovery
+#
+
+CREATE TABLE t1 (a INT, b INT, KEY ka(a), KEY kab(a,b)) ENGINE=XENGINE;
+INSERT INTO t1 (a, b) VALUES (1, 5);
+INSERT INTO t1 (a, b) VALUES (2, 6);
+INSERT INTO t1 (a, b) VALUES (3, 7);
+
+--echo # crash_during_online_index_creation
+flush logs;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/expect_crash.inc
+SET SESSION debug="+d,crash_during_online_index_creation";
+--error 2013
+ALTER TABLE t1 ADD INDEX kb(b), ALGORITHM=INPLACE;
+
+--source include/start_mysqld.inc
+
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+SET SESSION debug="-d,crash_during_online_index_creation";
+
+SHOW CREATE TABLE t1;
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+#
+# Test crash recovery with partitioned tables
+#
+# partition table is not supported.
+#--error ER_NOT_SUPPORTED_YET
+#CREATE TABLE t1 (i INT DEFAULT 0, j INT, k INT, PRIMARY KEY (i), KEY(j)) ENGINE = XENGINE PARTITION BY KEY(i) PARTITIONS 4;
+#
+#--disable_query_log
+#let $max = 100;
+#let $i = 1;
+#while ($i <= $max) {
+#  let $insert = INSERT INTO t1 VALUES ($i, $i, $i);
+#  inc $i;
+#  eval $insert;
+#}
+#--enable_query_log
+#
+#--echo # crash_during_index_creation_partition
+#flush logs;
+#
+#--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+#SET SESSION debug="+d,crash_during_index_creation_partition";
+#--error 2013
+#ALTER TABLE t1 ADD INDEX kij(i,j), ALGORITHM=INPLACE;
+#
+#--enable_reconnect
+#--source include/wait_until_connected_again.inc
+#
+#SET SESSION debug="-d,crash_during_index_creation_partition";
+#
+#SHOW CREATE TABLE t1;
+#
+## here, the index numbers should be higher because previously 4 index numbers
+## were allocated for the partitioned table
+#ALTER TABLE t1 ADD INDEX kij(i,j), ALGORITHM=INPLACE;
+#
+#SELECT * FROM t1 ORDER BY i LIMIT 10;
+#SELECT COUNT(*) FROM t1;
+#
+#DROP TABLE t1;
+
+#
+# Test rollback on partitioned tables for inplace alter
+#
+
+# partiton table is not supported.
+#CREATE TABLE t1 (i INT DEFAULT 0, j INT, k INT, PRIMARY KEY (i), KEY(j)) ENGINE = XENGINE PARTITION BY KEY(i) PARTITIONS 4;
+CREATE TABLE t1 (i INT DEFAULT 0, j INT, k INT, PRIMARY KEY (i), KEY(j)) ENGINE = XENGINE;
+
+--disable_query_log
+let $max = 100;
+let $i = 1;
+while ($i <= $max) {
+  let $insert = INSERT INTO t1 VALUES ($i, $i, $i);
+  inc $i;
+  eval $insert;
+}
+--enable_query_log
+
+--echo # crash_during_index_creation_partition
+flush logs;
+
+SET SESSION debug="+d,myx_simulate_index_create_rollback";
+
+--error 1105
+ALTER TABLE t1 ADD INDEX kij(i,j), ALGORITHM=INPLACE;
+SET SESSION debug="-d,myx_simulate_index_create_rollback";
+SHOW CREATE TABLE t1;
+
+# here, the index numbers should be higher because previously 4 index numbers
+# were allocated for the partitioned table
+ALTER TABLE t1 ADD INDEX kij(i,j), ALGORITHM=INPLACE;
+
+SHOW CREATE TABLE t1;
+SELECT COUNT(*) FROM t1;
+
+DROP TABLE t1;
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,9 @@
+--source suite/xengine/include/have_xengine.inc
+
+let ddl= $MYSQL_TMP_DIR/unique_sec_rev_cf.sql;
+--exec sed s/##CF##/" COMMENT 'rev:cf'"/g suite/xengine/t/unique_sec.inc > $ddl
+--source $ddl
+
+--remove_file $ddl
+
+--source suite/xengine/include/check_xengine_log_error.inc

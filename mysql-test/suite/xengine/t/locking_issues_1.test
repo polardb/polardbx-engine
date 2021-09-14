@@ -1,0 +1,36 @@
+--source suite/xengine/include/have_xengine.inc
+
+let $isolation_level = REPEATABLE READ;
+--source suite/xengine/include/locking_issues_case1_1.inc
+
+let $isolation_level = READ COMMITTED;
+--source suite/xengine/include/locking_issues_case1_1.inc
+
+let $isolation_level = REPEATABLE READ;
+--source suite/xengine/include/locking_issues_case1_2.inc
+
+let $isolation_level = READ COMMITTED;
+--source suite/xengine/include/locking_issues_case1_2.inc
+
+let $lock_scanned_rows=0;
+let $isolation_level = REPEATABLE READ;
+--source suite/xengine/include/locking_issues_case2.inc
+
+let $isolation_level = READ COMMITTED;
+--source suite/xengine/include/locking_issues_case2.inc
+
+# Rerun the case2 tests with xengine_lock_scanned_rows on
+let $lock_scanned_rows=1;
+let $isolation_level = REPEATABLE READ;
+--source suite/xengine/include/locking_issues_case2.inc
+
+let $isolation_level = READ COMMITTED;
+--source suite/xengine/include/locking_issues_case2.inc
+
+let $isolation_level = REPEATABLE READ;
+--source suite/xengine/include/locking_issues_case3.inc
+
+let $isolation_level = READ COMMITTED;
+--source suite/xengine/include/locking_issues_case3.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

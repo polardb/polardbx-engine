@@ -1,0 +1,11 @@
+create table t(id int primary key);
+set @@GLOBAL.DEBUG= '+d, before_sleep_in_flush_collect_stats';
+set @@GLOBAL.DEBUG= '+d, after_sleep_in_flush_collect_stats';
+#sending
+set global xengine_force_flush_memtable_now=ON;;
+set @@GLOBAL.DEBUG= '+d, sleep_before_rename_write_storage_engine';
+alter table t add column c1 int;
+set @@GLOBAL.DEBUG= '-d, sleep_before_rename_write_storage_engine';
+set @@GLOBAL.DEBUG= '-d, before_sleep_in_flush_collect_stats';
+set @@GLOBAL.DEBUG= '-d, after_sleep_in_flush_collect_stats';
+drop table t;

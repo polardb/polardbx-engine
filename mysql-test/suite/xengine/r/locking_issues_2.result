@@ -1,0 +1,71 @@
+
+-----------------------------------------------------------------------
+- Locking issues case 4:
+-   Phantom rows
+-   using REPEATABLE READ transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id INT AUTO_INCREMENT PRIMARY KEY, value INT) ENGINE=XENGINE;
+Inserting 200,000 rows
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+INSERT INTO t0 VALUES(200001,1), (-1,1);
+id	value
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 4:
+-   Phantom rows
+-   using READ COMMITTED transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id INT AUTO_INCREMENT PRIMARY KEY, value INT) ENGINE=XENGINE;
+Inserting 200,000 rows
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+INSERT INTO t0 VALUES(200001,1), (-1,1);
+id	value
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 5:
+-   Deleting primary key
+-   using REPEATABLE READ transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id INT AUTO_INCREMENT PRIMARY KEY, value INT) ENGINE=XENGINE;
+Inserting 200,000 rows
+UPDATE t0 SET value=100 WHERE id=190000;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+DELETE FROM t0 WHERE id=190000;
+COMMIT;
+ERROR: 1213
+COMMIT;
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 5:
+-   Deleting primary key
+-   using READ COMMITTED transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id INT AUTO_INCREMENT PRIMARY KEY, value INT) ENGINE=XENGINE;
+Inserting 200,000 rows
+UPDATE t0 SET value=100 WHERE id=190000;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+DELETE FROM t0 WHERE id=190000;
+COMMIT;
+id	value
+ERROR: 0
+COMMIT;
+DROP TABLE t0;

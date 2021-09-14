@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_PARALLEL_WAL_RECOVERY;
+SELECT @start_global_value;
+@start_global_value
+0
+"Trying to set variable @@global.XENGINE_PARALLEL_WAL_RECOVERY to 444. It should fail because it is readonly."
+SET @@global.XENGINE_PARALLEL_WAL_RECOVERY   = 444;
+ERROR HY000: Variable 'xengine_parallel_wal_recovery' is a read only variable

@@ -1,0 +1,40 @@
+--source suite/xengine/include/have_xengine.inc
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+create table t1(
+       id bigint not null primary key,
+       i1 bigint, #unique
+       i2 bigint, #repeating
+       c1 varchar(20), #unique
+       c2 varchar(20), #repeating
+       index t1_2(i1)
+) engine=xengine;
+
+--disable_query_log
+let $i=0;
+while ($i<20000)
+{
+  inc $i;
+  eval insert t1(id, i1, i2, c1, c2) values($i, $i, $i div 10, $i, $i div 10);
+}
+--enable_query_log
+
+select count(*), sum(id), sum(i1), sum(i2) from t1;
+
+# reload without load optimized config
+let $restart_file= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
+--exec echo "wait" > $restart_file
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+-- exec echo "restart:--xengine_write_buffer_size=64k --xengine_compression_per_level=kNoCompression" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+-- enable_reconnect
+-- source include/wait_until_connected_again.inc
+
+select count(*), sum(id), sum(i1), sum(i2) from t1;
+
+drop table t1;
+
+--source suite/xengine/include/check_xengine_log_error.inc

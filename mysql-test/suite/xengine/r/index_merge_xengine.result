@@ -1,0 +1,65 @@
+CREATE TABLE t1
+(
+/* fields/keys for row retrieval tests */
+key1 INT,
+key2 INT,
+key3 INT,
+key4 INT,
+/* make rows much bigger then keys */
+filler1 CHAR(200),
+KEY(key1),
+KEY(key2)
+) ENGINE=XENGINE;
+CREATE TABLE t0 AS SELECT * FROM t1;
+# Printing of many insert into t0 values (....) disabled.
+# Printing of many insert into t1 select .... from t0 disabled.
+# Printing of many insert into t1 (...) values (....) disabled.
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+7201
+SET GLOBAL xengine_force_flush_memtable_now = 1;
+EXPLAIN UPDATE t1 SET filler1='to be deleted' WHERE key1=100 AND key2=100;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t1	NULL	index_merge	key1,key2	key1,key2	5,5	#	1	100.00	Using intersect(key1,key2); Using where
+UPDATE t1 SET filler1='to be deleted' WHERE key1=100 and key2=100;
+DROP TABLE t0, t1;
+DROP TABLE IF EXISTS test_index_merge;
+CREATE TABLE test_index_merge (id INT AUTO_INCREMENT PRIMARY KEY, c1 INT, c2 INT, c3 INT, index idx_c1c2(c1,c2), index idx_c1c3(c1,c3)) ENGINE=xengine;
+set session binlog_format=row;
+show variables like '%2pc%';
+Variable_name	Value
+xengine_enable_2pc	ON
+show variables like '%binlog_format%';
+Variable_name	Value
+binlog_format	ROW
+CREATE PROCEDURE fill_table1(cnt int)
+begin
+declare i int default 0;
+repeat insert into test_index_merge(c1,c2,c3) values(100, 50, 100);
+set i=i+1;
+until i > cnt
+end repeat;
+end $$
+CREATE PROCEDURE fill_table2(cnt int)
+begin
+declare i int default 0;
+repeat insert into test_index_merge(c1,c2,c3) values(100, 100, 50);
+set i=i+1;
+until i > cnt
+end repeat;
+end$$
+call fill_table1(10000);
+call fill_table2(10000);
+insert into test_index_merge values(50002, 100, 50, 50);
+set global xengine_force_flush_memtable_now=1;
+analyze table test_index_merge;
+Table	Op	Msg_type	Msg_text
+test.test_index_merge	analyze	status	OK
+explain update test_index_merge set id=59999 where c1=100 and c2 = 50 and c3 = 50;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	test_index_merge	NULL	index_merge	idx_c1c2,idx_c1c3	idx_c1c3,idx_c1c2	10,10	NULL	#	100.00	Using intersect(idx_c1c3,idx_c1c2); Using where; Using temporary
+update test_index_merge set id=59999 where c1=100 and c2 = 50 and c3 = 50;
+set sql_log_bin=0;
+DROP TABLE test_index_merge;
+DROP PROCEDURE fill_table1;
+DROP PROCEDURE fill_table2;

@@ -1,3 +1,6 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
 /* Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -7796,12 +7799,16 @@ int MYSQL_BIN_LOG::prepare(THD *thd, bool all) {
   DBUG_TRACE;
 
   DBUG_ASSERT(opt_bin_log);
+
+  // with xengine, even without binlog, we still have 2pc transactions
+#if 0
   /*
     The applier thread explicitly overrides the value of sql_log_bin
     with the value of log_slave_updates.
   */
   DBUG_ASSERT(thd->slave_thread ? opt_log_slave_updates
                                 : thd->variables.sql_log_bin);
+#endif
 
   /*
     Set HA_IGNORE_DURABILITY to not flush the prepared record of the

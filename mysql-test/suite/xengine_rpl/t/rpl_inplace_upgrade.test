@@ -1,0 +1,196 @@
+source include/master-slave.inc;
+
+--connection master
+--let $MYPORT_1=query_get_value(show variables like "port", Value, 1)
+--connection slave
+--let $MYPORT_2=query_get_value(show variables like "port", Value, 1)
+
+# Create a table with SKs on master
+--connection master
+--error 1286
+CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`, `e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=XENGINE;
+
+connection slave;
+--error 1146
+SHOW CREATE TABLE t1;
+
+connection master;
+CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`, `e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=INNODB;
+INSERT INTO t1 VALUES(99, 99999, 99999, 99999, 'abcdewfreiuwrg13648', 123, 456, 789);
+
+sync_slave_with_master;
+connection slave;
+SHOW CREATE TABLE t1;
+
+############################### inplace upgrade slave ###############################
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--shutdown_server 100
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+--exec echo "restart: --xengine=1" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+ --let $rpl_server_number= 2
+--source include/rpl_reconnect.inc
+START SLAVE;
+--source include/wait_for_slave_to_start.inc
+
+connection slave;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+
+connection master;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+CREATE TABLE `t2` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`, `e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=INNODB;
+INSERT INTO t2 VALUES(99, 99999, 99999, 99999, 'abcdewfreiuwrg13648', 123, 456, 789);
+SHOW CREATE TABLE t2;
+SELECT * FROM t2;
+sync_slave_with_master;
+SHOW CREATE TABLE t2;
+SELECT * FROM t2;
+
+############################### do some DDL to verify ###############################
+connection master;
+ALTER TABLE t1 ADD COLUMN data VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_0(`data`);
+ALTER TABLE t2 ADD INDEX k_0(`data`);
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+sync_slave_with_master;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+############################### NOW switch master slave ###############################
+source include/rpl_end.inc;
+--disconnect master
+--disconnect slave
+
+--connect (master,127.0.0.1,root,,test,$MYPORT_2)
+--connect (slave,127.0.0.1,root,,test,$MYPORT_1)
+
+--let $rpl_server_count=2
+--let $rpl_topology= 2->1
+--source include/rpl_init.inc
+
+--connection master
+INSERT INTO t1 VALUES(678, 1234590, 1234590, 1234590, 'abcdewfreiuwrg13648', 123, 456, 789, NULL);
+INSERT INTO t2 VALUES(678, 1234590, 1234590, 1234590, 'abcdewfreiuwrg13648', 123, 456, 789, NULL);
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/save_master_pos.inc
+--connection slave 
+--source include/sync_slave_io.inc
+--source include/sync_slave_sql.inc
+
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+############################### NOW inplace upgrade origin master ###############################
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 100
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+--exec echo "restart: --xengine=1" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+ --let $rpl_server_number= 2
+--source include/rpl_reconnect.inc
+START SLAVE;
+--source include/wait_for_slave_to_start.inc
+
+--connection master
+CREATE TABLE `t3` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`, `e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=XENGINE;
+INSERT INTO t3 VALUES(99, 99999, 99999, 99999, 'abcdewfreiuwrg13648', 123, 456, 789);
+SHOW CREATE TABLE t3;
+SELECT * FROM t3;
+--source include/save_master_pos.inc
+--connection slave 
+--source include/sync_slave_io.inc
+--source include/sync_slave_sql.inc
+SHOW CREATE TABLE t3;
+SELECT * FROM t3;
+
+############################### do some DDL to verify ###############################
+connection master;
+ALTER TABLE t3 ADD COLUMN data VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t3 ADD INDEX k_0(`data`);
+INSERT INTO t3 VALUES(678, 1234590, 1234590, 1234590, 'abcdewfreiuwrg13648', 123, 456, 789, NULL);
+SHOW CREATE TABLE t3;
+SELECT * FROM t3;
+--source include/save_master_pos.inc
+--connection slave 
+--source include/sync_slave_io.inc
+--source include/sync_slave_sql.inc
+SHOW CREATE TABLE t3;
+SELECT * FROM t3;
+
+
+
+--connection master
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;
+
+--disconnect server_1
+--disconnect server_2
+--disconnect default
+--connect (server_1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (server_2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (default,127.0.0.1,root,,test,$MYPORT_2)
+source include/rpl_end.inc;

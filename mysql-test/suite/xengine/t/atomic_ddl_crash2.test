@@ -1,0 +1,128 @@
+--source include/have_debug.inc
+--source include/not_valgrind.inc
+--source include/not_crashrep.inc
+--source include/have_log_bin.inc
+--source suite/xengine/include/have_xengine.inc
+
+
+CALL mtr.add_suppression(".*rename dictionary error*");
+
+#
+# mock rollback when do rename
+#
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;   
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);                          
+select count(*) from t1;                                                     
+eval set session debug = 'd+, ddl_log_inject_rollback_rename_process';
+
+--error ER_ERROR_ON_RENAME
+alter table t1 rename to t2;
+
+show create table t1;                                                        
+--error ER_NO_SUCH_TABLE                                                     
+show create table t2;                                                        
+select * from t1;                                                            
+check table t1;                                                              
+drop table t1;                                                               
+
+
+
+#
+# inject crash during mutli operation for delete/rename stmt
+#
+create table t1(id int primary key, c1 int) engine=xengine;
+create table t2(id int primary key, c1 int) engine=xengine;
+create table t3(id int primary key, c1 int) engine=xengine;
+
+eval set session debug = 'd+, ddl_log_crash_delete_funcs';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval drop table t1,t2,t3;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+check table t1;
+
+show create table t2;
+check table t2;
+
+show create table t3;
+check table t3;
+
+drop table t1,t2,t3;
+
+#change name between t1 and t2;
+create table t1(id int primary key) engine=xengine;
+insert into t1 values(1),(2);
+create table t2(id int primary key, c1 int) engine=xengine;
+insert into t2 values(1,1),(2,2),(3,3);
+
+eval set session debug = 'd+, ddl_log_crash_rename_funcs';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval rename table t1 to t1_tmp, t2 to t1, t1_tmp to t2;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+check table t1;
+select * from t1;
+
+show create table t2;
+check table t2;
+select * from t2;
+
+rename table t1 to t1_tmp, t2 to t1, t1_tmp to t2;
+show create table t1;
+check table t1;
+select * from t1;
+
+show create table t2;
+check table t2;
+select * from t2;
+
+drop table t1,t2;
+
+#
+# inject crash during crash-recovery
+#
+create table t1(id int primary key, c1 int, c2 int) engine=xengine;
+alter table t1 add index idx_c1(c1), add index idx_c2(c2);
+
+eval set session debug = 'd+, ddl_log_crash_replay_funcs';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+alter table t1 drop column c2, ALGORITHM=COPY;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+check table t1;
+select * from t1;
+
+drop table t1;
+
+
+#
+# inject crash during crash-recovery, for inplace-rebuild ddl, useless
+#
+create table t1(id int primary key, c1 int, c2 int) engine=xengine;
+insert into t1 values(1,1,1),(2,2,2),(3,3,3);
+alter table t1 add index idx_c1(c1), add index idx_c2(c2);
+
+alter table t1 drop column c2, ALGORITHM=INPLACE;
+
+show create table t1;
+check table t1;
+select * from t1;
+
+drop table t1;
+
+--source suite/xengine/include/check_xengine_log_error.inc

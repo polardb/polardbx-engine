@@ -1,0 +1,7 @@
+--echo #
+--echo # Bug#20108866: --LOG_TIMESTAMPS=UTC NEEDS --LOG-BIN
+--echo #
+
+SELECT 1;
+
+--source suite/xengine/include/check_xengine_log_error.inc

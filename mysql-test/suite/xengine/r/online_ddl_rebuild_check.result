@@ -1,0 +1,369 @@
+##########
+# Test online ddl without rebuild and with rebuild
+##########
+##########
+# case 1 Test online inplace DDL no rebuild, which means all old subtable should be kept as same
+##########
+# BUG#23983934
+# https://work.aone.alibaba-inc.com/issue/23983934
+#############################################################
+# case 1.1 add new key, INDEX_ID of old key should be kept as same
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name CHAR(30), room INT, code INT, score FLOAT, UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三', 1, 128, 80), (2, '李四', 2, 256, 90);
+EXPLAIN SELECT code from t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	uk	5	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`code` AS `code` from `test`.`t`
+SELECT code from t;
+code
+128
+256
+# add new secondary key
+ALTER TABLE t ADD INDEX sk(score), ADD UNIQUE INDEX idx_room(room);
+EXPLAIN SELECT code from t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	uk	5	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`code` AS `code` from `test`.`t`
+SELECT code from t;
+code
+128
+256
+include/assert.inc [subtable of of pk and uk should not be changed after adding new key]
+DROP TABLE t;
+#############################################################
+# case 1.2 drop secondary key, INDEX_ID of PRIMARY key should be kept as same
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name CHAR(30), code INT, UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+SELECT * from t;
+id	name	code
+1	张三	128
+2	李四	256
+# drop secondary key
+ALTER TABLE t DROP INDEX uk;
+SELECT * from t;
+id	name	code
+1	张三	128
+2	李四	256
+include/assert.inc [subtable of pk should not be changed after dropping secondery key]
+DROP TABLE t;
+#############################################################
+# case 1.3 rename secondary key, INDEX_ID of the key should be kept as same
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name CHAR(30), code INT, UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+EXPLAIN SELECT code from t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	uk	5	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`code` AS `code` from `test`.`t`
+SELECT code from t;
+code
+128
+256
+# rename secondary key
+ALTER TABLE t RENAME INDEX uk TO uk_c;
+EXPLAIN SELECT code from t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	uk_c	5	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`code` AS `code` from `test`.`t`
+SELECT code from t;
+code
+128
+256
+include/assert.inc [subtable of pk and uk should not be changed after rename secondary key]
+# change index visibility
+ALTER TABLE t ALTER INDEX uk_c INVISIBLE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `name` char(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_c` (`code`) /*!80000 INVISIBLE */
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+EXPLAIN SELECT code from t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`code` AS `code` from `test`.`t`
+SELECT code from t;
+code
+128
+256
+include/assert.inc [subtable of pk and uk should not be changed after changine visibility of index]
+DROP TABLE t;
+#############################################################
+# case 1.4 rename column of index, INDEX_ID of the index should be kept as same
+#############################################################
+CREATE TABLE t(i INT PRIMARY KEY, name CHAR(30), code INT, KEY sk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+SELECT * FROM t;
+i	name	code
+1	张三	128
+2	李四	256
+# rename column of PRIMARY key
+ALTER TABLE t RENAME COLUMN i TO id, ALGORITHM=INPLACE;
+SELECT * FROM t;
+id	name	code
+1	张三	128
+2	李四	256
+include/assert.inc [subtable of pk and sk should not be changed after renaming column of pk]
+# rename column of secondary key
+ALTER TABLE t RENAME COLUMN code TO cd, ALGORITHM=INPLACE;
+EXPLAIN SELECT cd FROM t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	sk	5	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`cd` AS `cd` from `test`.`t`
+SELECT cd FROM t;
+cd
+128
+256
+include/assert.inc [subtable of pk and sk should not be changed after renaming name of sk]
+DROP TABLE t;
+#############################################################
+# case 1.5 extend varchar size within same pack length, INDEX_ID of the index should be kept as same
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name VARCHAR(70), KEY sk_nm(name)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三'), (2, '李四');
+SELECT * FROM t;
+id	name
+1	张三
+2	李四
+# extend varchar column
+ALTER TABLE t MODIFY COLUMN name VARCHAR(120), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `name` varchar(120) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sk_nm` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [subtable of pk and sk should not be changed after extending varchar column]
+DROP TABLE t;
+#############################################################
+# case 1.6 change comment of key, INDEX_ID of the index should be kept as same
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name VARCHAR(70), KEY sk_nm(name)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三'), (2, '李四');
+SELECT * FROM t;
+id	name
+1	张三
+2	李四
+# extend varchar column
+ALTER TABLE t DROP KEY sk_nm, ADD KEY sk_nm(name) COMMENT 'key on name', ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `name` varchar(70) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sk_nm` (`name`) COMMENT 'key on name'
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [subtable of pk and sk should not be changed after changing comment of index]
+DROP TABLE t;
+##########
+# case 2 Test online inplace DDL with rebuild, which means index number of all old subtable should be channged
+##########
+#############################################################
+# case 2.1 add new primary key, INDEX_ID of all existing keys should be changed
+#############################################################
+CREATE TABLE t(id INT NOT NULL, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+ALTER TABLE t ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`code`),
+  KEY `sk` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT name FROM t;
+name
+张三
+李四
+SELECT code FROM t;
+code
+128
+256
+include/assert.inc [subtable of uk and sk should not be changed after changing comment of index]
+DROP TABLE t;
+#############################################################
+# case 2.2 modify primary key, INDEX_ID of all existing keys should be changed
+#############################################################
+CREATE TABLE t(id INT NOT NULL, col INT PRIMARY KEY, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+ALTER TABLE t DROP COLUMN col, ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`code`),
+  KEY `sk` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT name FROM t;
+name
+张三
+李四
+SELECT code FROM t;
+code
+128
+256
+include/assert.inc [subtable of uk and sk should not be changed after changing comment of index]
+DROP TABLE t;
+#############################################################
+# case 2.3 set non-nullable column nullable, INDEX_ID of all existing keys should be changed
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, col INT NOT NULL, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+ALTER TABLE t MODIFY COLUMN col INT, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `col` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`code`),
+  KEY `sk` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT name FROM t;
+name
+张三
+李四
+SELECT code FROM t;
+code
+128
+256
+include/assert.inc [subtable of pk, uk and sk should not be changed after changing comment of index]
+DROP TABLE t;
+#############################################################
+# case 2.4 set nullable column non-nullable, INDEX_ID of all existing keys should be changed
+#############################################################
+SET @save_sql_mode = @@sql_mode;
+SET SQL_MODE = "STRICT_TRANS_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t(id INT PRIMARY KEY, col INT, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+ALTER TABLE t MODIFY COLUMN col INT NOT NULL, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `col` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`code`),
+  KEY `sk` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT name FROM t;
+name
+张三
+李四
+SELECT code FROM t;
+code
+128
+256
+include/assert.inc [subtable of pk, uk and sk should not be changed after changing comment of index]
+DROP TABLE t;
+SET SQL_MODE = @save_sql_mode;
+#############################################################
+# case 2.5 insert column, INDEX_ID of all existing keys should be changed
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+ALTER TABLE t ADD COLUMN col INT AFTER id, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `col` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`code`),
+  KEY `sk` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT name FROM t;
+name
+张三
+李四
+SELECT code FROM t;
+code
+128
+256
+include/assert.inc [subtable of pk, uk and sk should not be changed after changing comment of index]
+DROP TABLE t;
+#############################################################
+# case 2.6 reorder a column, INDEX_ID of all existing keys should be changed
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, col INT, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+ALTER TABLE t MODIFY COLUMN col INT AFTER name, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `col` int(11) DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`code`),
+  KEY `sk` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT name FROM t;
+name
+张三
+李四
+SELECT code FROM t;
+code
+128
+256
+SELECT * FROM t;
+id	name	col	code
+1	张三	1	128
+2	李四	4	256
+include/assert.inc [subtable of pk, uk and sk should not be changed after changing comment of index]
+DROP TABLE t;
+#############################################################
+# case 2.7 drop a column, INDEX_ID of all existing keys should be changed
+#############################################################
+CREATE TABLE t(id INT PRIMARY KEY, col INT, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+ALTER TABLE t DROP COLUMN col, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`code`),
+  KEY `sk` (`name`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT name FROM t;
+name
+张三
+李四
+SELECT code FROM t;
+code
+128
+256
+include/assert.inc [subtable of pk, uk and sk should not be changed after changing comment of index]
+DROP TABLE t;

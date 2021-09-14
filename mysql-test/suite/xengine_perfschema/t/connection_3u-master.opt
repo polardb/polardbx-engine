@@ -1,0 +1,2 @@
+--loose-performance_schema_users_size=3
+--default_storage_engine=xengine

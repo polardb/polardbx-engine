@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -291,9 +295,39 @@ TC_LOG::enum_result TC_LOG_MMAP::commit(THD *thd, bool all) {
   ulong cookie = 0;
   my_xid xid = thd->get_transaction()->xid_state()->get_xid()->get_my_xid();
 
-  if (all && xid)
-    if (!(cookie = log_xid(xid)))
-      return RESULT_ABORTED;  // Failed to log the transaction
+  bool is_xengine = false;
+  if (default_storage_engine) {
+    size_t default_engine_len = strlen(default_storage_engine);
+    is_xengine =
+        (default_engine_len == strlen("XENGINE")) &&
+        (!strncasecmp(default_storage_engine, "XENGINE", default_engine_len));
+  }
+
+  if (is_xengine) {
+    Transaction_ctx *trn_ctx = thd->get_transaction();
+
+    bool end_single_stmt_trans = !all && !thd->in_multi_stmt_transaction_mode();
+    bool real_trans = (all || end_single_stmt_trans);
+
+    Transaction_ctx::enum_trx_scope trx_scope =
+        all ? Transaction_ctx::SESSION : Transaction_ctx::STMT;
+
+    /*
+      We log xid only when
+      - is real transaction, if auto-commit statment or full transaction
+      - has update, that would generate xid
+      - has modified more than one engine, has been prepared
+      - storage engine support 2PC
+    */
+    if (real_trans && xid && trn_ctx->rw_ha_count(trx_scope) > 1 &&
+        !trn_ctx->no_2pc(trx_scope))
+      if (!(cookie = log_xid(xid)))
+        return RESULT_ABORTED;  // Failed to log the transaction
+  } else {
+    if (all && xid)
+      if (!(cookie = log_xid(xid)))
+        return RESULT_ABORTED;  // Failed to log the transaction
+  }
 
   if (ha_commit_low(thd, all))
     return RESULT_INCONSISTENT;  // Transaction logged, but not committed
@@ -341,6 +375,8 @@ int TC_LOG_MMAP::prepare(THD *thd, bool all) {
 ulong TC_LOG_MMAP::log_xid(my_xid xid) {
   mysql_mutex_lock(&LOCK_tc);
 
+  DBUG_EXECUTE_IF("tc_log_count",
+                  sql_print_information("tc_log_2pc happened"););
   while (true) {
     /* If active page is full - just wait... */
     while (unlikely(active && active->free == 0))

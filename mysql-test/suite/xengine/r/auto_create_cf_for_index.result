@@ -1,0 +1,73 @@
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+create table t1 (id int, c1 int,  primary key (id), index idx_c2(c1)) engine=xengine;
+create table t2 (id int, c2 int,  primary key (id)) engine=xengine;
+create table t3 (id int, c3 int,  primary key (id) comment 't3_primary') engine=xengine;
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+idx_c2	#
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t3';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+alter table t2 add index idx_c2(c2);
+alter table t3 add index idx_c3(c3) comment 'cf_t3';
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+idx_c2	#
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t3';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+idx_c3	#
+select count(*) from t1;
+count(*)
+100
+select count(*) from t2;
+count(*)
+100
+select count(*) from t3;
+count(*)
+100
+drop table t1;
+drop table t2;
+drop table t3;
+create table t1 (id int, c1 int,  primary key (id), index idx_c2(c1)) engine=xengine;
+create table t2 (id int, c2 int,  primary key (id)) engine=xengine;
+create table t3 (id int, c3 int,  primary key (id) comment 't3_primary') engine=xengine;
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+idx_c2	#
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t3';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+alter table t2 add index idx_c2(c2);
+alter table t3 add index idx_c3(c3) comment 'cf_t3';
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+idx_c2	#
+SELECT INDEX_NAME,SUBTABLE_ID FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t3';
+INDEX_NAME	SUBTABLE_ID
+PRIMARY	#
+idx_c3	#
+select count(*) from t1;
+count(*)
+100
+select count(*) from t2;
+count(*)
+100
+select count(*) from t3;
+count(*)
+100
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;

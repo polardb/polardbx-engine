@@ -1,0 +1,124 @@
+--source suite/xengine/include/have_xengine.inc
+
+# int 
+let $key_type = int;
+let $c_type = int;
+let $kv1 = 10001;
+let $kv2 = 10002;
+let $kv3 = 10003;
+let $kv4 = 10004;
+let $kv5 = 10005;
+let $cv1 = 20001;
+let $cv2 = 20002;
+let $cv3 = 20003;
+let $cv4 = 20004;
+let $cv5 = 20005;
+--source end_key_push_down.inc
+
+# timestamp
+let $key_type = timestamp;
+let $c_type = timestamp;
+let $kv1 = 20181127151343;
+let $kv2 = 20181127151344;
+let $kv3 = 20181127151345;
+let $kv4 = 20181127151346;
+let $kv5 = 20181127151347;
+let $cv1 = 20181127151348;
+let $cv2 = 20181127151349;
+let $cv3 = 20181127151350;
+let $cv4 = 20181127151351;
+let $cv5 = 20181127151352;
+--source end_key_push_down.inc
+
+# decimal
+let $key_type = decimal(6,4);
+let $c_type = decimal(6,4);
+let $kv1 = 10.001;
+let $kv2 = 10.002;
+let $kv3 = 10.003;
+let $kv4 = 10.004;
+let $kv5 = 10.005;
+let $cv1 = 20.001;
+let $cv2 = 20.002;
+let $cv3 = 20.003;
+let $cv4 = 20.004;
+let $cv5 = 20.005;
+--source end_key_push_down.inc
+
+# char and varchar, Utf8-bin
+let $kv1 = "ABCDEFGHIJKLMN";
+let $kv2 = "aBCDEFGHIJKLMN";
+let $kv3 = "aBcDEFGHIJKLMN";
+let $kv4 = "aBcDeFGHIJKLMN";
+let $kv5 = "aBcDeFgHIJKLMN";
+let $cv1 = "aBcDeFgHiJKLMN";
+let $cv2 = "aBcDeFgHiJkLMN";
+let $cv3 = "aBcDeFgHiJkLmN";
+let $cv4 = "aBcDeFgHiJkLmn";
+let $cv5 = "aBcDeFgHiJkLmx";
+
+let $key_type = char(128) CHARACTER SET utf8 COLLATE utf8_bin;
+let $c_type = char(128) CHARACTER SET utf8 COLLATE utf8_bin;
+--source end_key_push_down.inc
+
+let $key_type = varchar(128) CHARACTER SET utf8 COLLATE utf8_bin;
+let $c_type = varchar(128) CHARACTER SET utf8 COLLATE utf8_bin;
+--source end_key_push_down.inc
+
+# char and varchar, Utf8mb4_bin
+let $key_type = char(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+let $c_type = char(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+--source end_key_push_down.inc
+
+let $key_type = varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+let $c_type = varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+--source end_key_push_down.inc
+
+# char and varchar, Gbk_bin
+let $key_type = char(128) CHARACTER SET gbk COLLATE gbk_bin;
+let $c_type = char(128) CHARACTER SET gbk COLLATE gbk_bin;
+--source end_key_push_down.inc
+
+let $key_type = varchar(128) CHARACTER SET gbk COLLATE gbk_bin;
+let $c_type = varchar(128) CHARACTER SET gbk COLLATE gbk_bin;
+--source end_key_push_down.inc
+
+# char and varchar, Utf8-general_ci
+let $kv1 = "ABCDEFGHIJKLMN";
+let $kv2 = "aCCDEFGHIJKLMN";
+let $kv3 = "aCdDEFGHIJKLMN";
+let $kv4 = "aCdEeFGHIJKLMN";
+let $kv5 = "aCdEfFgHIJKLMN";
+let $cv1 = "aCdEfGgHiJKLMN";
+let $cv2 = "aCdEfGhHiJkLMN";
+let $cv3 = "aCdEfGhIiJkLmN";
+let $cv4 = "aCdEfGhIjJkLmn";
+let $cv5 = "aCdEfGhIjKkLmn";
+
+let $key_type = char(128) CHARACTER SET utf8 COLLATE utf8_general_ci;
+let $c_type = char(128) CHARACTER SET utf8 COLLATE utf8_general_ci;
+--source end_key_push_down.inc
+
+let $key_type = varchar(128) CHARACTER SET utf8 COLLATE utf8_general_ci;
+let $c_type = varchar(128) CHARACTER SET utf8 COLLATE utf8_general_ci;
+--source end_key_push_down.inc
+
+# char and varchar, Utf8mb4_general_ci
+let $key_type = char(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+let $c_type = char(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+--source end_key_push_down.inc
+
+let $key_type = varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+let $c_type = varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+--source end_key_push_down.inc
+
+# char and varchar, Gbk_chinese-ci
+let $key_type = char(128) CHARACTER SET gbk COLLATE gbk_chinese_ci;
+let $c_type = char(128) CHARACTER SET gbk COLLATE gbk_chinese_ci;
+--source end_key_push_down.inc
+
+let $key_type = varchar(128) CHARACTER SET gbk COLLATE gbk_chinese_ci;
+let $c_type = varchar(128) CHARACTER SET gbk COLLATE gbk_chinese_ci;
+--source end_key_push_down.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

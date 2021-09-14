@@ -1,4 +1,8 @@
 /*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
+/*
    Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -202,13 +206,38 @@ static bool write_db_cmd_to_binlog(THD *thd, const char *db, bool trx_cache) {
 
 static void set_db_default_charset(const THD *thd,
                                    HA_CREATE_INFO *create_info) {
+  bool is_xengine = false;
+
+  if (default_storage_engine) {
+    size_t default_engine_len = strlen(default_storage_engine);
+    is_xengine =
+        (default_engine_len == strlen("XENGINE")) &&
+        (!strncasecmp(default_storage_engine, "XENGINE", default_engine_len));
+  }
+
+  bool is_system_thd = (thd->is_dd_system_thread() ||
+                        thd->is_initialize_system_thread() ||
+                        thd->is_server_upgrade_thread());
+
   if (create_info->default_table_charset == nullptr) {
     create_info->default_table_charset = thd->variables.collation_server;
+
+    if (!is_system_thd && is_xengine &&
+        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
+      create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
+    }
   } else {
     if (!(create_info->used_fields & HA_CREATE_USED_DEFAULT_COLLATE) &&
-        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci)
+        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
       create_info->default_table_charset =
           thd->variables.default_collation_for_utf8mb4;
+
+      if (!is_system_thd && is_xengine &&
+          create_info->default_table_charset ==
+              &my_charset_utf8mb4_0900_ai_ci) {
+        create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
+      }
+    }
   }
 }
 

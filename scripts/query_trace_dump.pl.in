@@ -1,0 +1,144 @@
+#!/usr/bin/python
+import sys
+import argparse
+import textwrap
+
+cpu_freequency = 2.599898
+
+
+query_trace_format = '"AAA: 0x000aaa: 0x000xxx, BBB: 0x000bbb: 0x000yyy"'
+
+
+def format_data(data_str):
+    data_list = data_str.strip('\n').strip(',').split(', ')
+    data = [d.split(':') for d in data_list]
+    return ({d[0]: (int(d[1], 16), int(d[2], 16)) for d in data if len(d) == 3}, {d[0]: int(str(d[1]), 16) for d in data if len(d) == 2})
+
+
+class Formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
+    pass
+
+
+def valid_query_trace_str(query_trace_str):
+    try:
+        res_trace, res_count = format_data(query_trace_str)
+    except Exception, e:
+        msg = 'Not a valid query trace string, should be in format {} ....(actual: {})'.format(query_trace_format, query_trace_str)
+        raise argparse.ArgumentTypeError(msg)
+    if not len(res_trace) or not len(res_count):
+        msg = 'Nothing to analyse, should be in format {} ....(actual: {})'.format(query_trace_format, query_trace_str)
+        raise argparse.ArgumentTypeError(msg)
+    return query_trace_str
+
+
+parser = argparse.ArgumentParser(description=textwrap.dedent("""\
+        X-DB query trace analysing tool.
+        query_trace_dump QUERY_TRACE_STR(from the first trace point name)"""),
+    formatter_class=Formatter)
+parser.add_argument('query_trace_str', nargs='*', type=valid_query_trace_str, help='QUERY_TRACE_STR in error log, should be in format {} ...'.format(query_trace_format))
+parser.add_argument('-t', '--time', nargs=1, type=str, help='show time in ms or us', choices=['ms', 'us'], default='us')
+parser.add_argument('-f', '--file', nargs=1, type=str, help='file with query_trace_str')
+# parser.add_argument('-m', '--merge', action='store_true', help='merge the result or output seprately')
+
+def get_query_trace_from_file(file_path):
+    str_list = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            start = line.find('SERVER_OPERATION')
+            if start >= 0:
+                str_list.append(line[start:])
+    return str_list
+
+
+def format_output(result_list):
+    max_name_len = max([len(str(r[0])) for r in result_list]) + 2
+    max_data_len = max([len(str(r[1])) for r in result_list]) + 2
+    max_pct_len = max([len(str(r[2])) for r in result_list]) + 3
+    max_run_len = max([len(str(r[3])) for r in result_list]) + 2
+    print ''.join(('TRACE LIST'.ljust(max_name_len), 'TOTAL_TIME'.ljust(max_data_len), 'PERCENTAGE'.ljust(max_pct_len), 'TOTAL_COUNT'))
+    for row in result_list:
+        print ''.join((str(row[0]).ljust(max_name_len), str(row[1]).ljust(max_data_len), ('%s%%' % row[2]).ljust(max_pct_len), str(row[3]).ljust(max_run_len)))
+
+
+def calc_percentail(data, time):
+    data_list = []
+    name_list = []
+    run_list = []
+    result_list = []
+    time_sum = 0
+    global cpu_freequency
+    if time == 'us':
+        cycles_per_unit = cpu_freequency * 1000
+    else:
+        cycles_per_unit = cpu_freequency * 1000 * 1000
+
+    for k, item in data.iteritems():
+        v, r = item
+        value = v / cycles_per_unit
+        time_sum += float(value)
+        name_list.append(k)
+        data_list.append(float(value))
+        run_list.append(r)
+    for name, data, run in zip(name_list, data_list, run_list):
+        result_list.append((name, data, data / time_sum * 100, run))
+    result_list.sort(lambda a,b: int((b[1] - a[1])*10 ))
+    format_output(result_list)
+    print '--------- total time:', time_sum
+
+
+def calc_count(data, total_query):
+    name_list = []
+    count_list = []
+    avg_count_list = []
+    for name, count in data.iteritems():
+        name_list.append(name)
+        count_list.append(count)
+        avg_count_list.append(float(count) / total_query)
+
+    max_name_len = max([len(str(name)) for name in name_list]) + 2
+    max_count_len = max([len(str(count)) for count in count_list]) + 2
+    result_list = []
+    for name, count, avg_count in zip(name_list, count_list, avg_count_list):
+        result_list.append((name, count, avg_count))
+    result_list.sort(lambda a, b: int(b[1] - a[1]))
+    print ''.join(('COUNTER LIST'.ljust(max_name_len), 'TOTAL'.ljust(max_count_len), 'AVERAGE(/%s)'%total_query))
+    for name, count, avg_count in result_list:
+        print ''.join((str(name).ljust(max_name_len), str(count).ljust(max_count_len), str(avg_count)));
+
+
+def add_data_dict(d_base, d_delta):
+    d_base_trace, d_base_count = d_base
+    d_delta_trace, d_delta_count = d_delta
+    for k, v in d_delta_trace.iteritems():
+        if k in d_base_trace:
+            d_base_trace[k] = (d_base_trace[k][0] + v[0], d_base_trace[k][1] + v[1])
+        else:
+            d_base_trace[k] = (v[0], v[1])
+
+    for k, v in d_delta_count.iteritems():
+        if k in d_base_count:
+            d_base_count[k] = d_base_count[k] + v
+        else:
+            d_base_count[k] = v
+
+
+# for data_str1 in data_str_list:
+if __name__ == '__main__':
+    args = parser.parse_args()
+    if not args.file and not args.query_trace_str:
+        parser.print_help()
+        parser.error("at least use one of --file or query_trace_str")
+    d_data = ({}, {})
+    str_list = []
+    if args.file:
+        for f in args.file:
+            str_list += get_query_trace_from_file(f)
+    if args.query_trace_str:
+        for s in args.query_trace_str:
+            str_list.append(s)
+    for s in str_list:
+        add_data_dict(d_data, format_data(s))
+    if str_list:
+        calc_percentail(d_data[0], args.time)
+        calc_count(d_data[1], len(str_list))
+

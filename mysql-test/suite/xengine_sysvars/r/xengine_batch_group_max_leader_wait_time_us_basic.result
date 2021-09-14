@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_BATCH_GROUP_MAX_LEADER_WAIT_TIME_US;
+SELECT @start_global_value;
+@start_global_value
+50
+"Trying to set variable @@global.XENGINE_BATCH_GROUP_MAX_LEADER_WAIT_TIME_US to 444. It should fail because it is readonly."
+SET @@global.XENGINE_BATCH_GROUP_MAX_LEADER_WAIT_TIME_US   = 444;
+ERROR HY000: Variable 'xengine_batch_group_max_leader_wait_time_us' is a read only variable

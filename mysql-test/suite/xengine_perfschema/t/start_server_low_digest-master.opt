@@ -1,0 +1,2 @@
+--max_digest_length=10
+--default_storage_engine=xengine

@@ -1,0 +1,20 @@
+--source suite/xengine/include/have_xengine.inc
+
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES('TRUE');
+INSERT INTO valid_values VALUES('FALSE');
+
+CREATE TABLE invalid_values (value varchar(255));
+INSERT INTO invalid_values VALUES('aaa');
+INSERT INTO invalid_values VALUES('\'aaa\'');
+INSERT INTO invalid_values VALUES('123');
+INSERT INTO invalid_values VALUES('\'123\'');
+
+--let $sys_var=XENGINE_QUERY_TRACE_PRINT_SLOW
+--let $read_only=0
+--let $session=0
+--let $sticky=1
+--source ../inc/xengine_sys_var.inc
+
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

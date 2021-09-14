@@ -1,0 +1,11 @@
+
+#
+# Run subquery_sj_xengine_all.test with BKA enabled
+#
+set optimizer_switch='batched_key_access=on,block_nested_loop=off,mrr_cost_based=off';
+
+--source suite/xengine_main/t/subquery_sj_xengine_all.test
+
+set optimizer_switch=default;
+
+--source suite/xengine/include/check_xengine_log_error.inc

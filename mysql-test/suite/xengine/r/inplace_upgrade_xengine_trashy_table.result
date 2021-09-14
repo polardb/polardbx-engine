@@ -1,0 +1,39 @@
+###########################################################################
+# Stop the default mtr server
+###########################################################################
+# Stop DB server which was created by MTR default
+# Unzip the zip file.
+###########################################################################
+# start server with existing data directory and upgrade, then check existing data
+###########################################################################
+include/assert_grep.inc [Skip trashy temporary table during upgrade]
+SHOW DATABASES;
+Database
+__recycle_bin__
+information_schema
+mysql
+performance_schema
+sys
+test
+SHOW TABLES FROM test;
+Tables_in_test
+t1
+SELECT count(*) FROM test.t1;
+count(*)
+10010
+USE information_schema;
+SELECT * FROM XENGINE_TABLES;
+SCHEMA_NAME	NAME	N_COLS	INSTANT_COLS
+test	t1	3	0
+SELECT * FROM XENGINE_DDL;
+TABLE_SCHEMA	TABLE_NAME	PARTITION_NAME	INDEX_NAME	SUBTABLE_ID	INDEX_NUMBER	INDEX_TYPE	KV_FORMAT_VERSION
+test	t1	NULL	PRIMARY	258	258	1	11
+test	#sql-606a_8	NULL		259	259	1	11
+SELECT DISTINCT(SUBTABLE_ID), TABLE_NAME, SUBTABLE_NAME FROM XENGINE_SUBTABLE WHERE TABLE_NAME <> '<internal>';
+SUBTABLE_ID	TABLE_NAME	SUBTABLE_NAME
+259	<Unknown>	<Unknown>
+258	test.t1	PRIMARY
+###########################################################################
+# Cleanup
+###########################################################################
+# restart:

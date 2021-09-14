@@ -1,0 +1,6 @@
+begin;
+set global xengine_hotbackup = 'checkpoint';
+set global xengine_hotbackup = 'acquire';
+set global xengine_hotbackup = 'incremental';
+set global xengine_hotbackup = 'release';
+commit;

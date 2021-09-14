@@ -1,0 +1,476 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+drop table if exists t1;
+CREATE TABLE t1 (id INT primary key, c1 INT, c2 int, c3 int);
+insert into t1 values(1,1,1,1),(5,5,5,5),(9,9,9,9);
+include/rpl_sync.inc
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t1 drop column c1, add column c4 int default 100 ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+# Establish connection con1 (user=root)
+# Switch to connection con1
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6,6,6),(7,7,7,7);
+select * from t1;
+id	c1	c2	c3
+1	1	1	1
+5	5	5	5
+6	6	6	6
+7	7	7	7
+9	9	9	9
+update t1 set c2=100 where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	1	1	1
+5	5	5	5
+6	6	6	6
+7	7	100	7
+9	9	100	9
+update t1 set c1=99 where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	1	1	1
+5	5	5	5
+6	6	6	6
+7	99	100	7
+9	99	100	9
+delete from t1 where id=1;
+select * from t1;
+id	c1	c2	c3
+5	5	5	5
+6	6	6	6
+7	99	100	7
+9	99	100	9
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection default
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+select * from t1;
+id	c2	c3	c4
+5	5	5	100
+6	6	6	100
+7	100	7	100
+9	100	9	100
+include/rpl_sync.inc
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t1 is same]
+drop table t1;
+drop table if exists t1;
+create table t1(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into t1 values(1,11,'abc',111);
+insert into t1 values(2,12,'abc',222);
+insert into t1 values(3,13,'abc',333);
+alter table t1 add index idx_c1(c1),algorithm=inplace,lock=default;
+alter table t1 add index idx_c2(c2),algorithm=inplace,lock=default;
+alter table t1 add index idx_c3(c3),algorithm=inplace,lock=default;
+alter table t1 add index idx_c1_c2(c1,c2),algorithm=inplace,lock=default;
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t1 drop column c1, add column c4 int default 100 ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+# Switch to connection con1
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6,'6666',6),(7,7,'777777',7);
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	777777	7
+update t1 set c2='aaaa' where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	aaaa	7
+update t1 set c1=99 where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+delete from t1 where id=1;
+select * from t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection default
+Warnings:
+Warning	1831	Duplicate index 'idx_c1_c2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+select * from t1;
+id	c2	c3	c4
+2	abc	222	100
+3	abc	333	100
+6	6666	6	100
+7	aaaa	7	100
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+include/rpl_sync.inc
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`),
+  KEY `idx_c2` (`c2`),
+  KEY `idx_c3` (`c3`),
+  KEY `idx_c1_c2` (`c2`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c2` varchar(100) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`),
+  KEY `idx_c2` (`c2`),
+  KEY `idx_c3` (`c3`),
+  KEY `idx_c1_c2` (`c2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t1 is same]
+drop table t1;
+drop table if exists t1;
+create table t1(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into t1 values(1,11,'abc',111);
+insert into t1 values(2,12,'abc',222);
+insert into t1 values(3,13,'abc',333);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t1 add column c4 int default 100, add index idx_c4(c4) ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+# Switch to connection con1
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6,'6666',6),(7,7,'777777',7);
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	777777	7
+update t1 set c2='aaaa' where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	aaaa	7
+update t1 set c1=99 where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+delete from t1 where id=1;
+select * from t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection default
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+select * from t1;
+id	c1	c2	c3	c4
+2	12	abc	222	100
+3	13	abc	333	100
+6	6	6666	6	100
+7	99	aaaa	7	100
+include/rpl_sync.inc
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`),
+  KEY `idx_c4` (`c4`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '100',
+  PRIMARY KEY (`id`),
+  KEY `idx_c4` (`c4`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t1 is same]
+drop table t1;
+"test modify pk"
+drop table if exists t1;
+create table t1(id int not null primary key, c1 int not null, c2 varchar(100), c3 int);
+insert into t1 values(1,11,'abc',111);
+insert into t1 values(2,12,'abc',222);
+insert into t1 values(3,13,'abc',333);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t1 drop primary key, add primary key(c1), ALGORITHM  = INPLACE, LOCK=DEFAULT;
+# Switch to connection con1
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6,'6666',6),(7,7,'777777',7);
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	777777	7
+update t1 set c2='aaaa' where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	aaaa	7
+update t1 set c1=99 where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+delete from t1 where id=1;
+select * from t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection default
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+select * from t1;
+id	c1	c2	c3
+6	6	6666	6
+2	12	abc	222
+3	13	abc	333
+7	99	aaaa	7
+include/rpl_sync.inc
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) NOT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) NOT NULL,
+  `c2` varchar(100) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t1 is same]
+drop table t1;
+"test modify column from nul to not-null"
+drop table if exists t1;
+create table t1(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into t1 values(1,11,'abc',111);
+insert into t1 values(2,12,'abc',222);
+insert into t1 values(3,13,'abc',333);
+set @save_sql_mode = @@sql_mode;
+set sql_mode = "STRICT_TRANS_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t1 modify column c1 int not null ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+# Switch to connection con1
+set @save_sql_mode = @@sql_mode;
+set sql_mode = "STRICT_TRANS_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6,'6666',6),(7,7,'777777',7);
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	777777	7
+update t1 set c1=null where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	NULL	777777	7
+delete from t1 where id=1;
+select * from t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	NULL	777777	7
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection default
+ERROR 22004: Invalid use of NULL value
+set sql_mode = @save_sql_mode;
+set sql_mode = @save_sql_mode;
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+select * from t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	NULL	777777	7
+include/rpl_sync.inc
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t1 is same]
+drop table t1;
+"test modify column from nul to not-null"
+drop table if exists t1;
+create table t1(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into t1 values(1,11,'abc',111);
+insert into t1 values(2,12,'abc',222);
+insert into t1 values(3,13,'abc',333);
+set @save_sql_mode = @@sql_mode;
+set sql_mode = "STRICT_TRANS_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t1 modify column c2 varchar(100) not null ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+# Switch to connection con1
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6,'6666',6),(7,7,'777777',7);
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	777777	7
+update t1 set c2=null where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	NULL	7
+update t1 set c1=99 where id > 6;
+select * from t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	NULL	7
+delete from t1 where id=1;
+select * from t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	NULL	7
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection default
+ERROR 22004: Invalid use of NULL value
+set sql_mode = @save_sql_mode;
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+select * from t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	NULL	7
+include/rpl_sync.inc
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t1 is same]
+drop table t1;
+include/rpl_sync.inc
+include/rpl_end.inc

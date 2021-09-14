@@ -1,0 +1,38 @@
+DROP TABLE IF EXISTS test_index_merge;
+CREATE TABLE test_index_merge (id INT AUTO_INCREMENT PRIMARY KEY, c1 INT, c2 INT, c3 INT, index idx_c1c2(c1,c2), index idx_c1c3(c1,c3)) ENGINE=xengine;
+set session binlog_format=row;
+show variables like '%log_bin%';
+Variable_name	Value
+log_bin	#
+log_bin_basename	#
+log_bin_index	#
+log_bin_trust_function_creators	#
+log_bin_use_v1_row_events	#
+sql_log_bin	#
+show variables like '%binlog_format%';
+Variable_name	Value
+binlog_format	ROW
+CREATE PROCEDURE fill_table1(cnt int)
+begin
+declare i int default 0;
+repeat insert into test_index_merge(c1,c2,c3) values(100, 50, 100);
+set i=i+1;
+until i > cnt
+end repeat;
+end $$
+CREATE PROCEDURE fill_table2(cnt int)
+begin
+declare i int default 0;
+repeat insert into test_index_merge(c1,c2,c3) values(100, 100, 50);
+set i=i+1;
+until i > cnt
+end repeat;
+end$$
+call fill_table1(1000);
+call fill_table2(1000);
+insert into test_index_merge values(5000, 100, 50, 50);
+update test_index_merge set id=9999 where c1=100 and c2 = 50 and c3 = 50;
+set sql_log_bin=0;
+DROP TABLE test_index_merge;
+DROP PROCEDURE fill_table1;
+DROP PROCEDURE fill_table2;

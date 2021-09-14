@@ -1,0 +1,11 @@
+#########################################
+# Purpose: testing the replication in mixed mode
+# Requirements: define binlog format for mysqld as in example below:
+# ./mysql-test-run.pl --mysqld=--binlog-format=mixed
+#########################################
+--source include/have_binlog_format_mixed.inc
+let $engine_type= xengine;
+--source suite/xengine_rpl_basic/include/rpl_mixed_ddl.inc
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

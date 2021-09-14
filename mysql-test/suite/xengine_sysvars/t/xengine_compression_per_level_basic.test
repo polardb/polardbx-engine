@@ -1,0 +1,7 @@
+--source suite/xengine/include/have_xengine.inc
+
+--let $sys_var=XENGINE_COMPRESSION_PER_LEVEL
+--let $read_only=1
+--let $session=0
+--source ../inc/xengine_sys_var.inc
+

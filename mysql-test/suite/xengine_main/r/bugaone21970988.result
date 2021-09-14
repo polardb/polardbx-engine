@@ -1,0 +1,27 @@
+drop table if exists t_2;
+CREATE TABLE t_2 (a int auto_increment primary key)engine=xengine;
+ALTER TABLE t_2 ADD COLUMN b INT NOT NULL, ALGORITHM=instant, KEY_BLOCK_SIZE=100 COMMENT 'Col b copy-added';
+ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: XEngineDDL: only supports to change comment of table. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t_2 ADD COLUMN b INT NOT NULL, ALGORITHM=instant;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `a` int(11) NOT NULL AUTO_INCREMENT,
+  `b` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table t_2;
+drop table if exists t_3;
+CREATE TABLE t_3 (a int auto_increment primary key, b INT NOT NULL)engine=xengine;
+ALTER TABLE t_3 ADD INDEX idx(b), ALGORITHM= INPLACE, KEY_BLOCK_SIZE=100 COMMENT 'Index on b inplace-added';
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: XEngineDDL: only supports to change comment of table. Try ALGORITHM=COPY.
+ALTER TABLE t_3 ADD INDEX idx(b), ALGORITHM= INPLACE,  COMMENT 'Index on b inplace-added';
+show create table t_3;
+Table	Create Table
+t_3	CREATE TABLE `t_3` (
+  `a` int(11) NOT NULL AUTO_INCREMENT,
+  `b` int(11) NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `idx` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Index on b inplace-added'
+drop table t_3;

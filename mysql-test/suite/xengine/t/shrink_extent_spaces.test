@@ -1,0 +1,100 @@
+--source include/have_debug.inc
+--source suite/xengine/include/have_xengine.inc
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+#connect (con3,localhost,root,,);
+#connect (con4,localhost,root,,);
+#connect (con5,localhost,root,,);
+#connect (con6,localhost,root,,);
+#connect (con7,localhost,root,,);
+#connect (con8,localhost,root,,);
+
+connection con1;
+create table t(id int primary key);
+create table t1(id int primary key);
+create table t2(id int primary key, c int);
+--disable_query_log
+let $i = 1;
+while ($i <= 1024) {
+  eval insert into t values($i);
+  eval insert into t1 values($i);
+  eval insert into t2 values($i, $i);
+  inc $i;
+  set global xengine_force_flush_memtable_now=ON;
+}
+--enable_query_log
+#drop prevent shrink
+set @@GLOBAL.DEBUG= '+d,sleep_in_drop_index'; 
+--echo #sending
+--send drop table t
+
+connection con2;
+set @@GLOBAL.DEBUG= '+d,before_shrink';
+--error 1105
+set global xengine_shrink_n_extent_space = 1; 
+set @@GLOBAL.DEBUG= '-d,sleep_in_drop_index';
+set @@GLOBAL.DEBUG= '-d,before_shrink';
+
+#shrink prevent drop index
+connection con1;
+--reap;
+#wait for drop table
+select sleep(8);
+set @@GLOBAL.DEBUG= '+d,sleep_in_shrink';
+--echo #sending
+--send set global xengine_shrink_n_extent_space = 2 
+
+connection con2;
+#wait for shrink background
+drop table t1;
+
+# only one shrink
+set @@GLOBAL.DEBUG= '-d,sleep_in_shrink';
+--error 1105
+set global xengine_shrink_n_extent_space = 1;
+
+connection con1;
+--reap;
+# wait for drop table
+select sleep(1);
+#shrink prevent create index
+set @@GLOBAL.DEBUG= '+d,sleep_in_shrink';
+set @@GLOBAL.DEBUG= '+d,sleep_before_create_second_index';
+--echo #sending
+--send set global xengine_shrink_n_extent_space = 1;
+connection con2;
+--error 1105
+alter table t2 add key k(c);
+
+connection con1;
+--error 1105
+--reap;
+#create index prevent shrink
+set @@GLOBAL.DEBUG= '-d,sleep_before_create_second_index';
+set @@GLOBAL.DEBUG= '+d,before_shrink';
+set @@GLOBAL.DEBUG= '+d,sleep_in_create_second_index';
+--echo #sending
+--send alter table t2 add key k(c);
+connection con2;
+--error 1105
+set global xengine_shrink_n_extent_space = 1;
+set @@GLOBAL.DEBUG= '-d,sleep_in_shrink';
+set @@GLOBAL.DEBUG= '-d,before_shrink';
+set @@GLOBAL.DEBUG= '-d,sleep_in_create_second_index';
+
+connection con1;
+--reap;
+
+--echo # restart the server.
+--exec echo "restart:" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+select count(*) from t2;
+
+#drop table t1;
+drop table t2;
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

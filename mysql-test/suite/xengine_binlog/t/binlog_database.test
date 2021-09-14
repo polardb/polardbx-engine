@@ -1,0 +1,9 @@
+
+# A wrapper to test that dropping a database is binlogged
+# correctly. We test all three modes in the same file to avoid
+# unecessary server restarts.
+
+set binlog_format='row';
+source suite/xengine_binlog/include/database.inc;
+
+show databases;

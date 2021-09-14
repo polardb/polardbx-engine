@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -7766,6 +7770,21 @@ int handler::ha_reset() {
   return retval;
 }
 
+bool operating_on_xengine_during_xa(THD *thd, handlerton *hton) {
+  if (hton->db_type == DB_TYPE_XENGINE) {
+    const bool PRINT_ERROR_WHEN_CHECK_IN_XA = false;
+    const bool is_in_xa = (thd->get_transaction()->xid_state()->check_in_xa(
+                PRINT_ERROR_WHEN_CHECK_IN_XA));
+    if (is_in_xa) {
+      my_error(HA_ERR_WRONG_COMMAND, MYF(0),
+               "X-Engine do not support XA transactions");
+    }
+    return is_in_xa;
+  } else {
+    return false;
+  }
+}
+
 int handler::ha_write_row(uchar *buf) {
   int error;
   Log_func *log_func = Write_rows_log_event::binlog_row_logging_function;
@@ -7775,6 +7794,12 @@ int handler::ha_write_row(uchar *buf) {
   DBUG_EXECUTE_IF("inject_error_ha_write_row", return HA_ERR_INTERNAL_ERROR;);
   DBUG_EXECUTE_IF("simulate_storage_engine_out_of_memory",
                   return HA_ERR_SE_OUT_OF_MEMORY;);
+
+  if (operating_on_xengine_during_xa(ha_thd(), ht)) {
+    // X-Engine currently do not support executing xa dml
+    return HA_ERR_UNSUPPORTED;
+  }
+
   mark_trx_read_write();
 
   DBUG_EXECUTE_IF(

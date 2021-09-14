@@ -1,0 +1,4 @@
+--source suite/xengine/include/have_xengine.inc
+
+--echo # The test checks AUTO_INCREMENT capabilities that are not supported by XEngine-SE.
+--source suite/xengine/include/check_xengine_log_error.inc

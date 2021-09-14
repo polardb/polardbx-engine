@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2002, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -1494,7 +1498,7 @@ uint my_strxfrm_flag_normalize(uint flags) {
 
 size_t my_strxfrm_pad(const CHARSET_INFO *cs, uchar *str, uchar *frmend,
                       uchar *strend, uint nweights, uint flags) {
-  if (nweights && frmend < strend) {
+  if (nweights && frmend < strend && !(flags & MY_STRXFRM_NOPAD_WITH_SPACE)) {
     // PAD SPACE behavior.
     uint fill_length = MY_MIN((uint)(strend - frmend), nweights * cs->mbminlen);
     cs->cset->fill(cs, (char *)frmend, fill_length, cs->pad_char);

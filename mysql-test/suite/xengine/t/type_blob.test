@@ -1,0 +1,9 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# BLOB column types
+#
+
+--source type_blob.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

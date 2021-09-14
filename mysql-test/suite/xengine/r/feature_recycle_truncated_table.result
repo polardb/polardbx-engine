@@ -1,0 +1,186 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("table already exists in recycle_bin");
+CALL mtr.add_suppression("Fail TO recycle table");
+CALL mtr.add_suppression("Incorrect key file");
+create database db_recycle;
+create user super_1@'%' identified by 'pass';
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+grant all on *.* to super_1@'%';
+grant all on db_recycle.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_1@'%' ;
+grant create tablespace on *.* to normal_1@'%' ;
+grant SYSTEM_VARIABLES_ADMIN on *.* to normal_1@'%';
+grant file on *.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_3@'%' ;
+------------------------------------------------------
+1. Privileges
+-- Still require related privileges if want to
+show recycle bin db;
+-- No one can alter db except super_acl user;
+------------------------------------------------------
+show databases;
+Database
+__recycle_bin__
+db_recycle
+information_schema
+test
+show databases;
+Database
+information_schema
+test
+use __recycle_bin__;
+create table t1 (id int);
+ERROR 42000: Access denied for user 'normal_1'@'%' to database '__recycle_bin__'
+show tables;
+Tables_in___recycle_bin__
+1.1 dbms_recycle.purge_table still require db.table privileges;
+set global recycle_scheduler=off;
+use db_recycle;
+create table t1(id int);
+insert into t1 values(1);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+truncate table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_165	db_recycle	t1	#	#
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from __recycle_bin__.__xengine_165;
+id
+1
+call dbms_recycle.purge_table("$table_name");
+ERROR 42000: DROP command denied to user 'normal_2'@'localhost' for table '$table_name'
+call dbms_recycle.purge_table("__xengine_165");
+ERROR 42000: DROP command denied to user 'normal_3'@'localhost' for table 't1'
+set global recycle_scheduler=on;
+use db_recycle;
+set session recycle_bin=off;
+drop table t1;
+set session recycle_bin=on;
+------------------------------------------------------
+2. truncate table
+-- Related object:
+Column:
+Index:
+Foreign key(XEngine dones't support):
+Trigger:
+View:
+Constraint:
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL CHECK (id >= 1),
+PRIMARY KEY (id)
+);
+create table l1(id int);
+CREATE TRIGGER tri_1
+before INSERT ON p1 FOR EACH ROW
+BEGIN
+INSERT INTO l1 value(1);
+END//
+create view v1 as select * from p1;
+truncate table p1;
+show create table p1;
+Table	Create Table
+p1	CREATE TABLE `p1` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `p1_chk_1` CHECK ((`id` >= 1))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_161	db_recycle	p1	#	#
+show create table __recycle_bin__.__xengine_161;
+Table	Create Table
+__xengine_161	CREATE TABLE `__xengine_161` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `__xengine_161_chk_1` CHECK ((`id` >= 1))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from __recycle_bin__.__xengine_161;
+id
+check the valid of view and trigger
+insert into p1 values(2);
+select * from p1;
+id
+2
+select * from v1;
+id
+2
+select * from l1;
+id
+1
+drop table l1;
+drop view v1;
+drop table p1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+3. simulate handler rename failed.
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t3(id int);
+insert into t3 values(1);
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t3;
+id
+1
+SET @@SESSION.debug = "+d,simulate_crashed_table_error";
+truncate table t3;
+ERROR HY000: Incorrect key file for table 't3'; try to repair it
+SET @@SESSION.debug = "-d,simulate_crashed_table_error";
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t3;
+id
+1
+truncate table t3;
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t3;
+id
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_167	db_recycle	t3	#	#
+show create table __recycle_bin__.__xengine_167;
+Table	Create Table
+__xengine_167	CREATE TABLE `__xengine_167` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from __recycle_bin__.__xengine_167;
+id
+1
+set global recycle_scheduler=on;
+------------------------------------------
+cleanup
+------------------------------------------
+drop database db_recycle;
+drop user super_1@'%';
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+include/rpl_end.inc

@@ -1,0 +1,2 @@
+--loose-disable-performance-schema
+--default_storage_engine=xengine

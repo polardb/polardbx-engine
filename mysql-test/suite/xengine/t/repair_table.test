@@ -1,0 +1,9 @@
+--source suite/xengine/include/have_xengine.inc
+
+# 
+# REPAIR TABLE statements
+#
+
+--source repair_table.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

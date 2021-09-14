@@ -1,0 +1,5 @@
+let $engine_type= InnoDB;
+
+--source include/loaddata_autocom.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

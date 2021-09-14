@@ -1,0 +1,43 @@
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1(id BIGINT NOT NULL, aid VARCHAR(255), value LONGBLOB, PRIMARY KEY (id, aid)) engine=xengine;
+INSERT INTO t1 values (1, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 1000000));
+INSERT INTO t1 values (2, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 2000000));
+INSERT INTO t1 values (3, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 3000000));
+INSERT INTO t1 values (4, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 4000000));
+ERROR HY000: Internal error: Not implemented: row too large
+SELECT id,LENGTH(value),MD5(value) FROM t1;
+id	LENGTH(value)	MD5(value)
+1	10000000	c8ffc656c65b3e736280deff8a84feb3
+2	20000000	c3ae5d1128ef7aad710115b12cc4d079
+3	30000000	cae7eae2598c7ac9f88c2615141db87f
+set global xengine_force_flush_memtable_now = on;
+restarting...
+# restart
+SELECT id,LENGTH(value),MD5(value) FROM t1;
+id	LENGTH(value)	MD5(value)
+1	10000000	c8ffc656c65b3e736280deff8a84feb3
+2	20000000	c3ae5d1128ef7aad710115b12cc4d079
+3	30000000	cae7eae2598c7ac9f88c2615141db87f
+set global xengine_force_flush_memtable_now = on;
+DELETE FROM t1 where id % 2 = 0;
+set global xengine_force_flush_memtable_now = on;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+500
+restarting...
+# restart
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+500
+restarting...
+# restart
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+500
+SELECT id,LENGTH(value),MD5(value) FROM t1 where id = 3 or id = 5;
+id	LENGTH(value)	MD5(value)
+3	30000000	cae7eae2598c7ac9f88c2615141db87f
+5	6000000	953b7df6dde12942108bfab035cd878e
+SELECT id,LENGTH(value),MD5(value) FROM t1 where id % 2 = 0;
+id	LENGTH(value)	MD5(value)
+DROP TABLE t1;

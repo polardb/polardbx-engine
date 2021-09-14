@@ -1,0 +1,289 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+CALL mtr.add_suppression("Fail TO recycle table");
+CALL mtr.add_suppression("Incorrect key file");
+CREATE DATABASE db_recycle;
+CREATE DATABASE db_recycle_dummy;
+CREATE USER super_1@'%' IDENTIFIED BY 'pass';
+CREATE USER super_2@'%' IDENTIFIED BY 'pass';
+CREATE USER normal_1@'%' IDENTIFIED BY 'pass';
+CREATE USER normal_2@'%' IDENTIFIED BY 'pass';
+CREATE USER normal_3@'%' IDENTIFIED BY 'pass';
+CREATE USER normal_4@'%' IDENTIFIED BY 'pass';
+CREATE USER normal_5@'%' IDENTIFIED BY 'pass';
+GRANT ALL ON *.* TO super_1@'%';
+GRANT ALL ON *.* TO super_2@'%';
+GRANT ALL ON db_recycle.* TO normal_1@'%' ;
+GRANT ALL ON __recycle_bin__.* TO normal_1@'%' ;
+GRANT CREATE TABLESPACE ON *.* TO normal_1@'%' ;
+GRANT SYSTEM_VARIABLES_ADMIN on *.* TO normal_1@'%';
+GRANT ALL ON db_recycle_dummy.* TO normal_2@'%' ;
+GRANT ALL ON db_recycle.* TO normal_3@'%' ;
+GRANT ALL ON __recycle_bin__.* TO normal_3@'%' ;
+GRANT ALL ON db_recycle_dummy.* TO normal_4@'%' ;
+GRANT ALL ON __recycle_bin__.* TO normal_5@'%' ;
+SET @start_read_only = @@global.read_only;
+SET GLOBAL read_only = true;
+------------------------------------------------------
+1. Privileges
+-- Still require related privileges if want to
+show recycle bin db;
+-- No one can alter db except super_acl user;
+------------------------------------------------------
+SHOW DATABASES;
+Database
+__recycle_bin__
+db_recycle
+information_schema
+test
+SHOW DATABASES;
+Database
+__recycle_bin__
+db_recycle
+information_schema
+test
+SHOW DATABASES;
+Database
+db_recycle_dummy
+information_schema
+test
+SHOW DATABASES;
+Database
+db_recycle_dummy
+information_schema
+test
+USE __recycle_bin__;
+CREATE TABLE t1 (id int);
+ERROR 42000: Access denied for user 'normal_1'@'%' to database '__recycle_bin__'
+SHOW TABLES;
+Tables_in___recycle_bin__
+------------------------------------------------------
+1.1 dbms_recycle.purge_table still require db.table privileges;
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+USE db_recycle;
+CREATE TABLE t1(id INT);
+DROP TABLE t1;
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_165	db_recycle	t1	#	#
+CALL dbms_recycle.purge_table("__xengine_165");
+ERROR 42000: DROP command denied to user 'normal_2'@'localhost' for table '__xengine_165'
+CALL dbms_recycle.purge_table("__xengine_165");
+ERROR 42000: DROP command denied to user 'normal_5'@'localhost' for table 't1'
+show grants;
+Grants for normal_1@%
+GRANT CREATE TABLESPACE ON *.* TO `normal_1`@`%`
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO `normal_1`@`%`
+GRANT ALL PRIVILEGES ON `__recycle_bin__`.* TO `normal_1`@`%`
+GRANT ALL PRIVILEGES ON `db_recycle`.* TO `normal_1`@`%`
+CALL dbms_recycle.purge_table("__xengine_165");
+include/assert.inc [assert that the purge has not been added TO binlog]
+SET GLOBAL recycle_scheduler=on;
+------------------------------------------------------
+2. Drop table
+-- Related object:
+Foreign key(XEngine doesn't support):
+Trigger:
+View:
+Constraint:
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+);
+CREATE TABLE l1(id INT);
+CREATE TRIGGER tri_1
+BEFORE INSERT ON p1 FOR EACH ROW
+BEGIN
+INSERT INTO l1 value(1);
+END//
+CREATE VIEW v1 AS SELECT * FROM p1;
+1.1 confirm the trigger, view
+DROP TABLE p1;
+SHOW CREATE TABLE __recycle_bin__.__xengine_161;
+Table	Create Table
+__xengine_161	CREATE TABLE `__xengine_161` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TRIGGER tri_1;
+ERROR HY000: Trigger does not exist
+SHOW CREATE VIEW v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`normal_1`@`%` SQL SECURITY DEFINER VIEW `v1` AS select `p1`.`id` AS `id` from `p1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'db_recycle.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+SELECT * FROM v1;
+ERROR HY000: View 'db_recycle.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+DROP TABLE l1;
+DROP VIEW v1;
+SET GLOBAL recycle_scheduler=on;
+------------------------------------------------------
+3. Drop parent table(XEngine doesn't support foreign key)
+------------------------------------------------------
+------------------------------------------------------
+4. Drop in procedure
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+USE db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+);
+CREATE PROCEDURE proc_1()
+BEGIN
+DROP TABLE p1;
+END//
+CALL proc_1();
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_161	db_recycle	p1	#	#
+SHOW CREATE TABLE __recycle_bin__.__xengine_161;
+Table	Create Table
+__xengine_161	CREATE TABLE `__xengine_161` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP procedure proc_1;
+SET GLOBAL recycle_scheduler=on;
+------------------------------------------------------
+5. Drop database
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+USE db_recycle;
+CREATE TABLE p2 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+);
+CREATE TABLE l2(id int);
+CREATE TRIGGER tri_1
+BEFORE INSERT ON p2 FOR EACH ROW
+BEGIN
+INSERT INTO l2 value(1);
+END//
+CREATE VIEW v2 AS SELECT * FROM p2;
+DROP DATABASE db_recycle;
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_158	db_recycle	l2	#	#
+__recycle_bin__	__xengine_162	db_recycle	p2	#	#
+SHOW CREATE TABLE __recycle_bin__.__xengine_158;
+Table	Create Table
+__xengine_158	CREATE TABLE `__xengine_158` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE __recycle_bin__.__xengine_162;
+Table	Create Table
+__xengine_162	CREATE TABLE `__xengine_162` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CREATE DATABASE db_recycle;
+SET GLOBAL recycle_scheduler=on;
+------------------------------------------------------
+6. read only
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+USE db_recycle;
+CREATE TABLE t2 (id int);
+DROP TABLE t2;
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_166	db_recycle	t2	#	#
+SET GLOBAL read_only = on;
+CALL dbms_recycle.purge_table("__xengine_166");
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+SET GLOBAL read_only = off;
+CALL dbms_recycle.purge_table("__xengine_166");
+SET GLOBAL recycle_scheduler=on;
+------------------------------------------------------
+7. partition table or general tablespace
+(XEngine doesn't support partitioned table and tablespace)
+------------------------------------------------------
+------------------------------------------------------
+8. recycle_bin table exists error
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE t5(id int);
+DROP TABLE t5;
+CREATE TABLE t5(id int);
+DROP TABLE t5;
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_169	db_recycle	t5	#	#
+CALL dbms_recycle.purge_table("__xengine_169");
+SET GLOBAL recycle_scheduler=on;
+------------------------------------------------------
+9 fts table didn't support to be recycled
+(XEngine doesn't support FULLTEXT index)
+------------------------------------------------------
+------------------------------------------------------
+10. purge normal table or nonexist table
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE __recycle_bin__.x5(id INT);
+CALL dbms_recycle.purge_table("x5");
+ERROR HY000: Recycle table failed : x5 isn't recycled table
+CALL dbms_recycle.purge_table("x6");
+ERROR HY000: Recycle table failed : x6 didn't exist
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+DROP TABLE __recycle_bin__.x5;
+SET GLOBAL recycle_scheduler=on;
+------------------------------------------------------
+11. simulate handler rename failed.
+------------------------------------------------------
+SET GLOBAL recycle_scheduler=off;
+USE db_recycle;
+CREATE TABLE t6(id INT);
+INSERT INTO t6 VALUES(1);
+COMMIT;
+SET @@SESSION.debug = "+d,simulate_crashed_table_error";
+DROP TABLE t6;
+ERROR HY000: Incorrect key file for table 't6'; try to repair it
+SET @@SESSION.debug = "-d,simulate_crashed_table_error";
+SHOW CREATE TABLE t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t6;
+id
+1
+DROP TABLE t6;
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__xengine_170	db_recycle	t6	#	#
+CALL dbms_recycle.purge_table("__xengine_170");
+------------------------------------------------------
+12. with lock mode
+------------------------------------------------------
+CREATE TABLE test.t1(id INT);
+SET SESSION recycle_bin=on;
+LOCK TABLES test.t1 write;
+DROP TABLE test.t1;
+show create table t1;
+ERROR 42S02: Table 'db_recycle.t1' doesn't exist
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+UNLOCK tables;
+SET GLOBAL recycle_scheduler=on;
+drop database db_recycle;
+drop database db_recycle_dummy;
+drop user super_1@'%';
+drop user super_2@'%';
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+drop user normal_4@'%';
+drop user normal_5@'%';
+SET GLOBAL read_only = @start_read_only;
+include/rpl_end.inc

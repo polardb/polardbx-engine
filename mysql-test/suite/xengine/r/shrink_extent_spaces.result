@@ -1,0 +1,46 @@
+create table t(id int primary key);
+create table t1(id int primary key);
+create table t2(id int primary key, c int);
+set @@GLOBAL.DEBUG= '+d,sleep_in_drop_index';
+#sending
+drop table t;
+set @@GLOBAL.DEBUG= '+d,before_shrink';
+set global xengine_shrink_n_extent_space = 1;
+ERROR HY000: Background drop index is running
+set @@GLOBAL.DEBUG= '-d,sleep_in_drop_index';
+set @@GLOBAL.DEBUG= '-d,before_shrink';
+select sleep(8);
+sleep(8)
+0
+set @@GLOBAL.DEBUG= '+d,sleep_in_shrink';
+#sending
+set global xengine_shrink_n_extent_space = 2 ;
+drop table t1;
+set @@GLOBAL.DEBUG= '-d,sleep_in_shrink';
+set global xengine_shrink_n_extent_space = 1;
+ERROR HY000: Other shrink extent space is running
+select sleep(1);
+sleep(1)
+0
+set @@GLOBAL.DEBUG= '+d,sleep_in_shrink';
+set @@GLOBAL.DEBUG= '+d,sleep_before_create_second_index';
+#sending
+set global xengine_shrink_n_extent_space = 1;;
+alter table t2 add key k(c);
+ERROR HY000: Shrink extent space is running
+ERROR HY000: Shrink extent space not finished, please check the log of X-Engine
+set @@GLOBAL.DEBUG= '-d,sleep_before_create_second_index';
+set @@GLOBAL.DEBUG= '+d,before_shrink';
+set @@GLOBAL.DEBUG= '+d,sleep_in_create_second_index';
+#sending
+alter table t2 add key k(c);;
+set global xengine_shrink_n_extent_space = 1;
+ERROR HY000: Create second index is running
+set @@GLOBAL.DEBUG= '-d,sleep_in_shrink';
+set @@GLOBAL.DEBUG= '-d,before_shrink';
+set @@GLOBAL.DEBUG= '-d,sleep_in_create_second_index';
+# restart the server.
+select count(*) from t2;
+count(*)
+1024
+drop table t2;

@@ -1,0 +1,10 @@
+# 
+# Run join_outer.test with BKA enabled 
+#
+set optimizer_switch='batched_key_access=on,mrr_cost_based=off';
+
+--source join_outer.test
+
+set optimizer_switch=default;
+
+--source suite/xengine/include/check_xengine_log_error.inc

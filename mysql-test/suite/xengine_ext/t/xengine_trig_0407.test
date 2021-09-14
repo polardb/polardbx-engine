@@ -1,0 +1,5 @@
+#### suite/xengine_ext/t/innodb_trig_0407.test
+
+let $engine_type= XENGINE;
+
+--source suite/xengine_ext/triggers/triggers_0407.inc

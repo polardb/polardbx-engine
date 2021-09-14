@@ -1,0 +1,49 @@
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (a INT PRIMARY KEY, b CHAR(8)) ENGINE=xengine 
+DEFAULT CHARACTER SET = utf8
+COLLATE = utf8_general_ci
+COMMENT = 'standard table options'
+;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COMMENT='standard table options'
+ALTER TABLE t1 COMMENT = 'table altered';
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COMMENT='table altered'
+ALTER TABLE t1 ENGINE=MEMORY;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=MEMORY DEFAULT CHARSET=utf8 COMMENT='table altered'
+ALTER TABLE t1 ENGINE=xengine;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(8) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COMMENT='table altered'
+ALTER TABLE t1 CHARACTER SET = latin1 COLLATE = latin1_swedish_ci;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(8) CHARACTER SET utf8 DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COMMENT='table altered'
+DROP TABLE t1;

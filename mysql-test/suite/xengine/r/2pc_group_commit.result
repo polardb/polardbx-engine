@@ -1,0 +1,30 @@
+# Disable for valgrind because this takes too long
+DROP DATABASE IF EXISTS mysqlslap;
+CREATE DATABASE mysqlslap;
+USE mysqlslap;
+CREATE TABLE t1(id BIGINT AUTO_INCREMENT, value BIGINT, PRIMARY KEY(id)) ENGINE=xengine;
+# 2PC enabled, MyX durability enabled
+SET GLOBAL xengine_flush_log_at_trx_commit=1;
+## 2PC + durability + single thread
+select variable_value into @c from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+select case when variable_value-@c = 2000 then 'true' else 'false' end from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+case when variable_value-@c = 2000 then 'true' else 'false' end
+true
+## 2PC + durability + group commit
+select variable_value into @c from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+select case when variable_value-@c > 0 and variable_value-@c < 20000 then 'true' else 'false' end from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+case when variable_value-@c > 0 and variable_value-@c < 20000 then 'true' else 'false' end
+true
+# 2PC enabled, MyX durability disabled
+SET GLOBAL xengine_flush_log_at_trx_commit=0;
+select variable_value into @c from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+select case when variable_value-@c = 1000 then 'true' else 'false' end from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+case when variable_value-@c = 1000 then 'true' else 'false' end
+false
+select variable_value into @c from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+select case when variable_value-@c = 0 then 'true' else 'false' end from performance_schema.global_status where variable_name='xengine_wal_group_syncs';
+case when variable_value-@c = 0 then 'true' else 'false' end
+true
+SET GLOBAL xengine_flush_log_at_trx_commit=1;
+DROP TABLE t1;
+DROP DATABASE mysqlslap;

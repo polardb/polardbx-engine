@@ -1,0 +1,296 @@
+# restart server and check existing data
+# restart: --xengine=1 --datadir=MYSQL_TMP_DIR/data --innodb_data_file_path=ibdata1:12M:autoextend
+SHOW DATABASES;
+Database
+__recycle_bin__
+data
+information_schema
+mysql
+performance_schema
+sys
+test
+USE data;
+SHOW TABLES;
+Tables_in_data
+t_hidden_pk
+t_hidden_pk_sk
+t_hidden_pk_uk
+t_pk
+t_pk_auto
+t_pk_sk
+t_pk_uk
+SHOW CREATE TABLE t_hidden_pk;
+Table	Create Table
+t_hidden_pk	CREATE TABLE `t_hidden_pk` (
+  `id` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_hidden_pk_sk;
+Table	Create Table
+t_hidden_pk_sk	CREATE TABLE `t_hidden_pk_sk` (
+  `id` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  KEY `name` (`name`(10))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_hidden_pk_uk;
+Table	Create Table
+t_hidden_pk_uk	CREATE TABLE `t_hidden_pk_uk` (
+  `id` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  UNIQUE KEY `code` (`code`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk;
+Table	Create Table
+t_pk	CREATE TABLE `t_pk` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk_sk;
+Table	Create Table
+t_pk_sk	CREATE TABLE `t_pk_sk` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `name` (`name`(10))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk_uk;
+Table	Create Table
+t_pk_uk	CREATE TABLE `t_pk_uk` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk_auto;
+Table	Create Table
+t_pk_auto	CREATE TABLE `t_pk_auto` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t_hidden_pk, t_hidden_pk_sk, t_hidden_pk_uk, t_pk, t_pk_sk, t_pk_uk, t_pk_auto;
+Table	Op	Msg_type	Msg_text
+data.t_hidden_pk	check	status	OK
+data.t_hidden_pk_sk	check	status	OK
+data.t_hidden_pk_uk	check	status	OK
+data.t_pk	check	status	OK
+data.t_pk_sk	check	status	OK
+data.t_pk_uk	check	status	OK
+data.t_pk_auto	check	status	OK
+SELECT * FROM t_hidden_pk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_hidden_pk_sk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_hidden_pk_uk;
+id	name	code
+1	abc	2
+2	bcd	4
+3	def	6
+SELECT * FROM t_pk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_pk_sk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_pk_uk;
+id	name	code
+1	abc	2
+2	bcd	4
+3	def	6
+SELECT * FROM t_pk_auto;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT code FROM t_hidden_pk_uk;
+code
+2
+4
+6
+SELECT code FROM t_pk_uk;
+code
+2
+4
+6
+CREATE SCHEMA test2;
+USE test2;
+CREATE TABLE t1 LIKE data.t_pk_uk;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1 SELECT * FROM data.t_hidden_pk_uk;
+SELECT * FROM t1;
+id	name	code
+1	abc	2
+2	bcd	4
+3	def	6
+DROP DATABASE test2;
+DROP DATABASE data;
+# restart:
+# restart server and check existing data
+# restart: --xengine=1 --datadir=MYSQL_TMP_DIR/data --innodb_data_file_path=ibdata1:12M:autoextend
+SHOW DATABASES;
+Database
+__recycle_bin__
+data
+information_schema
+mysql
+performance_schema
+sys
+test
+USE data;
+SHOW TABLES;
+Tables_in_data
+t_hidden_pk
+t_hidden_pk_sk
+t_hidden_pk_uk
+t_pk
+t_pk_auto
+t_pk_sk
+t_pk_uk
+SHOW CREATE TABLE t_hidden_pk;
+Table	Create Table
+t_hidden_pk	CREATE TABLE `t_hidden_pk` (
+  `id` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_hidden_pk_sk;
+Table	Create Table
+t_hidden_pk_sk	CREATE TABLE `t_hidden_pk_sk` (
+  `id` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  KEY `name` (`name`(10))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_hidden_pk_uk;
+Table	Create Table
+t_hidden_pk_uk	CREATE TABLE `t_hidden_pk_uk` (
+  `id` int(11) DEFAULT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  UNIQUE KEY `code` (`code`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk;
+Table	Create Table
+t_pk	CREATE TABLE `t_pk` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk_sk;
+Table	Create Table
+t_pk_sk	CREATE TABLE `t_pk_sk` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `name` (`name`(10))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk_uk;
+Table	Create Table
+t_pk_uk	CREATE TABLE `t_pk_uk` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t_pk_auto;
+Table	Create Table
+t_pk_auto	CREATE TABLE `t_pk_auto` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t_hidden_pk, t_hidden_pk_sk, t_hidden_pk_uk, t_pk, t_pk_sk, t_pk_uk, t_pk_auto;
+Table	Op	Msg_type	Msg_text
+data.t_hidden_pk	check	status	OK
+data.t_hidden_pk_sk	check	status	OK
+data.t_hidden_pk_uk	check	status	OK
+data.t_pk	check	status	OK
+data.t_pk_sk	check	status	OK
+data.t_pk_uk	check	status	OK
+data.t_pk_auto	check	status	OK
+SELECT * FROM t_hidden_pk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_hidden_pk_sk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_hidden_pk_uk;
+id	name	code
+1	abc	2
+2	bcd	4
+3	def	6
+SELECT * FROM t_pk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_pk_sk;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT * FROM t_pk_uk;
+id	name	code
+1	abc	2
+2	bcd	4
+3	def	6
+SELECT * FROM t_pk_auto;
+id	name
+1	abc
+2	bcd
+3	def
+SELECT code FROM t_hidden_pk_uk;
+code
+2
+4
+6
+SELECT code FROM t_pk_uk;
+code
+2
+4
+6
+CREATE SCHEMA test2;
+USE test2;
+CREATE TABLE t1 LIKE data.t_pk_uk;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `name` varchar(40) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1 SELECT * FROM data.t_hidden_pk_uk;
+SELECT * FROM t1;
+id	name	code
+1	abc	2
+2	bcd	4
+3	def	6
+DROP DATABASE test2;
+DROP DATABASE data;
+# restart:

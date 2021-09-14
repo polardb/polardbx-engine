@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -103,6 +107,10 @@
 #endif
 
 #include "../components/mysql_server/log_builtins_imp.h"
+
+// TEMPORARILY to trace what happens in xengine during a slow query
+#include "storage/xengine/core/monitoring/query_perf_context.h"
+#include "storage/xengine/util/logger.h"     // mysql_reinit_xengine_log
 
 using std::max;
 using std::min;
@@ -1630,6 +1638,8 @@ void log_slow_do(THD *thd, struct System_status_var *query_start_status) {
   else
     query_logger.slow_log_write(thd, thd->query().str, thd->query().length,
                                 query_start_status);
+
+  QUERY_TRACE_FINISH(thd->query().str, thd->query().length);
 }
 
 /**
@@ -1971,6 +1981,8 @@ bool reopen_error_log() {
 
     if (result)
       my_error(ER_CANT_OPEN_ERROR_LOG, MYF(0), error_log_file, ".", "");
+    else if (mysql_reinit_xengine_log())
+      sql_print_error("Failed to re-initialize logger in XEngine: %s", error_log_file);
   }
 
   return result;

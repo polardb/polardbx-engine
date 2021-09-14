@@ -1,0 +1,299 @@
+--source include/have_debug.inc
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+# 
+# Basic ALTER TABLE statements.
+#
+# USAGE of table options in ALTER statements
+#   is covered in tbl_standard_opts and tbl_opt*.tests.
+#
+# Index operations are covered in index* tests.
+#
+# ALTER OFFLINE is not covered as it is not supported, as of 5.5.23
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+# Test limitation of index
+CREATE TABLE t1 (id INT PRIMARY KEY,
+                 f0 INT, f1 INT, f2 INT, f3 INT, f4 INT, f5 INT,
+                 f6 CHAR(10), f7 CHAR(10), f8 CHAR(10), f9 CHAR(10), fa CHAR(10),
+                 fb VARCHAR(30), fc VARCHAR(30), fd VARCHAR(30),
+                 fe TEXT(1000), ff TEXT(1000)) ENGINE=XENGINE;
+# === 1
+ALTER TABLE t1 ADD KEY k0(f0), ADD KEY k1(f1), ADD KEY k2(f2), ADD KEY k3(f3);
+ALTER TABLE t1 ADD KEY k4(f4), ADD KEY k5(f5), ADD KEY k6(f6), ADD KEY k7(f7) ;
+ALTER TABLE t1 ADD KEY k8(f8), ADD KEY k9(f9), ADD KEY ka(fa), ADD KEY kb(fb);
+ALTER TABLE t1 ADD KEY kc(fc), ADD KEY kd(fd), ADD KEY ke(fe(100)), ADD KEY kf(ff(100));
+# === 17
+ALTER TABLE t1 ADD KEY k01(f0, f1), ADD KEY k12(f1, f2), ADD KEY k23(f2, f3), ADD KEY k34(f3, f4);
+ALTER TABLE t1 ADD KEY k45(f4, f5), ADD KEY k56(f5, f6), ADD KEY k67(f6, f7), ADD KEY k78(f7, f8);
+ALTER TABLE t1 ADD KEY k89(f8, f9), ADD KEY k9a(f9, fa), ADD KEY kab(fa, fb), ADD KEY kbc(fb, fc);
+ALTER TABLE t1 ADD KEY kcd(fc, fd), ADD KEY kde(fd, fe(100));
+ALTER TABLE t1 ADD KEY kef(fe(100), ff(100)), ADD KEY kf0(ff(100), f0);
+# === 33
+ALTER TABLE t1 ADD KEY k012(f0, f1, f2), ADD KEY k123(f1, f2, f3);
+ALTER TABLE t1 ADD KEY k234(f2, f3, f4), ADD KEY k345(f3, f4, f5);
+ALTER TABLE t1 ADD KEY k456(f4, f5, f6), ADD KEY k567(f5, f6, f7);
+ALTER TABLE t1 ADD KEY k678(f6, f7, f8), ADD KEY k789(f7, f8, f9);
+ALTER TABLE t1 ADD KEY k89a(f8, f9, fa), ADD KEY k9ab(f9, fa, fb);
+ALTER TABLE t1 ADD KEY kabc(fa, fb, fc), ADD KEY kbcd(fb, fc, fd);
+ALTER TABLE t1 ADD KEY kcde(fc, fd, fe(100)), ADD KEY kdef(fd, fe(100), ff(100));
+ALTER TABLE t1 ADD KEY kef0(fe(100), ff(100), f0), ADD KEY kf01(ff(100), f0, f1);
+# === 49
+ALTER TABLE t1 ADD KEY k0123(f0, f1, f2, f3), ADD KEY k1234(f1, f2, f3, f4);
+ALTER TABLE t1 ADD KEY k2345(f2, f3, f4, f5), ADD KEY k3456(f3, f4, f5, f6);
+ALTER TABLE t1 ADD KEY k4567(f4, f5, f6, f7), ADD KEY k5678(f5, f6, f7, f8);
+ALTER TABLE t1 ADD KEY k6789(f6, f7, f8, f9), ADD KEY k789a(f7, f8, f9, fa);
+ALTER TABLE t1 ADD KEY k89ab(f8, f9, fa, fb), ADD KEY k9abc(f9, fa, fb, fc);
+ALTER TABLE t1 ADD KEY kabcd(fa, fb, fc, fd), ADD KEY kbcde(fb, fc, fd, fe(100));
+ALTER TABLE t1 ADD KEY kcdef(fc, fd, fe(100), ff(100)), ADD KEY kdef0(fd, fe(100), ff(100), f0);
+ALTER TABLE t1 ADD KEY kef01(fe(100), ff(100), f0, f1);
+# === 64 === Too many keys
+--error 1069
+ALTER TABLE t1 ADD KEY kf012(ff(100), f0, f1, f2);
+
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 (id INT PRIMARY KEY,
+                 f0 INT, f1 INT, f2 INT, f3 INT, f4 INT, f5 INT,
+                 f6 CHAR(10), f7 CHAR(10), f8 CHAR(10), f9 CHAR(10), fa CHAR(10),
+                 fb VARCHAR(30), fc VARCHAR(30), fd VARCHAR(30),
+                 fe TEXT(1000), ff TEXT(1000)) ENGINE=XENGINE;
+
+ALTER TABLE t1 ADD KEY sk1 (f0, f6, fb(10), fe(20));
+ALTER TABLE t1 ADD UNIQUE KEY uk1(f1, f7, fc(10), ff(20));
+--error 1070
+ALTER TABLE t1 ADD COLUMN f16 TEXT(1000),
+               ADD KEY sk2 (f0, f1, f2, f3, f4, f5,
+                            f6, f7, f8, f9, fa,
+                            fb(10), fc(10), fd(10),
+                            fe(20), ff(20), f16(20));
+--error 1070
+ALTER TABLE t1 ADD COLUMN f16 TEXT(1000),
+               ADD UNIQUE KEY uk2 (f0, f1, f2, f3, f4, f5,
+                                   f6, f7, f8, f9, fa,
+                                   fb(10), fc(10), fd(10),
+                                   fe(20), ff(20), f16(20));
+--error 1070
+ALTER TABLE t1 DROP PRIMARY KEY,
+               ADD PRIMARY KEY(id, f0, f1, f2, f3, f4, f5,
+                               f6, f7, f8, f9, fa,
+                               fb(10), fc(10), fd(10),
+                               fe(20), ff(20));
+# Can only create composite key with up to 16 key parts
+ALTER TABLE t1 ADD KEY sk2 (f0, f1, f2, f3, f4, f5,
+                            f6, f7, f8, f9, fa,
+                            fb(10), fc(10), fd(10),
+                            fe(20), ff(20));
+# Can only create composite key with up to 16 key parts
+ALTER TABLE t1 ADD UNIQUE KEY uk2 (f0, f1, f2, f3, f4, f5,
+                                   f6, f7, f8, f9, fa,
+                                   fb(10), fc(10), fd(10),
+                                   fe(20), ff(20));
+# Can only create composite key with up to 16 key parts
+ALTER TABLE t1 DROP PRIMARY KEY,
+               ADD PRIMARY KEY(id, f0, f1, f2, f3, f4, f5,
+                               f6, f7, f8, f9, fa,
+                               fb(10), fc(10), fd(10), fe(20));
+
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 (pk INT PRIMARY KEY, a INT, c CHAR(8)) ENGINE=xengine;
+INSERT INTO t1 VALUES (1,1,'a'),(2,5,'z');
+
+# check unsupported alteration
+# partition is not supported
+--error ER_CHECK_NOT_IMPLEMENTED
+ALTER TABLE t1 PARTITION BY HASH(id) PARTITIONS 8;
+
+# VIRTUAL_COLUMN is not supported
+--error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN
+ALTER TABLE t1 ADD COLUMN c2 INT GENERATED ALWAYS AS (c1 + 1);
+
+# ADD_STORED_GENERATED_COLUMN is not supported
+--error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN
+ALTER TABLE t1 ADD COLUMN c3 INT GENERATED ALWAYS AS (c1 + 2) STORED;
+
+# SPATIAL_INDEX is not supported
+--error ER_TABLE_CANT_HANDLE_SPKEYS
+ALTER TABLE t1 ADD SPATIAL INDEX spi(c1);
+
+# FOREIGN KEY is not supported
+CREATE TABLE t2(id INT AUTO_INCREMENT PRIMARY KEY, name CHAR(10)) ENGINE=XENGINE;
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 ADD COLUMN fk1 INT NOT NULL, ADD FOREIGN KEY(fk1) REFERENCES t2(id);
+DROP TABLE t2;
+
+ALTER TABLE t1 ADD COLUMN c3 INT DEFAULT 1;
+# show warning
+CREATE INDEX btr_key USING BTREE on t1(c3);
+DROP INDEX btr_key ON t1;
+
+# show warning
+CREATE INDEX hsh_key USING HASH on t1(c3);
+DROP INDEX hsh_key ON t1;
+
+ALTER TABLE t1 DROP COLUMN c3;
+
+SHOW CREATE TABLE t1;
+
+# Column operations
+
+ALTER TABLE t1 ADD COLUMN b INT;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ALTER COLUMN a SET DEFAULT '0';
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ALTER a DROP DEFAULT;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 CHANGE COLUMN b b1 CHAR(8) FIRST;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 CHANGE b1 b INT AFTER c;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 CHANGE b b CHAR(8);
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 MODIFY COLUMN b INT;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 MODIFY COLUMN b CHAR(8) FIRST;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 MODIFY COLUMN b INT AFTER a;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 DROP COLUMN b;
+SHOW CREATE TABLE t1;
+
+
+# Rename table
+
+ALTER TABLE t1 RENAME TO t2;
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
+
+
+# ORDER BY
+CREATE TABLE t1 (pk INT PRIMARY KEY, a INT, b INT) ENGINE=xengine;
+INSERT INTO t1 VALUES (1,1,5),(2,2,2),(3,4,3);
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ORDER BY b ASC, a DESC, pk DESC;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+
+# Character set, collate
+
+CREATE TABLE t1 (pk INT PRIMARY KEY, a INT, b CHAR(8), c CHAR(8)) ENGINE=xengine CHARACTER SET latin1 COLLATE latin1_general_cs;
+INSERT INTO t1 VALUES (1,5,'z','t');
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 CONVERT TO CHARACTER SET utf8;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 DEFAULT CHARACTER SET = latin1 COLLATE latin1_general_ci;
+SHOW CREATE TABLE t1;
+
+
+# A 'null' ALTER operation
+
+ALTER TABLE t1 FORCE;
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+# fix bug #22611997
+CREATE TABLE `t1` ( 
+`col1` int(11) NOT NULL, 
+`col2` int(11) NOT NULL, 
+`col3` int(11) DEFAULT NULL, 
+`col4` int(11) DEFAULT NULL, 
+`col5` text, 
+`col6` blob, 
+PRIMARY KEY (col5(10)));
+
+insert into t1 values(1,1,1,1,'a','a');
+insert into t1 values(1,1,1,1,'b','a'); 
+alter table t1 add index idx1(col3);
+
+--error 1062 
+alter table t1 drop index idx1, add unique index idx2(col2);
+
+insert into t1 values(1,1,1,1,'c','b');
+select * from t1;
+
+drop table t1;
+
+#fix bug #22484414
+connection default;
+CREATE TABLE T1(COL1 INT, COL2 INT, COL3 INT);
+INSERT INTO T1 VALUES(1,1,1);
+INSERT INTO T1 VALUES(1,2,1);
+INSERT INTO T1 VALUES(1,3,1);
+
+connect (con_alter,localhost,root,,);
+connection con_alter;
+set session debug= "+d,after_inplace_populate_sk";
+--send ALTER TABLE T1 ADD INDEX IDX_C1(COL1);
+
+connection default;
+select sleep(2);
+delete from T1 where col2=2;
+
+connection con_alter;
+--reap
+
+show create table T1;
+select col1 from T1 force index(idx_c1);
+select * from T1;
+set session debug= "-d,after_inplace_populate_sk";
+drop table T1;
+
+#fix bug #22878406
+connection default;
+CREATE TABLE `t1` (
+  `col4` text NOT NULL,
+  `col1` int(11) NOT NULL,
+  `col3` int(11) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `extra` int(11) DEFAULT NULL,
+  PRIMARY KEY (`col4`(10),`col1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+truncate table t1;
+insert into t1 values('3333333333333333333333333',4,4,4,null);
+insert into t1 values('4444444444444444444444444',4,4,3,null);
+select * from t1;
+
+connection con_alter;
+set session debug= "+d,sleep_after_index_base_creation";
+--send ALTER TABLE t1 ADD UNIQUE INDEX uidx(col2);
+
+connection default;
+select sleep(2);
+UPDATE t1 SET col2 = 4 LIMIT 2;
+
+connection con_alter;
+--error 1062
+--reap
+
+show create table t1;
+select * from t1;
+set session debug= "-d,after_inplace_populate_sk";
+drop table t1;
+
+--source suite/xengine/include/check_xengine_log_error.inc

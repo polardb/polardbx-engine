@@ -1,0 +1,329 @@
+# disabled test cases for XEngine storage engine
+#
+xengine_main.all_persisted_variables                         : BUG#000000
+
+# XA
+xengine_main.xa_gtid                                         : BUG#000000 XA
+xengine_main.xa_debug                                        : BUG#000000 XA
+xengine_binlog.binlog_xa_commit_failure                      : BUG#000000 XA
+xengine_binlog.binlog_xa_handling                            : BUG#000000 XA
+xengine_binlog.binlog_xa_prepare_failure                     : BUG#000000 XA
+xengine_binlog.binlog_xa_rollback_failure                    : BUG#000000 XA
+xengine_binlog.binlog_xa_trx_split_across_binlog             : BUG#000000 XA
+xengine_rpl_basic.rpl_xa_survive_crash_debug                 : BUG#000000 XA
+xengine_rpl_basic.rpl_xa_unsafe_for_sbr                      : BUG#000000 XA
+xengine_rpl_basic.rpl_xa_with_filters_binlogless_slave       : BUG#000000 XA
+xengine_rpl_basic.rpl_temporary_errors                       : BUG#000000 XA
+xengine_rpl_basic.rpl_trx_boundary_parser_warning            : BUG#000000 XA
+xengine_rpl_basic.rpl_xa_one_phase_error                     : BUG#000000 XA
+xengine_rpl_basic.rpl_xa_xplugin                             : BUG#000000 XA
+xengine_binlog_gtid.binlog_xa_modify_gtid_executed_explicitly         : BUG#000000 XA
+xengine_main.xa_prepared_binlog_off                          : BUG#000000 XA
+xengine_binlog_gtid.binlog_xa_select_gtid_executed_explicitly_crash   : BUG#000000 XA
+xengine_binlog_gtid.binlog_xa_empty_rollback                 : BUG#000000 XA
+xengine_rpl_gtid.rpl_xa_with_filters_error_msg               : BUG#000000 XA
+xengine_rpl_basic.rpl_filters_check_counter                  : BUG#000000 XA
+xengine_rpl_gtid.rpl_gtid_delete_memory_table_after_start_server : BUG#000000 XA
+xengine_rpl_gtid.rpl_gtids_table_disable_binlog_on_slave     : BUG#000000 XA
+xengine_main.xa_mdl_backup                                   : BUG#000000 XA
+xengine_rpl_gtid.rpl_xa_prepare                              : BUG#21891269 XA
+
+# timeout cases
+xengine.xengine_deadlock_stress_rc : BUG#000 disabled due to timeout
+xengine.xengine_deadlock_stress_rr : BUG#000 disabled due to timeout
+xengine_main.ctype_utf8mb4 : BUG#000 unstable (internal check failed)
+xengine_main.dd_upgrade_cs : BUG#21645087 shutdown error
+xengine_main.plugin_auth : BUG#21645087 shutdown error
+xengine_main.mysql_client_test : BUG#21645087 shutdown error
+
+xengine_main.import : BUG#21951796 Test not stable
+xengine_main.import_debug : BUG#21951796 Test not stable
+xengine_main.wl6443_deprecation : BUG#000 not stable, running long
+
+# checkpoint
+xengine.checkpoint : WL#000 XEngine does not support checkpoint yet
+
+# misc bugs
+xengine_perfschema.transaction_nested_events            : WL#000 performance_schema.events_transactions_history_long, update event id
+xengine_main.errors                                     : BUG#22062974 function aotmicity 
+#xengine_rpl_basic.rpl_master_pos_wait                   : BUG#21887336 Xdb_transaction destructor
+#xengine_rpl_basic.rpl_io_thd_wait_for_disk_space        : BUG#21887336 Xdb_transaction destructor
+xengine.shrink_extent_spaces                            : BUG#000 does not support yet
+xengine_rpl.rpl_gtid_rocksdb_sys_header                 : BUG#000 gtid recover change
+xengine_rpl_basic.rpl_row_jsondiff_binarydiff           : BUG#000000 JSON, slave not reach apply_json_diffs
+xengine_rpl_basic.rpl_row_jsondiff_error                : BUG#000000 JSON, slave not reach apply_json_diffs
+xengine_rpl_basic.rpl_perfschema_log_status_blockage    : BUG#000000 JSON
+xengine_rpl_basic.rpl_perfschema_log_status             : BUG#000000 JSON
+xengine_rpl_basic.rpl_multi_source_corrupt_repository   : BUG#28765425 origin bugs
+xengine_rpl_basic.rpl_high_prio_trx_slave               : BUG#000000 innodb high prio trx
+xengine_rpl_basic.rpl_late_abort                        : BUG#000000 innodb high prio trx
+#xengine_rpl_basic.rpl_insert_on_update                  : BUG#000000 stmt autoinc master-slave inconsistency
+xengine_sysschema.v_schema_redundant_indexes            : BUG#21398935 xengine index meta not included in sys table
+xengine_sysschema.pr_ps_setup_show_enabled              : BUG#21399948 xengine background thread are not included in systable
+xengine.xengine                                     : WL#22308914 no stable result of sql plan (range/index)
+xengine.type_char_indexes                           : WL#22308914 no stable result of sql plan (range/index)
+xengine.type_float_indexes                          : WL#22308914 no stable result of sql plan (range/index)
+xengine.type_int_indexes                            : WL#22308914 no stable result of sql plan (range/index)
+xengine.type_date_time_indexes                       : WL#22308914 no stable result of sql plan (range/index)
+xengine_main.type_float                             : WL#22447868 unstable results on rows of sql plan
+
+# DEBUG SYNC point 'lock_wait_will_wait' is for innodb
+xengine_perfschema.data_lock_waits_join                 : BUG#21539436 performance_schema.data_lock_waits is not updated for xengine
+xengine_perfschema.sorting_data_locks                   : BUG#21539436 performance_schema.data_locks is not updated for xengine
+xengine_perfschema.data_locks_join                      : BUG#21539436 performance_schema.data_locks is not updated for xengine
+xengine_perfschema.idx_events_stages_current            : WL#000 no update on performance_schema.events_stages_current
+#xengine_perfschema.setup_object_table_lock_io          : WL#000 performance_schema.table_lock_waits_summary_by_table
+
+# 21762885 lock wait timeout
+xengine_main.optimizer_debug_sync                   : BUG#21762885 Lock wait timeout
+xengine_main.concurrent_xengine_unsafelog           : BUG#21762885 Lock wait timeout
+xengine_main.xa                                     : BUG#21762885 Lock wait timeout
+
+xengine_rpl_basic.rpl_xa_survive_disconnect                         : BUG#21887945 xengine do not rollback a prepared readonly xa transaction
+xengine_rpl_basic.rpl_xa_survive_disconnect_lsu_off                 : BUG#21887945 xengine do not rollback a prepared readonly xa transaction
+xengine_rpl_basic.rpl_xa_survive_disconnect_table                   : BUG#21887945 xengine do not rollback a prepared readonly xa transaction
+xengine_rpl_nogtid.rpl_perfschema_applier_xa_status_check           : BUG#21887570 wait timeout
+
+# trigger related
+xengine_ext.xengine_trig_1011ext                        : BUG#21731441 Failed trigger does not rollback
+
+# collation
+xengine_main.ctype_collate          : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_cp1250_ch        : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_cp1251           : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_gb2312           : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_gbk_binlog       : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_latin2_ch        : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_sjis             : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_tis620           : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_uca              : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_ucs              : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_ujis_ucs2        : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_unicode900_as_ci : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_unicode900_as_cs : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_utf16            : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_utf16le          : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_utf16_uca        : WL#21701055 XEngine does not support certain collation
+xengine_main.ctype_utf8mb4_uca      : WL#21701055 XEngine does not support certain collation
+xengine_rpl_basic.rpl_row_utf32     : WL#21701055 XEngine does not support certain collation
+xengine_main.explain_other              : BUG#21731636 Unsupported collation on string indexed column
+xengine_main.ctype_ujis                 : BUG#21731636 Unsupported collation on string indexed column
+
+# partition
+xengine_main.tablespace                         : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_binlog                   : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_bug18198                 : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_charset                  : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_column                   : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_column_prune             : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_datatype                 : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_debug                    : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_debug_sync               : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_debug_sync_stmt          : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_error                    : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_exchange                 : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_grant                    : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_hash                     : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_innodb                   : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_list                     : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_locking                  : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_mgm                      : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_mgm_err                  : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_myisam                   : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_not_windows              : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_order                    : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_pruning                  : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_range                    : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_rename_longfilename      : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_sync                     : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_truncate                 : WL#21696842 XEngine does not support partitioned table
+xengine_main.partition_utf8                     : WL#21696842 XEngine does not support partitioned table
+xengine_main.explain_dml                        : WL#21696842 XEngine does not support partitioned table
+xengine_main.alter_table_partition              : WL#21696842 XEngine does not support partitioned table
+xengine_main.information_schema_part            : WL#21696842 XEngine does not support partitioned table
+xengine_main.locking_part                       : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_partition_info_hash_list  : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_row_hash_scan_sanity      : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_partition_id_commands     : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_partition_info            : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_partition_id_check        : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_row_basic_8partition      : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_innodb_bug28430           : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.default_row_format_01         : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_basic.rpl_partition_innodb          : WL#21696842 XEngine does not support partitioned table
+xengine_rpl_nogtid.rpl_partition_create_select  : WL#21696842 XEngine does not support partitioned table
+
+# default expression
+xengine_main.default_as_expr                            : WL#21696499 XEngine does not support default expr
+xengine_main.default_as_expr_debug                      : WL#21696499 XEngine does not support default expr
+xengine_rpl_basic.rpl_mix_row_default_as_expr_alter     : WL#21696499 XEngine does not support default expr
+xengine_rpl_basic.rpl_stmt_default_as_expr_alter        : WL#21696499 XEngine does not support default expr
+xengine_rpl_nogtid.rpl_nogtid_mix_row_default_as_expr   : WL#21696499 XEngine does not support default expr
+xengine_rpl_nogtid.rpl_nogtid_stmt_default_as_expr      : WL#21696499 XEngine does not support default expr
+
+# virtual generated column
+xengine_main.mysqlpump_basic                            : WL#21381222 XEngine does not support virtual generated column, partition
+xengine_main.functional_index_debug                     : WL#21381222 XEngine does not support virtual generated column
+xengine_main.window_functions                           : WL#21381222 XEngine does not support virtual generated column
+xengine_main.functional_index                           : WL#21381222 XEngine does not support virtual generated column
+xengine_rpl_basic.rpl_row_jsondiff_generated_col        : WL#21381222 XEngine does not support virtual generated column
+xengine_rpl_basic.rpl_virtual_gcol                      : WL#21381222 XEngine does not support virtual generated column
+xengine_rpl_basic.rpl_functional_index                  : WL#21381222 XEngine does not support virtual generated column
+xengine_rpl_basic.rpl_json                              : WL#21381222 XEngine does not support virtual generated column
+xengine_rpl_basic.rpl_xa_generated_columns              : WL#21381222 XEngine does not support virtual generated column
+xengine_rpl_basic.rpl_func_uuid                         : WL#21381222 XEngine does not support virtual generated column
+xengine_rpl_basic.rpl_instant_add_column                : WL#21381222 XEngine does not support virtual generated column
+xengine_binlog.binlog_functional_index                  : WL#21381222 XEngine does not support virtual generated column
+
+# fulltext index
+xengine_main.ctype_ldml                 : WL#21676997 XEngine does not support FULLTEXT index
+xengine_rpl_basic.rpl_rename_index      : WL#21676997 XEngine does not support FULLTEXT index
+xengine_sysvars.ft_boolean_syntax_func  : WL#21676997 XEngine does not support FULLTEXT index
+
+# descending index
+xengine_main.derived_correlated         : WL#21718463 XEngine does not support descending indexes
+xengine_main.desc_index_innodb          : WL#21718463 XEngine does not support descending indexes
+xengine_main.skip_scan                  : WL#21718463 XEngine does not support descending indexes
+xengine_main.window_functions_big       : WL#21718463 XEngine does not support descending indexes
+
+# savepoint
+xengine_main.flush_read_lock                                : WL#21380436 XEgine does not support savepoint
+xengine_rpl_basic.rpl_transaction_size                      : WL#21380436 XEgine does not support savepoint
+xengine_rpl_basic.rpl_stm_mix_rollback_to_savepoint         : WL#21380436 XEgine does not support savepoint
+xengine_rpl_basic.rpl_row_rollback_to_savepoint             : WL#21380436 XEgine does not support savepoint
+xengine_rpl_basic.rpl_innodb_mixed_dml                      : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_mixed_mixing_engines                 : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_row_mixing_engines                   : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_non_direct_mixed_mixing_engines      : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_non_direct_stm_mixing_engines        : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_mixed_binlog_max_cache_size          : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_non_direct_row_mixing_engines        : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_begin_commit_rollback                : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_stm_mixing_engines                   : WL#21380436 XEgine does not support savepoint
+xengine_rpl_nogtid.rpl_stm_binlog_max_cache_size            : WL#21380436 XEgine does not support savepoint
+xengine_binlog.binlog_transaction_write_set_savepoint_basic : WL#21380436 XEgine does not support savepoint
+xengine_binlog.binlog_transaction_write_set_savepoint_level : WL#21380436 XEgine does not support savepoint
+xengine_binlog.binlog_cache_write_failure                   : WL#21380436 XEgine does not support savepoint
+xengine_binlog_gtid.binlog_gtid_cache                       : WL#21380436 XEgine does not support savepoint
+xengine_binlog_nogtid.binlog_row_mix_xengine_myisam         : WL#21380436 XEgine does not support savepoint
+xengine_binlog_nogtid.binlog_mysqlbinlog_row_trans          : WL#21380436 XEgine does not support savepoint
+xengine_perfschema.transaction                              : WL#21380436 XEgine does not support savepoint
+xengine_rpl_gtid.rpl_gtid_execution                         : WL#21380436 XEgine does not support savepoint
+xengine_binlog.binlog_transaction_write_set_savepoint_insert_overwrite_identifier : WL#21380436 XEgine does not support savepoint
+
+# handler API
+xengine_main.handler_debug                              : WL#21644267 XEngine does not support Handler operation
+xengine_main.handler_non_debug                          : WL#21644267 XEngine does not support Handler operation
+
+# geometry data type
+xengine_main.mysqldump-binary                           : WL#21381550 XEngine does not support GEOMETRY
+xengine_main.mysqldump                                  : WL#21381550 XEngine does not support GEOMETRY
+xengine_rpl_basic.rpl_geometry                          : WL#21381550 XEngine does not support GEOMETRY
+xengine_rpl_basic.rpl_gis_ddl                           : WL#21381550 XEngine does not support GEOMETRY
+xengine_rpl_basic.rpl_gis_geometry                      : WL#21381550 XEngine does not support GEOMETRY
+xengine_rpl_nogtid.rpl_typeconv                         : WL#21381550 XEngine does not support GEOMETRY
+xengine_binlog.binlog_table_map_optional_metadata       : WL#21381550 XEngine does not support GEOMETRY
+xengine_ext.is_statistics                               : WL#21381550 XEngine does not support GEOMETRY
+xengine_perfschema.gis_metadata_locks                   : WL#21381550 xengine does not support GEOMETRY
+
+# foreign key
+xengine_rpl_basic.rpl_xa_gap_lock                       : WL#21381485 XEngine does not support foreign key
+#xengine_main.func_rollback                             : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_foreign_key_innodb                : WL#21381485 XEngine does not support foreign key
+xengine_binlog.binlog_foreign_key_parent_table_deleted  : WL#21381485 XEngine does not support foreign key
+xengine_sysvars.foreign_key_checks_func                 : WL#21381485 XEngine does not support foreign key
+xengine_ext.xengine_trig_frkey                          : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_binlog_transaction_dependency_tracking_with_fk        : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_binlog_transaction_dependency_tracking                : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_transaction_write_set_extraction                      : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_mts_logical_clock_applier_error_concurrent_stop_slave : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_insert_id_pk                                          : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_drop_db_fail                                          : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_row_idempotency                                       : WL#21381485 XEngine does not support foreign key
+xengine_rpl_basic.rpl_row_sp002_innodb                                      : WL#21381485 XEngine does not support foreign key
+
+# secondary engine
+xengine_rpl_basic.rpl_secondary_engine_load : WL#000 SECONDARY_ENGINE
+
+# temporary table
+xengine_binlog_nogtid.binlog_nogtid_create_drop_temporary_table                 : WL#21485699 XEngine does not support TEMPORARY table
+xengine_binlog_nogtid.binlog_row_mixed_enforce_gtid_consistency_tmp_violation   : WL#21485699 XEngine does not support TEMPORARY table
+xengine_binlog_nogtid.binlog_enforce_gtid_consistency_tmp_consistent            : WL#21485699 XEngine does not support TEMPORARY table
+xengine_binlog_nogtid.binlog_gtid_next_single_stmt_trx_rollback                 : WL#21485699 XEngine does not support TEMPORARY table
+xengine_perfschema.table_name                                                   : WL#21485699 XEngine does not support TEMPORARY table
+xengine_rpl_nogtid.rpl_no_gtid_split_statements                                 : WL#21485699 XEngine does not support TEMPORARY table
+xengine_rpl_nogtid.rpl_temp_table_mix_row                                       : WL#21485699 XEngine does not support TEMPORARY table
+
+# tablespace
+xengine_rpl_basic.rpl_explicit_undo_tablespaces             : WL#000 XEngine does not support tablespace
+xengine_rpl_basic.rpl_tablespace_without_datafile_option    : WL#000 XEngine does not support tablespace
+xengine_rpl_basic.rpl_half_atomic_ddl_no_binlog             : WL#000 XEngine does not support tablespace
+xengine_rpl_basic.rpl_half_atomic_ddl                       : WL#000 XEngine does not support tablespace
+
+# encryption table
+xengine_rpl_basic.rpl_table_encryption                  : WL#21506546 XEngine does not support ENCRYPTION
+xengine_rpl_basic.rpl_key_rotation                      : WL#21506546 XEngine does not support ENCRYPTION
+xengine_perfschema.keyring_keys                         : WL#21506546 XEngine does not support ENCRYPTION
+#xengine_auth_sec.key_rotation_qa                       : WL#21506546 XEngine does not support ENCRYPTION
+#xengine_auth_sec.keyring_file_data_qa                  : WL#21506546 XEngine does not support ENCRYPTION
+
+# IPv6
+xengine_rpl_basic.rpl_ip_mix                            : WL#000 Need IPv6 support
+xengine_rpl_basic.rpl_ipv6                              : WL#000 Need IPv6 support
+xengine_rpl_basic.rpl_ip_mix2                           : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_bad_deny     : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_good_deny    : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_max_con               : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_nameinfo_noname_allow : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_noname_allow : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_nameinfo_again_allow  : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_again_deny   : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_bad_allow    : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_ssl                   : WL#000 Need IPv6&SSL support
+xengine_perfschema.hostcache_ipv6_auth_plugin           : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_passwd                : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_blocked               : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_nameinfo_again_deny   : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_again_allow  : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_noname_deny  : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_addrinfo_good_allow   : WL#000 Need IPv6 support
+xengine_perfschema.hostcache_ipv6_nameinfo_noname_deny  : WL#000 Need IPv6 support
+xengine_perfschema.idx_compare_socket_instances         : WL#000 Need IPv6 support
+xengine_main.admin_interface_ipv4_mapped                : WL#000 Need IPv6 support
+
+# misc feature
+xengine_rpl_basic.rpl_unsafe_skip_locked_nowait             : WL#21487578 XEngine does not support nowait
+xengine_main.drop                                           : WL#21728526 XEngine does not support flush tables for export
+xengine_main.flush_table                                    : WL#21728526 XEngine does not support FLUSH TABLES FOR EXPORT
+xengine_main.consistent_snapshot                            : WL#000 XEngine does not support START TRANSACTION WITH CONSISTENT SNAPSHOT
+xengine.cons_snapshot_serializable                          : WL#000 XEngine does not support SERIALIZABLE
+xengine_rpl.optimize_myrocks_replace_into                   : BUG#000 RocksDB feature
+xengine_rpl.rocksdb_slave_check_before_image_consistency    : BUG#000 RocksDB feature
+xengine_rpl.rpl_no_unique_check_on_lag                      : BUG#000 RocksDB feature
+xengine_rpl.rpl_no_unique_check_on_lag_mts                  : BUG#000 RocksDB feature
+xengine_rpl_nogtid.rpl_skip_locked                          : BUG#21690280 SKIP LOCKED not support
+xengine_rpl_nogtid.rpl_sp_xengine                           : BUG#21731441 function atomic
+xengine_main.lock_multi                                     : WL#000 lock table read local issue
+xengine.level_read_uncommitted                              : WL#000 XEngine does not support READ-UNCOMMITTED
+xengine.level_serializable                                  : WL#000 XEngine does not support SERIALIZABLE
+xengine_rpl.rpl_crash_safe_wal_corrupt                      : BUG#000 ROCKSDB slave_gtid_info
+xengine_rpl.rpl_gtid_crash_safe_wal_corrupt                 : BUG#000 ROCKSDB slave_gtid_info
+xengine_rpl.rpl_missing_columns_sk_update                   : BUG#000 ROCKSDB log_column_name
+xengine_rpl.singledelete_idempotent_recovery                : BUG#000 ROCKSDB slave_use_idempotent_for_recovery
+xengine_rpl.singledelete_idempotent_table                   : BUG#000 ROCKSDB rbr_idempotent_tables
+xengine_rpl.rpl_rocksdb_slave_gtid_info_optimized           : BUG#000 ROCKSDB slave_gtid_info
+
+# mix/stmt binlog format
+xengine_main.insert                             : WL#000 XEngine not support mixed or stmt format binlog
+xengine_main.mysqlbinlog                        : WL#000 XEngine not support mixed or stmt format binlog
+xengine_main.mysqlbinlog_debug                  : WL#000 XEngine not support mixed or stmt format binlog
+xengine_main.user_var-binlog                    : WL#000 XEngine not support mixed or stmt format binlog
+xengine_main.bug12368203                        : WL#000 XEngine not support mixed or stmt format binlog
+xengine_main.alter_table-big                    : WL#000 XEngine not support mixed or stmt format binlog
+xengine_perfschema.rpl_statements               : WL#000 XEngine not support mixed or stmt format binlog
+xengine_sysvars.transaction_isolation_func      : WL#000 XEngine not support mixed or stmt format binlog
+#xengine_rpl_gtid.rpl_trx_boundary_parser_row    : WL#000 not xengine related
+#xengine_rpl_gtid.rpl_trx_boundary_parser_stmt   : WL#000 not xengine related
+
+# consistently failed as stocking case
+xengine_audit_null.audit_plugin_bugs    : BUG#28080637 Test fails consistently

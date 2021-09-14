@@ -1,0 +1,57 @@
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES(0);
+INSERT INTO valid_values VALUES(60);
+INSERT INTO valid_values VALUES(100);
+CREATE TABLE invalid_values (value varchar(255));
+INSERT INTO invalid_values VALUES('\'abc\'');
+SET @start_global_value = @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+SELECT @start_global_value;
+@start_global_value
+70
+'# Setting to valid values in global scope#'
+"Trying to set variable @@global.XENGINE_COMPACTION_DELETE_PERCENT to 0"
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT   = 0;
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+0
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT = DEFAULT;
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+70
+"Trying to set variable @@global.XENGINE_COMPACTION_DELETE_PERCENT to 60"
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT   = 60;
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+60
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT = DEFAULT;
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+70
+"Trying to set variable @@global.XENGINE_COMPACTION_DELETE_PERCENT to 100"
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT   = 100;
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+100
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT = DEFAULT;
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+70
+"Trying to set variable @@session.XENGINE_COMPACTION_DELETE_PERCENT to 444. It should fail because it is not session."
+SET @@session.XENGINE_COMPACTION_DELETE_PERCENT   = 444;
+ERROR HY000: Variable 'xengine_compaction_delete_percent' is a GLOBAL variable and should be set with SET GLOBAL
+'# Testing with invalid values in global scope #'
+"Trying to set variable @@global.XENGINE_COMPACTION_DELETE_PERCENT to 'abc'"
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT   = 'abc';
+Got one of the listed errors
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+70
+SET @@global.XENGINE_COMPACTION_DELETE_PERCENT = @start_global_value;
+SELECT @@global.XENGINE_COMPACTION_DELETE_PERCENT;
+@@global.XENGINE_COMPACTION_DELETE_PERCENT
+70
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

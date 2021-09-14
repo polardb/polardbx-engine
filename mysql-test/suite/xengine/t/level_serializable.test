@@ -1,0 +1,6 @@
+--source suite/xengine/include/have_xengine.inc
+
+let $trx_isolation = SERIALIZABLE;
+--source transaction_isolation.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

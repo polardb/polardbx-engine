@@ -1,3 +1,5 @@
+# Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+#
 # Copyright (c) 2006, 2019, Oracle and/or its affiliates. All rights reserved.
 # 
 # This program is free software; you can redistribute it and/or modify
@@ -519,9 +521,11 @@ ENDIF()
 
 OPTION(ENABLED_PROFILING "Enable profiling" ON)
 OPTION(WITHOUT_SERVER OFF)
-IF(UNIX)
-  OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
+OPTION(WITH_QUERY_TRACE "WITH_QUERY_TRACE" ON)
+IF (WITH_QUERY_TRACE)
+  ADD_DEFINITIONS(-DWITH_QUERY_TRACE)
 ENDIF()
+
 IF(WIN32)
   OPTION(WITH_MSCRT_DEBUG "MS Visual Studio Debug CRT instrumentation" OFF)
 ENDIF()

@@ -1,0 +1,19 @@
+drop table if exists t1;
+create table t1 (pk int primary key) engine=xengine;
+set global xengine_force_flush_memtable_now = true;
+select table_rows from information_schema.tables
+where table_schema = database() and table_name = 't1';
+TABLE_ROWS
+10000
+drop table t1;
+drop table if exists t2;
+create table t2 (pk int primary key) engine=xengine;
+set global xengine_force_flush_memtable_now = true;
+select table_rows from information_schema.tables
+where table_schema = database() and table_name = 't2';
+TABLE_ROWS
+10000
+select table_name from information_schema.tables where table_schema = database() and table_name = 't2';
+TABLE_NAME
+t2
+drop table t2;

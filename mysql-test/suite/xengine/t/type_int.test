@@ -1,0 +1,9 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# INT column types
+#
+
+--source type_int.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

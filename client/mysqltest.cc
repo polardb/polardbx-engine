@@ -1,3 +1,5 @@
+// Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+//
 // Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
@@ -7211,8 +7213,8 @@ static bool is_delimiter(const char *p) {
   return (match == delimiter_length);
 }
 
-// 256K -- a test in sp-big is >128K
-#define MAX_QUERY (256 * 1024 * 2)
+// 2M -- for big query test stackoverrun
+#define MAX_QUERY (256 * 1024 * 8)
 static char read_command_buf[MAX_QUERY];
 
 /// Create a command from a set of lines.

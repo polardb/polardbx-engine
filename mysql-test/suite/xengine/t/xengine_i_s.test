@@ -1,0 +1,14 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# 2 information_schema tables: XENGINE_TABLES and XENGINE_COLUMNS
+#
+
+create table t1 (id int primary key, c1 int default 1) engine=xengine;
+
+alter table t1 add column c2 int default 2, add column c3 char(100) default "c3c3c3c3c3c3", add column c4 varchar(100) default "c4c4c4c4c4c4c4c4c4",
+               add column c5 double default 5.5, add column c6 blob, add column c7 text;
+
+select * from information_schema.XENGINE_TABLES;
+select * from information_schema.XENGINE_COLUMNS;
+drop table t1;--source suite/xengine/include/check_xengine_log_error.inc

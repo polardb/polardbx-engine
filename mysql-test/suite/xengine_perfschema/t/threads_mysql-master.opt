@@ -1,0 +1,2 @@
+--thread_cache_size=0
+--default_storage_engine=xengine

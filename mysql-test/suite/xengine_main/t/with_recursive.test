@@ -1,0 +1,9 @@
+--echo # In-memory tmp tables
+set big_tables=0;
+--source ./with_recursive_xengine.inc
+
+--echo # On-disk tmp tables
+set big_tables=1;
+--source ./with_recursive_xengine.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

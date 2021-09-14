@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -179,6 +183,8 @@
 #include "sql/recycle_bin/recycle_parse.h"
 #include "sql/outline/outline_digest.h"
 #include "sql/outline/outline_interface.h"
+// TEMPORARILY to trace what happens in xengine during a slow query
+#include "storage/xengine/core/monitoring/query_perf_context.h"
 
 #include "ppi/ppi_statement.h"
 
@@ -1575,6 +1581,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
   DBUG_TRACE;
   DBUG_PRINT("info", ("command: %d", command));
 
+  QUERY_TRACE_RESET();
+  QUERY_TRACE_BEGIN(xengine::monitor::TracePoint::SERVER_OPERATION);
+
   Sql_cmd_clone *clone_cmd = nullptr;
 
   /* For per-query performance counters with log_slow_statement */
@@ -1902,6 +1911,8 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         size_t length =
             static_cast<size_t>(packet_end - beginning_of_next_stmt);
 
+        QUERY_TRACE_END(); // end SERVER_OPERATION trace
+
         log_slow_statement(thd, query_start_status_ptr);
         if (query_start_status_ptr) {
           /* Reset for values at start of next statement */
@@ -1933,6 +1944,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         thd->profiling->start_new_query("continuing");
         thd->profiling->set_query_source(beginning_of_next_stmt, length);
 #endif
+
+        QUERY_TRACE_RESET();
+        QUERY_TRACE_BEGIN(xengine::monitor::TracePoint::SERVER_OPERATION);
 
         /* PSI begin */
         thd->m_digest = &thd->m_digest_state;
@@ -2248,8 +2262,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
   }
 
 done:
-  DBUG_ASSERT(thd->open_tables == NULL ||
-              (thd->locked_tables_mode == LTM_LOCK_TABLES));
+  QUERY_TRACE_END(); // end SERVER_OPERATION trace
+  assert(thd->open_tables == nullptr ||
+         (thd->locked_tables_mode == LTM_LOCK_TABLES));
 
   /* Finalize server status flags after executing a command. */
   thd->update_slow_query_status();

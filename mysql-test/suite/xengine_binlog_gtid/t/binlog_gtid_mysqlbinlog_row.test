@@ -1,0 +1,3 @@
+--source include/have_binlog_format_row.inc
+
+--source suite/xengine_binlog_gtid/include/binlog_mysqlbinlog_row.inc

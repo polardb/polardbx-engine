@@ -1,0 +1,12 @@
+#
+# index_merge tests for statements using intersect algorithm
+#
+
+# Skipping the test when binlog_format=STATEMENT due to unsafe statements:
+# unsafe usage of auto-increment column, LIMIT clause, REPLACE... SELECT.
+--source include/not_binlog_format_statement.inc
+
+--source include/no_valgrind_without_big.inc
+--source suite/xengine_main/include/index_merge_intersect_dml.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

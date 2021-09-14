@@ -1,0 +1,440 @@
+============================================================
+# Test with latin1 and latin1_bin on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with latin1 and latin1_bin on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with latin1 and latin1_bin on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with latin1 and latin1_bin on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_chinese_ci on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_chinese_ci on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_chinese_ci on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_chinese_ci on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_bin on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_bin on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_bin on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with gbk and gbk_bin on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_general_ci on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET utf8mb3 COLLATE utf8mb3_general_ci;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_general_ci on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET utf8mb3 COLLATE utf8mb3_general_ci;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_general_ci on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET utf8mb3 COLLATE utf8mb3_general_ci;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_general_ci on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET utf8mb3 COLLATE utf8mb3_general_ci;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_bin on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET utf8mb3 COLLATE utf8mb3_bin;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_bin on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET utf8mb3 COLLATE utf8mb3_bin;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_bin on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET utf8mb3 COLLATE utf8mb3_bin;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb3 and utf8mb3_bin on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET utf8mb3 COLLATE utf8mb3_bin;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_0900_ai_ci on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_0900_ai_ci on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_0900_ai_ci on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_0900_ai_ci on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_general_ci on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_general_ci on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_general_ci on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_general_ci on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_bin on CHAR(20) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 CHAR(20))CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_bin on VARCHAR(60) for PRIMARY KEY(c1)
+============================================================
+CREATE TABLE t1(id INT, c1 VARCHAR(60))CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1);
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_bin on TEXT for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 TEXT)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+============================================================
+# Test with utf8mb4 and utf8mb4_bin on BLOB for PRIMARY KEY(c1(10))
+============================================================
+CREATE TABLE t1(id INT, c1 BLOB)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111'), (2, NULL);
+ALTER TABLE t1 ADD PRIMARY KEY(c1(10));
+Warnings:
+Warning	1265	Data truncated for column 'c1' at row 2
+ALTER TABLE t1 ADD INDEX(id);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;

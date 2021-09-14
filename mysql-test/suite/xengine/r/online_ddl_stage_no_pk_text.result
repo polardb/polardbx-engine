@@ -1,0 +1,282 @@
+=====================================================
+# Test online DDL(add unique key/add column/add primary key) with hidden primary key against DML
+=====================================================
+# case 1 add unique secondary key without rebuild
+=====================================================
+CREATE TABLE t(id INT, cont TEXT);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) DEFAULT NULL,
+  `cont` text COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sb_dml WAIT_FOR sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL cb_dml WAIT_FOR cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL cd_dml WAIT_FOR cd_dml_end';
+ALTER TABLE t ADD UNIQUE INDEX sk(cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL sb_dml_end WAIT_FOR cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL cb_dml_end WAIT_FOR cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) DEFAULT NULL,
+  `cont` text COLLATE utf8mb4_general_ci,
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+10000
+DROP TABLE t;
+=====================================================
+# case 2 add unique secondary key with rebuild
+=====================================================
+CREATE TABLE t(id INT, cont TEXT);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) DEFAULT NULL,
+  `cont` text COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sb_dml WAIT_FOR sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL cb_dml WAIT_FOR cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL cd_dml WAIT_FOR cd_dml_end';
+ALTER TABLE t ADD COLUMN extra CHAR(10) DEFAULT "Hello" AFTER id, ADD UNIQUE INDEX sk(cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL sb_dml_end WAIT_FOR cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL cb_dml_end WAIT_FOR cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) DEFAULT NULL,
+  `extra` char(10) COLLATE utf8mb4_general_ci DEFAULT 'Hello',
+  `cont` text COLLATE utf8mb4_general_ci,
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+10000
+DROP TABLE t;
+=====================================================
+# case 3 add primary key
+=====================================================
+CREATE TABLE t(id INT NOT NULL, cont TEXT NOT NULL);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` text COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin         SIGNAL pk_sb_dml WAIT_FOR pk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin    SIGNAL pk_cb_dml WAIT_FOR pk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done     SIGNAL pk_cd_dml WAIT_FOR pk_cd_dml_end';
+ALTER TABLE t ADD PRIMARY KEY(id, cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR pk_sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL pk_sb_dml_end WAIT_FOR pk_cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL pk_cb_dml_end WAIT_FOR pk_cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL pk_cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` text COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`id`,`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t VALUES(10010, REPEAT('10010', 10000));
+ERROR 23000: Duplicate entry '10010-1001010010100101001010010100101001010010100101001010010100' for key 'PRIMARY'
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+11000
+DROP TABLE t;
+=====================================================
+# case 4 add primary key and unique secondary key
+=====================================================
+CREATE TABLE t(id INT NOT NULL, cont TEXT);
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` text COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin         SIGNAL pk_sb_dml WAIT_FOR pk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin    SIGNAL pk_cb_dml WAIT_FOR pk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done     SIGNAL pk_cd_dml WAIT_FOR pk_cd_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sk_sb_dml WAIT_FOR sk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL sk_cb_dml WAIT_FOR sk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL sk_cd_dml WAIT_FOR sk_cd_dml_end';
+ALTER TABLE t ADD PRIMARY KEY(id), ADD UNIQUE INDEX sk(cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR pk_sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL pk_sb_dml_end WAIT_FOR pk_cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL pk_cb_dml_end WAIT_FOR pk_cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL pk_cd_dml_end WAIT_FOR sk_sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+9000
+SET DEBUG_SYNC='now SIGNAL sk_sb_dml_end WAIT_FOR sk_cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+10000
+SET DEBUG_SYNC='now SIGNAL sk_cb_dml_end WAIT_FOR sk_cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+11000
+SET DEBUG_SYNC='now SIGNAL sk_cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+11000
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` text COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+14000
+DROP TABLE t;

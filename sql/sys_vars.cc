@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -148,7 +152,10 @@
 #include "storage/perfschema/pfs_server.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
 
-TYPELIB bool_typelib = {array_elements(bool_values) - 1, "", bool_values, 0};
+#include "storage/xengine/util/logger.h"
+
+TYPELIB bool_typelib = {array_elements(bool_values) - 1, "", bool_values,
+                        nullptr};
 
 static bool update_buffer_size(THD *, KEY_CACHE *key_cache,
                                ptrdiff_t offset MY_ATTRIBUTE((unused)),
@@ -2478,6 +2485,7 @@ static Sys_var_ulong Sys_log_throttle_queries_not_using_indexes(
     ON_UPDATE(update_log_throttle_queries_not_using_indexes));
 
 static bool update_log_error_verbosity(sys_var *, THD *, enum_var_type) {
+  mysql_set_xengine_info_log_level(log_error_verbosity);
   return (log_builtins_filter_update_verbosity(log_error_verbosity) < 0);
 }
 

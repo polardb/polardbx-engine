@@ -1,0 +1,37 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug_sync.inc
+
+source include/master-slave.inc;
+
+#setup
+--source include/rpl_connection_master.inc
+create table t(id int);
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+#stop the slave sql thread
+--source include/stop_slave_sql.inc
+--source include/wait_for_slave_sql_to_stop.inc
+--source include/rpl_connection_master.inc
+insert into t values(1);
+
+--source include/rpl_connection_slave.inc
+flush logs;
+SET GLOBAL DEBUG='d,before_aquire_commit_lock';
+#--source include/start_slave_sql.inc
+start slave sql_thread;
+real_sleep 2;
+SET GLOBAL DEBUG='-d,before_aquire_commit_lock';
+flush tables with read lock;
+SET GLOBAL DEBUG='+d,before_aquire_data_lock';
+--disable_result_log
+show slave status;
+--enable_result_log
+SET GLOBAL DEBUG='-d,before_aquire_data_lock';
+unlock tables;
+
+--source include/rpl_connection_master.inc
+drop table t;
+
+--source include/rpl_end.inc
+--source suite/xengine/include/check_xengine_log_error.inc

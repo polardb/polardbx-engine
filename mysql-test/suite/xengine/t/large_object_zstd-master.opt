@@ -1,0 +1,2 @@
+--max_allowed_packet=500M
+--xengine_compression_per_level=kNoCompression:kNoCompression:kZSTD

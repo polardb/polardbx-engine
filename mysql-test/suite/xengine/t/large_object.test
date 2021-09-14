@@ -1,0 +1,51 @@
+--source suite/xengine/include/have_xengine.inc
+set global xengine_strict_collation_check = off;
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1(id BIGINT NOT NULL, aid VARCHAR(255), value LONGBLOB, PRIMARY KEY (id, aid)) engine=xengine;
+
+INSERT INTO t1 values (1, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 1000000));
+INSERT INTO t1 values (2, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 2000000));
+INSERT INTO t1 values (3, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 3000000));
+--error ER_INTERNAL_ERROR
+INSERT INTO t1 values (4, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 4000000));
+
+SELECT id,LENGTH(value),MD5(value) FROM t1;
+
+set global xengine_force_flush_memtable_now = on;
+
+--echo restarting...
+--source include/restart_mysqld.inc
+
+SELECT id,LENGTH(value),MD5(value) FROM t1;
+
+--disable_query_log
+let $i=4;
+while ($i<800)
+{
+  inc $i;
+  eval INSERT INTO t1 values ($i, REPEAT('I', 255), REPEAT('MYSQLMYSQL', 600000));
+}
+--enable_query_log
+
+set global xengine_force_flush_memtable_now = on;
+DELETE FROM t1 where id % 2 = 0;
+set global xengine_force_flush_memtable_now = on;
+SELECT COUNT(*) FROM t1;
+
+--echo restarting...
+--source include/restart_mysqld.inc
+
+SELECT COUNT(*) FROM t1;
+
+--echo restarting...
+--source include/restart_mysqld.inc
+
+SELECT COUNT(*) FROM t1;
+SELECT id,LENGTH(value),MD5(value) FROM t1 where id = 3 or id = 5;
+SELECT id,LENGTH(value),MD5(value) FROM t1 where id % 2 = 0;
+
+DROP TABLE t1;
+--source suite/xengine/include/check_xengine_log_error.inc

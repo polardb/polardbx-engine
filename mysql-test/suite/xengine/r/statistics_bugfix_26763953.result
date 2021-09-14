@@ -1,0 +1,46 @@
+DROP TABLE IF EXISTS test.t1_bugfix_26763953;
+create table test.t1_bugfix_26763953(
+c1 int primary key,
+c2 int
+) engine=xengine;
+set information_schema_stats_expiry = 1;
+insert into test.t1_bugfix_26763953 values (1, 1), (3, 3);
+set global xengine_force_flush_memtable_now = on;
+analyze table test.t1_bugfix_26763953;
+Table	Op	Msg_type	Msg_text
+test.t1_bugfix_26763953	analyze	status	OK
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+TABLE_SCHEMA	TABLE_NAME	ENGINE	VERSION	ROW_FORMAT	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH
+test	t1_bugfix_26763953	XENGINE	10	Fixed	2	1048576	2097152
+set global xengine_compact_cf = 55834574848;
+analyze table test.t1_bugfix_26763953;
+Table	Op	Msg_type	Msg_text
+test.t1_bugfix_26763953	analyze	status	OK
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+TABLE_SCHEMA	TABLE_NAME	ENGINE	VERSION	ROW_FORMAT	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH
+test	t1_bugfix_26763953	XENGINE	10	Fixed	2	1048576	2097152
+# restart
+set information_schema_stats_expiry = 1;
+analyze table test.t1_bugfix_26763953;
+Table	Op	Msg_type	Msg_text
+test.t1_bugfix_26763953	analyze	status	OK
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+TABLE_SCHEMA	TABLE_NAME	ENGINE	VERSION	ROW_FORMAT	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH
+test	t1_bugfix_26763953	XENGINE	10	Fixed	2	1048576	2097152
+insert into test.t1_bugfix_26763953 values (2, 2);
+set global xengine_force_flush_memtable_now = on;
+analyze table test.t1_bugfix_26763953;
+Table	Op	Msg_type	Msg_text
+test.t1_bugfix_26763953	analyze	status	OK
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+TABLE_SCHEMA	TABLE_NAME	ENGINE	VERSION	ROW_FORMAT	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH
+test	t1_bugfix_26763953	XENGINE	10	Fixed	3	1398101	4194304
+set global xengine_compact_cf = 55834574848;
+set global xengine_compact_cf = 25769803776;
+analyze table test.t1_bugfix_26763953;
+Table	Op	Msg_type	Msg_text
+test.t1_bugfix_26763953	analyze	status	OK
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+TABLE_SCHEMA	TABLE_NAME	ENGINE	VERSION	ROW_FORMAT	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH
+test	t1_bugfix_26763953	XENGINE	10	Fixed	3	699050	2097152
+DROP TABLE test.t1_bugfix_26763953;

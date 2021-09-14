@@ -1,0 +1,6 @@
+--source suite/xengine/include/have_xengine.inc
+
+-- let $truncate_table = 0
+-- let $drop_table = 1
+-- source drop_table3.inc
+--source suite/xengine/include/check_xengine_log_error.inc

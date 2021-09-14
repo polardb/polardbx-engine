@@ -1,0 +1,30 @@
+--source include/master-slave.inc
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--echo Test adding unique index inplace(rebuild) in a table without PRIMARY KEY
+--echo ###################################################################
+--echo # ref https://yuque.antfin-inc.com/db_core_team/internal_docs/wywa0h#f68c70b7
+--echo # t0: create table time
+--echo # t1: build-sk start time
+--echo # t2: build-base sk finish, and uk check start
+--echo # t3: uk-check finish
+--echo # d1: data in [t0-t1]
+--echo # d2: data in [t1-t2]
+--echo # d3: data in [t2-t3]
+--echo # d4: data in [t3-]
+--echo ###################################################################
+
+--echo # Using two connections for following tests, now establish connection con1 (user=root)
+connect (con1,localhost,root,,);
+connection master;
+
+--let $test_file=suite/xengine_rpl_basic/t/rpl_online_ddl_add_uk_no_pk_blob_rebuild.inc
+--source suite/xengine/include/xengine_full_charset.inc
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc
+
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

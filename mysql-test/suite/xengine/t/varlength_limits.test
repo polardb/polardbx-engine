@@ -1,0 +1,39 @@
+--source include/have_debug.inc
+--source ../include/have_xengine.inc
+
+--echo # BINARY/CHAR column width is limited up to 255
+--echo # row size is limited to 65535 (storage) bytes
+--echo # maximum key length is 3072 (storage) bytes
+--echo # maximum key part length is 3072 (storage) bytes
+
+SET @save_sql_mode = @@sql_mode;
+SET sql_mode="STRICT_ALL_TABLES";
+
+--echo # Establish connection for dml(user=root)
+connect(dml, localhost, root,,);
+connection default;
+
+--source ../include/varbinary_limits.inc
+
+--source ../include/varchar_latin1_limits.inc
+
+--let $coll= gbk_bin
+--source ../include/varchar_gbk_limits.inc
+--let $coll= gbk_chinese_ci
+--source ../include/varchar_gbk_limits.inc
+
+--let $coll= utf8_bin
+--source ../include/varchar_utf8_limits.inc
+--let $coll= utf8_general_ci
+--source ../include/varchar_utf8_limits.inc
+
+--let $coll= utf8mb4_0900_ai_ci
+--source ../include/varchar_utf8mb4_limits.inc
+--let $coll= utf8mb4_general_ci
+--source ../include/varchar_utf8mb4_limits.inc
+--let $coll= utf8mb4_bin
+--source ../include/varchar_utf8mb4_limits.inc
+
+set sql_mode = @save_sql_mode;
+
+--source suite/xengine/include/check_xengine_log_error.inc

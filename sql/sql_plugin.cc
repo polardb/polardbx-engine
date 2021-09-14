@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -3495,6 +3499,8 @@ static int test_plugin_options(MEM_ROOT *tmp_root, st_plugin_int *tmp,
   st_bookmark *var;
   size_t len;
   uint count = EXTRA_OPTIONS;
+  static constexpr char XENGINE_PLUGIN_NAME[] = "XENGINE";
+  static const int64_t XENGINE_NAME_SIZE = sizeof(XENGINE_PLUGIN_NAME) - 1 /* terminator NULL */;
   DBUG_TRACE;
   DBUG_ASSERT(tmp->plugin && tmp->name.str);
 
@@ -3503,6 +3509,7 @@ static int test_plugin_options(MEM_ROOT *tmp_root, st_plugin_int *tmp,
     default.
   */
   if (!(my_strcasecmp(&my_charset_latin1, tmp->name.str, "federated") &&
+        my_strcasecmp(&my_charset_latin1, tmp->name.str, XENGINE_PLUGIN_NAME) &&
         my_strcasecmp(&my_charset_latin1, tmp->name.str, "ndbcluster")))
     plugin_load_option = PLUGIN_OFF;
 
@@ -3543,6 +3550,17 @@ static int test_plugin_options(MEM_ROOT *tmp_root, st_plugin_int *tmp,
     if (tmp->load_option != PLUGIN_FORCE &&
         tmp->load_option != PLUGIN_FORCE_PLUS_PERMANENT)
       plugin_load_option = (enum_plugin_load_option) * (ulong *)opts[0].value;
+  }
+
+  /*
+   * xengine and xengine_* plugins should be on or off at the same time.
+   */
+  static enum_plugin_load_option xengine_load_options = PLUGIN_OFF;
+  if (!my_strcasecmp(&my_charset_latin1, tmp->name.str, XENGINE_PLUGIN_NAME)) {
+    xengine_load_options = plugin_load_option;
+  } else if (tmp->name.length >= XENGINE_NAME_SIZE &&
+             !memcmp(tmp->name.str, XENGINE_PLUGIN_NAME, XENGINE_NAME_SIZE)) {
+    plugin_load_option = xengine_load_options;
   }
 
   disable_plugin = (plugin_load_option == PLUGIN_OFF);

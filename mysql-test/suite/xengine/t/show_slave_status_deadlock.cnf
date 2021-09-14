@@ -1,0 +1,15 @@
+!include suite/rpl/my.cnf
+
+[mysqld.1]
+binlog_format=row
+relay-log=relay-log
+relay_log_index=relay-log.index
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+[mysqld.2]
+binlog_format=row
+relay-log=relay-log
+relay_log_index=relay-log.index
+master_info_repository=TABLE
+relay_log_info_repository=TABLE
+

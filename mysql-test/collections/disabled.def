@@ -78,3 +78,45 @@ rpl.rpl_multi_source_corrupt_repository   : Bug#28765425 Disabled until the bug 
 sysschema.v_wait_classes_global_by_avg_latency : BUG#21550054 Test fails too often.
 
 # x plugin suite tests
+
+# IPv6
+perfschema.hostcache_ipv6_addrinfo_again_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_again_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_bad_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_bad_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_good_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_good_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_noname_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_noname_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_auth_plugin : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_blocked : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_max_con : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_again_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_again_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_noname_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_noname_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_passwd : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_ssl : BUG#000 We don't support IPv6
+perfschema.idx_compare_socket_instances : BUG#000 We don't support IPv6
+main.bind_address_3 : BUG#000 We don't support IPv6
+rpl.rpl_ip_mix : BUG#000 We don't support IPv6
+rpl.rpl_ip_mix2 : BUG#000 We don't support IPv6
+rpl.rpl_ipv6 : BUG#000 We don't support IPv6
+x.system_variable_bind_address : BUG#000 We don't support IPv6
+x.performance_schema_sockets : BUG#000 We don't support IPv6
+x.notices_gr_quorum : BUG#000 We don't support IPv6
+x.notices_gr_single_primary : BUG#000 We don't support IPv6
+x.notices_gr_join_leave : BUG#000 We don't support IPv6
+large_tests.innodb_innochecksum_3gb : BUG#000 Take too long (timeout)
+main.multi_update2 : BUG#000 Take too long (timeout)
+main.window_functions_big : BUG#000 Take too long (timeout)
+innodb_gis.rtree_split_geographic : BUG#000 Take too long (timeout)
+large_tests.alter_table : BUG#000 Consume too much space
+rpl_gtid.rpl_wait_for_executed_gtid_set_no_timeout: BUG#000 unstable
+binlog.binlog_max_flush_queue_time_warn : BUG#000 unstable
+main.mysqlpump_extended : BUG#000 timeout
+main.mysql_load_data_local_dir : BUG#000 oracle mysql bug
+x.connection_multi_bind_address : BUG#000 We don't support IPv6
+x.connection_multi_bind_address_ipv6 : BUG#000 We don't support IPv6
+x.status_variables : BUG#000 We don't support IPv6
+auth_sec.host_sort : BUG#000 We don't support IPv6

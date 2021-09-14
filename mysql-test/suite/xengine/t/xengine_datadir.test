@@ -1,0 +1,32 @@
+--source suite/xengine/include/have_xengine.inc
+
+let $ddir = $MYSQL_TMP_DIR/.xengine_datadir.test.install.db;
+let $rdb_ddir = $MYSQL_TMP_DIR/.xengine_datadir.test;
+let $sql_file = $MYSQL_TMP_DIR/xengine_datadir.sql;
+
+--write_file $sql_file
+DROP DATABASE IF EXISTS mysqltest;
+CREATE DATABASE mysqltest;
+USE mysqltest;
+CREATE TABLE t1 (a INT PRIMARY KEY);
+INSERT INTO t1 VALUES(42);
+SET GLOBAL xengine_force_flush_memtable_now = 1;
+SELECT sleep(1);
+DROP TABLE t1;
+EOF
+
+# Must ensure this directory exists before launching mysqld
+mkdir $ddir;
+
+# Launch mysqld with non-standard xengine_datadir
+exec $MYSQLD_BOOTSTRAP_CMD --datadir=$ddir --xengine_datadir=$rdb_ddir --default-storage-engine=xengine --default-tmp-storage-engine=MyISAM --xengine < $sql_file;
+
+#not used MANIFEST
+--echo Check for the number of MANIFEST files
+--exec ls $rdb_ddir/MANIFEST-0000* | wc -l;
+
+# Clean up
+exec rm -rf $ddir;
+exec rm -rf $rdb_ddir;
+remove_file $sql_file;
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,30 @@
+--source suite/xengine/include/have_xengine.inc
+
+# [64K, 16G]
+CREATE TABLE valid_values (value varchar(100));
+INSERT INTO valid_values VALUES(64*1024);
+INSERT INTO valid_values VALUES(65536);
+INSERT INTO valid_values VALUES(100*1024*1024);
+INSERT INTO valid_values VALUES(8*1024*1024);
+INSERT INTO valid_values VALUES(128*1024*1024);
+INSERT INTO valid_values VALUES(1024*1024*1024);
+INSERT INTO valid_values VALUES(16*1024*1024*1024);
+
+CREATE TABLE invalid_values (value varchar(100));
+INSERT INTO invalid_values VALUES('abc');
+INSERT INTO invalid_values VALUES('kfc');
+INSERT INTO invalid_values VALUES(64);
+INSERT INTO invalid_values VALUES(32*1024*1024*1024);
+
+
+SET @saved_sql_mode = @@GLOBAL.sql_mode;
+set sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,STRICT_ALL_TABLES';
+
+--let $sys_var=XENGINE_SORT_BUFFER_SIZE
+--let $read_only=0
+--let $session=0
+--source ../inc/xengine_sys_var.inc
+
+set sql_mode=@saved_sql_mode;
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

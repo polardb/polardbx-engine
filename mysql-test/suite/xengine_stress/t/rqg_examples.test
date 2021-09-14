@@ -1,0 +1,18 @@
+--source suite/xengine/include/have_xengine.inc
+
+# RQG's examples test
+let $TARGET_DB = rqg_examples;
+let $GRAMMAR_FILES = examples/example.yy;
+let $DATA_FILE = examples/example.zz;
+let $OTHER_ARGS = '--errorlevel=FAILURE';
+
+--disable_warnings
+eval CREATE DATABASE IF NOT EXISTS $TARGET_DB;
+--enable_warnings
+
+--source ../include/rqg.inc
+
+eval DROP DATABASE $TARGET_DB;
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,414 @@
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+--enable_warnings
+
+# no hidden pk
+create table t1 (
+  k1 int,
+  k2 int,
+  k3 int,
+  v1 int,
+  v2 int,
+  v3 int,
+  primary key (k1, k2),
+  unique key ui1 (k2, k3),
+  key i1 (v1, v2, v3)
+) engine=xengine;
+
+# hidden pk
+create table t2 (
+  k1 int,
+  k2 int,
+  k3 int,
+  v1 int,
+  v2 int,
+  v3 int,
+  key i2 (v1, v2, v3)
+) engine=xengine;
+
+# prepare data
+## in sstable
+insert into t1 values
+(1, 1, 1, 1, 1, 1),
+(2, 3, 4, 1, 1, 3),
+(3, 5, 6, 1, 2, 5),
+(4, 7, 8, 1, 2, 7),
+(5, 9, 10, 2, 3, 9),
+(6, 11, 12, 2, 3, 11),
+(7, 13, 14, 2, 4, 13),
+(8, 15, 16, 2, 4, 15);
+
+insert into t2 values
+(1, 1, 1, 1, 1, 1),
+(2, 3, 4, 1, 1, 3),
+(3, 5, 6, 1, 2, 5),
+(4, 7, 8, 1, 2, 7),
+(5, 9, 10, 2, 3, 9),
+(6, 11, 12, 2, 3, 11),
+(7, 13, 14, 2, 4, 13),
+(8, 15, 16, 2, 4, 15);
+
+set global xengine_force_flush_memtable_now=on;
+--sleep 2
+
+## in memtable
+insert into t1 values
+(1, 2, 3, 1, 1, 2),
+(2, 4, 5, 1, 1, 4),
+(3, 6, 7, 1, 2, 6),
+(4, 8, 9, 1, 2, 8),
+(5, 10, 11, 2, 3, 10),
+(6, 12, 13, 2, 3, 12),
+(7, 14, 15, 2, 4, 14),
+(8, 16, 17, 2, 4, 16);
+
+insert into t2 values
+(1, 2, 3, 1, 1, 2),
+(2, 4, 5, 1, 1, 4),
+(3, 6, 7, 1, 2, 6),
+(4, 8, 9, 1, 2, 8),
+(5, 10, 11, 2, 3, 10),
+(6, 12, 13, 2, 3, 12),
+(7, 14, 15, 2, 4, 14),
+(8, 16, 17, 2, 4, 16);
+
+# no hidden pk test
+
+## access method: range
+### primary key
+select * from t1 where k1 > 2 order by k1, k2;
+select * from t1 where k1 < 7 order by k1, k2;
+select * from t1 where k1 >= 2 order by k1, k2;
+select * from t1 where k1 <= 7 order by k1, k2;
+select * from t1 where k1 > 2 and k1 < 7 order by k1, k2;
+select * from t1 where k1 >= 2 and k1 <= 7 order by k1, k2;
+select * from t1 where k1 >= 2 and k2 > 5 order by k1, k2;
+select * from t1 where k1 <= 7 and k2 < 11 order by k1, k2;
+select * from t1 where k1 >= 2 and k2 > 5 and k1 <=7 and k2 < 11 order by k1, k2;
+select * from t1 where k1 > 2 and k2 in (5,6,7,8,9,10) order by k1, k2;
+select * from t1 where k1 < 7 and k2 in (5,6,7,8,9,10) order by k1, k2;
+select * from t1 where k1 >= 2 and k2 in (5,6,7,8,9,10) order by k1, k2;
+select * from t1 where k1 <= 7 and k2 in (5,6,7,8,9,10) order by k1, k2;
+select * from t1 where k1 > 2 and k1 < 7 and k2 in (5,6,7,8,9,10) order by k1, k2;
+select * from t1 where k1 >= 2 and k1 <= 7 and k2 in (5,6,7,8,9,10) order by k1, k2;
+select * from t1 where k1 not in (2,4,7) order by k1, k2;
+select * from t1 where k1 > 2 and k2 not in (2,7,10) order by k1, k2;
+select * from t1 where k1 < 7 and k2 not in (2,7,10) order by k1, k2;
+select * from t1 where k1 >= 2 and k2 not in (2,7,10) order by k1, k2;
+select * from t1 where k1 <= 7 and k2 not in (2,7,10) order by k1, k2;
+select * from t1 where k1 > 2 and k1 < 7 and k2 not in (2,7,10) order by k1, k2;
+select * from t1 where k1 >= 2 and k1 <= 7 and k2 not in (2,7,10) order by k1, k2;
+
+select * from t1 where k1 > 2 order by k1 desc, k2 desc;
+select * from t1 where k1 < 7 order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 order by k1 desc, k2 desc;
+select * from t1 where k1 <= 7 order by k1 desc, k2 desc;
+select * from t1 where k1 > 2 and k1 < 7 order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 and k1 <= 7 order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 and k2 > 5 order by k1 desc, k2 desc;
+select * from t1 where k1 <= 7 and k2 < 11 order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 and k2 > 5 and k1 <=7 and k2 < 11 order by k1 desc, k2 desc;
+select * from t1 where k1 > 2 and k2 in (5,6,7,8,9,10) order by k1 desc, k2 desc;
+select * from t1 where k1 < 7 and k2 in (5,6,7,8,9,10) order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 and k2 in (5,6,7,8,9,10) order by k1 desc, k2 desc;
+select * from t1 where k1 <= 7 and k2 in (5,6,7,8,9,10) order by k1 desc, k2 desc;
+select * from t1 where k1 > 2 and k1 < 7 and k2 in (5,6,7,8,9,10) order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 and k1 <= 7 and k2 in (5,6,7,8,9,10) order by k1 desc, k2 desc;
+select * from t1 where k1 not in (2,4,7) order by k1 desc, k2 desc;
+select * from t1 where k1 > 2 and k2 not in (2,7,10) order by k1 desc, k2 desc;
+select * from t1 where k1 < 7 and k2 not in (2,7,10) order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 and k2 not in (2,7,10) order by k1 desc, k2 desc;
+select * from t1 where k1 <= 7 and k2 not in (2,7,10) order by k1 desc, k2 desc;
+select * from t1 where k1 > 2 and k1 < 7 and k2 not in (2,7,10) order by k1 desc, k2 desc;
+select * from t1 where k1 >= 2 and k1 <= 7 and k2 not in (2,7,10) order by k1 desc, k2 desc;
+
+### unique key
+select * from t1 where k2 > 2 order by k2, k3;
+select * from t1 where k2 < 15 order by k2, k3;
+select * from t1 where k2 >= 2 order by k2, k3;
+select * from t1 where k2 <= 15 order by k2, k3;
+select * from t1 where k2 > 2 and k2 < 15 order by k2, k3;
+select * from t1 where k2 >= 2 and k2 <= 15 order by k2, k3;
+select * from t1 where k2 >= 2 and k3 > 5 order by k2, k3;
+select * from t1 where k2 <= 15 and k3 < 10 order by k2, k3;
+select * from t1 where k2 >= 2 and k2 <= 15 and k3 > 5 and k3 < 10 order by k2, k3;
+select * from t1 where k2 > 2 and k3 in (5,6,7,8,9,10) order by k2, k3;
+select * from t1 where k2 < 15 and k3 in (5,6,7,8,9,10) order by k2, k3;
+select * from t1 where k2 >= 2 and k3 in (5,6,7,8,9,10) order by k2, k3;
+select * from t1 where k2 <= 15 and k3 in (5,6,7,8,9,10) order by k2, k3;
+select * from t1 where k2 > 2 and k2 < 15 and k3 in (5,6,7,8,9,10) order by k2, k3;
+select * from t1 where k2 >= 2 and k2 <= 15 and k3 in (5,6,7,8,9,10) order by k2, k3;
+select * from t1 where k2 not in (2,7,10) order by k2, k3;
+select * from t1 where k2 > 2 and k3 not in (2,7,10) order by k2, k3;
+select * from t1 where k2 < 15 and k3 not in (2,7,10) order by k2, k3;
+select * from t1 where k2 >= 2 and k3 not in (2,7,10) order by k2, k3;
+select * from t1 where k2 <= 15 and k3 not in (2,7,10) order by k2, k3;
+select * from t1 where k2 > 2 and k2 < 15 and k3 not in (2,7,10) order by k2, k3;
+select * from t1 where k2 >= 2 and k2 <= 15 and k3 not in (2,7,10) order by k2, k3;
+
+select * from t1 where k2 > 2 order by k2 desc, k3 desc;
+select * from t1 where k2 < 15 order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 order by k2 desc, k3 desc;
+select * from t1 where k2 <= 15 order by k2 desc, k3 desc;
+select * from t1 where k2 > 2 and k2 < 15 order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 and k2 <= 15 order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 and k3 > 5 order by k2 desc, k3 desc;
+select * from t1 where k2 <= 15 and k3 < 10 order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 and k2 <= 15 and k3 > 5 and k3 < 10 order by k2 desc, k3 desc;
+select * from t1 where k2 > 2 and k3 in (5,6,7,8,9,10) order by k2 desc, k3 desc;
+select * from t1 where k2 < 15 and k3 in (5,6,7,8,9,10) order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 and k3 in (5,6,7,8,9,10) order by k2 desc, k3 desc;
+select * from t1 where k2 <= 15 and k3 in (5,6,7,8,9,10) order by k2 desc, k3 desc;
+select * from t1 where k2 > 2 and k2 < 15 and k3 in (5,6,7,8,9,10) order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 and k2 <= 15 and k3 in (5,6,7,8,9,10) order by k2 desc, k3 desc;
+select * from t1 where k2 not in (2,7,10) order by k2 desc, k3 desc;
+select * from t1 where k2 > 2 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+select * from t1 where k2 < 15 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+select * from t1 where k2 <= 15 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+select * from t1 where k2 > 2 and k2 < 15 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+select * from t1 where k2 >= 2 and k2 <= 15 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+
+### key
+select * from t1 where v1 > 1 order by v1, v2, v3;
+select * from t1 where v1 < 2 order by v1, v2, v3;
+select * from t1 where v1 >= 1 order by v1, v2, v3;
+select * from t1 where v1 <= 2 order by v1, v2, v3;
+select * from t1 where v1 >= 1 and v1 < 2 order by v1, v2, v3;
+select * from t1 where v1 > 1 and v1 <= 2 order by v1, v2, v3;
+select * from t1 where v1 >= 1 and v2 > 3 order by v1, v2, v3;
+select * from t1 where v1 <= 2 and v2 < 3 order by v1, v2, v3;
+select * from t1 where v1 >= 1 and v2 > 1 and v1 <=2 and v2 < 4 order by v1, v2, v3;
+select * from t1 where v1 > 1 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t1 where v1 < 2 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t1 where v1 >= 1 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t1 where v1 <= 2 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t1 where v1 > 1 and v1 <=2 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t1 where v1 >= 1 and v1 < 2 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t1 where v1 not in (1,3) order by v1, v2, v3;
+select * from t1 where v1 > 1 and v2 not in (1,3) order by v1, v2, v3;
+select * from t1 where v1 < 2 and v2 not in (1,3) order by v1, v2, v3;
+select * from t1 where v1 >= 1 and v2 not in (1,3) order by v1, v2, v3;
+select * from t1 where v1 <= 2 and v2 not in (1,3) order by v1, v2, v3;
+select * from t1 where v1 > 1 and v1 <=2 and v2 not in (1,3) order by v1, v2, v3;
+select * from t1 where v1 >= 1 and v1 < 2 and v2 not in (1,3) order by v1, v2, v3;
+
+
+select * from t1 where v1 > 1 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 < 2 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 <= 2 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 and v1 < 2 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 > 1 and v1 <= 2 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 and v2 > 3 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 <= 2 and v2 < 3 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 and v2 > 1 and v1 <=2 and v2 < 4 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 > 1 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 < 2 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 <= 2 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 > 1 and v1 <=2 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 and v1 < 2 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 > 1 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 < 2 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 <= 2 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 > 1 and v1 <=2 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 >= 1 and v1 < 2 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+
+## access method: ref
+### primary key
+select * from t1 where k1 = 2 order by k1, k2;
+select * from t1 where k1 = 2 and k2 > 3 order by k1, k2;
+select * from t1 where k1 = 2 and k2 < 5 order by k1, k2;
+select * from t1 where k1 = 2 and k2 in (2,3,4,5) order by k1, k2;
+select * from t1 where k1 = 2 and k2 not in (2,7,10) order by k1, k2;
+
+select * from t1 where k1 = 2 order by k1 desc, k2 desc;
+select * from t1 where k1 = 2 and k2 > 3 order by k1 desc, k2 desc;
+select * from t1 where k1 = 2 and k2 < 5 order by k1 desc, k2 desc;
+select * from t1 where k1 = 2 and k2 in (2,3,4,5) order by k1 desc, k2 desc;
+select * from t1 where k1 = 2 and k2 not in (2,7,10) order by k1 desc, k2 desc;
+
+### unique key
+select * from t1 where k2 = 3 order by k2, k3;
+select * from t1 where k2 = 4 order by k2, k3;
+select * from t1 where k2 = 3 and k3 > 3 order by k2, k3;
+select * from t1 where k2 = 4 and k3 > 4 order by k2, k3;
+select * from t1 where k2 = 3 and k3 < 5 order by k2, k3;
+select * from t1 where k2 = 4 and k3 < 6 order by k2, k3;
+select * from t1 where k2 = 3 and k3 in (2,3,4,5,6) order by k2, k3;
+select * from t1 where k2 = 4 and k3 in (2,3,4,5,6) order by k2, k3;
+select * from t1 where k2 = 3 and k3 not in (2,7,10) order by k2, k3;
+select * from t1 where k2 = 4 and k3 not in (2,7,10) order by k2, k3;
+
+select * from t1 where k2 = 3 order by k2 desc, k3 desc;
+select * from t1 where k2 = 4 order by k2 desc, k3 desc;
+select * from t1 where k2 = 3 and k3 > 3 order by k2 desc, k3 desc;
+select * from t1 where k2 = 4 and k3 > 4 order by k2 desc, k3 desc;
+select * from t1 where k2 = 3 and k3 < 5 order by k2 desc, k3 desc;
+select * from t1 where k2 = 4 and k3 < 6 order by k2 desc, k3 desc;
+select * from t1 where k2 = 3 and k3 in (2,3,4,5,6) order by k2 desc, k3 desc;
+select * from t1 where k2 = 4 and k3 in (2,3,4,5,6) order by k2 desc, k3 desc;
+select * from t1 where k2 = 3 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+select * from t1 where k2 = 4 and k3 not in (2,7,10) order by k2 desc, k3 desc;
+
+### key
+select * from t1 where v1 = 1 order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 > 1 order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 < 2 order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 in (1,2,3,4,5) order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 = 2 order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 = 2 and v3 > 6 order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 = 2 and v3 < 6 order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 = 2 and v3 > 6 order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 = 2 and v3 in (2,4,6,8) order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 not in (1,3) order by v1, v2, v3;
+select * from t1 where v1 = 1 and v2 = 2 and v3 not in (1,3) order by v1, v2, v3;
+
+select * from t1 where v1 = 1 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 > 1 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 < 2 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 in (1,2,3,4,5) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 = 2 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 = 2 and v3 > 6 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 = 2 and v3 < 6 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 = 2 and v3 > 6 order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 = 2 and v3 in (2,4,6,8) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t1 where v1 = 1 and v2 = 2 and v3 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+
+# hidden pk test
+
+## access method: range
+### key
+select * from t2 where v1 > 1 order by v1, v2, v3;
+select * from t2 where v1 < 2 order by v1, v2, v3;
+select * from t2 where v1 >= 1 order by v1, v2, v3;
+select * from t2 where v1 <= 2 order by v1, v2, v3;
+select * from t2 where v1 >= 1 and v1 < 2 order by v1, v2, v3;
+select * from t2 where v1 > 1 and v1 <= 2 order by v1, v2, v3;
+select * from t2 where v1 >= 1 and v2 > 3 order by v1, v2, v3;
+select * from t2 where v1 <= 2 and v2 < 3 order by v1, v2, v3;
+select * from t2 where v1 >= 1 and v2 > 1 and v1 <=2 and v2 < 4 order by v1, v2, v3;
+select * from t2 where v1 > 1 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t2 where v1 < 2 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t2 where v1 >= 1 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t2 where v1 <= 2 and v2 in (2,3,5) order by v1, v2, v3;
+select * from t2 where v1 > 1 and v1 <=2 and v3 in (2,3,5) order by v1, v2, v3;
+select * from t2 where v1 >= 1 and v1 < 2 and v3 in (2,3,5) order by v1, v2, v3;
+select * from t2 where v1 not in (1,3) order by v1, v2, v3;
+select * from t2 where v1 > 1 and v2 not in (1,3) order by v1, v2, v3;
+select * from t2 where v1 < 2 and v2 not in (1,3) order by v1, v2, v3;
+select * from t2 where v1 >= 1 and v2 not in (1,3) order by v1, v2, v3;
+select * from t2 where v1 <= 2 and v2 not in (1,3) order by v1, v2, v3;
+select * from t2 where v1 > 1 and v1 <=2 and v3 not in (1,3) order by v1, v2, v3;
+select * from t2 where v1 >= 1 and v1 < 2 and v3 not in (1,3) order by v1, v2, v3;
+
+select * from t2 where v1 > 1 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 < 2 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 <= 2 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 and v1 < 2 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 > 1 and v1 <= 2 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 and v2 > 3 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 <= 2 and v2 < 3 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 and v2 > 1 and v1 <=2 and v2 < 4 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 > 1 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 < 2 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 <= 2 and v2 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 > 1 and v1 <=2 and v3 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 and v1 < 2 and v3 in (2,3,5) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 > 1 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 < 2 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 <= 2 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 > 1 and v1 <=2 and v3 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 >= 1 and v1 < 2 and v3 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+
+## access method: ref
+### key
+select * from t2 where v1 = 1 order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 > 1 order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 < 2 order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 in (1,2,3,4,5) order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 = 2 order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 = 2 and v3 > 6 order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 = 2 and v3 < 6 order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 = 2 and v3 > 6 order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 = 2 and v3 in (2,4,6,8) order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 not in (1,3) order by v1, v2, v3;
+select * from t2 where v1 = 1 and v2 = 2 and v3 not in (1,3) order by v1, v2, v3;
+
+select * from t2 where v1 = 1 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 > 1 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 < 2 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 in (1,2,3,4,5) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 = 2 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 = 2 and v3 > 6 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 = 2 and v3 < 6 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 = 2 and v3 > 6 order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 = 2 and v3 in (2,4,6,8) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+select * from t2 where v1 = 1 and v2 = 2 and v3 not in (1,3) order by v1 desc, v2 desc, v3 desc;
+
+# 
+create table t3 (k1 int unsigned, k2 int unsigned, k3 int unsigned, v1 int unsigned, primary key (k1, k2, k3));
+begin;
+insert into t3 values 
+(1,4294967295,1,1), 
+(1,4294967295,2,2), 
+(1,4294967295,3,3), 
+(1,4294967295,4,4), 
+(1,4294967295,5,5),
+(2,4294967295,1,1), 
+(2,4294967295,2,2), 
+(2,4294967295,3,3), 
+(2,4294967295,4,4), 
+(2,4294967295,5,5);
+
+## data in write batch
+select * from t3 where k1 = 1;
+select * from t3 where k1 > 0;
+select * from t3 where k1 > 1;
+select * from t3 where k1 >= 1;
+select * from t3 where k1 < 3;
+select * from t3 where k1 < 2;
+select * from t3 where k1 <= 2;
+select * from t3 where k1 > 0 and k1 < 2;
+select * from t3 where k1 > 1 and k1 <= 2;
+commit;
+
+## data in memtable
+select * from t3 where k1 = 1;
+select * from t3 where k1 > 0;
+select * from t3 where k1 > 1;
+select * from t3 where k1 >= 1;
+select * from t3 where k1 < 3;
+select * from t3 where k1 < 2;
+select * from t3 where k1 <= 2;
+select * from t3 where k1 > 0 and k1 < 2;
+select * from t3 where k1 > 1 and k1 <= 2;
+
+set global xengine_force_flush_memtable_now=on;
+--sleep 2
+
+## data in sstable
+select * from t3 where k1 = 1;
+select * from t3 where k1 > 0;
+select * from t3 where k1 > 1;
+select * from t3 where k1 >= 1;
+select * from t3 where k1 < 3;
+select * from t3 where k1 < 2;
+select * from t3 where k1 <= 2;
+select * from t3 where k1 > 0 and k1 < 2;
+select * from t3 where k1 > 1 and k1 <= 2;
+
+drop table t1;
+drop table t2;
+drop table t3;
+--source suite/xengine/include/check_xengine_log_error.inc

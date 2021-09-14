@@ -1,0 +1,2 @@
+--source suite/xengine/t/xengine_deadlock_detect.inc
+--source suite/xengine/include/check_xengine_log_error.inc

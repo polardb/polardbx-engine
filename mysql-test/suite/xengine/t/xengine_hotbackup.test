@@ -1,0 +1,94 @@
+--source suite/xengine/include/have_xengine.inc
+drop table if exists t1;
+
+--connect (conn1, 127.0.0.1, root, , test, $MYPORT_1)
+--connect (conn2, 127.0.0.1, root, , test, $MYPORT_1)
+
+--connection conn1
+create table t1 (a int primary key);
+insert into t1 values(42);
+set global xengine_force_flush_memtable_now = 1;
+
+show variables like 'autocommit';
+
+--error 1105
+set global xengine_hotbackup = 'checkpoint';
+
+--error 1105
+set global xengine_hotbackup = 'acquire';
+
+--error 1105
+set global xengine_hotbackup = 'incremental';
+
+--error 1105
+set global xengine_hotbackup = 'release';
+
+set autocommit = 0;
+
+--error 1105
+set global xengine_hotbackup = 'checkpoint';
+
+--error 1105
+set global xengine_hotbackup = 'acquire';
+
+--error 1105
+set global xengine_hotbackup = 'incremental';
+
+--error 1105
+set global xengine_hotbackup = 'release';
+
+set autocommit = 1;
+
+begin;
+--error 1105
+set global xengine_hotbackup = 'acquire';
+rollback;
+
+begin;
+--error 1105
+set global xengine_hotbackup = 'incremental';
+rollback;
+
+begin;
+--error 1105
+set global xengine_hotbackup = 'release';
+rollback;
+
+begin;
+set global xengine_hotbackup = 'checkpoint';
+--error 1105
+set global xengine_hotbackup = 'incremental';
+
+rollback;
+
+begin;
+set global xengine_hotbackup = 'checkpoint';
+select * from t1;
+--error 1105
+set global xengine_hotbackup = 'release';
+rollback;
+
+begin;
+set global xengine_hotbackup = 'checkpoint';
+select * from t1;
+set global xengine_hotbackup = 'acquire';
+--error 1105
+set global xengine_hotbackup = 'release';
+rollback;
+
+## test backup job exclusive
+
+begin;
+set global xengine_hotbackup = 'checkpoint';
+ 
+--connection conn2
+begin;
+--error 1105
+set global xengine_hotbackup = 'checkpoint';
+rollback;
+
+--connection conn1
+rollback;
+
+drop table t1;
+--source suite/xengine/include/check_xengine_log_error.inc

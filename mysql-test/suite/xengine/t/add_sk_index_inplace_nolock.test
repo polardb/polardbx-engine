@@ -1,0 +1,70 @@
+# test create secondar index online. don't block the concurrent dml
+
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+
+# we has two connection
+# con1: online create sk, which was block by xengine.inplace_create_sk_scan_base_begin
+# at this point, MDL lock was downgrade to MDL_SHARED_UPGRADABLE which is compatible for
+# concurrent DML DML lock
+
+# conn_defaul: 1. insert the new value when create sk online
+#2. wake up the con1 to start build sk.
+
+
+--echo # Establish connection con1 (user=root)
+connect (con1,localhost,root,,);
+
+--echo # Switch to connection con1
+connection con1;
+
+CREATE TABLE t1 (a INT primary key, b INT)ENGINE=xengine;
+
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t1 values(3,3);
+insert into t1 values(4,4);
+insert into t1 values(5,5);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+
+send alter table t1 add  index t1_c22 (b) ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+
+# concurrent dml
+connection default;
+# receive the altert table command
+
+
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6);
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+
+--echo # Switch to connection con1
+connection con1;
+reap
+
+--echo # Switch to connection default
+connection default;
+
+
+
+show create table t1;
+# use sk to select
+
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 1;
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 2;
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 3;
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 4;
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 5;
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 6;
+drop table t1;
+
+
+disconnect con1;
+
+connection default;
+--source suite/xengine/include/check_xengine_log_error.inc

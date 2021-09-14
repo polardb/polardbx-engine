@@ -1,0 +1,6 @@
+-- source include/not_ndb_default.inc
+let $engine_type=XENGINE;
+-- source extra/rpl_tests/rpl_row_sp002.test
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

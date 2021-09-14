@@ -1,0 +1,356 @@
+# Stop DB server which was created by MTR default
+SHOW DATABASES;
+Database
+__recycle_bin__
+information_schema
+mysql
+performance_schema
+sys
+test
+USE test;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `data` char(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+id	data
+1	12345
+CREATE TABLE t2 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+INSERT INTO t2 VALUES (1,'12345','ABCDEFG');
+SELECT * FROM t2;
+ID	DATA	DATA2
+1	12345	ABCDEFG
+ALTER TABLE t1 ADD COLUMN data2 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data3 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_2(`data2`);
+ALTER TABLE t2 ADD INDEX k_3(`data3`);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+CHECK TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	check	status	OK
+USE information_schema;
+"--xengine=1, show all xengine info tables"
+SHOW TABLES LIKE '%XENGINE%';
+Tables_in_information_schema (%XENGINE%)
+XENGINE_CFSTATS
+XENGINE_COLUMNS
+XENGINE_COMPACTION_HISTORY
+XENGINE_COMPACTION_STATS
+XENGINE_COMPACTION_TASK
+XENGINE_DBSTATS
+XENGINE_DDL
+XENGINE_DEBUG_INFO
+XENGINE_GLOBAL_INFO
+XENGINE_INDEX_FILE_MAP
+XENGINE_LOCKS
+XENGINE_MEM_ALLOC
+XENGINE_PERF_CONTEXT
+XENGINE_PERF_CONTEXT_GLOBAL
+XENGINE_QUERY_TRACE
+XENGINE_SUBTABLE
+XENGINE_TABLES
+XENGINE_TABLE_SPACE
+XENGINE_TRX
+# restart again, test recovery with --xengine=1
+USE test;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `data` char(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `data2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'abcdefg',
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`),
+  KEY `k_2` (`data2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `ID` int(11) NOT NULL,
+  `DATA` char(20) DEFAULT NULL,
+  `DATA2` text,
+  `data3` varchar(100) DEFAULT 'abcdefg',
+  PRIMARY KEY (`ID`),
+  KEY `DATA` (`DATA`),
+  KEY `k_3` (`data3`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1
+SELECT * FROM t1;
+id	data	data2
+1	12345	abcdefg
+SELECT * FROM t2;
+ID	DATA	DATA2	data3
+1	12345	ABCDEFG	abcdefg
+ALTER TABLE t1 ADD COLUMN data3 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data4 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_3(`data3`);
+ALTER TABLE t2 ADD INDEX k_4(`data4`);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `data` char(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `data2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'abcdefg',
+  `data3` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '1234567890',
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`),
+  KEY `k_2` (`data2`),
+  KEY `k_3` (`data3`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `ID` int(11) NOT NULL,
+  `DATA` char(20) DEFAULT NULL,
+  `DATA2` text,
+  `data3` varchar(100) DEFAULT 'abcdefg',
+  `data4` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`ID`),
+  KEY `DATA` (`DATA`),
+  KEY `k_3` (`data3`),
+  KEY `k_4` (`data4`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1
+SELECT * FROM t1;
+id	data	data2	data3
+1	12345	abcdefg	1234567890
+SELECT * FROM t2;
+ID	DATA	DATA2	data3	data4
+1	12345	ABCDEFG	abcdefg	1234567890
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+CHECK TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	check	status	OK
+USE information_schema;
+"--xengine=1, show all xengine info tables"
+SHOW TABLES like '%XENGINE%';
+Tables_in_information_schema (%XENGINE%)
+XENGINE_CFSTATS
+XENGINE_COLUMNS
+XENGINE_COMPACTION_HISTORY
+XENGINE_COMPACTION_STATS
+XENGINE_COMPACTION_TASK
+XENGINE_DBSTATS
+XENGINE_DDL
+XENGINE_DEBUG_INFO
+XENGINE_GLOBAL_INFO
+XENGINE_INDEX_FILE_MAP
+XENGINE_LOCKS
+XENGINE_MEM_ALLOC
+XENGINE_PERF_CONTEXT
+XENGINE_PERF_CONTEXT_GLOBAL
+XENGINE_QUERY_TRACE
+XENGINE_SUBTABLE
+XENGINE_TABLES
+XENGINE_TABLE_SPACE
+XENGINE_TRX
+DROP TABLE test.t1;
+DROP TABLE test.t2;
+# restart, test --xengine=0 upgrade
+SHOW DATABASES;
+Database
+__recycle_bin__
+information_schema
+mysql
+performance_schema
+sys
+test
+USE test;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `data` char(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+id	data
+1	12345
+CREATE TABLE t2 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+ERROR 42000: Unknown storage engine 'XENGINE'
+CREATE TABLE t2 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=INNODB;
+INSERT INTO t2 VALUES (1,'12345','ABCDEFG');
+SELECT * FROM t2;
+ID	DATA	DATA2
+1	12345	ABCDEFG
+ALTER TABLE t1 ADD COLUMN data2 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data3 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_2(`data2`);
+ALTER TABLE t2 ADD INDEX k_3(`data3`);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+CHECK TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	check	status	OK
+USE information_schema;
+"--xengine = 0, should have nothing"
+SHOW TABLES LIKE '%XENGINE%';
+Tables_in_information_schema (%XENGINE%)
+# restart again, to test recovery with --xengine=0 
+USE test;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `data` char(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `data2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'abcdefg',
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`),
+  KEY `k_2` (`data2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `ID` int(11) NOT NULL,
+  `DATA` char(20) DEFAULT NULL,
+  `DATA2` text,
+  `data3` varchar(100) DEFAULT 'abcdefg',
+  PRIMARY KEY (`ID`),
+  KEY `DATA` (`DATA`),
+  KEY `k_3` (`data3`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+SELECT * FROM t1;
+id	data	data2
+1	12345	abcdefg
+SELECT * FROM t2;
+ID	DATA	DATA2	data3
+1	12345	ABCDEFG	abcdefg
+CREATE TABLE t3 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+ERROR 42000: Unknown storage engine 'XENGINE'
+ALTER TABLE t1 ADD COLUMN data3 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data4 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_3(`data3`);
+ALTER TABLE t2 ADD INDEX k_4(`data4`);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `data` char(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `data2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'abcdefg',
+  `data3` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '1234567890',
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`),
+  KEY `k_2` (`data2`),
+  KEY `k_3` (`data3`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `ID` int(11) NOT NULL,
+  `DATA` char(20) DEFAULT NULL,
+  `DATA2` text,
+  `data3` varchar(100) DEFAULT 'abcdefg',
+  `data4` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`ID`),
+  KEY `DATA` (`DATA`),
+  KEY `k_3` (`data3`),
+  KEY `k_4` (`data4`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+SELECT * FROM t1;
+id	data	data2	data3
+1	12345	abcdefg	1234567890
+SELECT * FROM t2;
+ID	DATA	DATA2	data3	data4
+1	12345	ABCDEFG	abcdefg	1234567890
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+CHECK TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	check	status	OK
+USE information_schema;
+"--xengine = 0, should have nothing"
+SHOW TABLES LIKE '%XENGINE%';
+Tables_in_information_schema (%XENGINE%)
+# restart again, to test upgrade from --xengine=0 to --xengine=1 
+USE test;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `data` char(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `data2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'abcdefg',
+  `data3` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '1234567890',
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`),
+  KEY `k_2` (`data2`),
+  KEY `k_3` (`data3`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `ID` int(11) NOT NULL,
+  `DATA` char(20) DEFAULT NULL,
+  `DATA2` text,
+  `data3` varchar(100) DEFAULT 'abcdefg',
+  `data4` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`ID`),
+  KEY `DATA` (`DATA`),
+  KEY `k_3` (`data3`),
+  KEY `k_4` (`data4`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+SELECT * FROM t1;
+id	data	data2	data3
+1	12345	abcdefg	1234567890
+SELECT * FROM t2;
+ID	DATA	DATA2	data3	data4
+1	12345	ABCDEFG	abcdefg	1234567890
+CREATE TABLE t3 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+INSERT INTO t3 values(1, '12345', 'abcdefg');
+ALTER TABLE t3 ADD COLUMN DATA3 VARCHAR(100) DEFAULT '!@#$%^&*';
+ALTER TABLE t3 ADD INDEX key_3 (`DATA3`);
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `ID` int(11) NOT NULL,
+  `DATA` char(20) DEFAULT NULL,
+  `DATA2` text,
+  `DATA3` varchar(100) DEFAULT '!@#$%^&*',
+  PRIMARY KEY (`ID`),
+  KEY `DATA` (`DATA`),
+  KEY `key_3` (`DATA3`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1
+SELECT * FROM t3;
+ID	DATA	DATA2	DATA3
+1	12345	abcdefg	!@#$%^&*
+USE information_schema;
+"--xengine=1 should have xengine info tables"
+SHOW TABLES LIKE '%XENGINE%';
+Tables_in_information_schema (%XENGINE%)
+XENGINE_CFSTATS
+XENGINE_COLUMNS
+XENGINE_COMPACTION_HISTORY
+XENGINE_COMPACTION_STATS
+XENGINE_COMPACTION_TASK
+XENGINE_DBSTATS
+XENGINE_DDL
+XENGINE_DEBUG_INFO
+XENGINE_GLOBAL_INFO
+XENGINE_INDEX_FILE_MAP
+XENGINE_LOCKS
+XENGINE_MEM_ALLOC
+XENGINE_PERF_CONTEXT
+XENGINE_PERF_CONTEXT_GLOBAL
+XENGINE_QUERY_TRACE
+XENGINE_SUBTABLE
+XENGINE_TABLES
+XENGINE_TABLE_SPACE
+XENGINE_TRX
+SELECT DISTINCT(SUBTABLE_ID), TABLE_NAME, SUBTABLE_NAME FROM information_schema.xengine_subtable;
+SUBTABLE_ID	TABLE_NAME	SUBTABLE_NAME
+0	<internal>	default
+1	<internal>	__system__
+256	test.t3	PRIMARY
+257	test.t3	DATA
+258	test.t3	key_3
+DROP TABLE test.t1;
+DROP TABLE test.t2;
+# restart:

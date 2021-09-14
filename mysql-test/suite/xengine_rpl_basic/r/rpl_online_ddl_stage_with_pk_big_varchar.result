@@ -1,0 +1,448 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+=====================================================
+# Test online DDL(add unique key/add column/modify primary key) with primary key against DML
+=====================================================
+# case 1 add unique secondary key without rebuild
+=====================================================
+CREATE TABLE t(id INT PRIMARY KEY, cont VARCHAR(15000));
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sb_dml WAIT_FOR sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL cb_dml WAIT_FOR cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL cd_dml WAIT_FOR cd_dml_end';
+ALTER TABLE t ADD UNIQUE INDEX sk(cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL sb_dml_end WAIT_FOR cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL cb_dml_end WAIT_FOR cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+10000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+DROP TABLE t;
+=====================================================
+# case 2 add unique secondary key with rebuild
+=====================================================
+CREATE TABLE t(id INT PRIMARY KEY, cont VARCHAR(15000));
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sb_dml WAIT_FOR sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL cb_dml WAIT_FOR cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL cd_dml WAIT_FOR cd_dml_end';
+ALTER TABLE t ADD COLUMN extra CHAR(10) DEFAULT "Hello" AFTER id, ADD UNIQUE INDEX sk(cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL sb_dml_end WAIT_FOR cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL cb_dml_end WAIT_FOR cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `extra` char(10) COLLATE utf8mb4_general_ci DEFAULT 'Hello',
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `extra` char(10) DEFAULT 'Hello',
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+10000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `extra` char(10) COLLATE utf8mb4_general_ci DEFAULT 'Hello',
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `extra` char(10) DEFAULT 'Hello',
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+DROP TABLE t;
+=====================================================
+# case 3 modify primary key
+=====================================================
+CREATE TABLE t(id INT PRIMARY KEY, code INT NOT NULL, cont VARCHAR(15000) NOT NULL);
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin         SIGNAL pk_sb_dml WAIT_FOR pk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin    SIGNAL pk_cb_dml WAIT_FOR pk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done     SIGNAL pk_cd_dml WAIT_FOR pk_cd_dml_end';
+ALTER TABLE t DROP COLUMN id, ADD PRIMARY KEY(code, cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR pk_sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL pk_sb_dml_end WAIT_FOR pk_cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL pk_cb_dml_end WAIT_FOR pk_cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL pk_cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`code`,`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) NOT NULL,
+  PRIMARY KEY (`code`,`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+INSERT INTO t VALUES(10010, REPEAT('10010', 100));
+INSERT INTO t VALUES(10020, REPEAT('10020', 3000));
+ERROR 23000: Duplicate entry '10020-1002010020100201002010020100201002010020100201002010020100' for key 'PRIMARY'
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+11001
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`code`,`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) NOT NULL,
+  PRIMARY KEY (`code`,`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+DROP TABLE t;
+=====================================================
+# case 4 modify primary key and add unique secondary key
+=====================================================
+CREATE TABLE t(id INT PRIMARY KEY, code INT NOT NULL, cont VARCHAR(15000));
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+5000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin         SIGNAL pk_sb_dml WAIT_FOR pk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin    SIGNAL pk_cb_dml WAIT_FOR pk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done     SIGNAL pk_cd_dml WAIT_FOR pk_cd_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sk_sb_dml WAIT_FOR sk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL sk_cb_dml WAIT_FOR sk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL sk_cd_dml WAIT_FOR sk_cd_dml_end';
+ALTER TABLE t DROP COLUMN id, ADD PRIMARY KEY(code), ADD UNIQUE INDEX sk(cont(700));
+# Switch to dml connection
+SET DEBUG_SYNC='now WAIT_FOR pk_sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+6000
+SET DEBUG_SYNC='now SIGNAL pk_sb_dml_end WAIT_FOR pk_cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+7000
+SET DEBUG_SYNC='now SIGNAL pk_cb_dml_end WAIT_FOR pk_cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+8000
+SET DEBUG_SYNC='now SIGNAL pk_cd_dml_end WAIT_FOR sk_sb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+9000
+SET DEBUG_SYNC='now SIGNAL sk_sb_dml_end WAIT_FOR sk_cb_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+10000
+SET DEBUG_SYNC='now SIGNAL sk_cb_dml_end WAIT_FOR sk_cd_dml';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+11000
+SET DEBUG_SYNC='now SIGNAL sk_cd_dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+11000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`code`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`code`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT COUNT(*) FROM t;
+COUNT(*)
+14000
+include/rpl_sync.inc
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`code`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `code` int(11) NOT NULL,
+  `cont` varchar(15000) DEFAULT NULL,
+  PRIMARY KEY (`code`),
+  UNIQUE KEY `sk` (`cont`(700))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/assert.inc [master-slave t is same]
+DROP TABLE t;
+include/rpl_sync.inc
+include/rpl_end.inc

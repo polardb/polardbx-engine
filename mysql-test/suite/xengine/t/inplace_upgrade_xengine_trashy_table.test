@@ -1,0 +1,60 @@
+--source suite/xengine/include/have_xengine.inc
+
+--let $MYSQLD_DATADIR = `select @@datadir`
+
+--echo ###########################################################################
+--echo # Stop the default mtr server
+--echo ###########################################################################
+--echo # Stop DB server which was created by MTR default
+--let $shutdown_server_timeout = 300
+--source include/shutdown_mysqld.inc
+
+--let $MYSQLD_DATADIR1= $MYSQL_TMP_DIR/data
+--let $ZIP_FILE= $MYSQLTEST_VARDIR/std_data/upgrade/data_80016_xengine_trashy_table.zip
+--file_exists $ZIP_FILE
+
+--echo # Unzip the zip file.
+--exec unzip -qo $ZIP_FILE -d $MYSQL_TMP_DIR
+
+# upgrade xengine table when server restarts
+--echo ###########################################################################
+--echo # start server with existing data directory and upgrade, then check existing data
+--echo ###########################################################################
+--let $shutdown_server_timeout= 10
+--replace_result $MYSQLD MYSQLD $MYSQLD_DATADIR1 MYSQLD_DATADIR1
+--exec echo "restart: --datadir=$MYSQLD_DATADIR1 --innodb_data_file_path=ibdata1:12M:autoextend" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--let $wait_counter= 10000
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--let $MYSQL_DATADIR = `select @@datadir`
+--let $assert_file=$MYSQL_DATADIR/.xengine/Log
+--let $assert_text=Skip trashy temporary table during upgrade
+--let $assert_select= .*found trashy temporary table
+--let $assert_count= 1
+--let $assert_only_after= CURRENT_TEST: xengine.inplace_upgrade_xengine_trashy_table
+--source include/assert_grep.inc
+
+
+SHOW DATABASES;
+SHOW TABLES FROM test;
+SELECT count(*) FROM test.t1;
+
+USE information_schema;
+SELECT * FROM XENGINE_TABLES;
+SELECT * FROM XENGINE_DDL;
+SELECT DISTINCT(SUBTABLE_ID), TABLE_NAME, SUBTABLE_NAME FROM XENGINE_SUBTABLE WHERE TABLE_NAME <> '<internal>';
+
+--source suite/xengine/include/check_xengine_log_error.inc
+
+--echo ###########################################################################
+--echo # Cleanup
+--echo ###########################################################################
+--let $shutdown_server_timeout = 300
+--source include/shutdown_mysqld.inc
+
+--force-rmdir $MYSQLD_DATADIR1
+
+--let $restart_parameters = restart:
+--source include/start_mysqld.inc
+

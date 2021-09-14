@@ -1,0 +1,4 @@
+!include include/default_my.cnf
+
+[mysqld]
+default_storage_engine=xengine

@@ -1,0 +1,67 @@
+--source suite/xengine/include/have_xengine.inc
+--let $sync_count1= `show status like '%xengine_wal_synced%'`
+
+use test;
+create table t0 (id int, data  char(20), primary key(id));
+
+#
+# xengine_flush_log_at_trx_commit=2, sync every second.
+#
+
+#set global xengine_max_background_flushes=5;
+#set global xengine_max_background_compactions=10;
+set global xengine_flush_log_at_trx_commit=2;
+
+show variables like 'xengine_max_background_flushes';
+show variables like 'xengine_max_background_compactions';
+show variables like 'xengine_flush_log_at_trx_commit';
+select sleep(2);
+
+--let $sync_count2= `show status like '%xengine_wal_synced%'`
+--let $assert_cond= "$sync_count2" > "$sync_count1"
+--let $assert_text= sync count should grow.
+--echo $sync_count1
+--echo $sync_count2
+
+#
+# xengine_flush_log_at_trx_commit=1, sync when commit.
+#
+
+#set global xengine_max_background_flushes=3;
+#set global xengine_max_background_compactions=7;
+set global xengine_flush_log_at_trx_commit=1;
+
+show variables like 'xengine_max_background_flushes';
+show variables like 'xengine_max_background_compactions';
+show variables like 'xengine_flush_log_at_trx_commit';
+insert into t0 values(0, '123456');
+
+--let $sync_count3= `show status like '%xengine_wal_synced%'`
+--let $assert_cond= "$sync_count3" > "$sync_count2"
+--let $assert_text= sync count should grow.
+--echo $sync_count2
+--echo $sync_count3
+
+#
+# xengine_flush_log_at_trx_commit=0, don't sync.
+#
+
+#set global xengine_max_background_flushes=2;
+#set global xengine_max_background_compactions=5;
+set global xengine_flush_log_at_trx_commit=0;
+
+show variables like 'xengine_max_background_flushes';
+show variables like 'xengine_max_background_compactions';
+show variables like 'xengine_flush_log_at_trx_commit';
+insert into t0 values(1, '123456');
+
+--let $sync_count4= `show status like '%xengine_wal_synced%'`
+--let $assert_cond= "$sync_count4" = "$sync_count3"
+--let $assert_text= sync count should not grow.
+--echo $sync_count3
+--echo $sync_count4
+
+set global xengine_flush_log_at_trx_commit=1;
+
+drop table t0;
+--source suite/xengine/include/check_xengine_log_error.inc

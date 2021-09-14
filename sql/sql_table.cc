@@ -1,4 +1,8 @@
 /*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
+/*
    Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -7974,9 +7978,16 @@ static bool set_table_default_charset(THD *thd, HA_CREATE_INFO *create_info,
     let's fetch the database default character set and
     apply it to the table.
   */
+  bool is_xengine = create_info->db_type->db_type == DB_TYPE_XENGINE;
   if (create_info->default_table_charset == nullptr) {
-    if (get_default_db_collation(schema, &create_info->default_table_charset))
+    if (get_default_db_collation(schema, &create_info->default_table_charset)) {
       return true;
+    }
+
+    //for xengine, is collation is 0900_ai_ci, we replace it by general_ci
+    if (is_xengine && create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
+      create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
+    }
   } else {
     DBUG_ASSERT((create_info->used_fields & HA_CREATE_USED_CHARSET) == 0 ||
                 (create_info->used_fields & HA_CREATE_USED_DEFAULT_CHARSET) ||
@@ -7986,8 +7997,13 @@ static bool set_table_default_charset(THD *thd, HA_CREATE_INFO *create_info,
     if ((create_info->used_fields & HA_CREATE_USED_DEFAULT_CHARSET) &&
         !(create_info->used_fields & HA_CREATE_USED_DEFAULT_COLLATE) &&
         create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
-      create_info->default_table_charset =
+
+      if (!is_xengine) {
+        create_info->default_table_charset =
           thd->variables.default_collation_for_utf8mb4;
+      } else {
+        create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
+      }
 
       // ALTER TABLE ... CONVERT TO CHARACTER SET ...
       if (create_info->used_fields & HA_CREATE_USED_CHARSET) {
@@ -7996,8 +8012,13 @@ static bool set_table_default_charset(THD *thd, HA_CREATE_INFO *create_info,
     }
   }
 
-  if (create_info->default_table_charset == NULL)
+  if (create_info->default_table_charset == NULL) {
     create_info->default_table_charset = thd->collation();
+    if (is_xengine &&
+        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
+      create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
+    }
+  }
 
   return false;
 }

@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2004, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This library is free software; you can redistribute it and/or
@@ -2070,7 +2074,7 @@ static size_t my_strnxfrm_uca(const CHARSET_INFO *cs, Mb_wc mb_wc, uchar *dst,
     if (dst < de) *dst++ = s_res & 0xFF;
   }
 
-  if (dst < de) {
+  if (dst < de && !(flags & MY_STRXFRM_NOPAD_WITH_SPACE)) {
     /*
       PAD SPACE behavior.
 

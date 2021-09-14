@@ -1,0 +1,59 @@
+CREATE TABLE t(id INT NOT NULL, col1 INT, col2 INT NOT NULL, PRIMARY KEY(id, col2), UNIQUE KEY uk(col2)) ENGINE=XENGINE;
+INSERT INTO t VALUES(1, 2, 2), (2, 4, 4);
+SELECT * FROM t;
+id	col1	col2
+1	2	2
+2	4	4
+EXPLAIN SELECT col2 FROM t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	uk	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`col2` AS `col2` from `test`.`t`
+SELECT col2 FROM t;
+col2
+2
+4
+SET DEBUG_SYNC= 'xengine.inplace_populate_indexes_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t DROP COLUMN col1;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t SET col2=6 WHERE col2=4;
+SELECT * FROM t;
+id	col1	col2
+1	2	2
+2	4	6
+EXPLAIN SELECT col2 FROM t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	uk	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`col2` AS `col2` from `test`.`t`
+SELECT col2 FROM t;
+col2
+2
+6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `col2` int(11) NOT NULL,
+  PRIMARY KEY (`id`,`col2`),
+  UNIQUE KEY `uk` (`col2`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t;
+id	col2
+1	2
+2	6
+EXPLAIN SELECT col2 FROM t;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index	NULL	uk	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t`.`col2` AS `col2` from `test`.`t`
+SELECT col2 FROM t;
+col2
+2
+6
+DROP TABLE t;

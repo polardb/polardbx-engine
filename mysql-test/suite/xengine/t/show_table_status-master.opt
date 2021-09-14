@@ -1,0 +1,2 @@
+--xengine_debug_optimizer_n_rows=1000
+--xengine_table_stats_sampling_pct=100

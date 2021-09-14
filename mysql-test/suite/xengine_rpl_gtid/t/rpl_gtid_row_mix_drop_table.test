@@ -1,0 +1,2 @@
+--source include/have_binlog_format_mixed_or_row.inc
+--source suite/xengine_rpl_gtid/include/rpl_gtid_drop_table.inc

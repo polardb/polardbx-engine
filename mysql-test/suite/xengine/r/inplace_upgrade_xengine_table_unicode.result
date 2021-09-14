@@ -1,0 +1,52 @@
+###########################################################################
+# Stop the default mtr server
+###########################################################################
+# Stop DB server which was created by MTR default
+# Unzip the zip file.
+###########################################################################
+# start server with existing data directory and upgrade, then check existing data
+###########################################################################
+SHOW DATABASES;
+Database
+__recycle_bin__
+db中文
+information_schema
+mysql
+performance_schema
+sys
+test
+SHOW TABLES FROM test;
+Tables_in_test
+tbl中文
+SHOW TABLES FROM db中文;
+Tables_in_db中文
+tbl中文2
+USE information_schema;
+SELECT * FROM XENGINE_TABLES;
+SCHEMA_NAME	NAME	N_COLS	INSTANT_COLS
+test	tbl中文	2	0
+db中文	tbl中文2	2	0
+SELECT * FROM XENGINE_DDL;
+TABLE_SCHEMA	TABLE_NAME	PARTITION_NAME	INDEX_NAME	SUBTABLE_ID	INDEX_NUMBER	INDEX_TYPE	KV_FORMAT_VERSION
+test	tbl中文	NULL		256	256	3	11
+db中文	tbl中文2	NULL		257	257	3	11
+SELECT DISTINCT(SUBTABLE_ID), TABLE_NAME, SUBTABLE_NAME FROM XENGINE_SUBTABLE WHERE TABLE_NAME <> '<internal>';
+SUBTABLE_ID	TABLE_NAME	SUBTABLE_NAME
+257	db中文.tbl中文2	HIDDEN_PK_ID
+256	test.tbl中文	HIDDEN_PK_ID
+SELECT * FROM test.tbl中文;
+id	name
+1	abc
+2	bcd
+SELECT * FROM db中文.tbl中文2;
+id	name
+1	abc
+2	bcd
+SELECT * FROM XENGINE_DDL;
+TABLE_SCHEMA	TABLE_NAME	PARTITION_NAME	INDEX_NAME	SUBTABLE_ID	INDEX_NUMBER	INDEX_TYPE	KV_FORMAT_VERSION
+test	tbl中文	NULL	HIDDEN_PK_ID	256	256	3	11
+db中文	tbl中文2	NULL	HIDDEN_PK_ID	257	257	3	11
+###########################################################################
+# Cleanup
+###########################################################################
+# restart:

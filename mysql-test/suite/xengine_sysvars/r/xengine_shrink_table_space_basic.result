@@ -1,0 +1,10 @@
+CREATE TABLE test_shrink(c1 int primary key, c2 int) ENGINE=xengine;
+insert into test_shrink values (1, 1);
+set global xengine_force_flush_memtable_now=on;
+insert into test_shrink values (2, 2);
+set global xengine_force_flush_memtable_now=on;
+insert into test_shrink values (3, 3);
+set global xengine_force_flush_memtable_now=on;
+set global xengine_compact_cf = 55834574848;
+set global xengine_shrink_table_space=1;
+DROP TABLE test_shrink;

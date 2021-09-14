@@ -1,0 +1,232 @@
+SET @saved_parallel_read_threads = @@global.xengine_parallel_read_threads;
+SET @saved_sort_buffer_size = @@global.xengine_sort_buffer_size;
+SELECT @@global.xengine_parallel_read_threads;
+@@global.xengine_parallel_read_threads
+4
+SELECT @@global.xengine_sort_buffer_size;
+@@global.xengine_sort_buffer_size
+4194304
+SET xengine_parallel_read_threads=4;
+SET global xengine_sort_buffer_size=64*1024;
+Test interrupt during merge when build base
+###################################################################
+# case 1.1: check local merge interrupt
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SET SESSION DEBUG="+d,crash_during_local_merge";
+SET DEBUG_SYNC= 'xengine.local_merge_interrupted SIGNAL interrupted';
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR interrupted';
+# Switch to connection default
+ERROR HY000: Unknown error
+SET SESSION debug="-d,crash_during_local_merge";
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+###################################################################
+# case 1.2: check global merge interrupt
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SET SESSION DEBUG="+d,crash_during_global_merge";
+SET DEBUG_SYNC= 'xengine.global_merge_interrupted SIGNAL interrupted';
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR interrupted';
+# Switch to connection default
+ERROR HY000: Unknown error
+SET SESSION debug="-d,crash_during_global_merge";
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+###################################################################
+# case 2: dml unique check don't print err in child thread
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SET DEBUG_SYNC= 'xengine.build_base_global_merge_start SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+begin;
+INSERT INTO t1 VALUES(1005, repeat('1', 128));
+INSERT INTO t1 VALUES(1005, repeat('1', 128));
+commit;
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '1005' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+failed to add primary key
+DROP TABLE t1;
+###################################################################
+# case 3: test for thread from 1 to 64 for data size 1000
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), PRIMARY KEY(a))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SET xengine_parallel_read_threads=1;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=2;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=4;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=8;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=16;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=32;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=64;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+###################################################################
+# case 4: test for thread from 1 to 64 for data size 10
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), PRIMARY KEY(a))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SET xengine_parallel_read_threads=1;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=2;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=4;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=8;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=16;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=32;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET xengine_parallel_read_threads=64;
+ALTER TABLE t1 DROP PRIMARY KEY;
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+###################################################################
+# case 5: index is already sorted
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), PRIMARY KEY(a))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SET xengine_parallel_read_threads=4;
+ALTER TABLE t1 ADD INDEX a_1(a);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;
+SET @@global.xengine_parallel_read_threads=@saved_parallel_read_threads;
+SET @@global.xengine_sort_buffer_size=@saved_sort_buffer_size;
+SELECT @@global.xengine_parallel_read_threads;
+@@global.xengine_parallel_read_threads
+4
+SELECT @@global.xengine_sort_buffer_size;
+@@global.xengine_sort_buffer_size
+4194304

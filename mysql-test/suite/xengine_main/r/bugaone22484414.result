@@ -1,0 +1,25 @@
+drop table if exists t2;
+create table t2(
+i0 int(11) DEFAULT NULL ,
+i1 int(11) DEFAULT NULL ,
+i2 int(11) DEFAULT NULL
+) engine=xengine;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t2 add index idx1(i1), add index idx2(i2)  ;
+# Establish connection con1 (user=root)
+# Switch to connection con1
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t2 values(1,1,1);
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection default
+select *from t2 where i1 = 1;
+i0	i1	i2
+1	1	1
+select * from t2;
+i0	i1	i2
+1	1	1
+drop table t2;

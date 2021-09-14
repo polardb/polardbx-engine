@@ -1,0 +1,48 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+
+--disable_warnings
+
+drop table if exists t2;
+--enable_warnings
+create table t2(
+       i0 int(11) DEFAULT NULL ,
+       i1 int(11) DEFAULT NULL ,
+	   i2 int(11) DEFAULT NULL
+       
+) engine=xengine; 
+
+
+
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+send alter table t2 add index idx1(i1), add index idx2(i2)  ;
+
+	--echo # Establish connection con1 (user=root)
+	connect (con1,localhost,root,,);
+	--echo # Switch to connection con1
+	connection con1;
+	
+	
+	
+	SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+	insert into t2 values(1,1,1);
+	SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+	
+
+--echo # Switch to connection default
+connection default;
+reap;
+
+
+
+
+# if we got a stable snapshot for build index idx1, the idx1 will not include the record (1,1,1)
+select *from t2 where i1 = 1;
+
+select * from t2;
+
+
+drop table t2;
+
+--source suite/xengine/include/check_xengine_log_error.inc

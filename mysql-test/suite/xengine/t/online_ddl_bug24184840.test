@@ -1,0 +1,38 @@
+--source include/have_debug.inc
+--source suite/xengine/include/have_xengine.inc
+
+CREATE TABLE t(id INT NOT NULL, col1 INT, col2 INT NOT NULL, PRIMARY KEY(id, col2), UNIQUE KEY uk(col2)) ENGINE=XENGINE;
+
+INSERT INTO t VALUES(1, 2, 2), (2, 4, 4);
+SELECT * FROM t;
+--replace_column 10 #
+EXPLAIN SELECT col2 FROM t;
+SELECT col2 FROM t;
+
+SET DEBUG_SYNC= 'xengine.inplace_populate_indexes_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t DROP COLUMN col1;
+
+  connect (dml,localhost,root,,);
+  --echo # Switch to dml connection
+  connection dml;
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t SET col2=6 WHERE col2=4;
+  #INSERT INTO t VALUES(2, 5, 4);
+  SELECT * FROM t;
+  --replace_column 10 #
+  EXPLAIN SELECT col2 FROM t;
+  SELECT col2 FROM t;
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+# receive the result of ALTER TABLE, expected modify pk successfully
+reap;
+CHECK TABLE t;
+SHOW CREATE TABLE t;
+SELECT * FROM t;
+--replace_column 10 #
+EXPLAIN SELECT col2 FROM t;
+SELECT col2 FROM t;
+DROP TABLE t;
+
+--source suite/xengine/include/check_xengine_log_error.inc

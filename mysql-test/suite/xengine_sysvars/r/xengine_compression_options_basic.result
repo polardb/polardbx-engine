@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_COMPRESSION_OPTIONS;
+SELECT @start_global_value;
+@start_global_value
+-14:1:0
+"Trying to set variable @@global.XENGINE_COMPRESSION_OPTIONS to 444. It should fail because it is readonly."
+SET @@global.XENGINE_COMPRESSION_OPTIONS   = 444;
+ERROR HY000: Variable 'xengine_compression_options' is a read only variable

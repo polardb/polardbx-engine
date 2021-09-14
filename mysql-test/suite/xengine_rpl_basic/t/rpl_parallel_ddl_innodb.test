@@ -1,0 +1,12 @@
+--source include/not_valgrind.inc
+
+# Separated testcases for MyISAM and InnoDB because
+# result file differs.
+# MyISAM creates .frm, .MYI and .MYD files, whereas,
+# InnoDB creates .frm and .ibd files.
+
+--let $DEFAULT_ENGINE=XENGINE
+--source extra/rpl_tests/rpl_parallel_ddl.test
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

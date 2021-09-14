@@ -1,0 +1,11 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--echo # Establish another connection (user=root) for concurrent DML
+connect (dml,localhost,root,,);
+connection default;
+
+--let $test_file=suite/xengine/t/online_ddl_prefix_composite_key.inc
+--source suite/xengine/include/xengine_full_charset.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

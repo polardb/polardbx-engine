@@ -1,0 +1,13 @@
+#
+# Run subquery_sj_xengine_none.test with BKA_UNIQUE enabled
+#
+--source include/have_debug.inc
+SET debug= '+d,test_bka_unique';
+
+set optimizer_switch='batched_key_access=on,mrr_cost_based=off';
+
+--source suite/xengine_main/t/subquery_sj_xengine_none.test
+
+set optimizer_switch=default;
+
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,13 @@
+# suite/xengine_ext/t/is_table_constraints_mysql.test
+#
+# Check the content of information_schema.table_constraints about tables within
+# the database mysql (= the system tables) with different privileged users.
+#
+# Author:
+# 2008-01-23 mleich WL#4203 Reorganize and fix the data dictionary tests of
+#                           testsuite xengine_ext
+#                   Create this script based on older scripts and new code.
+#
+
+let $table_schema = mysql;
+--source suite/xengine_ext/datadict/table_constraints.inc

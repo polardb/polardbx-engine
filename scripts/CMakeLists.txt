@@ -1,3 +1,5 @@
+# Portions Copyright (c) 2020, Alibaba Group Holding Limited
+#
 # Copyright (c) 2006, 2019, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
@@ -432,6 +434,8 @@ ELSE()
       mysqldumpslow
       mysqld_multi
       mysqld_safe
+      query_trace_dump
+      compaction_tool
       )
   ENDIF()
 

@@ -1,0 +1,64 @@
+# existing issues of stocking MySQL
+x.performance_schema_sockets                    : WL#000 Need IPv6 support
+x.system_variable_bind_address                  : WL#000 Need IPv6 support
+rpl.rpl_ipv6                                    : WL#000 Need IPv6 support
+rpl.rpl_ip_mix                                  : WL#000 Need IPv6 support
+rpl.rpl_ip_mix2                                 : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_bad_deny     : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_good_deny    : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_max_con               : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_nameinfo_noname_allow : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_noname_allow : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_nameinfo_again_allow  : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_again_deny   : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_bad_allow    : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_ssl                   : WL#000 Need IPv6&SSL support
+perfschema.hostcache_ipv6_auth_plugin           : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_passwd                : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_blocked               : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_nameinfo_again_deny   : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_again_allow  : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_noname_deny  : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_addrinfo_good_allow   : WL#000 Need IPv6 support
+perfschema.hostcache_ipv6_nameinfo_noname_deny  : WL#000 Need IPv6 support
+perfschema.idx_compare_socket_instances         : WL#000 Need IPv6 support
+main.wl6301_3                                   : WL#000 Need IPv6 support
+
+# new issues with XEngine integrated
+query_rewrite_plugins.digest_collision              : BUG#000 load error log into table
+query_rewrite_plugins.errors                        : BUG#000 load error log into table
+query_rewrite_plugins.verbose                       : BUG#000 load error log into table
+test_services.test_services                         : BUG#000 load error log into table
+test_services.test_services_threaded                : BUG#000 load error log into table
+innodb.sdi                                          : BUG#000 JSON file is different, my_errno=175
+main.dd_upgrade_test                                : BUG#000 JSON file is different, my_errno=175
+main.mysqladmin                                     : BUG#000 mysqladmin command failed
+perfschema.transaction_nested_events                : BUG#000 $con1_therad_id is ''
+perfschema.idx_compare_ews_by_thread_by_event_name  : BUG#000 unstable
+# re-record following cases
+#binlog_nogtid.binlog_persist_only_variables         : BUG#000 need to filter out XEngine variable, refer to xengine_binlog_nogtid.binlog_persist_only_variables
+#binlog_nogtid.binlog_persist_variables              : BUG#000 need to filter out XEngine variable, refer to xengine_binlog_nogtid.binlog_persist_variables
+#binlog_nogtid.binlog_row_binlog                     : BUG#000 add xengine_paranoid_checks variable
+#binlog_nogtid.binlog_stm_binlog                     : BUG#000 add xengine_paranoid_checks variable
+#main.all_persisted_variables                        : BUG#000 need to filter out XEngine variable, refer to xengine_main.all_persisted_variables
+#main.dd_is_compatibility_cs                         : BUG#000 add XEngine I_S tables
+#main.information_schema_cs                          : BUG#000 add XEngine I_S tables
+#main.information_schema_db                          : BUG#000 add XEngine I_S tables
+#main.insert_select                                  : BUG#000 add xengine_bulk_load% variables
+#main.mysql_57_inplace_upgrade                       : BUG#000 increase number of sdi files due to XEngine I_S tables
+#main.mysqld--help-notwin                            : BUG#000 add output for XEngine SYS_VARs
+#main.mysqlshow_cs                                   : BUG#000 add XEngine I_S tables
+#perfschema.event_aggregate                          : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.event_aggregate_no_a                     : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.event_aggregate_no_a_no_h                : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.event_aggregate_no_a_no_u                : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.event_aggregate_no_a_no_u_no_h           : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.event_aggregate_no_h                     : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.event_aggregate_no_u                     : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.event_aggregate_no_u_no_h                : BUG#000 update wait/synch/mutex/sql/LOCK_connection_count
+#perfschema.pfs_example                              : BUG#000 remove wait/synch/sxlock/pfs_example/S2, update Performance_schema_rwlock_classes_lost
+#perfschema.pfs_example_lifecycle                    : BUG#000 remove wait/synch/sxlock/pfs_example/S2
+#sys_vars.all_vars                                   : BUG#000 add XEngine SYS_VARs
+#sysschema.pr_ps_setup_show_enabled                  : BUG#000 add XEngine background therads
+#sysschema.v_statements_with_full_table_scans        : BUG#000 update number of tables
+

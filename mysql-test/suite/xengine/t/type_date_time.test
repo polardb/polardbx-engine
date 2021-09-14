@@ -1,0 +1,10 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# Date and time column types
+# (DATE, DATETIME, TIMESTAMP, TIME, YEAR)
+#
+
+--source type_date_time.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -2,6 +2,10 @@
 #define HANDLER_INCLUDED
 
 /*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
+/*
    Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -668,6 +672,7 @@ enum legacy_db_type {
   /** Performance schema engine. */
   DB_TYPE_PERFORMANCE_SCHEMA,
   DB_TYPE_TEMPTABLE,
+  DB_TYPE_XENGINE = 41,
   DB_TYPE_FIRST_DYNAMIC = 42,
   DB_TYPE_SEQUENCE_DB,
   DB_TYPE_DEFAULT = 127  // Must be last

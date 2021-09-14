@@ -1,0 +1,31 @@
+--source suite/xengine/include/have_xengine.inc
+
+SET @start_global_value = @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS;
+SELECT @start_global_value;
+
+--echo "Trying to set @session.XENGINE_STRICT_COLLATION_EXCEPTIONS to simple table name."
+SET @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS = mytable;
+SELECT @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS;
+
+--echo "Trying to set @session.XENGINE_STRICT_COLLATION_EXCEPTIONS to regex table name(s)."
+SET @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS = "t.*";
+SELECT @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS;
+
+--echo "Trying to set @session.XENGINE_STRICT_COLLATION_EXCEPTIONS to multiple regex table names."
+SET @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS = "s.*,t.*";
+SELECT @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS;
+
+--echo "Trying to set @session.XENGINE_STRICT_COLLATION_EXCEPTIONS to empty."
+SET @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS = "";
+SELECT @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS;
+
+--echo "Trying to set @session.XENGINE_STRICT_COLLATION_EXCEPTIONS to default."
+SET @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS = DEFAULT;
+SELECT @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS;
+
+--echo "Trying to set @session.XENGINE_STRICT_COLLATION_EXCEPTIONS to 444.  It should fail because it is not session."
+--Error ER_GLOBAL_VARIABLE
+SET @@session.XENGINE_STRICT_COLLATION_EXCEPTIONS = 444;
+
+SET @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS = @start_global_value;
+SELECT @@global.XENGINE_STRICT_COLLATION_EXCEPTIONS;

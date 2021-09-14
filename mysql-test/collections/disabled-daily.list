@@ -92,7 +92,6 @@ xengine_main.errors                                     : BUG#22062974 function 
 #xengine_rpl_basic.rpl_master_pos_wait                   : BUG#21887336 Xdb_transaction destructor
 #xengine_rpl_basic.rpl_io_thd_wait_for_disk_space        : BUG#21887336 Xdb_transaction destructor
 xengine.shrink_extent_spaces                            : BUG#000 does not support yet
-xengine_sysvars.xengine_shrink_n_extent_space_basic     : BUG#000 does not support yet
 xengine_rpl.rpl_gtid_rocksdb_sys_header                 : BUG#000 gtid recover change
 xengine_rpl_basic.rpl_row_jsondiff_binarydiff           : BUG#000 JSON, slave not reach apply_json_diffs
 xengine_rpl_basic.rpl_row_jsondiff_error                : BUG#000 JSON, slave not reach apply_json_diffs
@@ -390,6 +389,52 @@ xengine_main.sp-vars                 : WL#24852289  test is created by init thre
 xengine_main.sp                      : WL#24852289  test is created by init thread, so use default charset.
 xengine_ext.xengine_charset          : WL#24852289  test is created by init thread, so use default charset.
 xengine_perfschema.show_aggregate    : WL#24852289  test is created by init thread, so use default charset.
+
+# xengine not supported mixed feature
+xengine.feature_recycle_truncated_table                        : WL#000 XEngine not support  
+xengine.feature_recycle_bin                                  : WL#000 XEngine not support  
+xengine_main.subquery_all                          : WL#000 XEngine not support  
+xengine_rpl_nogtid.rpl_semi_sync_install_at_start_server    : WL#000 XEngine not support  
+xengine_rpl_nogtid.rpl_semi_sync_uninstall_plugin    : WL#000 XEngine not support  
+xengine_rpl_nogtid.rpl_semi_sync_ack_thread        : WL#000 XEngine not support  
+xengine_main.subquery_nomat_nosj_bka_nixbnl        : WL#000 XEngine not support  
+xengine_auth_sec.server_withssl_client_withssl     : WL#000 XEngine not support  
+xengine_rpl_nogtid.rpl_semi_sync_wait_slave_count    : WL#000 XEngine not support  
+xengine_main.subquery_none                         : WL#000 XEngine not support  
+xengine_rpl_nogtid.rpl_nogtid_encryption_read      : WL#000 XEngine not support  
+xengine_main.subquery_nomat_nosj                     : WL#000 XEngine not support  
+xengine_main.subquery_all_bka                        : WL#000 XEngine not support  
+xengine_main.ssl_crl_clients_valid   : WL#000 XEngine not support  
+xengine_main.dd_schema_definition_after_upgrade_80_debug   : WL#000 XEngine not support  
+xengine_main.dd_schema_definition_after_upgrade_57_debug   : WL#000 XEngine not support  
+xengine_main.ssl_ca   : WL#000 XEngine not support  
+xengine_main.dictionary_tablespace                   : WL#000 XEngine not support  
+xengine_main.dd_upgrade_error                        : WL#000 XEngine not support  
+xengine_main.subquery_none_bka_nixbnl                : WL#000 XEngine not support  
+xengine_main.ssl_crl_crlpath                         : WL#000 XEngine not support  
+xengine_sysschema.fn_format_path                     : WL#000 XEngine not support  
+xengine_main.all_persisted_variables                 : WL#000 XEngine not support  
+xengine_rpl_basic.rpl_semi_sync_add_remove_slaves    : WL#000 XEngine not support  
+xengine_main.subquery_nomat_nosj_bka                 : WL#000 XEngine not support  
+xengine_main.grant_dynamic_session_variables_admin   : WL#000 XEngine not support  
+xengine_main.subquery_all_bka_nixbnl                 : WL#000 XEngine not support  
+xengine_rpl_basic.rpl_semi_sync_event                : WL#000 XEngine not support  
+xengine_main.dd_schema_definition_debug              : WL#000 XEngine not support  
+xengine_main.events_bugs   : WL#000 XEngine not support  
+xengine_main.mysql_57_inplace_upgrade                : WL#000 XEngine not support  
+xengine_main.dd_upgrade_cs   : WL#000 XEngine not support  
+xengine_main.dd_upgrade_error_debug                  : WL#000 XEngine not support  
+xengine_rpl_nogtid.rpl_semi_sync                     : WL#000 XEngine not support  
+xengine_main.subquery_none_bka   : WL#000 XEngine not support  
+xengine_main.dd_upgrade_partition   : WL#000 XEngine not support  
+xengine_main.ssl_crl   : WL#000 XEngine not support  
+xengine_main.mysql_80_inplace_upgrade   : WL#000 XEngine not support  
+xengine.inplace_upgrade_xengine_table_unicode   : WL#000 XEngine not support  
+xengine.inplace_upgrade   : WL#000 XEngine not support  
+xengine.inplace_upgrade_xengine_table   : WL#000 XEngine not support  
+xengine.inplace_upgrade_xengine_trashy_table   : WL#000 XEngine not support  
+xengine.inplace_upgrade_xengine_table_debug   : WL#000 XEngine not support  
+
 
 # Lizard didn't support in-place upgrade.
 main.dd_upgrade_partition                       : WL#000 Lizard didn't support in-place upgrade.

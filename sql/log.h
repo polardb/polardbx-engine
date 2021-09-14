@@ -1,3 +1,7 @@
+/*
+ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
+ */
+
 /* Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -792,7 +796,7 @@ extern Slow_log_throttle log_throttle_qni;
 #define sql_print_warning(...) \
   log_errlog_formatted(WARNING_LEVEL, ##__VA_ARGS__)
 
-#define sql_print_error(...) log_errlog_formatted(ERROR_LEVEL, ##__VA_ARGS__)
+#define sql_print_error(...) log_errlog_formatted(loglevel::ERROR_LEVEL, ##__VA_ARGS__)
 
 /**
   Prints a printf style message to the error log.

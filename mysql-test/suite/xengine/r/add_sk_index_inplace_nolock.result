@@ -1,0 +1,42 @@
+drop table if exists t1;
+# Establish connection con1 (user=root)
+# Switch to connection con1
+CREATE TABLE t1 (a INT primary key, b INT)ENGINE=xengine;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t1 values(3,3);
+insert into t1 values(4,4);
+insert into t1 values(5,5);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+alter table t1 add  index t1_c22 (b) ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6);
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+# Switch to connection con1
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `t1_c22` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 1;
+a	b
+1	1
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 2;
+a	b
+2	2
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 3;
+a	b
+3	3
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 4;
+a	b
+4	4
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 5;
+a	b
+5	5
+SELECT * FROM t1 USE INDEX (t1_c22) where b = 6;
+a	b
+6	6
+drop table t1;

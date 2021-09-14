@@ -1,0 +1,11 @@
+--source suite/xengine/include/have_xengine.inc
+--disable_warnings
+DROP TABLE IF EXISTS t;
+--enable_warnings
+CREATE TABLE t(id int primary key) engine=xengine;
+INSERT INTO t values (1), (2), (3);
+--error ER_TABLE_EXISTS_ERROR
+CREATE TABLE t(id int primary key) engine=xengine;
+SELECT * FROM t;
+DROP TABLE t;
+--source suite/xengine/include/check_xengine_log_error.inc

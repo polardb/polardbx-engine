@@ -1,0 +1,18 @@
+#
+# Bug#49823: mysql_upgrade fatal error due to general_log / slow_low CSV NULL
+#
+USE test;
+CREATE TABLE bug49823 (event_time TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), user_host MEDIUMTEXT NOT NULL, thread_id BIGINT(21) UNSIGNED NOT NULL, server_id INTEGER UNSIGNED NULL, command_type VARCHAR(64) NOT NULL, argument MEDIUMBLOB NOT NULL) engine=MYISAM CHARACTER SET utf8 comment="General log";
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SET GLOBAL general_log = OFF;
+USE mysql;
+FLUSH TABLES;
+RENAME TABLE general_log TO renamed_general_log;
+RENAME TABLE test.bug49823 TO general_log;
+# restart:--upgrade=FORCE --general-log=0
+DROP TABLE general_log;
+RENAME TABLE renamed_general_log TO general_log;
+USE test;
+# restart:

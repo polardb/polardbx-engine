@@ -1,0 +1,58 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+create database mysqltest;
+create table mysqltest.t1 (n int PRIMARY KEY);
+alter table mysqltest.t1 add m int;
+insert into mysqltest.t1 values (1,2);
+create table mysqltest.t2 (n int PRIMARY KEY);
+insert into mysqltest.t2 values (45);
+rename table mysqltest.t2 to mysqltest.t3, mysqltest.t1 to mysqltest.t2;
+include/rpl_sync.inc
+select * from mysqltest.t2;
+n	m
+1	2
+select * from mysqltest.t3;
+n
+45
+select * from mysqltest.t2;
+n	m
+1	2
+select * from mysqltest.t3;
+n
+45
+include/rpl_sync.inc
+show create table mysqltest.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `n` int(11) NOT NULL,
+  `m` int(11) DEFAULT NULL,
+  PRIMARY KEY (`n`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table mysqltest.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `n` int(11) NOT NULL,
+  `m` int(11) DEFAULT NULL,
+  PRIMARY KEY (`n`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [master-slave mysqltest.t2 is same]
+include/rpl_sync.inc
+show create table mysqltest.t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `n` int(11) NOT NULL,
+  PRIMARY KEY (`n`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table mysqltest.t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `n` int(11) NOT NULL,
+  PRIMARY KEY (`n`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [master-slave mysqltest.t3 is same]
+drop database mysqltest;
+include/rpl_sync.inc
+include/rpl_end.inc

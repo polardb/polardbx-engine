@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_CONCURRENT_WRITABLE_FILE_BUFFER_SWITCH_LIMIT;
+SELECT @start_global_value;
+@start_global_value
+32768
+"Trying to set variable @@global.XENGINE_CONCURRENT_WRITABLE_FILE_BUFFER_SWITCH_LIMIT to 444. It should fail because it is readonly."
+SET @@global.XENGINE_CONCURRENT_WRITABLE_FILE_BUFFER_SWITCH_LIMIT   = 444;
+ERROR HY000: Variable 'xengine_concurrent_writable_file_buffer_switch_limit' is a read only variable

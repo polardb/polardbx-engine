@@ -1432,6 +1432,276 @@ The following options may be given as the first argument:
  inversion optimization for moving window frames also for
  floating values.
  (Defaults to on; use --skip-windowing-use-high-precision to disable.)
+ --xengine[=name]    Enable or disable XENGINE plugin. Possible values are ON,
+ OFF, FORCE (don't start if the plugin fails to load).
+ --xengine-auto-shrink-enabled 
+ DBOptions::auto_shrink_enabled for XEngine
+ (Defaults to on; use --skip-xengine-auto-shrink-enabled to disable.)
+ --xengine-auto-shrink-schedule-interval=# 
+ DBOptions::auto_shrink_schedule_interval for XEngine
+ --xengine-base-background-compactions=# 
+ DBOptions::base_background_compactions for XEngine
+ --xengine-batch-group-max-group-size=# 
+ DBOptions::batch_group_max_group_size for XEngine
+ --xengine-batch-group-max-leader-wait-time-us=# 
+ DBOptions::batch_group_max_leader_wait_time_us for
+ XEngine
+ --xengine-batch-group-slot-array-size=# 
+ DBOptions::batch_group_slot_array_size for XEngine
+ --xengine-block-cache-size=# 
+ block_cache size for XEngine
+ --xengine-block-size=# 
+ BlockBasedTableOptions::block_size for XEngine
+ --xengine-bottommost-level=# 
+ CFOptions::bottommost_level for XEngine
+ --xengine-cfstats[=name] 
+ Enable or disable XENGINE_CFSTATS plugin. Possible values
+ are ON, OFF, FORCE (don't start if the plugin fails to
+ load).
+ --xengine-columns[=name] 
+ Enable or disable XENGINE_COLUMNS plugin. Possible values
+ are ON, OFF, FORCE (don't start if the plugin fails to
+ load).
+ --xengine-compact-cf=# 
+ Compact sub table
+ --xengine-compaction-delete-percent=# 
+ CFOptions::compaction_delete_percent for XEngine
+ --xengine-compaction-history[=name] 
+ Enable or disable XENGINE_COMPACTION_HISTORY plugin.
+ Possible values are ON, OFF, FORCE (don't start if the
+ plugin fails to load).
+ --xengine-compaction-mode=# 
+ DBOptions::compaction_mode for XEngine
+ --xengine-compaction-stats[=name] 
+ Enable or disable XENGINE_COMPACTION_STATS plugin.
+ Possible values are ON, OFF, FORCE (don't start if the
+ plugin fails to load).
+ --xengine-compaction-task[=name] 
+ Enable or disable XENGINE_COMPACTION_TASK plugin.
+ Possible values are ON, OFF, FORCE (don't start if the
+ plugin fails to load).
+ --xengine-compaction-task-extents-limit=# 
+ CFOptions::compaction_task_extents_limit for XEngine
+ --xengine-compaction-type=# 
+ DBOptions::compaction_type for XEngine
+ --xengine-compression-options=name 
+ CFOptions::compression_opts for XEngine
+ --xengine-compression-per-level=name 
+ CFOptions::compression_per_level for XEngine
+ --xengine-concurrent-writable-file-buffer-num=# 
+ DBOptions::concurrent_writable_file_buffer_num for
+ XEngine
+ --xengine-concurrent-writable-file-buffer-switch-limit=# 
+ DBOptions::concurrent_writable_file_buffer_switch_limit
+ for XEngine
+ --xengine-concurrent-writable-file-single-buffer-size=# 
+ DBOptions::concurrent_writable_file_single_buffer_size
+ for XEngine
+ --xengine-cpu-compaction-thread-num=# 
+ DBOptions::cpu_compaction_thread_num for XEngine
+ --xengine-datadir[=name] 
+ XEngine data directory
+ --xengine-db-total-write-buffer-size=# 
+ DBOptions::db_total_write_buffer_size for XEngine
+ --xengine-db-write-buffer-size=# 
+ DBOptions::db_write_buffer_size for XEngine
+ --xengine-dbstats[=name] 
+ Enable or disable XENGINE_DBSTATS plugin. Possible values
+ are ON, OFF, FORCE (don't start if the plugin fails to
+ load).
+ --xengine-ddl[=name] 
+ Enable or disable XENGINE_DDL plugin. Possible values are
+ ON, OFF, FORCE (don't start if the plugin fails to load).
+ --xengine-deadlock-detect 
+ Enables deadlock detection
+ --xengine-debug-info[=name] 
+ Enable or disable XENGINE_DEBUG_INFO plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-disable-auto-compactions 
+ CFOptions::disable_auto_compaction for XEngine
+ --xengine-disable-instant-ddl 
+ disable instant ddl feature if necessary.
+ --xengine-disable-online-ddl=# 
+ disable online ddl feature if necessary.0: not disable
+ online ddl,1: disable online-rebuild ddl, like modify
+ pk,2: disable all type online-ddl include
+ rebuild/norebuild
+ --xengine-disable-parallel-ddl 
+ disable parall ddl feature if necessary.
+ --xengine-dump-malloc-stats 
+ DBOptions::dump_malloc_stats for XENGINE
+ --xengine-dump-memtable-limit-size=# 
+ DBOptions::dump_memtable_limit_size for XEngine
+ --xengine-enable-2pc 
+ Enable two phase commit for XEngine
+ (Defaults to on; use --skip-xengine-enable-2pc to disable.)
+ --xengine-flush-delete-percent=# 
+ CFOptions::flush_delete_percent for XEngine
+ --xengine-flush-delete-percent-trigger=# 
+ CFOptions::flush_delete_percent_trigger for XEngine
+ --xengine-flush-delete-record-trigger=# 
+ CFOptions::flush_delete_record_trigger for XEngine
+ --xengine-flush-log-at-trx-commit=# 
+ Sync on transaction commit. Similar to
+ innodb_flush_log_at_trx_commit. 1: sync on commit, 0: not
+ sync until wal_bytes_per_sync, 2: sync per second
+ --xengine-force-flush-memtable-now 
+ Forces memstore flush which may block all write requests
+ so be careful
+ --xengine-fpga-compaction-thread-num=# 
+ DBOptions::fpga_compaction_thread_num for XEngine
+ --xengine-global-info[=name] 
+ Enable or disable XENGINE_GLOBAL_INFO plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-hotbackup=name 
+ Hot Backup
+ --xengine-idle-tasks-schedule-time=# 
+ DBOptions::idle_tasks_schedule_time for XEngine
+ --xengine-index-file-map[=name] 
+ Enable or disable XENGINE_INDEX_FILE_MAP plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-level-compaction-dynamic-level-bytes 
+ CFOptions::level_compaction_dynamic_level_bytes for
+ XEngine
+ (Defaults to on; use --skip-xengine-level-compaction-dynamic-level-bytes to disable.)
+ --xengine-level0-file-num-compaction-trigger=# 
+ CFOptions::level0_file_num_compaction_trigger for XEngine
+ --xengine-level0-layer-num-compaction-trigger=# 
+ CFOptions::level0_layer_num_compaction_trigger for
+ XEngine
+ --xengine-level1-extents-major-compaction-trigger=# 
+ CFOptions::level1_extents_major_compaction_trigger for
+ XEngine
+ --xengine-level2-usage-percent=# 
+ CFOptions::level2_usage_percent for XEngine
+ --xengine-lock-scanned-rows 
+ Take and hold locks on rows that are scanned but not
+ updated
+ --xengine-lock-wait-timeout=# 
+ Number of seconds to wait for lock
+ --xengine-locks[=name] 
+ Enable or disable XENGINE_LOCKS plugin. Possible values
+ are ON, OFF, FORCE (don't start if the plugin fails to
+ load).
+ --xengine-max-background-compactions=# 
+ DBOptions::max_background_compactions for XEngine
+ --xengine-max-background-dumps=# 
+ DBOptions::max_background_dumps for XEngine
+ --xengine-max-background-flushes=# 
+ DBOptions::max_background_flushes for XEngine
+ --xengine-max-free-extent-percent=# 
+ DBOptions::max_free_extent_percent for XEngine
+ --xengine-max-manifest-file-size=# 
+ DBOptions::max_manifest_file_size for XEngine
+ --xengine-max-row-locks=# 
+ Maximum number of locks a transaction can have
+ --xengine-max-shrink-extent-count=# 
+ DBOptions::max_shrink_extent_count for XEngine
+ --xengine-max-total-wal-size=# 
+ DBOptions::max_total_wal_size for XEngine
+ --xengine-max-write-buffer-number=# 
+ CFOptions::max_write_buffer_number for XEngine
+ --xengine-max-write-buffer-number-to-maintain=# 
+ CFOptions::max_write_buffer_number_to_maintain for
+ XEngine
+ --xengine-mem-alloc[=name] 
+ Enable or disable XENGINE_MEM_ALLOC plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-memtable=name 
+ options for CFOptions::memtable in XEngine
+ --xengine-min-write-buffer-number-to-merge=# 
+ CFOptions::min_write_buffer_number_to_merge for XEngine
+ --xengine-mutex-backtrace-threshold-ns=# 
+ DBOptions::mutex_backtrace_threshold_ns for XEngine
+ --xengine-parallel-read-threads=# 
+ Number of threads to do parallel read.
+ --xengine-parallel-recovery-thread-num=# 
+ DBOptions::parallel_recovery_thread_num for XEngine.
+ Default is 0
+ --xengine-parallel-wal-recovery 
+ DBOptions::parallel_wal_recovery for XEngine. Default is
+ FALSE
+ --xengine-pause-background-work 
+ Disable all xengine background operations
+ --xengine-perf-context[=name] 
+ Enable or disable XENGINE_PERF_CONTEXT plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-perf-context-global[=name] 
+ Enable or disable XENGINE_PERF_CONTEXT_GLOBAL plugin.
+ Possible values are ON, OFF, FORCE (don't start if the
+ plugin fails to load).
+ --xengine-purge-invalid-subtable-bg 
+ Turn on to enable purging invalid subtable in background
+ (Defaults to on; use --skip-xengine-purge-invalid-subtable-bg to disable.)
+ --xengine-query-trace[=name] 
+ Enable or disable XENGINE_QUERY_TRACE plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-query-trace-print-slow 
+ if print slow query detail in error log for XEngine
+ (Defaults to on; use --skip-xengine-query-trace-print-slow to disable.)
+ --xengine-query-trace-sum=name 
+ if record query detail in IS table for XEngine
+ --xengine-rate-limiter-bytes-per-sec=# 
+ DBOptions::rate_limiter bytes_per_sec for XEngine
+ --xengine-reset-pending-shrink=# 
+ reset subtable's pending shrink
+ --xengine-row-cache-size=# 
+ row_cache size for XEngine
+ --xengine-scan-add-blocks-limit=# 
+ CFOptions::scan_add_blocks_limit for XEngine
+ --xengine-shrink-allocate-interval=# 
+ DBOptions::shrink_allocate_interval for XEngine
+ --xengine-shrink-table-space=# 
+ Shrink xengine table space
+ --xengine-sort-buffer-size=# 
+ Memory buffer size for index creation
+ --xengine-stats-dump-period-sec=# 
+ DBOptions::stats_dump_period_sec for XEngine
+ --xengine-strict-collation-check 
+ Enforce case sensitive collation for XEngine indexes
+ (Defaults to on; use --skip-xengine-strict-collation-check to disable.)
+ --xengine-strict-collation-exceptions=name 
+ List of tables (using regex) that are excluded from the
+ case sensitive collation enforcement
+ --xengine-subtable[=name] 
+ Enable or disable XENGINE_SUBTABLE plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-table-cache-numshardbits=# 
+ DBOptions::table_cache_numshardbits for XEngine
+ --xengine-table-cache-size=# 
+ DBOptions::table_cache_size for XEngine
+ --xengine-table-space[=name] 
+ Enable or disable XENGINE_TABLE_SPACE plugin. Possible
+ values are ON, OFF, FORCE (don't start if the plugin
+ fails to load).
+ --xengine-tables[=name] 
+ Enable or disable XENGINE_TABLES plugin. Possible values
+ are ON, OFF, FORCE (don't start if the plugin fails to
+ load).
+ --xengine-total-max-shrink-extent-count=# 
+ DBOptions::total_max_shrink_extent_count for XEngine
+ --xengine-trx[=name] 
+ Enable or disable XENGINE_TRX plugin. Possible values are
+ ON, OFF, FORCE (don't start if the plugin fails to load).
+ --xengine-unsafe-for-binlog 
+ Allowing statement based binary logging which may break
+ consistency
+ --xengine-wal-dir=name 
+ DBOptions::wal_dir for XEngine
+ --xengine-wal-recovery-mode=# 
+ DBOptions::wal_recovery_mode for XEngine. Default is
+ kAbsoluteConsistency
+ --xengine-write-buffer-size=# 
+ CFOptions::write_buffer_size for XEngine
+ --xengine-write-disable-wal 
+ WriteOptions::disableWAL for XEngine
 
 Variables (--variable-name=value)
 abort-slave-event-count 0
@@ -1814,6 +2084,110 @@ validate-user-plugins TRUE
 verbose TRUE
 wait-timeout 28800
 windowing-use-high-precision TRUE
+xengine ON
+xengine-auto-shrink-enabled TRUE
+xengine-auto-shrink-schedule-interval 3600
+xengine-base-background-compactions 1
+xengine-batch-group-max-group-size 8
+xengine-batch-group-max-leader-wait-time-us 50
+xengine-batch-group-slot-array-size 8
+xengine-block-cache-size 536870912
+xengine-block-size 16384
+xengine-bottommost-level 2
+xengine-cfstats ON
+xengine-columns ON
+xengine-compact-cf 0
+xengine-compaction-delete-percent 70
+xengine-compaction-history ON
+xengine-compaction-mode 0
+xengine-compaction-stats ON
+xengine-compaction-task ON
+xengine-compaction-task-extents-limit 1000
+xengine-compaction-type 0
+xengine-compression-options -14:1:0
+xengine-compression-per-level kNoCompression
+xengine-concurrent-writable-file-buffer-num 4
+xengine-concurrent-writable-file-buffer-switch-limit 32768
+xengine-concurrent-writable-file-single-buffer-size 65536
+xengine-cpu-compaction-thread-num 8
+xengine-datadir ./.xengine
+xengine-db-total-write-buffer-size 107374182400
+xengine-db-write-buffer-size 107374182400
+xengine-dbstats ON
+xengine-ddl ON
+xengine-deadlock-detect FALSE
+xengine-debug-info ON
+xengine-disable-auto-compactions FALSE
+xengine-disable-instant-ddl FALSE
+xengine-disable-online-ddl 0
+xengine-disable-parallel-ddl FALSE
+xengine-dump-malloc-stats FALSE
+xengine-dump-memtable-limit-size 67108864
+xengine-enable-2pc TRUE
+xengine-flush-delete-percent 70
+xengine-flush-delete-percent-trigger 700000
+xengine-flush-delete-record-trigger 700000
+xengine-flush-log-at-trx-commit 1
+xengine-force-flush-memtable-now FALSE
+xengine-fpga-compaction-thread-num 8
+xengine-global-info ON
+xengine-hotbackup 
+xengine-idle-tasks-schedule-time 60
+xengine-index-file-map ON
+xengine-level-compaction-dynamic-level-bytes TRUE
+xengine-level0-file-num-compaction-trigger 64
+xengine-level0-layer-num-compaction-trigger 8
+xengine-level1-extents-major-compaction-trigger 1000
+xengine-level2-usage-percent 70
+xengine-lock-scanned-rows FALSE
+xengine-lock-wait-timeout 1
+xengine-locks ON
+xengine-max-background-compactions 1
+xengine-max-background-dumps 1
+xengine-max-background-flushes 1
+xengine-max-free-extent-percent 10
+xengine-max-manifest-file-size 18446744073709551615
+xengine-max-row-locks 1073741824
+xengine-max-shrink-extent-count 512
+xengine-max-total-wal-size 107374182400
+xengine-max-write-buffer-number 1000
+xengine-max-write-buffer-number-to-maintain 1000
+xengine-mem-alloc ON
+xengine-memtable 
+xengine-min-write-buffer-number-to-merge 2
+xengine-mutex-backtrace-threshold-ns 100000000
+xengine-parallel-read-threads 4
+xengine-parallel-recovery-thread-num 0
+xengine-parallel-wal-recovery FALSE
+xengine-pause-background-work FALSE
+xengine-perf-context ON
+xengine-perf-context-global ON
+xengine-purge-invalid-subtable-bg TRUE
+xengine-query-trace ON
+xengine-query-trace-print-slow TRUE
+xengine-query-trace-sum OFF
+xengine-rate-limiter-bytes-per-sec 0
+xengine-reset-pending-shrink 0
+xengine-row-cache-size 0
+xengine-scan-add-blocks-limit 100
+xengine-shrink-allocate-interval 3600
+xengine-shrink-table-space -1
+xengine-sort-buffer-size 4194304
+xengine-stats-dump-period-sec 600
+xengine-strict-collation-check TRUE
+xengine-strict-collation-exceptions (No default value)
+xengine-subtable ON
+xengine-table-cache-numshardbits 7
+xengine-table-cache-size 1073741824
+xengine-table-space ON
+xengine-tables ON
+xengine-total-max-shrink-extent-count 7680
+xengine-trx ON
+xengine-unsafe-for-binlog FALSE
+xengine-wal-dir 
+xengine-wal-recovery-mode 1
+xengine-write-buffer-size 268435456
+xengine-write-disable-wal FALSE
 
 To see what values a running MySQL server is using, type
 'mysqladmin variables' instead of 'mysqld --verbose --help'.

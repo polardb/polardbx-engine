@@ -1,0 +1,93 @@
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES(0);
+INSERT INTO valid_values VALUES(10);
+INSERT INTO valid_values VALUES(20);
+INSERT INTO valid_values VALUES(100);
+INSERT INTO valid_values VALUES(5120);
+CREATE TABLE invalid_values (value varchar(255));
+INSERT INTO invalid_values VALUES('\'aaa\'');
+INSERT INTO invalid_values VALUES('\'bbb\'');
+INSERT INTO invalid_values VALUES('\'-1\'');
+SET @start_global_value = @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+SELECT @start_global_value;
+@start_global_value
+7680
+'# Setting to valid values in global scope#'
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 0"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 0;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+0
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT = DEFAULT;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 10"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 10;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+10
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT = DEFAULT;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 20"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 20;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+20
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT = DEFAULT;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 100"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 100;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+100
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT = DEFAULT;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 5120"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 5120;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+5120
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT = DEFAULT;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+"Trying to set variable @@session.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 444. It should fail because it is not session."
+SET @@session.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 444;
+ERROR HY000: Variable 'xengine_total_max_shrink_extent_count' is a GLOBAL variable and should be set with SET GLOBAL
+'# Testing with invalid values in global scope #'
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 'aaa'"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 'aaa';
+Got one of the listed errors
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to 'bbb'"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = 'bbb';
+Got one of the listed errors
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+"Trying to set variable @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT to '-1'"
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT   = '-1';
+Got one of the listed errors
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+SET @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT = @start_global_value;
+SELECT @@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT;
+@@global.XENGINE_TOTAL_MAX_SHRINK_EXTENT_COUNT
+7680
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

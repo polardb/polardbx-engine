@@ -1,0 +1,230 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+connect (dml,localhost,root,,);
+connection default;
+
+SET @saved_parallel_read_threads = @@global.xengine_parallel_read_threads;
+SET @saved_sort_buffer_size = @@global.xengine_sort_buffer_size;
+SELECT @@global.xengine_parallel_read_threads;
+SELECT @@global.xengine_sort_buffer_size;
+SET xengine_parallel_read_threads=4;
+SET global xengine_sort_buffer_size=64*1024;
+
+--echo Test interrupt during merge when build base
+--echo ###################################################################
+--echo # case 1.1: check local merge interrupt
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+let $i=0;
+--disable_query_log
+while($i < 1000) {
+  # each record is about 128 bytes
+  --eval INSERT INTO t1 VALUES($i, repeat('1', 128));
+  inc $i;
+}
+--enable_query_log
+
+SET SESSION DEBUG="+d,crash_during_local_merge";
+SET DEBUG_SYNC= 'xengine.local_merge_interrupted SIGNAL interrupted';
+SEND ALTER TABLE t1 ADD PRIMARY KEY(a);
+
+      --echo # Switch to connection dml
+      connection dml;
+      SET DEBUG_SYNC= 'now WAIT_FOR interrupted';
+
+--echo # Switch to connection default
+connection default;
+--error 1105
+reap;
+SET SESSION debug="-d,crash_during_local_merge";
+SHOW CREATE TABLE t1;
+CHECK TABLE t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo # case 1.2: check global merge interrupt
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+let $i=0;
+--disable_query_log
+while($i < 1000) {
+  # each record is about 128 bytes
+  --eval INSERT INTO t1 VALUES($i, repeat('1', 128));
+  inc $i;
+}
+--enable_query_log
+
+SET SESSION DEBUG="+d,crash_during_global_merge";
+SET DEBUG_SYNC= 'xengine.global_merge_interrupted SIGNAL interrupted';
+SEND ALTER TABLE t1 ADD PRIMARY KEY(a);
+
+      --echo # Switch to connection dml
+      connection dml;
+      SET DEBUG_SYNC= 'now WAIT_FOR interrupted';
+
+--echo # Switch to connection default
+connection default;
+--error 1105
+reap;
+SET SESSION debug="-d,crash_during_global_merge";
+SHOW CREATE TABLE t1;
+CHECK TABLE t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo # case 2: dml unique check don't print err in child thread
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+let $i=0;
+--disable_query_log
+while($i < 1000) {
+  # each record is about 128 bytes
+  --eval INSERT INTO t1 VALUES($i, repeat('1', 128));
+  inc $i;
+}
+--enable_query_log
+
+SET DEBUG_SYNC= 'xengine.build_base_global_merge_start SIGNAL start_dml WAIT_FOR dml_done';
+SEND ALTER TABLE t1 ADD PRIMARY KEY(a);
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # insert key2
+  # wait the create pk ddl enter the build_base_global_merge_start point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # duplicated for new pk
+  eval begin;
+  INSERT INTO t1 VALUES(1005, repeat('1', 128));
+  INSERT INTO t1 VALUES(1005, repeat('1', 128));
+  eval commit;
+  # SELECT * FROM t1;
+  # signal create pk ddl the key has been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create primary key fail
+--error 1062
+reap;
+CHECK TABLE t1;
+
+SHOW CREATE TABLE t1;
+# SELECT * FROM t1;
+--echo failed to add primary key
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo # case 3: test for thread from 1 to 64 for data size 1000
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), PRIMARY KEY(a))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+let $i=0;
+--disable_query_log
+while($i < 1000) {
+  # each record is about 128 bytes
+  --eval INSERT INTO t1 VALUES($i, repeat('1', 128));
+  inc $i;
+}
+--enable_query_log
+SET xengine_parallel_read_threads=1;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=2;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=4;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=8;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=16;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=32;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=64;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo # case 4: test for thread from 1 to 64 for data size 10
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), PRIMARY KEY(a))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+let $i=0;
+--disable_query_log
+while($i < 10) {
+  # each record is about 128 bytes
+  --eval INSERT INTO t1 VALUES($i, repeat('1', 128));
+  inc $i;
+}
+--enable_query_log
+SET xengine_parallel_read_threads=1;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=2;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=4;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=8;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=16;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=32;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+SET xengine_parallel_read_threads=64;
+ALTER TABLE t1 DROP PRIMARY KEY; ALTER TABLE t1 ADD PRIMARY KEY(a);
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo # case 5: index is already sorted
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), PRIMARY KEY(a))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+let $i=0;
+--disable_query_log
+while($i < 1000) {
+  # each record is about 128 bytes
+  --eval INSERT INTO t1 VALUES($i, repeat('1', 128));
+  inc $i;
+}
+--enable_query_log
+
+SET xengine_parallel_read_threads=4;
+ALTER TABLE t1 ADD INDEX a_1(a);
+CHECK TABLE t1;
+DROP TABLE t1;
+
+SET @@global.xengine_parallel_read_threads=@saved_parallel_read_threads;
+SET @@global.xengine_sort_buffer_size=@saved_sort_buffer_size;
+SELECT @@global.xengine_parallel_read_threads;
+SELECT @@global.xengine_sort_buffer_size;
+

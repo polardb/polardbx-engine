@@ -1,0 +1,386 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+connect (dml,localhost,root,,);
+connection default;
+
+--echo =====================================================
+--echo # Test online DDL(add unique key/add column/add primary key) with hidden primary key against DML
+--echo =====================================================
+--echo # case 1 add unique secondary key without rebuild
+--echo =====================================================
+CREATE TABLE t(id INT, cont TEXT);
+SHOW CREATE TABLE t;
+
+--disable_query_log
+let $i=10000;
+let $max=15000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sb_dml WAIT_FOR sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL cb_dml WAIT_FOR cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL cd_dml WAIT_FOR cd_dml_end';
+send ALTER TABLE t ADD UNIQUE INDEX sk(cont(700));
+
+  --echo # Switch to dml connection
+  connection dml;
+
+  SET DEBUG_SYNC='now WAIT_FOR sb_dml';
+  --disable_query_log
+  let $i=15000;
+  let $max=16000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL sb_dml_end WAIT_FOR cb_dml';
+  --disable_query_log
+  let $i=16000;
+  let $max=17000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL cb_dml_end WAIT_FOR cd_dml';
+  --disable_query_log
+  let $i=17000;
+  let $max=18000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL cd_dml_end';
+
+connection default;
+reap;
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+SHOW CREATE TABLE t;
+
+--disable_query_log
+let $i=18000;
+let $max=20000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+DROP TABLE t;
+
+--echo =====================================================
+--echo # case 2 add unique secondary key with rebuild
+--echo =====================================================
+CREATE TABLE t(id INT, cont TEXT);
+SHOW CREATE TABLE t;
+
+--disable_query_log
+let $i=10000;
+let $max=15000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sb_dml WAIT_FOR sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL cb_dml WAIT_FOR cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL cd_dml WAIT_FOR cd_dml_end';
+send ALTER TABLE t ADD COLUMN extra CHAR(10) DEFAULT "Hello" AFTER id, ADD UNIQUE INDEX sk(cont(700));
+
+  --echo # Switch to dml connection
+  connection dml;
+
+  SET DEBUG_SYNC='now WAIT_FOR sb_dml';
+  --disable_query_log
+  let $i=15000;
+  let $max=16000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL sb_dml_end WAIT_FOR cb_dml';
+  --disable_query_log
+  let $i=16000;
+  let $max=17000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL cb_dml_end WAIT_FOR cd_dml';
+  --disable_query_log
+  let $i=17000;
+  let $max=18000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL cd_dml_end';
+
+connection default;
+reap;
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+SHOW CREATE TABLE t;
+
+--disable_query_log
+let $i=18000;
+let $max=20000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, CONCAT("Hello", CAST($i AS CHAR(5))), REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+DROP TABLE t;
+
+--echo =====================================================
+--echo # case 3 add primary key
+--echo =====================================================
+CREATE TABLE t(id INT NOT NULL, cont TEXT NOT NULL);
+SHOW CREATE TABLE t;
+
+--disable_query_log
+let $i=10000;
+let $max=15000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin         SIGNAL pk_sb_dml WAIT_FOR pk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin    SIGNAL pk_cb_dml WAIT_FOR pk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done     SIGNAL pk_cd_dml WAIT_FOR pk_cd_dml_end';
+send ALTER TABLE t ADD PRIMARY KEY(id, cont(700));
+
+  --echo # Switch to dml connection
+  connection dml;
+
+  SET DEBUG_SYNC='now WAIT_FOR pk_sb_dml';
+  --disable_query_log
+  let $i=15000;
+  let $max=16000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL pk_sb_dml_end WAIT_FOR pk_cb_dml';
+  --disable_query_log
+  let $i=16000;
+  let $max=17000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL pk_cb_dml_end WAIT_FOR pk_cd_dml';
+  --disable_query_log
+  let $i=17000;
+  let $max=18000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL pk_cd_dml_end';
+
+connection default;
+reap;
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+SHOW CREATE TABLE t;
+
+--error 1062
+INSERT INTO t VALUES(10010, REPEAT('10010', 10000));
+--disable_query_log
+let $i=21000;
+let $max=24000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+DROP TABLE t;
+
+--echo =====================================================
+--echo # case 4 add primary key and unique secondary key
+--echo =====================================================
+CREATE TABLE t(id INT NOT NULL, cont TEXT);
+SHOW CREATE TABLE t;
+
+--disable_query_log
+let $i=10000;
+let $max=15000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin         SIGNAL pk_sb_dml WAIT_FOR pk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin    SIGNAL pk_cb_dml WAIT_FOR pk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done     SIGNAL pk_cd_dml WAIT_FOR pk_cd_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin        SIGNAL sk_sb_dml WAIT_FOR sk_sb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL sk_cb_dml WAIT_FOR sk_cb_dml_end';
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done  SIGNAL sk_cd_dml WAIT_FOR sk_cd_dml_end';
+send ALTER TABLE t ADD PRIMARY KEY(id), ADD UNIQUE INDEX sk(cont(700));
+
+  --echo # Switch to dml connection
+  connection dml;
+
+  SET DEBUG_SYNC='now WAIT_FOR pk_sb_dml';
+  --disable_query_log
+  let $i=15000;
+  let $max=16000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL pk_sb_dml_end WAIT_FOR pk_cb_dml';
+  --disable_query_log
+  let $i=16000;
+  let $max=17000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL pk_cb_dml_end WAIT_FOR pk_cd_dml';
+  --disable_query_log
+  let $i=17000;
+  let $max=18000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL pk_cd_dml_end WAIT_FOR sk_sb_dml';
+  --disable_query_log
+  let $i=18000;
+  let $max=19000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL sk_sb_dml_end WAIT_FOR sk_cb_dml';
+  --disable_query_log
+  let $i=19000;
+  let $max=20000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL sk_cb_dml_end WAIT_FOR sk_cd_dml';
+  --disable_query_log
+  let $i=20000;
+  let $max=21000;
+  while ($i < $max) {
+    eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+    inc $i;
+  }
+  --enable_query_log
+  CHECK TABLE t;
+  SELECT COUNT(*) FROM t;
+
+  SET DEBUG_SYNC='now SIGNAL sk_cd_dml_end';
+
+connection default;
+reap;
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+SHOW CREATE TABLE t;
+
+--disable_query_log
+let $i=21000;
+let $max=24000;
+while ($i < $max) {
+  eval INSERT INTO t VALUES($i, REPEAT(CAST($i AS CHAR(5)), 10000));
+  inc $i;
+}
+--enable_query_log
+
+CHECK TABLE t;
+SELECT COUNT(*) FROM t;
+
+DROP TABLE t;
+
+--source suite/xengine/include/check_xengine_log_error.inc

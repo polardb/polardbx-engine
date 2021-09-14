@@ -1,0 +1,28 @@
+--source suite/xengine/include/have_xengine.inc
+
+call mtr.add_suppression("Did not write failed ");
+call mtr.add_suppression("Can't open and lock privilege tables");
+
+SET @ORIG_EVENT_SCHEDULER = @@EVENT_SCHEDULER;
+
+let $TARGET_DB = rqg_ddl;
+let $GRAMMAR_FILES = ddl.yy;
+let $DATA_FILE = ddl.zz;
+
+--disable_warnings
+eval CREATE DATABASE IF NOT EXISTS $TARGET_DB;
+--enable_warnings
+
+--source ../include/rqg.inc
+
+--disable_warnings
+eval DROP DATABASE $TARGET_DB;
+DROP TABLE IF EXISTS test.executors;
+DROP DATABASE IF EXISTS testdb_N;
+DROP DATABASE IF EXISTS testdb_S;
+--enable_warnings
+
+SET GLOBAL EVENT_SCHEDULER = @ORIG_EVENT_SCHEDULER;
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

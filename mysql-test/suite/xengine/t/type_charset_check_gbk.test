@@ -1,0 +1,42 @@
+--source suite/xengine/include/have_xengine.inc
+
+CREATE TABLE t1_sec_gbk(ID INT AUTO_INCREMENT, C1 VARCHAR(100), C2 VARCHAR(100), PRIMARY KEY(ID), KEY IDX_C1(C1)) charset gbk;
+CREATE TABLE t1_sec_gbk_bin(ID INT AUTO_INCREMENT, C1 VARCHAR(100), C2 VARCHAR(100), PRIMARY KEY(ID), KEY IDX_C1(C1)) charset gbk collate gbk_bin;
+
+
+delimiter //;
+create PROCEDURE proc_xengine_gbk()
+begin
+declare total_num int;
+set total_num=256*256;
+set @var=1;
+set autocommit =0;
+while @var<=total_num do
+set @dst=concat('0x',hex(@var));
+set @sql_str_gbk=concat('insert into t1_sec_gbk(id,c1,c2) values(@var, ' , @dst , ',' , @dst, ');');
+set @sql_str_bin=concat('insert into t1_sec_gbk_bin(id,c1,c2) values(@var, ' , @dst , ',' , @dst, ');');
+prepare stmt_gbk from @sql_str_gbk;
+prepare stmt_bin from @sql_str_bin;
+execute stmt_gbk;
+execute stmt_bin;
+deallocate prepare stmt_gbk;
+deallocate prepare stmt_bin;
+set @var=@var+1;
+if (@var mod 10000=0) then
+commit;
+end if;
+end while;
+commit;
+end;
+//
+delimiter ;//
+
+call proc_xengine_gbk();
+select count(*) from t1_sec_gbk where char_length(c1)=1 and length(c1) = 2;
+select count(*) from t1_sec_gbk_bin where char_length(c1)=1 and length(c1) = 2;
+
+drop procedure proc_xengine_gbk;
+drop table t1_sec_gbk;
+drop table t1_sec_gbk_bin;
+
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,45 @@
+use test;
+create table t0 (id int, data  char(20), primary key(id));
+set global xengine_flush_log_at_trx_commit=2;
+show variables like 'xengine_max_background_flushes';
+Variable_name	Value
+xengine_max_background_flushes	2
+show variables like 'xengine_max_background_compactions';
+Variable_name	Value
+xengine_max_background_compactions	4
+show variables like 'xengine_flush_log_at_trx_commit';
+Variable_name	Value
+xengine_flush_log_at_trx_commit	2
+select sleep(2);
+sleep(2)
+0
+xengine_wal_synced	4
+xengine_wal_synced	12
+set global xengine_flush_log_at_trx_commit=1;
+show variables like 'xengine_max_background_flushes';
+Variable_name	Value
+xengine_max_background_flushes	2
+show variables like 'xengine_max_background_compactions';
+Variable_name	Value
+xengine_max_background_compactions	4
+show variables like 'xengine_flush_log_at_trx_commit';
+Variable_name	Value
+xengine_flush_log_at_trx_commit	1
+insert into t0 values(0, '123456');
+xengine_wal_synced	12
+xengine_wal_synced	13
+set global xengine_flush_log_at_trx_commit=0;
+show variables like 'xengine_max_background_flushes';
+Variable_name	Value
+xengine_max_background_flushes	2
+show variables like 'xengine_max_background_compactions';
+Variable_name	Value
+xengine_max_background_compactions	4
+show variables like 'xengine_flush_log_at_trx_commit';
+Variable_name	Value
+xengine_flush_log_at_trx_commit	0
+insert into t0 values(1, '123456');
+xengine_wal_synced	13
+xengine_wal_synced	13
+set global xengine_flush_log_at_trx_commit=1;
+drop table t0;

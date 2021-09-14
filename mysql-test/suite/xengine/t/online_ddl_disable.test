@@ -1,0 +1,219 @@
+
+show variables like 'xengine_disable_online_ddl';
+set @xengine_disable_online_ddl_saved = @@xengine_disable_online_ddl;
+
+--error 1229
+set xengine_disable_online_ddl = 1;
+set global xengine_disable_online_ddl = 1;
+
+##################################################################
+# if xengine_disable_online_ddl is 1,
+# disable online-rebuild-ddl, still enable online-norebuild-ddl
+##################################################################
+--echo ##############
+--echo ### basic mixture tests of INSTANT/INPLACE/COPY DDL
+--echo ##############
+--echo # CREATE TABLE
+--echo #######
+CREATE TABLE t1(
+    id INT NOT NULL, col_to_drop INT,
+    c1 INT DEFAULT 1, c2 VARCHAR(70),
+    col_to_extend VARCHAR(70),
+    c3 INT NOT NULL, c4 INT NULL,
+    chk_col INT, k1_col INT, k2_col INT,
+    UNIQUE KEY k1(k1_col),
+    KEY k2(k2_col),
+    KEY vis_key(c1) VISIBLE,
+    KEY inv_key(c2) INVISIBLE,
+    CONSTRAINT old_chk1 CHECK(chk_col < 100),
+    CONSTRAINT old_chk2 CHECK(chk_col > 10),
+    PRIMARY KEY(col_to_drop)
+    ) ENGINE=XENGINE;
+
+INSERT INTO t1 VALUES(1, 1, 2, 'aa', 'abc', 2, 2, 20, 2, 1);
+INSERT INTO t1 VALUES(2, 2, 4, 'bb', 'cde', 4, 4, 40, 4, 1);
+
+--echo #######
+--echo # INSTANT DDL
+--echo #######
+ALTER TABLE t1
+    ADD COLUMN (app_col TEXT, app_col1 INT),
+    ALTER c1 DROP DEFAULT,
+    ALTER c2 SET DEFAULT 'aaaa',
+    RENAME TO tt,
+    ALGORITHM = INSTANT;
+SHOW CREATE TABLE tt;
+
+--echo #######
+--echo # Inplace without rebuild
+--echo #######
+# RENAME INDEX and ALTER INDEX on same index cann't operate together,
+# ALTER INDXE can't find either old key name or new key name
+ALTER TABLE tt
+    ALTER INDEX vis_key INVISIBLE,
+    ALTER INDEX inv_key VISIBLE,
+    ALGORITHM = INPLACE;
+
+ALTER TABLE tt
+    DROP KEY k1,
+    DROP KEY k2,
+    ADD INDEX key1(c4) COMMENT 'secondary key1',
+    ADD UNIQUE INDEX key2(c3) COMMENT 'unique secondary key2',
+    MODIFY COLUMN col_to_extend VARCHAR(100),
+    RENAME COLUMN col_to_drop to col_to_drop_later,
+    RENAME INDEX vis_key TO iv_key,
+    RENAME INDEX inv_key TO v_key,
+    ALGORITHM = INPLACE;
+SHOW CREATE TABLE tt;
+
+--echo #######
+--echo # Inplace DDL with rebuild, aka. online copy ddl
+--echo #######
+--error 1845
+ALTER TABLE tt
+    DROP PRIMARY KEY,
+    ADD PRIMARY KEY(id),
+    DROP COLUMN col_to_drop_later,
+    ADD COLUMN email VARCHAR(32) AFTER c2,
+    MODIFY COLUMN c3 INT AFTER c4,
+    ALGORITHM = INPLACE;
+SHOW CREATE TABLE tt;
+
+SELECT * FROM tt;
+DROP TABLE tt;
+
+
+##################################################################
+# if xengine_disable_online_ddl is 2,
+# disable online-rebuild-ddl, disable online-norebuild-ddl,
+# still enable instant-ddl
+##################################################################
+
+set global xengine_disable_online_ddl = 2;
+CREATE TABLE t1(
+    id INT NOT NULL, col_to_drop INT,
+    c1 INT DEFAULT 1, c2 VARCHAR(70),
+    col_to_extend VARCHAR(70),
+    c3 INT NOT NULL, c4 INT NULL,
+    chk_col INT, k1_col INT, k2_col INT,
+    UNIQUE KEY k1(k1_col),
+    KEY k2(k2_col),
+    KEY vis_key(c1) VISIBLE,
+    KEY inv_key(c2) INVISIBLE,
+    CONSTRAINT old_chk1 CHECK(chk_col < 100),
+    CONSTRAINT old_chk2 CHECK(chk_col > 10),
+    PRIMARY KEY(col_to_drop)
+    ) ENGINE=XENGINE;
+
+INSERT INTO t1 VALUES(1, 1, 2, 'aa', 'abc', 2, 2, 20, 2, 1);
+INSERT INTO t1 VALUES(2, 2, 4, 'bb', 'cde', 4, 4, 40, 4, 1);
+
+--echo #######
+--echo # INSTANT DDL
+--echo #######
+ALTER TABLE t1
+    ADD COLUMN (app_col TEXT, app_col1 INT),
+    ALTER c1 DROP DEFAULT,
+    ALTER c2 SET DEFAULT 'aaaa',
+    RENAME TO tt,
+    ALGORITHM = INSTANT;
+SHOW CREATE TABLE tt;
+
+--echo #######
+--echo # Inplace without rebuild
+--echo #######
+# RENAME INDEX and ALTER INDEX on same index cann't operate together,
+# ALTER INDXE can't find either old key name or new key name
+--error 1845
+ALTER TABLE tt
+    ALTER INDEX vis_key INVISIBLE,
+    ALTER INDEX inv_key VISIBLE,
+    ALGORITHM = INPLACE;
+--error 1845
+ALTER TABLE tt
+    DROP KEY k1,
+    DROP KEY k2,
+    ADD INDEX key1(c4) COMMENT 'secondary key1',
+    ADD UNIQUE INDEX key2(c3) COMMENT 'unique secondary key2',
+    MODIFY COLUMN col_to_extend VARCHAR(100),
+    RENAME COLUMN col_to_drop to col_to_drop_later,
+    RENAME INDEX vis_key TO iv_key,
+    RENAME INDEX inv_key TO v_key,
+    ALGORITHM = INPLACE;
+SHOW CREATE TABLE tt;
+
+ALTER TABLE tt
+    DROP KEY k1,
+    DROP KEY k2,
+    ADD INDEX key1(c4) COMMENT 'secondary key1',
+    ADD UNIQUE INDEX key2(c3) COMMENT 'unique secondary key2',
+    MODIFY COLUMN col_to_extend VARCHAR(100),
+    RENAME COLUMN col_to_drop to col_to_drop_later,
+    RENAME INDEX vis_key TO iv_key,
+    RENAME INDEX inv_key TO v_key,
+    ALGORITHM = COPY;
+SHOW CREATE TABLE tt;
+
+drop table tt;
+
+--echo ########################################################################
+--echo case 1 INSTANT DDL + INPLACE DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), ALGORITHM=INSTANT;
+SHOW CREATE TABLE t1;
+
+
+# ADD COLUMN with INPLACE DDL will rebuild the table online
+--error 1845
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, ADD UNIQUE KEY uk(c1), ADD KEY sk(c3), DROP KEY sk1, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, ADD UNIQUE KEY uk(c1), ADD KEY sk(c3), DROP KEY sk1, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 2 INSTANT DDL + INPLACE REBUILD DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), ALGORITHM=INSTANT;
+SHOW CREATE TABLE t1;
+
+--error 1845
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, DROP COLUMN c1, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 3 INPLACE DDL + INPLACE REBUILD DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+--error 1845
+ALTER TABLE t1 DROP COLUMN c2, ADD UNIQUE KEY uk(c1), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 4 INSTANT DDL + INPLACE DDL + INPLACE REBUILD DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+--error 1845
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, ADD UNIQUE KEY uk(c1), DROP COLUMN c2, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+set global xengine_disable_online_ddl = @xengine_disable_online_ddl_saved;
+show variables like 'xengine_disable_online_ddl';
+
+--source suite/xengine/include/check_xengine_log_error.inc

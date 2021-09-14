@@ -1,0 +1,52 @@
+--source include/have_debug.inc
+--source include/not_group_replication_plugin.inc
+--source include/have_binlog_format_row.inc
+--source suite/xengine_rpl/include/have_xengine.inc
+--source include/master-slave.inc
+
+let $engine=xengine;
+
+# create a table and do online ddl
+
+drop table if exists t1;
+connect (con1,localhost,root,,);
+	connection con1;
+	CREATE TABLE t1 (a INT primary key, b INT)ENGINE=xengine;
+
+	insert into t1 values(1,1);
+	insert into t1 values(2,2);
+	insert into t1 values(3,3);
+	insert into t1 values(4,4);
+	insert into t1 values(5,5);
+	SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml_insert WAIT_FOR start_dml_insert_finish';
+
+	send alter table t1 add  index t1_c22 (b) ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+
+connection default;
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml_insert';
+insert into t1 values(6,6);
+SET DEBUG_SYNC= 'now SIGNAL start_dml_insert_finish';
+
+--echo # Switch to connection con1
+connection con1;
+reap
+
+-echo # Switch to connection default
+connection default;
+show create table t1;
+
+
+
+--echo # Check the binlog contents on the slave
+--source include/sync_slave_sql_with_master.inc
+
+--connection slave
+show create table t1;
+select * from t1;
+
+--connection master
+
+drop table t1;
+
+--source include/rpl_end.inc
+
