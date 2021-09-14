@@ -29,6 +29,7 @@
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
 #include "sql/sp_head.h"
+#include "sql/tso/tso_proc.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -121,6 +122,8 @@ void package_context_init() {
 #endif
 
   register_package<Proc, Xa_proc_find_by_xid>(XA_PROC_SCHEMA);
+  /* dbms_tso.get_timestamp() */
+  register_package<Proc, Proc_get_timestamp>(TSO_PROC_SCHEMA);
 }
 
 } /* namespace im */

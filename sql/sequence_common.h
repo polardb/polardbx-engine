@@ -238,23 +238,35 @@ class Sequence_scan {
     IT_NON_NEXTVAL, /* Query non nextval, maybe currval or others */
   };
 
-  Sequence_scan() : m_mode(ORIGINAL_SCAN) {}
+  Sequence_scan() : m_mode(ORIGINAL_SCAN), m_batch(1) {}
   Sequence_scan(const Sequence_scan& seq_scan) : m_mode(seq_scan.m_mode) {}
 
-  void reset() { m_mode = ORIGINAL_SCAN; }
+  void reset() {
+    m_mode = ORIGINAL_SCAN;
+    m_batch = 1;
+  }
   void set(Scan_mode mode) { m_mode = mode; }
   Scan_mode get() { return m_mode; }
+
+  void set_batch(ulonglong batch) { m_batch = batch; }
+  ulonglong get_batch() { return m_batch; }
 
   /* Overlap the assignment operator */
   Sequence_scan &operator=(const Sequence_scan &rhs) {
     if (this != &rhs) {
       this->m_mode = rhs.m_mode;
+      this->m_batch = rhs.m_batch;
     }
     return *this;
   }
 
  private:
   Scan_mode m_mode;
+  /**
+    Used to get a batch of sequence value, currently only used for
+    timestamp sequence
+ */
+  ulonglong m_batch;
 };
 
 typedef Sequence_scan::Scan_mode Sequence_scan_mode;

@@ -10019,6 +10019,9 @@ ER_TABLE_IS_NOT_SEQUENCE
 ER_SEQUENCE_RETRY_TIMEOUT
   eng "Sequence '%-.192s.%-.192s' roll forward retry timeout"
 
+ER_TIMESTAMP_SERVICE_ERROR
+  eng "Failed to get timestamp value with timestamp service. %s"
+
 ER_XA_PROC_WRONG_XID
   eng "Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed %d bytes, and bqual cannot exceed %d bytes."
 

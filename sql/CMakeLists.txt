@@ -655,6 +655,8 @@ SET(SQL_SHARED_SOURCES
   sequence_common.cc
   sequence_transaction.cc
   sql_sequence.cc
+  timestamp_service.cc
+  tso/tso_proc.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)

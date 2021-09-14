@@ -1,0 +1,108 @@
+call mtr.add_suppression("Timestamp service failed to");
+call mtr.add_suppression("Timestamp service can not reserve");
+###########################################
+functionality test for timestamp service
+###########################################
+create database mydb;
+use mydb;
+call dbms_tso.get_timestamp();
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_tso.get_timestamp; expected 3, got 0
+call dbms_tso.get_timestamp("mydb");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_tso.get_timestamp; expected 3, got 1
+call dbms_tso.get_timestamp("mydb", 'sx');
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_tso.get_timestamp; expected 3, got 2
+create sequence s1 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+call dbms_tso.get_timestamp("", "", 1);
+ERROR HY000: Failed to get timestamp value with timestamp service. Can not open table [.]
+call dbms_tso.get_timestamp("mydb", "", 1);
+ERROR HY000: Failed to get timestamp value with timestamp service. Can not open table [mydb.]
+call dbms_tso.get_timestamp("", "s1", 1);
+ERROR HY000: Failed to get timestamp value with timestamp service. Can not open table [.s1]
+call dbms_tso.get_timestamp("mydb", "s1", -1);
+ERROR HY000: The 3th parameter didn't match for native procedure dbms_tso.get_timestamp
+call dbms_tso.get_timestamp("mydb", "s1", 99999999999999999999);
+ERROR HY000: The 3th parameter didn't match for native procedure dbms_tso.get_timestamp
+call dbms_tso.get_timestamp("mydb", "s1", 0);
+ERROR HY000: Failed to get timestamp value with timestamp service. Can not reserve 0 timestamp value, valid range is [1, 60000]
+call dbms_tso.get_timestamp("mydb", "s1", 90000);
+ERROR HY000: Failed to get timestamp value with timestamp service. Can not reserve 90000 timestamp value, valid range is [1, 60000]
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+Timestamp
+#
+drop sequence s1;
+###########################################
+simulate error
+###########################################
+create sequence s1 cache 5 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+SET @@SESSION.debug = "+d,sequence_reload_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+ERROR HY000: Sequence 'mydb.s1' roll forward retry timeout
+SET @@SESSION.debug = "-d,sequence_reload_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+Timestamp
+#
+SET @@SESSION.debug = "+d,sequence_quick_read_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+ERROR HY000: Sequence 'mydb.s1' roll forward retry timeout
+SET @@SESSION.debug = "-d,sequence_quick_read_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+Timestamp
+#
+drop sequence s1;
+###########################################
+misc test
+###########################################
+create table t1(c1 int) engine = innodb;
+insert into t1 values(1);
+create sequence s1 cache 5 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+begin;
+insert into t1 values(2);
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+Timestamp
+#
+rollback;
+select * from t1;
+c1
+1
+2
+begin;
+select currval, nextval from s1;
+currval	nextval
+#	#
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+Timestamp
+#
+commit;
+drop table t1;
+drop sequence s1;
+drop database mydb;

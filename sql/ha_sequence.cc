@@ -107,8 +107,7 @@ static ulonglong sequence_global_version = 0;
 
 static bool sequence_engine_inited = false;
 
-static Sequence_share *get_share(const char *name)
-{
+static Sequence_share *get_share(const char *name) {
   Sequence_share *share = nullptr;
   Sequence_shares_hash::const_iterator it;
   DBUG_ENTER("get_share");
@@ -258,7 +257,8 @@ int Sequence_share::enter_cond(THD *thd) {
   return 0;
 }
 
-Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values) {
+Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values,
+                                                  ulonglong batch) {
   DBUG_ENTER("quick_read");
 
   mysql_mutex_assert_owner(&m_mutex);
@@ -273,15 +273,8 @@ Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values) {
   if (m_type == Sequence_type::DIGITAL)
     DBUG_RETURN(digital_quick_read(local_values));
   else
-    DBUG_RETURN(timestamp_quick_read(local_values));
+    DBUG_RETURN(timestamp_quick_read(local_values, batch));
 }
-
-/** How many rounds then put into sleep */
-#define TIMESTAMP_SEQUENCE_ROUND_SLEEP 100
-/** Sleep time (milliseconds) */
-#define TIMESTAMP_SEQUENCE_SLEEP_TIME 10
-/** How many rounds then failed */
-#define TIMESTAMP_SEQUENCE_MAX_ROUND 100000
 
 /**
   Allocate a new time range [ m_low_limit - m_cache_end] as cached timestamp;
@@ -322,8 +315,10 @@ retry:
   Quick read timestamp from cache directly;
 
   @param[in/out]      local_values      it will send to user.
+  @param[in]          batch             number of timestamp value requested.
 */
-Sequence_cache_request Sequence_share::timestamp_quick_read(ulonglong *local_values){
+Sequence_cache_request Sequence_share::timestamp_quick_read(
+    ulonglong *local_values, ulonglong batch) {
   DBUG_ENTER("Sequence_share::timestamp_quick_read");
 
   mysql_mutex_assert_owner(&m_mutex);
@@ -364,7 +359,8 @@ retry:
 
   if (now == m_last_time) {
     m_counter++;
-    if (m_counter >= 65536) goto retry;
+    /* If remaining value does not satisfy the request, retry */
+    if (m_counter + (batch - 1) >= 65536) goto retry;
   } else if (now > m_last_time) {
     m_counter = 0;
   } else {
@@ -375,6 +371,9 @@ retry:
   ulonglong tmp = (now << 22) | (m_counter << 6);
   local_values[SF_CURRVAL] = tmp;
   local_values[SF_NEXTVAL] = tmp;
+
+  /* Remember the value that has been used so far */
+  m_counter += (batch - 1);
 
   DBUG_RETURN(CACHE_REQUEST_HIT);
 }
@@ -767,6 +766,7 @@ void ha_sequence::init_variables() {
   m_engine = nullptr;
   m_sequence_info = nullptr;
   m_share = nullptr;
+  m_batch = 1;
 
   start_of_scan = 0;
   DBUG_VOID_RETURN;
@@ -903,6 +903,9 @@ int ha_sequence::rnd_init(bool scan) {
   /* Inherit the sequence scan mode option. */
   m_scan_mode = table->sequence_scan.get();
   m_iter_mode = Sequence_iter_mode::IT_NON;
+  m_batch = table->sequence_scan.get_batch();
+
+  assert(m_batch <= TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE);
 
   if (m_scan_mode == Sequence_scan_mode::ITERATION_SCAN)
     m_iter_mode = sequence_iteration_type(table);
@@ -974,7 +977,7 @@ int ha_sequence::rnd_next(uchar *buf) {
     if ((error = m_share->enter_cond(ha_thd()))) {
       DBUG_RETURN(error);
     }
-    cache_request = m_share->quick_read(local_values);
+    cache_request = m_share->quick_read(local_values, m_batch);
     switch (cache_request) {
       case Sequence_cache_request::CACHE_REQUEST_HIT: {
         share_locker.release();
