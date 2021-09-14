@@ -135,12 +135,13 @@ class Sequence_share {
     Retrieve the nextval from cache directly.
 
     @param[out]     local_values    Used to store into thd->sequence_last_value
+    @param[in]      batch           Number of value requested
 
     @retval         request         Cache request result
   */
-  Cache_request quick_read(ulonglong *local_values);
+  Cache_request quick_read(ulonglong *local_values, uint32_t batch);
   Cache_request digital_quick_read(ulonglong *local_values);
-  Cache_request timestamp_quick_read(ulonglong *local_values);
+  Cache_request timestamp_quick_read(ulonglong *local_values, uint32_t batch);
   /**
     Validate cache.
   */
@@ -565,6 +566,9 @@ class ha_sequence : public handler {
   Sequence_info *m_sequence_info;
   Sequence_share *m_share;
   ulong start_of_scan;
+
+  /* Number of timestamp value requested */
+  uint32_t m_batch;
 
   Sequence_scan_mode m_scan_mode;
   Sequence_iter_mode m_iter_mode;

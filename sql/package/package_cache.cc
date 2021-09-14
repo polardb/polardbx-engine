@@ -30,9 +30,9 @@
 #include "sql/package/package_common.h"
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
-#include "sql/trans_proc/returning.h"
-#include "sql/ccl/ccl_proc.h"
 #include "sql/recycle_bin/recycle_proc.h"
+#include "sql/trans_proc/returning.h"
+#include "sql/tso/tso_proc.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -157,7 +157,7 @@ void package_context_init() {
 
   /* dbms_admin.show_native_procedure() */
   register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
-  
+
   /* dbms_outln.add_optimizer_outline(...) */
   register_package<Proc, Outline_optimizer_proc_add>(OUTLINE_PROC_SCHEMA);
   /* dbms_outln.add_index_outline(...) */
@@ -170,6 +170,9 @@ void package_context_init() {
   register_package<Proc, Outline_proc_show>(OUTLINE_PROC_SCHEMA);
   /* dbms_outln.preview_outline() */
   register_package<Proc, Outline_proc_preview>(OUTLINE_PROC_SCHEMA);
+
+  /* dbms_tso.get_timestamp() */
+  register_package<Proc, Proc_get_timestamp>(TSO_PROC_SCHEMA);
 }
 
 } /* namespace im */

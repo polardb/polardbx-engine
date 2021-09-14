@@ -597,6 +597,8 @@ SET(SQL_SHARED_SOURCES
   sql_statistics.cc
   ppi/ppi.cc
   ppi/ppi_noop.cc
+  timestamp_service.cc
+  tso/tso_proc.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

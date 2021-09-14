@@ -9308,6 +9308,10 @@ ER_OUTLINE_OPTIMIZER_HINT_PARSE
 
 ER_OUTLINE_SQL_DIGEST_TRUNCATED
   eng "Statement outline sql text has been truncated when compute digest: %s"
+
+ER_TIMESTAMP_SERVICE_ERROR
+  eng "Failed to get timestamp value with timestamp service (table '%s'.'%s')."
+
 #
 #  End of RDS error message.
 #

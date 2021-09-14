@@ -17,5 +17,6 @@ dbms_recycle	purge_table	ADMIN_PROC	VARCHAR
 dbms_recycle	restore_table	ADMIN_PROC	VARCHAR, VARCHAR, VARCHAR / VARCHAR
 dbms_recycle	show_tables	ADMIN_PROC	NULL
 dbms_trans	returning	TRANS_PROC	VARCHAR, VARCHAR
+dbms_tso	get_timestamp	ADMIN_PROC	VARCHAR, VARCHAR
 mysql	dummy	ADMIN_PROC	NULL
 mysql	dummy_2	ADMIN_PROC	LONGLONG, VARCHAR

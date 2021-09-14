@@ -1,0 +1,99 @@
+call mtr.add_suppression("Timestamp service failed to");
+###########################################
+functionality test for timestamp service
+###########################################
+create database mydb;
+use mydb;
+call dbms_tso.get_timestamp();
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_tso.get_timestamp; expected 2, got 0
+call dbms_tso.get_timestamp("mydb");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_tso.get_timestamp; expected 2, got 1
+call dbms_tso.get_timestamp("mydb", 'sx');
+ERROR HY000: Failed to get timestamp value with timestamp service (table 'mydb'.'sx').
+create sequence s1 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+call dbms_tso.get_timestamp("", "");
+ERROR HY000: Failed to get timestamp value with timestamp service (table ''.'').
+call dbms_tso.get_timestamp("mydb", "");
+ERROR HY000: Failed to get timestamp value with timestamp service (table 'mydb'.'').
+call dbms_tso.get_timestamp("", "s1");
+ERROR HY000: Failed to get timestamp value with timestamp service (table ''.'s1').
+call dbms_tso.get_timestamp("mydb", "s1");
+Timestamp
+#
+drop sequence s1;
+###########################################
+simulate error
+###########################################
+create sequence s1 cache 5 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+SET @@SESSION.debug = "+d,sequence_reload_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1");
+ERROR HY000: Sequence 'mydb.s1' roll forward retry timeout
+SET @@SESSION.debug = "-d,sequence_reload_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1");
+Timestamp
+#
+SET @@SESSION.debug = "+d,sequence_quick_read_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1");
+ERROR HY000: Sequence 'mydb.s1' roll forward retry timeout
+SET @@SESSION.debug = "-d,sequence_quick_read_retry_timeout";
+call dbms_tso.get_timestamp("mydb", "s1");
+Timestamp
+#
+drop sequence s1;
+###########################################
+misc test
+###########################################
+create table t1(c1 int) engine = innodb;
+insert into t1 values(1);
+create sequence s1 cache 5 timestamp;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+begin;
+insert into t1 values(2);
+call dbms_tso.get_timestamp("mydb", "s1");
+Timestamp
+#
+rollback;
+select * from t1;
+c1
+1
+2
+begin;
+select currval, nextval from s1;
+currval	nextval
+#	#
+call dbms_tso.get_timestamp("mydb", "s1");
+Timestamp
+#
+commit;
+drop table t1;
+drop sequence s1;
+drop database mydb;
