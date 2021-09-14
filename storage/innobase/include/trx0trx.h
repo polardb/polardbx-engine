@@ -57,6 +57,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0read.h"
 #include "lizard0trx.h"
 #include "lizard0gp0types.h"
+#include "lizard0xa.h"
 
 // Forward declaration
 struct mtr_t;
@@ -1260,6 +1261,9 @@ struct trx_t {
   gp_state_t gp_state;
   /** Prepared XA transaction blocking info */
   gp_wait_t gp_wait;
+
+  /** Descripe XA attributes from server */
+  XAD xad;
 };
 #ifndef UNIV_HOTBACKUP
 

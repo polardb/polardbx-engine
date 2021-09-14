@@ -599,6 +599,7 @@ SET(SQL_SHARED_SOURCES
   ppi/ppi_noop.cc
   timestamp_service.cc
   tso/tso_proc.cc
+  xa_handler.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

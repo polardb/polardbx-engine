@@ -132,6 +132,7 @@
 #include "varlen_sort.h"
 
 #include "sql/recycle_bin/recycle_table.h"
+#include "xa_handler.h"
 
 /**
   @def MYSQL_TABLE_IO_WAIT
@@ -1311,6 +1312,9 @@ void trans_register_ha(THD *thd, bool all, handlerton *ht_arg,
   if (ht_arg->prepare == 0) trn_ctx->set_no_2pc(trx_scope, true);
 
   trn_ctx->xid_state()->set_query_id(thd->query_id);
+
+  register_xa_attributes(thd, ht_arg);
+
 /*
   Register transaction start in performance schema if not done already.
   By doing this, we handle cases when the transaction is started implicitly in
