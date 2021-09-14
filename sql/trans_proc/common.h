@@ -21,6 +21,7 @@
 #define SQL_TRANS_PROC_COMMON_INCLUDED
 
 #include "my_inttypes.h"
+#include "sql/package/proc.h"
 #include "sql/sql_class.h"
 #include "sql/sql_digest_stream.h"
 #include "sql/sql_lex.h"
@@ -28,6 +29,22 @@
 class THD;
 
 namespace im {
+
+/* Native procedure schema: dbms_trans */
+extern LEX_CSTRING TRANS_PROC_SCHEMA;
+
+/*  Base class of all of the native procedure interfaces */
+class Trans_proc_base : public Proc {
+ public:
+  explicit Trans_proc_base(PSI_memory_key key) : Proc(key) {}
+
+  virtual const std::string qname() const {
+    std::stringstream ss;
+    ss << TRANS_PROC_SCHEMA.str << "." << str();
+    return ss.str();
+  }
+};
+
 
 /* Backup current execution context */
 class Sub_statement_context {

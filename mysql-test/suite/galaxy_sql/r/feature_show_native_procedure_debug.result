@@ -17,6 +17,7 @@ dbms_recycle	purge_table	ADMIN_PROC	VARCHAR
 dbms_recycle	restore_table	ADMIN_PROC	VARCHAR, VARCHAR, VARCHAR / VARCHAR
 dbms_recycle	show_tables	ADMIN_PROC	NULL
 dbms_trans	returning	TRANS_PROC	VARCHAR, VARCHAR
+dbms_trans	rollback_to_implicit_savepoint	TRANS_PROC	NULL
 dbms_tso	get_timestamp	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG
 dbms_undo	get_undo_purge_status	ADMIN_PROC	NULL
 dbms_xa	advance_gcn_no_flush	ADMIN_PROC	LONGLONG

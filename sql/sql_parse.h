@@ -59,7 +59,13 @@ union COM_DATA;
 
 extern "C" int test_if_data_home_dir(const char *dir);
 
+extern bool opt_auto_savepoint;
+
 bool stmt_causes_implicit_commit(const THD *thd, uint mask);
+
+
+bool stmt_causes_implicit_savepoint(const THD *thd);
+bool stmt_makes_implicit_savepoint(THD *thd);
 
 #ifndef NDEBUG
 extern void turn_parser_debug_on();

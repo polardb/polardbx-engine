@@ -1,0 +1,393 @@
+SET @auto_savepoint_orig = @@session.auto_savepoint;
+SET auto_savepoint = OFF;
+create table t1 (c1 int) engine = innodb;
+create table t2 (c1 int) engine = innodb;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+call dbms_trans.rollback_to_implicit_savepoint();
+ERROR 42000: SAVEPOINT __MySQL_Implicit_Savepoint__ does not exist
+commit;
+SET auto_savepoint = ON;
+start transaction;
+insert into t1 values(3);
+select * from t1;
+c1
+1
+2
+3
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+2
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+select * from t1;
+c1
+1
+2
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+select * from t1;
+c1
+1
+2
+update t1 set c1 = 3 where c1 = 2;
+select * from t1;
+c1
+1
+3
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+2
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t2 values(1);
+insert into t2 values(2);
+select * from t1;
+c1
+1
+2
+select * from t2;
+c1
+1
+2
+update t1, t2 set t1.c1 = 20, t2.c1 = 20 where t1.c1 = t2.c1 and t1.c1 = 2;
+select * from t1;
+c1
+1
+20
+select * from t2;
+c1
+1
+20
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+2
+select * from t2;
+c1
+1
+2
+commit;
+truncate table t1;
+truncate table t2;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+delete from t1 where c1 = 2;
+select * from t1;
+c1
+1
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+2
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t1 values(3);
+insert into t2 values(1);
+insert into t2 values(2);
+insert into t2 values(4);
+select * from t1;
+c1
+1
+2
+3
+select * from t2;
+c1
+1
+2
+4
+delete t1, t2 from t1 inner join t2 on t1.c1 = t2.c1;
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+2
+3
+select * from t2;
+c1
+1
+2
+4
+commit;
+truncate table t1;
+truncate table t2;
+start transaction;
+savepoint p1;
+insert into t1 values(1);
+select * from t1;
+c1
+1
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+rollback to p1;
+select * from t1;
+c1
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+savepoint p1;
+insert into t1 values(2);
+select * from t1;
+c1
+1
+2
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+rollback to p1;
+select * from t1;
+c1
+1
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+update t1 set c1 = 3 where c1 = 2;
+savepoint p1;
+select * from t1;
+c1
+1
+3
+update t1 set c1 = 4 where c1 = 3;
+update t1 set c1 = 5 where c1 = 4;
+select * from t1;
+c1
+1
+5
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+4
+rollback to p1;
+select * from t1;
+c1
+1
+3
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t2 values(1);
+insert into t2 values(2);
+savepoint p1;
+select * from t1;
+c1
+1
+2
+select * from t2;
+c1
+1
+2
+update t1, t2 set t1.c1 = 20, t2.c1 = 20 where t1.c1 = t2.c1 and t1.c1 = 2;
+update t1, t2 set t1.c1 = 30, t2.c1 = 30 where t1.c1 = t2.c1 and t1.c1 = 20;
+select * from t1;
+c1
+1
+30
+select * from t2;
+c1
+1
+30
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+20
+select * from t2;
+c1
+1
+20
+rollback to p1;
+select * from t1;
+c1
+1
+2
+select * from t2;
+c1
+1
+2
+commit;
+truncate table t1;
+truncate table t2;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t1 values(3);
+savepoint p1;
+select * from t1;
+c1
+1
+2
+3
+delete from t1 where c1 = 2;
+delete from t1 where c1 = 3;
+select * from t1;
+c1
+1
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+3
+rollback to p1;
+select * from t1;
+c1
+1
+2
+3
+commit;
+truncate table t1;
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t2 values(1);
+insert into t2 values(2);
+savepoint p1;
+select * from t1;
+c1
+1
+2
+select * from t2;
+c1
+1
+2
+insert into t1 values(3);
+insert into t2 values(4);
+select * from t1;
+c1
+1
+2
+3
+select * from t2;
+c1
+1
+2
+4
+delete t1, t2 from t1 inner join t2 on t1.c1 = t2.c1;
+select * from t1;
+c1
+3
+select * from t2;
+c1
+4
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+c1
+1
+2
+3
+select * from t2;
+c1
+1
+2
+4
+rollback to p1;
+select * from t1;
+c1
+1
+2
+select * from t2;
+c1
+1
+2
+commit;
+truncate table t1;
+truncate table t2;
+create table t3 (a int) engine = myisam;
+start transaction;
+insert into t2 values (1);
+insert into t3 values (1);
+select * from t2;
+c1
+1
+select * from t3;
+a
+1
+insert into t2 values (2);
+call dbms_trans.rollback_to_implicit_savepoint();
+Warnings:
+Warning	1196	Some non-transactional changed tables couldn't be rolled back
+select * from t2;
+c1
+1
+insert into t3 values (2);
+call dbms_trans.rollback_to_implicit_savepoint();
+Warnings:
+Warning	1196	Some non-transactional changed tables couldn't be rolled back
+select * from t3;
+a
+1
+2
+commit;
+truncate table t2;
+truncate table t3;
+create table articles (
+FTS_DOC_ID BIGINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
+id INT,
+title VARCHAR(200),
+FULLTEXT (title)
+) ENGINE= InnoDB;
+show variables like "%savepoint";
+Variable_name	Value
+auto_savepoint	ON
+start transaction;
+insert into articles(id, title) values(1, 'mysql');
+savepoint sp1;
+insert into articles(id, title) values(2, 'mysql');
+savepoint sp2;
+select * from articles;
+FTS_DOC_ID	id	title
+1	1	mysql
+2	2	mysql
+insert into articles(id, title) values(3, 'mysql');
+rollback to sp2;
+select * from articles;
+FTS_DOC_ID	id	title
+1	1	mysql
+2	2	mysql
+commit;
+SELECT * FROM articles WHERE MATCH(title) AGAINST('mysql');
+FTS_DOC_ID	id	title
+1	1	mysql
+SET GLOBAL innodb_ft_aux_table="test/articles";
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_CACHE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+mysql	1	1	1	1	0
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_TABLE;
+WORD	FIRST_DOC_ID	LAST_DOC_ID	DOC_COUNT	DOC_ID	POSITION
+SET GLOBAL innodb_ft_aux_table=default;
+drop table articles;
+SET auto_savepoint = @auto_savepoint_orig;
+drop table t1;
+drop table t2;
+drop table t3;

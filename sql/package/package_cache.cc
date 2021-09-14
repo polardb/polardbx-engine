@@ -35,6 +35,7 @@
 #include "sql/trans_proc/returning.h"
 #include "sql/ccl/ccl_proc.h"
 #include "sql/recycle_bin/recycle_proc.h"
+#include "sql/trans_proc/implicit_savepoint.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -189,6 +190,9 @@ void package_context_init() {
   register_package<Proc, Outline_proc_show>(OUTLINE_PROC_SCHEMA);
   /* dbms_outln.preview_outline() */
   register_package<Proc, Outline_proc_preview>(OUTLINE_PROC_SCHEMA);
+
+  /* dbms_trans.rollback_to_implicit_savepoint() */
+  register_package<Proc, Trans_proc_implicit_savepoint>(TRANS_PROC_SCHEMA);
 }
 
 } /* namespace im */

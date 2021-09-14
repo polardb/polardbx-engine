@@ -18,6 +18,8 @@ activate_all_roles_on_login
 activate_all_roles_on_login
 authentication_policy
 authentication_policy
+auto_savepoint
+auto_savepoint
 binlog_encryption
 binlog_encryption
 binlog_expire_logs_auto_purge

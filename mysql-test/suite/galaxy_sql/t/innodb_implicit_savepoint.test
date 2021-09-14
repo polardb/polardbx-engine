@@ -1,0 +1,364 @@
+#######################################################################
+#                                                                     #
+# Test for auto savepoint                                             #
+#                                                                     #
+#######################################################################
+
+-- source include/have_innodb_max_16k.inc
+
+SET @auto_savepoint_orig = @@session.auto_savepoint;
+
+SET auto_savepoint = OFF;
+
+# Create the test table
+create table t1 (c1 int) engine = innodb;
+create table t2 (c1 int) engine = innodb;
+
+#
+# Basic functionality test
+#
+
+# Error test : no implicit savepoint
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+
+-- error 1305
+call dbms_trans.rollback_to_implicit_savepoint();
+commit;
+
+# Enable auto savepoint
+SET auto_savepoint = ON;
+
+# INSERT : rollback the only data row change
+start transaction;
+insert into t1 values(3);
+select * from t1;
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+commit;
+
+truncate table t1;
+
+# INSERT : rollback the last data row change
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+
+select * from t1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+
+select * from t1;
+commit;
+
+truncate table t1;
+
+# UPDATE : rollback the last data row change
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+
+select * from t1;
+update t1 set c1 = 3 where c1 = 2;
+select * from t1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+
+select * from t1;
+commit;
+
+truncate table t1;
+
+# UPDATE multi-table : rollback the last data row change
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t2 values(1);
+insert into t2 values(2);
+
+select * from t1;
+select * from t2;
+
+update t1, t2 set t1.c1 = 20, t2.c1 = 20 where t1.c1 = t2.c1 and t1.c1 = 2;
+
+select * from t1;
+select * from t2;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+
+select * from t1;
+select * from t2;
+commit;
+
+truncate table t1;
+truncate table t2;
+
+# DELETE : rollback the last data row change
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+
+delete from t1 where c1 = 2;
+
+select * from t1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+
+select * from t1;
+commit;
+
+truncate table t1;
+
+# DELETE multi-table : rollback the last data row change
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t1 values(3);
+insert into t2 values(1);
+insert into t2 values(2);
+insert into t2 values(4);
+
+select * from t1;
+select * from t2;
+
+delete t1, t2 from t1 inner join t2 on t1.c1 = t2.c1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+
+select * from t1;
+select * from t2;
+commit;
+
+truncate table t1;
+truncate table t2;
+
+#
+# Mixed explicit savepoint and implicit savepoint
+#
+
+# INSERT : rollback the only data row change
+start transaction;
+savepoint p1;
+
+insert into t1 values(1);
+select * from t1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+
+rollback to p1;
+select * from t1;
+
+commit;
+
+truncate table t1;
+
+# INSERT : rollback to implicit savepoint and  explicit savepoint
+start transaction;
+insert into t1 values(1);
+savepoint p1;
+insert into t1 values(2);
+
+select * from t1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+
+rollback to p1;
+select * from t1;
+
+commit;
+
+truncate table t1;
+
+# UPDATE : rollback to implicit savepoint and  explicit savepoint
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+
+update t1 set c1 = 3 where c1 = 2;
+savepoint p1;
+
+select * from t1;
+
+update t1 set c1 = 4 where c1 = 3;
+update t1 set c1 = 5 where c1 = 4;
+
+select * from t1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+
+select * from t1;
+
+rollback to p1;
+select * from t1;
+
+commit;
+
+truncate table t1;
+
+# UPDATE multi-table : rollback to implicit savepoint and  explicit savepoint
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t2 values(1);
+insert into t2 values(2);
+savepoint p1;
+
+select * from t1;
+select * from t2;
+
+update t1, t2 set t1.c1 = 20, t2.c1 = 20 where t1.c1 = t2.c1 and t1.c1 = 2;
+update t1, t2 set t1.c1 = 30, t2.c1 = 30 where t1.c1 = t2.c1 and t1.c1 = 20;
+
+select * from t1;
+select * from t2;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+
+select * from t1;
+select * from t2;
+
+rollback to p1;
+select * from t1;
+select * from t2;
+
+commit;
+
+truncate table t1;
+truncate table t2;
+
+# DELETE : rollback the last data row change
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t1 values(3);
+savepoint p1;
+
+select * from t1;
+
+delete from t1 where c1 = 2;
+delete from t1 where c1 = 3;
+
+select * from t1;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+
+rollback to p1;
+select * from t1;
+
+commit;
+
+truncate table t1;
+
+# DELETE multi-table : rollback the last data row change
+start transaction;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t2 values(1);
+insert into t2 values(2);
+savepoint p1;
+
+select * from t1;
+select * from t2;
+
+insert into t1 values(3);
+insert into t2 values(4);
+
+select * from t1;
+select * from t2;
+
+delete t1, t2 from t1 inner join t2 on t1.c1 = t2.c1;
+
+select * from t1;
+select * from t2;
+
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t1;
+select * from t2;
+
+rollback to p1;
+select * from t1;
+select * from t2;
+
+commit;
+
+truncate table t1;
+truncate table t2;
+
+#
+# Misc test
+#
+
+# -------------- Non-transactional table --------------
+create table t3 (a int) engine = myisam;
+
+start transaction;
+insert into t2 values (1);
+insert into t3 values (1);
+
+select * from t2;
+select * from t3;
+
+insert into t2 values (2);
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t2;
+
+# Rollback does not work for non-transactinoal table
+insert into t3 values (2);
+call dbms_trans.rollback_to_implicit_savepoint();
+select * from t3;
+
+commit;
+
+truncate table t2;
+truncate table t3;
+
+# -------------- Full-text search --------------
+# This case is borrowed from innodb_fts.savepoiont, due to an existing bug
+# with FTS savepoint handling, the query with AGAINST('mysql') does not
+# show record with id = 2, this case should be updated after the bug is
+# fixed.
+create table articles (
+	FTS_DOC_ID BIGINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
+	id INT,
+	title VARCHAR(200),
+	FULLTEXT (title)
+	) ENGINE= InnoDB;
+
+show variables like "%savepoint";
+
+start transaction;
+insert into articles(id, title) values(1, 'mysql');
+savepoint sp1;
+
+insert into articles(id, title) values(2, 'mysql');
+savepoint sp2;
+
+select * from articles;
+
+insert into articles(id, title) values(3, 'mysql');
+
+rollback to sp2;
+
+select * from articles;
+
+commit;
+
+SELECT * FROM articles WHERE MATCH(title) AGAINST('mysql');
+
+SET GLOBAL innodb_ft_aux_table="test/articles";
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_CACHE;
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_INDEX_TABLE;
+SET GLOBAL innodb_ft_aux_table=default;
+
+drop table articles;
+
+
+# Cleanup
+SET auto_savepoint = @auto_savepoint_orig;
+drop table t1;
+drop table t2;
+drop table t3;

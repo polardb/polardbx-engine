@@ -517,6 +517,9 @@ struct System_variables {
   bool recycle_bin;
 
   bool outline_allowed_sql_digest_truncate;
+
+  /* Used to switch ON/OFF auto savepoint */
+  bool auto_savepoint;
 };
 
 /**

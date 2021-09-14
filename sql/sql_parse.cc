@@ -427,6 +427,88 @@ bool stmt_causes_implicit_commit(const THD *thd, uint mask) {
       return true;
   }
 }
+/**
+  Should implicit savepoint be made when running current statement?
+
+  @param thd    Thread handle
+
+  @retval true This statement shall cause an implicit savepoint
+  @retval false This statement shall NOT cause an implicit savepoint
+
+*/
+bool stmt_causes_implicit_savepoint(const THD *thd)
+{
+  bool retval= false;
+
+  /*
+    No need to make implicit savepoint if
+    - variable "auto_savepoint" is not enabled,
+    - or inside functions or triggers,
+    - or inside procedures,
+    - or not in multi-statement transaction,
+    - or statement is run by system thread (ie, bootstrap thread).
+  */
+  if (thd->variables.auto_savepoint &&
+      !thd->in_sub_stmt &&
+      !thd->sp_runtime_ctx &&
+      thd->in_active_multi_stmt_transaction() &&
+      (thd->system_thread == NON_SYSTEM_THREAD)) {
+
+    switch (thd->lex->sql_command) {
+    case SQLCOM_UPDATE:
+    case SQLCOM_INSERT:
+    case SQLCOM_INSERT_SELECT:
+    case SQLCOM_DELETE:
+    case SQLCOM_DELETE_MULTI:
+    case SQLCOM_UPDATE_MULTI:
+      retval= true;
+    default:
+      break;
+    }
+  }
+
+  return retval;
+}
+
+/**
+  Make implicit savepoint before running current statement
+
+  @param thd    Thread handle
+
+  @retval true  Error
+  @retval false Success
+
+*/
+bool stmt_makes_implicit_savepoint(THD *thd)
+{
+  LEX_STRING saved_ident = thd->lex->ident;
+
+  /*
+    Set savepoint name, like "SAVEPOINT name" statement, the name is needed
+    in low level function call.
+  */
+  thd->lex->ident = { C_STRING_WITH_LEN(MYSQL_IMPLICIT_SAVEPOINT) };
+
+  if (trans_savepoint(thd, thd->lex->ident)) {
+    thd->lex->ident = saved_ident;
+    return true;
+  }
+
+  /*
+    Commit the savepoint operation, otherwise, may hit assertion in some
+    cases complaining that statement transaction context is active when
+    running the real statement later, see open_tables_for_query().
+  */
+  thd->get_stmt_da()->set_overwrite_status(true);
+  trans_commit_stmt(thd);
+  thd->get_stmt_da()->set_overwrite_status(false);
+
+  /* Restore the identity before running the real statement */
+  thd->lex->ident = saved_ident;
+
+  return false;
+}
+
 
 /**
   @brief Iterates over all post replication filter actions registered and
@@ -3326,6 +3408,17 @@ int mysql_execute_command(THD *thd, bool first_level) {
   im::Ccl_comply_wrapper ccl_comply(thd);
   im::do_ccl_comply_queue_or_rule(thd, lex, all_tables);
   if (thd->is_error()) goto error;
+
+  /*
+    If current statement is eligible for implicit savepoint, make a savepoint
+    before it's executed.
+  */
+  if (stmt_causes_implicit_savepoint(thd)) {
+    if (stmt_makes_implicit_savepoint(thd)) {
+      my_error(ER_IMPLICIT_SAVEPOINT_FAILED, MYF(0));
+      goto error;
+    }
+  }
 
   /*
     Check if we are in a read-only transaction and we're trying to

@@ -445,3 +445,10 @@ static Sys_var_bool Sys_outline_allowed_sql_digest_truncate(
     SESSION_VAR(outline_allowed_sql_digest_truncate),
     CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
+                                       "Whether to make implicit savepoint for "
+                                       "each INSERT/DELETE/UPDATE statement",
+                                       SESSION_VAR(auto_savepoint), NO_CMD_LINE,
+                                       DEFAULT(FALSE), NO_MUTEX_GUARD,
+                                       NOT_IN_BINLOG, ON_CHECK(0),
+                                       ON_UPDATE(0));

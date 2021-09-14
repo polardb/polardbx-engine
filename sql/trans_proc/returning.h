@@ -20,7 +20,7 @@
 #ifndef SQL_TRANS_PROC_RETURNING_INCLUDED
 #define SQL_TRANS_PROC_RETURNING_INCLUDED
 
-#include "sql/package/proc.h"
+#include "sql/trans_proc/common.h"
 #include "sql/trans_proc/returning_parse.h"
 
 /**
@@ -30,19 +30,6 @@
 
 */
 namespace im {
-
-extern const LEX_CSTRING TRANS_PROC_SCHEMA;
-
-class Trans_proc_base : public Proc {
- public:
-  explicit Trans_proc_base(PSI_memory_key key) : Proc(key) {}
-
-  virtual const std::string qname() const override {
-    std::stringstream ss;
-    ss << TRANS_PROC_SCHEMA.str << "." << str();
-    return ss.str();
-  }
-};
 
 class Sql_cmd_trans_proc_returning : public Sql_cmd_trans_proc {
  public:
