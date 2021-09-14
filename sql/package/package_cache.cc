@@ -31,6 +31,7 @@
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
 #include "sql/recycle_bin/recycle_proc.h"
+#include "sql/trans_proc/implicit_savepoint.h"
 #include "sql/trans_proc/returning.h"
 #include "sql/tso/tso_proc.h"
 
@@ -173,6 +174,9 @@ void package_context_init() {
 
   /* dbms_tso.get_timestamp() */
   register_package<Proc, Proc_get_timestamp>(TSO_PROC_SCHEMA);
+
+  /* dbms_trans.rollback_to_implicit_savepoint() */
+  register_package<Proc, Trans_proc_implicit_savepoint>(TRANS_PROC_SCHEMA);
 }
 
 } /* namespace im */

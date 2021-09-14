@@ -150,6 +150,9 @@ class Join_plan;
 }
 class Unique_on_insert;
 
+/* Name of implicit savepoint */
+#define MYSQL_IMPLICIT_SAVEPOINT "__MySQL_Implicit_Savepoint__"
+
 extern ulong savepoint_alloc_size;
 
 /// Maps from slot to plugin. May return NULL if plugin has been unloaded.

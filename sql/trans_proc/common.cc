@@ -23,6 +23,8 @@
 
 namespace im {
 
+LEX_CSTRING TRANS_PROC_SCHEMA = {C_STRING_WITH_LEN("dbms_trans")};
+
 Sub_statement_context::Sub_statement_context(THD *thd)
     : m_thd(thd),
       m_old_query_id(thd->query_id),
