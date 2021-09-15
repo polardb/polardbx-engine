@@ -145,6 +145,8 @@ class Protocol_encoder : public Protocol_encoder_interface {
     m_gheader.init(ptype, gsid);
     m_xproto_encoder.rebuild_header();
   }
+
+  void send_tso(const uint64_t tso, int32_t err_no) override;
 };  // namespace ngs
 
 #ifdef XPLUGIN_LOG_PROTOBUF

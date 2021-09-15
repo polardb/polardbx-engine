@@ -134,6 +134,7 @@ SET(xplugin_SRC
   src/io/galaxy_listener_factory.cc
   ngs/src/galaxy_session.cc
   src/variables/galaxy_status.cc
+  src/galaxy_tso_handler.cc
 
   ${ngs_SRC}
 )

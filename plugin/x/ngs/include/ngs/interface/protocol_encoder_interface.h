@@ -126,6 +126,7 @@ class Protocol_encoder_interface {
   */
   virtual void build_header(gx::Protocol_type ptype, gx::GSession_id gs_id) = 0;
 
+  virtual void send_tso(const uint64_t tso, int32_t err_no) = 0;
 };
 
 }  // namespace ngs

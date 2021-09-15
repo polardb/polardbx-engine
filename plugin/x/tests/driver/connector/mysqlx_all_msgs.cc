@@ -161,5 +161,9 @@ static struct init_message_factory {
     client_message<Mysqlx::Cursor::Close>(Mysqlx::ClientMessages::CURSOR_CLOSE,
                                           "CURSOR_CLOSE",
                                           "Mysqlx.Cursor.Close");
+    client_message<Mysqlx::GetTSO>(Mysqlx::ClientMessages::GET_TSO, "GET_TSO",
+                                   "Mysqlx.GetTSO");
+    server_message<Mysqlx::ResultTSO>(Mysqlx::ServerMessages::RESULTSET_TSO,
+                                      "RESULTSET_TSO", "Mysqlx.ResultTSO");
   }
 } init_message_factory;

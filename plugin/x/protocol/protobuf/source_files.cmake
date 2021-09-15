@@ -37,5 +37,6 @@ SET(MYSQLX_PROTOBUF_PROTO_FILES
   "${MYSQLX_PROTOBUF_PROTO_DIR}/mysqlx_resultset.proto"
   "${MYSQLX_PROTOBUF_PROTO_DIR}/mysqlx_cursor.proto"
   "${MYSQLX_PROTOBUF_PROTO_DIR}/mysqlx_prepare.proto"
+  "${MYSQLX_PROTOBUF_PROTO_DIR}/galaxyx.proto"
 )
 

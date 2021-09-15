@@ -84,6 +84,8 @@ message ClientMessages {
     CURSOR_OPEN = 43;
     CURSOR_CLOSE = 44;
     CURSOR_FETCH = 45;
+
+    GET_TSO = 113;
   }
 }
 
@@ -115,6 +117,8 @@ message ServerMessages {
 
     SQL_STMT_EXECUTE_OK = 17;
     RESULTSET_FETCH_DONE_MORE_OUT_PARAMS = 18;
+
+    RESULTSET_TSO = 101;
   }
 }
 // ifndef PROTOBUF_LITE

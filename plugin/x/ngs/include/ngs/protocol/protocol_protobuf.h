@@ -51,6 +51,7 @@
 #include "plugin/x/generated/protobuf/mysqlx_resultset.pb.h"
 #include "plugin/x/generated/protobuf/mysqlx_session.pb.h"
 #include "plugin/x/generated/protobuf/mysqlx_sql.pb.h"
+#include "plugin/x/generated/protobuf/galaxyx.pb.h"
 #else
 #include "plugin/x/generated/protobuf_lite/mysqlx.pb.h"
 #include "plugin/x/generated/protobuf_lite/mysqlx_connection.pb.h"
@@ -62,6 +63,7 @@
 #include "plugin/x/generated/protobuf_lite/mysqlx_resultset.pb.h"
 #include "plugin/x/generated/protobuf_lite/mysqlx_session.pb.h"
 #include "plugin/x/generated/protobuf_lite/mysqlx_sql.pb.h"
+#include "plugin/x/generated/protobuf_lite/galaxyx.pb.h"
 #endif  // USE_MYSQLX_FULL_PROTO
 
 #ifdef WIN32

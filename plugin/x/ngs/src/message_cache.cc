@@ -107,6 +107,11 @@ bool Message_cache::alloc_message(const uint8_t message_type,
       message = &m_prepare_deallocate;
       break;
 
+    case Mysqlx::ClientMessages::GET_TSO:
+      message = allocate_object<Mysqlx::GetTSO>();
+      message_was_allocated = true;
+      break;
+
     default:
       break;
   }
