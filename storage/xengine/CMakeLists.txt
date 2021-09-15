@@ -5,7 +5,7 @@
 #ENDIF()
 
 # suppress warning of new FixedQueue<T>, since using C++17
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-compare -Wno-unused-parameter -Wno-unused-variable -Wno-vla -Wno-overloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-missing-format-attribute -Wno-format-security -Wno-non-virtual-dtor -faligned-new=32")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-compare -Wno-unused-parameter -Wno-unused-variable -Wno-vla -Wno-overloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-missing-format-attribute -Wno-format-security -Wno-non-virtual-dtor -faligned-new=32 -Wno-cast-qual")
 set(XENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/storage/xengine/core")
 CHECK_FUNCTION_EXISTS(sched_getcpu  HAVE_SCHED_GETCPU)
 IF(HAVE_SCHED_GETCPU)
