@@ -163,7 +163,10 @@ static struct init_message_factory {
                                           "Mysqlx.Cursor.Close");
     client_message<Mysqlx::GetTSO>(Mysqlx::ClientMessages::GET_TSO, "GET_TSO",
                                    "Mysqlx.GetTSO");
-    server_message<Mysqlx::ResultTSO>(Mysqlx::ServerMessages::RESULTSET_TSO,
-                                      "RESULTSET_TSO", "Mysqlx.ResultTSO");
+    server_message<Mysqlx::ResultTSO>(Mysqlx::ServerMessages::RESULT_TSO,
+                                      "RESULT_TSO", "Mysqlx.ResultTSO");
+    client_message<Mysqlx::Sql::GalaxyStmtExecute>(
+        Mysqlx::ClientMessages::GALAXY_STMT_EXECUTE, "GALAXY_STMT_EXECUTE",
+        "Mysqlx.Sql.GalaxyStmtExecute");
   }
 } init_message_factory;

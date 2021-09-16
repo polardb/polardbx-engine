@@ -115,8 +115,4 @@ large_tests.alter_table : BUG#000 Consume too much space
 rpl_gtid.rpl_wait_for_executed_gtid_set_no_timeout: BUG#000 unstable
 binlog.binlog_max_flush_queue_time_warn : BUG#000 unstable
 main.mysqlpump_extended : BUG#000 timeout
-main.mysql_load_data_local_dir : BUG#000 oracle mysql bug
-x.connection_multi_bind_address : BUG#000 We don't support IPv6
-x.connection_multi_bind_address_ipv6 : BUG#000 We don't support IPv6
 x.status_variables : BUG#000 We don't support IPv6
-auth_sec.host_sort : BUG#000 We don't support IPv6

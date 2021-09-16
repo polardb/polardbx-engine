@@ -115,6 +115,11 @@ ngs::Error_code Dispatcher::dispatch(const ngs::Message_request &command) {
     case Mysqlx::ClientMessages::GET_TSO:
       return m_exec_get_tso_handler.execute(
           static_cast<const Mysqlx::GetTSO &>(*command.get_message()));
+
+    case Mysqlx::ClientMessages::GALAXY_STMT_EXECUTE:
+      return m_galaxy_stmt_handler.execute(
+          static_cast<const Mysqlx::Sql::GalaxyStmtExecute &>(
+              *command.get_message()));
   }
 
   m_session->proto().get_protocol_monitor().on_error_unknown_msg_type();

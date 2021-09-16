@@ -528,4 +528,13 @@ bool Sql_data_context::is_sql_mode_set(const std::string &mode) {
   return false;
 }
 
+ngs::Error_code Sql_data_context::init_db(const char *db_name,
+                                          std::size_t db_len,
+                                          ngs::Resultset_interface *rset) {
+  COM_DATA data;
+  data.com_init_db.db_name = db_name;
+  data.com_init_db.length = static_cast<unsigned int>(db_len);
+  return execute_server_command(COM_INIT_DB, data, rset);
+}
+
 }  // namespace xpl

@@ -51,6 +51,7 @@
 #include "protobuf/mysqlx_session.pb.h"
 #include "protobuf/mysqlx_sql.pb.h"
 #include "protobuf/galaxyx.pb.h"
+#include "protobuf/galaxyx_sql.pb.h"
 
 #else  // USE_MYSQLX_FULL_PROTO
 
@@ -65,6 +66,7 @@
 #include "protobuf_lite/mysqlx_session.pb.h"
 #include "protobuf_lite/mysqlx_sql.pb.h"
 #include "protobuf_lite/galaxyx.pb.h"
+#include "protobuf_lite/galaxyx_sql.pb.h"
 
 #endif  // USE_MYSQLX_FULL_PROTO
 

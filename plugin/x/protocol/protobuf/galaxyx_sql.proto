@@ -27,10 +27,11 @@ syntax = "proto2";
 
 // ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
-package Mysqlx;
+package Mysqlx.Sql;
 option java_package = "com.mysql.cj.x.protobuf";
 
 import "mysqlx.proto";
+import "mysqlx_datatypes.proto";
 
 
 // style-guide:
@@ -45,24 +46,14 @@ import "mysqlx.proto";
 // }
 //
 
+message GalaxyStmtExecute {
+  optional string namespace = 3 [ default = "sql" ];
+  required bytes stmt = 1;
+  repeated Mysqlx.Datatypes.Any args = 2;
+  optional bool compact_metadata = 4 [ default = false ];
 
-// IDs of messages that can be sent from client to the server
-//
-// .. note::
-//   this message is never sent on the wire. It is only used to let ``protoc``
-//
-//   * generate constants
-//   * check for uniqueness
+  // Galaxy Store
+  optional string db_name = 5;
 
-// Client send GetTSO message to Server
-message GetTSO {
-  required bytes leader_name = 1;
-  required int32 batch_count = 2;
-  option (client_message_id) = GET_TSO; // comment_out_if PROTOBUF_LITE
-}
-
-message ResultTSO {
-  required int32 error_no = 1;
-  required uint64 ts = 2;
-  option (server_message_id) = RESULT_TSO; // comment_out_if PROTOBUF_LITE
+  option (client_message_id) = GALAXY_STMT_EXECUTE; // comment_out_if PROTOBUF_LITE
 }

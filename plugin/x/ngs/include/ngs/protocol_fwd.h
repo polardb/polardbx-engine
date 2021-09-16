@@ -39,7 +39,8 @@ namespace Mysqlx {
 
 namespace Sql {
 class StmtExecute;
-}
+class GalaxyStmtExecute;
+}  // namespace Sql
 
 namespace Resultset {
 class Row;

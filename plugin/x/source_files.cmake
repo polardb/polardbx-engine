@@ -135,6 +135,7 @@ SET(xplugin_SRC
   ngs/src/galaxy_session.cc
   src/variables/galaxy_status.cc
   src/galaxy_tso_handler.cc
+  src/galaxy_stmt_command_handler.cc
 
   ${ngs_SRC}
 )

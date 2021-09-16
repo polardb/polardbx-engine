@@ -109,6 +109,10 @@ class Sql_data_context : public ngs::Sql_session_interface {
   void switch_to_local_user(const std::string &username);
   bool wait_api_ready(std::function<bool()> exiting);
 
+  /** Galaxy X-protocol */
+  ngs::Error_code init_db(const char *db_name, std::size_t db_len,
+                          ngs::Resultset_interface *rset) override;
+
  private:
   Sql_data_context(const Sql_data_context &) = delete;
   Sql_data_context &operator=(const Sql_data_context &) = delete;

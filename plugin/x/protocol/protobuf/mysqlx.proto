@@ -85,6 +85,8 @@ message ClientMessages {
     CURSOR_CLOSE = 44;
     CURSOR_FETCH = 45;
 
+    // Special Galaxy define message from here.
+    GALAXY_STMT_EXECUTE = 101;
     GET_TSO = 113;
   }
 }
@@ -118,7 +120,7 @@ message ServerMessages {
     SQL_STMT_EXECUTE_OK = 17;
     RESULTSET_FETCH_DONE_MORE_OUT_PARAMS = 18;
 
-    RESULTSET_TSO = 101;
+    RESULT_TSO = 101;
   }
 }
 // ifndef PROTOBUF_LITE

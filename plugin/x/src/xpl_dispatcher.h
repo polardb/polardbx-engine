@@ -29,9 +29,10 @@
 #include "plugin/x/src/admin_cmd_handler.h"
 #include "plugin/x/src/crud_cmd_handler.h"
 #include "plugin/x/src/expect/expect_stack.h"
+#include "plugin/x/src/galaxy_stmt_command_handler.h"
+#include "plugin/x/src/galaxy_tso_handler.h"
 #include "plugin/x/src/prepare_command_handler.h"
 #include "plugin/x/src/stmt_command_handler.h"
-#include "plugin/x/src/galaxy_tso_handler.h"
 
 namespace xpl {
 
@@ -58,7 +59,10 @@ class Dispatcher {
   Expectation_stack m_expect_stack;
   Stmt_command_handler m_stmt_handler{m_session};
   Prepare_command_handler m_prepare_handler{m_session};
+
+  /** Galaxy X-protocol */
   gx::Get_tso_handler m_exec_get_tso_handler{m_session};
+  Galaxy_stmt_command_handler m_galaxy_stmt_handler{m_session};
 };
 
 }  // namespace xpl

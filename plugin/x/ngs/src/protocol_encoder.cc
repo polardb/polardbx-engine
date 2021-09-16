@@ -402,7 +402,7 @@ void Protocol_encoder::send_tso(const uint64_t tso, int32_t err_no) {
   Mysqlx::ResultTSO msg;
   msg.set_error_no(err_no);
   msg.set_ts(tso);
-  send_protobuf_message(Mysqlx::ServerMessages::RESULTSET_TSO, msg, true);
+  send_protobuf_message(Mysqlx::ServerMessages::RESULT_TSO, msg, true);
 }
 
 }  // namespace ngs

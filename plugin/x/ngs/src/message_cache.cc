@@ -112,6 +112,10 @@ bool Message_cache::alloc_message(const uint8_t message_type,
       message_was_allocated = true;
       break;
 
+    case Mysqlx::ClientMessages::GALAXY_STMT_EXECUTE:
+      message = &m_galaxy_stmt_execute;
+      break;
+
     default:
       break;
   }

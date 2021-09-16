@@ -72,6 +72,10 @@ class Sql_session_interface {
   virtual Error_code detach() = 0;
   virtual Error_code reset() = 0;
   virtual bool is_sql_mode_set(const std::string &mode) = 0;
+
+  /** Galaxy X-protocol */
+  virtual Error_code init_db(const char *db_name, std::size_t db_len,
+                             Resultset_interface *rset) = 0;
 };
 
 }  // namespace ngs
