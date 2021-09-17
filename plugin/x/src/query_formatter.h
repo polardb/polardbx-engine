@@ -35,6 +35,8 @@
 #include "plugin/x/ngs/include/ngs/memory.h"
 #include "plugin/x/src/helper/to_string.h"
 
+#include "plugin/x/src/galaxy_identifier.h"
+
 struct CHARSET_INFO;
 
 namespace xpl {
@@ -55,6 +57,9 @@ class Query_formatter {
   Query_formatter &operator%(const No_escape<const char *> &value);
   Query_formatter &operator%(const std::string &value);
   Query_formatter &operator%(const No_escape<std::string> &value);
+
+  /** Galaxy X-protocol */
+  Query_formatter &operator%(const gx::Identifier &identifier);
 
   template <typename Value_type>
   Query_formatter &operator%(const Value_type &value) {
@@ -95,6 +100,9 @@ class Query_formatter {
   void put_value(const char *value, const std::size_t length);
   void put_value_and_escape(const char *value, const std::size_t length);
   void validate_next_tag();
+
+  /** Galaxy X-protocol */
+  void put_ident_and_escape(const char *value, const std::size_t length);
 
   ngs::PFS_string &m_query;
   CHARSET_INFO &m_charset;

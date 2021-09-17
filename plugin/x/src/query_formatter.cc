@@ -263,3 +263,27 @@ void Query_formatter::put_value(const char *value, const std::size_t length) {
 std::size_t Query_formatter::count_tags() const {
   return std::count_if(m_query.begin(), m_query.end(), Sql_search_tags());
 }
+
+/** Galaxy X-protocol */
+void Query_formatter::put_ident_and_escape(const char *value,
+                                           const std::size_t length) {
+  const std::size_t length_maximum = 2 * length + 1 + 2;
+  std::string value_escaped(length_maximum, '\0');
+
+  std::size_t length_escaped = escape_string_for_mysql(
+      &m_charset, &value_escaped[1], length_maximum, value, length);
+  value_escaped[0] = value_escaped[1 + length_escaped] = '`';
+
+  value_escaped.resize(length_escaped + 2);
+
+  put_value(value_escaped.c_str(), value_escaped.length());
+}
+
+Query_formatter &Query_formatter::operator%(const gx::Identifier &identifier) {
+  validate_next_tag();
+
+  put_ident_and_escape(identifier.get_ident().c_str(),
+                       identifier.get_ident().length());
+
+  return *this;
+}

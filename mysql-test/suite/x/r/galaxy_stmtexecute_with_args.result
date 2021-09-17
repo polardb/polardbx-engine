@@ -1,0 +1,279 @@
+CREATE DATABASE xtest;
+USE xtest;
+CREATE TABLE `scalar_types`(`number_uint` INTEGER UNSIGNED DEFAULT 10, `number_sint` INTEGER DEFAULT -10, `value_bool` BOOLEAN DEFAULT 0, `value_string` VARCHAR(255) default NULL, `number_float` FLOAT DEFAULT 1.1, `number_double` DOUBLE DEFAULT 2.2, `value_blob` TINYBLOB DEFAULT NULL);
+send Mysqlx.Sql.StmtExecute {
+  stmt: "INSERT INTO `xtest`.`scalar_types`(`number_sint`, `number_uint`, `value_string`) VALUES(0, ?, \'First inserted row\'),(?, 1,\'Second inserted row\'), (-1, 0,?)"
+  args {
+    type: SCALAR
+    scalar {
+      type: V_UINT
+      v_unsigned_int: 1
+    }
+  }
+  args {
+    type: SCALAR
+    scalar {
+      type: V_SINT
+      v_signed_int: -1
+    }
+  }
+  args {
+    type: SCALAR
+    scalar {
+      type: V_STRING
+      v_string {
+        value: "\"Thrid\" inserted \'row\'"
+      }
+    }
+  }
+}
+
+
+3 rows affected
+Records: 3  Duplicates: 0  Warnings: 0
+send Mysqlx.Sql.StmtExecute {
+  stmt: "INSERT INTO `xtest`.`scalar_types`(`number_float`, `number_double`, `value_blob`) VALUES(0.1, ?, \'First inserted blob\'),(?, 200.01,\'Second inserted blob\'), (10.11, 2.2, ?), (111, 222, ?)"
+  args {
+    type: SCALAR
+    scalar {
+      type: V_DOUBLE
+      v_double: 200.01
+    }
+  }
+  args {
+    type: SCALAR
+    scalar {
+      type: V_DOUBLE
+      v_double: 10.11
+    }
+  }
+  args {
+    type: SCALAR
+    scalar {
+      type: V_STRING
+      v_string {
+        value: "\"Thrid\" inserted \'blob\'"
+      }
+    }
+  }
+  args {
+    type: SCALAR
+    scalar {
+      type: V_NULL
+    }
+  }
+}
+
+
+4 rows affected
+Records: 4  Duplicates: 0  Warnings: 0
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok
+Too many args
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "SELECT * FROM `xtest`.`scalar_types`"
+  args {
+    type: SCALAR
+    scalar {
+      type: V_STRING
+      v_string {
+        value: "%inserted \'row%"
+      }
+    }
+  }
+}
+
+Mysqlx.Error {
+  severity: ERROR
+  code: 5015
+  msg: "Too many arguments"
+  sql_state: "HY000"
+}
+
+RUN USE `xtest`
+
+0 rows affected
+String as identifier
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "SELECT * FROM ?"
+  args {
+    type: SCALAR
+    scalar {
+      type: V_IDENTIFIER
+      v_identifier {
+        value: "scalar_types"
+      }
+    }
+  }
+}
+
+Mysqlx.Resultset.ColumnMetaData {
+  type: UINT
+  name: "number_uint"
+  original_name: "number_uint"
+  table: "scalar_types"
+  original_table: "scalar_types"
+  schema: "xtest"
+  catalog: "def"
+  length: 10
+}
+
+Mysqlx.Resultset.ColumnMetaData {
+  type: SINT
+  name: "number_sint"
+  original_name: "number_sint"
+  table: "scalar_types"
+  original_table: "scalar_types"
+  schema: "xtest"
+  catalog: "def"
+  length: 11
+}
+
+Mysqlx.Resultset.ColumnMetaData {
+  type: SINT
+  name: "value_bool"
+  original_name: "value_bool"
+  table: "scalar_types"
+  original_table: "scalar_types"
+  schema: "xtest"
+  catalog: "def"
+  length: 1
+}
+
+Mysqlx.Resultset.ColumnMetaData {
+  type: BYTES
+  name: "value_string"
+  original_name: "value_string"
+  table: "scalar_types"
+  original_table: "scalar_types"
+  schema: "xtest"
+  catalog: "def"
+  collation: 255
+  length: 1020
+}
+
+Mysqlx.Resultset.ColumnMetaData {
+  type: FLOAT
+  name: "number_float"
+  original_name: "number_float"
+  table: "scalar_types"
+  original_table: "scalar_types"
+  schema: "xtest"
+  catalog: "def"
+  fractional_digits: 31
+  length: 12
+}
+
+Mysqlx.Resultset.ColumnMetaData {
+  type: DOUBLE
+  name: "number_double"
+  original_name: "number_double"
+  table: "scalar_types"
+  original_table: "scalar_types"
+  schema: "xtest"
+  catalog: "def"
+  fractional_digits: 31
+  length: 22
+}
+
+Mysqlx.Resultset.ColumnMetaData {
+  type: BYTES
+  name: "value_blob"
+  original_name: "value_blob"
+  table: "scalar_types"
+  original_table: "scalar_types"
+  schema: "xtest"
+  catalog: "def"
+  collation: 63
+  length: 255
+}
+
+Mysqlx.Resultset.Row {
+  field: "\001"
+  field: "\000"
+  field: "\000"
+  field: "First inserted row\000"
+  field: "\315\314\214?"
+  field: "\232\231\231\231\231\231\001@"
+  field: ""
+}
+
+Mysqlx.Resultset.Row {
+  field: "\001"
+  field: "\001"
+  field: "\000"
+  field: "Second inserted row\000"
+  field: "\315\314\214?"
+  field: "\232\231\231\231\231\231\001@"
+  field: ""
+}
+
+Mysqlx.Resultset.Row {
+  field: "\000"
+  field: "\001"
+  field: "\000"
+  field: "\"Thrid\" inserted \'row\'\000"
+  field: "\315\314\214?"
+  field: "\232\231\231\231\231\231\001@"
+  field: ""
+}
+
+Mysqlx.Resultset.Row {
+  field: "\n"
+  field: "\023"
+  field: "\000"
+  field: ""
+  field: "\315\314\314="
+  field: "\270\036\205\353Q\000i@"
+  field: "First inserted blob\000"
+}
+
+Mysqlx.Resultset.Row {
+  field: "\n"
+  field: "\023"
+  field: "\000"
+  field: ""
+  field: "\217\302!A"
+  field: "\270\036\205\353Q\000i@"
+  field: "Second inserted blob\000"
+}
+
+Mysqlx.Resultset.Row {
+  field: "\n"
+  field: "\023"
+  field: "\000"
+  field: ""
+  field: "\217\302!A"
+  field: "\232\231\231\231\231\231\001@"
+  field: "\"Thrid\" inserted \'blob\'\000"
+}
+
+Mysqlx.Resultset.Row {
+  field: "\n"
+  field: "\023"
+  field: "\000"
+  field: ""
+  field: "\000\000\336B"
+  field: "\000\000\000\000\000\300k@"
+  field: ""
+}
+
+Mysqlx.Resultset.FetchDone {
+}
+
+Mysqlx.Notice.Frame {
+  type: 3
+  scope: LOCAL
+  payload: "Mysqlx.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
+}
+
+Mysqlx.Sql.StmtExecuteOk {
+}
+
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok
+DROP DATABASE xtest;

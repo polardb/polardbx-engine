@@ -53,6 +53,8 @@ message Scalar {
     V_FLOAT = 6;
     V_BOOL  = 7;
     V_STRING  = 8;
+
+    V_IDENTIFIER = 21;
   };
 
   required Type type = 1;
@@ -65,6 +67,8 @@ message Scalar {
   optional float  v_float = 7;
   optional bool   v_bool = 8;
   optional String v_string = 9;
+
+  optional String v_identifier = 21;
 }
 
 // a object

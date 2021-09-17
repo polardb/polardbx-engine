@@ -33,6 +33,8 @@
 #include "plugin/x/ngs/include/ngs/protocol/protocol_protobuf.h"
 #include "plugin/x/src/xpl_error.h"
 
+#include "plugin/x/src/galaxy_identifier.h"
+
 namespace ngs {
 
 class Getter_any {
@@ -171,7 +173,7 @@ class Getter_any {
         functor(scalar.v_bool());
         break;
 
-      case Scalar::V_STRING:
+      case Scalar::V_STRING: {
         // XXX
         // implement char-set handling
         const bool is_valid =
@@ -180,6 +182,14 @@ class Getter_any {
         throw_invalid_type_if_false(scalar, is_valid);
         functor(scalar.v_string().value());
         break;
+      }
+
+      case Scalar::V_IDENTIFIER: {
+        throw_invalid_type_if_false(scalar, scalar.has_v_identifier());
+        const gx::Identifier identifier(scalar.v_identifier().value());
+        functor(identifier);
+        break;
+      }
     }
   }
 

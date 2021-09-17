@@ -73,6 +73,15 @@ class Any_to_param_handler {
         {false, MYSQL_TYPE_TINY, false, store_value(value), 1ul});
   }
 
+  /** Galaxy X-protocol */
+  void operator()(const gx::Identifier &ident) {
+    m_params->push_back(
+        {false, MYSQL_TYPE_STRING, false,
+         reinterpret_cast<const unsigned char *>(ident.get_ident().data()),
+         static_cast<unsigned long>(
+             ident.get_ident().size())});  // NOLINT(runtime/int)
+  }
+
  protected:
   using Param_value = Prepare_param_handler::Param_value;
   template <typename T>

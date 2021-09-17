@@ -223,15 +223,6 @@ static dberr_t roll_forward_scn() {
 
   keep = utc - (srv_scn_history_keep_days * 24 * 60 * 60);
 
-#ifdef UNIV_DEBUG
-  scn_transform_result_t result = try_scn_transform_by_utc(utc - 60);
-  fprintf(
-      stderr, "Scn convert result: scn: %lu, utc: %lu, state: %s, err: %s\n",
-      result.scn, result.utc,
-      result.state == SCN_TRANSFORM_STATE::NOT_FOUND ? "NOT_FOUND" : "SUCCESS",
-      result.err == DB_SUCCESS ? "SUCCESS" : "ERROR");
-#endif
-
   trx = trx_allocate_for_background();
   if (srv_read_only_mode) {
     trx_start_internal_read_only(trx);
