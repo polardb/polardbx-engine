@@ -258,7 +258,7 @@ int Sequence_share::enter_cond(THD *thd) {
 }
 
 Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values,
-                                                  uint32_t batch) {
+                                                  ulonglong batch) {
   DBUG_ENTER("quick_read");
 
   mysql_mutex_assert_owner(&m_mutex);
@@ -275,16 +275,6 @@ Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values,
   else
     DBUG_RETURN(timestamp_quick_read(local_values, batch));
 }
-
-/** How many rounds then put into sleep */
-#define TIMESTAMP_SEQUENCE_ROUND_SLEEP 100
-/** Sleep time (milliseconds) */
-#define TIMESTAMP_SEQUENCE_SLEEP_TIME 10
-/** How many rounds then failed */
-#define TIMESTAMP_SEQUENCE_MAX_ROUND 100000
-
-/* Max number of timestamp value that could be reserved in one request */
-#define TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE 2048
 
 /**
   Allocate a new time range [ m_low_limit - m_cache_end] as cached timestamp;
@@ -328,7 +318,7 @@ retry:
   @param[in]          batch             number of timestamp value requested.
 */
 Sequence_cache_request Sequence_share::timestamp_quick_read(
-    ulonglong *local_values, uint32_t batch) {
+    ulonglong *local_values, ulonglong batch) {
   DBUG_ENTER("Sequence_share::timestamp_quick_read");
 
   mysql_mutex_assert_owner(&m_mutex);
@@ -776,7 +766,7 @@ void ha_sequence::init_variables() {
   m_engine = nullptr;
   m_sequence_info = nullptr;
   m_share = nullptr;
-  m_batch = 0;
+  m_batch = 1;
 
   start_of_scan = 0;
   DBUG_VOID_RETURN;
@@ -912,9 +902,9 @@ int ha_sequence::rnd_init(bool scan) {
   /* Inherit the sequence scan mode option. */
   m_scan_mode = table->sequence_scan.get();
   m_iter_mode = Sequence_iter_mode::IT_NON;
+  m_batch = table->sequence_scan.get_batch();
 
-  m_batch = MY_MIN(table->sequence_scan.get_batch(),
-                   TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE);
+  DBUG_ASSERT(m_batch <= TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE);
 
   if (m_scan_mode == Sequence_scan_mode::ITERATION_SCAN)
     m_iter_mode = sequence_iteration_type(table);

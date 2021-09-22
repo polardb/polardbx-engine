@@ -24,6 +24,7 @@
 #include "my_inttypes.h"
 #include "sql/log.h"
 #include "sql/timestamp_service.h"
+#include "sql/ha_sequence.h"
 
 namespace im {
 
@@ -67,6 +68,10 @@ bool Cmd_get_timestamp::pc_execute(THD *thd) {
   Item_string *table_name_item = dynamic_cast<Item_string *>(it++);
   String *table_name = table_name_item->val_str(nullptr);
 
+  /* Get number of timestamp value requested */
+  Item_int *batch_size_item = dynamic_cast<Item_int *>(it++);
+  uint64 batch_size = batch_size_item->val_uint();
+
   /* Initialize timestamp service and get the timestamp value */
   TimestampService ts_service(thd, db_name->ptr(), table_name->ptr());
 
@@ -74,18 +79,10 @@ bool Cmd_get_timestamp::pc_execute(THD *thd) {
   if (ts_service.init()) {
     ret = true;
   } else {
-    /* Get one timestamp value from base table */
-    ret = ts_service.get_timestamp(m_timestamp, 1);
+    /* Get batch_size timestamp values from base table */
+    ret = ts_service.get_timestamp(m_timestamp, batch_size);
 
     ts_service.deinit();
-  }
-
-  if (ret) {
-    /* In case error status had been set in diagnostic area */
-    thd->get_stmt_da()->set_overwrite_status(true);
-    my_error(ER_TIMESTAMP_SERVICE_ERROR, MYF(0),
-             db_name->ptr(), table_name->ptr());
-    thd->get_stmt_da()->set_overwrite_status(false);
   }
 
   return ret;

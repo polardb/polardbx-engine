@@ -247,8 +247,8 @@ class Sequence_scan {
   void set(Scan_mode mode) { m_mode = mode; }
   Scan_mode get() { return m_mode; }
 
-  void set_batch(uint32_t batch) { m_batch = batch; }
-  uint32_t get_batch() { return m_batch; }
+  void set_batch(ulonglong batch) { m_batch = batch; }
+  ulonglong get_batch() { return m_batch; }
 
   /* Overlap the assignment operator */
   Sequence_scan &operator=(const Sequence_scan &rhs) {
@@ -265,7 +265,7 @@ class Sequence_scan {
     Used to get a batch of sequence value, currently only used for
     timestamp sequence
  */
-  uint32_t m_batch;
+  ulonglong m_batch;
 };
 
 typedef Sequence_scan::Scan_mode Sequence_scan_mode;

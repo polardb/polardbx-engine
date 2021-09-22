@@ -52,7 +52,7 @@ class TimestampService {
   bool open_base_table(thr_lock_type lock_type);
 
   /* Get next timestamp value */
-  bool get_timestamp(uint64_t &ts, const uint32_t batch = 1);
+  bool get_timestamp(uint64_t &ts, const uint64_t batch = 1);
 
   bool is_initialized() { return m_initialized; }
 

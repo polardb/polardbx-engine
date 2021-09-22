@@ -31,6 +31,7 @@
 #include "table.h"
 #include "timestamp_service.h"
 #include "transaction.h"  // trans_commit_stmt
+#include "ha_sequence.h"
 
 /**
   Initialize timestamp service
@@ -82,8 +83,11 @@ bool TimestampService::open_base_table(thr_lock_type lock_type) {
       close_thread_tables() which will release the lock.
     */
     close_thread_tables(m_thd);
-    sql_print_error("Timestamp service failed to open table %s.%s",
-                    m_db_name, m_table_name);
+    m_thd->get_stmt_da()->set_overwrite_status(true);
+    char errmsg[256] = {0};
+    sprintf(errmsg,"Can not open table [%s.%s]", m_db_name, m_table_name);
+    my_error(ER_TIMESTAMP_SERVICE_ERROR, MYF(0), errmsg);
+    m_thd->get_stmt_da()->set_overwrite_status(false);
     ret = true;
   } else {
     m_table = tables.table;
@@ -101,24 +105,37 @@ bool TimestampService::open_base_table(thr_lock_type lock_type) {
 
   @retval         FALSE if success, TRUE otherwise
 */
-bool TimestampService::get_timestamp(uint64_t &ts, const uint32_t batch) {
+bool TimestampService::get_timestamp(uint64_t &ts, const uint64_t batch) {
   bool ret = false;
+  int error = 0;
 
   DBUG_ASSERT(is_initialized());
   DBUG_ASSERT(m_table->file);
 
-  /* Set the number of timestamp value requested */
+	/* Check the number of timestamp value requested */
+  if (batch < TIMESTAMP_SEQUENCE_MIN_BATCH_SIZE ||
+      batch > TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE) {
+    char errmsg[256] = {0};
+    sprintf(errmsg,
+            "Can not reserve %llu timestamp value, valid range is [%llu, %llu]",
+            batch, TIMESTAMP_SEQUENCE_MIN_BATCH_SIZE,
+            TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE);
+    m_thd->get_stmt_da()->set_overwrite_status(true);
+    my_error(ER_TIMESTAMP_SERVICE_ERROR, MYF(0), errmsg);
+    m_thd->get_stmt_da()->set_overwrite_status(false);
+    return true;
+  }
+
+  /* Set the number of timestamp value requested (default 1) */
   m_table->sequence_scan.set_batch(batch);
 
   bitmap_set_bit(m_table->read_set, Sequence_field::FIELD_NUM_NEXTVAL);
 
-  if (m_table->file->ha_rnd_init(true)) {
-    sql_print_error("Timestamp service failed to start scan on table %s.%s",
-                    m_db_name, m_table_name);
+  if (error = m_table->file->ha_rnd_init(true)) {
+    m_table->file->print_error(error, MYF(0));
     ret = true;
   } else {
-    int error = m_table->file->ha_rnd_next(m_table->record[0]);
-
+    error = m_table->file->ha_rnd_next(m_table->record[0]);
     if (error) {
       m_table->file->print_error(error, MYF(0));
       ret = true;

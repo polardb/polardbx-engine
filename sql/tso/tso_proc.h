@@ -51,10 +51,10 @@ class Tso_proc_base : public Proc {
 /**
   Proc of get_timestamp()
 
-  This procedure gets the next timestamp value from existing timestamp
+  This procedure gets the next batch of timestamp value from existing timestamp
   sequence, the usage is
 
-    dbms_tso.get_timestamp(db_name, table_name)
+    dbms_tso.get_timestamp(db_name, table_name, batch_size)
 */
 class Proc_get_timestamp : public Tso_proc_base {
  public:
@@ -66,9 +66,11 @@ class Proc_get_timestamp : public Tso_proc_base {
       - db name, the name of db where base table resides
       - table name, the name of base table which is created when creating
         timestamp sequence
+      - batch size, number of timestamp value requested in a batch
     */
     m_parameters.push_back(MYSQL_TYPE_VARCHAR);
     m_parameters.push_back(MYSQL_TYPE_VARCHAR);
+    m_parameters.push_back(MYSQL_TYPE_LONGLONG);
 
     Column_element element = {MYSQL_TYPE_LONGLONG,
                               C_STRING_WITH_LEN("Timestamp"), 128};

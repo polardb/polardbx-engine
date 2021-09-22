@@ -46,6 +46,18 @@ extern handlerton *sequence_hton;
 #define SF_ROUND        Sequence_field::FIELD_NUM_ROUND
 #define SF_END          Sequence_field::FIELD_NUM_END
 
+/** How many rounds then put into sleep */
+#define TIMESTAMP_SEQUENCE_ROUND_SLEEP 100
+/** Sleep time (milliseconds) */
+#define TIMESTAMP_SEQUENCE_SLEEP_TIME 10
+/** How many rounds then failed */
+#define TIMESTAMP_SEQUENCE_MAX_ROUND 100000
+
+/* Min number of timestamp value that could be reserved in one request */
+#define TIMESTAMP_SEQUENCE_MIN_BATCH_SIZE 1
+/* Max number of timestamp value that could be reserved in one request */
+#define TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE 60000
+
 /**
   The sequence caches class definition, that's allowed to be accessed
   simultaneously while protected by mutex.
@@ -139,9 +151,9 @@ class Sequence_share {
 
     @retval         request         Cache request result
   */
-  Cache_request quick_read(ulonglong *local_values, uint32_t batch);
+  Cache_request quick_read(ulonglong *local_values, ulonglong batch);
   Cache_request digital_quick_read(ulonglong *local_values);
-  Cache_request timestamp_quick_read(ulonglong *local_values, uint32_t batch);
+  Cache_request timestamp_quick_read(ulonglong *local_values, ulonglong batch);
   /**
     Validate cache.
   */
@@ -568,7 +580,7 @@ class ha_sequence : public handler {
   ulong start_of_scan;
 
   /* Number of timestamp value requested */
-  uint32_t m_batch;
+  ulonglong m_batch;
 
   Sequence_scan_mode m_scan_mode;
   Sequence_iter_mode m_iter_mode;
