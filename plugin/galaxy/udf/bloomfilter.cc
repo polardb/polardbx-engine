@@ -66,6 +66,7 @@ typedef unsigned __int64 uint64_t;
 #else  // defined(_MSC_VER)
 
 #define  FORCE_INLINE inline __attribute__((always_inline))
+typedef void (*HASH_FUNC) (const void*, int, uint32_t, void*);
 
 static inline uint32_t rotl32(uint32_t x, int8_t r)
 {
@@ -84,8 +85,28 @@ static inline uint64_t rotl64(uint64_t x, int8_t r)
 
 #endif // !defined(_MSC_VER)
 
+enum enum_hash_method {
+    MURMUR3 = 0,
+    XXHASH = 1
+};
+
+static const bool is_hash_result_64[] = {false, true};
 
 static const char NULL_VALUE[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+static const uint32_t DEFAULT_SEED = 0;
+
+static const uint64_t PRIME64_1 = -7046029288634856825L;
+static const uint64_t PRIME64_2 = -4417276706812531889L;
+static const uint64_t PRIME64_3 = 1609587929392839161L;
+static const uint64_t PRIME64_4 = -8796714831421723037L;
+static const uint64_t PRIME64_5 = 2870177450012600261L;
+
+static const uint64_t V1 = DEFAULT_SEED + PRIME64_1 + PRIME64_2;
+static const uint64_t V2 = DEFAULT_SEED + PRIME64_2;
+static const uint64_t V3 = DEFAULT_SEED;
+static const uint64_t V4 = DEFAULT_SEED - PRIME64_1;
+
 #ifdef WORDS_BIGENDIAN
 static const bool Is_big_endian= true;
 #else
@@ -134,17 +155,54 @@ static FORCE_INLINE uint64_t fmix64(uint64_t k)
   return k;
 }
 
+static FORCE_INLINE uint64_t mix(uint64_t current, uint64_t value) {
+  return ROTL64(current + value * PRIME64_2, 31) * PRIME64_1;
+}
+
+static FORCE_INLINE uint64_t hmix(uint64_t hash, uint64_t value) {
+  uint64_t temp = hash ^ mix(0, value);
+  return temp * PRIME64_1 + PRIME64_4;
+}
+
+static FORCE_INLINE uint64_t get_mixed_hash(uint64_t v1, uint64_t v2, uint64_t v3, uint64_t v4) {
+  uint64_t hash = ROTL64(v1, 1) + ROTL64(v2, 7) +
+          ROTL64(v3, 12) + ROTL64(v4, 18);
+
+  hash = hmix(hash, v1);
+  hash = hmix(hash, v2);
+  hash = hmix(hash, v3);
+  hash = hmix(hash, v4);
+
+  return hash;
+}
+
+
+static FORCE_INLINE uint64_t mixForTail(uint64_t hash, uint64_t value) {
+  uint64_t temp = hash ^ mix(0, value);
+  return ROTL64(temp, 27) * PRIME64_1 + PRIME64_4;
+}
+
+static FORCE_INLINE uint64_t processTail(uint64_t hash, uint32_t value) {
+  uint64_t temp = hash ^ (value * PRIME64_1);
+  return ROTL64(temp, 23) * PRIME64_2 + PRIME64_3;
+}
+
+static FORCE_INLINE uint64_t processTail(uint64_t hash, uint8_t value) {
+  uint64_t temp = hash ^ (value * PRIME64_5);
+  return ROTL64(temp, 11) * PRIME64_1;
+}
+
 //-----------------------------------------------------------------------------
 
 void MurmurHash3_x86_32(const void* key, int len, uint32_t seed, void* out);
 void MurmurHash3_x86_128(const void* key, int len, uint32_t seed, void* out);
 void MurmurHash3_x64_128(const void* key, int len, uint32_t seed, void* out);
+void XxHash_x64_64(const void* key, int len, uint32_t seed, void* out);
 longlong bloomfilter(UDF_INIT* initid, UDF_ARGS* args, char* is_null, char* error);
 
 bool bloomfilter_init(UDF_INIT* initid, UDF_ARGS* args, char* message);
 void bloomfilter_deinit(UDF_INIT* initid);
 void bloomfilter_udf(gs::udf::Udf_definition *def);
-
 
 static const char* null_safe_value_ptr(char* origin_value_ptr, char* value_buffer, int length, bool reverse) {
     if (origin_value_ptr == nullptr) {
@@ -397,34 +455,102 @@ void MurmurHash3_x64_128(const void* key, const int len, const uint32_t seed, vo
   ((uint64_t*)out)[1] = h2;
 }
 
-// For debug
-//char* bloomfilter(UDF_INIT *initid, UDF_ARGS *args,
-//                  char *result, unsigned long *length,
-//                  char *is_null, char *error) {
-//    memcpy(result, args->args[3], args->lengths[3]);
-//    *length = args->lengths[3];
-//    return result;
-//}
+void XxHash_x64_64(const void* key, const int len, uint32_t seed, void * out) {
+  const int BLOCK_SIZE = 32;
+  uint64_t hash = len;
+  const uint64_t* blocks = (const uint64_t*)(key);
+  uint64_t* tail_start = (uint64_t*) key;
 
-longlong bloomfilter(UDF_INIT *initid MY_ATTRIBUTE((unused)), UDF_ARGS *args,
-                     char *is_null MY_ATTRIBUTE((unused)),
-                     char *error MY_ATTRIBUTE((unused))) {
+  //----------
+  // body
+  if (len > BLOCK_SIZE) {
+    const int nblocks = len / BLOCK_SIZE;
+    tail_start += nblocks;
+
+    uint64_t k1 = V1, k2 = V2, k3 = V3, k4 = V4;
+    for (int i = 0; i < nblocks; i++) {
+      k1 = mix(k1, getblock64(blocks, i * 4));
+      k2 = mix(k2, getblock64(blocks, i * 4 + 1));
+      k3 = mix(k3, getblock64(blocks, i * 4 + 2));
+      k4 = mix(k4, getblock64(blocks, i * 4 + 3));
+    }
+    hash += get_mixed_hash(k1, k2, k3, k4);
+  } else {
+    hash += (seed + PRIME64_5);
+  }
+
+  //----------
+  // tail
+
+  int bytes_left = len % BLOCK_SIZE;
+  uint8 * tail_by_int8 = (uint8 *)(tail_start);
+  // process by 8-byte blocks
+  while (bytes_left >= 8) {
+    hash = mixForTail(hash, getblock64((uint64_t *) tail_by_int8, 0));
+    tail_by_int8 += 8;
+    bytes_left -= 8;
+  }
+  // process by 4-byte block
+  if (bytes_left > 4) {
+    hash = processTail(hash, getblock32((uint32_t *) tail_by_int8, 0));
+    tail_by_int8 += 4;
+    bytes_left -= 4;
+  }
+  // process by 1 byte
+  for (int i = 0; i < bytes_left; ++i) {
+    hash = processTail(hash, tail_by_int8[i]);
+  }
+
+  // final hash
+  hash ^= hash >> 33;
+  hash *= PRIME64_2;
+  hash ^= hash >> 29;
+  hash *= PRIME64_3;
+  hash ^= hash >> 32;
+
+  ((uint64_t*)out)[0] = hash;
+}
+
+HASH_FUNC get_hash_func(int hash_enum) {
+  switch (hash_enum) {
+    case (int)MURMUR3:
+      return MurmurHash3_x86_128;
+    case (int)XXHASH:
+      return XxHash_x64_64;
+    default:
+      return nullptr;
+  }
+}
+
+/**
+ * BloomFilter only supports one field now
+ */
+longlong bloomfilter(UDF_INIT* initid, UDF_ARGS* args, char* is_null, char* error)
+{
   char* bitmap_ = args->args[0];
   long long total_bits_ = *((long long*)args->args[1]);
   long long numFunc = *((long long*)args->args[2]);
-  unsigned char hash_bytes[16];
+  unsigned char hash_res[16];
 
   char tmp_value_buffer[sizeof(double)];
 
   gs::udf::udf_counter.bloomfilter_counter++;
+
+  HASH_FUNC hash_func = MurmurHash3_x64_128;
+  bool is_result_64 = false;
+  if (args->arg_count == 5) {
+    int hash_func_enum = (*((int*)args->args[4]));
+    hash_func = get_hash_func(hash_func_enum);
+    is_result_64 = is_hash_result_64[hash_func_enum];
+  }
 
   // The possible type values are STRING_RESULT, INT_RESULT, and REAL_RESULT.
   switch (args->arg_type[3]) {
   case INT_RESULT:
     // For arguments of types INT_RESULT or REAL_RESULT, lengths still contains the maximum length of the argument (as for the initialisation function).
     // For an argument of type INT_RESULT, you must cast args->args[i] to a long long value :
-    MurmurHash3_x64_128(null_safe_value_ptr(args->args[3], tmp_value_buffer, sizeof(long long), Is_big_endian),
-                        sizeof(long long), 0, hash_bytes);
+    hash_func(null_safe_value_ptr(args->args[3], tmp_value_buffer, sizeof(long long), Is_big_endian),
+                        sizeof(long long), DEFAULT_SEED, &hash_res);
     break;
   case DECIMAL_RESULT:
   case STRING_RESULT:
@@ -433,39 +559,64 @@ longlong bloomfilter(UDF_INIT *initid MY_ATTRIBUTE((unused)), UDF_ARGS *args,
     // The string contents are available as args->args[i] and the string length is args->lengths[i].
     // You should not assume that strings are null-terminated.
 
-    MurmurHash3_x64_128(null_safe_value_ptr(args->args[3], tmp_value_buffer, args->lengths[3], false),
-                        args->lengths[3], 0, hash_bytes);
+    hash_func(null_safe_value_ptr(args->args[3], tmp_value_buffer, args->lengths[3], false),
+                        args->lengths[3], DEFAULT_SEED, &hash_res);
     break;
   case REAL_RESULT:
     // For an argument of type REAL_RESULT, you must cast args->args[i] to a double value:
-    MurmurHash3_x64_128(null_safe_value_ptr(args->args[3], tmp_value_buffer, sizeof(double), Is_big_endian),
-                        sizeof(double), 0, hash_bytes);
+    hash_func(null_safe_value_ptr(args->args[3], tmp_value_buffer, sizeof(double), Is_big_endian),
+                        sizeof(double), DEFAULT_SEED, &hash_res);
     break;
   default:
     return 0;
   }
 
-  int64_t hash1 = *(reinterpret_cast<int64_t*>(hash_bytes));
-  int64_t hash2 = *(reinterpret_cast<int64_t*>(hash_bytes + 8));
+  if (!is_result_64) {
+    // for 128 bit
+    int64_t hash1 = *(reinterpret_cast<int64_t*>(hash_res));
+    int64_t hash2 = *(reinterpret_cast<int64_t*>(hash_res + 8));
 
-  int64_t combined_hash = hash1;
+    int64_t combined_hash = hash1;
 
-  for (int64_t i = 0; i < numFunc; ++i) {
-    int64_t bit_index = (combined_hash & INT64_MAX) % total_bits_;
-    int64_t byte_index = bit_index / 8;
-    char byte_mask = 1 << (bit_index % 8);
-    if (!(bitmap_[byte_index] & byte_mask)) {
-      return 0;
+    for (int64_t i = 0; i < numFunc; ++i) {
+      int64_t bit_index = (combined_hash & INT64_MAX) % total_bits_;
+      int64_t byte_index = bit_index / 8;
+      char byte_mask = 1 << (bit_index % 8);
+      if (!(bitmap_[byte_index] & byte_mask)) {
+        return 0;
+      }
+      combined_hash += hash2;
     }
-    combined_hash += hash2;
+    return 1;
+  } else {
+    // for 64 bit
+    int64_t hash = *(reinterpret_cast<int64_t*>(hash_res));
+
+    int32_t hash1 = (int32_t) hash;
+    int32_t hash2 = (int32_t) (hash >> 32);
+    int32_t combined_hash = hash1 + hash2;
+
+    for (int64_t i = 0; i < numFunc; ++i) {
+      if (combined_hash < 0) {
+        combined_hash &= INT32_MAX;
+      }
+      int32_t bit_index = combined_hash % total_bits_;
+      int32_t byte_index = bit_index / 8;
+      char byte_mask = 1 << (bit_index % 8);
+      if (!(bitmap_[byte_index] & byte_mask)) {
+        // 只要有一次不匹配 就不存在
+        return 0;
+      }
+      combined_hash += hash2;
+    }
+    return 1;
   }
-  return 1;
 }
 
 bool bloomfilter_init(UDF_INIT *initid MY_ATTRIBUTE((unused)), UDF_ARGS *args,
                       char *message) {
-  if (args->arg_count != 4) {
-    strcpy(message, "bloomfilter requires 4 arguments");
+  if (args->arg_count != 4 && args->arg_count != 5) {
+    strcpy(message, "bloomfilter requires 4 arguments (5 args for xxhash)");
     return 1;
   }
 
@@ -485,6 +636,17 @@ bool bloomfilter_init(UDF_INIT *initid MY_ATTRIBUTE((unused)), UDF_ARGS *args,
   // Ask mysql to coerce decimal value to double
   if (args->arg_type[3] == DECIMAL_RESULT) {
       args->arg_type[3] = REAL_RESULT;
+  }
+
+  if (args->arg_count == 5) {
+    if (args->arg_type[4] != INT_RESULT) {
+      strcpy(message, "illegal hash method version");
+      return 1;
+    }
+    if (get_hash_func(*((int*)args->args[4])) == nullptr) {
+      strcpy(message, "not supported hash method");
+      return 1;
+    }
   }
 
   strcpy(message, "bloomfilter inited!");

@@ -1195,6 +1195,9 @@ ulonglong smart_handle_dup_key= 0;
 ulonglong smart_handle_no_key= 0;
 ulonglong smart_handle_failed= 0;
 
+/* bloomfilter udf hash implementation */
+bool support_bloomfilter_xxhash = true;
+
 /**
   Limit of the total number of prepared statements in the server.
   Is necessary to protect the server against out-of-memory attacks.

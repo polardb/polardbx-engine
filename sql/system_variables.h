@@ -433,6 +433,9 @@ struct System_variables {
 
   /* Replica consistent read */
   ulonglong read_lsn;
+
+  /* PolarX UDF */
+  bool support_bloomfilter_xxhash;
 };
 
 /**

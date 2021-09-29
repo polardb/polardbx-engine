@@ -404,6 +404,12 @@ static Sys_var_ulonglong Sys_read_lsn(
       ON_CHECK(check_read_lsn),
       ON_UPDATE(NULL));
 
+static Sys_var_bool Sys_udf_bloomfilter_xxhash(
+       "udf_bloomfilter_xxhash",
+       "Whether support xxhash for bloomfilter",
+       READ_ONLY GLOBAL_VAR(support_bloomfilter_xxhash), NO_CMD_LINE, DEFAULT(true),
+       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
 extern bool opt_consensus_index_buf_enabled;
 static Sys_var_bool Sys_mts_consensus_index_buf_enabled(
        "consensus_index_buf_enabled",
