@@ -27,6 +27,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -90,7 +91,8 @@ class Query_formatter {
   Query_formatter &put_fp(const Value_type &value) {
     std::stringstream stream;
     validate_next_tag();
-    stream << value;
+    stream << std::setprecision(std::numeric_limits<Value_type>::max_digits10)
+           << value;
     std::string string_value = stream.str();
     put_value(string_value.c_str(), string_value.length());
 
