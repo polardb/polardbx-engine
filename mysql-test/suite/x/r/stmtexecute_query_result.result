@@ -44,18 +44,21 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "pk"
   original_name: "pk"
   table: "mytable"
   original_table: "mytable"
   schema: "xtest"
   catalog: "def"
+  fractional_digits: 0
   length: 11
   flags: 304
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "data"
   original_name: "data"
   table: "mytable"
@@ -63,6 +66,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "xtest"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 400
 }
 

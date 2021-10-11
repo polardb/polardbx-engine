@@ -33,6 +33,7 @@ Mysqlx.Sql.StmtExecuteOk {
 check with show variables like version
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -40,12 +41,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -53,6 +56,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -270,17 +274,20 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "grp"
   original_name: "grp"
   table: "t1"
   original_table: "t1"
   schema: "test"
   catalog: "def"
+  fractional_digits: 0
   length: 11
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_LONG_BLOB
   name: "group_concat(a order by a,d-ascii(c)-a)"
   original_name: ""
   table: ""
@@ -288,6 +295,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 0
   length: 4096
 }
 
@@ -374,17 +382,20 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "grp"
   original_name: "grp"
   table: "t1"
   original_table: "t1"
   schema: "test"
   catalog: "def"
+  fractional_digits: 0
   length: 11
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_LONG_BLOB
   name: "group_concat(a order by c-ascii(c),a)"
   original_name: ""
   table: ""
@@ -392,6 +403,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 0
   length: 4096
 }
 
@@ -487,17 +499,20 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "grp"
   original_name: "grp"
   table: "t1"
   original_table: "t1"
   schema: "test"
   catalog: "def"
+  fractional_digits: 0
   length: 11
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "group_concat(c order by c)"
   original_name: ""
   table: ""
@@ -505,6 +520,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 16
 }
 
@@ -608,12 +624,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "length(a)"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 10
 }
 
@@ -654,6 +672,7 @@ Mysqlx.Sql.StmtExecuteOk {
 checking directly from IS tables
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -661,12 +680,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -674,6 +695,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -696,6 +718,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -703,12 +726,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -716,6 +741,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -738,6 +764,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -745,12 +772,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -758,6 +787,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -807,12 +837,14 @@ Mysqlx.Error {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "@@session.error_count"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 21
 }
 
@@ -834,6 +866,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Level"
   original_name: ""
   table: ""
@@ -841,24 +874,28 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 21
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONG
   name: "Code"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 4
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Message"
   original_name: ""
   table: ""
@@ -866,6 +903,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 1536
   flags: 16
 }
@@ -940,6 +978,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "a"
   original_name: "a"
   table: "t1"
@@ -947,6 +986,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "test"
   catalog: "def"
   collation: 45
+  fractional_digits: 0
   length: 30
 }
 
@@ -979,6 +1019,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_status"
@@ -986,12 +1027,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_status"
@@ -999,6 +1042,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -1021,6 +1065,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "a"
   original_name: "a"
   table: "t1"
@@ -1028,6 +1073,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "test"
   catalog: "def"
   collation: 45
+  fractional_digits: 0
   length: 30
 }
 
@@ -2950,6 +2996,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -2957,12 +3004,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -2970,6 +3019,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -3041,12 +3091,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "a"
   original_name: "a"
   table: "t1"
   original_table: "t1"
   schema: "test"
   catalog: "def"
+  fractional_digits: 0
   length: 11
 }
 
@@ -3083,12 +3135,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "a"
   original_name: "a"
   table: "t1"
   original_table: "t1"
   schema: "test"
   catalog: "def"
+  fractional_digits: 0
   length: 11
 }
 
@@ -6338,12 +6392,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "1"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 1
   flags: 16
 }
@@ -6387,12 +6443,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "1"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 1
   flags: 16
 }
@@ -6421,12 +6479,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "1"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 1
   flags: 16
 }
@@ -6479,12 +6539,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "1"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 1
   flags: 16
 }
@@ -6507,12 +6569,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "1"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 1
   flags: 16
 }
@@ -6620,6 +6684,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_STRING
   name: "c2"
   original_name: "c1"
   table: "t1"
@@ -6627,6 +6692,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "test"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 12
   flags: 1
 }
@@ -6659,6 +6725,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_STRING
   name: "c2"
   original_name: "c1"
   table: "t1"
@@ -6666,6 +6733,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "test"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 12
   flags: 1
 }
@@ -6786,6 +6854,7 @@ expect both error and warning
 change result file once Bug#21524666 is fixed
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_STRING
   name: "c2"
   original_name: "c1"
   table: "t1"
@@ -6793,6 +6862,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "test"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 12
   flags: 1
 }
@@ -6885,6 +6955,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Level"
   original_name: ""
   table: ""
@@ -6892,24 +6963,28 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 21
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONG
   name: "Code"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 4
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Message"
   original_name: ""
   table: ""
@@ -6917,6 +6992,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 1536
   flags: 16
 }
@@ -6941,6 +7017,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Level"
   original_name: ""
   table: ""
@@ -6948,24 +7025,28 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 21
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONG
   name: "Code"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 4
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Message"
   original_name: ""
   table: ""
@@ -6973,6 +7054,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 1536
   flags: 16
 }
@@ -6991,23 +7073,27 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "@@warning_count"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 21
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "@@error_count"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 21
 }
 
@@ -7030,12 +7116,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "n"
   original_name: "n"
   table: "t1"
   original_table: "t1"
   schema: "test"
   catalog: "def"
+  fractional_digits: 0
   length: 11
   flags: 48
 }
@@ -7062,6 +7150,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Level"
   original_name: ""
   table: ""
@@ -7069,24 +7158,28 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 21
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONG
   name: "Code"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 4
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Message"
   original_name: ""
   table: ""
@@ -7094,6 +7187,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 1536
   flags: 16
 }
@@ -7112,12 +7206,14 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "@@warning_count"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 21
 }
 
@@ -7331,6 +7427,7 @@ Mysqlx.Error {
 check with show variables like versio and expect warning related to GTID session
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -7338,12 +7435,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -7351,6 +7450,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -7369,6 +7469,7 @@ Mysqlx.Sql.StmtExecuteOk {
 check with show variables like versio and expect warning related to GTID session
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -7376,12 +7477,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -7389,6 +7492,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -7411,6 +7515,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -7418,12 +7523,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -7431,6 +7538,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -7453,6 +7561,7 @@ Mysqlx.Sql.StmtExecuteOk {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Variable_name"
   original_name: "Variable_name"
   table: "session_variables"
@@ -7460,12 +7569,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 256
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "Value"
   original_name: "Value"
   table: "session_variables"
@@ -7473,6 +7584,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4096
 }
 
@@ -7887,6 +7999,7 @@ command ok
 Namespace 'xplugin' is deprecated, please use 'mysqlx' instead
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_DECIMAL
   name: "notice"
   original_name: ""
   table: ""
@@ -7897,6 +8010,7 @@ Mysqlx.Resultset.ColumnMetaData {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_DECIMAL
   name: "enabled"
   original_name: ""
   table: ""
@@ -7998,6 +8112,7 @@ Mysqlx.Sql.StmtExecuteOk {
 listing notices after enabling warnings,account_expired notices
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_DECIMAL
   name: "notice"
   original_name: ""
   table: ""
@@ -8008,6 +8123,7 @@ Mysqlx.Resultset.ColumnMetaData {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_DECIMAL
   name: "enabled"
   original_name: ""
   table: ""
@@ -8070,6 +8186,7 @@ Mysqlx.Sql.StmtExecuteOk {
 listing notices with mixed case
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_DECIMAL
   name: "notice"
   original_name: ""
   table: ""
@@ -8080,6 +8197,7 @@ Mysqlx.Resultset.ColumnMetaData {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_DECIMAL
   name: "enabled"
   original_name: ""
   table: ""

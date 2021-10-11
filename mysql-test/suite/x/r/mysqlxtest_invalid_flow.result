@@ -2,12 +2,14 @@ Invalid receive after statement
 RUN SELECT 1
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONGLONG
   name: "1"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: "def"
+  fractional_digits: 0
   length: 1
   flags: 16
 }

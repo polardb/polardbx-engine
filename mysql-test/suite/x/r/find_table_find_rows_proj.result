@@ -122,6 +122,7 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_STRING
   name: "Name"
   original_name: "Name"
   table: "city"
@@ -129,18 +130,21 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "xtest"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 140
   flags: 17
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "Pop"
   original_name: "Population"
   table: "city"
   original_table: "city"
   schema: "xtest"
   catalog: "def"
+  fractional_digits: 0
   length: 11
   flags: 16
 }

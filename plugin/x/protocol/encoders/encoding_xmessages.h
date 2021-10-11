@@ -143,6 +143,11 @@ class XMessage_encoder_base : public Base_type {
     auto xmsg_start =
         Base_type::template begin_xmessage<Tags::server_id, 100>();
     Base_type::template encode_field_enum<Tags::type>(column->m_type);
+
+    // GalaxyStore
+    Base_type::template encode_field_enum<Tags::original_type>(
+        column->m_original_type);
+
     Base_type::template encode_optional_field_var_uint64<Tags::collation>(
         column->m_collation_ptr);
     Base_type::template encode_optional_field_var_uint32<

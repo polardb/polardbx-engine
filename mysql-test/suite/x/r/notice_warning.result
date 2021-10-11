@@ -16,6 +16,7 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
+  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -28,6 +29,7 @@ Mysqlx.Resultset.ColumnMetaData {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
+  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -90,6 +92,7 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
+  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -139,6 +142,7 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
+  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -238,6 +242,7 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "d"
   original_name: "d"
   table: "chartab"
@@ -245,6 +250,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "test"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 4
 }
 
@@ -311,6 +317,7 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_DECIMAL
   name: "notice"
   original_name: ""
   table: ""
@@ -321,6 +328,7 @@ Mysqlx.Resultset.ColumnMetaData {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_DECIMAL
   name: "enabled"
   original_name: ""
   table: ""

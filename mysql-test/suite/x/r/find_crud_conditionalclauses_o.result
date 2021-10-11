@@ -50,18 +50,21 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONG
   name: "actor_id"
   original_name: "actor_id"
   table: "actor"
   original_table: "actor"
   schema: "minisakila"
   catalog: "def"
+  fractional_digits: 0
   length: 10
   flags: 304
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "first_name"
   original_name: "first_name"
   table: "actor"
@@ -69,12 +72,14 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "minisakila"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 180
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "last_name"
   original_name: "last_name"
   table: "actor"
@@ -82,18 +87,21 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "minisakila"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 180
   flags: 16
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BIT
+  original_type: MYSQL_TYPE_BIT
   name: "is_active"
   original_name: "is_active"
   table: "actor"
   original_table: "actor"
   schema: "minisakila"
   catalog: "def"
+  fractional_digits: 0
   length: 1
   flags: 16
 }
@@ -842,6 +850,7 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_JSON
   name: "doc"
   original_name: "doc"
   table: "maincoll"
@@ -849,6 +858,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "mysqlxcoll"
   catalog: "def"
   collation: 63
+  fractional_digits: 0
   length: 4294967295
   content_type: 2
 }

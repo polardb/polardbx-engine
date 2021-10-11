@@ -54,6 +54,10 @@ class Column_info_builder {
   void set_type(const ::Mysqlx::Resultset::ColumnMetaData_FieldType type) {
     m_column_info.m_type = type;
   }
+  void set_original_type(
+      const ::Mysqlx::Resultset::ColumnMetaData_OriginalType type) {
+    m_column_info.m_original_type = type;
+  }
 
   void set_collation(const uint64_t collation) {
     m_collation = collation;

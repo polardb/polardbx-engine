@@ -161,6 +161,11 @@ int Streaming_command_delegate::field_metadata(struct st_send_field *field,
       type = MYSQL_TYPE_ENUM;
   }
 
+  // GalaxyStore
+  column_info.set_original_type(
+      static_cast<Mysqlx::Resultset::ColumnMetaData_OriginalType>(type));
+  column_info.set_decimals(field->decimals);
+
   switch (type) {
     case MYSQL_TYPE_TINY:
     case MYSQL_TYPE_SHORT:

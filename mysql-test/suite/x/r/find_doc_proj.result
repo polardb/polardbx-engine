@@ -52,6 +52,7 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_JSON
   name: "doc"
   original_name: ""
   table: ""
@@ -59,6 +60,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 46
+  fractional_digits: 31
   length: 16777216
   content_type: 2
 }
@@ -119,6 +121,7 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_JSON
   name: "doc"
   original_name: ""
   table: ""
@@ -126,6 +129,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 46
+  fractional_digits: 31
   length: 16777216
   content_type: 2
 }
@@ -190,6 +194,7 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_JSON
   name: "doc"
   original_name: ""
   table: ""
@@ -197,6 +202,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 46
+  fractional_digits: 31
   length: 16777216
   content_type: 2
 }
@@ -245,6 +251,7 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_JSON
   name: "doc"
   original_name: ""
   table: ""
@@ -252,6 +259,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 46
+  fractional_digits: 31
   length: 16777216
   content_type: 2
 }

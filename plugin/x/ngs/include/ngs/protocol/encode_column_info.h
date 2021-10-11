@@ -47,6 +47,8 @@ struct Encode_column_info {
   uint32_t *m_content_type_ptr{nullptr};
 
   bool m_compact{true};
+
+  int32_t m_original_type = 0;
 };
 
 }  // namespace ngs

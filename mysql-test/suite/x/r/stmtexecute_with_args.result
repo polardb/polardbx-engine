@@ -217,12 +217,16 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
+  fractional_digits: 0
   length: 11
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   collation: 45
+  fractional_digits: 31
   length: 44
   flags: 16
 }
@@ -260,17 +264,20 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "number_sint"
   original_name: "number_sint"
   table: "scalar_types"
   original_table: "scalar_types"
   schema: "xtest"
   catalog: "def"
+  fractional_digits: 0
   length: 11
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "number_sint"
   original_name: ""
   table: ""
@@ -278,6 +285,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: ""
   catalog: "def"
   collation: 45
+  fractional_digits: 31
   length: 44
   flags: 16
 }

@@ -111,39 +111,46 @@ send Mysqlx.Sql.GalaxyStmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
+  original_type: MYSQL_TYPE_LONG
   name: "number_uint"
   original_name: "number_uint"
   table: "scalar_types"
   original_table: "scalar_types"
   schema: "xtest"
   catalog: "def"
+  fractional_digits: 0
   length: 10
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_LONG
   name: "number_sint"
   original_name: "number_sint"
   table: "scalar_types"
   original_table: "scalar_types"
   schema: "xtest"
   catalog: "def"
+  fractional_digits: 0
   length: 11
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
+  original_type: MYSQL_TYPE_TINY
   name: "value_bool"
   original_name: "value_bool"
   table: "scalar_types"
   original_table: "scalar_types"
   schema: "xtest"
   catalog: "def"
+  fractional_digits: 0
   length: 1
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
   name: "value_string"
   original_name: "value_string"
   table: "scalar_types"
@@ -151,11 +158,13 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "xtest"
   catalog: "def"
   collation: 255
+  fractional_digits: 0
   length: 1020
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: FLOAT
+  original_type: MYSQL_TYPE_FLOAT
   name: "number_float"
   original_name: "number_float"
   table: "scalar_types"
@@ -168,6 +177,7 @@ Mysqlx.Resultset.ColumnMetaData {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DOUBLE
+  original_type: MYSQL_TYPE_DOUBLE
   name: "number_double"
   original_name: "number_double"
   table: "scalar_types"
@@ -180,6 +190,7 @@ Mysqlx.Resultset.ColumnMetaData {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
+  original_type: MYSQL_TYPE_BLOB
   name: "value_blob"
   original_name: "value_blob"
   table: "scalar_types"
@@ -187,6 +198,7 @@ Mysqlx.Resultset.ColumnMetaData {
   schema: "xtest"
   catalog: "def"
   collation: 63
+  fractional_digits: 0
   length: 255
 }
 
