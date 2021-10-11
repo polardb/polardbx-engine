@@ -144,10 +144,6 @@ class XMessage_encoder_base : public Base_type {
         Base_type::template begin_xmessage<Tags::server_id, 100>();
     Base_type::template encode_field_enum<Tags::type>(column->m_type);
 
-    // GalaxyStore
-    Base_type::template encode_field_enum<Tags::original_type>(
-        column->m_original_type);
-
     Base_type::template encode_optional_field_var_uint64<Tags::collation>(
         column->m_collation_ptr);
     Base_type::template encode_optional_field_var_uint32<
@@ -170,6 +166,11 @@ class XMessage_encoder_base : public Base_type {
       Base_type::template encode_field_string<Tags::schema>(column->m_db_name);
       Base_type::template encode_field_string<Tags::catalog>(column->m_catalog);
     }
+
+    // GalaxyStore
+    Base_type::template encode_field_enum<Tags::original_type>(
+        column->m_original_type);
+
     Base_type::end_xmessage(xmsg_start);
   }
 

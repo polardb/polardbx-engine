@@ -16,7 +16,6 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
-  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -25,11 +24,11 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 4
   length: 7
+  original_type: MYSQL_TYPE_NEWDECIMAL
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
-  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -38,6 +37,7 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 4
   length: 7
+  original_type: MYSQL_TYPE_NEWDECIMAL
 }
 
 Mysqlx.Resultset.Row {
@@ -92,7 +92,6 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
-  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -101,6 +100,7 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 4
   length: 7
+  original_type: MYSQL_TYPE_NEWDECIMAL
 }
 
 Mysqlx.Resultset.Row {
@@ -142,7 +142,6 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
-  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "1/0"
   original_name: ""
   table: ""
@@ -151,6 +150,7 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 4
   length: 7
+  original_type: MYSQL_TYPE_NEWDECIMAL
 }
 
 Mysqlx.Resultset.Row {
@@ -242,7 +242,6 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
-  original_type: MYSQL_TYPE_VARCHAR
   name: "d"
   original_name: "d"
   table: "chartab"
@@ -252,6 +251,7 @@ Mysqlx.Resultset.ColumnMetaData {
   collation: 255
   fractional_digits: 0
   length: 4
+  original_type: MYSQL_TYPE_VARCHAR
 }
 
 Mysqlx.Resultset.FetchDone {
@@ -317,24 +317,24 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
-  original_type: MYSQL_TYPE_DECIMAL
   name: "notice"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: ""
+  original_type: MYSQL_TYPE_DECIMAL
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
-  original_type: MYSQL_TYPE_DECIMAL
   name: "enabled"
   original_name: ""
   table: ""
   original_table: ""
   schema: ""
   catalog: ""
+  original_type: MYSQL_TYPE_DECIMAL
 }
 
 Mysqlx.Resultset.Row {

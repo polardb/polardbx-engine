@@ -105,7 +105,6 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
-  original_type: MYSQL_TYPE_LONG
   name: "ID"
   original_name: "ID"
   table: "city"
@@ -115,11 +114,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 11
   flags: 304
+  original_type: MYSQL_TYPE_LONG
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
-  original_type: MYSQL_TYPE_STRING
   name: "Name"
   original_name: "Name"
   table: "city"
@@ -130,11 +129,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 140
   flags: 17
+  original_type: MYSQL_TYPE_STRING
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
-  original_type: MYSQL_TYPE_STRING
   name: "CountryCode"
   original_name: "CountryCode"
   table: "city"
@@ -145,11 +144,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 12
   flags: 17
+  original_type: MYSQL_TYPE_STRING
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
-  original_type: MYSQL_TYPE_STRING
   name: "District"
   original_name: "District"
   table: "city"
@@ -160,11 +159,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 80
   flags: 17
+  original_type: MYSQL_TYPE_STRING
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
-  original_type: MYSQL_TYPE_LONG
   name: "Population"
   original_name: "Population"
   table: "city"
@@ -174,6 +173,7 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 11
   flags: 16
+  original_type: MYSQL_TYPE_LONG
 }
 
 Mysqlx.Resultset.Row {

@@ -57,7 +57,6 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
-  original_type: MYSQL_TYPE_LONGLONG
   name: "sleep(2)"
   original_name: ""
   table: ""
@@ -67,6 +66,7 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 21
   flags: 16
+  original_type: MYSQL_TYPE_LONGLONG
 }
 
 aborting session sess
@@ -138,7 +138,6 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: SINT
-  original_type: MYSQL_TYPE_LONGLONG
   name: "6"
   original_name: ""
   table: ""
@@ -148,6 +147,7 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 1
   flags: 16
+  original_type: MYSQL_TYPE_LONGLONG
 }
 
 aborting session sess

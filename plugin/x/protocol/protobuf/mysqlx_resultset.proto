@@ -513,26 +513,27 @@ message ColumnMetaData {
 
   // datatype of the field in a row
   required FieldType type = 1;
-  required OriginalType original_type = 2;
 
-  optional bytes name = 3;
-  optional bytes original_name = 4;
+  optional bytes name = 2;
+  optional bytes original_name = 3;
 
-  optional bytes table = 5;
-  optional bytes original_table = 6;
+  optional bytes table = 4;
+  optional bytes original_table = 5;
 
-  optional bytes schema = 7;
-  optional bytes catalog = 8;
+  optional bytes schema = 6;
+  optional bytes catalog = 7;
 
-  optional uint64 collation = 9 /* ifdef PROTOBUF3 [jstype = JS_STRING] */;
+  optional uint64 collation = 8 /* ifdef PROTOBUF3 [jstype = JS_STRING] */;
 
-  optional uint32 fractional_digits = 10;
+  optional uint32 fractional_digits = 9;
 
-  optional uint32 length = 11;
+  optional uint32 length = 10;
 
-  optional uint32 flags = 12;
+  optional uint32 flags = 11;
 
-  optional uint32 content_type = 13;
+  optional uint32 content_type = 12;
+
+  required OriginalType original_type = 20;
 
   option (server_message_id) = RESULTSET_COLUMN_META_DATA; // comment_out_if PROTOBUF_LITE
 }

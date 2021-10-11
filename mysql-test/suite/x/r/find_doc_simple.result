@@ -26,7 +26,6 @@ send Mysqlx.Crud.Find {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
-  original_type: MYSQL_TYPE_JSON
   name: "doc"
   original_name: "doc"
   table: "mycoll"
@@ -37,6 +36,7 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 4294967295
   content_type: 2
+  original_type: MYSQL_TYPE_JSON
 }
 
 Mysqlx.Resultset.Row {

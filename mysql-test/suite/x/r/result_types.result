@@ -27,7 +27,6 @@ send Mysqlx.Sql.StmtExecute {
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
-  original_type: MYSQL_TYPE_LONG
   name: "i"
   original_name: "i"
   table: "unsigneds"
@@ -36,11 +35,11 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 0
   length: 10
+  original_type: MYSQL_TYPE_LONG
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
-  original_type: MYSQL_TYPE_LONGLONG
   name: "b"
   original_name: "b"
   table: "unsigneds"
@@ -49,11 +48,11 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 0
   length: 20
+  original_type: MYSQL_TYPE_LONGLONG
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
-  original_type: MYSQL_TYPE_TINY
   name: "t"
   original_name: "t"
   table: "unsigneds"
@@ -62,11 +61,11 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 0
   length: 3
+  original_type: MYSQL_TYPE_TINY
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: UINT
-  original_type: MYSQL_TYPE_SHORT
   name: "s"
   original_name: "s"
   table: "unsigneds"
@@ -75,11 +74,11 @@ Mysqlx.Resultset.ColumnMetaData {
   catalog: "def"
   fractional_digits: 0
   length: 5
+  original_type: MYSQL_TYPE_SHORT
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: FLOAT
-  original_type: MYSQL_TYPE_FLOAT
   name: "f"
   original_name: "f"
   table: "unsigneds"
@@ -89,11 +88,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 31
   length: 12
   flags: 1
+  original_type: MYSQL_TYPE_FLOAT
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DOUBLE
-  original_type: MYSQL_TYPE_DOUBLE
   name: "d"
   original_name: "d"
   table: "unsigneds"
@@ -103,11 +102,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 31
   length: 22
   flags: 1
+  original_type: MYSQL_TYPE_DOUBLE
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DECIMAL
-  original_type: MYSQL_TYPE_NEWDECIMAL
   name: "de"
   original_name: "de"
   table: "unsigneds"
@@ -117,11 +116,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 2
   length: 11
   flags: 1
+  original_type: MYSQL_TYPE_NEWDECIMAL
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DATETIME
-  original_type: MYSQL_TYPE_DATETIME
   name: "dt"
   original_name: "dt"
   table: "unsigneds"
@@ -131,11 +130,11 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 0
   length: 19
   content_type: 2
+  original_type: MYSQL_TYPE_DATETIME
 }
 
 Mysqlx.Resultset.ColumnMetaData {
   type: DATETIME
-  original_type: MYSQL_TYPE_TIMESTAMP
   name: "ts"
   original_name: "ts"
   table: "unsigneds"
@@ -146,6 +145,7 @@ Mysqlx.Resultset.ColumnMetaData {
   length: 19
   flags: 1
   content_type: 2
+  original_type: MYSQL_TYPE_TIMESTAMP
 }
 
 Mysqlx.Resultset.FetchDone {

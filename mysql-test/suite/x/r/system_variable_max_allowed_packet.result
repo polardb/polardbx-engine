@@ -16,7 +16,6 @@ RUN drop table bla
 0 rows affected
 Mysqlx.Resultset.ColumnMetaData {
   type: BYTES
-  original_type: MYSQL_TYPE_VARCHAR
   name: "result"
   original_name: ""
   table: ""
@@ -27,6 +26,7 @@ Mysqlx.Resultset.ColumnMetaData {
   fractional_digits: 31
   length: 2440012
   flags: 16
+  original_type: MYSQL_TYPE_VARCHAR
 }
 
 Mysqlx.Resultset.Row {
