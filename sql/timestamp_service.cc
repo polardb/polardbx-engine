@@ -49,12 +49,15 @@ bool TimestampService::init() {
     Note, if it's found later that above case never happen, there is
     no need to do this.
   */
+  m_thd->lex->reset_n_backup_query_tables_list(&m_query_tables_backup);
+
   m_thd->reset_n_backup_open_tables_state(&m_state_backup,
                                           Open_tables_state::SYSTEM_TABLES);
 
   /* Open the base table */
   if (open_base_table(TL_WRITE)) {
     m_thd->restore_backup_open_tables_state(&m_state_backup);
+    m_thd->lex->restore_backup_query_tables_list(&m_query_tables_backup);
     return true;
   }
 
@@ -167,6 +170,9 @@ void TimestampService::deinit() {
 
   /* Release MDL locks and restore the opened tables */
   m_thd->restore_backup_open_tables_state(&m_state_backup);
+
+  /* Restore query tables */
+  m_thd->lex->restore_backup_query_tables_list(&m_query_tables_backup);
 
   m_table = NULL;
 }

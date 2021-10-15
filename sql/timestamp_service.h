@@ -23,6 +23,7 @@
 
 #include "my_inttypes.h"
 #include "sql_class.h"
+#include "sql_lex.h"
 
 /* error number sent to client */
 #define GTS_SUCCESS 0
@@ -71,6 +72,9 @@ class TimestampService {
   TABLE *m_table;
 
   bool m_initialized;
+
+  /* Backup query tables */
+  Query_tables_list m_query_tables_backup;
 
   /* Backup open tables */
   Open_tables_backup m_state_backup;
