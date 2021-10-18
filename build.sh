@@ -257,7 +257,7 @@ cmake .                               \
     -DWITH_PERFSCHEMA_STORAGE_ENGINE=1 \
     -DWITH_EXAMPLE_STORAGE_ENGINE=0    \
     -DWITH_TEMPTABLE_STORAGE_ENGINE=1  \
-    -DWITH_XENGINE_STORAGE_ENGINE=0    \
+    -DWITH_XENGINE_STORAGE_ENGINE=1    \
     -DWITH_QUERY_TRACE=1               \
     -DWITH_EXTRA_CHARSETS=all          \
     -DDEFAULT_CHARSET=utf8mb4          \

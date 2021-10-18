@@ -108,9 +108,11 @@
 
 #include "../components/mysql_server/log_builtins_imp.h"
 
+#ifdef WITH_XENGINE_STORAGE_ENGINE
 // TEMPORARILY to trace what happens in xengine during a slow query
 #include "storage/xengine/core/monitoring/query_perf_context.h"
 #include "storage/xengine/util/logger.h"     // mysql_reinit_xengine_log
+#endif
 
 using std::max;
 using std::min;
@@ -1639,7 +1641,9 @@ void log_slow_do(THD *thd, struct System_status_var *query_start_status) {
     query_logger.slow_log_write(thd, thd->query().str, thd->query().length,
                                 query_start_status);
 
+#ifdef WITH_XENGINE_STORAGE_ENGINE
   QUERY_TRACE_FINISH(thd->query().str, thd->query().length);
+#endif
 }
 
 /**
@@ -1981,8 +1985,10 @@ bool reopen_error_log() {
 
     if (result)
       my_error(ER_CANT_OPEN_ERROR_LOG, MYF(0), error_log_file, ".", "");
+#ifdef WITH_XENGINE_STORAGE_ENGINE
     else if (mysql_reinit_xengine_log())
       sql_print_error("Failed to re-initialize logger in XEngine: %s", error_log_file);
+#endif
   }
 
   return result;
