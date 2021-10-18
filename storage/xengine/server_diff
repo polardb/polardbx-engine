@@ -1,0 +1,1604 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 17939f7c6f4..ddfe865201f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,3 +1,5 @@
++# Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++#
+ # Copyright (c) 2006, 2019, Oracle and/or its affiliates. All rights reserved.
+ # 
+ # This program is free software; you can redistribute it and/or modify
+@@ -519,9 +521,11 @@ ENDIF()
+ 
+ OPTION(ENABLED_PROFILING "Enable profiling" ON)
+ OPTION(WITHOUT_SERVER OFF)
+-IF(UNIX)
+-  OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
++OPTION(WITH_QUERY_TRACE "WITH_QUERY_TRACE" ON)
++IF (WITH_QUERY_TRACE)
++  ADD_DEFINITIONS(-DWITH_QUERY_TRACE)
+ ENDIF()
++
+ IF(WIN32)
+   OPTION(WITH_MSCRT_DEBUG "MS Visual Studio Debug CRT instrumentation" OFF)
+ ENDIF()
+diff --git a/client/mysqltest.cc b/client/mysqltest.cc
+index 432b2be4e36..e57a6b5582b 100644
+--- a/client/mysqltest.cc
++++ b/client/mysqltest.cc
+@@ -1,3 +1,5 @@
++// Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++//
+ // Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ //
+ // This program is free software; you can redistribute it and/or modify
+@@ -7211,8 +7213,8 @@ static bool is_delimiter(const char *p) {
+   return (match == delimiter_length);
+ }
+ 
+-// 256K -- a test in sp-big is >128K
+-#define MAX_QUERY (256 * 1024 * 2)
++// 2M -- for big query test stackoverrun
++#define MAX_QUERY (256 * 1024 * 8)
+ static char read_command_buf[MAX_QUERY];
+ 
+ /// Create a command from a set of lines.
+diff --git a/include/m_ctype.h b/include/m_ctype.h
+index 4014ecf6d42..ec58b77a054 100644
+--- a/include/m_ctype.h
++++ b/include/m_ctype.h
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+diff --git a/include/my_base.h b/include/my_base.h
+index 3d4dae3826a..b527fc81044 100644
+--- a/include/my_base.h
++++ b/include/my_base.h
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+diff --git a/mysql-test/collections/disabled.def b/mysql-test/collections/disabled.def
+index 82433e45fa8..d71e449674b 100644
+--- a/mysql-test/collections/disabled.def
++++ b/mysql-test/collections/disabled.def
+@@ -78,3 +78,45 @@ rpl.rpl_multi_source_corrupt_repository   : Bug#28765425 Disabled until the bug
+ sysschema.v_wait_classes_global_by_avg_latency : BUG#21550054 Test fails too often.
+ 
+ # x plugin suite tests
++
++# IPv6
++perfschema.hostcache_ipv6_addrinfo_again_allow : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_addrinfo_again_deny : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_addrinfo_bad_allow : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_addrinfo_bad_deny : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_addrinfo_good_allow : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_addrinfo_good_deny : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_addrinfo_noname_allow : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_addrinfo_noname_deny : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_auth_plugin : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_blocked : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_max_con : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_nameinfo_again_allow : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_nameinfo_again_deny : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_nameinfo_noname_allow : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_nameinfo_noname_deny : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_passwd : BUG#000 We don't support IPv6
++perfschema.hostcache_ipv6_ssl : BUG#000 We don't support IPv6
++perfschema.idx_compare_socket_instances : BUG#000 We don't support IPv6
++main.bind_address_3 : BUG#000 We don't support IPv6
++rpl.rpl_ip_mix : BUG#000 We don't support IPv6
++rpl.rpl_ip_mix2 : BUG#000 We don't support IPv6
++rpl.rpl_ipv6 : BUG#000 We don't support IPv6
++x.system_variable_bind_address : BUG#000 We don't support IPv6
++x.performance_schema_sockets : BUG#000 We don't support IPv6
++x.notices_gr_quorum : BUG#000 We don't support IPv6
++x.notices_gr_single_primary : BUG#000 We don't support IPv6
++x.notices_gr_join_leave : BUG#000 We don't support IPv6
++large_tests.innodb_innochecksum_3gb : BUG#000 Take too long (timeout)
++main.multi_update2 : BUG#000 Take too long (timeout)
++main.window_functions_big : BUG#000 Take too long (timeout)
++innodb_gis.rtree_split_geographic : BUG#000 Take too long (timeout)
++large_tests.alter_table : BUG#000 Consume too much space
++rpl_gtid.rpl_wait_for_executed_gtid_set_no_timeout: BUG#000 unstable
++binlog.binlog_max_flush_queue_time_warn : BUG#000 unstable
++main.mysqlpump_extended : BUG#000 timeout
++main.mysql_load_data_local_dir : BUG#000 oracle mysql bug
++x.connection_multi_bind_address : BUG#000 We don't support IPv6
++x.connection_multi_bind_address_ipv6 : BUG#000 We don't support IPv6
++x.status_variables : BUG#000 We don't support IPv6
++auth_sec.host_sort : BUG#000 We don't support IPv6
+diff --git a/mysql-test/r/mysqld--help-notwin.result b/mysql-test/r/mysqld--help-notwin.result
+index 26bbd657daf..a0baf61f5ce 100644
+--- a/mysql-test/r/mysqld--help-notwin.result
++++ b/mysql-test/r/mysqld--help-notwin.result
+@@ -1432,6 +1432,276 @@ The following options may be given as the first argument:
+  inversion optimization for moving window frames also for
+  floating values.
+  (Defaults to on; use --skip-windowing-use-high-precision to disable.)
++ --xengine[=name]    Enable or disable XENGINE plugin. Possible values are ON,
++ OFF, FORCE (don't start if the plugin fails to load).
++ --xengine-auto-shrink-enabled 
++ DBOptions::auto_shrink_enabled for XEngine
++ (Defaults to on; use --skip-xengine-auto-shrink-enabled to disable.)
++ --xengine-auto-shrink-schedule-interval=# 
++ DBOptions::auto_shrink_schedule_interval for XEngine
++ --xengine-base-background-compactions=# 
++ DBOptions::base_background_compactions for XEngine
++ --xengine-batch-group-max-group-size=# 
++ DBOptions::batch_group_max_group_size for XEngine
++ --xengine-batch-group-max-leader-wait-time-us=# 
++ DBOptions::batch_group_max_leader_wait_time_us for
++ XEngine
++ --xengine-batch-group-slot-array-size=# 
++ DBOptions::batch_group_slot_array_size for XEngine
++ --xengine-block-cache-size=# 
++ block_cache size for XEngine
++ --xengine-block-size=# 
++ BlockBasedTableOptions::block_size for XEngine
++ --xengine-bottommost-level=# 
++ CFOptions::bottommost_level for XEngine
++ --xengine-cfstats[=name] 
++ Enable or disable XENGINE_CFSTATS plugin. Possible values
++ are ON, OFF, FORCE (don't start if the plugin fails to
++ load).
++ --xengine-columns[=name] 
++ Enable or disable XENGINE_COLUMNS plugin. Possible values
++ are ON, OFF, FORCE (don't start if the plugin fails to
++ load).
++ --xengine-compact-cf=# 
++ Compact sub table
++ --xengine-compaction-delete-percent=# 
++ CFOptions::compaction_delete_percent for XEngine
++ --xengine-compaction-history[=name] 
++ Enable or disable XENGINE_COMPACTION_HISTORY plugin.
++ Possible values are ON, OFF, FORCE (don't start if the
++ plugin fails to load).
++ --xengine-compaction-mode=# 
++ DBOptions::compaction_mode for XEngine
++ --xengine-compaction-stats[=name] 
++ Enable or disable XENGINE_COMPACTION_STATS plugin.
++ Possible values are ON, OFF, FORCE (don't start if the
++ plugin fails to load).
++ --xengine-compaction-task[=name] 
++ Enable or disable XENGINE_COMPACTION_TASK plugin.
++ Possible values are ON, OFF, FORCE (don't start if the
++ plugin fails to load).
++ --xengine-compaction-task-extents-limit=# 
++ CFOptions::compaction_task_extents_limit for XEngine
++ --xengine-compaction-type=# 
++ DBOptions::compaction_type for XEngine
++ --xengine-compression-options=name 
++ CFOptions::compression_opts for XEngine
++ --xengine-compression-per-level=name 
++ CFOptions::compression_per_level for XEngine
++ --xengine-concurrent-writable-file-buffer-num=# 
++ DBOptions::concurrent_writable_file_buffer_num for
++ XEngine
++ --xengine-concurrent-writable-file-buffer-switch-limit=# 
++ DBOptions::concurrent_writable_file_buffer_switch_limit
++ for XEngine
++ --xengine-concurrent-writable-file-single-buffer-size=# 
++ DBOptions::concurrent_writable_file_single_buffer_size
++ for XEngine
++ --xengine-cpu-compaction-thread-num=# 
++ DBOptions::cpu_compaction_thread_num for XEngine
++ --xengine-datadir[=name] 
++ XEngine data directory
++ --xengine-db-total-write-buffer-size=# 
++ DBOptions::db_total_write_buffer_size for XEngine
++ --xengine-db-write-buffer-size=# 
++ DBOptions::db_write_buffer_size for XEngine
++ --xengine-dbstats[=name] 
++ Enable or disable XENGINE_DBSTATS plugin. Possible values
++ are ON, OFF, FORCE (don't start if the plugin fails to
++ load).
++ --xengine-ddl[=name] 
++ Enable or disable XENGINE_DDL plugin. Possible values are
++ ON, OFF, FORCE (don't start if the plugin fails to load).
++ --xengine-deadlock-detect 
++ Enables deadlock detection
++ --xengine-debug-info[=name] 
++ Enable or disable XENGINE_DEBUG_INFO plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-disable-auto-compactions 
++ CFOptions::disable_auto_compaction for XEngine
++ --xengine-disable-instant-ddl 
++ disable instant ddl feature if necessary.
++ --xengine-disable-online-ddl=# 
++ disable online ddl feature if necessary.0: not disable
++ online ddl,1: disable online-rebuild ddl, like modify
++ pk,2: disable all type online-ddl include
++ rebuild/norebuild
++ --xengine-disable-parallel-ddl 
++ disable parall ddl feature if necessary.
++ --xengine-dump-malloc-stats 
++ DBOptions::dump_malloc_stats for XENGINE
++ --xengine-dump-memtable-limit-size=# 
++ DBOptions::dump_memtable_limit_size for XEngine
++ --xengine-enable-2pc 
++ Enable two phase commit for XEngine
++ (Defaults to on; use --skip-xengine-enable-2pc to disable.)
++ --xengine-flush-delete-percent=# 
++ CFOptions::flush_delete_percent for XEngine
++ --xengine-flush-delete-percent-trigger=# 
++ CFOptions::flush_delete_percent_trigger for XEngine
++ --xengine-flush-delete-record-trigger=# 
++ CFOptions::flush_delete_record_trigger for XEngine
++ --xengine-flush-log-at-trx-commit=# 
++ Sync on transaction commit. Similar to
++ innodb_flush_log_at_trx_commit. 1: sync on commit, 0: not
++ sync until wal_bytes_per_sync, 2: sync per second
++ --xengine-force-flush-memtable-now 
++ Forces memstore flush which may block all write requests
++ so be careful
++ --xengine-fpga-compaction-thread-num=# 
++ DBOptions::fpga_compaction_thread_num for XEngine
++ --xengine-global-info[=name] 
++ Enable or disable XENGINE_GLOBAL_INFO plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-hotbackup=name 
++ Hot Backup
++ --xengine-idle-tasks-schedule-time=# 
++ DBOptions::idle_tasks_schedule_time for XEngine
++ --xengine-index-file-map[=name] 
++ Enable or disable XENGINE_INDEX_FILE_MAP plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-level-compaction-dynamic-level-bytes 
++ CFOptions::level_compaction_dynamic_level_bytes for
++ XEngine
++ (Defaults to on; use --skip-xengine-level-compaction-dynamic-level-bytes to disable.)
++ --xengine-level0-file-num-compaction-trigger=# 
++ CFOptions::level0_file_num_compaction_trigger for XEngine
++ --xengine-level0-layer-num-compaction-trigger=# 
++ CFOptions::level0_layer_num_compaction_trigger for
++ XEngine
++ --xengine-level1-extents-major-compaction-trigger=# 
++ CFOptions::level1_extents_major_compaction_trigger for
++ XEngine
++ --xengine-level2-usage-percent=# 
++ CFOptions::level2_usage_percent for XEngine
++ --xengine-lock-scanned-rows 
++ Take and hold locks on rows that are scanned but not
++ updated
++ --xengine-lock-wait-timeout=# 
++ Number of seconds to wait for lock
++ --xengine-locks[=name] 
++ Enable or disable XENGINE_LOCKS plugin. Possible values
++ are ON, OFF, FORCE (don't start if the plugin fails to
++ load).
++ --xengine-max-background-compactions=# 
++ DBOptions::max_background_compactions for XEngine
++ --xengine-max-background-dumps=# 
++ DBOptions::max_background_dumps for XEngine
++ --xengine-max-background-flushes=# 
++ DBOptions::max_background_flushes for XEngine
++ --xengine-max-free-extent-percent=# 
++ DBOptions::max_free_extent_percent for XEngine
++ --xengine-max-manifest-file-size=# 
++ DBOptions::max_manifest_file_size for XEngine
++ --xengine-max-row-locks=# 
++ Maximum number of locks a transaction can have
++ --xengine-max-shrink-extent-count=# 
++ DBOptions::max_shrink_extent_count for XEngine
++ --xengine-max-total-wal-size=# 
++ DBOptions::max_total_wal_size for XEngine
++ --xengine-max-write-buffer-number=# 
++ CFOptions::max_write_buffer_number for XEngine
++ --xengine-max-write-buffer-number-to-maintain=# 
++ CFOptions::max_write_buffer_number_to_maintain for
++ XEngine
++ --xengine-mem-alloc[=name] 
++ Enable or disable XENGINE_MEM_ALLOC plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-memtable=name 
++ options for CFOptions::memtable in XEngine
++ --xengine-min-write-buffer-number-to-merge=# 
++ CFOptions::min_write_buffer_number_to_merge for XEngine
++ --xengine-mutex-backtrace-threshold-ns=# 
++ DBOptions::mutex_backtrace_threshold_ns for XEngine
++ --xengine-parallel-read-threads=# 
++ Number of threads to do parallel read.
++ --xengine-parallel-recovery-thread-num=# 
++ DBOptions::parallel_recovery_thread_num for XEngine.
++ Default is 0
++ --xengine-parallel-wal-recovery 
++ DBOptions::parallel_wal_recovery for XEngine. Default is
++ FALSE
++ --xengine-pause-background-work 
++ Disable all xengine background operations
++ --xengine-perf-context[=name] 
++ Enable or disable XENGINE_PERF_CONTEXT plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-perf-context-global[=name] 
++ Enable or disable XENGINE_PERF_CONTEXT_GLOBAL plugin.
++ Possible values are ON, OFF, FORCE (don't start if the
++ plugin fails to load).
++ --xengine-purge-invalid-subtable-bg 
++ Turn on to enable purging invalid subtable in background
++ (Defaults to on; use --skip-xengine-purge-invalid-subtable-bg to disable.)
++ --xengine-query-trace[=name] 
++ Enable or disable XENGINE_QUERY_TRACE plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-query-trace-print-slow 
++ if print slow query detail in error log for XEngine
++ (Defaults to on; use --skip-xengine-query-trace-print-slow to disable.)
++ --xengine-query-trace-sum=name 
++ if record query detail in IS table for XEngine
++ --xengine-rate-limiter-bytes-per-sec=# 
++ DBOptions::rate_limiter bytes_per_sec for XEngine
++ --xengine-reset-pending-shrink=# 
++ reset subtable's pending shrink
++ --xengine-row-cache-size=# 
++ row_cache size for XEngine
++ --xengine-scan-add-blocks-limit=# 
++ CFOptions::scan_add_blocks_limit for XEngine
++ --xengine-shrink-allocate-interval=# 
++ DBOptions::shrink_allocate_interval for XEngine
++ --xengine-shrink-table-space=# 
++ Shrink xengine table space
++ --xengine-sort-buffer-size=# 
++ Memory buffer size for index creation
++ --xengine-stats-dump-period-sec=# 
++ DBOptions::stats_dump_period_sec for XEngine
++ --xengine-strict-collation-check 
++ Enforce case sensitive collation for XEngine indexes
++ (Defaults to on; use --skip-xengine-strict-collation-check to disable.)
++ --xengine-strict-collation-exceptions=name 
++ List of tables (using regex) that are excluded from the
++ case sensitive collation enforcement
++ --xengine-subtable[=name] 
++ Enable or disable XENGINE_SUBTABLE plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-table-cache-numshardbits=# 
++ DBOptions::table_cache_numshardbits for XEngine
++ --xengine-table-cache-size=# 
++ DBOptions::table_cache_size for XEngine
++ --xengine-table-space[=name] 
++ Enable or disable XENGINE_TABLE_SPACE plugin. Possible
++ values are ON, OFF, FORCE (don't start if the plugin
++ fails to load).
++ --xengine-tables[=name] 
++ Enable or disable XENGINE_TABLES plugin. Possible values
++ are ON, OFF, FORCE (don't start if the plugin fails to
++ load).
++ --xengine-total-max-shrink-extent-count=# 
++ DBOptions::total_max_shrink_extent_count for XEngine
++ --xengine-trx[=name] 
++ Enable or disable XENGINE_TRX plugin. Possible values are
++ ON, OFF, FORCE (don't start if the plugin fails to load).
++ --xengine-unsafe-for-binlog 
++ Allowing statement based binary logging which may break
++ consistency
++ --xengine-wal-dir=name 
++ DBOptions::wal_dir for XEngine
++ --xengine-wal-recovery-mode=# 
++ DBOptions::wal_recovery_mode for XEngine. Default is
++ kAbsoluteConsistency
++ --xengine-write-buffer-size=# 
++ CFOptions::write_buffer_size for XEngine
++ --xengine-write-disable-wal 
++ WriteOptions::disableWAL for XEngine
+ 
+ Variables (--variable-name=value)
+ abort-slave-event-count 0
+@@ -1814,6 +2084,110 @@ validate-user-plugins TRUE
+ verbose TRUE
+ wait-timeout 28800
+ windowing-use-high-precision TRUE
++xengine ON
++xengine-auto-shrink-enabled TRUE
++xengine-auto-shrink-schedule-interval 3600
++xengine-base-background-compactions 1
++xengine-batch-group-max-group-size 8
++xengine-batch-group-max-leader-wait-time-us 50
++xengine-batch-group-slot-array-size 8
++xengine-block-cache-size 536870912
++xengine-block-size 16384
++xengine-bottommost-level 2
++xengine-cfstats ON
++xengine-columns ON
++xengine-compact-cf 0
++xengine-compaction-delete-percent 70
++xengine-compaction-history ON
++xengine-compaction-mode 0
++xengine-compaction-stats ON
++xengine-compaction-task ON
++xengine-compaction-task-extents-limit 1000
++xengine-compaction-type 0
++xengine-compression-options -14:1:0
++xengine-compression-per-level kNoCompression
++xengine-concurrent-writable-file-buffer-num 4
++xengine-concurrent-writable-file-buffer-switch-limit 32768
++xengine-concurrent-writable-file-single-buffer-size 65536
++xengine-cpu-compaction-thread-num 8
++xengine-datadir ./.xengine
++xengine-db-total-write-buffer-size 107374182400
++xengine-db-write-buffer-size 107374182400
++xengine-dbstats ON
++xengine-ddl ON
++xengine-deadlock-detect FALSE
++xengine-debug-info ON
++xengine-disable-auto-compactions FALSE
++xengine-disable-instant-ddl FALSE
++xengine-disable-online-ddl 0
++xengine-disable-parallel-ddl FALSE
++xengine-dump-malloc-stats FALSE
++xengine-dump-memtable-limit-size 67108864
++xengine-enable-2pc TRUE
++xengine-flush-delete-percent 70
++xengine-flush-delete-percent-trigger 700000
++xengine-flush-delete-record-trigger 700000
++xengine-flush-log-at-trx-commit 1
++xengine-force-flush-memtable-now FALSE
++xengine-fpga-compaction-thread-num 8
++xengine-global-info ON
++xengine-hotbackup 
++xengine-idle-tasks-schedule-time 60
++xengine-index-file-map ON
++xengine-level-compaction-dynamic-level-bytes TRUE
++xengine-level0-file-num-compaction-trigger 64
++xengine-level0-layer-num-compaction-trigger 8
++xengine-level1-extents-major-compaction-trigger 1000
++xengine-level2-usage-percent 70
++xengine-lock-scanned-rows FALSE
++xengine-lock-wait-timeout 1
++xengine-locks ON
++xengine-max-background-compactions 1
++xengine-max-background-dumps 1
++xengine-max-background-flushes 1
++xengine-max-free-extent-percent 10
++xengine-max-manifest-file-size 18446744073709551615
++xengine-max-row-locks 1073741824
++xengine-max-shrink-extent-count 512
++xengine-max-total-wal-size 107374182400
++xengine-max-write-buffer-number 1000
++xengine-max-write-buffer-number-to-maintain 1000
++xengine-mem-alloc ON
++xengine-memtable 
++xengine-min-write-buffer-number-to-merge 2
++xengine-mutex-backtrace-threshold-ns 100000000
++xengine-parallel-read-threads 4
++xengine-parallel-recovery-thread-num 0
++xengine-parallel-wal-recovery FALSE
++xengine-pause-background-work FALSE
++xengine-perf-context ON
++xengine-perf-context-global ON
++xengine-purge-invalid-subtable-bg TRUE
++xengine-query-trace ON
++xengine-query-trace-print-slow TRUE
++xengine-query-trace-sum OFF
++xengine-rate-limiter-bytes-per-sec 0
++xengine-reset-pending-shrink 0
++xengine-row-cache-size 0
++xengine-scan-add-blocks-limit 100
++xengine-shrink-allocate-interval 3600
++xengine-shrink-table-space -1
++xengine-sort-buffer-size 4194304
++xengine-stats-dump-period-sec 600
++xengine-strict-collation-check TRUE
++xengine-strict-collation-exceptions (No default value)
++xengine-subtable ON
++xengine-table-cache-numshardbits 7
++xengine-table-cache-size 1073741824
++xengine-table-space ON
++xengine-tables ON
++xengine-total-max-shrink-extent-count 7680
++xengine-trx ON
++xengine-unsafe-for-binlog FALSE
++xengine-wal-dir 
++xengine-wal-recovery-mode 1
++xengine-write-buffer-size 268435456
++xengine-write-disable-wal FALSE
+ 
+ To see what values a running MySQL server is using, type
+ 'mysqladmin variables' instead of 'mysqld --verbose --help'.
+diff --git a/mysys/my_handler_errors.h b/mysys/my_handler_errors.h
+index 634db80eda2..ed838bddb2d 100644
+--- a/mysys/my_handler_errors.h
++++ b/mysys/my_handler_errors.h
+@@ -1,6 +1,10 @@
+ #ifndef MYSYS_MY_HANDLER_ERRORS_INCLUDED
+ #define MYSYS_MY_HANDLER_ERRORS_INCLUDED
+ 
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2008, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+diff --git a/scripts/CMakeLists.txt b/scripts/CMakeLists.txt
+index c64bfb521ae..88c968caf8a 100644
+--- a/scripts/CMakeLists.txt
++++ b/scripts/CMakeLists.txt
+@@ -1,3 +1,5 @@
++# Portions Copyright (c) 2020, Alibaba Group Holding Limited
++#
+ # Copyright (c) 2006, 2019, Oracle and/or its affiliates. All rights reserved.
+ #
+ # This program is free software; you can redistribute it and/or modify
+@@ -432,6 +434,8 @@ ELSE()
+       mysqldumpslow
+       mysqld_multi
+       mysqld_safe
++      query_trace_dump
++      compaction_tool
+       )
+   ENDIF()
+ 
+diff --git a/scripts/compaction_tool.sh b/scripts/compaction_tool.sh
+new file mode 100755
+index 00000000000..99df67693ac
+--- /dev/null
++++ b/scripts/compaction_tool.sh
+@@ -0,0 +1,358 @@
++#cat /tmp/xdump.sh
++#!/bin/bash
++
++RED="\e[1;31m"
++BLUE="\e[1;34m"
++GREEN="\e[1;32m"
++RED_BLINK="\e[1;31;5m"
++GREEN_BLINK="\e[1;32;5m"
++NC="\e[0m"
++
++get_key_value() {
++  echo "$1" | sed 's/^--[a-zA-Z_-]*=//'
++}
++
++usage() {
++cat <<EOF
++usage: $0 [-t frag|compact_sk|show_sk] [-i input_stats_file]
++   or: $0 [-h | --help]
++
++ -t command
++    frag                calc fragment of extents;
++    show_sk             show secondary key's extents status;
++    compact_sk          compact all secondary key;
++ -i input_stats_file    use input_stats_file instead of fetch again
++ -h                     Show this help message.
++EOF
++}
++
++parse_options() {
++  while test $# -gt 0 ; do
++    case "$1" in
++    -t=*)
++      command_type=`get_key_value "$1"`;;
++    -t)
++      shift
++      command_type=`get_key_value "$1"`;;
++    -i=*)
++      input_stats_file=`get_key_value "$1"`;;
++    -i)
++      shift
++      input_stats_file=`get_key_value "$1"`;;
++    -h | --help)
++      usage
++      exit 0;;
++    *)
++      echo "Unknown option '$1'"
++      exit 1;;
++    esac
++    shift
++  done
++
++}
++
++# total_size: select sum(DATA), sum(INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE;
++# l0_size: select "l0_size", sum(DATA), sum(XENGINE_SUBTABLE.INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE where LEVEL=0;
++# l1_size: select "l1_size", sum(DATA), sum(XENGINE_SUBTABLE.INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE where LEVEL=1;
++# l2_size: select "l2_size", sum(DATA), sum(XENGINE_SUBTABLE.INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE where LEVEL=2;
++# 内外部碎片率计算，每层数据size和碎片率计算
++calc_frag() {
++  if [ ${input_stats_file}'x' == 'x' ]; then
++    sudo rm -rf ${cf_size}
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e 'select "total_size", sum(DATA), sum(XENGINE_SUBTABLE.INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE; select "l0_size", sum(DATA), sum(XENGINE_SUBTABLE.INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE where LEVEL=0; select "l1_size", sum(DATA), sum(XENGINE_SUBTABLE.INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE where LEVEL=1;select "l2_size", sum(DATA), sum(XENGINE_SUBTABLE.INDEX), sum(EXTENTS) from information_schema.XENGINE_SUBTABLE where LEVEL=2;' > ${cf_size}
++
++    input_stats_file=${cf_size}
++  fi
++
++  sst_num=`sudo find /u01/my3306/data/xengine/ -name "*.sst" | wc -l`
++  #echo "sst file: $sst_num"
++  printf "${RED}sst file num:${NC} %s\n" "${sst_num}"
++  grep -E "total_size" ${input_stats_file} | grep -v "sum" | awk -v sst_num="${sst_num}" 'BEGIN{total_data=0;total_index=0;total_size=0;total_extent=0;} \
++      { total_data+=$2/1024/1024; \
++        total_index+=$3/1024/1024; \
++        total_extent+=$4;\
++        total_size+=total_extent*2;\
++      } \
++
++      END{ print "\033[34mAll:\033[0m TotalSize:", int(total_size), "MB TotalData:", int(total_data), "MB TotalIndex:", int(total_index), "MB"; \
++      print "   TotalExtent:", int(total_extent), " Real SST:", sst_num, "\033[31m SST usage=\033[0m ", (total_extent+511)/512*100/sst_num, "%"; \
++      print "   \033[31m(Data + Index) / Size = \033[0m", 100*(total_data+total_index)/total_size, "%"  }'
++  grep "l0_size" ${input_stats_file} | grep -v "sum" | awk 'BEGIN{total_data=0;total_index=0;total_size=0;total_extent=0;} \
++      { total_data+=$2/1024/1024; \
++        total_index+=$3/1024/1024; \
++        total_extent+=$4;\
++        total_size+=total_extent*2;\
++      } \
++
++          END{ print "\033[34m L0:\033[0m TotalSize:", int(total_size), "MB TotalData:", int(total_data), "MB TotalIndex:", int(total_index), "MB"; \
++      print "   \033[31mExtent: \033[0m", int(total_extent); \
++      print "   \033[31m(Data + Index) / Size = \033[0m", 100*(total_data+total_index)/total_size, "%"  }'
++  grep "l1_size" ${input_stats_file} | grep -v "sum" | awk 'BEGIN{total_data=0;total_index=0;total_size=0;total_extent=0;} \
++      { total_data+=$2/1024/1024; \
++        total_index+=$3/1024/1024; \
++        total_extent+=$4;\
++        total_size+=total_extent*2;\
++      } \
++            END{ print "\033[34m L1:\033[0m TotalSize:", int(total_size), "MB TotalData:", int(total_data), "MB TotalIndex:", int(total_index), "MB"; \
++      print "   \033[31mExtent: \033[0m", int(total_extent); \
++      print "   \033[31m(Data + Index) / Size = \033[0m", 100*(total_data+total_index)/total_size, "%"  }'
++  grep "l2_size" ${input_stats_file} | grep -v "sum" | awk 'BEGIN{total_data=0;total_index=0;total_size=0;total_extent=0;} \
++      { total_data+=$2/1024/1024; \
++        total_index+=$3/1024/1024; \
++        total_extent+=$4;\
++        total_size+=total_extent*2;\
++      } \
++
++            END{ print "\033[34m L2:\033[0m TotalSize:", int(total_size), "MB TotalData:", int(total_data), "MB TotalIndex:", int(total_index), "MB"; \
++      print "   \033[31mExtent: \033[0m", int(total_extent); \
++      print "   \033[31m(Data + Index) / Size = \033[0m", 100*(total_data+total_index)/total_size, "%"  }'
++}
++
++#  INVALID_TYPE_TASK = 0,
++#  FLUSH_TASK = 1,
++#  // There are many kinds of Compaction types.
++#  // Each type has specified input and output level
++#  INTRA_COMPACTION_TASK = 2,                  // L0 layers intra compaction
++#  MINOR_COMPACTION_TASK = 3,                  // L0 compaction to L1 (FPGA)
++#  SPLIT_TASK = 4,                             // L1 split extent to L1
++#  MAJOR_COMPACTION_TASK = 5,                  // L1 compaction to L2
++#  MAJOR_SELF_COMPACTION_TASK = 6,             // L2 compaction to L2
++#  BUILD_BASE_INDEX_TASK = 7,                 //build base index, append data to level2
++#  //
++#  // Note we should resever these orders to be backwords compatible.
++#  STREAM_COMPACTION_TASK = 8,                 // L0 compaction to L1
++#  MINOR_DELETE_COMPACTION_TASK = 9,           // L0 compaction to L1 (Delete triggered)
++#  MAJOR_DELETE_COMPACTION_TASK = 10,           // L1 compaction to L2 (Delete triggered)
++#  MAJOR_AUTO_SELF_COMPACTION_TASK = 11,       // L2 compaction to L2 (Auto triggered with time period)
++#  MANUAL_MAJOR_TASK = 12,                     // L1 compaction to L2 (manual trigger, all extents to L2)
++#  MANUAL_FULL_AMOUNT_TASK = 13,               // compact all extents to level2
++#  SHRINK_EXTENT_SPACE_TASK = 14,              // reclaim the free extent space
++#  DELETE_MAJOR_SELF_TASK = 15,                // compact all delete records in level2
++#  FLUSH_LEVEL1_TASK = 16,                     // flush memtables to level1
++#  MINOR_AUTO_SELF_TASK = 17,                  // level1 compaction to level1
++#  DUMP_TASK = 18,                             // dump memtable to M0
++#  SWITCH_M02L0_TASK = 19,                     // switch M0 to L0
++#  MAX_TYPE_TASK
++#  set global xengine_compact_cf=cf_id+(task_type << 32)
++
++compact_sk() {
++  ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "select COLUMN_FAMILY from information_schema.xengine_ddl where index_type=2" > ${cf_file}
++  cnt=0
++  while read line ; do
++    cnt=$((cnt+1))
++    echo -e "Pharse 1: ${cnt} cf=${line}\n"
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "set global xengine_compact_cf=${line}+(13 << 32)";
++
++    #echo `sed -n "/${line}/{n;n;n;n;n;n;n;p}" $cf_file`
++    #echo -n `grep -A 5 -nr "\[${line}\]" $cf_file`
++  done < ${cf_file}
++
++  sleep 1800s
++  #sleep 3600s
++  cnt=0
++  while read line ; do
++    cnt=$((cnt+1))
++    echo -e "Pharse 2: ${cnt} cf=$line\n"
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "set global xengine_compact_cf=${line}+(6<<32)";
++  done < ${cf_file}
++}
++
++show_sk() {
++  if [ ! -f "$cf_stats" ]; then
++    sudo rm -rf ${cf_stats}
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e 'select * from information_schema.xengine_subtable' > ${cf_stats}
++  fi
++  ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "select COLUMN_FAMILY from information_schema.xengine_ddl where index_type=2" > ${cf_file}
++  cnt=0
++  while read line ; do
++    cnt=$((cnt+1))
++    echo -e "${cnt}: cf_id=${line}"
++    #grep ${line} $cf_file
++    #echo -e `grep  ${line} $cf_file`
++    echo "`sed -n "/${line}/{n;n;n;n;n;N;N;p}" "$cf_stats"`"
++    #echo `sed -n "/${line}/{n;n;n;n;n;p;n;p;n;p}" $cf_stats`
++    #echo -n `grep -A 5 -nr "\[${line}\]" $cf_file`
++    #echo -n `grep -A 5 -nr "\[${line}\]" $cf_file`
++  done < ${cf_file}
++  exit
++}
++
++show_err() {
++  if [ ! -f "$cf_err" ]; then
++    sudo rm -rf ${cf_err}
++  fi
++  while :; do
++    printf "${GREEN} err begin: ${NC}\n"
++    printf "${RED_BLINK} invalid l0 layer: ${NC}\n"
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "select a.TABLE_NAME, b.SUBTABLE_ID, b.layer, b.EXTENTS, b.DATA, b.INDEX from information_schema.xengine_subtable as b, information_schema.xengine_ddl as a  where layer > ${max_layer} and b.SUBTABLE_ID=a.COLUMN_FAMILY order by layer desc;"
++
++    printf "${RED_BLINK} invalid l1 extents size: ${NC}\n"
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "select a.TABLE_NAME, b.SUBTABLE_ID, b.layer, b.EXTENTS, b.DATA, b.INDEX from information_schema.xengine_subtable as b, information_schema.xengine_ddl as a  where level = 1 and extents > ${max_l1_size} and b.SUBTABLE_ID=a.COLUMN_FAMILY order by extents desc;"
++
++    printf "${RED} invalid level1 usage percent: ${NC}\n"
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "select  data/(extents*2*1024*1024), a.TABLE_NAME, b.SUBTABLE_ID, b.layer, b.EXTENTS, b.DATA, b.INDEX from information_schema.xengine_subtable as b, information_schema.xengine_ddl as a where level = 1 and extents > 0 and data*100/(extents*2*1024*1024) < ${min_l1usage_percent} and data > ${usage_size_limit} order by data desc;"
++
++    printf "${RED} invalid level2 usage percent: ${NC}\n"
++    ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "select  data/(extents*2*1024*1024), a.TABLE_NAME, b.SUBTABLE_ID, b.layer, b.EXTENTS, b.DATA, b.INDEX from information_schema.xengine_subtable as b, information_schema.xengine_ddl as a where level = 2 and extents > 0 and data*100/(extents*2*1024*1024) < ${min_l2usage_percent} and data > ${usage_size_limit} order by data desc;"
++
++    printf "${GREEN} err end: ${NC}\n"
++    sleep ${show_time}
++  done
++}
++
++show_err_detail() {
++  printf "${GREEN} analyze begin: ${NC}\n"
++  ${mysql} -uroot -S /u01/my3306/run/mysql.sock -e "select SUBTABLE_ID from information_schema.xengine_subtable where layer > ${max_layer} order by layer desc limit 10" > ${cf_err}
++  id_num=0
++  while read line ; do
++    if [ $id_num == 0 ]
++    then
++      id_num=`expr $id_num + 1`
++      echo $id_num
++      continue
++    fi
++    echo ${line}
++		#todo 限定日志开始与结束时间
++    grep -E "PICK_TASK|first scedule|complete one|begin to run" ${mysql_base}"/log/mysql.err"| grep "GetID()=${line}" > ${line}".log"
++    grep "begin to run flush" ${line}".log" | awk '{print $1" "$2, $15, $16, $17}' > ${line}"flush"
++    grep "begin to run flush" ${line}".log" | awk '{$a=substr($1" "$2, 2,24);  print $a}' > "tt.log"
++    # flush start
++    last_tt=0
++    avgflush_tt=0
++    num=1
++    while read subline; do
++      if [ $last_tt == 0 ]; then
++        last_tt=`date -d "${subline}" +%s`
++      else
++        num=`expr $num + 1`
++        cur_tt=`date -d "${subline}" +%s`
++        step=`expr $cur_tt - $last_tt`
++        avgflush_tt=`expr $avg_tt + $step`
++        echo $step >> ${line}"ft.log"
++      fi
++    done < "tt.log"
++    avgflush_tt=`expr $avgflush_tt / $num`
++    echo "average time each flush is " $avgflush_tt"s"
++    grep "begin to run flush" ${line}".log" | awk '{$a=substr($16,19);sub(/,/,"",$a);print}' > "delete.log"
++    grep "begin to run flush" ${line}".log" | awk '{$a=substr($17,20);print $a}' > "size.log"
++    del_num=0
++    total_size=0
++    num=0
++    while read subline; do
++      num=`expr $num + 1`
++      del_num=`expr $del_num + ${subline}`
++    done < "delete.log"
++    while read subline; do
++      total_size=`expr $total_size + ${subline}`
++    done < "size.log"
++    echo "flush delete entries is " $del_num
++    average_size=`expr $total_size / $num`
++    echo "flush average size is " $average_size
++    # flush end
++    
++    # minor start
++    grep "complete one compaction" ${line}".log" | grep "STREAM COMPACTION" > "minor.log"
++    grep "complete one compaction" ${line}".log" | grep "MAJOR COMPACTION" > "major.log"
++    grep "STREAM COMPACTION" "minor.log" | awk '{$a=substr($1" "$2, 2,24);  print $a}' > "minor_tt.log" 
++    grep "MAJOR COMPACTION" "major.log" | awk '{$a=substr($1" "$2, 2,24);  print $a}' > "major_tt.log"
++    last_tt=0
++	num=0
++    avgminor_tt=0
++    while read subline; do
++      if [ $last_tt == 0 ]; then
++        last_tt=`date -d "${subline}" +%s`
++      else
++        num=`expr $num + 1`
++        cur_tt=`date -d "${subline}" +%s`
++        step=`expr $cur_tt - $last_tt`
++#        echo $step
++        avgminor_tt=`expr $avgminor_tt + $step`
++#        echo $avgminor_tt
++        echo $step >> ${line}"_minor_ft.log"
++      fi
++    done < "minor_tt.log"
++    minor_average=0
++    if [ $num == 0 ]; then
++      echo "has no minor"
++    else
++	  minor_average=`expr $avgminor_tt / $num`
++      echo "the average time of each minor is" $minor_average
++    fi
++    # minor end
++
++	#major start
++    last_tt=0
++    num=0
++    avgmajor_tt=0
++    major_average=0
++    while read subline; do
++      if [ $last_tt == 0 ]; then
++        last_tt=`date -d "${subline}" +%s`
++      else
++        num=`expr $num + 1`
++        cur_tt=`date -d "${subline}" +%s`
++        step=`expr $cur_tt - $last_tt`
++        avgflush_tt=`expr $avgmajor_tt + $step`
++        echo $step >> ${line}"_major_ft.log"
++      fi
++    done < "major_tt.log"
++    if [ $num == 0 ]; then
++      echo "has no major"
++    else
++      major_average=`expr $avgmajor_tt / $num`
++      echo "the average time of each major is" $major_average
++    fi
++    # major end
++    if [[ $major_average -eq 0 && $minor_average -eq 0 ]]; then
++      continue
++    fi
++    # result
++    fs=1048576
++	if [ $del_num -gt 0 ]; then
++      if [ $average_size -lt $fs ]; then
++		echo "has delete entries, may be delete flush cause, need adjust delete option"
++	  fi
++	  if [ $major_average -gt $minor_average ]; then
++		echo "may be major task is very frequent, need do manual compaction"
++	  fi
++	elif [ $average_size -lt $fs ]; then
++      
++	  if [ $average -gt `expr $minor_average * 10` ]; then
++		echo "flush task is too small, need check wal"
++	  fi
++	else 
++	  echo "have more todo"
++    fi 
++  done < ${cf_err}
++}
++
++command_type="show_err"
++cf_file="/tmp/cf0"
++cf_size="/tmp/cf_size"
++cf_stats="/tmp/cf_stats"
++cf_err="cf_err"
++mysql="/u01/mysql/bin/mysql"
++mysql_base="/u01/my3306"
++
++max_layer=100
++max_l1_size=5000
++min_l1usage_percent=50
++min_l2usage_percent=60
++usage_size_limit=1073741824
++show_time=60 
++
++
++
++parse_options "$@"
++
++if [ ${command_type} == "frag" ]; then
++   calc_frag
++elif [ ${command_type} == "compact_sk" ]; then
++   compact_sk
++elif [ ${command_type} == "show_sk" ]; then
++   show_sk
++elif [ ${command_type} == "show_err" ]; then
++  show_err
++elif [ ${command_type} == "show_err_detail" ]; then
++  show_err_detail
++fi
+diff --git a/scripts/query_trace_dump.pl.in b/scripts/query_trace_dump.pl.in
+new file mode 100755
+index 00000000000..a2b9f83342e
+--- /dev/null
++++ b/scripts/query_trace_dump.pl.in
+@@ -0,0 +1,144 @@
++#!/usr/bin/python
++import sys
++import argparse
++import textwrap
++
++cpu_freequency = 2.599898
++
++
++query_trace_format = '"AAA: 0x000aaa: 0x000xxx, BBB: 0x000bbb: 0x000yyy"'
++
++
++def format_data(data_str):
++    data_list = data_str.strip('\n').strip(',').split(', ')
++    data = [d.split(':') for d in data_list]
++    return ({d[0]: (int(d[1], 16), int(d[2], 16)) for d in data if len(d) == 3}, {d[0]: int(str(d[1]), 16) for d in data if len(d) == 2})
++
++
++class Formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
++    pass
++
++
++def valid_query_trace_str(query_trace_str):
++    try:
++        res_trace, res_count = format_data(query_trace_str)
++    except Exception, e:
++        msg = 'Not a valid query trace string, should be in format {} ....(actual: {})'.format(query_trace_format, query_trace_str)
++        raise argparse.ArgumentTypeError(msg)
++    if not len(res_trace) or not len(res_count):
++        msg = 'Nothing to analyse, should be in format {} ....(actual: {})'.format(query_trace_format, query_trace_str)
++        raise argparse.ArgumentTypeError(msg)
++    return query_trace_str
++
++
++parser = argparse.ArgumentParser(description=textwrap.dedent("""\
++        X-DB query trace analysing tool.
++        query_trace_dump QUERY_TRACE_STR(from the first trace point name)"""),
++    formatter_class=Formatter)
++parser.add_argument('query_trace_str', nargs='*', type=valid_query_trace_str, help='QUERY_TRACE_STR in error log, should be in format {} ...'.format(query_trace_format))
++parser.add_argument('-t', '--time', nargs=1, type=str, help='show time in ms or us', choices=['ms', 'us'], default='us')
++parser.add_argument('-f', '--file', nargs=1, type=str, help='file with query_trace_str')
++# parser.add_argument('-m', '--merge', action='store_true', help='merge the result or output seprately')
++
++def get_query_trace_from_file(file_path):
++    str_list = []
++    with open(file_path, 'r') as f:
++        for line in f:
++            start = line.find('SERVER_OPERATION')
++            if start >= 0:
++                str_list.append(line[start:])
++    return str_list
++
++
++def format_output(result_list):
++    max_name_len = max([len(str(r[0])) for r in result_list]) + 2
++    max_data_len = max([len(str(r[1])) for r in result_list]) + 2
++    max_pct_len = max([len(str(r[2])) for r in result_list]) + 3
++    max_run_len = max([len(str(r[3])) for r in result_list]) + 2
++    print ''.join(('TRACE LIST'.ljust(max_name_len), 'TOTAL_TIME'.ljust(max_data_len), 'PERCENTAGE'.ljust(max_pct_len), 'TOTAL_COUNT'))
++    for row in result_list:
++        print ''.join((str(row[0]).ljust(max_name_len), str(row[1]).ljust(max_data_len), ('%s%%' % row[2]).ljust(max_pct_len), str(row[3]).ljust(max_run_len)))
++
++
++def calc_percentail(data, time):
++    data_list = []
++    name_list = []
++    run_list = []
++    result_list = []
++    time_sum = 0
++    global cpu_freequency
++    if time == 'us':
++        cycles_per_unit = cpu_freequency * 1000
++    else:
++        cycles_per_unit = cpu_freequency * 1000 * 1000
++
++    for k, item in data.iteritems():
++        v, r = item
++        value = v / cycles_per_unit
++        time_sum += float(value)
++        name_list.append(k)
++        data_list.append(float(value))
++        run_list.append(r)
++    for name, data, run in zip(name_list, data_list, run_list):
++        result_list.append((name, data, data / time_sum * 100, run))
++    result_list.sort(lambda a,b: int((b[1] - a[1])*10 ))
++    format_output(result_list)
++    print '--------- total time:', time_sum
++
++
++def calc_count(data, total_query):
++    name_list = []
++    count_list = []
++    avg_count_list = []
++    for name, count in data.iteritems():
++        name_list.append(name)
++        count_list.append(count)
++        avg_count_list.append(float(count) / total_query)
++
++    max_name_len = max([len(str(name)) for name in name_list]) + 2
++    max_count_len = max([len(str(count)) for count in count_list]) + 2
++    result_list = []
++    for name, count, avg_count in zip(name_list, count_list, avg_count_list):
++        result_list.append((name, count, avg_count))
++    result_list.sort(lambda a, b: int(b[1] - a[1]))
++    print ''.join(('COUNTER LIST'.ljust(max_name_len), 'TOTAL'.ljust(max_count_len), 'AVERAGE(/%s)'%total_query))
++    for name, count, avg_count in result_list:
++        print ''.join((str(name).ljust(max_name_len), str(count).ljust(max_count_len), str(avg_count)));
++
++
++def add_data_dict(d_base, d_delta):
++    d_base_trace, d_base_count = d_base
++    d_delta_trace, d_delta_count = d_delta
++    for k, v in d_delta_trace.iteritems():
++        if k in d_base_trace:
++            d_base_trace[k] = (d_base_trace[k][0] + v[0], d_base_trace[k][1] + v[1])
++        else:
++            d_base_trace[k] = (v[0], v[1])
++
++    for k, v in d_delta_count.iteritems():
++        if k in d_base_count:
++            d_base_count[k] = d_base_count[k] + v
++        else:
++            d_base_count[k] = v
++
++
++# for data_str1 in data_str_list:
++if __name__ == '__main__':
++    args = parser.parse_args()
++    if not args.file and not args.query_trace_str:
++        parser.print_help()
++        parser.error("at least use one of --file or query_trace_str")
++    d_data = ({}, {})
++    str_list = []
++    if args.file:
++        for f in args.file:
++            str_list += get_query_trace_from_file(f)
++    if args.query_trace_str:
++        for s in args.query_trace_str:
++            str_list.append(s)
++    for s in str_list:
++        add_data_dict(d_data, format_data(s))
++    if str_list:
++        calc_percentail(d_data[0], args.time)
++        calc_count(d_data[1], len(str_list))
++
+diff --git a/sql/binlog.cc b/sql/binlog.cc
+index f3d8f226cc1..a4b400bcd76 100644
+--- a/sql/binlog.cc
++++ b/sql/binlog.cc
+@@ -1,3 +1,6 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
+ /* Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -7796,12 +7799,16 @@ int MYSQL_BIN_LOG::prepare(THD *thd, bool all) {
+   DBUG_TRACE;
+ 
+   DBUG_ASSERT(opt_bin_log);
++
++  // with xengine, even without binlog, we still have 2pc transactions
++#if 0
+   /*
+     The applier thread explicitly overrides the value of sql_log_bin
+     with the value of log_slave_updates.
+   */
+   DBUG_ASSERT(thd->slave_thread ? opt_log_slave_updates
+                                 : thd->variables.sql_log_bin);
++#endif
+ 
+   /*
+     Set HA_IGNORE_DURABILITY to not flush the prepared record of the
+diff --git a/sql/handler.cc b/sql/handler.cc
+index 2c2409c6988..1aef379a886 100644
+--- a/sql/handler.cc
++++ b/sql/handler.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -7762,6 +7766,21 @@ int handler::ha_reset() {
+   return retval;
+ }
+ 
++bool operating_on_xengine_during_xa(THD *thd, handlerton *hton) {
++  if (hton->db_type == DB_TYPE_XENGINE) {
++    const bool PRINT_ERROR_WHEN_CHECK_IN_XA = false;
++    const bool is_in_xa = (thd->get_transaction()->xid_state()->check_in_xa(
++                PRINT_ERROR_WHEN_CHECK_IN_XA));
++    if (is_in_xa) {
++      my_error(HA_ERR_WRONG_COMMAND, MYF(0),
++               "X-Engine do not support XA transactions");
++    }
++    return is_in_xa;
++  } else {
++    return false;
++  }
++}
++
+ int handler::ha_write_row(uchar *buf) {
+   int error;
+   Log_func *log_func = Write_rows_log_event::binlog_row_logging_function;
+@@ -7771,6 +7790,12 @@ int handler::ha_write_row(uchar *buf) {
+   DBUG_EXECUTE_IF("inject_error_ha_write_row", return HA_ERR_INTERNAL_ERROR;);
+   DBUG_EXECUTE_IF("simulate_storage_engine_out_of_memory",
+                   return HA_ERR_SE_OUT_OF_MEMORY;);
++
++  if (operating_on_xengine_during_xa(ha_thd(), ht)) {
++    // X-Engine currently do not support executing xa dml
++    return HA_ERR_UNSUPPORTED;
++  }
++
+   mark_trx_read_write();
+ 
+   DBUG_EXECUTE_IF(
+diff --git a/sql/handler.h b/sql/handler.h
+index 960d3c9f50d..52e63b879f7 100644
+--- a/sql/handler.h
++++ b/sql/handler.h
+@@ -1,6 +1,10 @@
+ #ifndef HANDLER_INCLUDED
+ #define HANDLER_INCLUDED
+ 
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /*
+    Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+diff --git a/sql/log.cc b/sql/log.cc
+index f5cac4195b1..17c244982d7 100644
+--- a/sql/log.cc
++++ b/sql/log.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -104,6 +108,10 @@
+ 
+ #include "../components/mysql_server/log_builtins_imp.h"
+ 
++// TEMPORARILY to trace what happens in xengine during a slow query
++#include "storage/xengine/core/monitoring/query_perf_context.h"
++#include "storage/xengine/util/logger.h"     // mysql_reinit_xengine_log
++
+ using std::max;
+ using std::min;
+ 
+@@ -1630,6 +1638,8 @@ void log_slow_do(THD *thd, struct System_status_var *query_start_status) {
+   else
+     query_logger.slow_log_write(thd, thd->query().str, thd->query().length,
+                                 query_start_status);
++
++  QUERY_TRACE_FINISH(thd->query().str, thd->query().length);
+ }
+ 
+ /**
+@@ -1971,6 +1981,8 @@ bool reopen_error_log() {
+ 
+     if (result)
+       my_error(ER_CANT_OPEN_ERROR_LOG, MYF(0), error_log_file, ".", "");
++    else if (mysql_reinit_xengine_log())
++      sql_print_error("Failed to re-initialize logger in XEngine: %s", error_log_file);
+   }
+ 
+   return result;
+diff --git a/sql/log.h b/sql/log.h
+index 4be79925495..06c359bce39 100644
+--- a/sql/log.h
++++ b/sql/log.h
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+diff --git a/sql/sql_db.cc b/sql/sql_db.cc
+index c13c05242b3..c17da444e8b 100644
+--- a/sql/sql_db.cc
++++ b/sql/sql_db.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /*
+    Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+@@ -202,13 +206,38 @@ static bool write_db_cmd_to_binlog(THD *thd, const char *db, bool trx_cache) {
+ 
+ static void set_db_default_charset(const THD *thd,
+                                    HA_CREATE_INFO *create_info) {
++  bool is_xengine = false;
++
++  if (default_storage_engine) {
++    size_t default_engine_len = strlen(default_storage_engine);
++    is_xengine =
++        (default_engine_len == strlen("XENGINE")) &&
++        (!strncasecmp(default_storage_engine, "XENGINE", default_engine_len));
++  }
++
++  bool is_system_thd = (thd->is_dd_system_thread() ||
++                        thd->is_initialize_system_thread() ||
++                        thd->is_server_upgrade_thread());
++
+   if (create_info->default_table_charset == nullptr) {
+     create_info->default_table_charset = thd->variables.collation_server;
++
++    if (!is_system_thd && is_xengine &&
++        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
++      create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
++    }
+   } else {
+     if (!(create_info->used_fields & HA_CREATE_USED_DEFAULT_COLLATE) &&
+-        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci)
++        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
+       create_info->default_table_charset =
+           thd->variables.default_collation_for_utf8mb4;
++
++      if (!is_system_thd && is_xengine &&
++          create_info->default_table_charset ==
++              &my_charset_utf8mb4_0900_ai_ci) {
++        create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
++      }
++    }
+   }
+ }
+ 
+diff --git a/sql/sql_parse.cc b/sql/sql_parse.cc
+index 57ae7a21c7a..3fbc29808a5 100644
+--- a/sql/sql_parse.cc
++++ b/sql/sql_parse.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -179,6 +183,8 @@
+ #include "sql/recycle_bin/recycle_parse.h"
+ #include "sql/outline/outline_digest.h"
+ #include "sql/outline/outline_interface.h"
++// TEMPORARILY to trace what happens in xengine during a slow query
++#include "storage/xengine/core/monitoring/query_perf_context.h"
+ 
+ #include "ppi/ppi_statement.h"
+ 
+@@ -1493,6 +1499,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
+   DBUG_TRACE;
+   DBUG_PRINT("info", ("command: %d", command));
+ 
++  QUERY_TRACE_RESET();
++  QUERY_TRACE_BEGIN(xengine::monitor::TracePoint::SERVER_OPERATION);
++
+   Sql_cmd_clone *clone_cmd = nullptr;
+ 
+   /* For per-query performance counters with log_slow_statement */
+@@ -1820,6 +1829,8 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
+         size_t length =
+             static_cast<size_t>(packet_end - beginning_of_next_stmt);
+ 
++        QUERY_TRACE_END(); // end SERVER_OPERATION trace
++
+         log_slow_statement(thd, query_start_status_ptr);
+         if (query_start_status_ptr) {
+           /* Reset for values at start of next statement */
+@@ -1852,6 +1863,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
+         thd->profiling->set_query_source(beginning_of_next_stmt, length);
+ #endif
+ 
++        QUERY_TRACE_RESET();
++        QUERY_TRACE_BEGIN(xengine::monitor::TracePoint::SERVER_OPERATION);
++
+         /* PSI begin */
+         thd->m_digest = &thd->m_digest_state;
+         thd->m_digest->reset(thd->m_token_array, max_digest_length);
+@@ -2166,8 +2180,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
+   }
+ 
+ done:
+-  DBUG_ASSERT(thd->open_tables == NULL ||
+-              (thd->locked_tables_mode == LTM_LOCK_TABLES));
++  QUERY_TRACE_END(); // end SERVER_OPERATION trace
++  assert(thd->open_tables == nullptr ||
++         (thd->locked_tables_mode == LTM_LOCK_TABLES));
+ 
+   /* Finalize server status flags after executing a command. */
+   thd->update_slow_query_status();
+diff --git a/sql/sql_plugin.cc b/sql/sql_plugin.cc
+index 579d0f1c12d..a48ee298222 100644
+--- a/sql/sql_plugin.cc
++++ b/sql/sql_plugin.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -3495,6 +3499,8 @@ static int test_plugin_options(MEM_ROOT *tmp_root, st_plugin_int *tmp,
+   st_bookmark *var;
+   size_t len;
+   uint count = EXTRA_OPTIONS;
++  static constexpr char XENGINE_PLUGIN_NAME[] = "XENGINE";
++  static const int64_t XENGINE_NAME_SIZE = sizeof(XENGINE_PLUGIN_NAME) - 1 /* terminator NULL */;
+   DBUG_TRACE;
+   DBUG_ASSERT(tmp->plugin && tmp->name.str);
+ 
+@@ -3503,6 +3509,7 @@ static int test_plugin_options(MEM_ROOT *tmp_root, st_plugin_int *tmp,
+     default.
+   */
+   if (!(my_strcasecmp(&my_charset_latin1, tmp->name.str, "federated") &&
++        my_strcasecmp(&my_charset_latin1, tmp->name.str, XENGINE_PLUGIN_NAME) &&
+         my_strcasecmp(&my_charset_latin1, tmp->name.str, "ndbcluster")))
+     plugin_load_option = PLUGIN_OFF;
+ 
+@@ -3545,6 +3552,17 @@ static int test_plugin_options(MEM_ROOT *tmp_root, st_plugin_int *tmp,
+       plugin_load_option = (enum_plugin_load_option) * (ulong *)opts[0].value;
+   }
+ 
++  /*
++   * xengine and xengine_* plugins should be on or off at the same time.
++   */
++  static enum_plugin_load_option xengine_load_options = PLUGIN_OFF;
++  if (!my_strcasecmp(&my_charset_latin1, tmp->name.str, XENGINE_PLUGIN_NAME)) {
++    xengine_load_options = plugin_load_option;
++  } else if (tmp->name.length >= XENGINE_NAME_SIZE &&
++             !memcmp(tmp->name.str, XENGINE_PLUGIN_NAME, XENGINE_NAME_SIZE)) {
++    plugin_load_option = xengine_load_options;
++  }
++
+   disable_plugin = (plugin_load_option == PLUGIN_OFF);
+   tmp->load_option = plugin_load_option;
+ 
+diff --git a/sql/sql_table.cc b/sql/sql_table.cc
+index 6e4cb9d03ac..6e3676c9333 100644
+--- a/sql/sql_table.cc
++++ b/sql/sql_table.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /*
+    Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+@@ -7974,9 +7978,16 @@ static bool set_table_default_charset(THD *thd, HA_CREATE_INFO *create_info,
+     let's fetch the database default character set and
+     apply it to the table.
+   */
++  bool is_xengine = create_info->db_type->db_type == DB_TYPE_XENGINE;
+   if (create_info->default_table_charset == nullptr) {
+-    if (get_default_db_collation(schema, &create_info->default_table_charset))
++    if (get_default_db_collation(schema, &create_info->default_table_charset)) {
+       return true;
++    }
++
++    //for xengine, is collation is 0900_ai_ci, we replace it by general_ci
++    if (is_xengine && create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
++      create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
++    }
+   } else {
+     DBUG_ASSERT((create_info->used_fields & HA_CREATE_USED_CHARSET) == 0 ||
+                 (create_info->used_fields & HA_CREATE_USED_DEFAULT_CHARSET) ||
+@@ -7986,8 +7997,13 @@ static bool set_table_default_charset(THD *thd, HA_CREATE_INFO *create_info,
+     if ((create_info->used_fields & HA_CREATE_USED_DEFAULT_CHARSET) &&
+         !(create_info->used_fields & HA_CREATE_USED_DEFAULT_COLLATE) &&
+         create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
+-      create_info->default_table_charset =
++
++      if (!is_xengine) {
++        create_info->default_table_charset =
+           thd->variables.default_collation_for_utf8mb4;
++      } else {
++        create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
++      }
+ 
+       // ALTER TABLE ... CONVERT TO CHARACTER SET ...
+       if (create_info->used_fields & HA_CREATE_USED_CHARSET) {
+@@ -7996,8 +8012,13 @@ static bool set_table_default_charset(THD *thd, HA_CREATE_INFO *create_info,
+     }
+   }
+ 
+-  if (create_info->default_table_charset == NULL)
++  if (create_info->default_table_charset == NULL) {
+     create_info->default_table_charset = thd->collation();
++    if (is_xengine &&
++        create_info->default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
++      create_info->default_table_charset = &my_charset_utf8mb4_general_ci;
++    }
++  }
+ 
+   return false;
+ }
+diff --git a/sql/sys_vars.cc b/sql/sys_vars.cc
+index 815ee3a0a4a..f838e696722 100644
+--- a/sql/sys_vars.cc
++++ b/sql/sys_vars.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -148,7 +152,10 @@
+ #include "storage/perfschema/pfs_server.h"
+ #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
+ 
+-TYPELIB bool_typelib = {array_elements(bool_values) - 1, "", bool_values, 0};
++#include "storage/xengine/util/logger.h"
++
++TYPELIB bool_typelib = {array_elements(bool_values) - 1, "", bool_values,
++                        nullptr};
+ 
+ static bool update_buffer_size(THD *, KEY_CACHE *key_cache,
+                                ptrdiff_t offset MY_ATTRIBUTE((unused)),
+@@ -2478,6 +2485,7 @@ static Sys_var_ulong Sys_log_throttle_queries_not_using_indexes(
+     ON_UPDATE(update_log_throttle_queries_not_using_indexes));
+ 
+ static bool update_log_error_verbosity(sys_var *, THD *, enum_var_type) {
++  mysql_set_xengine_info_log_level(log_error_verbosity);
+   return (log_builtins_filter_update_verbosity(log_error_verbosity) < 0);
+ }
+ 
+diff --git a/sql/tc_log.cc b/sql/tc_log.cc
+index 694863651c6..1c1a6f2b4fe 100644
+--- a/sql/tc_log.cc
++++ b/sql/tc_log.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -291,9 +295,39 @@ TC_LOG::enum_result TC_LOG_MMAP::commit(THD *thd, bool all) {
+   ulong cookie = 0;
+   my_xid xid = thd->get_transaction()->xid_state()->get_xid()->get_my_xid();
+ 
+-  if (all && xid)
+-    if (!(cookie = log_xid(xid)))
+-      return RESULT_ABORTED;  // Failed to log the transaction
++  bool is_xengine = false;
++  if (default_storage_engine) {
++    size_t default_engine_len = strlen(default_storage_engine);
++    is_xengine =
++        (default_engine_len == strlen("XENGINE")) &&
++        (!strncasecmp(default_storage_engine, "XENGINE", default_engine_len));
++  }
++
++  if (is_xengine) {
++    Transaction_ctx *trn_ctx = thd->get_transaction();
++
++    bool end_single_stmt_trans = !all && !thd->in_multi_stmt_transaction_mode();
++    bool real_trans = (all || end_single_stmt_trans);
++
++    Transaction_ctx::enum_trx_scope trx_scope =
++        all ? Transaction_ctx::SESSION : Transaction_ctx::STMT;
++
++    /*
++      We log xid only when
++      - is real transaction, if auto-commit statment or full transaction
++      - has update, that would generate xid
++      - has modified more than one engine, has been prepared
++      - storage engine support 2PC
++    */
++    if (real_trans && xid && trn_ctx->rw_ha_count(trx_scope) > 1 &&
++        !trn_ctx->no_2pc(trx_scope))
++      if (!(cookie = log_xid(xid)))
++        return RESULT_ABORTED;  // Failed to log the transaction
++  } else {
++    if (all && xid)
++      if (!(cookie = log_xid(xid)))
++        return RESULT_ABORTED;  // Failed to log the transaction
++  }
+ 
+   if (ha_commit_low(thd, all))
+     return RESULT_INCONSISTENT;  // Transaction logged, but not committed
+@@ -341,6 +375,8 @@ int TC_LOG_MMAP::prepare(THD *thd, bool all) {
+ ulong TC_LOG_MMAP::log_xid(my_xid xid) {
+   mysql_mutex_lock(&LOCK_tc);
+ 
++  DBUG_EXECUTE_IF("tc_log_count",
++                  sql_print_information("tc_log_2pc happened"););
+   while (true) {
+     /* If active page is full - just wait... */
+     while (unlikely(active && active->free == 0))
+diff --git a/storage/xengine/handler/handler_alter.cc b/storage/xengine/handler/handler_alter.cc
+index aff0c693e79..e75b404cbcd 100644
+--- a/storage/xengine/handler/handler_alter.cc
++++ b/storage/xengine/handler/handler_alter.cc
+@@ -397,7 +397,7 @@ my_core::enum_alter_inplace_result ha_xengine::check_if_supported_inplace_alter(
+                   Alter_inplace_info::ADD_COLUMN);
+ 
+       DBUG_ASSERT((key_part->field->auto_flags & Field::NEXT_NUMBER) ==
+-                  key_part->field->flags & AUTO_INCREMENT_FLAG);
++                  !!(key_part->field->flags & AUTO_INCREMENT_FLAG));
+ 
+       if (key_part->field->flags & AUTO_INCREMENT_FLAG) {
+         /* We cannot assign an AUTO_INCREMENT
+diff --git a/strings/ctype-simple.cc b/strings/ctype-simple.cc
+index 6a9dbbb5d59..a0ed5e40fda 100644
+--- a/strings/ctype-simple.cc
++++ b/strings/ctype-simple.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2002, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This program is free software; you can redistribute it and/or modify
+@@ -1494,7 +1498,7 @@ uint my_strxfrm_flag_normalize(uint flags) {
+ 
+ size_t my_strxfrm_pad(const CHARSET_INFO *cs, uchar *str, uchar *frmend,
+                       uchar *strend, uint nweights, uint flags) {
+-  if (nweights && frmend < strend) {
++  if (nweights && frmend < strend && !(flags & MY_STRXFRM_NOPAD_WITH_SPACE)) {
+     // PAD SPACE behavior.
+     uint fill_length = MY_MIN((uint)(strend - frmend), nweights * cs->mbminlen);
+     cs->cset->fill(cs, (char *)frmend, fill_length, cs->pad_char);
+diff --git a/strings/ctype-uca.cc b/strings/ctype-uca.cc
+index ff262219706..adbf68c69fc 100644
+--- a/strings/ctype-uca.cc
++++ b/strings/ctype-uca.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2004, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This library is free software; you can redistribute it and/or
+@@ -2070,7 +2074,7 @@ static size_t my_strnxfrm_uca(const CHARSET_INFO *cs, Mb_wc mb_wc, uchar *dst,
+     if (dst < de) *dst++ = s_res & 0xFF;
+   }
+ 
+-  if (dst < de) {
++  if (dst < de && !(flags & MY_STRXFRM_NOPAD_WITH_SPACE)) {
+     /*
+       PAD SPACE behavior.
+ 
+diff --git a/strings/ctype-utf8.cc b/strings/ctype-utf8.cc
+index b69b4b447f9..91e6e5d6cb3 100644
+--- a/strings/ctype-utf8.cc
++++ b/strings/ctype-utf8.cc
+@@ -1,3 +1,7 @@
++/*
++ * Portions Copyright (c) 2020, Alibaba Group Holding Limited.
++ */
++
+ /* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ 
+    This library is free software; you can redistribute it and/or
+@@ -5303,7 +5307,7 @@ static inline size_t my_strnxfrm_unicode_tmpl(const CHARSET_INFO *cs,
+   }
+ 
+ pad:
+-  if (dst < de && nweights)  // PAD SPACE behavior.
++  if (dst < de && nweights && !(flags & MY_STRXFRM_NOPAD_WITH_SPACE))  // PAD SPACE behavior.
+     dst += my_strxfrm_pad_nweights_unicode(dst, de, nweights);
+ 
+   if ((flags & MY_STRXFRM_PAD_TO_MAXLEN) && dst < de)
+@@ -5373,7 +5377,7 @@ size_t my_strnxfrm_unicode_full_bin(const CHARSET_INFO *cs, uchar *dst,
+         if (dst < de) *dst++ = 0x20;
+       }
+     }
+-  } else {
++  } else if (!(flags & MY_STRXFRM_NOPAD_WITH_SPACE)) {
+     // Regular PAD SPACE behavior.
+     for (; dst < de && nweights; nweights--) {
+       *dst++ = 0x00;

@@ -1,0 +1,2 @@
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_recycle.purge_table(`xxxx`.table);

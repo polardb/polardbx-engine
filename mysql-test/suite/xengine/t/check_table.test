@@ -1,0 +1,29 @@
+--source suite/xengine/include/have_xengine.inc
+
+# 
+# CHECK TABLE statements
+#
+# Note: the output is likely to be different for the engine under test,
+# in which case rdiff will be needed. Or, the output might say that
+# the storage engine does not support CHECK.
+#
+
+--source check_table.inc
+
+DROP TABLE IF EXISTS t2;
+CREATE TABLE t2 (
+    id INT,
+    data CHAR(20),
+    PRIMARY KEY(data(7)),
+    KEY idx_data(data(10)),
+    UNIQUE KEY idx_data2(data))
+ENGINE=XENGINE,
+COLLATE=utf8mb4_general_ci;
+
+INSERT INTO t2 VALUES(1, '123456');
+INSERT INTO t2 VALUES(2, '123456982357894275');
+
+CHECK TABLE t2;
+
+DROP TABLE t2;
+--source suite/xengine/include/check_xengine_log_error.inc

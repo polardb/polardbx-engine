@@ -1,0 +1,26 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+# Restart the slave with a different secure path.
+[connection slave]
+include/assert.inc [Datadir is the new secure file path]
+include/start_slave.inc
+[connection master]
+create table t2(a int not null auto_increment, b int, primary key(a)) engine=innodb;
+start transaction;
+insert into t2(b) values (1);
+insert into t2(b) values (2);
+load data infile '../../std_data/rpl_loaddata.dat' into table t2;
+load data infile '../../std_data/rpl_loaddata.dat' into table t2;
+commit;
+include/sync_slave_sql_with_master.inc
+# Restore the old secure path on slave.
+include/assert.inc [Old secure file path is restored.]
+include/start_slave.inc
+include/diff_tables.inc [master:t2, slave:t2]
+[connection master]
+drop table t2;
+include/sync_slave_sql_with_master.inc
+include/rpl_end.inc

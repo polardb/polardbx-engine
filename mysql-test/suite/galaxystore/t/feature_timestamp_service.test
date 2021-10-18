@@ -1,0 +1,140 @@
+--source include/have_binlog_format_row.inc
+
+call mtr.add_suppression("Timestamp service failed to");
+call mtr.add_suppression("Timestamp service can not reserve");
+
+connect(con_root, 127.0.0.1, root,,);
+connect(con_root_aux, 127.0.0.1, root,,);
+connection con_root;
+
+--echo ###########################################
+--echo functionality test for timestamp service
+--echo ###########################################
+
+create database mydb;
+use mydb;
+
+# wrong number of parameters provided, error expected
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_tso.get_timestamp();
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_tso.get_timestamp("mydb");
+
+# wrong name of timestamp sequence provided, error expected
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_tso.get_timestamp("mydb", 'sx');
+
+# create timestamp sequence
+create sequence s1 timestamp;
+
+# blank-string parameters provided, error expected
+--error ER_TIMESTAMP_SERVICE_ERROR
+call dbms_tso.get_timestamp("", "", 1);
+
+--error ER_TIMESTAMP_SERVICE_ERROR
+call dbms_tso.get_timestamp("mydb", "", 1);
+
+--error ER_TIMESTAMP_SERVICE_ERROR
+call dbms_tso.get_timestamp("", "s1", 1);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_tso.get_timestamp("mydb", "s1", -1);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_tso.get_timestamp("mydb", "s1", 99999999999999999999);
+
+# 0 is not a valid value for the 3rd parameter, error expected
+--error ER_TIMESTAMP_SERVICE_ERROR
+call dbms_tso.get_timestamp("mydb", "s1", 0);
+
+# big batch size is specified, error expected
+--error ER_TIMESTAMP_SERVICE_ERROR
+call dbms_tso.get_timestamp("mydb", "s1", 90000);
+
+# correct parameters provided, succeed
+--replace_column 1 #
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+
+drop sequence s1;
+
+--echo ###########################################
+--echo simulate error
+--echo ###########################################
+
+create sequence s1 cache 5 timestamp;
+
+SET @@SESSION.debug = "+d,sequence_reload_retry_timeout";
+--error ER_SEQUENCE_RETRY_TIMEOUT
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+
+SET @@SESSION.debug = "-d,sequence_reload_retry_timeout";
+--replace_column 1 #
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+
+SET @@SESSION.debug = "+d,sequence_quick_read_retry_timeout";
+--error ER_SEQUENCE_RETRY_TIMEOUT
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+
+SET @@SESSION.debug = "-d,sequence_quick_read_retry_timeout";
+--replace_column 1 #
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+
+drop sequence s1;
+
+--echo ###########################################
+--echo misc test
+--echo ###########################################
+
+# ---- call the proc within transaction ----
+
+create table t1(c1 int) engine = innodb;
+insert into t1 values(1);
+
+create sequence s1 cache 5 timestamp;
+
+begin;
+insert into t1 values(2);
+
+# admin proc will cause implicit transaction commit
+--replace_column 1 #
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+
+rollback;
+
+# this table should have 2 data rows
+select * from t1;
+
+# ---- compare timestamp value got from proc and native sequence engine API ----
+
+LET $ts_value_proc = `call dbms_tso.get_timestamp("mydb", "s1", 1)`;
+LET $ts_value_seq = `select nextval(s1)`;
+
+if ($ts_value_proc >= $ts_value_seq)
+{
+  --echo "Error : Timestamp value got in the later time should be bigger"
+  --echo "timestamp value (1st) $ts_value_proc"
+  --echo "timestamp value (2nd) $ts_value_seq"
+}
+
+# ---- get timestamp value from 2 different sessions ----
+
+begin;
+--replace_column 1 # 2 #
+select currval, nextval from s1;
+
+# call the proc with another transaction
+connection con_root_aux;
+
+--replace_column 1 #
+call dbms_tso.get_timestamp("mydb", "s1", 1);
+
+# switch back to the first session and commit transaction
+
+connection con_root;
+
+commit;
+
+drop table t1;
+drop sequence s1;
+drop database mydb;

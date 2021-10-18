@@ -1,0 +1,39 @@
+--source suite/xengine/include/have_xengine.inc
+
+
+# test instant add col
+--disable_warnings
+drop table if exists t_2;
+--enable_warnings
+
+
+CREATE TABLE t_2 (a int auto_increment primary key)engine=xengine;                             
+# not suuport other create option except COMMENT option
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t_2 ADD COLUMN b INT NOT NULL, ALGORITHM=instant, KEY_BLOCK_SIZE=100 COMMENT 'Col b copy-added';
+
+# support succeed
+ALTER TABLE t_2 ADD COLUMN b INT NOT NULL, ALGORITHM=instant;
+
+show create table t_2;
+drop table t_2;
+
+
+# test inplace add index
+
+--disable_warnings
+drop table if exists t_3;
+--enable_warnings
+CREATE TABLE t_3 (a int auto_increment primary key, b INT NOT NULL)engine=xengine;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t_3 ADD INDEX idx(b), ALGORITHM= INPLACE, KEY_BLOCK_SIZE=100 COMMENT 'Index on b inplace-added';
+ALTER TABLE t_3 ADD INDEX idx(b), ALGORITHM= INPLACE,  COMMENT 'Index on b inplace-added';
+show create table t_3;
+drop table t_3;
+
+
+
+
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

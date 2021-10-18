@@ -1,0 +1,5 @@
+--source include/have_case_insensitive_file_system.inc
+--source suite/xengine_main/include/mysqlshow.inc
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

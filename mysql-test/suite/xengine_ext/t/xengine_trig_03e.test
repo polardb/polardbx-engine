@@ -1,0 +1,16 @@
+#### suite/xengine_ext/t/innodb_trig_03e.test
+
+let $engine_type= XENGINE;
+
+# Create some objects needed in many testcases
+USE test;
+
+--source suite/xengine_ext/triggers/triggers_03e_db_level.inc
+--source suite/xengine_ext/triggers/triggers_03e_table_level.inc
+--source suite/xengine_ext/triggers/triggers_03e_global_db_mix.inc
+--source suite/xengine_ext/triggers/triggers_03e_db_table_mix.inc
+--source suite/xengine_ext/triggers/triggers_03e_prepare.inc
+--source suite/xengine_ext/triggers/triggers_03e_definer.inc
+--source suite/xengine_ext/triggers/triggers_03e_transaction.inc
+--source suite/xengine_ext/triggers/triggers_03e_columns.inc
+

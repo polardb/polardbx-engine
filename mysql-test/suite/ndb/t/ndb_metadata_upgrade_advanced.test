@@ -1,0 +1,202 @@
+--source include/have_multi_ndb.inc
+--source suite/ndb/include/backup_restore_setup.inc
+
+#
+# The table structures are as follows:
+# CREATE TABLE t1 (
+#   c1 INT PRIMARY KEY AUTO_INCREMENT,
+#   c2 INT UNSIGNED NOT NULL,
+#   c3 FLOAT,
+#   c4 VARCHAR(255),
+#   c5 TIME,
+#   c6 DATE,
+#   c7 DATETIME,
+#   c8 BLOB,
+#   c9 CHAR(30),
+#   c10 VARBINARY(255),
+#   UNIQUE KEY xc2(c2)
+# ) ENGINE NDB;
+#
+# INSERT INTO t1 VALUES(1,1,2.5,'a','23:59:59','2018-01-30','2018-01-30 13:46:00','b','c','d');
+#
+# CREATE TABLE t2 (
+#   c1 int PRIMARY KEY,
+#   c2 int GENERATED ALWAYS AS (c1*c1)
+# ) ENGINE NDB;
+#
+# INSERT INTO t2(c1) VALUES(2);
+#
+# CREATE TABLE t3 (
+#   c1 int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+#   c2 varchar(100),
+#   c3 varchar(100)
+# ) ENGINE NDB
+#   COMMENT="NDB_TABLE=READ_BACKUP=0,PARTITION_BALANCE=FOR_RP_BY_NODE";
+#
+# INSERT INTO t3 VALUES(1,'a','a');
+#
+
+--exec $NDB_RESTORE -b 1 -n 1 -m -r --disable-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_advanced_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b 1 -n 2 -r $NDB_SAVED_BACKUPS/metadata_upgrade_advanced_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b 1 -n 1 --rebuild-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_advanced_backup >> $NDB_TOOLS_OUTPUT
+
+--echo Backup from 7.5 restored
+
+--echo Restart server 1 to trigger schema synchronization
+let $mysqld_name=mysqld.1.1;
+--source include/restart_mysqld.inc
+
+connection server2;
+--echo Restart server 2 to trigger schema synchronization
+let $mysqld_name=mysqld.2.1;
+--source include/restart_mysqld.inc
+
+# Turn off metadata check so it doesn't intefere with discovery/schema synch
+SET @old_ndb_metadata_check_server2 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
+connection server1;
+SET @old_ndb_metadata_check_server1 = @@global.ndb_metadata_check;
+SET GLOBAL ndb_metadata_check = false;
+
+# Check schema and then perform DML and DDL on the tables
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+
+ALTER TABLE t1 DROP COLUMN c9;
+INSERT INTO t1 VALUES (2,2,2.5,'a','23:59:59','2018-01-30','2018-01-30 13:46:00','b','d');
+--sorted_result
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+SHOW CREATE TABLE t2;
+--sorted_result
+SELECT * FROM t2;
+
+ALTER TABLE t2 RENAME t4;
+INSERT INTO t4(c1) VALUES (3);
+--sorted_result
+SELECT * FROM t4;
+
+DROP TABLE t4;
+
+SHOW CREATE TABLE t3;
+--sorted_result
+SELECT * FROM t3;
+
+ALTER TABLE t3 ALGORITHM=COPY, ADD COLUMN c4 int;
+INSERT INTO t3 VALUES (2,'b','b',2);
+--sorted_result
+SELECT * FROM t3;
+
+DROP TABLE t3;
+
+--exec $NDB_RESTORE -b 1 -n 1 -m -r --disable-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_advanced_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b 1 -n 2 -r $NDB_SAVED_BACKUPS/metadata_upgrade_advanced_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b 1 -n 1 --rebuild-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_advanced_backup >> $NDB_TOOLS_OUTPUT
+
+# Test upgrade of the metadata during discovery from NDB
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+
+ALTER TABLE t1 DROP COLUMN c9;
+INSERT INTO t1 VALUES (2,2,2.5,'a','23:59:59','2018-01-30','2018-01-30 13:46:00','b','d');
+--sorted_result
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+SHOW CREATE TABLE t2;
+--sorted_result
+SELECT * FROM t2;
+
+connection server2;
+SHOW CREATE TABLE t2;
+connection server1;
+
+ALTER TABLE t2 RENAME t4;
+INSERT INTO t4(c1) VALUES (3);
+--sorted_result
+SELECT * FROM t4;
+
+DROP TABLE t4;
+
+SHOW CREATE TABLE t3;
+--sorted_result
+SELECT * FROM t3;
+
+ALTER TABLE t3 ALGORITHM=COPY, ADD COLUMN c4 int;
+INSERT INTO t3 VALUES (2,'b','b',2);
+--sorted_result
+SELECT * FROM t3;
+
+DROP TABLE t3;
+
+# Reset metadata check value
+--connection server2
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server2;
+--connection server1
+SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server1;
+
+#
+# Metadata upgrade of a disk data table
+#
+# The table structure is as follows:
+#
+# CREATE LOGFILE GROUP lg1
+#   ADD UNDOFILE 'lg1_undofile.dat'
+#   INITIAL_SIZE 1M
+#   UNDO_BUFFER_SIZE = 1M
+#   ENGINE NDB;
+#
+# CREATE TABLESPACE ts1
+#   ADD DATAFILE 'ts1_datafile.dat'
+#   USE LOGFILE GROUP lg1
+#   INITIAL_SIZE 2M
+#   ENGINE NDB;
+#
+# CREATE TABLE t1 (
+#   a INT PRIMARY KEY,
+#   b VARCHAR(255)
+# ) ENGINE NDB
+#   TABLESPACE ts1
+#   STORAGE DISK;
+#
+# INSERT INTO t1 VALUES (1,'Sad Cypress');
+#
+
+--exec $NDB_RESTORE -b 1 -n 1 -m -r --disable-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_disk_data_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b 1 -n 2 -r $NDB_SAVED_BACKUPS/metadata_upgrade_disk_data_backup >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b 1 -n 1 --rebuild-indexes $NDB_SAVED_BACKUPS/metadata_upgrade_disk_data_backup >> $NDB_TOOLS_OUTPUT
+--echo Backup from 7.6 restored
+
+--echo Restart server 1 to trigger schema synchronization
+let $mysqld_name=mysqld.1.1;
+--source include/restart_mysqld.inc
+connection server2;
+--echo Restart server 2 to trigger schema synchronization
+let $mysqld_name=mysqld.2.1;
+--source include/restart_mysqld.inc
+connection server1;
+
+# Check schema and then perform DML and DDL on the tables
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+
+ALTER TABLE t1 DROP COLUMN b;
+INSERT INTO t1 VALUES (2);
+--sorted_result
+SELECT * FROM t1;
+
+DROP TABLE t1;
+ALTER TABLESPACE ts1
+  DROP DATAFILE 'ts1_datafile.dat';
+DROP TABLESPACE ts1;
+DROP LOGFILE GROUP lg1
+  ENGINE NDB;
+
+let NDB_RESTORE=;
+--remove_file $NDB_TOOLS_OUTPUT

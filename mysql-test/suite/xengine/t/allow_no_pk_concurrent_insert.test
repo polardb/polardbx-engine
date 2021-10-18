@@ -1,0 +1,27 @@
+
+#
+# Tests concurrent inserts for tables with no primary key.
+#
+
+--source suite/xengine/include/have_xengine.inc
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+--echo # Binary must be compiled with debug for this test
+--source include/have_debug.inc
+
+create user sbtest IDENTIFIED WITH mysql_native_password;
+grant all privileges on *.* to 'sbtest'@'%';
+
+# create the actual table
+CREATE TABLE t1 (a INT) ENGINE=xengine;
+
+let $exec = python suite/xengine/t/xengine_concurrent_insert.py sbtest 127.0.0.1 $MASTER_MYPORT test t1 100 4;
+exec $exec;
+
+SELECT COUNT(*) from t1;
+DROP USER 'sbtest'@'%';
+DROP TABLE t1;
+--source suite/xengine/include/check_xengine_log_error.inc

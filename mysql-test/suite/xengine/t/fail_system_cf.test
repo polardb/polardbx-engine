@@ -1,0 +1,17 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# Any create table using the system column family should fail
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (i INT, PRIMARY KEY (i) COMMENT '__system__') ENGINE = XENGINE;
+
+#cleanup
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+--source suite/xengine/include/check_xengine_log_error.inc

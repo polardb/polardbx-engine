@@ -1,0 +1,107 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+
+* max_heap_table_size *
+SET @restore_slave_max_heap_table_size=@@global.max_heap_table_size;
+SET @@global.max_heap_table_size=HEAP_SIZE;
+SET @@session.max_heap_table_size=HEAP_SIZE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b VARCHAR(10), c VARCHAR(RECORD_SIZE)) ENGINE=MEMORY;
+SELECT COUNT(*)=ROW_COUNT FROM t1;
+COUNT(*)=ROW_COUNT
+1
+include/sync_slave_sql_with_master.inc
+SELECT COUNT(*)=ROW_COUNT FROM t1 WHERE b='master' GROUP BY b ORDER BY b;
+COUNT(*)=ROW_COUNT
+1
+TRUNCATE TABLE t1;
+SELECT COUNT(*)<ROW_COUNT AND COUNT(*)>0 FROM t1 WHERE b='slave' GROUP BY b ORDER BY b;
+COUNT(*)<ROW_COUNT AND COUNT(*)>0
+1
+SELECT COUNT(*)<ROW_COUNT AND COUNT(*)>0 FROM t2 WHERE b='slave' GROUP BY b ORDER BY b;
+COUNT(*)<ROW_COUNT AND COUNT(*)>0
+1
+DROP TABLE IF EXISTS t1,t2;
+
+* storage_engine *
+SET @restore_master_storage_engine=@@global.default_storage_engine;
+SET @@global.default_storage_engine=InnoDB;
+SET @@session.default_storage_engine=InnoDB;
+SET @restore_slave_storage_engine=@@global.default_storage_engine;
+SET @@global.default_storage_engine=Memory;
+SET @@session.default_storage_engine=Memory;
+CREATE TABLE t1 (a INT NOT NULL PRIMARY KEY, b VARCHAR(10));
+CREATE TABLE t2 (a INT NOT NULL PRIMARY KEY, b VARCHAR(10)) ENGINE=InnoDB;
+include/sync_slave_sql_with_master.inc
+CREATE TABLE t3 (a INT NOT NULL PRIMARY KEY, b VARCHAR(10));
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET @@global.default_storage_engine=InnoDB;
+SET @@session.default_storage_engine=InnoDB;
+DROP TABLE IF EXISTS t1,t2,t3;
+
+* sql_mode *
+SET @@global.sql_mode=ANSI;
+SET @@session.sql_mode=ANSI;
+SET @@global.sql_mode=TRADITIONAL;
+SET @@session.sql_mode=TRADITIONAL;
+CREATE TABLE t1 (a INT NOT NULL PRIMARY KEY, b VARCHAR(10), c DATE);
+INSERT INTO t1 VALUES (1, 'master', '0000-00-00');
+SELECT * FROM t1 ORDER BY a;
+a	b	c
+1	master	0000-00-00
+include/sync_slave_sql_with_master.inc
+INSERT INTO t1 VALUES (1, 'slave', '0000-00-00');
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'c' at row 1
+SELECT * FROM t1 ORDER BY a;
+a	b	c
+1	master	0000-00-00
+SET @@global.sql_mode=DEFAULT;
+SET @@session.sql_mode=DEFAULT;
+SET @@global.sql_mode=DEFAULT;
+SET @@session.sql_mode=DEFAULT;
+DROP TABLE t1;
+
+*** clean up ***
+SET @@global.default_storage_engine=@restore_master_storage_engine;
+include/sync_slave_sql_with_master.inc
+SET @@global.max_heap_table_size=@restore_slave_max_heap_table_size;
+SET @@global.default_storage_engine=@restore_slave_storage_engine;
+
+call mtr.add_suppression("The table 't[12]' is full");
+include/rpl_end.inc

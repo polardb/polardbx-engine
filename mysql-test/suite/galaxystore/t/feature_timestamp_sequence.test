@@ -1,0 +1,113 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+connection master;
+create database s_db;
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+create user normal_4@'%' identified by 'pass';
+
+grant all on s_db.* to normal_1@'%' ;
+grant all on test.* to normal_2@'%' ;
+grant all on s_db.* to normal_3@'%' ;
+grant all on test.* to normal_4@'%' ;
+
+--sync_slave_with_master
+
+connect(m_normal_1, 127.0.0.1, normal_1, pass, s_db, $MASTER_MYPORT);
+connect(m_normal_2, 127.0.0.1, normal_2, pass, test, $MASTER_MYPORT);
+
+connect(s_normal_3, 127.0.0.1, normal_3, pass, s_db, $SLAVE_MYPORT);
+connect(s_normal_4, 127.0.0.1, normal_4, pass, test, $SLAVE_MYPORT);
+
+
+connection slave;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+
+--echo ###########################################
+--echo master and slave sync sequence.
+--echo ###########################################
+
+connection master;
+use s_db;
+
+create sequence s1;
+show create table s1;
+
+--sync_slave_with_master
+connection slave;
+use s_db;
+show create table s1;
+
+connection master;
+use s_db;
+drop sequence s1;
+
+--echo ###########################################
+--echo invalid timestamp sequence
+--echo ###########################################
+connection master;
+use s_db;
+
+create sequence s1 timestamp;
+
+--error ER_SEQUENCE_INVALID
+create sequence s2 cache 10000 timestamp;
+
+create sequence s3 cycle timestamp;
+
+drop sequence s1;
+drop sequence s3;
+
+create sequence s1 cache 5 timestamp;
+
+--replace_column 1 #
+select nextval(s1);
+--replace_column 1 #
+select currval(s1);
+
+drop sequence s1;
+
+--echo ###########################################
+--echo simulate error
+--echo ###########################################
+connection master;
+use s_db;
+
+create sequence s1 cache 5 timestamp;
+
+SET @@SESSION.debug = "+d,sequence_reload_retry_timeout";
+--error ER_SEQUENCE_RETRY_TIMEOUT
+select nextval(s1);
+
+SET @@SESSION.debug = "-d,sequence_reload_retry_timeout";
+--replace_column 1 #
+select nextval(s1);
+
+SET @@SESSION.debug = "+d,sequence_quick_read_retry_timeout";
+--error ER_SEQUENCE_RETRY_TIMEOUT
+select nextval(s1);
+
+SET @@SESSION.debug = "-d,sequence_quick_read_retry_timeout";
+--replace_column 1 #
+select nextval(s1);
+
+
+drop sequence s1;
+
+
+connection master;
+drop database s_db;
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+drop user normal_4@'%';
+
+connection slave;
+set global read_only = @start_read_only;
+
+connection master;
+--sync_slave_with_master
+--source include/rpl_end.inc

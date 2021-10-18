@@ -1,0 +1,5 @@
+--source include/have_example_plugin.inc
+
+SELECT @@global.example_enum_var = 'e2';
+
+--source suite/xengine/include/check_xengine_log_error.inc

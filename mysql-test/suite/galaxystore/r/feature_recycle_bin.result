@@ -1,0 +1,415 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("Fail to recycle table");
+call mtr.add_suppression("Incorrect key file");
+create database db_recycle;
+create database db_recycle_dummy;
+create user super_1@'%' identified by 'pass';
+create user super_2@'%' identified by 'pass';
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+create user normal_4@'%' identified by 'pass';
+create user normal_5@'%' identified by 'pass';
+grant all on *.* to super_1@'%';
+grant all on *.* to super_2@'%';
+grant all on db_recycle.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_1@'%' ;
+grant create tablespace on *.* to normal_1@'%' ;
+grant SYSTEM_VARIABLES_ADMIN on *.* to normal_1@'%';
+grant all on db_recycle_dummy.* to normal_2@'%' ;
+grant all on db_recycle.* to normal_3@'%' ;
+grant all on __recycle_bin__.* to normal_3@'%' ;
+grant all on db_recycle_dummy.* to normal_4@'%' ;
+grant all on __recycle_bin__.* to normal_5@'%' ;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+------------------------------------------------------
+1. Privileges
+-- Still require related privileges if want to
+show recycle bin db;
+-- No one can alter db except super_acl user;
+------------------------------------------------------
+show databases;
+Database
+__recycle_bin__
+db_recycle
+information_schema
+test
+show databases;
+Database
+__recycle_bin__
+db_recycle
+information_schema
+test
+show databases;
+Database
+db_recycle_dummy
+information_schema
+test
+show databases;
+Database
+db_recycle_dummy
+information_schema
+test
+use __recycle_bin__;
+create table t1 (id int);
+drop table t1;
+show tables;
+Tables_in___recycle_bin__
+1.1 dbms_recycle.purge_table still require db.table privileges;
+set global recycle_scheduler=off;
+use db_recycle;
+create table t1(id int);
+drop table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+call dbms_recycle.purge_table("__innodb_165");
+ERROR 42000: DROP command denied to user 'normal_2'@'localhost' for table '__innodb_165'
+call dbms_recycle.purge_table("__innodb_165");
+ERROR 42000: DROP command denied to user 'normal_5'@'localhost' for table 't1'
+show grants;
+Grants for normal_1@%
+GRANT CREATE TABLESPACE ON *.* TO `normal_1`@`%`
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO `normal_1`@`%`
+GRANT ALL PRIVILEGES ON `__recycle_bin__`.* TO `normal_1`@`%`
+GRANT ALL PRIVILEGES ON `db_recycle`.* TO `normal_1`@`%`
+call dbms_recycle.purge_table("__innodb_165");
+include/assert.inc [assert that the purge has not been added to binlog]
+set global recycle_scheduler=on;
+------------------------------------------------------
+1. Drop table
+-- Related object:
+Foreign key:
+Trigger:
+View:
+Constraint:
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=INNODB;
+CREATE TABLE c1 (
+id INT,
+parent_id INT,
+INDEX par_ind (parent_id),
+FOREIGN KEY (parent_id)
+REFERENCES p1(id)
+ON DELETE CASCADE
+) ENGINE=INNODB;
+create table l1(id int);
+CREATE TRIGGER tri_1
+before INSERT ON c1 FOR EACH ROW
+BEGIN
+INSERT INTO l1 value(1);
+END//
+create view v1 as select * from c1;
+1.1 confirm the trigger, view, foreign key.
+drop table c1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_148	db_recycle	c1	#	#
+show create table __recycle_bin__.__innodb_148;
+Table	Create Table
+__innodb_148	CREATE TABLE `__innodb_148` (
+  `id` int(11) DEFAULT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  KEY `par_ind` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create trigger tri_1;
+ERROR HY000: Trigger does not exist
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`normal_1`@`%` SQL SECURITY DEFINER VIEW `v1` AS select `c1`.`id` AS `id`,`c1`.`parent_id` AS `parent_id` from `c1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'db_recycle.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select * from v1;
+ERROR HY000: View 'db_recycle.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+drop table l1;
+drop view v1;
+drop table p1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+1. Drop parent table
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=INNODB;
+CREATE TABLE c1 (
+id INT,
+parent_id INT,
+INDEX par_ind (parent_id),
+FOREIGN KEY (parent_id)
+REFERENCES p1(id)
+ON DELETE CASCADE
+) ENGINE=INNODB;
+1.1  foreign key.
+drop table p1;
+ERROR HY000: Cannot drop table 'p1' referenced by a foreign key constraint 'c1_ibfk_1' on table 'c1'.
+set foreign_key_checks=off;
+drop table p1;
+insert into c1 values(1, 2);
+commit;
+show create table c1;
+Table	Create Table
+c1	CREATE TABLE `c1` (
+  `id` int(11) DEFAULT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  KEY `par_ind` (`parent_id`),
+  CONSTRAINT `c1_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `p1` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+set foreign_key_checks=on;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_161	db_recycle	p1	#	#
+show create table __recycle_bin__.__innodb_161;
+Table	Create Table
+__innodb_161	CREATE TABLE `__innodb_161` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table c1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+1. Drop in procedure
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=INNODB;
+create procedure proc_1()
+begin
+drop table p1;
+end//
+call proc_1();
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_161	db_recycle	p1	#	#
+show create table __recycle_bin__.__innodb_161;
+Table	Create Table
+__innodb_161	CREATE TABLE `__innodb_161` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop procedure proc_1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+2. Drop database
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p2 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=INNODB;
+CREATE TABLE c2 (
+id INT,
+parent_id INT,
+self_id INT,
+INDEX id_ind (id),
+INDEX par_ind (parent_id),
+INDEX sel_ind (self_id),
+FOREIGN KEY (self_id)
+REFERENCES c2(id),
+FOREIGN KEY (parent_id)
+REFERENCES p2(id)
+ON DELETE CASCADE
+) ENGINE=INNODB;
+create table l2(id int);
+CREATE TRIGGER tri_1
+before INSERT ON c2 FOR EACH ROW
+BEGIN
+INSERT INTO l2 value(1);
+END//
+create view v2 as select * from c2;
+drop database db_recycle;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_149	db_recycle	c2	#	#
+__recycle_bin__	__innodb_158	db_recycle	l2	#	#
+__recycle_bin__	__innodb_162	db_recycle	p2	#	#
+show create table __recycle_bin__.__innodb_149;
+Table	Create Table
+__innodb_149	CREATE TABLE `__innodb_149` (
+  `id` int(11) DEFAULT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  `self_id` int(11) DEFAULT NULL,
+  KEY `id_ind` (`id`),
+  KEY `par_ind` (`parent_id`),
+  KEY `sel_ind` (`self_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table __recycle_bin__.__innodb_158;
+Table	Create Table
+__innodb_158	CREATE TABLE `__innodb_158` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table __recycle_bin__.__innodb_162;
+Table	Create Table
+__innodb_162	CREATE TABLE `__innodb_162` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+create database db_recycle;
+set global recycle_scheduler=on;
+------------------------------------------------------
+3. read only
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t2 (id int);
+drop table t2;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+set global read_only = on;
+call dbms_recycle.purge_table("__innodb_166");
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+set global read_only = off;
+call dbms_recycle.purge_table("__innodb_166");
+set global recycle_scheduler=on;
+------------------------------------------------------
+4. partition table or general tablespace
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE t3 (
+firstname VARCHAR(25) NOT NULL,
+lastname VARCHAR(25) NOT NULL,
+username VARCHAR(16) NOT NULL,
+email VARCHAR(35),
+joined DATE NOT NULL
+)
+PARTITION BY RANGE( YEAR(joined) ) (
+PARTITION p0 VALUES LESS THAN (1960),
+PARTITION p1 VALUES LESS THAN (1970),
+PARTITION p2 VALUES LESS THAN (1980),
+PARTITION p3 VALUES LESS THAN (1990),
+PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+drop table t3;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle	t3	#	#
+show create table __recycle_bin__.__innodb_167;
+Table	Create Table
+__innodb_167	CREATE TABLE `__innodb_167` (
+  `firstname` varchar(25) NOT NULL,
+  `lastname` varchar(25) NOT NULL,
+  `username` varchar(16) NOT NULL,
+  `email` varchar(35) DEFAULT NULL,
+  `joined` date NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`joined`))
+(PARTITION p0 VALUES LESS THAN (1960) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (1970) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN (1980) ENGINE = InnoDB,
+ PARTITION p3 VALUES LESS THAN (1990) ENGINE = InnoDB,
+ PARTITION p4 VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+call dbms_recycle.purge_table("__innodb_167");
+CREATE TABLESPACE `ts1` ADD DATAFILE 'ts1.ibd' Engine=InnoDB;
+create table t4(id int) tablespace ts1;
+drop table t4;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_168	db_recycle	t4	#	#
+show create table __recycle_bin__.__innodb_168;
+Table	Create Table
+__innodb_168	CREATE TABLE `__innodb_168` (
+  `id` int(11) DEFAULT NULL
+) /*!50100 TABLESPACE `ts1` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call dbms_recycle.purge_table("__innodb_168");
+set global recycle_scheduler=on;
+drop tablespace ts1;
+------------------------------------------------------
+5. recycle_bin table exists error
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t5(id int);
+drop table t5;
+create table t5(id int);
+drop table t5;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_169	db_recycle	t5	#	#
+call dbms_recycle.purge_table("");
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_recycle.purge_table
+call dbms_recycle.purge_table("__innodb_169");
+set global recycle_scheduler=on;
+------------------------------------------------------
+5.1 fts table didn't support to be recycled
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE t1 (
+id INT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
+title VARCHAR(200),
+content TEXT,
+FULLTEXT INDEX ft_content (content)
+) ENGINE=InnoDB DEFAULT CHARACTER SET gb2312 COLLATE gb2312_chinese_ci;
+drop table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+set global recycle_scheduler=on;
+------------------------------------------------------
+6. purge normal table or noexist table
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table __recycle_bin__.x5(id int);
+call dbms_recycle.purge_table("x5");
+ERROR HY000: Recycle table failed : x5 isn't recycled table
+call dbms_recycle.purge_table("x6");
+ERROR HY000: Recycle table failed : x6 didn't exist
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+drop table __recycle_bin__.x5;
+set global recycle_scheduler=on;
+------------------------------------------------------
+7. simulate handler rename failed.
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t6(id int);
+insert into t6 values(1);
+commit;
+SET @@SESSION.debug = "+d,simulate_crashed_table_error";
+drop table t6;
+ERROR HY000: Incorrect key file for table 't6'; try to repair it
+SET @@SESSION.debug = "-d,simulate_crashed_table_error";
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t6;
+id
+1
+drop table t6;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_170	db_recycle	t6	#	#
+call dbms_recycle.purge_table("__innodb_170");
+set global recycle_scheduler=on;
+drop database db_recycle;
+drop database db_recycle_dummy;
+drop user super_1@'%';
+drop user super_2@'%';
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+drop user normal_4@'%';
+drop user normal_5@'%';
+set global read_only = @start_read_only;
+include/rpl_end.inc

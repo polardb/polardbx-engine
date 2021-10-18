@@ -1,0 +1,11 @@
+SET @start_global_value = @@global.XENGINE_WRITE_DISABLE_WAL;
+SELECT @start_global_value;
+@start_global_value
+0
+SET @start_session_value = @@session.XENGINE_WRITE_DISABLE_WAL;
+SELECT @start_session_value;
+@start_session_value
+0
+"Trying to set variable @@global.XENGINE_WRITE_DISABLE_WAL to 444. It should fail because it is readonly."
+SET @@global.XENGINE_WRITE_DISABLE_WAL   = 444;
+ERROR HY000: Variable 'xengine_write_disable_wal' is a read only variable

@@ -1,0 +1,34 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/not_threadpool.inc
+
+perl;
+  use File::Basename;
+  my $dirname=dirname($ENV{MYSQLTEST_FILE});
+  my @all_tests=<$dirname/*_basic{,_32,_64}.test>;
+  open(F, '>', "$ENV{MYSQLTEST_VARDIR}/tmp/xengine_sysvars.xengine_all_vars.txt") or die;
+  binmode F;
+  print F join "\n", sort map { s/_basic(_32|_64)?\.test$//; basename $_ } @all_tests;
+EOF
+
+create table t1 (test_name text);
+create table t2 (variable_name text);
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval load data infile "$MYSQLTEST_VARDIR/tmp/xengine_sysvars.xengine_all_vars.txt" into table t1;
+
+insert into t2 select variable_name from performance_schema.global_variables where variable_name like "xengine_%";
+insert into t2 select variable_name from performance_schema.session_variables where variable_name like "xengine_%";
+update t2 set variable_name= replace(variable_name, "xengine_concurrent_writable_file_", "xengine_cwf_");
+
+--sorted_result
+select variable_name as `There should be *no* long test name listed below:` from t2
+  where length(variable_name) > 50;
+
+--sorted_result
+select variable_name as `There should be *no* variables listed below:` from t2
+  left join t1 on variable_name=test_name where test_name is null ORDER BY variable_name;
+
+# Cleanup
+drop table t1;
+drop table t2;
+--remove_file $MYSQLTEST_VARDIR/tmp/xengine_sysvars.xengine_all_vars.txt
+

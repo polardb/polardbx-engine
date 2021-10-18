@@ -1,0 +1,22 @@
+show global status like 'Lizard_%';
+Variable_name	Value
+Lizard_txn_undo_log_free_list_length	#
+Lizard_txn_undo_log_cached	#
+Lizard_txn_undo_log_request	#
+Lizard_txn_undo_log_reuse	#
+Lizard_txn_undo_log_free_list_get	#
+Lizard_txn_undo_log_free_list_put	#
+Lizard_txn_undo_log_create	#
+Lizard_txn_undo_log_hash_element	#
+Lizard_txn_undo_log_hash_hit	#
+Lizard_txn_undo_log_hash_miss	#
+Lizard_txn_undo_lost_page_miss_when_safe	#
+Lizard_txn_undo_lost_magic_number_wrong	#
+Lizard_txn_undo_lost_ext_flag_wrong	#
+Lizard_txn_undo_lost_trx_id_mismatch	#
+Lizard_txn_undo_lookup_by_uba	#
+Lizard_cleanout_page_collect	#
+Lizard_cleanout_record_clean	#
+Lizard_cleanout_cursor_collect	#
+Lizard_cleanout_cursor_restore_failed	#
+Lizard_undo_retention_stats	#

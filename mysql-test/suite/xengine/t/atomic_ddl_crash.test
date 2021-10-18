@@ -1,0 +1,370 @@
+--source include/have_debug.inc
+--source include/not_valgrind.inc
+--source include/not_crashrep.inc
+--source include/have_log_bin.inc
+--source suite/xengine/include/have_xengine.inc
+
+#
+#inject crash during create table
+#
+# first injection
+--echo # Test create table crash/recovery rollback.
+set session debug='+d, ddl_log_crash_after_drop_subtable_log';
+select @@debug;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+CREATE TABLE t1 (a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--error ER_NO_SUCH_TABLE
+show create table t1;
+
+#second injection
+set session debug='+d, ddl_log_crash_create_after_xengine_success';
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+CREATE TABLE t1 (a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+-- error ER_NO_SUCH_TABLE
+show create table t1;
+
+eval set session debug = '+d, ddl_log_crash_before_post_ddl_phase';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+CREATE TABLE t1 (a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+drop table t1;
+
+#
+#inject crash after delete_table during truncate table process
+#
+create table t1(a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+insert into t1 values(1,1,1),(2,2,2);
+select * from t1;
+show create table t1;
+eval set session debug = 'd+, ddl_log_crash_truncate_after_delete_table';
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval truncate table t1;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+#expect truncate failure, and rollback atomic
+select * from t1;
+
+eval set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval truncate table t1;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+
+#expect truncate success
+select * from t1;
+drop table t1;
+
+#
+# inject crash for delete table
+#
+create table t1(id int primary key) engine=xengine;
+insert into t1 values(1),(2),(3);
+eval set session debug = 'd+, ddl_log_crash_before_xengine_delete_success';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval DROP TABLE t1;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+select * from t1;
+drop table t1;
+
+create table t1(id int primary key) engine=xengine;
+insert into t1 values(1),(2),(3);
+eval set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval DROP TABLE t1;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+#table should not exists
+--error ER_NO_SUCH_TABLE
+show create table t1;
+
+#
+# TODO  drop table t1,t2,t3, crash after drop t1 finish
+#
+
+#
+# inject crash for alter-copy table
+#
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+#insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),(7,1),(8,1),(9,1),(10,1),(11,1);
+
+#now bulk_load size is 10000 for default
+let $i=10010;
+--disable_query_log
+while($i) {
+  --eval insert into t1 values($i,$i);
+  dec $i;
+}
+--enable_query_log
+
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_after_commit_in_the_middle';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+#set @xengine_commit_in_the_middle_saved = @@xengine_commit_in_the_middle;
+#set @xengine_bulk_load_size_saved = @@xengine_bulk_load_size;
+#set xengine_commit_in_the_middle=1;
+#set xengine_bulk_load_size = 10;
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+alter table t1 drop column c1, ALGORITHM=COPY;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+#select * from t1;
+select count(*) from t1;
+drop table t1;
+
+#
+# inject crash for during rebuild-inplace table
+#
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+let $i=10010;
+--disable_query_log
+while($i) {
+  --eval insert into t1 values($i,$i);
+  dec $i;
+}
+
+select count(*) from t1;
+eval set session debug = 'd+, crash_during_online_index_creation';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+alter table t1 drop column c1, ALGORITHM=INPLACE;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+select count(*) from t1;
+drop table t1;
+
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 drop column c1;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+#ddl already executed successfully
+show create table t1;
+select * from t1;
+check table t1;
+drop table t1;
+
+#
+# inject crash for rename table
+#
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),(7,1),(8,1),(9,1),(10,1),(11,1);
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_before_write_rename_log';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 rename to t2;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+--error ER_NO_SUCH_TABLE
+show create table t2;
+select * from t1;
+check table t1;
+drop table t1;
+
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_after_write_rename_log';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 rename to t2;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+--error ER_NO_SUCH_TABLE
+show create table t2;
+select * from t1;
+check table t1;
+drop table t1;
+
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_after_xengine_rename_success';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 rename to t2;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+--error ER_NO_SUCH_TABLE
+show create table t2;
+select * from t1;
+check table t1;
+drop table t1;
+
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 rename to t2;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--error ER_NO_SUCH_TABLE
+show create table t1;
+show create table t2;
+select * from t2;
+check table t2;
+drop table t2;
+
+#
+# inject crash for alter/inplace/rebuild
+#
+create table t1(id int auto_increment primary key, c1 int, c2 int) engine=xengine;
+insert into t1 values(1,1,1),(2,1,2),(3,1,3),(4,1,4),(5,1,5);
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_before_inplace_ddl_commit';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 drop column c2, algorithm=inplace;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+select * from t1;
+check table t1;
+alter table t1 drop column c2, algorithm=inplace;
+show create table t1;
+select * from t1;
+drop table t1;
+
+
+#
+# inject crash for alter/inplace
+#
+create table t1(id int auto_increment primary key, c1 int, c2 int) engine=xengine;
+insert into t1 values(1,1,1),(2,1,2),(3,1,3),(4,1,4),(5,1,5);
+select count(*) from t1;
+eval set session debug = 'd+, ddl_log_crash_before_inplace_ddl_commit';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 add index idx_c1(c1);
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+select * from t1;
+check table t1;
+alter table t1 add index idx_c1(c1);
+show create table t1;
+
+eval set session debug = 'd+, ddl_log_crash_before_remove_index_ongoing';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 drop index idx_c1, add unique index idx_uk_c2(c2);
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+select * from t1;
+check table t1;
+
+eval set session debug = 'd+, ddl_log_crash_after_remove_index_ongoing';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 drop index idx_c1, add unique index idx_uk_c2(c2);
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+select * from t1;
+check table t1;
+
+eval set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+--eval alter table t1 drop index idx_c1, add unique index idx_uk_c2(c2);
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+show create table t1;
+select * from t1;
+check table t1;
+drop table t1;
+
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

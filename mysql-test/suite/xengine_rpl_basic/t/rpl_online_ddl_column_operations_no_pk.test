@@ -1,0 +1,376 @@
+--source include/master-slave.inc
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+#####drop columns
+#int type
+drop table if exists tt;
+create table tt(id int, c1 int, c2 int, c3 int);
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+select * from tt;
+
+alter table tt drop column c2;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+insert into tt values(4,4,4);
+select * from tt;
+
+#varchar type
+drop table if exists tt_varchar;
+create table tt_varchar(id int, c1 int, c2 varchar(100), c3 int);
+insert into tt_varchar values(1,1,'a',1),(2,2,'b',2),(3,3,'c',3);
+select * from tt_varchar;
+
+alter table tt_varchar drop column c1;
+--let $table_1= tt_varchar
+--source ../include/online_ddl_checksum.inc
+select * from tt_varchar;
+
+alter table tt_varchar drop column c2;
+--let $table_1= tt_varchar
+--source ../include/online_ddl_checksum.inc
+select * from tt_varchar;
+
+#char type
+drop table if exists tt_char;
+create table tt_char(id int, c1 int, c2 char(100), c3 int);
+insert into tt_char values(1,1,'a',1),(2,2,'b',2),(3,3,'c',3);
+select * from tt_char;
+
+alter table tt_char drop column c1;
+--let $table_1= tt_varchar
+--source ../include/online_ddl_checksum.inc
+select * from tt_char;
+
+alter table tt_char drop column c2;
+--let $table_1= tt_varchar
+--source ../include/online_ddl_checksum.inc
+select * from tt_char;
+
+#lob type
+drop table if exists tt_blob;
+create table tt_blob(id int, c1 int, c2 blob, c3 int);
+insert into tt_blob values(1,1,'a',1),(2,2,'b',2),(3,3,'c',3);
+select * from tt_blob;
+
+alter table tt_blob drop column c1;
+--let $table_1= tt_blob
+--source ../include/online_ddl_checksum.inc
+select * from tt_blob;
+
+alter table tt_blob drop column c2;
+--let $table_1= tt_blob
+--source ../include/online_ddl_checksum.inc
+select * from tt_blob;
+
+
+#add columns/drop columns
+#int type
+drop table if exists tt;
+create table tt(id int, c1 int, c2 int, c3 int);
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+select * from tt;
+
+alter table tt drop column c1, add column c4 int default 5;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+alter table tt drop column c4, add column c1 int default 100;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+alter table tt drop column c3, add column c4 int default null;
+select * from tt;
+
+#varchar type
+drop table if exists tt_varchar;
+create table tt_varchar(id int, c1 varchar(100), c2 varchar(300), c3 int);
+insert into tt_varchar values(1,'abc','abc',1),(2,'cde','cde',2),(3,'def','def',3);
+select * from tt_varchar;
+
+alter table tt_varchar drop column c1, add column c4 varchar(100) default 'gggggg';
+select * from tt_varchar;
+--let $table_1= tt_varchar
+--source ../include/online_ddl_checksum.inc
+
+alter table tt_varchar drop column c4, add column c1 varchar(300);
+select * from tt_varchar;
+--let $table_1= tt_varchar
+--source ../include/online_ddl_checksum.inc
+
+alter table tt_varchar drop column c3, add column c4 varchar(100) default 'aaaaaa';
+select * from tt_varchar;
+--let $table_1= tt_varchar
+--source ../include/online_ddl_checksum.inc
+
+
+#char type
+drop table if exists tt_char;
+create table tt_char(id int  , c1 int, c2 char(100), c3 int);
+insert into tt_char values(1,1,'aaaaa',1),(2,2,'bbbbb',2),(3,3,'cccccc',3);
+select * from tt_char;
+
+alter table tt_char drop column c1, add column c4 char(100) default 'gggggg';
+select * from tt_char;
+--let $table_1= tt_char
+--source ../include/online_ddl_checksum.inc
+
+alter table tt_char drop column c4, add column c1 char(200);
+select * from tt_char;
+--let $table_1= tt_char
+--source ../include/online_ddl_checksum.inc
+
+alter table tt_char drop column c3, add column c4 char(100) default 'aaaaaa';
+select * from tt_char;
+--let $table_1= tt_char
+--source ../include/online_ddl_checksum.inc
+
+#lob type
+drop table if exists tt_blob;
+create table tt_blob(id int  , c1 int, c2 blob, c3 int);
+insert into tt_blob values(1,1,'aaaaa',1),(2,2,'bbbbb',2),(3,3,'ccccc',3);
+select * from tt_blob;
+
+--error 1101
+alter table tt_blob drop column c1, add column c4 blob default 'gggggg';
+select * from tt_blob;
+
+alter table tt_blob drop column c1, add column c4 blob;
+select * from tt_blob;
+--let $table_1= tt_blob
+--source ../include/online_ddl_checksum.inc
+
+alter table tt_blob drop column c4, add column c1 blob;
+select * from tt_blob;
+--let $table_1= tt_blob
+--source ../include/online_ddl_checksum.inc
+
+alter table tt_blob drop column c3, add column c4 blob;
+select * from tt_blob;
+--let $table_1= tt_blob
+--source ../include/online_ddl_checksum.inc
+
+#reorder
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 int, c3 int);
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+ALTER TABLE tt MODIFY c2 int AFTER c3 ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+
+ALTER TABLE tt MODIFY c2 int first, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 int, c3 int);
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+ALTER TABLE tt MODIFY c1 int first, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+#table with multi-indexes
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+
+alter table tt add index idx_c1(c1),algorithm=inplace,lock=default;
+alter table tt add index idx_c2(c2),algorithm=inplace,lock=default;
+alter table tt add index idx_c3(c3),algorithm=inplace,lock=default;
+alter table tt add index idx_c1_c2(c1,c2),algorithm=inplace,lock=default;
+
+insert into tt values(4,14,'abc',444);
+
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+check table tt;
+
+alter table tt MODIFY c2 varchar(100) first, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+check table tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+#drop column and drop indexes
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+
+alter table tt add index idx_c1(c1),algorithm=inplace,lock=default;
+alter table tt add index idx_c2(c2),algorithm=inplace,lock=default;
+alter table tt add index idx_c3(c3),algorithm=inplace,lock=default;
+alter table tt add index idx_c1_c2(c1,c2),algorithm=inplace,lock=default;
+
+alter table tt drop column c2, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+check table tt;
+
+alter table tt drop column c1, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+check table tt;
+
+#add new columns, and new column is part of new indexes
+drop table tt;
+create table tt(id int  , c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+
+alter table tt add column c4 int default 5, add index idx_c4(c4),algorithm=inplace,lock=default;
+select * from tt;
+check table tt;
+
+alter table tt add column c5 varchar(100), add index idx_c5(c5),algorithm=inplace,lock=default;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+check table tt;
+
+
+#######
+####extend varchar
+#######
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 varchar(10), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+
+alter table tt MODIFY c2 varchar(30) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+alter table tt MODIFY c2 varchar(63) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+--error 1846
+alter table tt MODIFY c2 varchar(64) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+
+--error 1846
+alter table tt MODIFY c2 varchar(200) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+
+#####
+##shrink varchar
+#####
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+
+--error 1846
+alter table tt MODIFY c2 varchar(90) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+
+--error 1846
+alter table tt MODIFY c2 varchar(30) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+
+#####
+#change column from not null-->null
+#####
+drop table if exists tt;
+create table tt(id int  , c1 int not null, c2 varchar(100) not null, c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+
+alter table tt MODIFY c2 varchar(100), ALGORITHM  = INPLACE, LOCK=DEFAULT;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+alter table tt MODIFY c1 int, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+#####
+#chagne column from null-->not null
+#####
+
+#only strict sql_mode support null-->not null
+select @@sql_mode;
+set @save_sql_mode = @@sql_mode;
+set sql_mode = "STRICT_TRANS_TABLES";
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+
+alter table tt MODIFY c2 varchar(100) not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+alter table tt MODIFY c1 int not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+#include null record
+set sql_mode = "STRICT_ALL_TABLES";
+drop table if exists tt;
+create table tt(id int  , c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+
+alter table tt MODIFY c2 varchar(100) not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+alter table tt MODIFY c1 int not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+--let $table_1= tt
+--source ../include/online_ddl_checksum.inc
+
+set sql_mode = @save_sql_mode;
+
+################
+# add column with autoinc attribute
+################
+#CREATE TABLE t (a INT, b INT);
+#insert into t values(1,1),(2,2),(3,3),(100,100);
+#select * from t;
+#alter table t add column c int auto_increment, add index idx_c(c);
+#select * from t;
+#
+#set auto_increment_increment=10;
+#set auto_increment_offset = 5;
+#drop table t;
+#CREATE TABLE t (a INT, b INT);
+#insert into t values(1,1),(2,2),(3,3),(100,100);
+#select * from t;
+#alter table t add column c int auto_increment, add index idx_c(c);
+#select * from t;
+
+
+#cleanup
+drop table if exists tt;
+drop table if exists tt_varchar;
+drop table if exists tt_char;
+drop table if exists tt_blob;
+drop table if exists t;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc
+
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

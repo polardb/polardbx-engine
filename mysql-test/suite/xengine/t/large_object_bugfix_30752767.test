@@ -1,0 +1,30 @@
+--source suite/xengine/include/have_xengine.inc
+set global xengine_strict_collation_check = off;
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1(c1 int primary key, c2 mediumblob) engine=xengine;
+
+--disable_warnings
+INSERT INTO t1 values (1, repeat('a', 16777216));
+--enable_warnings
+
+set global xengine_force_flush_memtable_now = on;
+sleep 5;
+
+--echo restarting...
+--source include/restart_mysqld.inc
+
+SELECT c1, MD5(c2) FROM t1;
+
+set global xengine_compact_cf = 55834574848;
+sleep 5;
+
+--echo restarting...
+--source include/restart_mysqld.inc
+
+SELECT c1, MD5(c2) FROM t1;
+
+DROP TABLE t1;
+--source suite/xengine/include/check_xengine_log_error.inc

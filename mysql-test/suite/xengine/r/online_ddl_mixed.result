@@ -1,0 +1,402 @@
+##############
+### basic mixture tests of INSTANT/INPLACE/COPY DDL
+##############
+# CREATE TABLE
+#######
+CREATE TABLE t1(
+id INT NOT NULL, col_to_drop INT,
+c1 INT DEFAULT 1, c2 VARCHAR(70),
+col_to_extend VARCHAR(70),
+c3 INT NOT NULL, c4 INT NULL,
+chk_col INT, k1_col INT, k2_col INT,
+UNIQUE KEY k1(k1_col),
+KEY k2(k2_col),
+KEY vis_key(c1) VISIBLE,
+KEY inv_key(c2) INVISIBLE,
+CONSTRAINT old_chk1 CHECK(chk_col < 100),
+CONSTRAINT old_chk2 CHECK(chk_col > 10),
+PRIMARY KEY(col_to_drop)
+) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 2, 'aa', 'abc', 2, 2, 20, 2, 1);
+INSERT INTO t1 VALUES(2, 2, 4, 'bb', 'cde', 4, 4, 40, 4, 1);
+#######
+# INSTANT DDL
+#######
+ALTER TABLE t1
+ADD COLUMN (app_col TEXT, app_col1 INT),
+ALTER c1 DROP DEFAULT,
+ALTER c2 SET DEFAULT 'aaaa',
+RENAME TO tt,
+ALGORITHM = INSTANT;
+SHOW CREATE TABLE tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `col_to_drop` int(11) NOT NULL,
+  `c1` int(11),
+  `c2` varchar(70) COLLATE utf8mb4_general_ci DEFAULT 'aaaa',
+  `col_to_extend` varchar(70) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) NOT NULL,
+  `c4` int(11) DEFAULT NULL,
+  `chk_col` int(11) DEFAULT NULL,
+  `k1_col` int(11) DEFAULT NULL,
+  `k2_col` int(11) DEFAULT NULL,
+  `app_col` text COLLATE utf8mb4_general_ci,
+  `app_col1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`col_to_drop`),
+  UNIQUE KEY `k1` (`k1_col`),
+  KEY `k2` (`k2_col`),
+  KEY `vis_key` (`c1`),
+  KEY `inv_key` (`c2`) /*!80000 INVISIBLE */,
+  CONSTRAINT `old_chk1` CHECK ((`chk_col` < 100)),
+  CONSTRAINT `old_chk2` CHECK ((`chk_col` > 10))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of subtables should be kept same after INSTANT DDL]
+#######
+# Inplace without rebuild
+#######
+ALTER TABLE tt
+ALTER INDEX vis_key INVISIBLE,
+ALTER INDEX inv_key VISIBLE,
+ALGORITHM = INPLACE;
+ALTER TABLE tt
+DROP KEY k1,
+DROP KEY k2,
+ADD INDEX key1(c4) COMMENT 'secondary key1',
+ADD UNIQUE INDEX key2(c3) COMMENT 'unique secondary key2',
+MODIFY COLUMN col_to_extend VARCHAR(100),
+RENAME COLUMN col_to_drop to col_to_drop_later,
+RENAME INDEX vis_key TO iv_key,
+RENAME INDEX inv_key TO v_key,
+RENAME TO t2,
+ALGORITHM = INPLACE;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int(11) NOT NULL,
+  `col_to_drop_later` int(11) NOT NULL,
+  `c1` int(11),
+  `c2` varchar(70) COLLATE utf8mb4_general_ci DEFAULT 'aaaa',
+  `col_to_extend` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) NOT NULL,
+  `c4` int(11) DEFAULT NULL,
+  `chk_col` int(11) DEFAULT NULL,
+  `k1_col` int(11) DEFAULT NULL,
+  `k2_col` int(11) DEFAULT NULL,
+  `app_col` text COLLATE utf8mb4_general_ci,
+  `app_col1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`col_to_drop_later`),
+  UNIQUE KEY `key2` (`c3`) COMMENT 'unique secondary key2',
+  KEY `iv_key` (`c1`) /*!80000 INVISIBLE */,
+  KEY `v_key` (`c2`),
+  KEY `key1` (`c4`) COMMENT 'secondary key1',
+  CONSTRAINT `old_chk1` CHECK ((`chk_col` < 100)),
+  CONSTRAINT `old_chk2` CHECK ((`chk_col` > 10))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of non-dropped subtables should be kept same after INPLACE DDL without rebuild]
+#######
+# Inplace DDL with rebuild, aka. online copy ddl
+#######
+ALTER TABLE t2
+DROP PRIMARY KEY,
+ADD PRIMARY KEY(id),
+DROP COLUMN col_to_drop_later,
+ADD COLUMN email VARCHAR(32) AFTER c2,
+MODIFY COLUMN c3 INT AFTER c4,
+RENAME TO tt,
+ALGORITHM = INPLACE;
+SHOW CREATE TABLE tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11),
+  `c2` varchar(70) COLLATE utf8mb4_general_ci DEFAULT 'aaaa',
+  `email` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `col_to_extend` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c4` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `chk_col` int(11) DEFAULT NULL,
+  `k1_col` int(11) DEFAULT NULL,
+  `k2_col` int(11) DEFAULT NULL,
+  `app_col` text COLLATE utf8mb4_general_ci,
+  `app_col1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `key2` (`c3`) COMMENT 'unique secondary key2',
+  KEY `iv_key` (`c1`) /*!80000 INVISIBLE */,
+  KEY `v_key` (`c2`),
+  KEY `key1` (`c4`) COMMENT 'secondary key1',
+  CONSTRAINT `old_chk1` CHECK ((`chk_col` < 100)),
+  CONSTRAINT `old_chk2` CHECK ((`chk_col` > 10))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of non-dropped subtables should be changed after INPLACE DDL with rebuild]
+#######
+# (offline) COPY DDL
+#######
+ALTER TABLE tt ALTER INDEX iv_key VISIBLE, ALTER INDEX v_key INVISIBLE, ALGORITHM = INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE tt DROP CHECK old_chk2, ADD CONSTRAINT new_chk CHECK(chk_col > 1), ALGORITHM = INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY.
+ALTER TABLE tt DROP CHECK old_chk2, ADD CONSTRAINT new_chk CHECK(chk_col > 1), ALGORITHM = INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+ALTER TABLE tt DROP PRIMARY KEY, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: With INPLACE DDL, XEngine only allows that DROP PRIMARY KEY is combined with ADD PRIMARY KEY. Try ALGORITHM=COPY.
+ALTER TABLE tt COMMENT "comment1 on tt", ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE tt COMMENT "comment1 on tt", ALGORITHM=INPLACE;
+ALTER TABLE tt COMMENT "comment1 on tt", KEY_BLOCK_SIZE=1000, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: XEngineDDL: only supports to change comment of table. Try ALGORITHM=COPY.
+ALTER TABLE tt CHARACTER SET=latin1, ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: XEngineDDL: only supports to change comment of table. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE tt CHARACTER SET=latin1, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: XEngineDDL: only supports to change comment of table. Try ALGORITHM=COPY.
+ALTER TABLE tt MODIFY COLUMN col_to_extend VARCHAR(80), ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE tt MODIFY COLUMN col_to_extend VARCHAR(80), ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+ALTER TABLE tt
+DROP PRIMARY KEY,
+MODIFY COLUMN col_to_extend VARCHAR(80),
+DROP CHECK old_chk2,
+ADD CONSTRAINT new_chk CHECK(chk_col > 1),
+COMMENT 'comment2 on tt',
+CHARACTER SET latin1,
+LOCK=DEFAULT;
+SHOW CREATE TABLE tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11),
+  `c2` varchar(70) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'aaaa',
+  `email` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `col_to_extend` varchar(80) DEFAULT NULL,
+  `c4` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `chk_col` int(11) DEFAULT NULL,
+  `k1_col` int(11) DEFAULT NULL,
+  `k2_col` int(11) DEFAULT NULL,
+  `app_col` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `app_col1` int(11) DEFAULT NULL,
+  UNIQUE KEY `key2` (`c3`) COMMENT 'unique secondary key2',
+  KEY `iv_key` (`c1`) /*!80000 INVISIBLE */,
+  KEY `v_key` (`c2`),
+  KEY `key1` (`c4`) COMMENT 'secondary key1',
+  CONSTRAINT `new_chk` CHECK ((`chk_col` > 1)),
+  CONSTRAINT `old_chk1` CHECK ((`chk_col` < 100))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COMMENT='comment2 on tt'
+include/assert.inc [id of non-dropped subtables should be changed after (offline) COPY DDL]
+SELECT * FROM tt;
+id	c1	c2	email	col_to_extend	c4	c3	chk_col	k1_col	k2_col	app_col	app_col1
+1	2	aa	NULL	abc	2	2	20	2	1	NULL	NULL
+2	4	bb	NULL	cde	4	4	40	4	1	NULL	NULL
+DROP TABLE tt;
+########################################################################
+case 1 INSTANT DDL + INPLACE DDL
+########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), ALGORITHM=INSTANT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sk1` (`c2`(6))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, ADD UNIQUE KEY uk(c1), ADD KEY sk(c3), DROP KEY sk1, ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, ADD UNIQUE KEY uk(c1), ADD KEY sk(c3), DROP KEY sk1, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c4` float DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`c1`),
+  KEY `sk` (`c3`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of primary key subtables should be changed after INPLACE DDL with rebuild]
+INSERT INTO t1(id, c1, c3) VALUES(3, 3, 'cccc');
+INSERT INTO t1(id, c3) VALUES(4, 'dddd');
+ERROR 23000: Duplicate entry '1' for key 'uk'
+ALTER TABLE t1 ADD COLUMN chk_col VARCHAR(30), DROP KEY sk;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c4` float DEFAULT NULL,
+  `chk_col` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`c1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+id	c1	c2	c3	c4	chk_col
+1	1	aaaa	NULL	NULL	NULL
+2	2	bbbb	NULL	NULL	NULL
+3	3	NULL	cccc	NULL	NULL
+DROP TABLE t1;
+########################################################################
+case 2 INSTANT DDL + INPLACE REBUILD DDL
+########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), ALGORITHM=INSTANT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sk1` (`c2`(6))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, DROP COLUMN c1, ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, DROP COLUMN c1, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c2` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c4` float DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sk1` (`c2`(6))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of primary key subtables should be changed after INPLACE DDL with rebuild]
+SELECT * FROM t1;
+id	c2	c3	c4
+1	aaaa	NULL	NULL
+2	bbbb	NULL	NULL
+DROP TABLE t1;
+########################################################################
+case 3 INPLACE DDL + INPLACE REBUILD DDL
+########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+ALTER TABLE t1 DROP COLUMN c2, ADD UNIQUE KEY uk(c1), ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 DROP COLUMN c2, ADD UNIQUE KEY uk(c1), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`c1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of primary key subtables should be changed after INPLACE DDL with rebuild]
+INSERT INTO t1 VALUES(3, 2);
+ERROR 23000: Duplicate entry '2' for key 'uk'
+INSERT INTO t1 VALUES(3, 3);
+SELECT * FROM t1;
+id	c1
+1	1
+2	2
+3	3
+DROP TABLE t1;
+########################################################################
+case 4 INSTANT DDL + INPLACE DDL + INPLACE REBUILD DDL
+########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, ADD UNIQUE KEY uk(c1), DROP COLUMN c2, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c3` float DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`c1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of primary key subtables should be changed after INPLACE DDL with rebuild]
+INSERT INTO t1 VALUES(3, 2, 1.0);
+ERROR 23000: Duplicate entry '2' for key 'uk'
+INSERT INTO t1 VALUES(3, 3, 1.0);
+SELECT * FROM t1;
+id	c1	c3
+1	1	NULL
+2	2	NULL
+3	3	1
+DROP TABLE t1;
+########################################################################
+case 5 INSTANT DDL + (offlinie) COPY DDL
+########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, MODIFY COLUMN c2 VARCHAR (100), ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, MODIFY COLUMN c2 VARCHAR (100), ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, MODIFY COLUMN c2 VARCHAR (100);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` float DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sk1` (`c2`(6))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of primary key subtables should be changed after INPLACE DDL with rebuild]
+SELECT * FROM t1;
+id	c1	c2	c3
+1	1	aaaa	NULL
+2	2	bbbb	NULL
+DROP TABLE t1;
+########################################################################
+case 6 INPLACE DDL + (offline) COPY DDL
+########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+ALTER TABLE t1 DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c'), ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+ALTER TABLE t1 DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c');
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` enum('a','b','c') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of primary key subtables should be changed after INPLACE DDL with rebuild]
+SELECT * FROM t1;
+id	c1
+1	a
+2	b
+DROP TABLE t1;
+########################################################################
+case 7 INSTANT DDL + INPLACE DDL + (offline) COPY DDL
+########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c'), ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c'), ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c');
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` enum('a','b','c') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+include/assert.inc [id of primary key subtables should be changed after INPLACE DDL with rebuild]
+SELECT * FROM t1;
+id	c1	c3
+1	a	NULL
+2	b	NULL
+DROP TABLE t1;

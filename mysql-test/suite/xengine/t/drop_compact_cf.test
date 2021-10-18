@@ -1,0 +1,45 @@
+--source include/have_debug.inc
+--source suite/xengine/include/have_xengine.inc
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+
+connection con1;
+#prepare data
+create table t(id int primary key);
+--disable_query_log
+let $i = 1;
+while ($i <= 1024) {
+  eval insert into t values($i);
+  inc $i;
+}
+set global xengine_force_flush_memtable_now=ON;
+--enable_query_log
+--disable_result_log
+#do manual compaction for table t
+let $cf_id=`select index_number from information_schema.xengine_ddl where table_name ='t'`;
+let $val= $cf_id + 13 << 32;
+--enable_result_log
+#drop when compact 
+set @@GLOBAL.DEBUG= '+d, before_manual_compaction';
+set @@GLOBAL.DEBUG= '+d, after_manual_compaction';
+--echo #sending
+--disable_query_log
+--send_eval set global xengine_compact_cf=$val
+--enable_query_log
+
+connection con2;
+drop table t;
+
+connection con1;
+--reap
+set @@GLOBAL.DEBUG= '-d, before_manual_compaction';
+set @@GLOBAL.DEBUG= '-d, after_manual_compaction';
+
+#resart not crash
+shutdown;
+--exec echo "restart:" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+select index_number from information_schema.xengine_ddl where table_name ='t';
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,2 @@
+--source include/no_valgrind_without_big.inc
+--source suite/xengine_rpl_gtid/include/rpl_split_statements.inc

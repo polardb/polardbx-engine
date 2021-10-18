@@ -1,0 +1,21 @@
+# suite/xengine_ext/t/is_schemata.test
+#
+# Check the layout of information_schema.schemata, permissions and the impact of
+# CREATE/ALTER/DROP SCHEMA on it.
+#
+# There is detailed information about this test within
+#    suite/xengine_ext/datadict/is_schemata.inc
+#
+# Author:
+# 2008-01-23 mleich WL#4203 Reorganize and fix the data dictionary tests of
+#                           testsuite xengine_ext
+#                   Create this script based on older scripts and new code.
+#
+
+# Result differences depending on FS case sensitivity.
+if (!$require_case_insensitive_file_system)
+{
+  --source include/have_case_sensitive_file_system.inc
+}
+
+--source suite/xengine_ext/datadict/is_schemata.inc

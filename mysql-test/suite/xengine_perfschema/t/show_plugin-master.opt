@@ -1,0 +1,2 @@
+$EXAMPLE_PLUGIN_OPT
+--default_storage_engine=xengine

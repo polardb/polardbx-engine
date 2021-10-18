@@ -1,0 +1,10 @@
+drop table if exists t1;
+# Binary must be compiled with debug for this test
+create user sbtest IDENTIFIED WITH mysql_native_password;
+grant all privileges on *.* to 'sbtest'@'%';
+CREATE TABLE t1 (a INT) ENGINE=xengine;
+SELECT COUNT(*) from t1;
+COUNT(*)
+400
+DROP USER 'sbtest'@'%';
+DROP TABLE t1;

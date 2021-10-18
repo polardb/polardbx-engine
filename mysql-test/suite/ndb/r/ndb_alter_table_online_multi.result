@@ -1,0 +1,32 @@
+*******************************
+* basic concurent online alter test
+*******************************
+* With Commit
+*******************************
+CREATE TABLE t1 (a INT UNSIGNED KEY, b INT UNSIGNED) ENGINE NDB;
+begin;
+update t1 set b = 0 where a = 1;
+update t1 set b = 1 where a = 2;
+delete from t1      where a = 3;
+insert into t1 values (5,5),(6,6);
+update t1 set b = 0 where a = 6;
+ALTER TABLE t1 ADD c CHAR(19), ADD d VARCHAR(255), ADD e char(255);
+Warnings:
+Warning	1478	Converted FIXED field 'c' to DYNAMIC to enable online ADD COLUMN
+Warning	1478	Converted FIXED field 'd' to DYNAMIC to enable online ADD COLUMN
+Warning	1478	Converted FIXED field 'e' to DYNAMIC to enable online ADD COLUMN
+Warning	1296	Node <nodeid> 'Distribution of ALTER TABLE 't1' failed'
+update t1 set b = 0 where a = 2;
+ERROR HY000: Table definition has changed, please retry transaction
+show warnings;
+Level	Code	Message
+Error	1412	Table definition has changed, please retry transaction
+Warning	1296	Failed to discover table 't1' from NDB, table definition changed
+Error	159	Table definition has changed, please retry transaction
+SELECT * FROM t1 ORDER BY a;
+a	b	c	d	e
+1	1	NULL	NULL	NULL
+2	2	NULL	NULL	NULL
+3	3	NULL	NULL	NULL
+4	4	NULL	NULL	NULL
+DROP TABLE t1;

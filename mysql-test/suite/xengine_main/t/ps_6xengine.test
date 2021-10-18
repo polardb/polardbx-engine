@@ -1,0 +1,30 @@
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
+###############################################
+#                                             #
+#  Prepared Statements test on XEngine tables  #
+#                                             #
+###############################################
+
+#    
+# NOTE: PLEASE SEE ps_1general.test (bottom) 
+#       BEFORE ADDING NEW TEST CASES HERE !!!
+
+use test;
+
+let $type= 'XENGINE' ;
+-- source suite/xengine_main/include/ps_create.inc
+-- source include/ps_renew.inc
+
+-- source include/ps_query.inc
+
+-- source include/ps_modify.inc
+-- source include/ps_modify1.inc
+-- source include/ps_conv.inc
+
+drop table t1, t9;
+
+# End of 4.1 tests
+
+--source suite/xengine/include/check_xengine_log_error.inc

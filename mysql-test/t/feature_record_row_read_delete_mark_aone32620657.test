@@ -1,0 +1,31 @@
+# Test the record of number of rows read with delete mark feature,
+# in TABLE_STATISTICS and events_statements_summary_by_digest_supplement.
+
+--source include/have_debug.inc
+--source include/restart_mysqld.inc
+
+SET GLOBAL innodb_undo_retention = 900;
+SET GLOBAL opt_tablestat = on;
+
+CREATE DATABASE test_delect_mark_record;
+USE test_delect_mark_record;
+CREATE TABLE test_table(n int);
+INSERT INTO test_table VALUES(1), (1), (1), (2), (2);
+DELETE FROM test_table WHERE n = 2;
+SELECT * FROM test_table;
+SELECT COUNT(*) FROM test_table;
+
+SELECT DIGEST_TEXT, ROWS_READ_DELETE_MARK
+FROM performance_schema.events_statements_summary_by_digest_supplement
+where DIGEST_TEXT = 'SELECT * FROM `test_table`' ;
+
+SELECT DIGEST_TEXT, ROWS_READ_DELETE_MARK
+FROM performance_schema.events_statements_summary_by_digest_supplement
+where DIGEST_TEXT = 'SELECT COUNT ( * ) FROM `test_table`' ;
+
+SELECT TABLE_NAME, ROWS_READ_DELETE_MARK FROM INFORMATION_SCHEMA.TABLE_STATISTICS 
+where table_name = 'test_table' and TABLE_SCHEMA = 'test_delect_mark_record';
+
+DROP DATABASE test_delect_mark_record;
+SET GLOBAL opt_tablestat = default;
+SET GLOBAL innodb_undo_retention = default;

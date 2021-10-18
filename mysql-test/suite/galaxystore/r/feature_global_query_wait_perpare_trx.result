@@ -1,0 +1,78 @@
+set global innodb_rds_flashback_enabled = false;
+create table tt (a int);
+create table pp (a int);
+create view vv as select * from pp;
+create table gcn (a int, gcn int);
+drop table gcn;
+select * from tt as of gcn 1;
+a
+select * from tt as of gcn 1 alias;
+a
+select * from tt as of gcn 1 as alias;
+a
+select * from (select * from tt as of gcn 1 as alias union all select * from tt as of timestamp now()) ff;
+a
+with ff as (select * from tt as of gcn 1 as alias union all select * from tt as of timestamp now()) select * from ff;
+a
+with ff as (select * from tt as of gcn 1 as alias union all select * from tt as of timestamp now()) update pp set a=0 where a=(select max(a) from ff);
+select * from pp where a=(select max(a) from tt  as of gcn 1 as alias);
+a
+select * from tt group by a having a< (select sum(a) from pp as of gcn 1 as alias);
+a
+update tt set a=0 where a < (select sum(a) from pp as of gcn 1 as alias);
+select ll.* from tt as of timestamp now() ll  join pp as of gcn 1 as vv on vv.a=ll.a;
+a
+select * from tt as of gcn (select 1+2);
+a
+select * from tt as of gcn (1+2);
+a
+insert into pp values(1);
+select * from tt as of gcn (select max(a) from pp);
+a
+delete from pp;
+select * from tt as of gcn '123';
+a
+select * from tt as of gcn (select sum(a) from pp);
+a
+select * from tt as of gcn (select avg(a) from pp);
+ERROR HY000: Snapshot (as of) 'scn/gcn' must be of type integer
+select * from tt as of gcn 0.11;
+ERROR HY000: Snapshot (as of) 'scn/gcn' must be of type integer
+select * from tt as of gcn (a<b);
+ERROR 42S22: Unknown column 'b' in 'field list'
+create temporary table tmp(a int);
+select * from tmp as of gcn 1;
+ERROR HY000: Snapshot (as of) expression not allowed for 'tmp', cause it is not a innodb base table
+drop table tmp;
+select * from information_schema.INNODB_TABLESPACES as of gcn 1 limit 0;
+SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
+select * from tt as of gcn 1 as alias for update;
+ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
+select * from tt as of gcn 1 as alias LOCK IN SHARE MODE;
+ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
+select * from vv as of gcn 1;
+ERROR HY000: Snapshot (as of) expression not allowed for 'vv', cause it is not a innodb base table
+lock tables vv read;
+select * from vv as of gcn 1;
+ERROR HY000: Snapshot (as of) expression not allowed for 'vv', cause it is not a innodb base table
+unlock tables;
+update tt as of gcn 1 as alias set a=0;
+ERROR HY000: Snapshot (as of) expression can only be appear in select from list tables
+delete from tt as of gcn 1 as alias;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'of gcn 1 as alias' at line 1
+insert into tt as of gcn 1 values (1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of gcn 1 values (1)' at line 1
+create table no_ok as of gcn 1 alias (a int);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'of gcn 1 alias (a int)' at line 1
+alter table tt as of gcn 1 add column b int;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of gcn 1 add column b int' at line 1
+lock table tt as of gcn 1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'of gcn 1' at line 1
+handler tt as of gcn 1 open;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of gcn 1 open' at line 1
+replace into tt as of gcn 1  valuse (1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of gcn 1  valuse (1)' at line 1
+set global innodb_rds_flashback_enabled = default;
+drop view vv;
+drop table tt;
+drop table pp;

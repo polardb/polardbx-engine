@@ -1,0 +1,96 @@
+--source include/have_debug.inc
+--disable_ps_protocol
+
+call mtr.add_suppression("mysql.outline");
+call mtr.add_suppression("Statement outline");
+
+connection default;
+
+show global variables like "max_digest_length";
+
+create database outline_db;
+create table outline_db.t1(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+create table outline_db.t2(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+insert into outline_db.t1 values(1, 2, 'xpchild');
+insert into outline_db.t2 values(1, 2, 'xpchild');
+commit;
+
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%';
+
+create user 'u1'@'%';
+grant all privileges on outline_db.* to 'u1'@'%';
+grant all privileges on mysql.* to 'u1'@'%';
+
+connect(con_u0, localhost, u0,,);
+connect(con_u1, localhost, u1,,);
+connect(con_root,localhost, root,,);
+
+#-----------------------------------------------------------
+# 1. Outline table storage error.
+#-----------------------------------------------------------
+
+connection con_u0;
+
+SET @@SESSION.debug = "+d,simulate_storage_engine_out_of_memory";
+
+--error ER_OUTLINE_TABLE_OP_FAILED
+call dbms_outln.add_index_outline(
+    'outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+    "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+SET @@SESSION.debug = "-d,simulate_storage_engine_out_of_memory";
+
+#-----------------------------------------------------------
+# 2. Outline sql digest compute error.
+#-----------------------------------------------------------
+
+connection con_u0;
+
+SET @@SESSION.debug = "+d,outline_simulate_oom";
+
+--error ER_OUTLINE_DIGEST_COMPUTE
+call dbms_outln.add_index_outline(
+    'outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+    "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+SET @@SESSION.debug = "-d,outline_simulate_oom";
+
+#-----------------------------------------------------------
+# 3. Outline sql text truncated.
+#-----------------------------------------------------------
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2', '',
+                                  "select * from t1 where col1 = 2 and col2 =
+                                  'xpchild' and (col2 = 'dajda' or col2 = 'ydaa'
+                                                 and col2 = 'fdaj')");
+
+set session outline_allowed_sql_digest_truncate = off;
+
+--error ER_OUTLINE_SQL_DIGEST_TRUNCATED
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2', '',
+                                  "select * from t1 where col1 = 2 and col2 =
+                                  'xpchild' and (col2 = 'dajda' or col2 = 'ydaa'
+                                                 and col2 = 'fdaj')");
+
+
+
+connection default;
+drop database outline_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+
+disconnect con_u0;
+disconnect con_u1;
+disconnect con_root;
+
+--enable_ps_protocol

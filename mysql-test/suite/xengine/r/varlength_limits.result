@@ -1,0 +1,4143 @@
+# BINARY/CHAR column width is limited up to 255
+# row size is limited to 65535 (storage) bytes
+# maximum key length is 3072 (storage) bytes
+# maximum key part length is 3072 (storage) bytes
+SET @save_sql_mode = @@sql_mode;
+SET sql_mode="STRICT_ALL_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+# Establish connection for dml(user=root)
+=====================================================
+# Test limitation of VARBINARY
+=====================================================
+CREATE TABLE t(a BINARY(256));
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+CREATE TABLE t(a BINARY(64));
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a BINARY(255));
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a VARBINARY(65536));
+ERROR 42000: Column length too big for column 'a' (max = 65535); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varbinary column
+# limit number of binary character is 65532(65535 - 1(for nullbits) - 2(store var length))
+=====================================================
+CREATE TABLE t(a VARBINARY(65533));
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARBINARY(65532));
+INSERT INTO t VALUES(CONCAT('ab', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('cd', REPEAT('abcde', 13106)));
+INSERT INTO t VALUES(CONCAT('ef', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+65532
+65532
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+65532
+65532
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varbinary(65532) DEFAULT NULL,
+  KEY `ka` (`a`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t ADD UNIQUE KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(a(3072));
+DROP TABLE t;
+=====================================================
+# with non-nullable varbinary column
+# limit number of binary characters is 65533(65535 - 2(store var length))
+=====================================================
+CREATE TABLE t(a VARBINARY(65534) NOT NULL);
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARBINARY(65533) NOT NULL);
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65533
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 13106)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65533
+65533
+65533
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varbinary(65533) NOT NULL,
+  KEY `ka` (`a`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65533
+65533
+65533
+ALTER TABLE t ADD UNIQUE KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(a(3072));
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varbinary(65533) NOT NULL,
+  UNIQUE KEY `a` (`a`(3072)),
+  KEY `ka` (`a`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with non-nullable varbinary column
+# limit number of binary characters is 65528(65535 - 4(pk) - 1(for nullbits) - 2(store var length))
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARBINARY(65529));
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARBINARY(65528));
+INSERT INTO t VALUES(1, CONCAT('abc', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcd', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(3, CONCAT('cde', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varbinary(65528) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+ALTER TABLE t ADD UNIQUE KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(3072));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('def', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(5, CONCAT('efg', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(6, CONCAT('bcd', REPEAT('abcde', 13105)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+4	65528
+5	65528
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varbinary(65528) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(3072)),
+  UNIQUE KEY `ukb` (`b`(3072)),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+4	65528
+5	65528
+DROP TABLE t;
+=====================================================
+# with non-nullable varbinary column
+# limit number of binary characters is 65529(65535 - 4(pk) - 2(store var length))
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARBINARY(65530) NOT NULL);
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARBINARY(65529) NOT NULL);
+INSERT INTO t VALUES(1, CONCAT('abcd', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcde', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(3, CONCAT('cdef', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varbinary(65529) NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+ALTER TABLE t ADD UNIQUE KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(3072));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('defg', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(5, CONCAT('efgh', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(6, CONCAT('bcde', REPEAT('abcde', 13105)));
+ERROR 23000: Duplicate entry 'bcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+4	65529
+5	65529
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varbinary(65529) NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(3072)),
+  UNIQUE KEY `ukb` (`b`(3072)),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+4	65529
+5	65529
+DROP TABLE t;
+=====================================================
+=====================================================
+# Test limitation of VARCHAR with latin1_bin
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET latin1 COLLATE latin1_bin;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+CREATE TABLE t(a VARCHAR(65536)) CHARSET latin1 COLLATE latin1_bin;
+ERROR 42000: Column length too big for column 'a' (max = 65535); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 65532(65535 - 1(for nullbits) - 2(store var length))
+=====================================================
+CREATE TABLE t(a VARCHAR(65533)) CHARSET latin1 COLLATE latin1_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(65532)) CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t VALUES(CONCAT('ab', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bc', REPEAT('abcde', 13106)));
+INSERT INTO t VALUES(CONCAT('cd', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+65532
+65532
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(65532) COLLATE latin1_bin DEFAULT NULL,
+  KEY `ka` (`a`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+65532
+65532
+ALTER TABLE t ADD UNIQUE KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(3072));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('de', REPEAT('abcde', 13106)));
+INSERT INTO t VALUES(CONCAT('ef', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+65532
+65532
+65532
+65532
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(65532) COLLATE latin1_bin DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(3072)),
+  UNIQUE KEY `uka2` (`a`(3072)),
+  KEY `ka` (`a`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65532
+65532
+65532
+65532
+65532
+DROP TABLE t;
+=====================================================
+# with nullable varchar column
+# limit number of charactes is 65533(65535 - 2(store var length))
+=====================================================
+CREATE TABLE t(a VARCHAR(65534) NOT NULL) CHARSET latin1 COLLATE latin1_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(65533) NOT NULL) CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65533
+ALTER TABLE t ADD PRIMARY KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD PRIMARY KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 13106)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 13106)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65533
+65533
+65533
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(65533) COLLATE latin1_bin NOT NULL,
+  KEY `ka` (`a`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65533
+65533
+65533
+ALTER TABLE t ADD UNIQUE KEY(a(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(3072));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('def', REPEAT('abcde', 13106)));
+INSERT INTO t VALUES(CONCAT('efg', REPEAT('abcde', 13106)));
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 13106)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'uka'
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+65533
+65533
+65533
+65533
+65533
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(65533) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`a`(3072)),
+  KEY `ka` (`a`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 13106)));
+ERROR 23000: Duplicate entry 'abcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'PRIMARY'
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 614)));
+ERROR 23000: Duplicate entry 'abcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'PRIMARY'
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 613)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+3068
+65533
+65533
+65533
+65533
+65533
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 65528(65535 - 4(pk) - 1(for nullbits) - 2(store var length))
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(65529)) CHARSET latin1 COLLATE latin1_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(65528)) CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t VALUES(1, CONCAT('abc', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcd', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(3, CONCAT('cde', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(65528) COLLATE latin1_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+ALTER TABLE t ADD UNIQUE KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(3072));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('def', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(5, CONCAT('efg', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(6, CONCAT('bcd', REPEAT('abcde', 13105)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+4	65528
+5	65528
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(65528) COLLATE latin1_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(3072)),
+  UNIQUE KEY `ukb` (`b`(3072)),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65528
+2	65528
+3	65528
+4	65528
+5	65528
+DROP TABLE t;
+=====================================================
+# with nullable varchar column
+# limit number of characters is 65529(65535 - 4(pk) - 2(store var length))
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(65530) NOT NULL) CHARSET latin1 COLLATE latin1_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(65529) NOT NULL) CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t VALUES(1, CONCAT('abcd', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcde', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(3, CONCAT('cdef', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(65529) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+ALTER TABLE t ADD UNIQUE KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(3072));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('defg', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(5, CONCAT('efgh', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(6, CONCAT('bcde', REPEAT('abcde', 13105)));
+ERROR 23000: Duplicate entry 'bcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+4	65529
+5	65529
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(65529) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(3072)),
+  UNIQUE KEY `ukb` (`b`(3072)),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+4	65529
+5	65529
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(3073));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(3072));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('fghi', REPEAT('abcde', 13105)));
+INSERT INTO t VALUES(7, CONCAT('ghij', REPEAT('abcde', 13105)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+4	65529
+5	65529
+6	65529
+7	65529
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(65529) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`b`(3072)),
+  KEY `kb` (`b`(3072))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	65529
+2	65529
+3	65529
+4	65529
+5	65529
+6	65529
+7	65529
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) COLLATE latin1_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE latin1_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE latin1_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+=====================================================
+# Test limitation of VARCHAR with gbk & gbk_bin
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET gbk COLLATE gbk_bin;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 32766((65535 - 1(for nullbits) - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a VARCHAR(32767)) CHARSET gbk COLLATE gbk_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(32766)) CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t VALUES(CONCAT('a', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('b', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('c', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) COLLATE gbk_bin DEFAULT NULL,
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+ALTER TABLE t ADD UNIQUE KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1536));
+INSERT INTO t VALUES(CONCAT('c', REPEAT('abcde', 6553)));
+ERROR 23000: Duplicate entry 'cabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabc' for key 'uka'
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('d', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('e', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) COLLATE gbk_bin DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(1536)),
+  UNIQUE KEY `uka2` (`a`(1536)),
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 32766((65535 - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a VARCHAR(32767) NOT NULL) CHARSET gbk COLLATE gbk_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(32766) NOT NULL) CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t VALUES(CONCAT('a', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('b', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('c', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) COLLATE gbk_bin NOT NULL,
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+ALTER TABLE t ADD UNIQUE KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1536));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('d', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('e', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('b', REPEAT('abcde', 6553)));
+ERROR 23000: Duplicate entry 'babcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabc' for key 'uka'
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`a`(1536)),
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 32764((65535 - 4(pk) - 1(for nullbits) - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32765)) CHARSET gbk COLLATE gbk_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32764)) CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t VALUES(1, CONCAT('abcd', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcde', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(3, CONCAT('cdef', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) COLLATE gbk_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+ALTER TABLE t ADD UNIQUE KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1536));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('defg', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(5, CONCAT('efgh', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(6, CONCAT('bcde', REPEAT('abcde', 6552)));
+ERROR 23000: Duplicate entry 'bcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) COLLATE gbk_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1536)),
+  UNIQUE KEY `ukb` (`b`(1536)),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 32764((65535 - 4(pk) - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32765) NOT NULL) CHARSET gbk COLLATE gbk_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32764) NOT NULL) CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t VALUES(1, CONCAT('abcd', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcde', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(3, CONCAT('cdef', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+ALTER TABLE t ADD UNIQUE KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1536));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('defg', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(5, CONCAT('efgh', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(6, CONCAT('bcde', REPEAT('abcde', 6552)));
+ERROR 23000: Duplicate entry 'bcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1536)),
+  UNIQUE KEY `ukb` (`b`(1536)),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('fghi', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(7, CONCAT('ghij', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+6	32764
+7	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`b`(1536)),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+6	32764
+7	32764
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) COLLATE gbk_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE gbk_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE gbk_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+# Test limitation of VARCHAR with gbk & gbk_chinese_ci
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET gbk COLLATE gbk_chinese_ci;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 32766((65535 - 1(for nullbits) - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a VARCHAR(32767)) CHARSET gbk COLLATE gbk_chinese_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(32766)) CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t VALUES(CONCAT('a', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('b', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('c', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) DEFAULT NULL,
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+ALTER TABLE t ADD UNIQUE KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1536));
+INSERT INTO t VALUES(CONCAT('c', REPEAT('abcde', 6553)));
+ERROR 23000: Duplicate entry 'cabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabc' for key 'uka'
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('d', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('e', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(1536)),
+  UNIQUE KEY `uka2` (`a`(1536)),
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 32766((65535 - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a VARCHAR(32767) NOT NULL) CHARSET gbk COLLATE gbk_chinese_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(32766) NOT NULL) CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t VALUES(CONCAT('a', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('b', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('c', REPEAT('abcde', 6553)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) NOT NULL,
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+ALTER TABLE t ADD UNIQUE KEY(a(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1536));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('d', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('e', REPEAT('abcde', 6553)));
+INSERT INTO t VALUES(CONCAT('b', REPEAT('abcde', 6553)));
+ERROR 23000: Duplicate entry 'babcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabc' for key 'uka'
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(32766) NOT NULL,
+  PRIMARY KEY (`a`(1536)),
+  KEY `ka` (`a`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+32766
+32766
+32766
+32766
+32766
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 32764((65535 - 4(pk) - 1(for nullbits) - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32765)) CHARSET gbk COLLATE gbk_chinese_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32764)) CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t VALUES(1, CONCAT('abcd', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcde', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(3, CONCAT('cdef', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+ALTER TABLE t ADD UNIQUE KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1536));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('defg', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(5, CONCAT('efgh', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(6, CONCAT('bcde', REPEAT('abcde', 6552)));
+ERROR 23000: Duplicate entry 'bcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1536)),
+  UNIQUE KEY `ukb` (`b`(1536)),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 32764((65535 - 4(pk) - 2(store var length))/2)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32765) NOT NULL) CHARSET gbk COLLATE gbk_chinese_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(32764) NOT NULL) CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t VALUES(1, CONCAT('abcd', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcde', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(3, CONCAT('cdef', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+ALTER TABLE t ADD UNIQUE KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1536));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('defg', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(5, CONCAT('efgh', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(6, CONCAT('bcde', REPEAT('abcde', 6552)));
+ERROR 23000: Duplicate entry 'bcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1536)),
+  UNIQUE KEY `ukb` (`b`(1536)),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(1537));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(1536));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('fghi', REPEAT('abcde', 6552)));
+INSERT INTO t VALUES(7, CONCAT('ghij', REPEAT('abcde', 6552)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+6	32764
+7	32764
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(32764) NOT NULL,
+  PRIMARY KEY (`b`(1536)),
+  KEY `kb` (`b`(1536))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	32764
+2	32764
+3	32764
+4	32764
+5	32764
+6	32764
+7	32764
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+# Test limitation of VARCHAR with utf8(aka. utf8mb3) & utf8_bin
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET utf8 COLLATE utf8_bin;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 21844((65535 - 1(for nullbits) - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a VARCHAR(21845)) CHARSET utf8 COLLATE utf8_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(21844)) CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(CONCAT('abcd', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcde', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) COLLATE utf8_bin DEFAULT NULL,
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+ALTER TABLE t ADD UNIQUE KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1024));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+ERROR 23000: Duplicate entry 'cdefabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'uka'
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('defg', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('efgh', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) COLLATE utf8_bin DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(1024)),
+  UNIQUE KEY `uka2` (`a`(1024)),
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 21844((65535 - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a VARCHAR(21845) NOT NULL) CHARSET utf8 COLLATE utf8_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(21844) NOT NULL) CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(CONCAT('abcd', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+ALTER TABLE t ADD PRIMARY KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD PRIMARY KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcde', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) COLLATE utf8_bin NOT NULL,
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+ALTER TABLE t ADD UNIQUE KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1024));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+ERROR 23000: Duplicate entry 'cdefabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'uka'
+ALTER TABLE t ADD PRIMARY KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('defg', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('efgh', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`a`(1024)),
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 21842((65535 - 4(pk) - 1(for nullbits) - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21843)) CHARSET utf8 COLLATE utf8_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21842)) CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21842) COLLATE utf8_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+ALTER TABLE t ADD UNIQUE KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1024));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 4268)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+4	21342
+5	21342
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21842) COLLATE utf8_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1024)),
+  UNIQUE KEY `ukb` (`b`(1024)),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+4	21342
+5	21342
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 21843((65535 - 4(pk) - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21844) NOT NULL) CHARSET utf8 COLLATE utf8_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21843) NOT NULL) CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(1, CONCAT('abc', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcd', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(3, CONCAT('cde', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21843) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+ALTER TABLE t ADD UNIQUE KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1024));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('def', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(5, CONCAT('efg', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(6, CONCAT('bcd', REPEAT('abcde', 4268)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21843) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1024)),
+  UNIQUE KEY `ukb` (`b`(1024)),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('gh', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(7, CONCAT('hi', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+6	21342
+7	21342
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21843) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`b`(1024)),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+6	21342
+7	21342
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE utf8_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE utf8_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+# Test limitation of VARCHAR with utf8(aka. utf8mb3) & utf8_general_ci
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET utf8 COLLATE utf8_general_ci;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 21844((65535 - 1(for nullbits) - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a VARCHAR(21845)) CHARSET utf8 COLLATE utf8_general_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(21844)) CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(CONCAT('abcd', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcde', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) DEFAULT NULL,
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+ALTER TABLE t ADD UNIQUE KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1024));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+ERROR 23000: Duplicate entry 'cdefabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'uka'
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('defg', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('efgh', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(1024)),
+  UNIQUE KEY `uka2` (`a`(1024)),
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 21844((65535 - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a VARCHAR(21845) NOT NULL) CHARSET utf8 COLLATE utf8_general_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a VARCHAR(21844) NOT NULL) CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(CONCAT('abcd', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+ALTER TABLE t ADD PRIMARY KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD PRIMARY KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcde', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) NOT NULL,
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+ALTER TABLE t ADD UNIQUE KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(1024));
+INSERT INTO t VALUES(CONCAT('cdef', REPEAT('abcde', 4368)));
+ERROR 23000: Duplicate entry 'cdefabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde' for key 'uka'
+ALTER TABLE t ADD PRIMARY KEY(a(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('defg', REPEAT('abcde', 4368)));
+INSERT INTO t VALUES(CONCAT('efgh', REPEAT('abcde', 4368)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(21844) NOT NULL,
+  PRIMARY KEY (`a`(1024)),
+  KEY `ka` (`a`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+21844
+21844
+21844
+21844
+21844
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 21842((65535 - 4(pk) - 1(for nullbits) - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21843)) CHARSET utf8 COLLATE utf8_general_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21842)) CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21842) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+ALTER TABLE t ADD UNIQUE KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1024));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 4268)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+4	21342
+5	21342
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21842) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1024)),
+  UNIQUE KEY `ukb` (`b`(1024)),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21342
+2	21342
+3	21342
+4	21342
+5	21342
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 21843((65535 - 4(pk) - 2(store var length))/3)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21844) NOT NULL) CHARSET utf8 COLLATE utf8_general_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(21843) NOT NULL) CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t VALUES(1, CONCAT('abc', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bcd', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(3, CONCAT('cde', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21843) NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+ALTER TABLE t ADD UNIQUE KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(1024));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('def', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(5, CONCAT('efg', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(6, CONCAT('bcd', REPEAT('abcde', 4268)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21843) NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(1024)),
+  UNIQUE KEY `ukb` (`b`(1024)),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(1025));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(1024));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('gh', REPEAT('abcde', 4268)));
+INSERT INTO t VALUES(7, CONCAT('hi', REPEAT('abcde', 4268)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+6	21342
+7	21342
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(21843) NOT NULL,
+  PRIMARY KEY (`b`(1024)),
+  KEY `kb` (`b`(1024))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	21343
+2	21343
+3	21343
+4	21343
+5	21343
+6	21342
+7	21342
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+# Test limitation of VARCHAR with utf8mb4 & utf8mb4_0900_ai_ci
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 16383((65535 - 1(for nullbits) - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a VARCHAR(16384)) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ERROR 42000: Column length too big for column 'a' (max = 16383); use BLOB or TEXT instead
+CREATE TABLE t(a VARCHAR(16383)) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) DEFAULT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+ALTER TABLE t ADD UNIQUE KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('efg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('fgh', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(768)),
+  UNIQUE KEY `uka2` (`a`(768)),
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 16383((65535 - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a VARCHAR(16384) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ERROR 42000: Column length too big for column 'a' (max = 16383); use BLOB or TEXT instead
+CREATE TABLE t(a VARCHAR(16383) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) NOT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) NOT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t ADD UNIQUE KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('def', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('efg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'uka'
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) NOT NULL,
+  PRIMARY KEY (`a`(768)),
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 16382((65535 - 4(pk) - 1(for nullbits) - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16383)) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16382)) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+ALTER TABLE t ADD UNIQUE KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(768)),
+  UNIQUE KEY `ukb` (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of charactesr is 16382((65535 - 4(pk) - 2(store var length))/3 = 16382)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16383) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16382) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+ALTER TABLE t ADD UNIQUE KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(768)),
+  UNIQUE KEY `ukb` (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('fg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(7, CONCAT('gh', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+6	16382
+7	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) NOT NULL,
+  PRIMARY KEY (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+6	16382
+7	16382
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+=====================================================
+# Test limitation of VARCHAR with utf8mb4 & utf8mb4_general_ci
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 16383((65535 - 1(for nullbits) - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a VARCHAR(16384)) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+ERROR 42000: Column length too big for column 'a' (max = 16383); use BLOB or TEXT instead
+CREATE TABLE t(a VARCHAR(16383)) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+ALTER TABLE t ADD UNIQUE KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('efg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('fgh', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(768)),
+  UNIQUE KEY `uka2` (`a`(768)),
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 16383((65535 - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a VARCHAR(16384) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+ERROR 42000: Column length too big for column 'a' (max = 16383); use BLOB or TEXT instead
+CREATE TABLE t(a VARCHAR(16383) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_general_ci NOT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_general_ci NOT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t ADD UNIQUE KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('def', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('efg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'uka'
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`a`(768)),
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 16382((65535 - 4(pk) - 1(for nullbits) - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16383)) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16382)) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+ALTER TABLE t ADD UNIQUE KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(768)),
+  UNIQUE KEY `ukb` (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of charactesr is 16382((65535 - 4(pk) - 2(store var length))/3 = 16382)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16383) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16382) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+ALTER TABLE t ADD UNIQUE KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(768)),
+  UNIQUE KEY `ukb` (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('fg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(7, CONCAT('gh', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+6	16382
+7	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+6	16382
+7	16382
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+=====================================================
+# Test limitation of VARCHAR with utf8mb4 & utf8mb4_bin
+=====================================================
+CREATE TABLE t(a CHAR(64)) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t VALUES(REPEAT('abcd', 16));
+SELECT * FROM t;
+a
+abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd
+DROP TABLE t;
+CREATE TABLE t(a CHAR(255)) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t VALUES(REPEAT('abcde', 51));
+SELECT * FROM t;
+a
+abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde
+DROP TABLE t;
+CREATE TABLE t(a CHAR(256)) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
+=====================================================
+# with hidden primary key
+=====================================================
+# with nullable varchar column
+# limit number of characters is 16383((65535 - 1(for nullbits) - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a VARCHAR(16384)) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+ERROR 42000: Column length too big for column 'a' (max = 16383); use BLOB or TEXT instead
+CREATE TABLE t(a VARCHAR(16383)) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_bin DEFAULT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+ALTER TABLE t ADD UNIQUE KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY uka2(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('efg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('fgh', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'uka2' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_bin DEFAULT NULL,
+  UNIQUE KEY `uka` (`a`(768)),
+  UNIQUE KEY `uka2` (`a`(768)),
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 16383((65535 - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a VARCHAR(16384) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+ERROR 42000: Column length too big for column 'a' (max = 16383); use BLOB or TEXT instead
+CREATE TABLE t(a VARCHAR(16383) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t VALUES(CONCAT('abc', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+ALTER TABLE t ADD KEY(a);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY ka(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('cde', REPEAT('abcde', 3276)));
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_bin NOT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_bin NOT NULL,
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+ALTER TABLE t ADD UNIQUE KEY(a(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY uka(a(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY uka, ADD PRIMARY KEY(a(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(CONCAT('def', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('efg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(CONCAT('bcd', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcdabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdea' for key 'uka'
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` varchar(16383) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`a`(768)),
+  KEY `ka` (`a`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT LENGTH(a) FROM t;
+LENGTH(a)
+16383
+16383
+16383
+16383
+16383
+DROP TABLE t;
+=====================================================
+# with user defined primary key
+=====================================================
+# with non-nullable varchar column
+# limit number of characters is 16382((65535 - 4(pk) - 1(for nullbits) - 2(store var length))/4)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16383)) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16382)) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+ALTER TABLE t ADD UNIQUE KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(768)),
+  UNIQUE KEY `ukb` (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+DROP TABLE t;
+=====================================================
+# with non-nullable varchar column
+# limit number of charactesr is 16382((65535 - 4(pk) - 2(store var length))/3 = 16382)
+=====================================================
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16383) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+CREATE TABLE t(a INT PRIMARY KEY, b VARCHAR(16382) NOT NULL) CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t VALUES(1, CONCAT('ab', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+ALTER TABLE t ADD KEY(b);
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD KEY kb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(2, CONCAT('bc', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(3, CONCAT('cd', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+ALTER TABLE t ADD UNIQUE KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+ALTER TABLE t ADD UNIQUE KEY(b(768));
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t ADD UNIQUE KEY ukb(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(4, CONCAT('de', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(5, CONCAT('ef', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(6, CONCAT('bc', REPEAT('abcde', 3276)));
+ERROR 23000: Duplicate entry 'bcabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeab' for key 'b'
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+Warnings:
+Warning	1831	Duplicate index 'ukb' defined on the table 'test.t'. This is deprecated and will be disallowed in a future release.
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`(768)),
+  UNIQUE KEY `ukb` (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY(b(769));
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL begin_dml WAIT_FOR dml_end';
+ALTER TABLE t DROP KEY b, DROP KEY ukb, DROP PRIMARY KEY, ADD PRIMARY KEY(b(768));
+# Switch dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR begin_dml';
+INSERT INTO t VALUES(6, CONCAT('fg', REPEAT('abcde', 3276)));
+INSERT INTO t VALUES(7, CONCAT('gh', REPEAT('abcde', 3276)));
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+6	16382
+7	16382
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+CHECK TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) NOT NULL,
+  `b` varchar(16382) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`b`(768)),
+  KEY `kb` (`b`(768))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT a, LENGTH(b) FROM t;
+a	LENGTH(b)
+1	16382
+2	16382
+3	16382
+4	16382
+5	16382
+6	16382
+7	16382
+DROP TABLE t;
+=====================================================
+CREATE TABLE t1(id INT PRIMARY KEY, b char(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE utf8mb4_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b varchar(10), c int, d CHAR(10))ENGINE=XENGINE CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2, '1a');
+INSERT INTO t1 VALUES(2, '2222222', 4, '2b');
+####
+prefix index
+####
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY pre_uk(b(4)), ADD KEY pre_sk(d(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6, '3c');
+INSERT INTO t1 VALUES(4, '3333222', 8, '3c');
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '3333' for key 'pre_uk'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  `d` char(10) COLLATE utf8mb4_bin DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+SELECT * FROM t1;
+id	b	c	d
+1	1111111	2	1a
+2	2222222	4	2b
+3	3333333	6	3c
+4	3333222	8	3c
+drop table t1;
+=====================================================
+set sql_mode = @save_sql_mode;

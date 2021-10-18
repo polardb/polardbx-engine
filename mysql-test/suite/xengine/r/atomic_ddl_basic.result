@@ -1,0 +1,201 @@
+create table t1 (id int primary key, c1 int default 1) engine=xengine;
+insert into t1(id) values (1);
+select * from t1;
+id	c1
+1	1
+create table t1_like like t1;
+select * from t1_like;
+id	c1
+show create table t1_like;
+Table	Create Table
+t1_like	CREATE TABLE `t1_like` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table t1;
+select * from t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+drop table t1_like;
+create table t1 (id int primary key, c1 int default 1) engine=xengine;
+alter table t1 add column c2 int default 2, add column c3 char(100) default "c3c3c3c3c3c3", add column c4 varchar(100) default "c4c4c4c4c4c4c4c4c4",
+add column c5 double default 5.5, add column c6 blob, add column c7 text, algorithm=instant;
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7
+insert into t1(id) values(2);
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL
+alter table t1 alter column c1 set default 2, algorithm=instant;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '2',
+  `c2` int(11) DEFAULT '2',
+  `c3` char(100) COLLATE utf8mb4_general_ci DEFAULT 'c3c3c3c3c3c3',
+  `c4` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'c4c4c4c4c4c4c4c4c4',
+  `c5` double DEFAULT '5.5',
+  `c6` blob,
+  `c7` text COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table t1 alter column c2 set default 20, algorithm=instant;
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL
+insert into t1 (id,c3) values (5,"new c3");
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL
+5	2	20	new c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL
+drop table t1;
+create table t1 (id int primary key, c1 int default 1, c2 int) engine=xengine;
+insert into t1 values(1,1,1);
+insert into t1 values(2,1,1);
+insert into t1 values(3,1,1);
+select * from t1;
+id	c1	c2
+1	1	1
+2	1	1
+3	1	1
+alter table t1 add index idx_c1(c1), add index idx_c2(c2);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`),
+  KEY `idx_c2` (`c2`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table t1 drop  index idx_c2;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table t1 add index idx_c2_2(c2), drop index idx_c1;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c2_2` (`c2`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table t1;
+create table t1 (id int primary key, c1 int default 1) engine=xengine;
+alter table t1 add column c2 int default 2, add column c3 char(100) default "c3c3c3c3c3c3", add column c4 varchar(100) default "c4c4c4c4c4c4c4c4c4",
+add column c5 double default 5.5, add column c6 blob, add column c7 text, algorithm=instant;
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7
+alter table t1 add column c8 int after c4;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '1',
+  `c2` int(11) DEFAULT '2',
+  `c3` char(100) COLLATE utf8mb4_general_ci DEFAULT 'c3c3c3c3c3c3',
+  `c4` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'c4c4c4c4c4c4c4c4c4',
+  `c8` int(11) DEFAULT NULL,
+  `c5` double DEFAULT '5.5',
+  `c6` blob,
+  `c7` text COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2	c3	c4	c8	c5	c6	c7
+alter table t1 add column c9 ENUM('a', 'b') FIRST;
+select * from t1;
+c9	id	c1	c2	c3	c4	c8	c5	c6	c7
+alter table t1 add column c10 ENUM('a', 'b');
+select * from t1;
+c9	id	c1	c2	c3	c4	c8	c5	c6	c7	c10
+insert into t1 (id,c8) values (3, 5);
+select * from t1;
+c9	id	c1	c2	c3	c4	c8	c5	c6	c7	c10
+NULL	3	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5	5.5	NULL	NULL	NULL
+drop table t1;
+create table t1 (c1 int) engine=xengine;
+insert into t1 values (1);
+alter table t1 add column id int primary key;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) DEFAULT NULL,
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+c1	id
+1	0
+alter table t1 drop column id;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+c1
+1
+drop table t1;
+create database sbtest;
+use sbtest;
+create table t1(id int primary key, c1 int default 1) engine=xengine;
+insert into t1 values(1,1);
+create table t2(id int primary key, c1 int default 1) engine=xengine;
+insert into t2 values(2,2);
+alter table t1 rename to t1_2;
+alter table t2 rename to t2_2;
+show tables;
+Tables_in_sbtest
+t1_2
+t2_2
+select * from t1_2;
+id	c1
+1	1
+select * from t2_2;
+id	c1
+2	2
+rename table t1_2 to t1_old, t2_2 to t2_new;
+show tables;
+Tables_in_sbtest
+t1_old
+t2_new
+select * from t1_old;
+id	c1
+1	1
+select * from t2_new;
+id	c1
+2	2
+rename table t1_old to tmp_table,
+t2_new to t1,
+tmp_table to t2;
+select * from t1;
+id	c1
+2	2
+select * from t2;
+id	c1
+1	1
+drop table t1;
+drop table t2;
+create table t1(id int primary key, c1 int default 1) engine=xengine;
+insert into t1 values(1,1),(2,2),(3,3);
+select * from t1;
+id	c1
+1	1
+2	2
+3	3
+truncate table t1;
+select * from t1;
+id	c1
+drop table t1;
+drop database sbtest;

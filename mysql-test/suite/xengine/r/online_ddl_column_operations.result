@@ -1,0 +1,1203 @@
+drop table if exists tt;
+Warnings:
+Note	1051	Unknown table 'test.tt'
+create table tt(id int primary key, c1 int, c2 int, c3 int);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+select * from tt;
+id	c1	c2	c3
+1	1	1	1
+2	2	2	2
+3	3	3	3
+alter table tt drop column c2;
+select * from tt;
+id	c1	c3
+1	1	1
+2	2	2
+3	3	3
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt values(4,4,4);
+select * from tt;
+id	c1	c3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+drop table if exists tt_varchar;
+Warnings:
+Note	1051	Unknown table 'test.tt_varchar'
+create table tt_varchar(id int primary key, c1 int, c2 varchar(100), c3 int);
+show create table tt_varchar;
+Table	Create Table
+tt_varchar	CREATE TABLE `tt_varchar` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt_varchar values(1,1,'a',1),(2,2,'b',2),(3,3,'c',3);
+select * from tt_varchar;
+id	c1	c2	c3
+1	1	a	1
+2	2	b	2
+3	3	c	3
+alter table tt_varchar drop column c1;
+show create table tt_varchar;
+Table	Create Table
+tt_varchar	CREATE TABLE `tt_varchar` (
+  `id` int(11) NOT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt_varchar;
+id	c2	c3
+1	a	1
+2	b	2
+3	c	3
+alter table tt_varchar drop column c2;
+show create table tt_varchar;
+Table	Create Table
+tt_varchar	CREATE TABLE `tt_varchar` (
+  `id` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt_varchar;
+id	c3
+1	1
+2	2
+3	3
+drop table if exists tt_char;
+Warnings:
+Note	1051	Unknown table 'test.tt_char'
+create table tt_char(id int primary key, c1 int, c2 char(100), c3 int);
+show create table tt_char;
+Table	Create Table
+tt_char	CREATE TABLE `tt_char` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` char(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt_char values(1,1,'a',1),(2,2,'b',2),(3,3,'c',3);
+select * from tt_char;
+id	c1	c2	c3
+1	1	a	1
+2	2	b	2
+3	3	c	3
+alter table tt_char drop column c1;
+show create table tt_char;
+Table	Create Table
+tt_char	CREATE TABLE `tt_char` (
+  `id` int(11) NOT NULL,
+  `c2` char(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt_char;
+id	c2	c3
+1	a	1
+2	b	2
+3	c	3
+alter table tt_char drop column c2;
+show create table tt_char;
+Table	Create Table
+tt_char	CREATE TABLE `tt_char` (
+  `id` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt_char;
+id	c3
+1	1
+2	2
+3	3
+drop table if exists tt_blob;
+Warnings:
+Note	1051	Unknown table 'test.tt_blob'
+create table tt_blob(id int primary key, c1 int, c2 blob, c3 int);
+show create table tt_blob;
+Table	Create Table
+tt_blob	CREATE TABLE `tt_blob` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` blob,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt_blob values(1,1,'a',1),(2,2,'b',2),(3,3,'c',3);
+select * from tt_blob;
+id	c1	c2	c3
+1	1	a	1
+2	2	b	2
+3	3	c	3
+alter table tt_blob drop column c1;
+show create table tt_blob;
+Table	Create Table
+tt_blob	CREATE TABLE `tt_blob` (
+  `id` int(11) NOT NULL,
+  `c2` blob,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt_blob;
+id	c2	c3
+1	a	1
+2	b	2
+3	c	3
+alter table tt_blob drop column c2;
+show create table tt_blob;
+Table	Create Table
+tt_blob	CREATE TABLE `tt_blob` (
+  `id` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt_blob;
+id	c3
+1	1
+2	2
+3	3
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 int, c3 int);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+select * from tt;
+id	c1	c2	c3
+1	1	1	1
+2	2	2	2
+3	3	3	3
+alter table tt drop column c1, add column c4 int default 5;
+select * from tt;
+id	c2	c3	c4
+1	1	1	5
+2	2	2	5
+3	3	3	5
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '5',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt drop column c4, add column c1 int default 100;
+select * from tt;
+id	c2	c3	c1
+1	1	1	100
+2	2	2	100
+3	3	3	100
+alter table tt drop column c3, add column c4 int default null;
+select * from tt;
+id	c2	c1	c4
+1	1	100	NULL
+2	2	100	NULL
+3	3	100	NULL
+drop table if exists tt_varchar;
+create table tt_varchar(id int primary key, c1 varchar(100), c2 varchar(300), c3 int);
+show create table tt_varchar;
+Table	Create Table
+tt_varchar	CREATE TABLE `tt_varchar` (
+  `id` int(11) NOT NULL,
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c2` varchar(300) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt_varchar values(1,'abc','abc',1),(2,'cde','cde',2),(3,'def','def',3);
+select * from tt_varchar;
+id	c1	c2	c3
+1	abc	abc	1
+2	cde	cde	2
+3	def	def	3
+alter table tt_varchar drop column c1, add column c4 varchar(100) default 'gggggg';
+select * from tt_varchar;
+id	c2	c3	c4
+1	abc	1	gggggg
+2	cde	2	gggggg
+3	def	3	gggggg
+show create table tt_varchar;
+Table	Create Table
+tt_varchar	CREATE TABLE `tt_varchar` (
+  `id` int(11) NOT NULL,
+  `c2` varchar(300) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'gggggg',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt_varchar drop column c4, add column c1 varchar(300);
+select * from tt_varchar;
+id	c2	c3	c1
+1	abc	1	NULL
+2	cde	2	NULL
+3	def	3	NULL
+alter table tt_varchar drop column c3, add column c4 varchar(100) default 'aaaaaa';
+select * from tt_varchar;
+id	c2	c1	c4
+1	abc	NULL	aaaaaa
+2	cde	NULL	aaaaaa
+3	def	NULL	aaaaaa
+drop table if exists tt_char;
+create table tt_char(id int primary key, c1 int, c2 char(100), c3 int);
+show create table tt_char;
+Table	Create Table
+tt_char	CREATE TABLE `tt_char` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` char(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt_char values(1,1,'aaaaa',1),(2,2,'bbbbb',2),(3,3,'cccccc',3);
+select * from tt_char;
+id	c1	c2	c3
+1	1	aaaaa	1
+2	2	bbbbb	2
+3	3	cccccc	3
+alter table tt_char drop column c1, add column c4 char(100) default 'gggggg';
+select * from tt_char;
+id	c2	c3	c4
+1	aaaaa	1	gggggg
+2	bbbbb	2	gggggg
+3	cccccc	3	gggggg
+show create table tt_char;
+Table	Create Table
+tt_char	CREATE TABLE `tt_char` (
+  `id` int(11) NOT NULL,
+  `c2` char(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` char(100) COLLATE utf8mb4_general_ci DEFAULT 'gggggg',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt_char drop column c4, add column c1 char(200);
+select * from tt_char;
+id	c2	c3	c1
+1	aaaaa	1	NULL
+2	bbbbb	2	NULL
+3	cccccc	3	NULL
+alter table tt_char drop column c3, add column c4 char(100) default 'aaaaaa';
+select * from tt_char;
+id	c2	c1	c4
+1	aaaaa	NULL	aaaaaa
+2	bbbbb	NULL	aaaaaa
+3	cccccc	NULL	aaaaaa
+drop table if exists tt_blob;
+create table tt_blob(id int primary key, c1 int, c2 blob, c3 int);
+show create table tt_blob;
+Table	Create Table
+tt_blob	CREATE TABLE `tt_blob` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` blob,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into tt_blob values(1,1,'aaaaa',1),(2,2,'bbbbb',2),(3,3,'ccccc',3);
+select * from tt_blob;
+id	c1	c2	c3
+1	1	aaaaa	1
+2	2	bbbbb	2
+3	3	ccccc	3
+alter table tt_blob drop column c1, add column c4 blob default 'gggggg';
+ERROR 42000: BLOB, TEXT, GEOMETRY or JSON column 'c4' can't have a default value
+select * from tt_blob;
+id	c1	c2	c3
+1	1	aaaaa	1
+2	2	bbbbb	2
+3	3	ccccc	3
+show create table tt_blob;
+Table	Create Table
+tt_blob	CREATE TABLE `tt_blob` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` blob,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt_blob drop column c1, add column c4 blob;
+select * from tt_blob;
+id	c2	c3	c4
+1	aaaaa	1	NULL
+2	bbbbb	2	NULL
+3	ccccc	3	NULL
+alter table tt_blob drop column c4, add column c1 blob;
+select * from tt_blob;
+id	c2	c3	c1
+1	aaaaa	1	NULL
+2	bbbbb	2	NULL
+3	ccccc	3	NULL
+alter table tt_blob drop column c3, add column c4 blob;
+select * from tt_blob;
+id	c2	c1	c4
+1	aaaaa	NULL	NULL
+2	bbbbb	NULL	NULL
+3	ccccc	NULL	NULL
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 int, c3 int);
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+ALTER TABLE tt MODIFY c2 int AFTER c3 ,ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+id	c1	c3	c2
+1	1	1	1
+2	2	2	2
+3	3	3	3
+ALTER TABLE tt MODIFY c2 int first, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c2` int(11) DEFAULT NULL,
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+c2	id	c1	c3
+1	1	1	1
+2	2	2	2
+3	3	3	3
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 int, c3 int);
+insert into tt values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE tt MODIFY c1 int first, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+select * from tt;
+c1	id	c2	c3
+1	1	1	1
+2	2	2	2
+3	3	3	3
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+alter table tt add index idx_c1(c1),algorithm=inplace,lock=default;
+alter table tt add index idx_c2(c2),algorithm=inplace,lock=default;
+alter table tt add index idx_c3(c3),algorithm=inplace,lock=default;
+alter table tt add index idx_c1_c2(c1,c2),algorithm=inplace,lock=default;
+insert into tt values(4,14,'abc',444);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`),
+  KEY `idx_c2` (`c2`),
+  KEY `idx_c3` (`c3`),
+  KEY `idx_c1_c2` (`c1`,`c2`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+4	14	abc	444
+check table tt;
+Table	Op	Msg_type	Msg_text
+test.tt	check	status	OK
+alter table tt MODIFY c2 varchar(100) first, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`),
+  KEY `idx_c2` (`c2`),
+  KEY `idx_c3` (`c3`),
+  KEY `idx_c1_c2` (`c1`,`c2`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+c2	id	c1	c3
+abc	1	11	111
+abc	2	12	222
+abc	3	13	333
+abc	4	14	444
+check table tt;
+Table	Op	Msg_type	Msg_text
+test.tt	check	status	OK
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int) engine=xengine;
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+alter table tt add index idx_c1(c1),algorithm=inplace,lock=default;
+alter table tt add index idx_c2(c2),algorithm=inplace,lock=default;
+alter table tt add index idx_c3(c3),algorithm=inplace,lock=default;
+alter table tt add index idx_c1_c2(c1,c2),algorithm=inplace,lock=default;
+alter table tt drop column c2, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+Warnings:
+Warning	1831	Duplicate index 'idx_c1_c2' defined on the table 'test.tt'. This is deprecated and will be disallowed in a future release.
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`),
+  KEY `idx_c3` (`c3`),
+  KEY `idx_c1_c2` (`c1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+id	c1	c3
+1	11	111
+2	12	222
+3	13	333
+check table tt;
+Table	Op	Msg_type	Msg_text
+test.tt	check	status	OK
+alter table tt drop column c1, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c3` (`c3`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+id	c3
+1	111
+2	222
+3	333
+check table tt;
+Table	Op	Msg_type	Msg_text
+test.tt	check	status	OK
+drop table tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int) engine=xengine;
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+alter table tt add column c4 int default 5, add index idx_c4(c4),algorithm=inplace,lock=default;
+select * from tt;
+id	c1	c2	c3	c4
+1	11	abc	111	5
+2	12	abc	222	5
+3	13	abc	333	5
+check table tt;
+Table	Op	Msg_type	Msg_text
+test.tt	check	status	OK
+alter table tt add column c5 varchar(100), add index idx_c5(c5),algorithm=inplace,lock=default;
+select * from tt;
+id	c1	c2	c3	c4	c5
+1	11	abc	111	5	NULL
+2	12	abc	222	5	NULL
+3	13	abc	333	5	NULL
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT '5',
+  `c5` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c4` (`c4`),
+  KEY `idx_c5` (`c5`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+check table tt;
+Table	Op	Msg_type	Msg_text
+test.tt	check	status	OK
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(10), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(30) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(63) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(63) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(64) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+alter table tt MODIFY c2 varchar(200) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+####
+# bug24019378: https://work.aone.alibaba-inc.com/issue/24019378
+####
+CREATE TABLE t1(id INT PRIMARY KEY, name VARCHAR(70), code INT) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 'aa', 2), (2, 'bb', 4);
+SELECT * FROM t1;
+id	name	code
+1	aa	2
+2	bb	4
+ALTER TABLE t1
+MODIFY COLUMN name VARCHAR(90),
+ADD INDEX key1(code) COMMENT 'secondary key1',
+ALGORITHM = INPLACE;
+SELECT code FROM t1;
+code
+2
+4
+ALTER TABLE t1
+DROP KEY key1,
+MODIFY COLUMN name VARCHAR(100),
+ADD UNIQUE INDEX key2(code) COMMENT 'unique secondary key2',
+ALGORITHM = INPLACE;
+SELECT code FROM t1;
+code
+2
+4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `code` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `key2` (`code`) COMMENT 'unique secondary key2'
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+alter table tt MODIFY c2 varchar(90) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+alter table tt MODIFY c2 varchar(30) , ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+drop table if exists tt;
+create table tt(id int primary key, c1 int not null, c2 varchar(100) not null, c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) NOT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(100), ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) NOT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c1 int, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+4	14	abc	444
+select @@sql_mode;
+@@sql_mode
+NO_ENGINE_SUBSTITUTION
+set @save_sql_mode = @@sql_mode;
+set sql_mode = "";
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(100) not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: cannot silently convert NULL values, as required in this SQL_MODE. Try ALGORITHM=COPY.
+alter table tt MODIFY c1 int not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: cannot silently convert NULL values, as required in this SQL_MODE. Try ALGORITHM=COPY.
+set sql_mode = "STRICT_TRANS_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(100) not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c1 int not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) NOT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,null,null,333);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(100) not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 22004: Invalid use of NULL value
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	NULL	NULL	333
+alter table tt MODIFY c1 int not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+ERROR 22004: Invalid use of NULL value
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from tt;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	NULL	NULL	333
+set sql_mode = "STRICT_ALL_TABLES";
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 varchar(100), c3 int);
+insert into tt values(1,11,'abc',111);
+insert into tt values(2,12,'abc',222);
+insert into tt values(3,13,'abc',333);
+insert into tt values(4,14,'abc',444);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c2 varchar(100) not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt MODIFY c1 int not null, ALGORITHM  = INPLACE, LOCK=DEFAULT;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) NOT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+set sql_mode = @save_sql_mode;
+DROP TABLE IF EXISTS t;
+Warnings:
+Note	1051	Unknown table 'test.t'
+CREATE TABLE t(x INT DEFAULT 1 NOT NULL, y INT NOT NULL) ENGINE=XENGINE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `x` int(11) NOT NULL DEFAULT '1',
+  `y` int(11) NOT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t(y) VALUES(0);
+INSERT INTO t VALUES(1, 0);
+SELECT * FROM t;
+x	y
+1	0
+1	0
+ALTER TABLE t MODIFY x INT NULL, MODIFY COLUMN y INT NULL, ALGORITHM=INPLACE;
+INSERT INTO t(y) VALUES(0);
+INSERT INTO t VALUES(1, 0);
+SELECT * FROM t;
+x	y
+1	0
+1	0
+NULL	0
+1	0
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `x` int(11) DEFAULT NULL,
+  `y` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t;
+CREATE TABLE t(x INT DEFAULT 1 NOT NULL, y INT NOT NULL, UNIQUE KEY uk(x), KEY sk(y)) ENGINE=XENGINE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `x` int(11) NOT NULL DEFAULT '1',
+  `y` int(11) NOT NULL,
+  UNIQUE KEY `uk` (`x`),
+  KEY `sk` (`y`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t(y) VALUES(0);
+INSERT INTO t VALUES(1, 0);
+ERROR 23000: Duplicate entry '1' for key 'uk'
+SELECT * FROM t;
+x	y
+1	0
+ALTER TABLE t MODIFY x INT NULL, MODIFY COLUMN y INT NULL, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: With INPLACE DDL, XEngine only allows that DROP PRIMARY KEY is combined with ADD PRIMARY KEY. Try ALGORITHM=COPY.
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `x` int(11) NOT NULL DEFAULT '1',
+  `y` int(11) NOT NULL,
+  UNIQUE KEY `uk` (`x`),
+  KEY `sk` (`y`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t;
+CREATE TABLE t(id INT AUTO_INCREMENT, x INT DEFAULT 1 NOT NULL, y INT NOT NULL, PRIMARY KEY(id), UNIQUE KEY uk(x), KEY sk(y)) ENGINE=XENGINE;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `x` int(11) NOT NULL DEFAULT '1',
+  `y` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`x`),
+  KEY `sk` (`y`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t(y) VALUES(0);
+INSERT INTO t(x, y) VALUES(2, 0);
+ALTER TABLE t MODIFY x INT NULL, MODIFY COLUMN y INT NULL, ALGORITHM=INPLACE;
+INSERT INTO t(x) VALUES(0);
+INSERT INTO t(x, y) VALUES(2, 0);
+ERROR 23000: Duplicate entry '2' for key 'uk'
+SELECT * FROM t;
+id	x	y
+1	1	0
+2	2	0
+3	0	NULL
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `x` int(11) DEFAULT NULL,
+  `y` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk` (`x`),
+  KEY `sk` (`y`)
+) ENGINE=XENGINE AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t;
+CREATE TABLE t (a INT primary key, b INT) engine=xengine;
+insert into t values(1,1),(2,2),(3,3),(100,100);
+select * from t;
+a	b
+1	1
+2	2
+3	3
+100	100
+alter table t add column c int auto_increment, add index idx_c(c);
+select * from t;
+a	b	c
+1	1	1
+2	2	2
+3	3	3
+100	100	4
+set auto_increment_increment=10;
+set auto_increment_offset = 5;
+drop table t;
+CREATE TABLE t (a INT primary key, b INT) engine=xengine;
+insert into t values(1,1),(2,2),(3,3),(100,100);
+select * from t;
+a	b
+1	1
+2	2
+3	3
+100	100
+alter table t add column c int auto_increment, add index idx_c(c);
+select * from t;
+a	b	c
+1	1	5
+2	2	15
+3	3	25
+100	100	35
+drop table tt;
+create table tt(id int auto_increment primary key) engine=xengine;
+insert into tt values(1),(2),(3);
+update tt set id=100 where id=1;
+insert into tt values(null);
+select * from tt;
+id
+2
+3
+100
+105
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1(id INT PRIMARY KEY, b INT DEFAULT 1, c CHAR(10) DEFAULT 'aaa') ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11) DEFAULT '1',
+  `c` char(10) COLLATE utf8mb4_general_ci DEFAULT 'aaa',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1(id) VALUES(1), (2);
+INSERT INTO t1 VALUES(3, 0, 'ccc'), (4, 1, 'dddd');
+SELECT * from t1;
+id	b	c
+1	1	aaa
+2	1	aaa
+3	0	ccc
+4	1	dddd
+ALTER TABLE t1 ALTER b DROP DEFAULT, ALTER c SET DEFAULT 'bbb', ALGORITHM=INPLACE;
+INSERT INTO t1(id) VALUES(5), (6);
+Warnings:
+Warning	1364	Field 'b' doesn't have a default value
+INSERT INTO t1 VALUES(7, 2, 'eeee'), (8, 3, 'ffff');
+SELECT * from t1;
+id	b	c
+1	1	aaa
+2	1	aaa
+3	0	ccc
+4	1	dddd
+5	NULL	bbb
+6	NULL	bbb
+7	2	eeee
+8	3	ffff
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11),
+  `c` char(10) COLLATE utf8mb4_general_ci DEFAULT 'bbb',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b INT DEFAULT 1, c CHAR(10) DEFAULT 'aaa') ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11) DEFAULT '1',
+  `c` char(10) COLLATE utf8mb4_general_ci DEFAULT 'aaa',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1(id) VALUES(1), (2);
+INSERT INTO t1 VALUES(3, 0, 'ccc'), (4, 1, 'dddd');
+SELECT * from t1;
+id	b	c
+1	1	aaa
+2	1	aaa
+3	0	ccc
+4	1	dddd
+ALTER TABLE t1 ADD KEY sk(c), ALGORITHM=INPLACE ;
+ALTER TABLE t1 ALTER b DROP DEFAULT, ALTER c SET DEFAULT 'bbb', ALGORITHM=INPLACE;
+INSERT INTO t1(id) VALUES(5), (6);
+Warnings:
+Warning	1364	Field 'b' doesn't have a default value
+INSERT INTO t1 VALUES(7, 2, 'eeee'), (8, 3, 'ffff');
+SELECT * from t1;
+id	b	c
+1	1	aaa
+2	1	aaa
+3	0	ccc
+4	1	dddd
+5	NULL	bbb
+6	NULL	bbb
+7	2	eeee
+8	3	ffff
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11),
+  `c` char(10) COLLATE utf8mb4_general_ci DEFAULT 'bbb',
+  PRIMARY KEY (`id`),
+  KEY `sk` (`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1(id INT PRIMARY KEY, b INT DEFAULT 1, c CHAR(10) DEFAULT 'aaa') ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11) DEFAULT '1',
+  `c` char(10) COLLATE utf8mb4_general_ci DEFAULT 'aaa',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1 VALUES(3, 0, 'ccc'), (4, 1, 'dddd');
+SELECT * from t1;
+id	b	c
+3	0	ccc
+4	1	dddd
+ALTER TABLE t1 RENAME COLUMN c TO c_h_a_r, ALGORITHM=INPLACE;
+SELECT * from t1;
+id	b	c_h_a_r
+3	0	ccc
+4	1	dddd
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11) DEFAULT '1',
+  `c_h_a_r` char(10) COLLATE utf8mb4_general_ci DEFAULT 'aaa',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+create table t1(id int primary key, c1 int, c2 int) engine=xengine;
+insert into t1 values(1,1,1),(2,2,2);
+ALTER TABLE t1 ADD COLUMN extra INT;
+ALTER TABLE t1 change COLUMN extra col1 INT default 5;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `col1` int(11) DEFAULT '5',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2	col1
+1	1	1	NULL
+2	2	2	NULL
+insert into t1(id,c1,c2) values(3,3,3);
+select * from t1;
+id	c1	c2	col1
+1	1	1	NULL
+2	2	2	NULL
+3	3	3	5
+drop table t1;
+create table t1(id int primary key, c1 int, c2 int) engine=xengine;
+insert into t1 values(1,1,1),(2,2,2);
+ALTER TABLE t1 ADD COLUMN extra INT;
+ALTER TABLE t1 change COLUMN extra col1 INT default 5, add column col3 int;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `col1` int(11) DEFAULT '5',
+  `col3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2	col1	col3
+1	1	1	NULL	NULL
+2	2	2	NULL	NULL
+insert into t1(id,c1,c2) values(3,3,3);
+select * from t1;
+id	c1	c2	col1	col3
+1	1	1	NULL	NULL
+2	2	2	NULL	NULL
+3	3	3	5	NULL
+drop table t1;
+CREATE TABLE t1(id INT PRIMARY KEY, b INT DEFAULT 1, c CHAR(10) DEFAULT 'aaa') ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11) DEFAULT '1',
+  `c` char(10) COLLATE utf8mb4_general_ci DEFAULT 'aaa',
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1 VALUES(3, 0, 'ccc'), (4, 1, 'dddd');
+SELECT * from t1;
+id	b	c
+3	0	ccc
+4	1	dddd
+ALTER TABLE t1 ADD KEY sk(c), ALGORITHM=INPLACE ;
+ALTER TABLE t1 RENAME COLUMN c TO c_h_a_r, ALGORITHM=INPLACE;
+SELECT * from t1;
+id	b	c_h_a_r
+3	0	ccc
+4	1	dddd
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `b` int(11) DEFAULT '1',
+  `c_h_a_r` char(10) COLLATE utf8mb4_general_ci DEFAULT 'aaa',
+  PRIMARY KEY (`id`),
+  KEY `sk` (`c_h_a_r`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1(b INT DEFAULT 1, c CHAR(10), d VARCHAR(5), UNIQUE KEY(c), KEY (d)) ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `b` int(11) DEFAULT '1',
+  `c` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `d` varchar(5) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  UNIQUE KEY `c` (`c`),
+  KEY `d` (`d`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1 VALUES(0, 'ccc', 'aaa'), (1, 'dddd', 'bbb');
+SELECT * from t1;
+b	c	d
+0	ccc	aaa
+1	dddd	bbb
+ALTER TABLE t1 MODIFY c CHAR(10) CHARACTER SET utf8, MODIFY COLUMN d VARCHAR(10) CHARACTER SET utf8, ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY.
+Using COPY
+ALTER TABLE t1 MODIFY c CHAR(10) CHARACTER SET utf8, MODIFY COLUMN d VARCHAR(10) CHARACTER SET utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `b` int(11) DEFAULT '1',
+  `c` char(10) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL,
+  `d` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL,
+  UNIQUE KEY `c` (`c`),
+  KEY `d` (`d`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+INSERT INTO t1 VALUES(2, 'eea', 'aaa'), (3, 'ffxx', 'bbb');
+SELECT * from t1;
+b	c	d
+0	ccc	aaa
+1	dddd	bbb
+2	eea	aaa
+3	ffxx	bbb
+DROP TABLE t1;
+drop table if exists tt;
+drop table if exists tt_varchar;
+drop table if exists tt_char;
+drop table if exists tt_blob;
+drop table if exists t;

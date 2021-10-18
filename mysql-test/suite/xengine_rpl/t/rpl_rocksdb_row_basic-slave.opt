@@ -1,0 +1,1 @@
+--loose-xengine-strict-collation-check=off --transaction-isolation=READ-COMMITTED

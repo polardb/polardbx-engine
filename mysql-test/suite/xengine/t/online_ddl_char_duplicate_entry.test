@@ -1,0 +1,101 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--echo ###################################################################
+--echo case 1 duplicate entry for DML
+--echo ###################################################################
+--echo case 1.1 based on existing PRIMARY KEY
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c int, PRIMARY KEY(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+--error 1062
+INSERT INTO t1 VALUES(2, '1111', 4);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.2 based on existing UNIQUE SECONDARY KEY
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int, UNIQUE KEY uk(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+--error 1062
+INSERT INTO t1 VALUES(2, '1111', 4);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.3 based on existing UNIQUE SECONDARY KEY with HIDDEN KEY
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10), c int, UNIQUE KEY uk(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+--error 1062
+INSERT INTO t1 VALUES(2, '1111', 4);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+
+--echo ###################################################################
+--echo case 2 duplicate entry on VARCHAR for DDL based on existing data
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+
+--echo ###################################################################
+--echo case 2.1 DDL to add UNIQUE SECONDARY KEY
+--echo ###################################################################
+--error 1062
+ALTER TABLE t1 ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+--echo ###################################################################
+--echo case 2.2 DDL to add UNIQUE SECONDARY KEY and MODIFY PRIMARY KEY
+--echo ###################################################################
+--error 1062
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(c), ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+--echo ###################################################################
+--echo case 2.3 DDL to MODIFY PRIMARY KEY
+--echo ###################################################################
+--error 1062
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3 duplicate entry on CHAR for DDL based on existing data
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b CHAR(10) NOT NULL, c int NOT NULL)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+
+--echo ###################################################################
+--echo case 3.1 DDL to add UNIQUE SECONDARY KEY
+--echo ###################################################################
+--error 1062
+ALTER TABLE t1 ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+--echo ###################################################################
+--echo case 3.2 DDL to add UNIQUE SECONDARY KEY and MODIFY PRIMARY KEY
+--echo ###################################################################
+--error 1062
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(c), ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+--echo ###################################################################
+--echo case 3.3 DDL to MODIFY PRIMARY KEY
+--echo ###################################################################
+--error 1062
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # Establish another connection (user=root) for concurrent DML
+connect (dml,localhost,root,,);
+connection default;
+
+--let $test_file=suite/xengine/t/online_ddl_duplicate_entry_varchar.inc
+--source suite/xengine/include/xengine_full_charset.inc
+
+--let $test_file=suite/xengine/t/online_ddl_duplicate_entry_blob.inc
+--source suite/xengine/include/xengine_full_charset.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

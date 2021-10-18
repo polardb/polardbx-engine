@@ -1,0 +1,480 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--disable_ps_protocol
+
+call mtr.add_suppression("mysql.concurrency_control");
+
+connection default;
+
+create database ccl_db;
+create table ccl_db.t1(id int, name varchar(100));
+
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%';
+
+create user 'u1'@'%';
+grant all privileges on ccl_db.* to 'u1'@'%';
+grant all privileges on mysql.* to 'u1'@'%';
+
+connect(con_u0, localhost, u0,,);
+connect(con_u1, localhost, u1,,);
+connect(con_root,localhost, root,,);
+
+
+#
+# 1. Check the ccl table structure.
+#
+
+connection con_root;
+show create table mysql.concurrency_control;
+
+
+#
+# 2. check the ccl proc
+#
+
+#
+--echo 2.1 check privileges
+#
+connection con_u1;
+
+call dbms_ccl.add_ccl_rule("SELECT", "mysql", "user", 10, "key1;key2;key3");
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+call dbms_ccl.flush_ccl_rule();
+
+call dbms_ccl.del_ccl_rule(1);
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+#
+--echo 2.2 test the parameters
+#
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_ccl.add_ccl_rule("ccl_db", "t1", 10, "key1;key2;key3");
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_ccl.add_ccl_rule("ccl_db", 10, 10, "key1;key2;key3");
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_ccl.add_ccl_rule(10, "ccl_db", 10, 10, "key1;key2;key3");
+
+--error ER_CCL_INVALID_RULE
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "", 10, "key1;key2;key3");
+
+--error ER_CCL_INVALID_RULE
+call dbms_ccl.add_ccl_rule("select", "", "t1", 10, "key1;key2;key3");
+
+--error ER_CCL_INVALID_RULE
+call dbms_ccl.add_ccl_rule("xxxx", "", "t1", 10, "key1;key2;key3");
+
+--error ER_CCL_INVALID_RULE
+call dbms_ccl.add_ccl_rule("", "ccl_db", "t1", 10, "key1;key2;key3");
+
+call dbms_ccl.add_ccl_rule("select", "ccl_db",
+                           "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxpchild", 10, "key1;key2;key3");
+
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "key1;key2;key3");
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+--replace_column 1 #
+select * from mysql.concurrency_control;
+
+delete from mysql.concurrency_control;
+commit;
+
+call dbms_ccl.flush_ccl_rule();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+--replace_column 1 #
+select * from mysql.concurrency_control;
+
+
+#
+--echo 2.3 test the ccl table error.
+#
+connection con_u1;
+alter table mysql.concurrency_control add col1 int;
+
+--error ER_CANNOT_LOAD_FROM_TABLE_V2
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "key1;key2;key3");
+
+--error ER_CANNOT_LOAD_FROM_TABLE_V2
+call dbms_ccl.del_ccl_rule(1);
+
+--error ER_CANNOT_LOAD_FROM_TABLE_V2
+call dbms_ccl.flush_ccl_rule();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+alter table mysql.concurrency_control drop column col1;
+
+#
+--echo 2.4 test delete warning
+#
+connection con_u1;
+
+call dbms_ccl.del_ccl_rule(1234567);
+
+
+#
+--echo 2.5 test rule conflicit
+#
+connection con_u1;
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "");
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+--error ER_CCL_DUPLICATE_RULE
+call dbms_ccl.add_ccl_rule("select", "", "", 11, "");
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "");
+
+call dbms_ccl.add_ccl_rule("update", "ccl_db", "t1", 10, "");
+
+call dbms_ccl.add_ccl_rule("insert", "ccl_db", "t1", 10, "");
+
+call dbms_ccl.add_ccl_rule("delete", "ccl_db", "t1", 10, "");
+
+--error ER_CCL_DUPLICATE_RULE
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 11, "");
+
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "key1");
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "key2");
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+
+call dbms_ccl.flush_ccl_rule();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+#===========================================================
+
+#
+--echo 3 test the rule match
+#
+
+connection con_u1;
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "");
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+select "key";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "");
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+select "key" from ccl_db.t1;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+
+delete from mysql.concurrency_control;
+commit;
+
+call dbms_ccl.flush_ccl_rule();
+
+
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 20, "");
+call dbms_ccl.add_ccl_rule("select", "", "", 20, "key");
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+select "key" from ccl_db.t1;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+select "key";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+
+call dbms_ccl.flush_ccl_rule();
+
+#
+-- echo 4 test keywords
+#
+
+connection con_u1;
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 30, "");
+call dbms_ccl.add_ccl_rule("select", "", "", 30, "key1;key2;key3");
+
+select "key1key2" from ccl_db.t1;
+select "key1key2key3";
+select "key1 key2 key3";
+select "key2 key1 key3";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+update mysql.concurrency_control set ordered = 'Y' where keywords="key1;key2;key3";
+commit;
+call dbms_ccl.flush_ccl_rule();
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+select "key1key2key3";
+select "key1 key2 key3";
+select "key2 key1 key3";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+
+#
+--echo test 5 insert case
+#
+delete from mysql.concurrency_control;
+commit;
+
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("insert", "ccl_db", "t1", 40, "");
+insert into ccl_db.t1 values(1, 'xpchild');
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+call dbms_ccl.add_ccl_rule("insert", "", "", 50, "");
+insert into ccl_db.t1 values(1, 'xpchild');
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+call dbms_ccl.add_ccl_rule("insert", "", "", 60, "xpchild");
+insert into ccl_db.t1 values(1, 'xpchild');
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+
+#
+--echo test update case
+#
+delete from mysql.concurrency_control;
+commit;
+
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("update", "ccl_db", "t1", 70, "");
+update ccl_db.t1 set name = 'xpchild' where id = 1;
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+call dbms_ccl.add_ccl_rule("update", "", "", 80, "");
+update ccl_db.t1 set name = 'xpchild' where id = 1;
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+call dbms_ccl.add_ccl_rule("update", "", "", 90, "xpchild");
+update ccl_db.t1 set name = 'xpchild' where id = 1;
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+#
+--echo test delete case
+#
+delete from mysql.concurrency_control;
+commit;
+
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("delete", "ccl_db", "t1", 100, "");
+delete from ccl_db.t1 where name = 'xpchild';
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+call dbms_ccl.add_ccl_rule("delete", "", "", 110, "");
+delete from ccl_db.t1 where name = 'xpchild';
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+call dbms_ccl.add_ccl_rule("delete", "", "", 120, "xpchild");
+delete from ccl_db.t1 where name = 'xpchild';
+commit;
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+#
+--echo test concurrent case and threads_running
+#
+call dbms_ccl.add_ccl_rule('select', 'ccl_db', 't1', 1, '');
+--exec $MYSQL_CLIENT_TEST -c test_ccl >> $MYSQLTEST_VARDIR/log/ccl_rule.out.log 2>&1
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+#
+# issue29256080 sp function cause ccl comply rule assert
+#
+connection default;
+call dbms_ccl.add_ccl_rule("select", "", "", 1, "");
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+select 1 from dual;
+
+create procedure proc_1() flush status;
+delimiter |;
+create function func_1() returns int begin call proc_1(); return 1; end|
+delimiter ;|
+
+--error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
+select func_1() from dual;
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+#
+# issueAone29768851 max_waiting_count and concurrency_count
+#
+call dbms_ccl.add_ccl_rule('select', 'ccl_db', 't1', 1, '');
+--exec $MYSQL_CLIENT_TEST -c test_ccl_max_waiting >> $MYSQLTEST_VARDIR/log/ccl_rule.out.log 2>&1
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+create table ccl_db.t2(id int, name varchar(100));
+create table ccl_db.t3(id int, name varchar(100));
+
+
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 0, "");
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t2", 0, "id");
+call dbms_ccl.add_ccl_rule("select", "", "", 0, "name");
+call dbms_ccl.add_ccl_rule("select", "", "", 0, "");
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+--error ER_CCL_REFUSE_QUERY 
+select * from ccl_db.t1 limit 1;
+
+--error ER_CCL_REFUSE_QUERY 
+select * from ccl_db.t2 limit 1;
+
+--error ER_CCL_REFUSE_QUERY 
+select * from ccl_db.t2 where id = 1;
+
+--error ER_CCL_REFUSE_QUERY 
+select * from ccl_db.t3;
+
+--error ER_CCL_REFUSE_QUERY 
+select func_1() from dual;
+
+call proc_1();
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 0, "");
+
+--error ER_CCL_REFUSE_QUERY 
+select * from ccl_db.t1 where id in (select id from ccl_db.t2);
+
+--error ER_CCL_REFUSE_QUERY
+select * from ccl_db.t2 where id in (select id from ccl_db.t1);
+
+--error ER_CCL_REFUSE_QUERY
+select * from ccl_db.t1 union select * from ccl_db.t2;
+
+select * from ccl_db.t2 limit 1;
+
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+connection default;
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+drop function func_1;
+drop procedure proc_1;
+
+drop database ccl_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+
+disconnect con_u0;
+disconnect con_u1;
+disconnect con_root;
+
+--enable_ps_protocol

@@ -1,0 +1,29 @@
+call mtr.add_suppression("Fail to recycle table");
+create table test.t1(id int);
+set session recycle_bin=on;
+lock tables test.t1 write;
+drop table test.t1;
+show create table t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+show create table __recycle_bin__.__innodb_165;
+ERROR 42S02: Table '__recycle_bin__.__innodb_165' doesn't exist
+unlock tables;
+create database db_json;
+use db_json;
+CREATE TABLE db_json.t1(c4 JSON ,
+c5 INT GENERATED ALWAYS AS (JSON_EXTRACT(c4,'$.key_a')) STORED,
+c6 INT GENERATED ALWAYS AS (JSON_EXTRACT(c4,'$.key_b')) VIRTUAL,
+c7 POINT NOT NULL SRID 0,
+spatial INDEX idx2 (c7)
+) ENGINE = InnoDB;
+drop database db_json;
+show create table __recycle_bin__.__innodb_165;
+Table	Create Table
+__innodb_165	CREATE TABLE `__innodb_165` (
+  `c4` json DEFAULT NULL,
+  `c5` int(11) GENERATED ALWAYS AS (json_extract(`c4`,_utf8mb4'$.key_a')) STORED,
+  `c6` int(11) GENERATED ALWAYS AS (json_extract(`c4`,_utf8mb4'$.key_b')) VIRTUAL,
+  `c7` point NOT NULL /*!80003 SRID 0 */,
+  SPATIAL KEY `idx2` (`c7`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call dbms_recycle.purge_table("__innodb_165");

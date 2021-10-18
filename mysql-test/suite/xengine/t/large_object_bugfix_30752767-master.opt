@@ -1,0 +1,2 @@
+--max_allowed_packet=500M
+--xengine_max_total_wal_size=10M

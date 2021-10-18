@@ -1,0 +1,4 @@
+CREATE DATABASE IF NOT EXISTS rqg_examples;
+Running test with grammar file examples/example.yy
+rqg test success!
+DROP DATABASE rqg_examples;

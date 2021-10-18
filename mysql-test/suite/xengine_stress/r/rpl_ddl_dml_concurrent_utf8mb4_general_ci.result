@@ -1,0 +1,56 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("Did not write failed ");
+call mtr.add_suppression("Can't open and lock privilege tables");
+SET @ORIG_EVENT_SCHEDULER = @@EVENT_SCHEDULER;
+CREATE DATABASE IF NOT EXISTS rqg_ddl_dml_concurrent;
+=================================
+# Test with utf8mb4 and utf8mb4_general_ci
+=================================
+CREATE TABLE rqg_ddl_dml_concurrent.ddl_dml_concurrent (
+col1 INT, col2 INT, col3 INT,
+col4 TEXT, col5 CHAR(80), col6 VARCHAR(1200)
+)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+# Table in slave
+include/rpl_sync.inc
+SHOW CREATE TABLE rqg_ddl_dml_concurrent.ddl_dml_concurrent;
+Table	Create Table
+ddl_dml_concurrent	CREATE TABLE `ddl_dml_concurrent` (
+  `col1` int(11) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `col3` int(11) DEFAULT NULL,
+  `col4` text COLLATE utf8mb4_general_ci,
+  `col5` char(80) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `col6` varchar(1200) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+# Table in master
+SHOW CREATE TABLE rqg_ddl_dml_concurrent.ddl_dml_concurrent;
+Table	Create Table
+ddl_dml_concurrent	CREATE TABLE `ddl_dml_concurrent` (
+  `col1` int(11) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `col3` int(11) DEFAULT NULL,
+  `col4` text COLLATE utf8mb4_general_ci,
+  `col5` char(80) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `col6` varchar(1200) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+Running test with grammar file ddl_dml_concurrent.yy
+rqg test success!
+include/rpl_sync.inc
+# 1. due to unknonw issue, checksum may be different but it is same when
+#    doing manually checksum, so stop using checksum here
+# 2. use rpl_diff.inc to check query results on TARGET_TABLE, while
+#    records scan order may be different between master and slave,
+#    so order records with all columns
+include/rpl_diff.inc
+DROP TABLE rqg_ddl_dml_concurrent.ddl_dml_concurrent;
+DROP DATABASE rqg_ddl_dml_concurrent;
+DROP TABLE IF EXISTS test.executors;
+DROP DATABASE IF EXISTS testdb_N;
+DROP DATABASE IF EXISTS testdb_S;
+SET GLOBAL EVENT_SCHEDULER = @ORIG_EVENT_SCHEDULER;
+include/rpl_sync.inc
+include/rpl_end.inc

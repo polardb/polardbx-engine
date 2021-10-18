@@ -1,0 +1,37 @@
+--source include/have_galaxy.inc
+
+--echo Install galaxy plugin
+
+eval INSTALL PLUGIN galaxy SONAME "$GALAXY_PLUGIN";
+
+--echo galax plugin status
+
+--replace_column 2 #
+show global status like '%galaxy%';
+
+--echo performance_schema metrics
+select * from performance_schema.user_defined_functions where UDF_NAME in ('hyperloglog', 'hllndv', 'bloomfilter');
+
+--echo test create/drop inner function
+
+--error ER_UDF_EXISTS
+eval create function bloomfilter returns int soname "$GALAXY_PLUGIN";
+
+--error ER_UDF_EXISTS
+eval create function hyperloglog returns int soname "$GALAXY_PLUGIN";
+
+--error ER_UDF_EXISTS
+eval create function hllndv returns int soname "$GALAXY_PLUGIN";
+
+--error ER_UDF_DROP_DYNAMICALLY_REGISTERED
+drop function bloomfilter;
+
+--error ER_UDF_DROP_DYNAMICALLY_REGISTERED
+drop function hyperloglog;
+
+--error ER_UDF_DROP_DYNAMICALLY_REGISTERED
+drop function hllndv;
+
+UNINSTALL PLUGIN galaxy;
+
+select * from performance_schema.user_defined_functions where UDF_NAME in ('hyperloglog', 'hllndv', 'bloomfilter');

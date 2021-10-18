@@ -1,0 +1,50 @@
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+pk INT AUTO_INCREMENT PRIMARY KEY,
+c1 int,
+c2 varchar(100),
+b JSON,
+b1 JSON not null,
+b17m BLOB(17000000),
+t TINYBLOB,
+m MEDIUMBLOB,
+l LONGBLOB,
+n JSON not null,
+c3 varchar(100),
+c4 int
+) ENGINE=xengine;
+SHOW COLUMNS IN t1;
+Field	Type	Null	Key	Default	Extra
+pk	int(11)	NO	PRI	NULL	auto_increment
+c1	int(11)	YES		NULL	
+c2	varchar(100)	YES		NULL	
+b	json	YES		NULL	
+b1	json	NO		NULL	
+b17m	longblob	YES		NULL	
+t	tinyblob	YES		NULL	
+m	mediumblob	YES		NULL	
+l	longblob	YES		NULL	
+n	json	NO		NULL	
+c3	varchar(100)	YES		NULL	
+c4	int(11)	YES		NULL	
+INSERT INTO t1 (b,b1,b17m,t,m,l,n) VALUES
+('[]','[]','','','','','[]'),
+('[]','[]','test3','test4','test5','test6','[]');
+insert into t1 values(100,100,'abc','[{"fileVal": "001", "fileName": "coupon_1"}]','[{"fileVal": "002", "fileName": "coupon_2"}]','test','test','test','test','[{"fileVal": "003", "fileName": "coupon_3"}]', 'abcdefg', 100);
+select c2, b1, n, c3, c4 from t1 where pk=100;
+c2	b1	n	c3	c4
+abc	[{"fileVal": "002", "fileName": "coupon_2"}]	[{"fileVal": "003", "fileName": "coupon_3"}]	abcdefg	100
+select n from t1 where pk=100;
+n
+[{"fileVal": "003", "fileName": "coupon_3"}]
+select c3,c4 from t1;
+c3	c4
+NULL	NULL
+NULL	NULL
+abcdefg	100
+SELECT LENGTH(b), LENGTH(b1), LENGTH(b17m), LENGTH(t), LENGTH(m), LENGTH(l) FROM t1;
+LENGTH(b)	LENGTH(b1)	LENGTH(b17m)	LENGTH(t)	LENGTH(m)	LENGTH(l)
+2	2	0	0	0	0
+2	2	5	5	5	5
+44	44	4	4	4	4
+DROP TABLE t1;

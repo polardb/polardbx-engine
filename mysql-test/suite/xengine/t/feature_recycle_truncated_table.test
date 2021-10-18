@@ -1,0 +1,197 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+--source ../include/have_xengine.inc
+--disable_ps_protocol
+
+call mtr.add_suppression("table already exists in recycle_bin");
+CALL mtr.add_suppression("Fail TO recycle table");
+CALL mtr.add_suppression("Incorrect key file");
+
+connection master;
+create database db_recycle;
+create user super_1@'%' identified by 'pass';
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+
+grant all on *.* to super_1@'%';
+grant all on db_recycle.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_1@'%' ;
+grant create tablespace on *.* to normal_1@'%' ;
+grant SYSTEM_VARIABLES_ADMIN on *.* to normal_1@'%';
+grant file on *.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_3@'%' ;
+
+--sync_slave_with_master
+
+connect(m_super_1, 127.0.0.1, super_1, pass, db_recycle, $MASTER_MYPORT);
+connect(m_normal_1, 127.0.0.1, normal_1, pass, db_recycle, $MASTER_MYPORT);
+connect(m_normal_2, 127.0.0.1, normal_2, pass, test, $MASTER_MYPORT);
+connect(m_normal_3, 127.0.0.1, normal_3, pass, , $MASTER_MYPORT);
+
+--echo ------------------------------------------------------
+--echo 1. Privileges
+--echo    -- Still require related privileges if want to
+--echo       show recycle bin db;
+--echo    -- No one can alter db except super_acl user;
+--echo ------------------------------------------------------
+connection m_normal_1;
+show databases;
+
+connection m_normal_2;
+show databases;
+
+connection m_normal_1;
+use __recycle_bin__;
+--error ER_DBACCESS_DENIED_ERROR
+create table t1 (id int);
+show tables;
+
+--echo 1.1 dbms_recycle.purge_table still require db.table privileges;
+
+connection m_super_1;
+set global recycle_scheduler=off;
+
+connection m_normal_1;
+use db_recycle;
+create table t1(id int);
+insert into t1 values(1);
+show create table t1;
+truncate table t1;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+show create table t1;
+
+let $table_name=query_get_value(CALL dbms_recycle.show_tables(), TABLE, 1);
+eval select * from __recycle_bin__.$table_name;
+
+connection m_normal_2;
+let $table_name=query_get_value(CALL dbms_recycle.show_tables(), TABLE, 1);
+--error ER_TABLEACCESS_DENIED_ERROR
+call dbms_recycle.purge_table("$table_name");
+
+connection m_normal_3;
+let $table_name=query_get_value(CALL dbms_recycle.show_tables(), TABLE, 1);
+--error ER_TABLEACCESS_DENIED_ERROR
+eval call dbms_recycle.purge_table("$table_name");
+
+connection m_super_1;
+set global recycle_scheduler=on;
+--sleep 3
+
+connection m_normal_1;
+use db_recycle;
+set session recycle_bin=off;
+drop table t1;
+set session recycle_bin=on;
+
+--echo ------------------------------------------------------
+--echo 2. truncate table
+--echo    -- Related object:
+--echo       Column:
+--echo       Index:
+--echo       Foreign key(XEngine dones't support):
+--echo       Trigger:
+--echo       View:
+--echo       Constraint:
+--echo ------------------------------------------------------
+
+connection m_super_1;
+set global recycle_scheduler=off;
+
+connection m_normal_1;
+use db_recycle;
+
+CREATE TABLE p1 (
+    id INT NOT NULL CHECK (id >= 1),
+    PRIMARY KEY (id)
+);
+
+create table l1(id int);
+
+delimiter //;
+CREATE TRIGGER tri_1
+  before INSERT ON p1 FOR EACH ROW
+BEGIN
+  INSERT INTO l1 value(1);
+END//
+delimiter  ;//
+
+create view v1 as select * from p1;
+
+truncate table p1;
+
+show create table p1;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+let $table_name=query_get_value(CALL dbms_recycle.show_tables(), TABLE, 1);
+eval show create table __recycle_bin__.$table_name;
+eval select * from __recycle_bin__.$table_name;
+
+--echo check the valid of view and trigger
+insert into p1 values(2);
+select * from p1;
+select * from v1;
+select * from l1;
+
+drop table l1;
+drop view v1;
+drop table p1;
+connection m_super_1;
+set global recycle_scheduler=on;
+
+--sleep 3
+
+--echo ------------------------------------------------------
+--echo 3. simulate handler rename failed.
+--echo ------------------------------------------------------
+connection m_super_1;
+set global recycle_scheduler=off;
+
+connection m_normal_1;
+use db_recycle;
+
+create table t3(id int);
+insert into t3 values(1);
+show create table t3;
+select * from t3;
+SET @@SESSION.debug = "+d,simulate_crashed_table_error";
+--error 126
+truncate table t3;
+SET @@SESSION.debug = "-d,simulate_crashed_table_error";
+show create table t3;
+select * from t3;
+truncate table t3;
+show create table t3;
+select * from t3;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+let $table_name=query_get_value(CALL dbms_recycle.show_tables(), TABLE, 1);
+eval show create table __recycle_bin__.$table_name;
+eval select * from __recycle_bin__.$table_name;
+
+set global recycle_scheduler=on;
+
+--sleep 3
+
+--echo ------------------------------------------
+--echo cleanup
+--echo ------------------------------------------
+connection master;
+drop database db_recycle;
+drop user super_1@'%';
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+
+connection master;
+--sync_slave_with_master
+--source include/rpl_end.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

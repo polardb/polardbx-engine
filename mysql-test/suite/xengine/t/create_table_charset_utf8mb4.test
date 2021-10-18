@@ -1,0 +1,134 @@
+--source suite/xengine/include/have_xengine.inc
+
+--disable_warnings
+
+#create statement
+drop table if exists tt;
+create table tt(c1 varchar(100));
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8, collate utf8_general_ci;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8mb4;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+
+drop table tt;
+create table tt(id int);
+show create table tt;
+
+alter table tt add column c1 varchar(100);
+show full columns from tt;
+
+#alter statement
+alter table tt convert to charset utf8;
+show create table tt;
+show full columns from tt;
+
+alter table tt convert to charset utf8, collate utf8_general_ci;
+show create table tt;
+show full columns from tt;
+
+alter table tt convert to charset utf8mb4;
+show create table tt;
+show full columns from tt;
+
+alter table tt convert to charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+show full columns from tt;
+
+alter table tt convert to charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+show full columns from tt;
+
+#xengine storage
+drop table if exists tt;
+create table tt(c1 varchar(100)) engine=xengine;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8, collate utf8_general_ci;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8mb4;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+
+#innodb storage
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8, collate utf8_general_ci;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8mb4;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+
+#create database
+create database db_test;
+show create database db_test;
+
+drop database db_test;
+create database db_test charset utf8mb4;
+show create database db_test;
+
+drop database db_test;
+create database db_test charset utf8;
+show create database db_test;
+
+drop database db_test;
+create database db_test charset utf8mb4 collate utf8mb4_0900_ai_ci;
+show create database db_test;
+
+drop database db_test;
+create database db_test charset utf8mb4 collate utf8mb4_general_ci;
+show create database db_test;
+
+drop database db_test;
+
+
+--enable_warnings
+
+
+drop table tt;

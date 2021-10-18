@@ -1,0 +1,4 @@
+--source include/have_log_bin.inc
+--source suite/xengine_binlog_gtid/include/binlog_xengine.inc
+
+--echo End of tests

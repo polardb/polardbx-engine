@@ -1,0 +1,59 @@
+set sql_mode='traditional';
+create table t1 (d date);
+insert into t1 (d) select date_sub('2000-01-01', INTERVAL 2001 YEAR);
+ERROR 22008: Datetime function: datetime field overflow
+insert into t1 (d) select date_add('2000-01-01',interval 8000 year);
+ERROR 22008: Datetime function: datetime field overflow
+insert into t1 values (date_add(NULL, INTERVAL 1 DAY));
+insert into t1 values (date_add('2000-01-04', INTERVAL NULL DAY));
+set sql_mode='';
+insert into t1 (d) select date_sub('2000-01-01', INTERVAL 2001 YEAR);
+Warnings:
+Warning	1441	Datetime function: datetime field overflow
+insert into t1 (d) select date_add('2000-01-01',interval 8000 year);
+Warnings:
+Warning	1441	Datetime function: datetime field overflow
+insert into t1 values (date_add(NULL, INTERVAL 1 DAY));
+insert into t1 values (date_add('2000-01-04', INTERVAL NULL DAY));
+select * from t1;
+d
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+drop table t1;
+End of 4.1 tests
+SELECT CAST('2006-09-26' AS DATE) + INTERVAL 1 DAY;
+CAST('2006-09-26' AS DATE) + INTERVAL 1 DAY
+2006-09-27
+SELECT CAST('2006-09-26' AS DATE) + INTERVAL 1 MONTH;
+CAST('2006-09-26' AS DATE) + INTERVAL 1 MONTH
+2006-10-26
+SELECT CAST('2006-09-26' AS DATE) + INTERVAL 1 YEAR;
+CAST('2006-09-26' AS DATE) + INTERVAL 1 YEAR
+2007-09-26
+SELECT CAST('2006-09-26' AS DATE) + INTERVAL 1 WEEK;
+CAST('2006-09-26' AS DATE) + INTERVAL 1 WEEK
+2006-10-03
+create table t1 (a int, b varchar(10));
+insert into t1 values (1, '2001-01-01'),(2, '2002-02-02');
+select '2007-01-01' + interval a day from t1;
+'2007-01-01' + interval a day
+2007-01-02
+2007-01-03
+select b + interval a day from t1;
+b + interval a day
+2001-01-02
+2002-02-04
+drop table t1;
+End of 5.0 tests
+#
+# Bug #27004806: UBSAN: ITEM_DATE_ADD_INTERVAL - NEGATION OF XYZ AND SIGNED INTEGER OVERFLOW
+#
+SELECT ADDDATE('8112-06-20', REPEAT('1', 32));
+ADDDATE('8112-06-20', REPEAT('1', 32))
+NULL
+Warnings:
+Warning	1441	Datetime function: datetime field overflow

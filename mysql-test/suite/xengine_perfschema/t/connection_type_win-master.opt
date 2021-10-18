@@ -1,0 +1,2 @@
+--local-infile=true
+--default_storage_engine=xengine

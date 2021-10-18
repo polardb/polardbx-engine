@@ -1,0 +1,87 @@
+# ==== Purpose ====
+# The purpose of this script is to test that binary logging returns an error
+# if more than one engine is involved and at least one of them it's doing its
+# own logging (is *self-logging*), which is the case for NDB engine.
+#
+# ==== Requirements ====
+#
+# R1. When more than one engine is involved in binary logging and at least one
+#     engine is self-logging then binary logging should return error
+#     `ER_BINLOG_MULTIPLE_ENGINES_AND_SELF_LOGGING_ENGINE`.
+#
+# ==== Implementation ====
+#
+# TC1. Verify that when more than one engine is involved in binary logging and
+#      at least one engine is self-logging then binary logging should return
+#      error `ER_BINLOG_MULTIPLE_ENGINES_AND_SELF_LOGGING_ENGINE`.
+# ------------------------------------------------------------------
+# With BINLOG_FORMAT = ROW :
+# 1) Create a trigger which inserts data in MYISAM engine upon insertion of
+#    data in NDB engine.
+# 2) Try to insert data in the NDB ENGINE.
+# 3) Verify that error `ER_BINLOG_ROW_ENGINE_AND_STMT_ENGINE` is returned.
+# 4) Verify that no data was inserted in the NDB engine.
+# 5) Verify that no data was inserted in MYISAM engine.
+#
+# ==== References ====
+#
+# BUG#39934: Slave stops for engine that only support row-based logging
+# BUG#42829: binlogging enabled for all schemas regardless of binlog-db-db /
+# binlog-ignore-db
+#
+# ==== Related test cases ====
+#
+# rpl.rpl_binlog_format_errors verifies that binary logging returns an error
+# for the conditions 1 to 7 listed in the comments section of method
+# decide_logging_format(). Condition 8 requires a self-logging engine which
+# is the case of NDB and therefore it is tested in this script.
+
+# Need debug so that 'SET @@session.debug' works.
+--source include/have_debug.inc
+# Need example plugin because it is the only statement-only engine.
+--source include/have_example_plugin.inc
+# The test changes binlog_format, so there is no reason to run it
+# under more than one binlog format.
+--source include/have_binlog_format_row.inc
+--source include/have_ndb.inc
+# The test requires MyISAM engine
+--source include/have_myisam.inc
+--source suite/ndb_rpl/ndb_master-slave.inc
+
+--disable_query_log
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+CALL mtr.add_suppression("Cannot execute statement: impossible to write to binary log");
+--enable_query_log
+
+--echo ==== Initialize ====
+
+
+--echo [on master]
+--source include/rpl_connection_master.inc
+
+CREATE TABLE t (a VARCHAR(100)) ENGINE = MYISAM;
+CREATE TABLE t_self_logging (a VARCHAR(100)) ENGINE = NDB;
+
+--echo [on slave]
+--source include/sync_slave_sql_with_master.inc
+
+--echo [on master]
+--source include/rpl_connection_master.inc
+
+--echo ==== Test ====
+
+--echo ---- binlog_format='row' ----
+
+--echo * Modify tables of more than one engine, one of which is self-logging
+--eval CREATE TRIGGER trig_1 AFTER INSERT ON t_self_logging FOR EACH ROW BEGIN INSERT INTO t VALUES (1); END
+--error ER_BINLOG_MULTIPLE_ENGINES_AND_SELF_LOGGING_ENGINE
+INSERT INTO t_self_logging VALUES (1);
+DROP trigger trig_1;
+SELECT * FROM t_self_logging /* Should be empty */;
+SELECT * FROM t /* Should be empty */;
+
+--echo ==== Clean up ====
+DROP TABLE t, t_self_logging;
+--source include/sync_slave_sql_with_master.inc
+
+--source include/rpl_end.inc

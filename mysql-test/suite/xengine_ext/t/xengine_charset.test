@@ -1,0 +1,14 @@
+################################################################################
+# Author:  Chen Shibin                                                         #
+# Date:    2019-07-24                                                          #
+# Purpose: Testing the charsets for XENGINE engine                             #
+#                                                                              #
+# Checking of other prerequisites is in charset_master.test                    #
+################################################################################
+#Want to skip this test from daily Valgrind execution.
+--source include/no_valgrind_without_big.inc
+
+
+let $engine_type= XENGINE;
+--source suite/xengine_ext/charset/charset_master.test
+

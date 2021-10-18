@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_LEVEL_COMPACTION_DYNAMIC_LEVEL_BYTES;
+SELECT @start_global_value;
+@start_global_value
+1
+"Trying to set variable @@global.XENGINE_LEVEL_COMPACTION_DYNAMIC_LEVEL_BYTES to 444. It should fail because it is readonly."
+SET @@global.XENGINE_LEVEL_COMPACTION_DYNAMIC_LEVEL_BYTES   = 444;
+ERROR HY000: Variable 'xengine_level_compaction_dynamic_level_bytes' is a read only variable

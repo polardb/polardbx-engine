@@ -1,0 +1,336 @@
+--echo ##########
+--echo # Test online ddl without rebuild and with rebuild
+--echo ##########
+
+--echo ##########
+--echo # case 1 Test online inplace DDL no rebuild, which means all old subtable should be kept as same
+--echo ##########
+--echo # BUG#23983934
+--echo # https://work.aone.alibaba-inc.com/issue/23983934
+
+--echo #############################################################
+--echo # case 1.1 add new key, INDEX_ID of old key should be kept as same
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name CHAR(30), room INT, code INT, score FLOAT, UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三', 1, 128, 80), (2, '李四', 2, 256, 90);
+--replace_column 10 #
+EXPLAIN SELECT code from t;
+SELECT code from t;
+
+--echo # add new secondary key
+ALTER TABLE t ADD INDEX sk(score), ADD UNIQUE INDEX idx_room(room);
+--replace_column 10 #
+EXPLAIN SELECT code from t;
+SELECT code from t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of of pk and uk should not be changed after adding new key
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no" AND "$old_uk_index_no" = "$new_uk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 1.2 drop secondary key, INDEX_ID of PRIMARY key should be kept as same
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name CHAR(30), code INT, UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+SELECT * from t;
+
+--echo # drop secondary key
+ALTER TABLE t DROP INDEX uk;
+SELECT * from t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk should not be changed after dropping secondery key
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 1.3 rename secondary key, INDEX_ID of the key should be kept as same
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name CHAR(30), code INT, UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+--replace_column 10 #
+EXPLAIN SELECT code from t;
+SELECT code from t;
+
+--echo # rename secondary key
+ALTER TABLE t RENAME INDEX uk TO uk_c;
+--replace_column 10 #
+EXPLAIN SELECT code from t;
+SELECT code from t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk_c', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk and uk should not be changed after rename secondary key
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no" AND "$old_uk_index_no" = "$new_uk_index_no"
+--source include/assert.inc
+
+--echo # change index visibility
+ALTER TABLE t ALTER INDEX uk_c INVISIBLE;
+SHOW CREATE TABLE t;
+--replace_column 10 #
+EXPLAIN SELECT code from t;
+SELECT code from t;
+
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk_c', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk and uk should not be changed after changine visibility of index
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no" AND "$old_uk_index_no" = "$new_uk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 1.4 rename column of index, INDEX_ID of the index should be kept as same
+--echo #############################################################
+CREATE TABLE t(i INT PRIMARY KEY, name CHAR(30), code INT, KEY sk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+SELECT * FROM t;
+
+--echo # rename column of PRIMARY key
+ALTER TABLE t RENAME COLUMN i TO id, ALGORITHM=INPLACE;
+SELECT * FROM t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk and sk should not be changed after renaming column of pk
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no" AND "$old_sk_index_no" = "$new_sk_index_no"
+--source include/assert.inc
+
+--echo # rename column of secondary key
+ALTER TABLE t RENAME COLUMN code TO cd, ALGORITHM=INPLACE;
+--replace_column 10 #
+EXPLAIN SELECT cd FROM t;
+SELECT cd FROM t;
+
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk and sk should not be changed after renaming name of sk
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no" AND "$old_sk_index_no" = "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 1.5 extend varchar size within same pack length, INDEX_ID of the index should be kept as same
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name VARCHAR(70), KEY sk_nm(name)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三'), (2, '李四');
+SELECT * FROM t;
+
+--echo # extend varchar column
+ALTER TABLE t MODIFY COLUMN name VARCHAR(120), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk and sk should not be changed after extending varchar column
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no" AND "$old_sk_index_no" = "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 1.6 change comment of key, INDEX_ID of the index should be kept as same
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name VARCHAR(70), KEY sk_nm(name)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三'), (2, '李四');
+SELECT * FROM t;
+
+--echo # extend varchar column
+ALTER TABLE t DROP KEY sk_nm, ADD KEY sk_nm(name) COMMENT 'key on name', ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_pk_index_no" = "$new_pk_index_no" AND "$old_sk_index_no" = "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+
+--echo ##########
+--echo # case 2 Test online inplace DDL with rebuild, which means index number of all old subtable should be channged
+--echo ##########
+
+--echo #############################################################
+--echo # case 2.1 add new primary key, INDEX_ID of all existing keys should be changed
+--echo #############################################################
+CREATE TABLE t(id INT NOT NULL, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+
+ALTER TABLE t ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+SELECT name FROM t;
+SELECT code FROM t;
+
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of uk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_uk_index_no" != "$new_uk_index_no" AND "$old_sk_index_no" != "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 2.2 modify primary key, INDEX_ID of all existing keys should be changed
+--echo #############################################################
+CREATE TABLE t(id INT NOT NULL, col INT PRIMARY KEY, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+
+ALTER TABLE t DROP COLUMN col, ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+SELECT name FROM t;
+SELECT code FROM t;
+
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of uk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_uk_index_no" != "$new_uk_index_no" AND "$old_sk_index_no" != "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 2.3 set non-nullable column nullable, INDEX_ID of all existing keys should be changed
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, col INT NOT NULL, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+
+ALTER TABLE t MODIFY COLUMN col INT, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+SELECT name FROM t;
+SELECT code FROM t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk, uk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_pk_index_no" != "$new_pk_index_no" AND "$old_uk_index_no" != "$new_uk_index_no" AND "$old_sk_index_no" != "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 2.4 set nullable column non-nullable, INDEX_ID of all existing keys should be changed
+--echo #############################################################
+#only strict sql_mode support null-->not null
+SET @save_sql_mode = @@sql_mode;
+SET SQL_MODE = "STRICT_TRANS_TABLES";
+CREATE TABLE t(id INT PRIMARY KEY, col INT, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+
+ALTER TABLE t MODIFY COLUMN col INT NOT NULL, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+SELECT name FROM t;
+SELECT code FROM t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk, uk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_pk_index_no" != "$new_pk_index_no" AND "$old_uk_index_no" != "$new_uk_index_no" AND "$old_sk_index_no" != "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+SET SQL_MODE = @save_sql_mode;
+
+--echo #############################################################
+--echo # case 2.5 insert column, INDEX_ID of all existing keys should be changed
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, '张三', 128), (2, '李四', 256);
+
+ALTER TABLE t ADD COLUMN col INT AFTER id, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+SELECT name FROM t;
+SELECT code FROM t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk, uk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_pk_index_no" != "$new_pk_index_no" AND "$old_uk_index_no" != "$new_uk_index_no" AND "$old_sk_index_no" != "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--echo #############################################################
+--echo # case 2.6 reorder a column, INDEX_ID of all existing keys should be changed
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, col INT, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+
+ALTER TABLE t MODIFY COLUMN col INT AFTER name, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+SELECT name FROM t;
+SELECT code FROM t;
+SELECT * FROM t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk, uk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_pk_index_no" != "$new_pk_index_no" AND "$old_uk_index_no" != "$new_uk_index_no" AND "$old_sk_index_no" != "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+
+--echo #############################################################
+--echo # case 2.7 drop a column, INDEX_ID of all existing keys should be changed
+--echo #############################################################
+CREATE TABLE t(id INT PRIMARY KEY, col INT, name VARCHAR(40), code INT, KEY sk(name), UNIQUE KEY uk(code)) ENGINE=XENGINE;
+--let $old_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $old_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+INSERT INTO t VALUES (1, 1, '张三', 128), (2, 4, '李四', 256);
+
+ALTER TABLE t DROP COLUMN col, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t;
+SELECT name FROM t;
+SELECT code FROM t;
+
+--let $new_pk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_uk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='uk', INDEX_NUMBER, 1)
+--let $new_sk_index_no=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t' AND INDEX_NAME='sk', INDEX_NUMBER, 1)
+--let $assert_text = subtable of pk, uk and sk should not be changed after changing comment of index
+--let $assert_cond = "$old_pk_index_no" != "$new_pk_index_no" AND "$old_uk_index_no" != "$new_uk_index_no" AND "$old_sk_index_no" != "$new_sk_index_no"
+--source include/assert.inc
+
+DROP TABLE t;
+
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,3 @@
+--loose-gtid-mode=on
+--loose-enforce-gtid-consistency
+--default_storage_engine=xengine

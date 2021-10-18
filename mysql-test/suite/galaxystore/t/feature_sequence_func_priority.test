@@ -1,0 +1,145 @@
+# When user has defined nextval/currval function, should use the functions
+# defined by user first.
+
+
+--echo
+--echo Case 1: normal cases
+--echo
+
+# start mysqld with lower_case_table_names=0
+let $restart_parameters = restart: --lower_case_table_names=0;
+--source include/restart_mysqld.inc
+
+connection default;
+use test;
+create sequence s2 start with 1;
+
+delimiter $$;
+create function nextval(a int) returns int begin return 0; end $$
+create function currval(a varchar(100)) returns int begin return 0; end $$
+delimiter ;$$
+
+# user-defined functions with high priority
+select 1 + nextval(0);
+select 1 + currval('a');
+select 1 + `nextval`(0);
+select 1 + `currval`('a');
+
+--error ER_BAD_FIELD_ERROR
+select 1 + nextval(s2);
+--error ER_UNKNOWN_TABLE
+select 1 + nextval(test.s2);
+--error ER_BAD_FIELD_ERROR
+select 1 + currval(s2);
+--error ER_UNKNOWN_TABLE
+select 1 + currval(test.s2);
+
+--connect(conn, localhost, root,,mysql)
+connection conn;
+select database();
+set session sql_log_bin=off;
+
+# not connected to test, use sequence functions
+select 1 + nextval(test.s2);
+select 1 + currval(test.s2);
+
+# not connected to test, use sequence functions, but parameters invalid
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + nextval(0);
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + currval('1');
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select 1 + currval('1', 2);
+
+# schema specified, use udf
+select 1 + test.nextval(0);
+select 1 + test.currval('a');
+
+# schema specified, use udf, but parameters invalid
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+select 1 + test.nextval('a');
+--error ER_BAD_FIELD_ERROR
+select 1 + test.currval(a);
+
+set session sql_log_bin=default;
+
+connection default;
+
+create database Test;
+use Test;
+
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + nextval(0);
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + currval('a');
+
+use test;
+drop sequence s2;
+drop function nextval;
+drop function currval;
+drop database Test;
+
+
+--echo
+--echo Case 2: drop function + create function
+--echo
+
+connection default;
+use test;
+
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + nextval(0);
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + currval('a');
+
+delimiter $$;
+create function nextval(a int) returns int begin return 0; end $$
+create function currval(a varchar(100)) returns int begin return 0; end $$
+delimiter ;$$
+
+select 1 + nextval(0);
+select 1 + currval('a');
+
+drop function nextval;
+drop function currval;
+
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + nextval(0);
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + currval('a');
+
+
+--echo
+--echo Case 3: Drop database
+--echo
+
+connection default;
+create database Test;
+use Test;
+
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + nextval(0);
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + currval('a');
+
+delimiter $$;
+create function nextval(a int) returns int begin return 0; end $$
+create function currval(a varchar(100)) returns int begin return 0; end $$
+delimiter ;$$
+
+select 1 + nextval(0);
+select 1 + currval('a');
+
+use mysql;
+drop database Test;
+create database Test;
+use Test;
+ 
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + nextval(0);
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select 1 + currval('a');
+
+use mysql;
+drop database Test;
+

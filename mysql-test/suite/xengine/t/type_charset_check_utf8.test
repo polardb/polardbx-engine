@@ -1,0 +1,41 @@
+--source suite/xengine/include/have_xengine.inc
+
+CREATE TABLE t1_sec_utf8(ID INT AUTO_INCREMENT, C1 VARCHAR(100), C2 VARCHAR(100), PRIMARY KEY(ID), KEY IDX_C1(C1)) charset utf8;
+CREATE TABLE t1_sec_utf8_bin(ID INT AUTO_INCREMENT, C1 VARCHAR(100), C2 VARCHAR(100), PRIMARY KEY(ID), KEY IDX_C1(C1)) charset utf8 collate utf8_bin;
+
+delimiter //;
+create procedure proc_xengine_utf8()
+begin
+declare total_num int;
+set total_num=256*256;
+set @var=1;
+set autocommit =0;
+while @var<=total_num do
+set @dst=concat('0x',hex(@var));
+set @sql_str_utf8=concat('insert into t1_sec_utf8(id,c1,c2) values(@var, ' , @dst , ',' , @dst, ');');
+set @sql_str_bin=concat('insert into t1_sec_utf8_bin(id,c1,c2) values(@var, ' , @dst , ',' , @dst, ');');
+prepare stmt_utf8 from @sql_str_utf8;
+prepare stmt_bin from @sql_str_bin;
+execute stmt_utf8;
+execute stmt_bin;
+deallocate prepare stmt_utf8;
+deallocate prepare stmt_bin;
+set @var=@var+1;
+if (@var mod 10000=0) then
+commit;
+end if;
+end while;
+commit;
+end;
+//
+delimiter ;//
+
+call proc_xengine_utf8();
+select count(*) from t1_sec_utf8 where char_length(c1)=1 and length(c1) = 2;
+select count(*) from t1_sec_utf8_bin where char_length(c1)=1 and length(c1) = 2;
+
+drop procedure proc_xengine_utf8;
+drop table t1_sec_utf8;
+drop table t1_sec_utf8_bin;
+
+--source suite/xengine/include/check_xengine_log_error.inc

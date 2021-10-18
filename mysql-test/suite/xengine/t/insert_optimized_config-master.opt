@@ -1,0 +1,5 @@
+--xengine_write_buffer_size=16k
+--xengine_level0_file_num_compaction_trigger=4
+--xengine_max_write_buffer_number=16
+--xengine_compression_per_level=kNoCompression
+

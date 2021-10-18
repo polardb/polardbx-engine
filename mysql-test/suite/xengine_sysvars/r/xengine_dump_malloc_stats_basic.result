@@ -1,0 +1,61 @@
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES(1);
+INSERT INTO valid_values VALUES(0);
+INSERT INTO valid_values VALUES('on');
+INSERT INTO valid_values VALUES('off');
+CREATE TABLE invalid_values (value varchar(255));
+SET @start_global_value = @@global.XENGINE_DUMP_MALLOC_STATS;
+SELECT @start_global_value;
+@start_global_value
+0
+'# Setting to valid values in global scope#'
+"Trying to set variable @@global.XENGINE_DUMP_MALLOC_STATS to 1"
+SET @@global.XENGINE_DUMP_MALLOC_STATS   = 1;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+1
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_DUMP_MALLOC_STATS = DEFAULT;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+0
+"Trying to set variable @@global.XENGINE_DUMP_MALLOC_STATS to 0"
+SET @@global.XENGINE_DUMP_MALLOC_STATS   = 0;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+0
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_DUMP_MALLOC_STATS = DEFAULT;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+0
+"Trying to set variable @@global.XENGINE_DUMP_MALLOC_STATS to on"
+SET @@global.XENGINE_DUMP_MALLOC_STATS   = on;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+1
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_DUMP_MALLOC_STATS = DEFAULT;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+0
+"Trying to set variable @@global.XENGINE_DUMP_MALLOC_STATS to off"
+SET @@global.XENGINE_DUMP_MALLOC_STATS   = off;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+0
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_DUMP_MALLOC_STATS = DEFAULT;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+0
+"Trying to set variable @@session.XENGINE_DUMP_MALLOC_STATS to 444. It should fail because it is not session."
+SET @@session.XENGINE_DUMP_MALLOC_STATS   = 444;
+ERROR HY000: Variable 'xengine_dump_malloc_stats' is a GLOBAL variable and should be set with SET GLOBAL
+'# Testing with invalid values in global scope #'
+SET @@global.XENGINE_DUMP_MALLOC_STATS = @start_global_value;
+SELECT @@global.XENGINE_DUMP_MALLOC_STATS;
+@@global.XENGINE_DUMP_MALLOC_STATS
+0
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

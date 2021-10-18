@@ -1,0 +1,17 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression('Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.');
+create table ti (b int auto_increment, a int, primary key (a,b)) engine= innodb;
+ERROR 42000: Incorrect table definition; there can be only one auto column and it must be defined as a key
+create table ti (b int auto_increment, a int, primary key (b,a)) engine= innodb;
+set @@binlog_format=statement;
+*** no warning when autoincrement is the first in PK
+insert into ti set b=null, a=1;
+show warnings;
+Level	Code	Message
+drop table ti;
+include/sync_slave_sql_with_master.inc
+include/rpl_end.inc

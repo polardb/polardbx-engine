@@ -1,0 +1,342 @@
+--source suite/xengine/include/have_xengine.inc
+
+set global xengine_strict_collation_check=1;
+#============================
+# character-set utf8mb4
+#============================
+--disable_warnings
+set names utf8mb4;
+
+#===================
+#prefix-blob-type
+#===================
+drop table if exists tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8mb4 collate utf8mb4_general_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aa');
+insert into tt values(1,'AAcc');
+
+
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8mb4 collate utf8mb4_0900_ai_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aa');
+insert into tt values(1,'AAcc');
+
+
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8mb4 collate utf8mb4_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+#======================
+#prefix-text-type
+#=====================
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8mb4 collate utf8mb4_general_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aacc');
+
+
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8mb4 collate utf8mb4_0900_ai_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'A中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aAcc');
+
+
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8mb4 collate utf8mb4_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+
+#============================
+# character-set utf8
+#============================
+
+set names utf8;
+#===================
+#prefix-blob-type
+#===================
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8 collate utf8_general_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aa');
+insert into tt values(1,'AAcc');
+
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8 collate utf8_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+#======================
+#prefix-text-type
+#=====================
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8 collate utf8_general_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aacc');
+
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8 collate utf8_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+--error 1062
+insert into tt values(1,'a中');
+
+insert into tt values(1,'aabb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+
+#============================
+# character-set gbk
+#============================
+
+set names gbk;
+
+#===================
+#prefix-blob-type
+#===================
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=gbk collate gbk_chinese_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+--error 1062
+insert into tt values(1,'aa');
+
+insert into tt values(1,'acbb');
+
+insert into tt values(1,'AAcc');
+
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=gbk collate gbk_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+--error 1062
+insert into tt values(1,'aa');
+
+insert into tt values(1,'acbb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+#======================
+#prefix-text-type
+#=====================
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=gbk collate gbk_chinese_ci;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+--error 1062
+insert into tt values(1,'aa');
+
+insert into tt values(1,'acbb');
+
+--error 1062
+insert into tt values(1,'aacc');
+
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=gbk collate gbk_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+--error 1062
+insert into tt values(1,'aa');
+
+insert into tt values(1,'acbb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+
+#============================
+# character-set latin1_bin
+#============================
+set names latin1;
+#===================
+#prefix-blob-type
+#===================
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=latin1;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+--error 1062
+insert into tt values(1,'aa');
+
+insert into tt values(1,'acbb');
+
+insert into tt values(1,'AAcc');
+
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=latin1 collate latin1_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+--error 1062
+insert into tt values(1,'aa');
+
+insert into tt values(1,'acbb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+#======================
+#prefix-text-type
+#=====================
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=latin1;
+
+--error 1105
+alter table tt add unique index idx_uk(c1(2));
+
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=latin1 collate latin1_bin;
+
+alter table tt add unique index idx_uk(c1(2));
+
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+--error 1062
+insert into tt values(1,'aa');
+
+insert into tt values(1,'acbb');
+
+--error 1062
+insert into tt values(1,'aacc');
+insert into tt values(1,'aAcc');
+select * from tt;
+
+--enable_warnings
+drop table tt;
+set global xengine_strict_collation_check=0;
+
+# assume all ERROR generated before this test has been processed by previous tests.
+# here, we can replace ERROR generated by this test whihc is reported during
+# create_cfs with unsupported collation
+--let $REP = <ERROR_replaced_in_xengine.type_lob_prefix>
+--source suite/xengine/include/filter_out_xengine_log_error.inc

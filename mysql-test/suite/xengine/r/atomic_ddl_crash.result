@@ -1,0 +1,418 @@
+# Test create table crash/recovery rollback.
+set session debug='+d, ddl_log_crash_after_drop_subtable_log';
+select @@debug;
+@@debug
+d,ddl_log_crash_after_drop_subtable_log
+CREATE TABLE t1 (a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+Got one of the listed errors
+show create table t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+set session debug='+d, ddl_log_crash_create_after_xengine_success';
+CREATE TABLE t1 (a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+Got one of the listed errors
+show create table t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+set session debug = '+d, ddl_log_crash_before_post_ddl_phase';
+CREATE TABLE t1 (a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  KEY `a` (`a`),
+  KEY `b` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table t1;
+create table t1(a INT, b INT, c INT, key(a), key(b)) engine=xengine;
+insert into t1 values(1,1,1),(2,2,2);
+select * from t1;
+a	b	c
+1	1	1
+2	2	2
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  KEY `a` (`a`),
+  KEY `b` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+set session debug = 'd+, ddl_log_crash_truncate_after_delete_table';
+truncate table t1;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  KEY `a` (`a`),
+  KEY `b` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+a	b	c
+1	1	1
+2	2	2
+set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+truncate table t1;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  KEY `a` (`a`),
+  KEY `b` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+a	b	c
+drop table t1;
+create table t1(id int primary key) engine=xengine;
+insert into t1 values(1),(2),(3);
+set session debug = 'd+, ddl_log_crash_before_xengine_delete_success';
+DROP TABLE t1;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id
+1
+2
+3
+drop table t1;
+create table t1(id int primary key) engine=xengine;
+insert into t1 values(1),(2),(3);
+set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+DROP TABLE t1;;
+Got one of the listed errors
+show create table t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+select count(*) from t1;
+count(*)
+10010
+set session debug = 'd+, ddl_log_crash_after_commit_in_the_middle';
+alter table t1 drop column c1, ALGORITHM=COPY;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=10011 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select count(*) from t1;
+count(*)
+10010
+drop table t1;
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+count(*)
+10010
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=10011 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select count(*) from t1;
+count(*)
+10010
+drop table t1;
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+count(*)
+5
+set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+alter table t1 drop column c1;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id
+1
+2
+3
+4
+5
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),(7,1),(8,1),(9,1),(10,1),(11,1);
+select count(*) from t1;
+count(*)
+11
+set session debug = 'd+, ddl_log_crash_before_write_rename_log';
+alter table t1 rename to t2;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t2;
+ERROR 42S02: Table 'test.t2' doesn't exist
+select * from t1;
+id	c1
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+9	1
+10	1
+11	1
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+count(*)
+5
+set session debug = 'd+, ddl_log_crash_after_write_rename_log';
+alter table t1 rename to t2;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t2;
+ERROR 42S02: Table 'test.t2' doesn't exist
+select * from t1;
+id	c1
+1	1
+2	1
+3	1
+4	1
+5	1
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+count(*)
+5
+set session debug = 'd+, ddl_log_crash_after_xengine_rename_success';
+alter table t1 rename to t2;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show create table t2;
+ERROR 42S02: Table 'test.t2' doesn't exist
+select * from t1;
+id	c1
+1	1
+2	1
+3	1
+4	1
+5	1
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;
+create table t1(id int auto_increment primary key, c1 int) engine=xengine;
+insert into t1 values(1,1),(2,1),(3,1),(4,1),(5,1);
+select count(*) from t1;
+count(*)
+5
+set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+alter table t1 rename to t2;;
+Got one of the listed errors
+show create table t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t2;
+id	c1
+1	1
+2	1
+3	1
+4	1
+5	1
+check table t2;
+Table	Op	Msg_type	Msg_text
+test.t2	check	status	OK
+drop table t2;
+create table t1(id int auto_increment primary key, c1 int, c2 int) engine=xengine;
+insert into t1 values(1,1,1),(2,1,2),(3,1,3),(4,1,4),(5,1,5);
+select count(*) from t1;
+count(*)
+5
+set session debug = 'd+, ddl_log_crash_before_inplace_ddl_commit';
+alter table t1 drop column c2, algorithm=inplace;;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2
+1	1	1
+2	1	2
+3	1	3
+4	1	4
+5	1	5
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+alter table t1 drop column c2, algorithm=inplace;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1
+1	1
+2	1
+3	1
+4	1
+5	1
+drop table t1;
+create table t1(id int auto_increment primary key, c1 int, c2 int) engine=xengine;
+insert into t1 values(1,1,1),(2,1,2),(3,1,3),(4,1,4),(5,1,5);
+select count(*) from t1;
+count(*)
+5
+set session debug = 'd+, ddl_log_crash_before_inplace_ddl_commit';
+alter table t1 add index idx_c1(c1);;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2
+1	1	1
+2	1	2
+3	1	3
+4	1	4
+5	1	5
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+alter table t1 add index idx_c1(c1);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+set session debug = 'd+, ddl_log_crash_before_remove_index_ongoing';
+alter table t1 drop index idx_c1, add unique index idx_uk_c2(c2);;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2
+1	1	1
+2	1	2
+3	1	3
+4	1	4
+5	1	5
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+set session debug = 'd+, ddl_log_crash_after_remove_index_ongoing';
+alter table t1 drop index idx_c1, add unique index idx_uk_c2(c2);;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_c1` (`c1`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2
+1	1	1
+2	1	2
+3	1	3
+4	1	4
+5	1	5
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+set session debug = 'd+, ddl_log_crash_before_post_ddl_phase';
+alter table t1 drop index idx_c1, add unique index idx_uk_c2(c2);;
+Got one of the listed errors
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_uk_c2` (`c2`)
+) ENGINE=XENGINE AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select * from t1;
+id	c1	c2
+1	1	1
+2	1	2
+3	1	3
+4	1	4
+5	1	5
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;

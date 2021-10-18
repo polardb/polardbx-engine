@@ -1,0 +1,30 @@
+--source suite/xengine/include/have_xengine.inc
+--disable_warnings
+drop table if exists t2;
+create table t2(
+       id bigint not null primary key,
+       i1 text, #unique
+       i2 varchar(1024) #unique
+) engine=xengine DEFAULT CHARSET=UTF8 COLLATE=utf8_general_ci;
+drop procedure if exists insert_data_t2;
+--enable_warnings
+
+
+delimiter //;
+CREATE PROCEDURE insert_data_t2(cnt int)
+BEGIN
+  DECLARE i int DEFAULT 0;
+  
+    WHILE i<cnt
+      DO
+        INSERT INTO t2(id,i1,i2) VALUES(i,"xxx",REPEAT(CAST(i AS CHAR(100)),100));
+        set i=i+1;
+        end WHILE;
+  
+END//
+delimiter ;//
+call insert_data_t2(3000);
+ALTER TABLE t2 ADD index indx1(i2) , ALGORITHM=inplace;
+drop table t2;
+DROP PROCEDURE insert_data_t2;
+--source suite/xengine/include/check_xengine_log_error.inc

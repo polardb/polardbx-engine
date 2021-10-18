@@ -1,0 +1,36 @@
+create database lizard_db;
+use information_schema;
+select * from INNODB_TABLESPACES where space = 4294967290;
+SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
+4294967290	innodb_lizard	18432	Any	16384	0	General	4096	12582912	12582912	8.0.18	1	N	normal
+select * from INNODB_TABLESPACES_BRIEF where space = 4294967290;
+SPACE	NAME	PATH	FLAG	SPACE_TYPE
+4294967290	innodb_lizard	lizard.ibd	18432	General
+select * from INNODB_DATAFILES where space = 4294967290;
+SPACE	PATH
+4294967290	lizard.ibd
+SET SESSION debug= '+d, skip_dd_table_access_check';
+select * from mysql.tablespaces where id = 3;
+id	name	options	se_private_data	comment	engine
+3	innodb_lizard	encryption=N;	flags=18432;id=4294967290;server_version=80018;space_version=1;state=normal;		InnoDB
+select * from mysql.tablespace_files where tablespace_id = 3;
+tablespace_id	ordinal_position	file_name	se_private_data
+3	1	lizard.ibd	NULL
+use lizard_db;
+create table t(id int) engine=innodb tablespace=innodb_lizard;
+ERROR 42000: InnoDB: `innodb_lizard` is a reserved tablespace name.
+CREATE TABLESPACE `innodb_lizard` ADD DATAFILE 'lizard.ibd' Engine=InnoDB;
+ERROR 42000: InnoDB: `innodb_lizard` is a reserved tablespace name.
+CREATE TABLESPACE `innodb_lizard` ADD DATAFILE 'xx.ibd' Engine=InnoDB;
+ERROR 42000: InnoDB: `innodb_lizard` is a reserved tablespace name.
+CREATE TABLESPACE `xx` ADD DATAFILE 'lizard.ibd' Engine=InnoDB;
+ERROR HY000: Duplicate file name for tablespace 'xx'
+create table t(id int)engine =innodb;
+alter table t tablespace innodb_lizard;
+ERROR 42000: InnoDB: `innodb_lizard` is a reserved tablespace name.
+drop table t;
+alter tablespace innodb_lizard rename to xxxx;
+ERROR 42000: InnoDB: `innodb_lizard` is a reserved tablespace name.
+drop tablespace innodb_lizard;
+ERROR 42000: InnoDB: `innodb_lizard` is a reserved tablespace name.
+drop database lizard_db;

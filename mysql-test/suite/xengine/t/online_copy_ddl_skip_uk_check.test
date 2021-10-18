@@ -1,0 +1,390 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--echo Skip unique check test of online copied ddl
+
+--echo # Establish another connection (user=root) for concurrent DML
+connect (dml,localhost,root,,);
+connection default;
+
+--echo ###################################################################
+--echo case 1 Skip unique check with online DML
+--echo ###################################################################
+--echo case 1.1 new table copies hidden pk and unique sk from old table, DML will insert duplicate key
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(100), d FLOAT, UNIQUE KEY uk1_1(b))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 0.1), (2, 'bbbb', 0.2);
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 0.3);
+  --error 1062
+  INSERT INTO t1 VALUES(4, 'bbbb', 0.4);
+  # this will not be DEL+PUT in new table
+  UPDATE t1 SET b='bbbbcccc' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.2 new table copies user defined pk and unique sk from old table, DML will insert duplicate key
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), d FLOAT, UNIQUE KEY uk1_2(b))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 0.1), (2, 'bbbb', 0.2);
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 0.3);
+  --error 1062
+  INSERT INTO t1 VALUES(4, 'bbbb', 0.4);
+  # this will not be DEL+PUT in new table
+  UPDATE t1 SET b='bbbbcccc' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+--error 1062
+INSERT INTO t1 VALUES(3, 'cccc', 'c', 0.3);
+INSERT INTO t1 VALUES(4, 'dddd', 'd', 0.4);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.3 new table copies hidden pk and unique sk from old table, DML will add duplicate key with update
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(100), d FLOAT, UNIQUE KEY uk1_3(b))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 0.1), (2, 'bbbb', 0.2);
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 0.3);
+  --error 1062
+  UPDATE t1 SET b='bbbb' WHERE a=1;
+  # this will not be DEL+PUT in new table
+  UPDATE t1 SET b='bbbbcccc' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.4 new table copies user defined pk and unique sk from old table, DML will add duplicate key with update
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), d FLOAT, UNIQUE KEY uk1_4(b))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 0.1), (2, 'bbbb', 0.2);
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 0.3);
+  --error 1062
+  UPDATE t1 SET b='bbbb' WHERE a=3;
+  # this will not be DEL+PUT in new table
+  UPDATE t1 SET b='bbbbcccc' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+--error 1062
+INSERT INTO t1 VALUES(5, 'bbbb', 'c', 0.5);
+INSERT INTO t1 VALUES(4, 'dddd', 'd', 0.4);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.5 Skip unique check when DDL do index renaming with other rebuild DDL operation
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), d INT, UNIQUE KEY ukb(b(4)), KEY sk(d))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 1), (2, 'bbbbbbbb', 2);
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD COLUMN c CHAR(10) AFTER b, RENAME KEY ukb to uk1_5, RENAME KEY sk TO sk1_5, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'ccccccccc', 2);
+  --error 1062
+  UPDATE t1 SET b='bbbbccccc' WHERE a=3;
+  # this will not be DEL+PUT in new table
+  UPDATE t1 SET b='bbbcccc' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+--error 1062
+INSERT INTO t1 VALUES(4, 'bbbcccc', 'ddddd', 0.3);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.6 Skip unique check when DDL alter visibility of index 
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), d INT, UNIQUE KEY uk1_6(b(4)), KEY sk1_6(d))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 1), (2, 'bbbbbbbb', 2);
+--echo inplace ddl without rebuild
+ALTER TABLE t1 ALTER INDEX uk1_6 INVISIBLE, ALTER INDEX sk1_6 INVISIBLE, ALGORITHM=INPLACE;
+--error 1062
+INSERT INTO t1 VALUES (3, 'aaaa', 1);
+SHOW CREATE TABLE t1;
+
+--echo inplace ddl with rebuild
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ALTER INDEX uk1_6 VISIBLE, ALTER INDEX sk1_6 VISIBLE, ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'ccccccccc', 2);
+  --error 1062
+  UPDATE t1 SET b='bbbbccccc' WHERE a=3;
+  # this will not be DEL+PUT in new table
+  UPDATE t1 SET b='bbbccccc' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+reap;
+CHECK TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES (3, 'aaaa', 'c', 1);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+
+--echo ###################################################################
+--echo case 2 Don't skip unique check with online DML
+--echo ###################################################################
+--echo case 2.1 new table copies hidden pk and change unique sk, DML will insert duplicate key
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(100), d FLOAT, UNIQUE KEY uk2_1(b(10)))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 0.1), (2, 'bbbbbbbb', 0.2);
+
+#skip unique checn on HIDDEN_PK, not skip unique check on uk2_1
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP KEY uk2_1, ADD UNIQUE KEY uk2_1(a, b(4)), ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 0.3);
+  INSERT INTO t1 VALUES(2, 'bbbb', 0.4);
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.2 new table copies user defined pk and change unique sk, DML will insert duplicate key
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), d INT, UNIQUE KEY uk2_2(b))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 1), (2, 'bbbbbbbb', 2);
+
+#skip unique check of PK, not skip unique check on uk2_2
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP KEY uk2_2, ADD UNIQUE KEY uk2_2(b(4), d), ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_create_sk_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 3);
+  INSERT INTO t1 VALUES(4, 'bbbb', 2);
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+--error 1062
+INSERT INTO t1 VALUES(3, 'cccc', 3);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.3 new table copies hidden pk and change unique sk, DML will add duplicate key with update
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(100), d FLOAT, UNIQUE KEY uk2_3(b(10)))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 0.1), (2, 'bbbbbbbb', 0.2);
+
+#skip unique check of HIDDEN_PK and SK, not skip unique check on uk2_3
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP KEY uk2_3, ADD UNIQUE KEY uk2_3(a, b(4)), ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_create_sk_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 0.3);
+  UPDATE t1 SET a=2, b='bbbbcc' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.4 new table copies user defined pk and change unique sk, DML will add duplicate key with update
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), d INT, UNIQUE KEY uk2_4(b(10)))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa', 1), (2, 'bbbbbbbb', 2);
+
+#skip unique check of PK, not skip unique check on uk2_4
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP KEY uk2_4, ADD UNIQUE KEY uk2_4(b(4), d), ADD COLUMN c CHAR(10) DEFAULT NULL AFTER b, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_create_sk_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'cccc', 2);
+  UPDATE t1 SET b='bbbb' WHERE a=3;
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+--error 1062
+INSERT INTO t1 VALUES(3, 'cccc', 3);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.5 Don't skip unique check when DDL change index definition and do index renaming
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), c CHAR(10), d INT, UNIQUE KEY ukb(b(4), c(6)), KEY sk(d))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa1111', 'c111111', 1), (2, 'bbbb', 'cccccc', 2);
+
+#skip unique check of PK and SK, not skip unique check on uk2_5
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP COLUMN c, RENAME KEY ukb to uk2_5, RENAME KEY sk TO sk2_5, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_create_sk_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'aaaa333333', 'ccccccccc', 2);
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+--error 1062
+INSERT INTO t1 VALUES(3, 'ccccccc', 'ddddd', 3);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.6 new table redefines primary key and copies unique key
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(100), c CHAR(10), d INT NOT NULL, UNIQUE KEY ukb(b(4), c(6)))ENGINE=XENGINE;
+SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'aaaa1111', 'c111111', 1), (2, 'bbbb', 'cccccc', 2);
+
+#skip unique check on uk2_6, not skip unique check on PK
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP COLUMN a, ADD PRIMARY KEY(d), RENAME KEY ukb to uk2_6, ALGORITHM=INPLACE;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, 'aaaa333333', 'ccccccccc', 3);
+  SELECT * FROM t1;
+  # signal DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+--error 1062
+INSERT INTO t1 VALUES('ccccccc', 'ddddd', 3);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--source suite/xengine/include/check_xengine_log_error.inc

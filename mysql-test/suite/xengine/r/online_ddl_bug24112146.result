@@ -1,0 +1,317 @@
+CREATE TABLE t1 (a INT NOT NULL, b INT, KEY kb(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1), (2, 1);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `kb` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b
+1	1
+2	1
+SET DEBUG_SYNC= 'xengine.inplace_populate_primary_key_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 1);
+SELECT * FROM t1;
+a	b
+1	1
+2	1
+2	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `kb` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b
+1	1
+2	1
+2	1
+failed to add primary key
+DROP TABLE t1;
+CREATE TABLE t1 (a INT NOT NULL, b INT, UNIQUE KEY kb(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1), (2, 2);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  UNIQUE KEY `kb` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SET DEBUG_SYNC= 'xengine.inplace_populate_primary_key_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	3
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  UNIQUE KEY `kb` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	3
+failed to add primary key
+DROP TABLE t1;
+select @@xengine_sort_buffer_size into @saved_sort_buffer_size;
+set global xengine_sort_buffer_size=64*1024;
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), KEY kb(b(512)))ENGINE=XENGINE;
+INSERT INTO t1 VALUES(0, repeat('1', 512));;
+INSERT INTO t1 VALUES(1, repeat('1', 512));;
+INSERT INTO t1 VALUES(2, repeat('1', 512));;
+INSERT INTO t1 VALUES(3, repeat('1', 512));;
+INSERT INTO t1 VALUES(4, repeat('1', 512));;
+INSERT INTO t1 VALUES(5, repeat('1', 512));;
+INSERT INTO t1 VALUES(6, repeat('1', 512));;
+INSERT INTO t1 VALUES(7, repeat('1', 512));;
+INSERT INTO t1 VALUES(8, repeat('1', 512));;
+INSERT INTO t1 VALUES(9, repeat('1', 512));;
+INSERT INTO t1 VALUES(10, repeat('1', 512));;
+INSERT INTO t1 VALUES(11, repeat('1', 512));;
+INSERT INTO t1 VALUES(12, repeat('1', 512));;
+INSERT INTO t1 VALUES(13, repeat('1', 512));;
+INSERT INTO t1 VALUES(14, repeat('1', 512));;
+INSERT INTO t1 VALUES(15, repeat('1', 512));;
+INSERT INTO t1 VALUES(16, repeat('1', 512));;
+INSERT INTO t1 VALUES(17, repeat('1', 512));;
+INSERT INTO t1 VALUES(18, repeat('1', 512));;
+INSERT INTO t1 VALUES(19, repeat('1', 512));;
+INSERT INTO t1 VALUES(20, repeat('1', 512));;
+INSERT INTO t1 VALUES(21, repeat('1', 512));;
+INSERT INTO t1 VALUES(22, repeat('1', 512));;
+INSERT INTO t1 VALUES(23, repeat('1', 512));;
+INSERT INTO t1 VALUES(24, repeat('1', 512));;
+INSERT INTO t1 VALUES(25, repeat('1', 512));;
+INSERT INTO t1 VALUES(26, repeat('1', 512));;
+INSERT INTO t1 VALUES(27, repeat('1', 512));;
+INSERT INTO t1 VALUES(28, repeat('1', 512));;
+INSERT INTO t1 VALUES(29, repeat('1', 512));;
+INSERT INTO t1 VALUES(30, repeat('1', 512));;
+INSERT INTO t1 VALUES(31, repeat('1', 512));;
+INSERT INTO t1 VALUES(32, repeat('1', 512));;
+INSERT INTO t1 VALUES(33, repeat('1', 512));;
+INSERT INTO t1 VALUES(34, repeat('1', 512));;
+INSERT INTO t1 VALUES(35, repeat('1', 512));;
+INSERT INTO t1 VALUES(36, repeat('1', 512));;
+INSERT INTO t1 VALUES(37, repeat('1', 512));;
+INSERT INTO t1 VALUES(38, repeat('1', 512));;
+INSERT INTO t1 VALUES(39, repeat('1', 512));;
+INSERT INTO t1 VALUES(40, repeat('1', 512));;
+INSERT INTO t1 VALUES(41, repeat('1', 512));;
+INSERT INTO t1 VALUES(42, repeat('1', 512));;
+INSERT INTO t1 VALUES(43, repeat('1', 512));;
+INSERT INTO t1 VALUES(44, repeat('1', 512));;
+INSERT INTO t1 VALUES(45, repeat('1', 512));;
+INSERT INTO t1 VALUES(46, repeat('1', 512));;
+INSERT INTO t1 VALUES(47, repeat('1', 512));;
+INSERT INTO t1 VALUES(48, repeat('1', 512));;
+INSERT INTO t1 VALUES(49, repeat('1', 512));;
+INSERT INTO t1 VALUES(50, repeat('1', 512));;
+INSERT INTO t1 VALUES(51, repeat('1', 512));;
+INSERT INTO t1 VALUES(52, repeat('1', 512));;
+INSERT INTO t1 VALUES(53, repeat('1', 512));;
+INSERT INTO t1 VALUES(54, repeat('1', 512));;
+INSERT INTO t1 VALUES(55, repeat('1', 512));;
+INSERT INTO t1 VALUES(56, repeat('1', 512));;
+INSERT INTO t1 VALUES(57, repeat('1', 512));;
+INSERT INTO t1 VALUES(58, repeat('1', 512));;
+INSERT INTO t1 VALUES(59, repeat('1', 512));;
+INSERT INTO t1 VALUES(60, repeat('1', 512));;
+INSERT INTO t1 VALUES(61, repeat('1', 512));;
+INSERT INTO t1 VALUES(62, repeat('1', 512));;
+INSERT INTO t1 VALUES(63, repeat('1', 512));;
+INSERT INTO t1 VALUES(64, repeat('1', 512));;
+INSERT INTO t1 VALUES(65, repeat('1', 512));;
+INSERT INTO t1 VALUES(66, repeat('1', 512));;
+INSERT INTO t1 VALUES(67, repeat('1', 512));;
+INSERT INTO t1 VALUES(68, repeat('1', 512));;
+INSERT INTO t1 VALUES(69, repeat('1', 512));;
+INSERT INTO t1 VALUES(70, repeat('1', 512));;
+INSERT INTO t1 VALUES(71, repeat('1', 512));;
+INSERT INTO t1 VALUES(72, repeat('1', 512));;
+INSERT INTO t1 VALUES(73, repeat('1', 512));;
+INSERT INTO t1 VALUES(74, repeat('1', 512));;
+INSERT INTO t1 VALUES(75, repeat('1', 512));;
+INSERT INTO t1 VALUES(76, repeat('1', 512));;
+INSERT INTO t1 VALUES(77, repeat('1', 512));;
+INSERT INTO t1 VALUES(78, repeat('1', 512));;
+INSERT INTO t1 VALUES(79, repeat('1', 512));;
+INSERT INTO t1 VALUES(80, repeat('1', 512));;
+INSERT INTO t1 VALUES(81, repeat('1', 512));;
+INSERT INTO t1 VALUES(82, repeat('1', 512));;
+INSERT INTO t1 VALUES(83, repeat('1', 512));;
+INSERT INTO t1 VALUES(84, repeat('1', 512));;
+INSERT INTO t1 VALUES(85, repeat('1', 512));;
+INSERT INTO t1 VALUES(86, repeat('1', 512));;
+INSERT INTO t1 VALUES(87, repeat('1', 512));;
+INSERT INTO t1 VALUES(88, repeat('1', 512));;
+INSERT INTO t1 VALUES(89, repeat('1', 512));;
+INSERT INTO t1 VALUES(90, repeat('1', 512));;
+INSERT INTO t1 VALUES(91, repeat('1', 512));;
+INSERT INTO t1 VALUES(92, repeat('1', 512));;
+INSERT INTO t1 VALUES(93, repeat('1', 512));;
+INSERT INTO t1 VALUES(94, repeat('1', 512));;
+INSERT INTO t1 VALUES(95, repeat('1', 512));;
+INSERT INTO t1 VALUES(96, repeat('1', 512));;
+INSERT INTO t1 VALUES(97, repeat('1', 512));;
+INSERT INTO t1 VALUES(98, repeat('1', 512));;
+INSERT INTO t1 VALUES(99, repeat('1', 512));;
+INSERT INTO t1 VALUES(100, repeat('1', 512));;
+INSERT INTO t1 VALUES(101, repeat('1', 512));;
+INSERT INTO t1 VALUES(102, repeat('1', 512));;
+INSERT INTO t1 VALUES(103, repeat('1', 512));;
+INSERT INTO t1 VALUES(104, repeat('1', 512));;
+INSERT INTO t1 VALUES(105, repeat('1', 512));;
+INSERT INTO t1 VALUES(106, repeat('1', 512));;
+INSERT INTO t1 VALUES(107, repeat('1', 512));;
+INSERT INTO t1 VALUES(108, repeat('1', 512));;
+INSERT INTO t1 VALUES(109, repeat('1', 512));;
+INSERT INTO t1 VALUES(110, repeat('1', 512));;
+INSERT INTO t1 VALUES(111, repeat('1', 512));;
+INSERT INTO t1 VALUES(112, repeat('1', 512));;
+INSERT INTO t1 VALUES(113, repeat('1', 512));;
+INSERT INTO t1 VALUES(114, repeat('1', 512));;
+INSERT INTO t1 VALUES(115, repeat('1', 512));;
+INSERT INTO t1 VALUES(116, repeat('1', 512));;
+INSERT INTO t1 VALUES(117, repeat('1', 512));;
+INSERT INTO t1 VALUES(118, repeat('1', 512));;
+INSERT INTO t1 VALUES(119, repeat('1', 512));;
+INSERT INTO t1 VALUES(120, repeat('1', 512));;
+INSERT INTO t1 VALUES(121, repeat('1', 512));;
+INSERT INTO t1 VALUES(122, repeat('1', 512));;
+INSERT INTO t1 VALUES(123, repeat('1', 512));;
+INSERT INTO t1 VALUES(124, repeat('1', 512));;
+INSERT INTO t1 VALUES(125, repeat('1', 512));;
+INSERT INTO t1 VALUES(126, repeat('1', 512));;
+INSERT INTO t1 VALUES(127, repeat('1', 512));;
+INSERT INTO t1 VALUES(128, repeat('1', 512));;
+INSERT INTO t1 VALUES(129, repeat('1', 512));;
+INSERT INTO t1 VALUES(130, repeat('1', 512));;
+INSERT INTO t1 VALUES(131, repeat('1', 512));;
+INSERT INTO t1 VALUES(132, repeat('1', 512));;
+INSERT INTO t1 VALUES(133, repeat('1', 512));;
+INSERT INTO t1 VALUES(134, repeat('1', 512));;
+INSERT INTO t1 VALUES(135, repeat('1', 512));;
+INSERT INTO t1 VALUES(136, repeat('1', 512));;
+INSERT INTO t1 VALUES(137, repeat('1', 512));;
+INSERT INTO t1 VALUES(138, repeat('1', 512));;
+INSERT INTO t1 VALUES(139, repeat('1', 512));;
+INSERT INTO t1 VALUES(140, repeat('1', 512));;
+INSERT INTO t1 VALUES(141, repeat('1', 512));;
+INSERT INTO t1 VALUES(142, repeat('1', 512));;
+INSERT INTO t1 VALUES(143, repeat('1', 512));;
+INSERT INTO t1 VALUES(144, repeat('1', 512));;
+INSERT INTO t1 VALUES(145, repeat('1', 512));;
+INSERT INTO t1 VALUES(146, repeat('1', 512));;
+INSERT INTO t1 VALUES(147, repeat('1', 512));;
+INSERT INTO t1 VALUES(148, repeat('1', 512));;
+INSERT INTO t1 VALUES(149, repeat('1', 512));;
+INSERT INTO t1 VALUES(150, repeat('1', 512));;
+INSERT INTO t1 VALUES(151, repeat('1', 512));;
+INSERT INTO t1 VALUES(152, repeat('1', 512));;
+INSERT INTO t1 VALUES(153, repeat('1', 512));;
+INSERT INTO t1 VALUES(154, repeat('1', 512));;
+INSERT INTO t1 VALUES(155, repeat('1', 512));;
+INSERT INTO t1 VALUES(156, repeat('1', 512));;
+INSERT INTO t1 VALUES(157, repeat('1', 512));;
+INSERT INTO t1 VALUES(158, repeat('1', 512));;
+INSERT INTO t1 VALUES(159, repeat('1', 512));;
+INSERT INTO t1 VALUES(160, repeat('1', 512));;
+INSERT INTO t1 VALUES(161, repeat('1', 512));;
+INSERT INTO t1 VALUES(162, repeat('1', 512));;
+INSERT INTO t1 VALUES(163, repeat('1', 512));;
+INSERT INTO t1 VALUES(164, repeat('1', 512));;
+INSERT INTO t1 VALUES(165, repeat('1', 512));;
+INSERT INTO t1 VALUES(166, repeat('1', 512));;
+INSERT INTO t1 VALUES(167, repeat('1', 512));;
+INSERT INTO t1 VALUES(168, repeat('1', 512));;
+INSERT INTO t1 VALUES(169, repeat('1', 512));;
+INSERT INTO t1 VALUES(170, repeat('1', 512));;
+INSERT INTO t1 VALUES(171, repeat('1', 512));;
+INSERT INTO t1 VALUES(172, repeat('1', 512));;
+INSERT INTO t1 VALUES(173, repeat('1', 512));;
+INSERT INTO t1 VALUES(174, repeat('1', 512));;
+INSERT INTO t1 VALUES(175, repeat('1', 512));;
+INSERT INTO t1 VALUES(176, repeat('1', 512));;
+INSERT INTO t1 VALUES(177, repeat('1', 512));;
+INSERT INTO t1 VALUES(178, repeat('1', 512));;
+INSERT INTO t1 VALUES(179, repeat('1', 512));;
+INSERT INTO t1 VALUES(180, repeat('1', 512));;
+INSERT INTO t1 VALUES(181, repeat('1', 512));;
+INSERT INTO t1 VALUES(182, repeat('1', 512));;
+INSERT INTO t1 VALUES(183, repeat('1', 512));;
+INSERT INTO t1 VALUES(184, repeat('1', 512));;
+INSERT INTO t1 VALUES(185, repeat('1', 512));;
+INSERT INTO t1 VALUES(186, repeat('1', 512));;
+INSERT INTO t1 VALUES(187, repeat('1', 512));;
+INSERT INTO t1 VALUES(188, repeat('1', 512));;
+INSERT INTO t1 VALUES(189, repeat('1', 512));;
+INSERT INTO t1 VALUES(190, repeat('1', 512));;
+INSERT INTO t1 VALUES(191, repeat('1', 512));;
+INSERT INTO t1 VALUES(192, repeat('1', 512));;
+INSERT INTO t1 VALUES(193, repeat('1', 512));;
+INSERT INTO t1 VALUES(194, repeat('1', 512));;
+INSERT INTO t1 VALUES(195, repeat('1', 512));;
+INSERT INTO t1 VALUES(196, repeat('1', 512));;
+INSERT INTO t1 VALUES(197, repeat('1', 512));;
+INSERT INTO t1 VALUES(198, repeat('1', 512));;
+INSERT INTO t1 VALUES(199, repeat('1', 512));;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci,
+  KEY `kb` (`b`(512))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SET DEBUG_SYNC= 'xengine.inplace_populate_primary_key_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, repeat('1', 512));
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` longtext COLLATE utf8mb4_general_ci,
+  KEY `kb` (`b`(512))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+failed to add primary key
+DROP TABLE t1;
+set global xengine_sort_buffer_size=@saved_sort_buffer_size;

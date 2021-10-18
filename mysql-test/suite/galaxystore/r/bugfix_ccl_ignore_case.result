@@ -1,0 +1,24 @@
+call dbms_ccl.add_ccl_rule("SELECT", "information_schema", "referential_constraints", 1, "");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	information_schema	referential_constraints	Y	N	1	0	0	0	
+SELECT kcu.constraint_name, kcu.column_name, kcu.referenced_table_name,
+kcu.referenced_column_name
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu
+ON ((kcu.constraint_catalog = rc.constraint_catalog
+OR (kcu.constraint_catalog IS NULL
+AND rc.constraint_catalog IS NULL))
+AND kcu.constraint_schema = rc.constraint_schema
+AND kcu.constraint_name = rc.constraint_name)
+WHERE (rc.constraint_schema = DATABASE()
+AND kcu.table_schema = DATABASE()
+AND rc.table_name = 'prefix_special_activity'
+                      AND kcu.table_name = 'prefix_special_activity');
+constraint_name	column_name	referenced_table_name	referenced_column_name
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	information_schema	referential_constraints	Y	N	1	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();

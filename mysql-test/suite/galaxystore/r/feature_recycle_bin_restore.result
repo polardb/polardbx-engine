@@ -1,0 +1,226 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("Fail to recycle table");
+call mtr.add_suppression("Incorrect key file");
+create database db_recycle;
+create database db_recycle_2;
+create user super_1@'%' identified by 'pass';
+create user super_2@'%' identified by 'pass';
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+create user normal_4@'%' identified by 'pass';
+create user normal_5@'%' identified by 'pass';
+grant all on *.* to super_1@'%';
+grant all on *.* to super_2@'%';
+grant all on db_recycle.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_1@'%' ;
+grant create tablespace on *.* to normal_1@'%' ;
+grant SYSTEM_VARIABLES_ADMIN on *.* to normal_1@'%';
+grant select on db_recycle.* to normal_2@'%' ;
+grant all on db_recycle_2.* to normal_2@'%' ;
+grant select on __recycle_bin__.* to normal_2@'%' ;
+grant select on db_recycle.* to normal_3@'%' ;
+grant select on db_recycle_2.* to normal_3@'%' ;
+grant all on __recycle_bin__.* to normal_3@'%' ;
+grant select on db_recycle.* to normal_4@'%' ;
+grant all on db_recycle_2.* to normal_4@'%' ;
+grant select,alter,drop on __recycle_bin__.* to normal_4@'%' ;
+grant select on db_recycle.* to normal_5@'%' ;
+grant select,insert,create on db_recycle_2.* to normal_5@'%' ;
+grant all on __recycle_bin__.* to normal_5@'%' ;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+------------------------------------------------------
+1. Normal
+-- Restore the table after drop;
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t1(id int);
+drop table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+show grants;
+Grants for super_1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, SUPER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO `super_1`@`%`
+GRANT APPLICATION_PASSWORD_ADMIN,AUDIT_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,GROUP_REPLICATION_ADMIN,INNODB_REDO_LOG_ARCHIVE,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_USER_ID,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,XA_RECOVER_ADMIN ON *.* TO `super_1`@`%`
+call dbms_recycle.restore_table("__innodb_165", "", "");
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
+show tables;
+Tables_in_db_recycle
+t1
+set sql_log_bin = 0;
+drop table t1;
+set sql_log_bin = 1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+call dbms_recycle.restore_table("__innodb_165", "");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_recycle.restore_table; expected 3, got 2
+call dbms_recycle.restore_table("__innodb_165", "", "", "");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_recycle.restore_table; expected 3, got 4
+call dbms_recycle.restore_table("__innodb_165");
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
+set sql_log_bin = 0;
+drop table t1;
+set sql_log_bin = 1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+call dbms_recycle.restore_table("__innodb_165", "db_recycle", "t2");
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
+show tables;
+Tables_in_db_recycle
+t2
+set recycle_bin = 0;
+set sql_log_bin = 0;
+drop table t2;
+set sql_log_bin = 1;
+set recycle_bin = 1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+2. DB and Table check
+-- The origin table must exists and the dest table must not exists;
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t1(id int);
+drop table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+call dbms_recycle.restore_table("", "", "");
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_recycle.restore_table
+call dbms_recycle.restore_table("__innodb_155", "", "");
+ERROR HY000: Recycle table failed : __innodb_155 didn't exist
+create table t1(id int);
+call dbms_recycle.restore_table("__innodb_165", "", "");
+ERROR 42S01: Table 't1' already exists
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
+ERROR HY000: Recycle table failed :  only restore table __innodb_165 on current node, other replicas should be handled separately.
+show tables;
+Tables_in_db_recycle
+t1
+set recycle_bin = 0;
+drop table t1;
+set sql_log_bin = 0;
+drop table db_recycle_2.t1;
+set sql_log_bin = 1;
+set recycle_bin = 1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+3. Privileges
+-- Restore table need SUPER_ACL
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t1(id int);
+create table t2(id int);
+drop table t1;
+drop table t2;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+call dbms_recycle.restore_table("__innodb_166", "db_recycle_2", "t1");
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+use db_recycle_2;
+show tables;
+Tables_in_db_recycle_2
+set recycle_bin = 0;
+set recycle_bin = 1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+4. Rename
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+create table t1(id int);
+drop table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+call dbms_recycle.purge_table("__innodb_165");
+set global recycle_scheduler=on;
+------------------------------------------------------
+5. Foreign key
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=INNODB;
+CREATE TABLE c1 (
+id INT,
+parent_id INT,
+INDEX par_ind (parent_id),
+FOREIGN KEY (parent_id)
+REFERENCES p1(id)
+ON DELETE CASCADE
+) ENGINE=INNODB;
+drop table c1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_148	db_recycle	c1	#	#
+__recycle_bin__	__innodb_166	db_recycle	t2	#	#
+call dbms_recycle.restore_table("__innodb_148", "", "");
+ERROR HY000: Recycle table failed :  only restore table __innodb_148 on current node, other replicas should be handled separately.
+show create table c1;
+Table	Create Table
+c1	CREATE TABLE `c1` (
+  `id` int(11) DEFAULT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  KEY `par_ind` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+set recycle_bin = 0;
+drop table p1;
+set sql_log_bin = 0;
+drop table c1;
+set sql_log_bin = 1;
+set recycle_bin = 1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+** Clean up **
+------------------------------------------------------
+drop database db_recycle;
+drop database db_recycle_2;
+drop user super_1@'%';
+drop user super_2@'%';
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+drop user normal_4@'%';
+drop user normal_5@'%';
+set global read_only = @start_read_only;
+include/rpl_end.inc

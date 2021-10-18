@@ -1,0 +1,17 @@
+set global xengine_strict_collation_check = off;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1(c1 int primary key, c2 mediumblob) engine=xengine;
+INSERT INTO t1 values (1, repeat('a', 16777216));
+set global xengine_force_flush_memtable_now = on;
+restarting...
+# restart
+SELECT c1, MD5(c2) FROM t1;
+c1	MD5(c2)
+1	59bc7c3cf08fcff32cf523fcd58df01d
+set global xengine_compact_cf = 55834574848;
+restarting...
+# restart
+SELECT c1, MD5(c2) FROM t1;
+c1	MD5(c2)
+1	59bc7c3cf08fcff32cf523fcd58df01d
+DROP TABLE t1;

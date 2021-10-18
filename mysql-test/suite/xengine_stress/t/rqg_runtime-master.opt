@@ -1,0 +1,1 @@
+--xengine_strict_collation_check=0  --default-storage-engine=XENGINE --secure_file_priv=

@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_WAL_RECOVERY_MODE;
+SELECT @start_global_value;
+@start_global_value
+1
+"Trying to set variable @@global.XENGINE_WAL_RECOVERY_MODE to 444. It should fail because it is readonly."
+SET @@global.XENGINE_WAL_RECOVERY_MODE   = 444;
+ERROR HY000: Variable 'xengine_wal_recovery_mode' is a read only variable

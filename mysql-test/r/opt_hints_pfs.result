@@ -1,0 +1,65 @@
+#
+# Bug #21286261: QUERY DIGEST DOES NOT REFLECT NEW OPTIMIZER HINTS
+#
+CREATE TABLE t1(i INT);
+CREATE TABLE t2(i INT);
+# Digests should be same (empty hint comment):
+SELECT        * FROM t1;
+SELECT /*+ */ * FROM t1;
+SELECT digest, digest_text FROM performance_schema.events_statements_history ORDER BY timer_start DESC LIMIT 2;
+digest	digest_text
+fbc315167041daed7f27d518083b193df27c39a67a3d5e2fdadc98827d5d6ab3	SELECT * FROM `t1`
+fbc315167041daed7f27d518083b193df27c39a67a3d5e2fdadc98827d5d6ab3	SELECT * FROM `t1`
+# Digests should be different:
+SELECT * FROM t1, t2;
+SELECT /*+
+BKA(t1@qb1)
+BNL(@qb1 t1)
+DUPSWEEDOUT
+FIRSTMATCH
+INTOEXISTS
+LOOSESCAN
+MATERIALIZATION
+MRR(t1)
+NO_BKA(t2)
+NO_BNL(t2)
+NO_ICP(t2)
+NO_MRR(t2)
+NO_RANGE_OPTIMIZATION(t2)
+NO_SEMIJOIN(t2)
+QB_NAME(qb1)
+SEMIJOIN(t1)
+SUBQUERY(t1)
+*/ * FROM t1, t2;
+SELECT digest, digest_text FROM performance_schema.events_statements_history ORDER BY timer_start DESC LIMIT 2;
+digest	digest_text
+61efd771719f5fa74bf5f66846fd11f8466fcee7e1bb8b0d98d778486ec570e3	SELECT /*+ BKA ( `t1`@`qb1` ) BNL ( @`qb1` `t1` ) DUPSWEEDOUT FIRSTMATCH INTOEXISTS LOOSESCAN MATERIALIZATION MRR ( `t1` ) NO_BKA ( `t2` ) NO_BNL ( `t2` ) NO_ICP ( `t2` ) NO_MRR ( `t2` ) NO_RANGE_OPTIMIZATION ( `t2` ) NO_SEMIJOIN ( `t2` ) QB_NAME ( `qb1` ) SEMIJOIN ( `t1` ) SUBQUERY ( `t1` ) */ * FROM `t1` , `t2`
+a1aa9bd2ed9dcfa8945680dfa96b4dcf81a1a2d5015a7a09d1da22a8ee54ef71	SELECT * FROM `t1` , `t2`
+SELECT * FROM t2, t1;
+SELECT /*+ MAX_EXECUTION_TIME(4294967295) */ * FROM t2, t1;
+SELECT digest, digest_text FROM performance_schema.events_statements_history ORDER BY timer_start DESC LIMIT 2;
+digest	digest_text
+f66e71ee60d8eb83847c85deb50d6b99fab5344a31950a444bb484b4c5f9a9c1	SELECT /*+ MAX_EXECUTION_TIME (?) */ * FROM `t2` , `t1`
+a03ffc771fceef026bb78f8bab98e958323e238cd7cfad92753f333ddfcc8ee4	SELECT * FROM `t2` , `t1`
+SELECT 1;
+SELECT /*+ bad_hint_also_goes_to_digest */ 1;
+SELECT digest, digest_text FROM performance_schema.events_statements_history ORDER BY timer_start DESC LIMIT 2;
+digest	digest_text
+89f150a009f68612cdd007c047dd0766813dfab6b206b4acfaddbec466c9f4e3	SELECT /*+ `bad_hint_also_goes_to_digest` */ ?
+f1ea6cee1b4090c784ccd0e75f7a9775104fe39bfb43145466867e56b7d469e7	SELECT ?
+DROP TABLE t1, t2;
+#
+# WL#681: Hint to temporarily set session variable for current statement
+#
+SELECT 1;
+SELECT /*+ SET_VAR(foo = 1K) */ 1;
+SELECT digest, digest_text FROM performance_schema.events_statements_history ORDER BY timer_start DESC LIMIT 2;
+digest	digest_text
+fbfe844970b264275ca0e0e6808314d2a464c9527120bf925c738ed3be22e112	SELECT /*+ SET_VAR ( `foo` = ? ) */ ?
+f1ea6cee1b4090c784ccd0e75f7a9775104fe39bfb43145466867e56b7d469e7	SELECT ?
+SELECT 1;
+SELECT /*+ SET_VAR(bar = 'baz') */ 1;
+SELECT digest, digest_text FROM performance_schema.events_statements_history ORDER BY timer_start DESC LIMIT 2;
+digest	digest_text
+abc8019832d82cd427fe86ca614b9df1b7f86904405d0005c47e0c253d2a1e7c	SELECT /*+ SET_VAR ( `bar` = ? ) */ ?
+f1ea6cee1b4090c784ccd0e75f7a9775104fe39bfb43145466867e56b7d469e7	SELECT ?

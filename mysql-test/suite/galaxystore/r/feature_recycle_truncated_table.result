@@ -1,0 +1,386 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("table already exists in recycle_bin");
+call mtr.add_suppression("Fail to recycle table");
+create database db_recycle;
+create database db_recycle_dummy;
+create user super_1@'%' identified by 'pass';
+create user super_2@'%' identified by 'pass';
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+create user normal_4@'%' identified by 'pass';
+create user normal_5@'%' identified by 'pass';
+grant all on *.* to super_1@'%';
+grant all on *.* to super_2@'%';
+grant all on db_recycle.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_1@'%' ;
+grant create tablespace on *.* to normal_1@'%' ;
+grant SYSTEM_VARIABLES_ADMIN on *.* to normal_1@'%';
+grant file on *.* to normal_1@'%' ;
+grant all on db_recycle_dummy.* to normal_2@'%' ;
+grant all on db_recycle.* to normal_3@'%' ;
+grant all on __recycle_bin__.* to normal_3@'%' ;
+grant all on db_recycle_dummy.* to normal_4@'%' ;
+grant all on __recycle_bin__.* to normal_5@'%' ;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+------------------------------------------------------
+1. Privileges
+-- Still require related privileges if want to
+show recycle bin db;
+-- No one can alter db except super_acl user;
+------------------------------------------------------
+show databases;
+Database
+__recycle_bin__
+db_recycle
+information_schema
+test
+show databases;
+Database
+__recycle_bin__
+db_recycle
+information_schema
+test
+show databases;
+Database
+db_recycle_dummy
+information_schema
+test
+show databases;
+Database
+db_recycle_dummy
+information_schema
+test
+use __recycle_bin__;
+create table t1 (id int);
+drop table t1;
+show tables;
+Tables_in___recycle_bin__
+1.1 dbms_recycle.purge_table still require db.table privileges;
+set global recycle_scheduler=off;
+use db_recycle;
+create table t1(id int);
+insert into t1 values(1);
+truncate table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from __recycle_bin__.__innodb_165;
+id
+1
+call dbms_recycle.purge_table("__innodb_165");
+ERROR 42000: DROP command denied to user 'normal_2'@'localhost' for table '__innodb_165'
+call dbms_recycle.purge_table("__innodb_165");
+ERROR 42000: DROP command denied to user 'normal_5'@'localhost' for table 't1'
+set global recycle_scheduler=on;
+use db_recycle;
+set session recycle_bin=off;
+drop table t1;
+set session recycle_bin=on;
+------------------------------------------------------
+2. truncate table
+-- Related object:
+Column:
+Index:
+Foreign key:
+Trigger:
+View:
+Constraint:
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE p1 (
+id INT NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=INNODB;
+CREATE TABLE c1 (
+id INT CHECK (id >= 1),
+parent_id INT,
+INDEX par_ind (parent_id),
+FOREIGN KEY (parent_id)
+REFERENCES p1(id)
+ON DELETE CASCADE
+) ENGINE=INNODB;
+create table l1(id int);
+CREATE TRIGGER tri_1
+before INSERT ON c1 FOR EACH ROW
+BEGIN
+INSERT INTO l1 value(1);
+END//
+create view v1 as select * from c1;
+truncate table p1;
+ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`db_recycle`.`c1`, CONSTRAINT `c1_ibfk_1`)
+set foreign_key_checks=off;
+truncate table p1;
+insert into c1 values(1, 2);
+set foreign_key_checks=on;
+truncate table c1;
+show create table c1;
+Table	Create Table
+c1	CREATE TABLE `c1` (
+  `id` int(11) DEFAULT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  KEY `par_ind` (`parent_id`),
+  CONSTRAINT `c1_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `p1` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `c1_chk_1` CHECK ((`id` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table p1;
+Table	Create Table
+p1	CREATE TABLE `p1` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_148	db_recycle	c1	#	#
+__recycle_bin__	__innodb_161	db_recycle	p1	#	#
+show create table __recycle_bin__.__innodb_148;
+Table	Create Table
+__innodb_148	CREATE TABLE `__innodb_148` (
+  `id` int(11) DEFAULT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  KEY `par_ind` (`parent_id`),
+  CONSTRAINT `__innodb_148_chk_1` CHECK ((`id` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table __recycle_bin__.__innodb_161;
+Table	Create Table
+__innodb_161	CREATE TABLE `__innodb_161` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from __recycle_bin__.__innodb_161;
+id
+select * from __recycle_bin__.__innodb_148;
+id	parent_id
+1	2
+check the valid of view and trigger
+insert into p1 values(2);
+insert into c1 values(2, 2);
+select * from p1;
+id
+2
+select * from c1;
+id	parent_id
+2	2
+select * from v1;
+id	parent_id
+2	2
+select * from l1;
+id
+1
+1
+drop table c1;
+drop table l1;
+drop view v1;
+drop table p1;
+set global recycle_scheduler=on;
+------------------------------------------------------
+3. partition table
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLE t3 (
+firstname VARCHAR(25) NOT NULL,
+lastname VARCHAR(25) NOT NULL,
+username VARCHAR(16) NOT NULL,
+email VARCHAR(35),
+joined DATE NOT NULL
+)
+PARTITION BY RANGE( YEAR(joined) ) (
+PARTITION p0 VALUES LESS THAN (1960),
+PARTITION p1 VALUES LESS THAN (1970),
+PARTITION p2 VALUES LESS THAN (1980),
+PARTITION p3 VALUES LESS THAN (1990),
+PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+truncate table t3;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle	t3	#	#
+show create table __recycle_bin__.__innodb_167;
+Table	Create Table
+__innodb_167	CREATE TABLE `__innodb_167` (
+  `firstname` varchar(25) NOT NULL,
+  `lastname` varchar(25) NOT NULL,
+  `username` varchar(16) NOT NULL,
+  `email` varchar(35) DEFAULT NULL,
+  `joined` date NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`joined`))
+(PARTITION p0 VALUES LESS THAN (1960) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (1970) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN (1980) ENGINE = InnoDB,
+ PARTITION p3 VALUES LESS THAN (1990) ENGINE = InnoDB,
+ PARTITION p4 VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `firstname` varchar(25) NOT NULL,
+  `lastname` varchar(25) NOT NULL,
+  `username` varchar(16) NOT NULL,
+  `email` varchar(35) DEFAULT NULL,
+  `joined` date NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`joined`))
+(PARTITION p0 VALUES LESS THAN (1960) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (1970) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN (1980) ENGINE = InnoDB,
+ PARTITION p3 VALUES LESS THAN (1990) ENGINE = InnoDB,
+ PARTITION p4 VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+call dbms_recycle.purge_table("__innodb_167");
+drop table t3;
+set global recycle_scheduler=on;
+------------------------------------------------------
+4. general tablespace
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+CREATE TABLESPACE `ts1` ADD DATAFILE 'ts1.ibd' Engine=InnoDB;
+create table t4(id int) tablespace ts1;
+truncate table t4;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_168	db_recycle	t4	#	#
+show create table __recycle_bin__.__innodb_168;
+Table	Create Table
+__innodb_168	CREATE TABLE `__innodb_168` (
+  `id` int(11) DEFAULT NULL
+) /*!50100 TABLESPACE `ts1` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `id` int(11) DEFAULT NULL
+) /*!50100 TABLESPACE `ts1` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call dbms_recycle.purge_table("__innodb_168");
+drop table t4;
+call dbms_recycle.purge_table("__innodb_168");
+set global recycle_scheduler=on;
+drop tablespace ts1;
+------------------------------------------------------
+5. Table options:
+key_block_size
+encrypt
+data dir
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle;
+set session sql_log_bin=off;
+create table t5 (a int, b int) DATA DIRECTORY='MYSQL_TMP_DIR/alt_dir';
+show create table t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci DATA DIRECTORY='MYSQL_TMP_DIR/alt_dir/'
+truncate table t5;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_169	db_recycle	t5	#	#
+show create table __recycle_bin__.__innodb_169;
+Table	Create Table
+__innodb_169	CREATE TABLE `__innodb_169` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci DATA DIRECTORY='MYSQL_TMP_DIR/alt_dir/'
+show create table t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci DATA DIRECTORY='MYSQL_TMP_DIR/alt_dir/'
+call dbms_recycle.purge_table("__innodb_169");
+drop table t5;
+call dbms_recycle.purge_table("__innodb_169");
+CREATE TABLE t6 (a INT, b INT)
+ENGINE = InnoDB key_block_size = 8
+PARTITION BY RANGE(a) SUBPARTITION BY KEY(b) (
+PARTITION tens VALUES LESS THAN (100)
+(SUBPARTITION subpart11,
+SUBPARTITION subpart12),
+PARTITION hundreds VALUES LESS THAN (1000)
+(SUBPARTITION subpart21,
+SUBPARTITION subpart22),
+PARTITION thousands VALUES LESS THAN (10000)
+(SUBPARTITION subpart31 DATA DIRECTORY 'MYSQL_TMP_DIR',
+SUBPARTITION subpart32 DATA DIRECTORY 'MYSQL_TMP_DIR' TABLESPACE `innodb_file_per_table`));
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE (`a`)
+SUBPARTITION BY KEY (b)
+(PARTITION tens VALUES LESS THAN (100)
+ (SUBPARTITION subpart11 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB,
+  SUBPARTITION subpart12 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB),
+ PARTITION hundreds VALUES LESS THAN (1000)
+ (SUBPARTITION subpart21 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB,
+  SUBPARTITION subpart22 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB),
+ PARTITION thousands VALUES LESS THAN (10000)
+ (SUBPARTITION subpart31 TABLESPACE = `innodb_file_per_table` DATA DIRECTORY = 'MYSQL_TMP_DIR/' ENGINE = InnoDB,
+  SUBPARTITION subpart32 TABLESPACE = `innodb_file_per_table` DATA DIRECTORY = 'MYSQL_TMP_DIR/' ENGINE = InnoDB)) */
+truncate table t6;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_170	db_recycle	t6	#	#
+show create table __recycle_bin__.__innodb_170;
+Table	Create Table
+__innodb_170	CREATE TABLE `__innodb_170` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE (`a`)
+SUBPARTITION BY KEY (b)
+(PARTITION tens VALUES LESS THAN (100)
+ (SUBPARTITION subpart11 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB,
+  SUBPARTITION subpart12 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB),
+ PARTITION hundreds VALUES LESS THAN (1000)
+ (SUBPARTITION subpart21 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB,
+  SUBPARTITION subpart22 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB),
+ PARTITION thousands VALUES LESS THAN (10000)
+ (SUBPARTITION subpart31 TABLESPACE = `innodb_file_per_table` DATA DIRECTORY = 'MYSQL_TMP_DIR' ENGINE = InnoDB,
+  SUBPARTITION subpart32 TABLESPACE = `innodb_file_per_table` DATA DIRECTORY = 'MYSQL_TMP_DIR' ENGINE = InnoDB)) */
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE (`a`)
+SUBPARTITION BY KEY (b)
+(PARTITION tens VALUES LESS THAN (100)
+ (SUBPARTITION subpart11 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB,
+  SUBPARTITION subpart12 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB),
+ PARTITION hundreds VALUES LESS THAN (1000)
+ (SUBPARTITION subpart21 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB,
+  SUBPARTITION subpart22 TABLESPACE = `innodb_file_per_table` ENGINE = InnoDB),
+ PARTITION thousands VALUES LESS THAN (10000)
+ (SUBPARTITION subpart31 TABLESPACE = `innodb_file_per_table` DATA DIRECTORY = 'MYSQL_TMP_DIR/' ENGINE = InnoDB,
+  SUBPARTITION subpart32 TABLESPACE = `innodb_file_per_table` DATA DIRECTORY = 'MYSQL_TMP_DIR/' ENGINE = InnoDB)) */
+call dbms_recycle.purge_table("__innodb_170");
+drop table t6;
+call dbms_recycle.purge_table("__innodb_170");
+set session sql_log_bin=on;
+set global recycle_scheduler=on;
+drop database db_recycle;
+drop database db_recycle_dummy;
+drop user super_1@'%';
+drop user super_2@'%';
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+drop user normal_4@'%';
+drop user normal_5@'%';
+set global read_only = @start_read_only;
+include/rpl_end.inc

@@ -1,0 +1,2 @@
+--force-restart
+--default_storage_engine=xengine

@@ -1,0 +1,4 @@
+let $engine= MyISAM;
+--source include/ctype_utf8mb4.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

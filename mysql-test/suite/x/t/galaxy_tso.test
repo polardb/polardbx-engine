@@ -1,0 +1,40 @@
+## generated
+## Test query with resultset
+
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+call mtr.add_suppression("Timestamp service failed to open");
+call mtr.add_suppression("tso get failed");
+## Test starts here
+--write_file $MYSQL_TMP_DIR/galaxy_tso.tmp
+## Test data
+-->sql
+create sequence mysql.gts_base cache 1 timestamp;
+-->endsql
+
+Mysqlx.GetTSO {
+  leader_name: "xpchild"
+  batch_count: 10
+}
+-->recv
+
+## Cleanup
+-->sql
+drop sequence if exists mysql.gts_base;
+-->endsql
+
+Mysqlx.GetTSO {
+  leader_name: "xpchild"
+  batch_count: 10
+}
+-->recverror ER_X_GALAXY_TSO_FAILED
+
+EOF
+
+--replace_regex /ts: [0-9]+/ts: x/
+--exec $GALAXYXTEST -ux_root --password='' --file=$MYSQL_TMP_DIR/galaxy_tso.tmp 2>&1
+
+## Cleanup
+--remove_file $MYSQL_TMP_DIR/galaxy_tso.tmp
+--source include/xplugin_drop_user.inc

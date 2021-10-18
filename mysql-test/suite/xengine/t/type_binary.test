@@ -1,0 +1,9 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# BINARY column types
+#
+
+--source type_binary.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

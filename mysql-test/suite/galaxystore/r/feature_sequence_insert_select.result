@@ -1,0 +1,88 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+
+** Prepare **
+[connection master]
+create database seq_test;
+use seq_test;
+create sequence s1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+create table mt1 (id int key, c1 int);
+update s1 set cache = 3;
+insert into mt1 values (1, 0);
+select s1.nextval;
+s1.nextval
+1
+include/sync_slave_sql_with_master.inc
+
+** Insert Select **
+[connection master]
+use seq_test;
+insert into mt1 select s1.nextval, id from mt1;
+insert into mt1 select s1.nextval, id from mt1;
+insert into mt1 select s1.nextval, id from mt1;
+insert into mt1 select s1.nextval, id from mt1;
+select * from mt1;
+id	c1
+1	0
+2	1
+3	1
+4	2
+5	1
+6	2
+7	3
+8	4
+9	1
+10	2
+11	3
+12	4
+13	5
+14	6
+15	7
+16	8
+select * from s1;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+0	17	1	9223372036854775807	1	1	3	0	0
+include/sync_slave_sql_with_master.inc
+[connection slave]
+use seq_test;
+select * from mt1;
+id	c1
+1	0
+2	1
+3	1
+4	2
+5	1
+6	2
+7	3
+8	4
+9	1
+10	2
+11	3
+12	4
+13	5
+14	6
+15	7
+16	8
+select * from s1;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+0	17	1	9223372036854775807	1	1	3	0	0
+
+** Cleanup **
+[connection master]
+use mysql;
+drop database seq_test;
+include/sync_slave_sql_with_master.inc
+include/rpl_end.inc

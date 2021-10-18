@@ -1,0 +1,7 @@
+--source suite/xengine/include/have_xengine.inc
+
+let $trx_isolation = READ COMMITTED;
+
+--source consistent_snapshot.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

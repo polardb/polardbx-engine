@@ -1,0 +1,43 @@
+set global opt_tablestat=on;
+set global opt_indexstat=on;
+create database db_1;
+create table db_1.t1(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key(col2)
+)engine= innodb;
+create temporary table db_1.t3(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key(col2)
+)engine= innodb;
+select count(*) from db_1.t1;
+count(*)
+200
+select * from db_1.t1 where id=1;
+id	col1	col2
+1	test100	100
+update db_1.t1 set col1='update' where id=1;
+delete from db_1.t1 where id=1;
+commit;
+select count(col2) from db_1.t3;
+count(col2)
+100
+drop table db_1.t3;
+select * from information_schema.table_statistics where table_schema='db_1' order by table_schema, table_name;
+TABLE_SCHEMA	TABLE_NAME	ROWS_READ	ROWS_CHANGED	ROWS_CHANGED_X_INDEXES	ROWS_INSERTED	ROWS_DELETED	ROWS_UPDATED	ROWS_READ_DELETE_MARK
+db_1	t1	303	202	404	200	1	1	0
+db_1	t3	100	100	200	100	0	0	0
+select * from information_schema.index_statistics where table_schema='db_1' order by table_schema, table_name, index_name;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	ROWS_READ	SCAN_USED
+db_1	t1	PRIMARY	303	5
+db_1	t3	col2	100	1
+select count(*) from performance_schema.memory_summary_global_by_event_name where event_name = 'memory/sql/object_statistics';
+count(*)
+1
+set global opt_tablestat = ON;
+set global opt_indexstat = ON;
+drop table db_1.t1;
+drop database db_1;

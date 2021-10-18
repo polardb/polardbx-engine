@@ -1,0 +1,380 @@
+call mtr.add_suppression("mysql.concurrency_control");
+create database ccl_db;
+create table ccl_db.t1(id int, name varchar(100));
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%';
+create user 'u1'@'%';
+grant all privileges on ccl_db.* to 'u1'@'%';
+grant all privileges on mysql.* to 'u1'@'%';
+show create table mysql.concurrency_control;
+Table	Create Table
+concurrency_control	CREATE TABLE `concurrency_control` (
+  `Id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `Type` enum('SELECT','UPDATE','INSERT','DELETE') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL DEFAULT 'SELECT',
+  `Schema_name` varchar(64) COLLATE utf8_bin DEFAULT NULL,
+  `Table_name` varchar(64) COLLATE utf8_bin DEFAULT NULL,
+  `Concurrency_count` bigint(20) NOT NULL,
+  `Keywords` text COLLATE utf8_bin,
+  `State` enum('N','Y') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL DEFAULT 'Y',
+  `Ordered` enum('N','Y') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL DEFAULT 'N',
+  PRIMARY KEY (`Id`)
+) /*!50100 TABLESPACE `mysql` */ ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin STATS_PERSISTENT=0 COMMENT='Concurrency control'
+2.1 check privileges
+call dbms_ccl.add_ccl_rule("SELECT", "mysql", "user", 10, "key1;key2;key3");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	mysql	user	Y	N	10	0	0	0	key1;key2;key3
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.del_ccl_rule(1);
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+2.2 test the parameters
+call dbms_ccl.add_ccl_rule("ccl_db", "t1", 10, "key1;key2;key3");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ccl.add_ccl_rule; expected 5, got 4
+call dbms_ccl.add_ccl_rule("ccl_db", 10, 10, "key1;key2;key3");
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ccl.add_ccl_rule; expected 5, got 4
+call dbms_ccl.add_ccl_rule(10, "ccl_db", 10, 10, "key1;key2;key3");
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_ccl.add_ccl_rule
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "", 10, "key1;key2;key3");
+ERROR HY000: Concurrency control rule 0 is not valid when add rule
+call dbms_ccl.add_ccl_rule("select", "", "t1", 10, "key1;key2;key3");
+ERROR HY000: Concurrency control rule 0 is not valid when add rule
+call dbms_ccl.add_ccl_rule("xxxx", "", "t1", 10, "key1;key2;key3");
+ERROR HY000: Concurrency control rule 0 is not valid when add rule
+call dbms_ccl.add_ccl_rule("", "ccl_db", "t1", 10, "key1;key2;key3");
+ERROR HY000: Concurrency control rule 0 is not valid when add rule
+call dbms_ccl.add_ccl_rule("select", "ccl_db",
+"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxpchild", 10, "key1;key2;key3");
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "key1;key2;key3");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	10	0	0	0	key1;key2;key3
+#	SELECT	ccl_db	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxpchild	Y	N	10	0	0	0	key1;key2;key3
+select * from mysql.concurrency_control;
+Id	Type	Schema_name	Table_name	Concurrency_count	Keywords	State	Ordered
+#	SELECT	ccl_db	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	10	key1;key2;key3	Y	N
+#	SELECT	ccl_db	t1	10	key1;key2;key3	Y	N
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+select * from mysql.concurrency_control;
+Id	Type	Schema_name	Table_name	Concurrency_count	Keywords	State	Ordered
+2.3 test the ccl table error.
+alter table mysql.concurrency_control add col1 int;
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "key1;key2;key3");
+ERROR HY000: Cannot load from mysql.concurrency_control. The table is probably corrupted
+call dbms_ccl.del_ccl_rule(1);
+ERROR HY000: Cannot load from mysql.concurrency_control. The table is probably corrupted
+call dbms_ccl.flush_ccl_rule();
+ERROR HY000: Cannot load from mysql.concurrency_control. The table is probably corrupted
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+alter table mysql.concurrency_control drop column col1;
+2.4 test delete warning
+call dbms_ccl.del_ccl_rule(1234567);
+Warnings:
+Warning	7526	Concurrency control rule 1234567 is not found in table
+Warning	7526	Concurrency control rule 1234567 is not found in cache
+2.5 test rule conflicit
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT			Y	N	10	0	0	0	
+call dbms_ccl.add_ccl_rule("select", "", "", 11, "");
+ERROR HY000: Concurrency control rule 5 is duplicate when load command rule
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT			Y	N	10	0	0	0	
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "");
+call dbms_ccl.add_ccl_rule("update", "ccl_db", "t1", 10, "");
+call dbms_ccl.add_ccl_rule("insert", "ccl_db", "t1", 10, "");
+call dbms_ccl.add_ccl_rule("delete", "ccl_db", "t1", 10, "");
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 11, "");
+ERROR HY000: Concurrency control rule 10 is duplicate when load intact rule
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "key1");
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "key2");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	10	0	0	0	
+#	SELECT			Y	N	10	0	0	0	key1
+#	SELECT			Y	N	10	0	0	0	key2
+#	SELECT			Y	N	10	0	0	0	
+#	UPDATE	ccl_db	t1	Y	N	10	0	0	0	
+#	INSERT	ccl_db	t1	Y	N	10	0	0	0	
+#	DELETE	ccl_db	t1	Y	N	10	0	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+3 test the rule match
+call dbms_ccl.add_ccl_rule("select", "", "", 10, "");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT			Y	N	10	0	0	0	
+select "key";
+key
+key
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT			Y	N	10	1	0	0	
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 10, "");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	10	0	0	0	
+#	SELECT			Y	N	10	1	0	0	
+select "key" from ccl_db.t1;
+key
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	10	1	0	0	
+#	SELECT			Y	N	10	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 20, "");
+call dbms_ccl.add_ccl_rule("select", "", "", 20, "key");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	20	0	0	0	
+#	SELECT			Y	N	20	0	0	0	key
+select "key" from ccl_db.t1;
+key
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	20	1	0	0	
+#	SELECT			Y	N	20	0	0	0	key
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	20	1	0	0	
+#	SELECT			Y	N	20	0	0	0	key
+select "key";
+key
+key
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	20	1	0	0	
+#	SELECT			Y	N	20	1	0	0	key
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+4 test keywords
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 30, "");
+call dbms_ccl.add_ccl_rule("select", "", "", 30, "key1;key2;key3");
+select "key1key2" from ccl_db.t1;
+key1key2
+select "key1key2key3";
+key1key2key3
+key1key2key3
+select "key1 key2 key3";
+key1 key2 key3
+key1 key2 key3
+select "key2 key1 key3";
+key2 key1 key3
+key2 key1 key3
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	30	1	0	0	
+#	SELECT			Y	N	30	3	0	0	key1;key2;key3
+update mysql.concurrency_control set ordered = 'Y' where keywords="key1;key2;key3";
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	30	0	0	0	
+#	SELECT			Y	Y	30	0	0	0	key1;key2;key3
+select "key1key2key3";
+key1key2key3
+key1key2key3
+select "key1 key2 key3";
+key1 key2 key3
+key1 key2 key3
+select "key2 key1 key3";
+key2 key1 key3
+key2 key1 key3
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	30	0	0	0	
+#	SELECT			Y	Y	30	2	0	0	key1;key2;key3
+test 5 insert case
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("insert", "ccl_db", "t1", 40, "");
+insert into ccl_db.t1 values(1, 'xpchild');
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	INSERT	ccl_db	t1	Y	N	40	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("insert", "", "", 50, "");
+insert into ccl_db.t1 values(1, 'xpchild');
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	INSERT			Y	N	50	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("insert", "", "", 60, "xpchild");
+insert into ccl_db.t1 values(1, 'xpchild');
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	INSERT			Y	N	60	1	0	0	xpchild
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+test update case
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("update", "ccl_db", "t1", 70, "");
+update ccl_db.t1 set name = 'xpchild' where id = 1;
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	UPDATE	ccl_db	t1	Y	N	70	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("update", "", "", 80, "");
+update ccl_db.t1 set name = 'xpchild' where id = 1;
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	UPDATE			Y	N	80	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("update", "", "", 90, "xpchild");
+update ccl_db.t1 set name = 'xpchild' where id = 1;
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	UPDATE			Y	N	90	1	0	0	xpchild
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+test delete case
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("delete", "ccl_db", "t1", 100, "");
+delete from ccl_db.t1 where name = 'xpchild';
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	DELETE	ccl_db	t1	Y	N	100	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("delete", "", "", 110, "");
+delete from ccl_db.t1 where name = 'xpchild';
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	DELETE			Y	N	110	1	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("delete", "", "", 120, "xpchild");
+delete from ccl_db.t1 where name = 'xpchild';
+commit;
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	DELETE			Y	N	120	1	0	0	xpchild
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+test concurrent case and threads_running
+call dbms_ccl.add_ccl_rule('select', 'ccl_db', 't1', 1, '');
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	1	5	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("select", "", "", 1, "");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT			Y	N	1	0	0	0	
+select 1 from dual;
+1
+1
+create procedure proc_1() flush status;
+create function func_1() returns int begin call proc_1(); return 1; end|
+select func_1() from dual;
+ERROR 0A000: FLUSH is not allowed in stored function or trigger
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule('select', 'ccl_db', 't1', 1, '');
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+create table ccl_db.t2(id int, name varchar(100));
+create table ccl_db.t3(id int, name varchar(100));
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 0, "");
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t2", 0, "id");
+call dbms_ccl.add_ccl_rule("select", "", "", 0, "name");
+call dbms_ccl.add_ccl_rule("select", "", "", 0, "");
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t2	Y	N	0	0	0	0	id
+#	SELECT	ccl_db	t1	Y	N	0	0	0	0	
+#	SELECT			Y	N	0	0	0	0	name
+#	SELECT			Y	N	0	0	0	0	
+select * from ccl_db.t1 limit 1;
+ERROR HY000: Concurrency control refuse to execute query
+select * from ccl_db.t2 limit 1;
+ERROR HY000: Concurrency control refuse to execute query
+select * from ccl_db.t2 where id = 1;
+ERROR HY000: Concurrency control refuse to execute query
+select * from ccl_db.t3;
+ERROR HY000: Concurrency control refuse to execute query
+select func_1() from dual;
+ERROR HY000: Concurrency control refuse to execute query
+call proc_1();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t2	Y	N	0	1	0	0	id
+#	SELECT	ccl_db	t1	Y	N	0	1	0	0	
+#	SELECT			Y	N	0	0	0	0	name
+#	SELECT			Y	N	0	3	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("select", "ccl_db", "t1", 0, "");
+select * from ccl_db.t1 where id in (select id from ccl_db.t2);
+ERROR HY000: Concurrency control refuse to execute query
+select * from ccl_db.t2 where id in (select id from ccl_db.t1);
+ERROR HY000: Concurrency control refuse to execute query
+select * from ccl_db.t1 union select * from ccl_db.t2;
+ERROR HY000: Concurrency control refuse to execute query
+select * from ccl_db.t2 limit 1;
+id	name
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+#	SELECT	ccl_db	t1	Y	N	0	3	0	0	
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+drop function func_1;
+drop procedure proc_1;
+drop database ccl_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';

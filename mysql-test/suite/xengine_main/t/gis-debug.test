@@ -1,0 +1,5 @@
+--source include/have_debug.inc
+
+--source include/gis_debug.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

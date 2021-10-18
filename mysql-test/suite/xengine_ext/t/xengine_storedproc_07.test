@@ -1,0 +1,5 @@
+#### suite/xengine_ext/t/innodb_storedproc_07.test
+
+let $engine_type= XENGINE;
+
+--source suite/xengine_ext/storedproc/storedproc_07.inc

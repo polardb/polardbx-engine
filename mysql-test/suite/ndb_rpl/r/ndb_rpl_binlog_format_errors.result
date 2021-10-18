@@ -1,0 +1,29 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+==== Initialize ====
+[on master]
+[connection master]
+CREATE TABLE t (a VARCHAR(100)) ENGINE = MYISAM;
+CREATE TABLE t_self_logging (a VARCHAR(100)) ENGINE = NDB;
+[on slave]
+include/sync_slave_sql_with_master.inc
+[on master]
+[connection master]
+==== Test ====
+---- binlog_format='row' ----
+* Modify tables of more than one engine, one of which is self-logging
+CREATE TRIGGER trig_1 AFTER INSERT ON t_self_logging FOR EACH ROW BEGIN INSERT INTO t VALUES (1); END;
+INSERT INTO t_self_logging VALUES (1);
+ERROR HY000: Cannot execute statement: impossible to write to binary log since more than one engine is involved and at least one engine is self-logging.
+DROP trigger trig_1;
+SELECT * FROM t_self_logging /* Should be empty */;
+a
+SELECT * FROM t /* Should be empty */;
+a
+==== Clean up ====
+DROP TABLE t, t_self_logging;
+include/sync_slave_sql_with_master.inc
+include/rpl_end.inc

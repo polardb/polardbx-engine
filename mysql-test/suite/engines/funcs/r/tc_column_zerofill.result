@@ -1,0 +1,801 @@
+DROP TABLE IF EXISTS t4;
+CREATE TABLE t4(c1 TINYINT   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` tinyint(3) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 SMALLINT   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` smallint(5) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 MEDIUMINT   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` mediumint(8) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INT   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INTEGER   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 BIGINT   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` bigint(20) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DECIMAL   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DEC   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FIXED   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 NUMERIC   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 REAL   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE PRECISION   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FLOAT   ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` float unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 TINYINT UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` tinyint(3) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 SMALLINT UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` smallint(5) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 MEDIUMINT UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` mediumint(8) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INT UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INTEGER UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 BIGINT UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` bigint(20) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DECIMAL UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DEC UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FIXED UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 NUMERIC UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 REAL UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE PRECISION UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FLOAT UNSIGNED ZEROFILL NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` float unsigned zerofill DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 TINYINT   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` tinyint(3) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 SMALLINT   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` smallint(5) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 MEDIUMINT   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` mediumint(8) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INT   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INTEGER   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 BIGINT   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` bigint(20) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DECIMAL   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DEC   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FIXED   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 NUMERIC   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 REAL   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE PRECISION   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FLOAT   ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` float unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 TINYINT UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` tinyint(3) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 SMALLINT UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` smallint(5) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 MEDIUMINT UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` mediumint(8) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INT UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 INTEGER UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` int(10) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 BIGINT UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` bigint(20) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DECIMAL UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DEC UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FIXED UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 NUMERIC UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` decimal(10,0) unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 REAL UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 DOUBLE PRECISION UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` double unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test
+CREATE TABLE t4(c1 FLOAT UNSIGNED ZEROFILL NOT NULL);
+Warnings:
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.
+SHOW TABLES;
+Tables_in_test
+t4
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `c1` float unsigned zerofill NOT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+SHOW TABLES;
+Tables_in_test

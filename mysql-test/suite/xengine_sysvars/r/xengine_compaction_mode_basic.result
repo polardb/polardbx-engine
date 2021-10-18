@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_COMPACTION_MODE;
+SELECT @start_global_value;
+@start_global_value
+0
+"Trying to set variable @@global.XENGINE_COMPACTION_MODE to 444. It should fail because it is readonly."
+SET @@global.XENGINE_COMPACTION_MODE   = 444;
+ERROR HY000: Variable 'xengine_compaction_mode' is a read only variable

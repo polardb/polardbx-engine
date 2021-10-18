@@ -1,0 +1,74 @@
+--source suite/xengine/include/have_xengine.inc
+
+--disable_warnings
+DROP TABLE IF EXISTS test.t1_bugfix_26763953;
+--enable_warnings
+
+create table test.t1_bugfix_26763953(
+        c1 int primary key,
+        c2 int
+) engine=xengine;
+
+#refresh statistics quickly
+set information_schema_stats_expiry = 1;
+
+#insert data
+insert into test.t1_bugfix_26763953 values (1, 1), (3, 3);
+
+#flush the data to disk,generate one extent(2M), the extent is in level0 now
+set global xengine_force_flush_memtable_now = on;
+--exec sleep 2
+
+#make the statistics update to information_schema.tables
+analyze table test.t1_bugfix_26763953;
+--exec sleep 3
+
+#select the statistics
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+
+#compaction the data to levle2, the extent is reuse to level2
+set global xengine_compact_cf = 55834574848;
+--exec sleep 10
+analyze table test.t1_bugfix_26763953;
+--exec sleep 2
+
+#select the statistics again, data not change and the extent is reused, so the statistics should't change too
+#in bug(https://work.aone.alibaba-inc.com/issue/26763953), the statistics will increase
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+
+#restart the server, check the stats
+--source include/restart_mysqld.inc
+--exec sleep 5
+
+#refresh statistics quickly
+set information_schema_stats_expiry = 1;
+analyze table test.t1_bugfix_26763953;
+--exec sleep 2
+
+#select the statistics again
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+
+#insert data, and flush to disk,generate another extent(2M)
+insert into test.t1_bugfix_26763953 values (2, 2);
+set global xengine_force_flush_memtable_now = on;
+--exec sleep 2
+analyze table test.t1_bugfix_26763953;
+--exec sleep 2
+
+#select statistics again, the data_length should add 2M
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+
+#compaction the data to levle2, and the two extent merge to one
+set global xengine_compact_cf = 55834574848;
+--exec sleep 5
+#level2 major self compaction
+set global xengine_compact_cf = 25769803776;
+--exec sleep 5
+analyze table test.t1_bugfix_26763953;
+--exec sleep 2
+
+#select statistics again, the dara_length should decrease to 2M
+select TABLE_SCHEMA, TABLE_NAME, ENGINE, VERSION, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH from information_schema.tables where table_schema='test' and table_name='t1_bugfix_26763953';
+
+
+DROP TABLE test.t1_bugfix_26763953;

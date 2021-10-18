@@ -1,0 +1,76 @@
+--source suite/xengine/include/have_xengine.inc
+
+let ddl= $MYSQL_TMP_DIR/unique_sec.sql;
+--exec sed s/##CF##//g suite/xengine/t/unique_sec.inc > $ddl
+--source $ddl
+
+--echo #
+--echo # Issue #88: Creating unique index over column with duplicate values succeeds
+--echo #
+create table t1 (pk int primary key, a int) engine=xengine;
+
+insert into t1 values 
+(1, 1),
+(2, 2),
+(3, 3),
+(4, 1),
+(5, 5);
+
+--error ER_DUP_ENTRY
+alter table t1 add unique(a);
+drop table t1;
+
+--echo #
+--echo # Issue #111
+--echo #
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE t2 (pk int, a int, PRIMARY KEY (pk, a), UNIQUE KEY (a)) ENGINE=XENGINE PARTITION BY KEY (a) PARTITIONS 16;
+# create table again without partition
+CREATE TABLE t2 (pk int, a int, PRIMARY KEY (pk, a), UNIQUE KEY (a)) ENGINE=XENGINE;
+INSERT INTO t2 VALUES (1,1);
+--error ER_DUP_ENTRY
+INSERT INTO t2 VALUES (1,1);
+--error ER_DUP_ENTRY
+INSERT INTO t2 VALUES (2,1);
+DROP TABLE t2;
+
+--echo #
+--echo # Issue #491 (https://github.com/facebook/mysql-5.6/issues/491)
+--echo #
+CREATE TABLE t (a BLOB, PRIMARY KEY(a(2)), UNIQUE KEY (a(1))) engine=xengine;
+INSERT INTO t VALUES('a');
+CHECK TABLE t EXTENDED;
+DROP TABLE t;
+
+CREATE TABLE t (a VARCHAR(255), PRIMARY KEY(a), UNIQUE KEY (a(1))) engine=xengine;
+INSERT INTO t VALUES('a');
+CHECK TABLE t EXTENDED;
+DROP TABLE t;
+
+CREATE TABLE t (a VARCHAR(255), PRIMARY KEY(a(2)), UNIQUE KEY (a(1))) engine=xengine;
+INSERT INTO t VALUES('a');
+CHECK TABLE t EXTENDED;
+DROP TABLE t;
+
+--echo #
+--echo # https://workitem.aone.alibaba-inc.com/project/573930/issue/13901272
+--echo # for duplicate key,create index
+create table tt(id int primary key , c1 varchar(100)) character set utf8;
+insert into tt values(1,'a');
+insert into tt values(2,'a');
+--error ER_DUP_ENTRY
+alter table tt add unique index idx_c1(c1);
+show create table tt;
+drop table tt;
+
+create table tt2(id int primary key , c1 varchar(100)) character set utf8;
+insert into tt2 values(1,'a');
+insert into tt2 values(2,'b');
+alter table tt2 add unique index idx_c1(c1);
+show create table tt2;
+select * from tt2;
+drop table tt2;
+
+--remove_file $ddl
+
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,493 @@
+DROP TABLE IF EXISTS t1, t2;
+CREATE TABLE t1 (id INT PRIMARY KEY,
+f0 INT, f1 INT, f2 INT, f3 INT, f4 INT, f5 INT,
+f6 CHAR(10), f7 CHAR(10), f8 CHAR(10), f9 CHAR(10), fa CHAR(10),
+fb VARCHAR(30), fc VARCHAR(30), fd VARCHAR(30),
+fe TEXT(1000), ff TEXT(1000)) ENGINE=XENGINE;
+ALTER TABLE t1 ADD KEY k0(f0), ADD KEY k1(f1), ADD KEY k2(f2), ADD KEY k3(f3);
+ALTER TABLE t1 ADD KEY k4(f4), ADD KEY k5(f5), ADD KEY k6(f6), ADD KEY k7(f7) ;
+ALTER TABLE t1 ADD KEY k8(f8), ADD KEY k9(f9), ADD KEY ka(fa), ADD KEY kb(fb);
+ALTER TABLE t1 ADD KEY kc(fc), ADD KEY kd(fd), ADD KEY ke(fe(100)), ADD KEY kf(ff(100));
+ALTER TABLE t1 ADD KEY k01(f0, f1), ADD KEY k12(f1, f2), ADD KEY k23(f2, f3), ADD KEY k34(f3, f4);
+ALTER TABLE t1 ADD KEY k45(f4, f5), ADD KEY k56(f5, f6), ADD KEY k67(f6, f7), ADD KEY k78(f7, f8);
+ALTER TABLE t1 ADD KEY k89(f8, f9), ADD KEY k9a(f9, fa), ADD KEY kab(fa, fb), ADD KEY kbc(fb, fc);
+ALTER TABLE t1 ADD KEY kcd(fc, fd), ADD KEY kde(fd, fe(100));
+ALTER TABLE t1 ADD KEY kef(fe(100), ff(100)), ADD KEY kf0(ff(100), f0);
+ALTER TABLE t1 ADD KEY k012(f0, f1, f2), ADD KEY k123(f1, f2, f3);
+ALTER TABLE t1 ADD KEY k234(f2, f3, f4), ADD KEY k345(f3, f4, f5);
+ALTER TABLE t1 ADD KEY k456(f4, f5, f6), ADD KEY k567(f5, f6, f7);
+ALTER TABLE t1 ADD KEY k678(f6, f7, f8), ADD KEY k789(f7, f8, f9);
+ALTER TABLE t1 ADD KEY k89a(f8, f9, fa), ADD KEY k9ab(f9, fa, fb);
+ALTER TABLE t1 ADD KEY kabc(fa, fb, fc), ADD KEY kbcd(fb, fc, fd);
+ALTER TABLE t1 ADD KEY kcde(fc, fd, fe(100)), ADD KEY kdef(fd, fe(100), ff(100));
+ALTER TABLE t1 ADD KEY kef0(fe(100), ff(100), f0), ADD KEY kf01(ff(100), f0, f1);
+ALTER TABLE t1 ADD KEY k0123(f0, f1, f2, f3), ADD KEY k1234(f1, f2, f3, f4);
+ALTER TABLE t1 ADD KEY k2345(f2, f3, f4, f5), ADD KEY k3456(f3, f4, f5, f6);
+ALTER TABLE t1 ADD KEY k4567(f4, f5, f6, f7), ADD KEY k5678(f5, f6, f7, f8);
+ALTER TABLE t1 ADD KEY k6789(f6, f7, f8, f9), ADD KEY k789a(f7, f8, f9, fa);
+ALTER TABLE t1 ADD KEY k89ab(f8, f9, fa, fb), ADD KEY k9abc(f9, fa, fb, fc);
+ALTER TABLE t1 ADD KEY kabcd(fa, fb, fc, fd), ADD KEY kbcde(fb, fc, fd, fe(100));
+ALTER TABLE t1 ADD KEY kcdef(fc, fd, fe(100), ff(100)), ADD KEY kdef0(fd, fe(100), ff(100), f0);
+ALTER TABLE t1 ADD KEY kef01(fe(100), ff(100), f0, f1);
+ALTER TABLE t1 ADD KEY kf012(ff(100), f0, f1, f2);
+ERROR 42000: Too many keys specified; max 64 keys allowed
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `f0` int(11) DEFAULT NULL,
+  `f1` int(11) DEFAULT NULL,
+  `f2` int(11) DEFAULT NULL,
+  `f3` int(11) DEFAULT NULL,
+  `f4` int(11) DEFAULT NULL,
+  `f5` int(11) DEFAULT NULL,
+  `f6` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `f7` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `f8` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `f9` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `fa` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `fb` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `fc` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `fd` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `fe` text COLLATE utf8mb4_general_ci,
+  `ff` text COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`id`),
+  KEY `k0` (`f0`),
+  KEY `k1` (`f1`),
+  KEY `k2` (`f2`),
+  KEY `k3` (`f3`),
+  KEY `k4` (`f4`),
+  KEY `k5` (`f5`),
+  KEY `k6` (`f6`),
+  KEY `k7` (`f7`),
+  KEY `k8` (`f8`),
+  KEY `k9` (`f9`),
+  KEY `ka` (`fa`),
+  KEY `kb` (`fb`),
+  KEY `kc` (`fc`),
+  KEY `kd` (`fd`),
+  KEY `ke` (`fe`(100)),
+  KEY `kf` (`ff`(100)),
+  KEY `k01` (`f0`,`f1`),
+  KEY `k12` (`f1`,`f2`),
+  KEY `k23` (`f2`,`f3`),
+  KEY `k34` (`f3`,`f4`),
+  KEY `k45` (`f4`,`f5`),
+  KEY `k56` (`f5`,`f6`),
+  KEY `k67` (`f6`,`f7`),
+  KEY `k78` (`f7`,`f8`),
+  KEY `k89` (`f8`,`f9`),
+  KEY `k9a` (`f9`,`fa`),
+  KEY `kab` (`fa`,`fb`),
+  KEY `kbc` (`fb`,`fc`),
+  KEY `kcd` (`fc`,`fd`),
+  KEY `kde` (`fd`,`fe`(100)),
+  KEY `kef` (`fe`(100),`ff`(100)),
+  KEY `kf0` (`ff`(100),`f0`),
+  KEY `k012` (`f0`,`f1`,`f2`),
+  KEY `k123` (`f1`,`f2`,`f3`),
+  KEY `k234` (`f2`,`f3`,`f4`),
+  KEY `k345` (`f3`,`f4`,`f5`),
+  KEY `k456` (`f4`,`f5`,`f6`),
+  KEY `k567` (`f5`,`f6`,`f7`),
+  KEY `k678` (`f6`,`f7`,`f8`),
+  KEY `k789` (`f7`,`f8`,`f9`),
+  KEY `k89a` (`f8`,`f9`,`fa`),
+  KEY `k9ab` (`f9`,`fa`,`fb`),
+  KEY `kabc` (`fa`,`fb`,`fc`),
+  KEY `kbcd` (`fb`,`fc`,`fd`),
+  KEY `kcde` (`fc`,`fd`,`fe`(100)),
+  KEY `kdef` (`fd`,`fe`(100),`ff`(100)),
+  KEY `kef0` (`fe`(100),`ff`(100),`f0`),
+  KEY `kf01` (`ff`(100),`f0`,`f1`),
+  KEY `k0123` (`f0`,`f1`,`f2`,`f3`),
+  KEY `k1234` (`f1`,`f2`,`f3`,`f4`),
+  KEY `k2345` (`f2`,`f3`,`f4`,`f5`),
+  KEY `k3456` (`f3`,`f4`,`f5`,`f6`),
+  KEY `k4567` (`f4`,`f5`,`f6`,`f7`),
+  KEY `k5678` (`f5`,`f6`,`f7`,`f8`),
+  KEY `k6789` (`f6`,`f7`,`f8`,`f9`),
+  KEY `k789a` (`f7`,`f8`,`f9`,`fa`),
+  KEY `k89ab` (`f8`,`f9`,`fa`,`fb`),
+  KEY `k9abc` (`f9`,`fa`,`fb`,`fc`),
+  KEY `kabcd` (`fa`,`fb`,`fc`,`fd`),
+  KEY `kbcde` (`fb`,`fc`,`fd`,`fe`(100)),
+  KEY `kcdef` (`fc`,`fd`,`fe`(100),`ff`(100)),
+  KEY `kdef0` (`fd`,`fe`(100),`ff`(100),`f0`),
+  KEY `kef01` (`fe`(100),`ff`(100),`f0`,`f1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1 (id INT PRIMARY KEY,
+f0 INT, f1 INT, f2 INT, f3 INT, f4 INT, f5 INT,
+f6 CHAR(10), f7 CHAR(10), f8 CHAR(10), f9 CHAR(10), fa CHAR(10),
+fb VARCHAR(30), fc VARCHAR(30), fd VARCHAR(30),
+fe TEXT(1000), ff TEXT(1000)) ENGINE=XENGINE;
+ALTER TABLE t1 ADD KEY sk1 (f0, f6, fb(10), fe(20));
+ALTER TABLE t1 ADD UNIQUE KEY uk1(f1, f7, fc(10), ff(20));
+ALTER TABLE t1 ADD COLUMN f16 TEXT(1000),
+ADD KEY sk2 (f0, f1, f2, f3, f4, f5,
+f6, f7, f8, f9, fa,
+fb(10), fc(10), fd(10),
+fe(20), ff(20), f16(20));
+ERROR 42000: Too many key parts specified; max 16 parts allowed
+ALTER TABLE t1 ADD COLUMN f16 TEXT(1000),
+ADD UNIQUE KEY uk2 (f0, f1, f2, f3, f4, f5,
+f6, f7, f8, f9, fa,
+fb(10), fc(10), fd(10),
+fe(20), ff(20), f16(20));
+ERROR 42000: Too many key parts specified; max 16 parts allowed
+ALTER TABLE t1 DROP PRIMARY KEY,
+ADD PRIMARY KEY(id, f0, f1, f2, f3, f4, f5,
+f6, f7, f8, f9, fa,
+fb(10), fc(10), fd(10),
+fe(20), ff(20));
+ERROR 42000: Too many key parts specified; max 16 parts allowed
+ALTER TABLE t1 ADD KEY sk2 (f0, f1, f2, f3, f4, f5,
+f6, f7, f8, f9, fa,
+fb(10), fc(10), fd(10),
+fe(20), ff(20));
+ALTER TABLE t1 ADD UNIQUE KEY uk2 (f0, f1, f2, f3, f4, f5,
+f6, f7, f8, f9, fa,
+fb(10), fc(10), fd(10),
+fe(20), ff(20));
+ALTER TABLE t1 DROP PRIMARY KEY,
+ADD PRIMARY KEY(id, f0, f1, f2, f3, f4, f5,
+f6, f7, f8, f9, fa,
+fb(10), fc(10), fd(10), fe(20));
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `f0` int(11) NOT NULL,
+  `f1` int(11) NOT NULL,
+  `f2` int(11) NOT NULL,
+  `f3` int(11) NOT NULL,
+  `f4` int(11) NOT NULL,
+  `f5` int(11) NOT NULL,
+  `f6` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `f7` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `f8` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `f9` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `fa` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `fb` varchar(30) COLLATE utf8mb4_general_ci NOT NULL,
+  `fc` varchar(30) COLLATE utf8mb4_general_ci NOT NULL,
+  `fd` varchar(30) COLLATE utf8mb4_general_ci NOT NULL,
+  `fe` text COLLATE utf8mb4_general_ci NOT NULL,
+  `ff` text COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`id`,`f0`,`f1`,`f2`,`f3`,`f4`,`f5`,`f6`,`f7`,`f8`,`f9`,`fa`,`fb`(10),`fc`(10),`fd`(10),`fe`(20)),
+  UNIQUE KEY `uk1` (`f1`,`f7`,`fc`(10),`ff`(20)),
+  UNIQUE KEY `uk2` (`f0`,`f1`,`f2`,`f3`,`f4`,`f5`,`f6`,`f7`,`f8`,`f9`,`fa`,`fb`(10),`fc`(10),`fd`(10),`fe`(20),`ff`(20)),
+  KEY `sk1` (`f0`,`f6`,`fb`(10),`fe`(20)),
+  KEY `sk2` (`f0`,`f1`,`f2`,`f3`,`f4`,`f5`,`f6`,`f7`,`f8`,`f9`,`fa`,`fb`(10),`fc`(10),`fd`(10),`fe`(20),`ff`(20))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1 (pk INT PRIMARY KEY, a INT, c CHAR(8)) ENGINE=xengine;
+INSERT INTO t1 VALUES (1,1,'a'),(2,5,'z');
+ALTER TABLE t1 PARTITION BY HASH(id) PARTITIONS 8;
+ERROR 42000: The storage engine for the table doesn't support native partitioning
+ALTER TABLE t1 ADD COLUMN c2 INT GENERATED ALWAYS AS (c1 + 1);
+ERROR HY000: 'Specified storage engine' is not supported for generated columns.
+ALTER TABLE t1 ADD COLUMN c3 INT GENERATED ALWAYS AS (c1 + 2) STORED;
+ERROR HY000: 'Specified storage engine' is not supported for generated columns.
+ALTER TABLE t1 ADD SPATIAL INDEX spi(c1);
+ERROR HY000: The used table type doesn't support SPATIAL indexes
+CREATE TABLE t2(id INT AUTO_INCREMENT PRIMARY KEY, name CHAR(10)) ENGINE=XENGINE;
+ALTER TABLE t1 ADD COLUMN fk1 INT NOT NULL, ADD FOREIGN KEY(fk1) REFERENCES t2(id);
+ERROR 42000: XEngine currently doesn't support foreign key constraints
+DROP TABLE t2;
+ALTER TABLE t1 ADD COLUMN c3 INT DEFAULT 1;
+CREATE INDEX btr_key USING BTREE on t1(c3);
+Warnings:
+Note	3502	This storage engine does not support the BTREE index algorithm, storage engine default was used instead.
+DROP INDEX btr_key ON t1;
+CREATE INDEX hsh_key USING HASH on t1(c3);
+Warnings:
+Note	3502	This storage engine does not support the HASH index algorithm, storage engine default was used instead.
+DROP INDEX hsh_key ON t1;
+ALTER TABLE t1 DROP COLUMN c3;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 ADD COLUMN b INT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 ALTER COLUMN a SET DEFAULT '0';
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT '0',
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 ALTER a DROP DEFAULT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 CHANGE COLUMN b b1 CHAR(8) FIRST;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `b1` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 CHANGE b1 b INT AFTER c;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 CHANGE b b CHAR(8);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `b` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 MODIFY COLUMN b INT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 MODIFY COLUMN b CHAR(8) FIRST;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `b` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 MODIFY COLUMN b INT AFTER a;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `b` int(11) DEFAULT NULL,
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 DROP COLUMN b;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 RENAME TO t2;
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `pk` int(11) NOT NULL,
+  `a` int(11),
+  `c` char(8) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t2;
+CREATE TABLE t1 (pk INT PRIMARY KEY, a INT, b INT) ENGINE=xengine;
+INSERT INTO t1 VALUES (1,1,5),(2,2,2),(3,4,3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 ORDER BY b ASC, a DESC, pk DESC;
+Warnings:
+Warning	1105	ORDER BY ignored as there is a user-defined clustered index in the table 't1'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+pk	a	b
+1	1	5
+2	2	2
+3	4	3
+DROP TABLE t1;
+CREATE TABLE t1 (pk INT PRIMARY KEY, a INT, b CHAR(8), c CHAR(8)) ENGINE=xengine CHARACTER SET latin1 COLLATE latin1_general_cs;
+INSERT INTO t1 VALUES (1,5,'z','t');
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` char(8) COLLATE latin1_general_cs DEFAULT NULL,
+  `c` char(8) COLLATE latin1_general_cs DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_general_cs
+ALTER TABLE t1 CONVERT TO CHARACTER SET utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` char(8) DEFAULT NULL,
+  `c` char(8) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+ALTER TABLE t1 DEFAULT CHARACTER SET = latin1 COLLATE latin1_general_ci;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` char(8) CHARACTER SET utf8 DEFAULT NULL,
+  `c` char(8) CHARACTER SET utf8 DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_general_ci
+ALTER TABLE t1 FORCE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` char(8) CHARACTER SET utf8 DEFAULT NULL,
+  `c` char(8) CHARACTER SET utf8 DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_general_ci
+DROP TABLE t1;
+CREATE TABLE `t1` ( 
+`col1` int(11) NOT NULL, 
+`col2` int(11) NOT NULL, 
+`col3` int(11) DEFAULT NULL, 
+`col4` int(11) DEFAULT NULL, 
+`col5` text, 
+`col6` blob, 
+PRIMARY KEY (col5(10)));
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+insert into t1 values(1,1,1,1,'a','a');
+insert into t1 values(1,1,1,1,'b','a');
+alter table t1 add index idx1(col3);
+alter table t1 drop index idx1, add unique index idx2(col2);
+ERROR 23000: Duplicate entry '1' for key 'idx2'
+insert into t1 values(1,1,1,1,'c','b');
+select * from t1;
+col1	col2	col3	col4	col5	col6
+1	1	1	1	a	a
+1	1	1	1	b	a
+1	1	1	1	c	b
+drop table t1;
+CREATE TABLE T1(COL1 INT, COL2 INT, COL3 INT);
+INSERT INTO T1 VALUES(1,1,1);
+INSERT INTO T1 VALUES(1,2,1);
+INSERT INTO T1 VALUES(1,3,1);
+set session debug= "+d,after_inplace_populate_sk";
+ALTER TABLE T1 ADD INDEX IDX_C1(COL1);;
+select sleep(2);
+sleep(2)
+0
+delete from T1 where col2=2;
+show create table T1;
+Table	Create Table
+T1	CREATE TABLE `T1` (
+  `COL1` int(11) DEFAULT NULL,
+  `COL2` int(11) DEFAULT NULL,
+  `COL3` int(11) DEFAULT NULL,
+  KEY `IDX_C1` (`COL1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select col1 from T1 force index(idx_c1);
+col1
+1
+1
+select * from T1;
+COL1	COL2	COL3
+1	1	1
+1	3	1
+set session debug= "-d,after_inplace_populate_sk";
+drop table T1;
+CREATE TABLE `t1` (
+`col4` text NOT NULL,
+`col1` int(11) NOT NULL,
+`col3` int(11) DEFAULT NULL,
+`col2` int(11) DEFAULT NULL,
+`extra` int(11) DEFAULT NULL,
+PRIMARY KEY (`col4`(10),`col1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+truncate table t1;
+insert into t1 values('3333333333333333333333333',4,4,4,null);
+insert into t1 values('4444444444444444444444444',4,4,3,null);
+select * from t1;
+col4	col1	col3	col2	extra
+3333333333333333333333333	4	4	4	NULL
+4444444444444444444444444	4	4	3	NULL
+set session debug= "+d,sleep_after_index_base_creation";
+ALTER TABLE t1 ADD UNIQUE INDEX uidx(col2);;
+select sleep(2);
+sleep(2)
+0
+UPDATE t1 SET col2 = 4 LIMIT 2;
+ERROR 23000: Duplicate entry '4' for key 'uidx'
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col4` text NOT NULL,
+  `col1` int(11) NOT NULL,
+  `col3` int(11) DEFAULT NULL,
+  `col2` int(11) DEFAULT NULL,
+  `extra` int(11) DEFAULT NULL,
+  PRIMARY KEY (`col4`(10),`col1`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t1;
+col4	col1	col3	col2	extra
+3333333333333333333333333	4	4	4	NULL
+4444444444444444444444444	4	4	4	NULL
+set session debug= "-d,after_inplace_populate_sk";
+drop table t1;

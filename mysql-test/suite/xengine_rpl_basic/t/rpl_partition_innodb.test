@@ -1,0 +1,13 @@
+# Test of partitioning features with replication for InnoDB
+--source include/master-slave.inc
+
+# Set the default connection to 'master'
+
+let $engine_type= 'InnoDB';
+
+--source suite/rpl/include/rpl_partition.inc
+
+--source include/rpl_end.inc
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

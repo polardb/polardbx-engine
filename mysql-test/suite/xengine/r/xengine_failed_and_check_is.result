@@ -1,0 +1,20 @@
+SHOW STORAGE ENGINES;
+Engine	Support	Comment	Transactions	XA	Savepoints
+FEDERATED	NO	Federated MySQL storage engine	NULL	NULL	NULL
+BLACKHOLE	YES	/dev/null storage engine (anything you write to it disappears)	NO	NO	NO
+MEMORY	YES	Hash based, stored in memory, useful for temporary tables	NO	NO	NO
+InnoDB	DEFAULT	Supports transactions, row-level locking, and foreign keys	YES	YES	YES
+PERFORMANCE_SCHEMA	YES	Performance Schema	NO	NO	NO
+Sequence	YES	Sequence Storage Engine Helper	NO	NO	NO
+MyISAM	YES	MyISAM storage engine	NO	NO	NO
+MRG_MYISAM	YES	Collection of identical MyISAM tables	NO	NO	NO
+CSV	YES	CSV storage engine	NO	NO	NO
+ARCHIVE	YES	Archive storage engine	NO	NO	NO
+USE information_schema;
+SHOW TABLES LIKE '%XENGINE%';
+Tables_in_information_schema (%XENGINE%)
+include/assert_grep.inc [Found XENGINE human-made error]
+include/assert_grep.inc [Found XENGINE init failed]
+include/assert_grep.inc [Found XENGINE register failed]
+include/assert_grep.inc [Found XENGINE information_schema table ERROR log for 19 times.]
+include/assert_grep.inc [Found XENGINE information_schema table plugin register failed log for 19 times.]

@@ -1,0 +1,5 @@
+--source include/master-slave.inc
+--source include/rpl_end.inc
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

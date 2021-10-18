@@ -1,0 +1,306 @@
+create table t1 (id int primary key, c1 int default 1) engine=xengine;
+insert into t1(id) values (1);
+select * from t1;
+id	c1
+1	1
+alter table t1 add column c2 int default 2, add column c3 char(100) default "c3c3c3c3c3c3", add column c4 varchar(100) default "c4c4c4c4c4c4c4c4c4",
+add column c5 double default 5.5, add column c6 blob, add column c7 text, algorithm=instant;
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7
+1	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL
+insert into t1(id) values(2);
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7
+1	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL
+alter table t1 add column c8 int after c4, algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+alter table t1 add column c9 ENUM('a', 'b') FIRST, algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+alter table t1 add column c8 ENUM('a', 'b'), algorithm=instant;
+insert into t1 (id,c8) values (3,'a');
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7	c8
+1	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+3	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	a
+create table t2 (c1 int) engine=xengine;
+insert into t2 values (1);
+alter table t2 add column id int primary key, algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+drop table t2;
+alter table t1 alter column c1 set default 2, algorithm=instant;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '2',
+  `c2` int(11) DEFAULT '2',
+  `c3` char(100) COLLATE utf8mb4_general_ci DEFAULT 'c3c3c3c3c3c3',
+  `c4` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'c4c4c4c4c4c4c4c4c4',
+  `c5` double DEFAULT '5.5',
+  `c6` blob,
+  `c7` text COLLATE utf8mb4_general_ci,
+  `c8` enum('a','b') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table t1 alter column c2 set default 20, algorithm=instant;
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7	c8
+1	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+3	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	a
+alter table t1 alter column c3 drop default, algorithm=instant;
+insert into t1 (id) values (4);
+Warnings:
+Warning	1364	Field 'c3' doesn't have a default value
+insert into t1 (id,c3) values (5,"new c3");
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7	c8
+1	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+3	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	a
+4	2	20	NULL	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+5	2	20	new c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+alter table t1 alter column c3 set default "newc3-1", algorithm=instant, LOCK=NONE;
+ERROR HY000: Incorrect usage of ALGORITHM=INSTANT and LOCK=NONE/SHARED/EXCLUSIVE
+alter table t1 alter column c3 set default "newc3-2", algorithm=instant, LOCK=SHARED;
+ERROR HY000: Incorrect usage of ALGORITHM=INSTANT and LOCK=NONE/SHARED/EXCLUSIVE
+alter table t1 alter column c3 set default "newc3-3", algorithm=instant, LOCK=EXCLUSIVE;
+ERROR HY000: Incorrect usage of ALGORITHM=INSTANT and LOCK=NONE/SHARED/EXCLUSIVE
+alter table t1 alter column c3 set default "newc3-4", algorithm=instant, LOCK=DEFAULT;
+alter table t1 MODIFY COLUMN c8 ENUM('a', 'b', 'c', 'd', 'e'), ALGORITHM=INSTANT;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '2',
+  `c2` int(11) DEFAULT '20',
+  `c3` char(100) COLLATE utf8mb4_general_ci DEFAULT 'newc3-4',
+  `c4` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'c4c4c4c4c4c4c4c4c4',
+  `c5` double DEFAULT '5.5',
+  `c6` blob,
+  `c7` text COLLATE utf8mb4_general_ci,
+  `c8` enum('a','b','c','d','e') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+insert into t1(id,c8) values(6,'e');
+select * from t1;
+id	c1	c2	c3	c4	c5	c6	c7	c8
+1	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+2	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+3	1	2	c3c3c3c3c3c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	a
+4	2	20	NULL	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+5	2	20	new c3	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	NULL
+6	2	20	newc3-4	c4c4c4c4c4c4c4c4c4	5.5	NULL	NULL	e
+ALTER TABLE t1 RENAME TO t2, ALGORITHM=INSTANT;
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT '2',
+  `c2` int(11) DEFAULT '20',
+  `c3` char(100) COLLATE utf8mb4_general_ci DEFAULT 'newc3-4',
+  `c4` varchar(100) COLLATE utf8mb4_general_ci DEFAULT 'c4c4c4c4c4c4c4c4c4',
+  `c5` double DEFAULT '5.5',
+  `c6` blob,
+  `c7` text COLLATE utf8mb4_general_ci,
+  `c8` enum('a','b','c','d','e') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t2 RENAME TO t1, ALGORITHM=INSTANT;
+alter table t1 rename column c2 to c2_2, algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+drop table t1;
+create table t1 (c1 int primary key, c2 int, c3 char(10), c4 varchar(200), c5 text, c6 datetime, c7 double, c8 blob, c9 varbinary(10), c10 int);
+insert into t1(c1,c3,c10) values (1,"333",1);
+select * from t1;
+c1	c2	c3	c4	c5	c6	c7	c8	c9	c10
+1	NULL	333	NULL	NULL	NULL	NULL	NULL	NULL	1
+alter table t1 add column c11 int default '11',algorithm=instant;
+select * from t1;
+c1	c2	c3	c4	c5	c6	c7	c8	c9	c10	c11
+1	NULL	333	NULL	NULL	NULL	NULL	NULL	NULL	1	11
+drop table t1;
+CREATE TABLE IF NOT EXISTS t1(
+id INT auto_increment,
+col1 INT,
+col2 INT,
+col3 INT,
+col4 TEXT,
+primary key(`id`)
+) engine=xengine;
+insert into t1 values(1, 1, 1, 1, '1');
+insert into t1 values(2, 2, 2, 2, '2');
+insert into t1 values(3, 3, 3, 3, '3');
+insert into t1 values(4, 4, 4, 4, '4');
+select 0 from t1 where col1 > 1;
+0
+0
+0
+0
+select col1 from t1 where col1 > 1;
+col1
+2
+3
+4
+alter table t1 add column col5 int default 0;
+select 0 from t1 where col1 > 1;
+0
+0
+0
+0
+select col1 from t1 where col1 > 1;
+col1
+2
+3
+4
+select * from t1;
+id	col1	col2	col3	col4	col5
+1	1	1	1	1	0
+2	2	2	2	2	0
+3	3	3	3	3	0
+4	4	4	4	4	0
+insert into t1 values(5, 5, 5, 5, '5', 5);
+alter table t1 add column col6 varchar(10) default "six";
+select 0 from t1 where col1 > 1;
+0
+0
+0
+0
+0
+select col1, col3 from t1 where col1 > 1;
+col1	col3
+2	2
+3	3
+4	4
+5	5
+select col5 from t1 where col1 > 1;
+col5
+0
+0
+0
+5
+select col5, col6 from t1 where col1 > 1;
+col5	col6
+0	six
+0	six
+0	six
+5	six
+select * from t1;
+id	col1	col2	col3	col4	col5	col6
+1	1	1	1	1	0	six
+2	2	2	2	2	0	six
+3	3	3	3	3	0	six
+4	4	4	4	4	0	six
+5	5	5	5	5	5	six
+drop table t1;
+create table t1 (id int primary key) engine=xengine;
+insert into t1(id) values (1),(2);
+alter table t1 add column c1 datetime not null default '2019-07-18', algorithm=instant;
+select c1 from t1;
+c1
+2019-07-18 00:00:00
+2019-07-18 00:00:00
+drop table t1;
+create table test_0 (
+pk bigint,
+sk1 char(20),
+sk2 varchar(20),
+uk1 decimal(20,4),
+uk2 bigint,
+v1 timestamp(6) not null default now(6),
+v2 timestamp(6) not null default now(6),
+padding longblob,
+primary key (pk),
+key sk1 (sk1, sk2),
+unique key uk1 (uk1, uk2)
+) engine = xengine collate utf8mb4_general_ci;
+insert into test_0 (pk, sk1, sk2, uk1, uk2, padding) values (1, '0', '1', 2, 3, REPEAT('MYSQLMYSQL', 6));
+alter table test_0 add column a1 timestamp(6) not null default now(6);
+insert into test_0 (pk, sk1, sk2, uk1, uk2, padding) values (4, '3', '4', 8, 9, REPEAT('MYSQLMYSQL', 6));
+alter table test_0 drop column v1;
+drop table test_0;
+create table test_1 (
+pk bigint,
+c1 int not null default 0,
+c2 int not null default 0,
+primary key (pk)
+) engine = xengine collate utf8mb4_general_ci;
+insert into test_1 values (1,1,1);
+alter table test_1 add column c3 int default 0;
+insert into test_1 values (2,2,2,2);
+alter table test_1 add column c4 int not null default 2;
+insert into test_1 values (3,3,3,3,3);
+select c1, c3, c4 from test_1;
+c1	c3	c4
+1	0	2
+2	2	2
+3	3	3
+drop table test_1;
+CREATE TABLE t1 (a INT, b INT) engine = xengine;
+INSERT INTO t1 VALUES(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+ALTER TABLE t1 ADD COLUMN c1 INT DEFAULT 5 AFTER a, ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD COLUMN c1 INT DEFAULT 5 FIRST, ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD COLUMN c1 INT DEFAULT 5 AFTER b, ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 6 AFTER c1, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c1` int(11) DEFAULT '5',
+  `c2` int(11) DEFAULT '6'
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+show variables like "xengine_disable_instant_ddl";
+Variable_name	Value
+xengine_disable_instant_ddl	OFF
+CREATE TABLE t1 (a INT, b INT) engine = xengine;
+INSERT INTO t1 VALUES(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+ALTER TABLE t1 ADD COLUMN c1 INT DEFAULT 5, ALGORITHM=INSTANT;
+select b, c1 from t1 where c1 = 5;
+b	c1
+1	5
+2	5
+3	5
+4	5
+5	5
+set global xengine_disable_instant_ddl = ON;
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 5, ALGORITHM=INSTANT;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 5;
+alter table t1 alter column b set default 10, algorithm = instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+alter table t1 alter column b set default 10;
+select b, c1 from t1 where c1 = 5;
+b	c1
+1	5
+2	5
+3	5
+4	5
+5	5
+INSERT INTO t1 VALUES(6, 6, 10, 10);
+set global xengine_disable_instant_ddl = OFF;
+ALTER TABLE t1 ADD COLUMN c3 varchar(10) DEFAULT "xengine", ALGORITHM=INSTANT;
+alter table t1 alter column b set default 8, algorithm = instant;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT '8',
+  `c1` int(11) DEFAULT '5',
+  `c2` int(11) DEFAULT '5',
+  `c3` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'xengine'
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+select c2, a from t1;
+c2	a
+5	1
+5	2
+5	3
+5	4
+5	5
+10	6
+DROP TABLE t1;

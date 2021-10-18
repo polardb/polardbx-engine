@@ -1,0 +1,26 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection master]
+create table t(id int);
+include/sync_slave_sql_with_master.inc
+[connection slave]
+include/stop_slave_sql.inc
+include/wait_for_slave_sql_to_stop.inc
+[connection master]
+insert into t values(1);
+[connection slave]
+flush logs;
+SET GLOBAL DEBUG='d,before_aquire_commit_lock';
+start slave sql_thread;
+SET GLOBAL DEBUG='-d,before_aquire_commit_lock';
+flush tables with read lock;
+SET GLOBAL DEBUG='+d,before_aquire_data_lock';
+show slave status;
+SET GLOBAL DEBUG='-d,before_aquire_data_lock';
+unlock tables;
+[connection master]
+drop table t;
+include/rpl_end.inc

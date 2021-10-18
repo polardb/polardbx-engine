@@ -1,0 +1,9 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# BOOLEAN column type
+#
+
+--source type_bool.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,881 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--echo # Establish dml connection (user=root)
+connect (dml,localhost,root,,);
+connection default;
+
+--echo ================================================================
+--echo # case 1 delete record before inserting conflict record
+--echo ================================================================
+--echo # case 1.1 add unique key
+--echo ================================================================
+--echo # case 1.1.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.1.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.1.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.2 modify primary key
+--echo ================================================================
+--echo # case 1.2.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.2.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.2.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.3 add primary key
+--echo ================================================================
+--echo # case 1.3.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the add pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal add pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.3.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the add pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal add pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 1.3.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 3);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the add pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=3;
+  INSERT INTO t1 VALUES(4,3);
+  # signal add pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+
+--error 1062
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+# copied from add_unique_index_online.test
+--echo ================================================================
+--echo # case 2 delete record after inserting conflict record
+--echo ================================================================
+--echo # case 2.1 add unique key
+--echo ================================================================
+--echo # case 2.1.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.1.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.1.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.2 modify primary key
+--echo ================================================================
+--echo # case 2.2.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.2.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.2.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.3 add primary key
+--echo ================================================================
+--echo # case 2.3.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the add pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.3.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the add pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal add pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 2.3.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the add pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,1);
+  DELETE FROM t1 WHERE a = 6;
+  SELECT * FROM t1;
+  # signal add pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES(3, 1);
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3 delete record before inserting conflict record
+--echo ================================================================
+--echo # case 3.1 add unique key
+--echo ================================================================
+--echo # case 3.1.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3,1);
+  INSERT INTO t1 VALUES(2,1);
+  SELECT * FROM t1;
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.1.1 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3, 1);
+  INSERT INTO t1 VALUES(2, 1);
+  SELECT * FROM t1;
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.1.1 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD UNIQUE INDEX t1_ub(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the create sk ddl enter the inplace_create_sk_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3, 1);
+  INSERT INTO t1 VALUES(2, 1);
+  SELECT * FROM t1;
+  # signal create sk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.2 modify primary key
+--echo ================================================================
+--echo # case 3.2.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3,1);
+  INSERT INTO t1 VALUES(2,1);
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.2.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3,1);
+  INSERT INTO t1 VALUES(2,1);
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.2.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3,1);
+  INSERT INTO t1 VALUES(2,1);
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.3 add primary key
+--echo ================================================================
+--echo # case 3.3.1 (t0, t1)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the add pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3,1);
+  INSERT INTO t1 VALUES(2,1);
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.3.2 (t1, t2)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the add pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3,1);
+  INSERT INTO t1 VALUES(2,1);
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+--echo # case 3.3.3 (t2, -)
+--echo ================================================================
+CREATE TABLE t1 (a INT, b INT NOT NULL)ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1, 1);
+
+SET DEBUG_SYNC='xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_finish';
+send ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the add pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC='now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE b=1;
+  INSERT INTO t1 VALUES(3,1);
+  INSERT INTO t1 VALUES(2,1);
+  SELECT * FROM t1;
+  # signal modify pk ddl the key2 has been inserted
+  SET DEBUG_SYNC='now SIGNAL dml_finish';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--echo ================================================================
+
+--source suite/xengine/include/check_xengine_log_error.inc

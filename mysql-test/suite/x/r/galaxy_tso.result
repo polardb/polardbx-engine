@@ -1,0 +1,35 @@
+call mtr.add_suppression("Timestamp service failed to open");
+call mtr.add_suppression("tso get failed");
+RUN create sequence mysql.gts_base cache 1 timestamp
+
+0 rows affected
+send Mysqlx.GetTSO {
+  leader_name: "xpchild"
+  batch_count: 10
+}
+
+Mysqlx.ResultTSO {
+  error_no: 0
+  ts: x
+}
+
+RUN drop sequence if exists mysql.gts_base
+
+0 rows affected
+send Mysqlx.GetTSO {
+  leader_name: "xpchild"
+  batch_count: 10
+}
+
+Got expected error:
+Mysqlx.Error {
+  severity: ERROR
+  code: 5500
+  msg: "tso acquire failed"
+  sql_state: "HY000"
+}
+
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok

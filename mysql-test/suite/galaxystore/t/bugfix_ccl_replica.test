@@ -1,0 +1,70 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+
+connection master;
+create database ccl_db;
+
+create table ccl_db.t1(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+create table ccl_db.t2(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+insert into ccl_db.t1 values(1, 2, 'xpchild');
+insert into ccl_db.t2 values(1, 2, 'xpchild');
+commit;
+
+
+create user normal_1@'%' identified by 'pass';
+
+grant all on ccl_db.* to normal_1@'%' ;
+grant all on mysql.* to normal_1@'%' ;
+
+
+--sync_slave_with_master
+
+connect(m_normal_1, 127.0.0.1, normal_1, pass, ccl_db, $MASTER_MYPORT);
+connect(s_normal_1, 127.0.0.1, normal_1, pass, ccl_db, $SLAVE_MYPORT);
+
+connection slave;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+
+--echo --------------------------------------------------------------
+--echo Add ccl rule didn't generate binlog
+--echo --------------------------------------------------------------
+
+connection m_normal_1;
+call dbms_ccl.add_ccl_rule('SELECT', '', '', 10, '');
+call dbms_ccl.show_ccl_rule();
+
+connection master;
+--sync_slave_with_master
+
+connection s_normal_1;
+call dbms_ccl.show_ccl_rule();
+
+--echo --------------------------------------------------------------
+--echo  Add ccl on slave
+--echo --------------------------------------------------------------
+
+connection s_normal_1;
+call dbms_ccl.add_ccl_rule('SELECT', '', '', 10, '');
+call dbms_ccl.show_ccl_rule();
+
+connection slave;
+set global read_only = @start_read_only;
+
+connection master;
+drop user normal_1@'%';
+drop database ccl_db;
+
+--sync_slave_with_master
+--source include/rpl_end.inc

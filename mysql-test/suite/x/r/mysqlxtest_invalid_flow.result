@@ -1,0 +1,23 @@
+Invalid receive after statement
+RUN SELECT 1
+Mysqlx.Resultset.ColumnMetaData {
+  type: SINT
+  name: "1"
+  original_name: ""
+  table: ""
+  original_table: ""
+  schema: ""
+  catalog: "def"
+  fractional_digits: 0
+  length: 1
+  flags: 16
+  original_type: MYSQL_TYPE_LONGLONG
+}
+
+
+
+0 rows affected
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok

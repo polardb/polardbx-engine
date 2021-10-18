@@ -1,0 +1,35 @@
+--source include/master-slave.inc
+--source suite/xengine/include/have_xengine.inc
+
+call mtr.add_suppression("Did not write failed ");
+call mtr.add_suppression("Can't open and lock privilege tables");
+
+SET @ORIG_EVENT_SCHEDULER = @@EVENT_SCHEDULER;
+
+let $TARGET_DB = rqg_ddl_dml_concurrent;
+let $TARGET_TABLE = ddl_dml_concurrent;
+let $GRAMMAR_FILES = ddl_dml_concurrent.yy;
+let $DATA_FILE = concurrent.zz;
+let $OTHER_ARGS = '--errorlevel=FAILURE';
+
+--eval CREATE DATABASE IF NOT EXISTS $TARGET_DB
+
+--let $cs = utf8
+--let $coll = utf8_general_ci
+--source ../include/rpl_ddl_dml_concurrent_rqg.inc
+
+--eval DROP DATABASE $TARGET_DB
+
+--disable_warnings
+DROP TABLE IF EXISTS test.executors;
+DROP DATABASE IF EXISTS testdb_N;
+DROP DATABASE IF EXISTS testdb_S;
+--enable_warnings
+
+SET GLOBAL EVENT_SCHEDULER = @ORIG_EVENT_SCHEDULER;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

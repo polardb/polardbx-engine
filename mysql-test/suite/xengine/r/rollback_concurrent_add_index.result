@@ -1,0 +1,16 @@
+create database tb;
+create table t(id int primary key, c1 int, c2 int);
+insert into t values(1,1,1),(2,1,2);
+create table t1(id int primary key, c1 int, c2 int);
+SET DEBUG_SYNC= 'RESET';
+SET DEBUG_SYNC='before_commit_inplace_alter_table SIGNAL rollback WAIT_FOR commit';
+#sending
+alter table t1 add index(c1);;
+SET DEBUG_SYNC='before_rollback_inplace_alter_table WAIT_FOR rollback';
+SET DEBUG_SYNC='after_rollback_inplace_alter_table SIGNAL commit';
+alter table t add unique index(c1);
+ERROR 23000: Duplicate entry '1' for key 'c1'
+# restart the server.
+drop table t;
+drop table t1;
+drop database tb;

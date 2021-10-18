@@ -1,0 +1,43 @@
+set global innodb_undo_retention = 1000;
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (
+	id INT NOT NULL,
+	value VARCHAR(50) NOT NULL,
+	PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+--connect (conn1,localhost,root,,)
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+--connect (conn2,localhost,root,,)
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+connection conn1;
+
+xa start '1';
+set innodb_snapshot_seq = @base_seq + 102;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end '1';
+xa prepare '1';
+
+connection conn2;
+disconnect conn1;
+
+set innodb_commit_seq = @base_seq + 104;
+xa commit '1';
+
+set innodb_snapshot_seq = @base_seq + 103;
+select * from t1;
+
+#
+# Cleanup
+#
+disconnect conn2;
+
+connection default;
+DROP TABLE t1;
+set global innodb_undo_retention = default;

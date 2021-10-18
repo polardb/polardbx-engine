@@ -1,0 +1,5 @@
+prepare p1 from "call mysql.dummy_2(1, 'xpchild')";
+execute p1;
+NAME	ID
+xpchild	1
+deallocate prepare p1;

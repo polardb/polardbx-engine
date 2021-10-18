@@ -1,0 +1,114 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+connect (dml,localhost,root,,);
+connection default;
+
+CREATE TABLE t1 (a INT NOT NULL, b INT, KEY kb(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1), (2, 1);
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+SET DEBUG_SYNC= 'xengine.inplace_populate_primary_key_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a);
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # insert key2
+  # wait the create pk ddl enter the inplace_populate_primary_key_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # duplicated for new pk
+  INSERT INTO t1 VALUES(2, 1);
+  SELECT * FROM t1;
+  # signal create pk ddl the key has been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create primary key fail
+--error 1062
+reap;
+CHECK TABLE t1;
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+--echo failed to add primary key
+DROP TABLE t1;
+
+CREATE TABLE t1 (a INT NOT NULL, b INT, UNIQUE KEY kb(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1), (2, 2);
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+SET DEBUG_SYNC= 'xengine.inplace_populate_primary_key_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a);
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # insert key2
+  # wait the create pk ddl enter the inplace_populate_primary_key_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(2, 3);
+  SELECT * FROM t1;
+  # signal create pk ddl the key has been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create primary key fail
+--error 1062
+reap;
+CHECK TABLE t1;
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+--echo failed to add primary key
+DROP TABLE t1;
+
+# check when dup sk splited in different segment
+select @@xengine_sort_buffer_size into @saved_sort_buffer_size;
+set global xengine_sort_buffer_size=64*1024;
+
+CREATE TABLE t1(a INT NOT NULL, b TEXT(10485760), KEY kb(b(512)))ENGINE=XENGINE;
+let $i=0;
+while($i < 200) {
+  # each record is about 10MB
+  --eval INSERT INTO t1 VALUES($i, repeat('1', 512));
+  inc $i;
+}
+
+SHOW CREATE TABLE t1;
+# SELECT * FROM t1;
+
+SET DEBUG_SYNC= 'xengine.inplace_populate_primary_key_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a);
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # insert key2
+  # wait the create pk ddl enter the inplace_populate_primary_key_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # duplicated for new pk
+  INSERT INTO t1 VALUES(2, repeat('1', 512));
+  # SELECT * FROM t1;
+  # signal create pk ddl the key has been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection default
+connection default;
+# receive the result of alter table, expected create primary key fail
+--error 1062
+reap;
+CHECK TABLE t1;
+
+SHOW CREATE TABLE t1;
+# SELECT * FROM t1;
+--echo failed to add primary key
+DROP TABLE t1;
+
+set global xengine_sort_buffer_size=@saved_sort_buffer_size;
+
+--source suite/xengine/include/check_xengine_log_error.inc

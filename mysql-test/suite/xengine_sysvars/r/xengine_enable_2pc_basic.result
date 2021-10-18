@@ -1,0 +1,7 @@
+SET @start_global_value = @@global.XENGINE_ENABLE_2PC;
+SELECT @start_global_value;
+@start_global_value
+1
+"Trying to set variable @@global.XENGINE_ENABLE_2PC to 444. It should fail because it is readonly."
+SET @@global.XENGINE_ENABLE_2PC   = 444;
+ERROR HY000: Variable 'xengine_enable_2pc' is a read only variable

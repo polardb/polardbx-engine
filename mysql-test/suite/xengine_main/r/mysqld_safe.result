@@ -1,0 +1,19 @@
+use test;
+@@binlog_format
+MIXED
+Database
+__recycle_bin__
+information_schema
+mtr
+mysql
+performance_schema
+sys
+test
+Database
+__recycle_bin__
+information_schema
+mtr
+mysql
+performance_schema
+sys
+test

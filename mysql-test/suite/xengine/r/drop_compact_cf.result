@@ -1,0 +1,10 @@
+create table t(id int primary key);
+set @@GLOBAL.DEBUG= '+d, before_manual_compaction';
+set @@GLOBAL.DEBUG= '+d, after_manual_compaction';
+#sending
+drop table t;
+set @@GLOBAL.DEBUG= '-d, before_manual_compaction';
+set @@GLOBAL.DEBUG= '-d, after_manual_compaction';
+shutdown;
+select index_number from information_schema.xengine_ddl where table_name ='t';
+index_number

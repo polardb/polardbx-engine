@@ -1,0 +1,26 @@
+USE test;
+CREATE TABLE t1 (
+`id` int unsigned NOT NULL AUTO_INCREMENT,
+`k` int unsigned NOT NULL DEFAULT '0',
+`c` char(120) NOT NULL DEFAULT '',
+PRIMARY KEY (`id`),
+KEY `k_1` (`k`)
+);
+INSERT INTO t1 VALUES (1, 1, 'first'), (2, 1, 'second'), (3, 2, 'thrid');
+SELECT * FROM t1;
+id	k	c
+1	1	first
+2	1	second
+3	2	thrid
+SELECT * FROM t1 WHERE id = 1;
+id	k	c
+1	1	first
+SELECT * FROM t1 WHERE k = 1;
+id	k	c
+1	1	first
+2	1	second
+SELECT * FROM information_schema.INDEX_STATISTICS WHERE TABLE_NAME = 't1' order by INDEX_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	ROWS_READ	SCAN_USED
+test	t1	k_1	2	1
+test	t1	PRIMARY	4	2
+DROP TABLE t1;

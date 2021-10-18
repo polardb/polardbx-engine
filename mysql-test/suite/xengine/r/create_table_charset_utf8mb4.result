@@ -1,0 +1,219 @@
+drop table if exists tt;
+create table tt(c1 varchar(100));
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8, collate utf8_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8mb4;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table tt;
+create table tt(c1 varchar(100)) charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table tt;
+create table tt(id int);
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+alter table tt add column c1 varchar(100);
+show full columns from tt;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+id	int(11)	NULL	YES		NULL		select,insert,update,references	
+c1	varchar(100)	utf8mb4_general_ci	YES		NULL		select,insert,update,references	
+alter table tt convert to charset utf8;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) DEFAULT NULL,
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+show full columns from tt;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+id	int(11)	NULL	YES		NULL		select,insert,update,references	
+c1	varchar(100)	utf8_general_ci	YES		NULL		select,insert,update,references	
+alter table tt convert to charset utf8, collate utf8_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) DEFAULT NULL,
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+show full columns from tt;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+id	int(11)	NULL	YES		NULL		select,insert,update,references	
+c1	varchar(100)	utf8_general_ci	YES		NULL		select,insert,update,references	
+alter table tt convert to charset utf8mb4;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) DEFAULT NULL,
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show full columns from tt;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+id	int(11)	NULL	YES		NULL		select,insert,update,references	
+c1	varchar(100)	utf8mb4_general_ci	YES		NULL		select,insert,update,references	
+alter table tt convert to charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) DEFAULT NULL,
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show full columns from tt;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+id	int(11)	NULL	YES		NULL		select,insert,update,references	
+c1	varchar(100)	utf8mb4_0900_ai_ci	YES		NULL		select,insert,update,references	
+alter table tt convert to charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `id` int(11) DEFAULT NULL,
+  `c1` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+show full columns from tt;
+Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
+id	int(11)	NULL	YES		NULL		select,insert,update,references	
+c1	varchar(100)	utf8mb4_0900_ai_ci	YES		NULL		select,insert,update,references	
+drop table if exists tt;
+create table tt(c1 varchar(100)) engine=xengine;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8, collate utf8_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8mb4;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table tt;
+create table tt(c1 varchar(100)) engine=xengine charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8, collate utf8_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8mb4;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8mb4, collate utf8mb4_0900_ai_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table tt;
+create table tt(c1 varchar(100)) engine=innodb charset utf8mb4, collate utf8mb4_general_ci;
+show create table tt;
+Table	Create Table
+tt	CREATE TABLE `tt` (
+  `c1` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+create database db_test;
+show create database db_test;
+Database	Create Database
+db_test	CREATE DATABASE `db_test` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */
+drop database db_test;
+create database db_test charset utf8mb4;
+show create database db_test;
+Database	Create Database
+db_test	CREATE DATABASE `db_test` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */
+drop database db_test;
+create database db_test charset utf8;
+show create database db_test;
+Database	Create Database
+db_test	CREATE DATABASE `db_test` /*!40100 DEFAULT CHARACTER SET utf8 */ /*!80016 DEFAULT ENCRYPTION='N' */
+drop database db_test;
+create database db_test charset utf8mb4 collate utf8mb4_0900_ai_ci;
+show create database db_test;
+Database	Create Database
+db_test	CREATE DATABASE `db_test` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */
+drop database db_test;
+create database db_test charset utf8mb4 collate utf8mb4_general_ci;
+show create database db_test;
+Database	Create Database
+db_test	CREATE DATABASE `db_test` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci */ /*!80016 DEFAULT ENCRYPTION='N' */
+drop database db_test;
+drop table tt;

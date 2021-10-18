@@ -1,0 +1,333 @@
+--echo ##############
+--echo ### basic mixture tests of INSTANT/INPLACE/COPY DDL
+--echo ##############
+--echo # CREATE TABLE
+--echo #######
+CREATE TABLE t1(
+    id INT NOT NULL, col_to_drop INT,
+    c1 INT DEFAULT 1, c2 VARCHAR(70),
+    col_to_extend VARCHAR(70),
+    c3 INT NOT NULL, c4 INT NULL,
+    chk_col INT, k1_col INT, k2_col INT,
+    UNIQUE KEY k1(k1_col),
+    KEY k2(k2_col),
+    KEY vis_key(c1) VISIBLE,
+    KEY inv_key(c2) INVISIBLE,
+    CONSTRAINT old_chk1 CHECK(chk_col < 100),
+    CONSTRAINT old_chk2 CHECK(chk_col > 10),
+    PRIMARY KEY(col_to_drop)
+    ) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='k1', INDEX_NUMBER, 1)
+--let $old_k2_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='k2', INDEX_NUMBER, 1)
+--let $old_k3_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='vis_key', INDEX_NUMBER, 1)
+--let $old_k4_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='inv_key', INDEX_NUMBER, 1)
+
+INSERT INTO t1 VALUES(1, 1, 2, 'aa', 'abc', 2, 2, 20, 2, 1);
+INSERT INTO t1 VALUES(2, 2, 4, 'bb', 'cde', 4, 4, 40, 4, 1);
+
+--echo #######
+--echo # INSTANT DDL
+--echo #######
+ALTER TABLE t1
+    ADD COLUMN (app_col TEXT, app_col1 INT),
+    ALTER c1 DROP DEFAULT,
+    ALTER c2 SET DEFAULT 'aaaa',
+    RENAME TO tt,
+    ALGORITHM = INSTANT;
+SHOW CREATE TABLE tt;
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='k1', INDEX_NUMBER, 1)
+--let $new_k2_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='k2', INDEX_NUMBER, 1)
+--let $new_k3_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='vis_key', INDEX_NUMBER, 1)
+--let $new_k4_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='inv_key', INDEX_NUMBER, 1)
+--let $assert_text = id of subtables should be kept same after INSTANT DDL
+--let $assert_cond = "$old_pk_id" = "$new_pk_id" AND "$old_k1_id" = "$new_k1_id" AND "$old_k2_id" = "$new_k2_id" AND "$old_k3_id" = "$new_k3_id" AND "$old_k4_id" = "$new_k4_id"
+--source include/assert.inc
+
+--echo #######
+--echo # Inplace without rebuild
+--echo #######
+# RENAME INDEX and ALTER INDEX on same index cann't operate together,
+# ALTER INDXE can't find either old key name or new key name
+ALTER TABLE tt
+    ALTER INDEX vis_key INVISIBLE,
+    ALTER INDEX inv_key VISIBLE,
+    ALGORITHM = INPLACE;
+
+ALTER TABLE tt
+    DROP KEY k1,
+    DROP KEY k2,
+    ADD INDEX key1(c4) COMMENT 'secondary key1',
+    ADD UNIQUE INDEX key2(c3) COMMENT 'unique secondary key2',
+    MODIFY COLUMN col_to_extend VARCHAR(100),
+    RENAME COLUMN col_to_drop to col_to_drop_later,
+    RENAME INDEX vis_key TO iv_key,
+    RENAME INDEX inv_key TO v_key,
+    RENAME TO t2,
+    ALGORITHM = INPLACE;
+SHOW CREATE TABLE t2;
+
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2' AND INDEX_NAME='key1', INDEX_NUMBER, 1)
+--let $old_k2_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2' AND INDEX_NAME='key2', INDEX_NUMBER, 1)
+--let $old_k3_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2' AND INDEX_NAME='iv_key', INDEX_NUMBER, 1)
+--let $old_k4_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t2' AND INDEX_NAME='v_key', INDEX_NUMBER, 1)
+--let $assert_text = id of non-dropped subtables should be kept same after INPLACE DDL without rebuild
+--let $assert_cond = "$old_pk_id" = "$new_pk_id" AND "$old_k3_id" = "$new_k3_id" AND "$old_k4_id" = "$new_k4_id"
+--source include/assert.inc
+
+--echo #######
+--echo # Inplace DDL with rebuild, aka. online copy ddl
+--echo #######
+ALTER TABLE t2
+    DROP PRIMARY KEY,
+    ADD PRIMARY KEY(id),
+    DROP COLUMN col_to_drop_later,
+    ADD COLUMN email VARCHAR(32) AFTER c2,
+    MODIFY COLUMN c3 INT AFTER c4,
+    RENAME TO tt,
+    ALGORITHM = INPLACE;
+SHOW CREATE TABLE tt;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='key1', INDEX_NUMBER, 1)
+--let $new_k2_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='key2', INDEX_NUMBER, 1)
+--let $new_k3_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='iv_key', INDEX_NUMBER, 1)
+--let $new_k4_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='v_key', INDEX_NUMBER, 1)
+--let $assert_text = id of non-dropped subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id" AND "$old_k1_id" != "$new_k1_id" AND "$old_k2_id" != "$new_k2_id" AND "$old_k3_id" != "$new_k3_id" AND "$old_k4_id" != "$new_k4_id"
+--source include/assert.inc
+
+--echo #######
+--echo # (offline) COPY DDL
+--echo #######
+--error 1845
+ALTER TABLE tt ALTER INDEX iv_key VISIBLE, ALTER INDEX v_key INVISIBLE, ALGORITHM = INSTANT;
+--error 1845
+ALTER TABLE tt DROP CHECK old_chk2, ADD CONSTRAINT new_chk CHECK(chk_col > 1), ALGORITHM = INSTANT;
+--error 1845
+ALTER TABLE tt DROP CHECK old_chk2, ADD CONSTRAINT new_chk CHECK(chk_col > 1), ALGORITHM = INPLACE;
+--error 1846
+ALTER TABLE tt DROP PRIMARY KEY, ALGORITHM=INPLACE;
+--error 1845
+ALTER TABLE tt COMMENT "comment1 on tt", ALGORITHM=INSTANT;
+ALTER TABLE tt COMMENT "comment1 on tt", ALGORITHM=INPLACE;
+--error 1846
+ALTER TABLE tt COMMENT "comment1 on tt", KEY_BLOCK_SIZE=1000, ALGORITHM=INPLACE;
+--error 1846
+ALTER TABLE tt CHARACTER SET=latin1, ALGORITHM=INSTANT;
+--error 1846
+ALTER TABLE tt CHARACTER SET=latin1, ALGORITHM=INPLACE;
+--error 1846
+ALTER TABLE tt MODIFY COLUMN col_to_extend VARCHAR(80), ALGORITHM=INSTANT;
+--error 1846
+ALTER TABLE tt MODIFY COLUMN col_to_extend VARCHAR(80), ALGORITHM=INPLACE;
+
+ALTER TABLE tt
+    DROP PRIMARY KEY,
+    MODIFY COLUMN col_to_extend VARCHAR(80),
+    DROP CHECK old_chk2,
+    ADD CONSTRAINT new_chk CHECK(chk_col > 1),
+    COMMENT 'comment2 on tt',
+    CHARACTER SET latin1,
+    LOCK=DEFAULT;
+SHOW CREATE TABLE tt;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='HIDDEN_PK_ID', INDEX_NUMBER, 1)
+--let $old_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='key1', INDEX_NUMBER, 1)
+--let $old_k2_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='key2', INDEX_NUMBER, 1)
+--let $old_k3_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='iv_key', INDEX_NUMBER, 1)
+--let $old_k4_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='tt' AND INDEX_NAME='v_key', INDEX_NUMBER, 1)
+--let $assert_text = id of non-dropped subtables should be changed after (offline) COPY DDL
+--let $assert_cond = "$old_pk_id" != "$new_pk_id" AND "$old_k1_id" != "$new_k1_id" AND "$old_k2_id" != "$new_k2_id" AND "$old_k3_id" != "$new_k3_id" AND "$old_k4_id" != "$new_k4_id"
+--source include/assert.inc
+
+SELECT * FROM tt;
+DROP TABLE tt;
+
+--echo ########################################################################
+--echo case 1 INSTANT DDL + INPLACE DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), ALGORITHM=INSTANT;
+SHOW CREATE TABLE t1;
+
+--error 1845
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, ADD UNIQUE KEY uk(c1), ADD KEY sk(c3), DROP KEY sk1, ALGORITHM=INSTANT;
+
+# ADD COLUMN with INPLACE DDL will rebuild the table online
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, ADD UNIQUE KEY uk(c1), ADD KEY sk(c3), DROP KEY sk1, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $assert_text = id of primary key subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id"
+--source include/assert.inc
+
+INSERT INTO t1(id, c1, c3) VALUES(3, 3, 'cccc');
+--error 1062
+INSERT INTO t1(id, c3) VALUES(4, 'dddd');
+
+ALTER TABLE t1 ADD COLUMN chk_col VARCHAR(30), DROP KEY sk;
+SHOW CREATE TABLE t1;
+
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 2 INSTANT DDL + INPLACE REBUILD DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='sk1', INDEX_NUMBER, 1)
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), ALGORITHM=INSTANT;
+SHOW CREATE TABLE t1;
+
+--error 1845
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, DROP COLUMN c1, ALGORITHM=INSTANT;
+
+ALTER TABLE t1 ADD COLUMN c4 FLOAT, DROP COLUMN c1, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='sk1', INDEX_NUMBER, 1)
+--let $assert_text = id of primary key subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id" AND "$old_k1_id" != "$new_k1_id"
+--source include/assert.inc
+
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 3 INPLACE DDL + INPLACE REBUILD DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+# DROP COLUMN c2 will DROP key sk1 implicitly
+--error 1845
+ALTER TABLE t1 DROP COLUMN c2, ADD UNIQUE KEY uk(c1), ALGORITHM=INSTANT;
+
+ALTER TABLE t1 DROP COLUMN c2, ADD UNIQUE KEY uk(c1), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $assert_text = id of primary key subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id"
+--source include/assert.inc
+
+--error 1062
+INSERT INTO t1 VALUES(3, 2);
+INSERT INTO t1 VALUES(3, 3);
+
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 4 INSTANT DDL + INPLACE DDL + INPLACE REBUILD DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, ADD UNIQUE KEY uk(c1), DROP COLUMN c2, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $assert_text = id of primary key subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id"
+--source include/assert.inc
+
+--error 1062
+INSERT INTO t1 VALUES(3, 2, 1.0);
+INSERT INTO t1 VALUES(3, 3, 1.0);
+
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 5 INSTANT DDL + (offlinie) COPY DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+--error 1846
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, MODIFY COLUMN c2 VARCHAR (100), ALGORITHM=INSTANT;
+
+--error 1846
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, MODIFY COLUMN c2 VARCHAR (100), ALGORITHM=INPLACE;
+
+ALTER TABLE t1 ADD COLUMN c3 FLOAT, MODIFY COLUMN c2 VARCHAR (100);
+SHOW CREATE TABLE t1;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $assert_text = id of primary key subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id"
+--source include/assert.inc
+
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 6 INPLACE DDL + (offline) COPY DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='sk1', INDEX_NUMBER, 1)
+
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+# DROP COLUMN c2 will DROP key sk1 implicitly
+--error 1846
+ALTER TABLE t1 DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c'), ALGORITHM=INPLACE;
+
+ALTER TABLE t1 DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c');
+SHOW CREATE TABLE t1;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='sk1', INDEX_NUMBER, 1)
+--let $assert_text = id of primary key subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id" AND "$old_k1_id" != "$new_k1_id"
+--source include/assert.inc
+
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo ########################################################################
+--echo case 7 INSTANT DDL + INPLACE DDL + (offline) COPY DDL
+--echo ########################################################################
+CREATE TABLE t1(id INT PRIMARY KEY, c1 INT DEFAULT 1, c2 CHAR(10), KEY sk1(c2(6))) ENGINE=XENGINE;
+--let $old_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $old_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='sk1', INDEX_NUMBER, 1)
+
+INSERT INTO t1 VALUES(1, 1, 'aaaa'), (2, 2, 'bbbb');
+
+# DROP COLUMN c2 will DROP key sk1 implicitly
+--error 1846
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c'), ALGORITHM=INSTANT;
+
+--error 1846
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c'), ALGORITHM=INPLACE;
+
+ALTER TABLE t1 ADD COLUMN c3 VARCHAR(30), DROP COLUMN c2, MODIFY COLUMN c1 ENUM('a', 'b', 'c');
+SHOW CREATE TABLE t1;
+
+--let $new_pk_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='PRIMARY', INDEX_NUMBER, 1)
+--let $new_k1_id=query_get_value(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL WHERE TABLE_NAME='t1' AND INDEX_NAME='sk1', INDEX_NUMBER, 1)
+--let $assert_text = id of primary key subtables should be changed after INPLACE DDL with rebuild
+--let $assert_cond = "$old_pk_id" != "$new_pk_id" AND "$old_k1_id" != "$new_k1_id"
+--source include/assert.inc
+
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--source suite/xengine/include/check_xengine_log_error.inc

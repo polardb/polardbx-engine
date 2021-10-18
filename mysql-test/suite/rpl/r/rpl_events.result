@@ -1,0 +1,114 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+SET @old_event_scheduler = @@global.event_scheduler;
+set global event_scheduler=1;
+CREATE TABLE t28953 (a INT);
+CREATE EVENT event1 ON SCHEDULE EVERY 1 YEAR
+DO BEGIN
+select * from t28953;
+END;|
+ALTER EVENT event1 RENAME TO event2;
+include/sync_slave_sql_with_master.inc
+DROP EVENT event2;
+CREATE TABLE test.t1(details CHAR(30));
+CREATE EVENT /*!50000 event44331_1 */
+ON SCHEDULE AT CURRENT_TIMESTAMP
+ON COMPLETION PRESERVE DISABLE
+DO INSERT INTO test.t1 VALUES('event event44331_1 fired - no definer');
+CREATE DEFINER=CURRENT_USER /*!50000 EVENT event44331_2 */
+ON SCHEDULE AT CURRENT_TIMESTAMP
+ON COMPLETION PRESERVE DISABLE
+DO INSERT INTO test.t1 VALUES('event event44331_2 fired - DEFINER=CURRENT_USER');
+CREATE DEFINER=CURRENT_USER() EVENT event44331_3
+ON SCHEDULE AT CURRENT_TIMESTAMP
+ON COMPLETION PRESERVE DISABLE
+DO INSERT INTO test.t1 VALUES('event event44331_3 fired - DEFINER=CURRENT_USER() function');
+CREATE /*!50000 DEFINER='user44331' */ EVENT event44331_4
+ON SCHEDULE AT CURRENT_TIMESTAMP
+ON COMPLETION PRESERVE DISABLE
+DO INSERT INTO test.t1 VALUES('event event44331_4 fired - DEFINER=user1');
+# Test for bug#50095 Multi-statement including CREATE EVENT causes rotten
+# binlog entry
+SELECT 'ABC';
+SELECT '123'|
+ABC
+ABC
+123
+123
+#on master 
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_1';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_1	root@localhost
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_2';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_2	root@localhost
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_3';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_3	root@localhost
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_4';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_4	user44331@%
+include/sync_slave_sql_with_master.inc
+#on slave
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_1';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_1	root@localhost
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_2';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_2	root@localhost
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_3';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_3	root@localhost
+select EVENT_SCHEMA, EVENT_NAME, DEFINER from information_schema.events
+where EVENT_NAME='event44331_4';
+EVENT_SCHEMA	EVENT_NAME	DEFINER
+test	event44331_4	user44331@%
+SET @@global.event_scheduler= @old_event_scheduler;
+DROP TABLE t28953;
+DROP TABLE t1;
+DROP EVENT event44331_1;
+DROP EVENT event44331_2;
+DROP EVENT event44331_3;
+DROP EVENT event44331_4;
+include/sync_slave_sql_with_master.inc
+CREATE EVENT event1 ON SCHEDULE EVERY 100 SECOND STARTS '2000-01-01 00:00:00'
+ON COMPLETION PRESERVE ENABLE DO
+BEGIN
+SET @dummy = 100;
+END\\
+CREATE PROCEDURE proc1()
+BEGIN
+DECLARE dummy INT UNSIGNED;
+SET dummy = 100;
+ALTER EVENT EVENT1 ON SCHEDULE EVERY dummy SECOND
+STARTS '2000-01-01 00:00:00' ENABLE;
+END \\
+CALL proc1();
+include/sync_slave_sql_with_master.inc
+DROP EVENT event1;
+DROP PROCEDURE proc1;
+call mtr.add_suppression("Unsafe statement written to the binary log");
+set @secs=100;
+CREATE EVENT EVENT_WITH_SYSDATE_AND_VARIABLES
+ON SCHEDULE EVERY @secs MINUTE STARTS sysdate()
+ON COMPLETION PRESERVE
+DO BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION
+SELECT CONCAT('SAMPLE MSG');
+END |
+ALTER EVENT EVENT_WITH_SYSDATE_AND_VARIABLES
+ON SCHEDULE
+EVERY @secs HOUR
+STARTS sysdate() |
+DROP EVENT EVENT_WITH_SYSDATE_AND_VARIABLES |
+include/rpl_end.inc

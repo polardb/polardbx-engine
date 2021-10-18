@@ -1,0 +1,188 @@
+--source suite/xengine/include/have_xengine.inc
+
+--let $MYSQLD_DATADIR= `select @@datadir`
+--let $MYSQLD_DATADIR1= $MYSQL_TMP_DIR/data1
+--let $MYSQLD_DATADIR2= $MYSQL_TMP_DIR/data2
+
+--echo # Stop DB server which was created by MTR default
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 100
+--source include/wait_until_disconnected.inc
+
+--let $ZIP_FILE= $MYSQLTEST_VARDIR/std_data/upgrade/rds8_data.zip
+--copy_file $ZIP_FILE $MYSQL_TMP_DIR/rds8_data.zip
+--file_exists $MYSQL_TMP_DIR/rds8_data.zip
+--exec unzip -qo $MYSQL_TMP_DIR/rds8_data.zip -d $MYSQL_TMP_DIR;
+--exec mv $MYSQL_TMP_DIR/data $MYSQL_TMP_DIR/data1
+--exec cp -r $MYSQL_TMP_DIR/data1 $MYSQL_TMP_DIR/data2
+
+# ---------------------------------------- with parameter --xengine=1 ----------------------------------------
+
+--enable_reconnect
+# We use these parameters to generate rds8_data.zip
+--exec echo "restart: --datadir=$MYSQLD_DATADIR1 --back_log=1500 --max_connections=8000 --max_connect_errors=10000 --connect-timeout=5 --wait-timeout=28800 --interactive-timeout=28800 --slave-net-timeout=600 --net_read_timeout=30 --net_write_timeout=60 --net_retry_count=10 --net_buffer_length=16384 --max_allowed_packet=64M --performance_schema=ON --thread_stack=512K --thread_cache_size=256 --default-time-zone=system --character-set-server=latin1 --tmp_table_size=512M --max_heap_table_size=512M --log_bin=mysql-bin --server-id=1 --sync_binlog=1000 --binlog_order_commits=1 --xengine_flush_log_at_trx_commit=1 --xengine_enable_2pc=1 --xengine_batch_group_slot_array_size=5 --xengine_batch_group_max_group_size=15 --xengine_batch_group_max_leader_wait_time_us=50 --innodb_buffer_pool_size=10M --innodb_buffer_pool_instances=8 --innodb_data_file_path=ibdata:10M:autoextend --innodb_log_file_size=10M --innodb_log_files_in_group=2 --transaction_isolation=READ-COMMITTED --innodb_file_per_table --innodb_open_files=4000 --innodb_max_dirty_pages_pct=90 --innodb_use_native_aio=1 --innodb_stats_persistent=1 --innodb_spin_wait_delay=30 --innodb_adaptive_hash_index=0 --innodb_flush_log_at_trx_commit=0 --innodb_log_buffer_size=64M --innodb_lock_wait_timeout=50 --innodb_doublewrite=0 --innodb_thread_concurrency=0 --innodb_adaptive_flushing=1 --innodb_flush_neighbors=0 --innodb_read_io_threads=4 --innodb_write_io_threads=4 --innodb_io_capacity=4000 --innodb_purge_threads=1 --innodb_adaptive_hash_index=1 --innodb_flush_method=O_DIRECT_NO_FSYNC --innodb_change_buffering=all" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+SHOW DATABASES;
+USE test;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+CREATE TABLE t2 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+INSERT INTO t2 VALUES (1,'12345','ABCDEFG');
+SELECT * FROM t2;
+
+ALTER TABLE t1 ADD COLUMN data2 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data3 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_2(`data2`);
+ALTER TABLE t2 ADD INDEX k_3(`data3`);
+CHECK TABLE t1;
+CHECK TABLE t2;
+
+USE information_schema;
+--echo "--xengine=1, show all xengine info tables"
+SHOW TABLES LIKE '%XENGINE%';
+
+--echo # restart again, test recovery with --xengine=1
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 100
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+# We use these parameters to generate rds8_data.zip
+--exec echo "restart: --datadir=$MYSQLD_DATADIR1 --back_log=1500 --max_connections=8000 --max_connect_errors=10000 --connect-timeout=5 --wait-timeout=28800 --interactive-timeout=28800 --slave-net-timeout=600 --net_read_timeout=30 --net_write_timeout=60 --net_retry_count=10 --net_buffer_length=16384 --max_allowed_packet=64M --performance_schema=ON --thread_stack=512K --thread_cache_size=256 --default-time-zone=system --character-set-server=latin1 --tmp_table_size=512M --max_heap_table_size=512M --log_bin=mysql-bin --server-id=1 --sync_binlog=1000 --binlog_order_commits=1 --xengine_flush_log_at_trx_commit=1 --xengine_enable_2pc=1 --xengine_batch_group_slot_array_size=5 --xengine_batch_group_max_group_size=15 --xengine_batch_group_max_leader_wait_time_us=50 --innodb_buffer_pool_size=10M --innodb_buffer_pool_instances=8 --innodb_data_file_path=ibdata:10M:autoextend --innodb_log_file_size=10M --innodb_log_files_in_group=2 --transaction_isolation=READ-COMMITTED --innodb_file_per_table --innodb_open_files=4000 --innodb_max_dirty_pages_pct=90 --innodb_use_native_aio=1 --innodb_stats_persistent=1 --innodb_spin_wait_delay=30 --innodb_adaptive_hash_index=0 --innodb_flush_log_at_trx_commit=0 --innodb_log_buffer_size=64M --innodb_lock_wait_timeout=50 --innodb_doublewrite=0 --innodb_thread_concurrency=0 --innodb_adaptive_flushing=1 --innodb_flush_neighbors=0 --innodb_read_io_threads=4 --innodb_write_io_threads=4 --innodb_io_capacity=4000 --innodb_purge_threads=1 --innodb_adaptive_hash_index=1 --innodb_flush_method=O_DIRECT_NO_FSYNC --innodb_change_buffering=all" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+USE test;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+ALTER TABLE t1 ADD COLUMN data3 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data4 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_3(`data3`);
+ALTER TABLE t2 ADD INDEX k_4(`data4`);
+
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+CHECK TABLE t1;
+CHECK TABLE t2;
+
+USE information_schema;
+--echo "--xengine=1, show all xengine info tables"
+SHOW TABLES like '%XENGINE%';
+
+DROP TABLE test.t1;
+DROP TABLE test.t2;
+
+# ---------------------------------------- with parameter --xengine=0 ----------------------------------------
+
+--echo # restart, test --xengine=0 upgrade
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 100
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+# We use these parameters to generate rds8_data.zip
+--exec echo "restart: --xengine=0 --datadir=$MYSQLD_DATADIR2 --back_log=1500 --max_connections=8000 --max_connect_errors=10000 --connect-timeout=5 --wait-timeout=28800 --interactive-timeout=28800 --slave-net-timeout=600 --net_read_timeout=30 --net_write_timeout=60 --net_retry_count=10 --net_buffer_length=16384 --max_allowed_packet=64M --performance_schema=ON --thread_stack=512K --thread_cache_size=256 --default-time-zone=system --character-set-server=latin1 --tmp_table_size=512M --max_heap_table_size=512M --log_bin=mysql-bin --server-id=1 --sync_binlog=1000 --binlog_order_commits=1 --xengine_flush_log_at_trx_commit=1 --xengine_enable_2pc=1 --xengine_batch_group_slot_array_size=5 --xengine_batch_group_max_group_size=15 --xengine_batch_group_max_leader_wait_time_us=50 --innodb_buffer_pool_size=10M --innodb_buffer_pool_instances=8 --innodb_data_file_path=ibdata:10M:autoextend --innodb_log_file_size=10M --innodb_log_files_in_group=2 --transaction_isolation=READ-COMMITTED --innodb_file_per_table --innodb_open_files=4000 --innodb_max_dirty_pages_pct=90 --innodb_use_native_aio=1 --innodb_stats_persistent=1 --innodb_spin_wait_delay=30 --innodb_adaptive_hash_index=0 --innodb_flush_log_at_trx_commit=0 --innodb_log_buffer_size=64M --innodb_lock_wait_timeout=50 --innodb_doublewrite=0 --innodb_thread_concurrency=0 --innodb_adaptive_flushing=1 --innodb_flush_neighbors=0 --innodb_read_io_threads=4 --innodb_write_io_threads=4 --innodb_io_capacity=4000 --innodb_purge_threads=1 --innodb_adaptive_hash_index=1 --innodb_flush_method=O_DIRECT_NO_FSYNC --innodb_change_buffering=all" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+SHOW DATABASES;
+USE test;
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+--error 1286
+CREATE TABLE t2 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+CREATE TABLE t2 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=INNODB;
+INSERT INTO t2 VALUES (1,'12345','ABCDEFG');
+SELECT * FROM t2;
+
+ALTER TABLE t1 ADD COLUMN data2 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data3 VARCHAR(100) DEFAULT 'abcdefg', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_2(`data2`);
+ALTER TABLE t2 ADD INDEX k_3(`data3`);
+CHECK TABLE t1;
+CHECK TABLE t2;
+
+USE information_schema;
+--echo "--xengine = 0, should have nothing"
+SHOW TABLES LIKE '%XENGINE%';
+
+--echo # restart again, to test recovery with --xengine=0 
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 100
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+# We use these parameters to generate rds8_data.zip
+--exec echo "restart: --xengine=0 --datadir=$MYSQLD_DATADIR2 --back_log=1500 --max_connections=8000 --max_connect_errors=10000 --connect-timeout=5 --wait-timeout=28800 --interactive-timeout=28800 --slave-net-timeout=600 --net_read_timeout=30 --net_write_timeout=60 --net_retry_count=10 --net_buffer_length=16384 --max_allowed_packet=64M --performance_schema=ON --thread_stack=512K --thread_cache_size=256 --default-time-zone=system --character-set-server=latin1 --tmp_table_size=512M --max_heap_table_size=512M --log_bin=mysql-bin --server-id=1 --sync_binlog=1000 --binlog_order_commits=1 --xengine_flush_log_at_trx_commit=1 --xengine_enable_2pc=1 --xengine_batch_group_slot_array_size=5 --xengine_batch_group_max_group_size=15 --xengine_batch_group_max_leader_wait_time_us=50 --innodb_buffer_pool_size=10M --innodb_buffer_pool_instances=8 --innodb_data_file_path=ibdata:10M:autoextend --innodb_log_file_size=10M --innodb_log_files_in_group=2 --transaction_isolation=READ-COMMITTED --innodb_file_per_table --innodb_open_files=4000 --innodb_max_dirty_pages_pct=90 --innodb_use_native_aio=1 --innodb_stats_persistent=1 --innodb_spin_wait_delay=30 --innodb_adaptive_hash_index=0 --innodb_flush_log_at_trx_commit=0 --innodb_log_buffer_size=64M --innodb_lock_wait_timeout=50 --innodb_doublewrite=0 --innodb_thread_concurrency=0 --innodb_adaptive_flushing=1 --innodb_flush_neighbors=0 --innodb_read_io_threads=4 --innodb_write_io_threads=4 --innodb_io_capacity=4000 --innodb_purge_threads=1 --innodb_adaptive_hash_index=1 --innodb_flush_method=O_DIRECT_NO_FSYNC --innodb_change_buffering=all" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+USE test;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+--error 1286
+CREATE TABLE t3 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+ALTER TABLE t1 ADD COLUMN data3 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data4 VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_3(`data3`);
+ALTER TABLE t2 ADD INDEX k_4(`data4`);
+
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+CHECK TABLE t1;
+CHECK TABLE t2;
+
+USE information_schema;
+--echo "--xengine = 0, should have nothing"
+SHOW TABLES LIKE '%XENGINE%';
+
+--echo # restart again, to test upgrade from --xengine=0 to --xengine=1 
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 100
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+# We use these parameters to generate rds8_data.zip
+--exec echo "restart: --xengine=1 --datadir=$MYSQLD_DATADIR2 --back_log=1500 --max_connections=8000 --max_connect_errors=10000 --connect-timeout=5 --wait-timeout=28800 --interactive-timeout=28800 --slave-net-timeout=600 --net_read_timeout=30 --net_write_timeout=60 --net_retry_count=10 --net_buffer_length=16384 --max_allowed_packet=64M --performance_schema=ON --thread_stack=512K --thread_cache_size=256 --default-time-zone=system --character-set-server=latin1 --tmp_table_size=512M --max_heap_table_size=512M --log_bin=mysql-bin --server-id=1 --sync_binlog=1000 --binlog_order_commits=1 --xengine_flush_log_at_trx_commit=1 --xengine_enable_2pc=1 --xengine_batch_group_slot_array_size=5 --xengine_batch_group_max_group_size=15 --xengine_batch_group_max_leader_wait_time_us=50 --innodb_buffer_pool_size=10M --innodb_buffer_pool_instances=8 --innodb_data_file_path=ibdata:10M:autoextend --innodb_log_file_size=10M --innodb_log_files_in_group=2 --transaction_isolation=READ-COMMITTED --innodb_file_per_table --innodb_open_files=4000 --innodb_max_dirty_pages_pct=90 --innodb_use_native_aio=1 --innodb_stats_persistent=1 --innodb_spin_wait_delay=30 --innodb_adaptive_hash_index=0 --innodb_flush_log_at_trx_commit=0 --innodb_log_buffer_size=64M --innodb_lock_wait_timeout=50 --innodb_doublewrite=0 --innodb_thread_concurrency=0 --innodb_adaptive_flushing=1 --innodb_flush_neighbors=0 --innodb_read_io_threads=4 --innodb_write_io_threads=4 --innodb_io_capacity=4000 --innodb_purge_threads=1 --innodb_adaptive_hash_index=1 --innodb_flush_method=O_DIRECT_NO_FSYNC --innodb_change_buffering=all" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+
+USE test;
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+CREATE TABLE t3 (ID INT, DATA CHAR(20), DATA2 TEXT, PRIMARY KEY(`ID`), KEY(`DATA`)) ENGINE=XENGINE;
+INSERT INTO t3 values(1, '12345', 'abcdefg');
+ALTER TABLE t3 ADD COLUMN DATA3 VARCHAR(100) DEFAULT '!@#$%^&*';
+ALTER TABLE t3 ADD INDEX key_3 (`DATA3`);
+SHOW CREATE TABLE t3;
+SELECT * FROM t3;
+
+USE information_schema;
+--echo "--xengine=1 should have xengine info tables"
+SHOW TABLES LIKE '%XENGINE%';
+--sorted_result
+SELECT DISTINCT(SUBTABLE_ID), TABLE_NAME, SUBTABLE_NAME FROM information_schema.xengine_subtable;
+
+DROP TABLE test.t1;
+DROP TABLE test.t2;
+
+--source suite/xengine/include/check_xengine_log_error.inc
+
+###########################################################################
+# Cleanup
+###########################################################################
+--let $restart_parameters = restart:
+--source include/restart_mysqld.inc
+
+--force-rmdir $MYSQLD_DATADIR1
+--force-rmdir $MYSQLD_DATADIR2
+--remove_file $MYSQL_TMP_DIR/rds8_data.zip
+

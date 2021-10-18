@@ -1,0 +1,9 @@
+create database test1;
+create table test1.t1 (n int);
+n
+1
+2
+n
+1
+# restart
+drop database test1;

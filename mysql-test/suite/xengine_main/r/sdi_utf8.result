@@ -1,0 +1,3 @@
+CREATE TABLE tæøå(i INT) ENGINE XENGINE;
+t@0m@1k@0l_XXX.sdi
+DROP TABLE tæøå;

@@ -1,0 +1,5 @@
+let $engine= heap;
+let $is_heap= 1;
+--source include/ctype_utf8mb4.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

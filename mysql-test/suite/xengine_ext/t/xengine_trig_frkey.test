@@ -1,0 +1,5 @@
+#### suite/xengine_ext/t/innodb_triggers.test
+
+let $engine_type= XENGINE;
+
+--source suite/xengine_ext/triggers/trig_frkey.inc

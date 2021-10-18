@@ -1,0 +1,65 @@
+
+#========================================================================
+# STEP 1 - SETUP
+#========================================================================
+
+## Setup control thread
+
+SET SESSION AUTOCOMMIT= 1;
+USE test;
+DROP DATABASE IF EXISTS db;
+
+## Create test database, test tables, one transactional and one non-transactional
+CREATE DATABASE db;
+CREATE TABLE db.t1 (s1 int, s2 varchar(64)) ENGINE=XENGINE;
+CREATE TABLE db.nt1 (s1 int, s2 varchar(64)) ENGINE=MYISAM;
+CREATE PROCEDURE db.tp_update() UPDATE t1 SET s1 = s1 + 1;
+CREATE PROCEDURE db.tp_start() START TRANSACTION;
+CREATE PROCEDURE db.tp_rollback() ROLLBACK;
+CREATE PROCEDURE db.tp_commit() COMMIT;
+CREATE FUNCTION db.fn_add(x INT, y INT) RETURNS INT
+BEGIN
+INSERT INTO t1 VALUES (x, "INSERT x"),(y, "INSERT y");
+RETURN x+y;
+END |
+
+## Warm-up data-dictionary cache.
+
+## Setup connection 1
+USE db;
+SET SESSION AUTOCOMMIT = 1;
+SELECT thread_id INTO @my_thread_id
+FROM performance_schema.threads
+WHERE processlist_id = connection_id();
+Warnings:
+Warning	1329	No data - zero rows fetched, selected, or processed
+
+## Disable events from the control (default) connection
+UPDATE performance_schema.threads SET instrumented = 'NO' WHERE processlist_id = CONNECTION_ID();
+SET @all_threads= 0;
+
+## Enable only transaction and statement instruments
+UPDATE performance_schema.setup_instruments SET enabled='NO', timed='NO';
+UPDATE performance_schema.setup_instruments SET enabled='YES'
+  WHERE name LIKE ('statement/%') OR name = 'transaction';
+
+## Clear statement and transaction history
+CALL test.clear_history();
+
+#========================================================================
+# STEP 2 - BASIC TRANSACTION
+#========================================================================
+#
+# STEP 2.1 - IMPLICIT
+#
+INSERT INTO t1 VALUES (210, "INSERT 210");
+INSERT INTO t1 VALUES (211, "INSERT 211");
+INSERT INTO t1 VALUES (212, "INSERT 212");
+UPDATE t1 SET s1 = s1 + 1 WHERE s1 = 212;
+Timeout in wait_condition.inc for SELECT COUNT(*) > 0 FROM performance_schema.threads
+WHERE THREAD_ID = @con1_thread_id
+AND (PROCESSLIST_STATE = 'Sleep' OR PROCESSLIST_STATE IS NULL)
+AND PROCESSLIST_INFO IS NULL
+The activity of connection con1 did not finish.
+thread_id	PROCESSLIST_id	PROCESSLIST_STATE	PROCESSLIST_INFO
+Abort.

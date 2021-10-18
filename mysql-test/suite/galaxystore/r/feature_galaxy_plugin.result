@@ -1,0 +1,32 @@
+Install galaxy plugin
+INSTALL PLUGIN galaxy SONAME "galaxy.so";
+galax plugin status
+show global status like '%galaxy%';
+Variable_name	Value
+Galaxyx_address	#
+Galaxyx_port	#
+galaxy_bloomfilter_call_count	#
+galaxy_hllndv_call_count	#
+galaxy_hyperloglog_call_count	#
+performance_schema metrics
+select * from performance_schema.user_defined_functions where UDF_NAME in ('hyperloglog', 'hllndv', 'bloomfilter');
+UDF_NAME	UDF_RETURN_TYPE	UDF_TYPE	UDF_LIBRARY	UDF_USAGE_COUNT
+bloomfilter	integer	function		1
+hllndv	integer	aggregate		1
+hyperloglog	char	aggregate		1
+test create/drop inner function
+create function bloomfilter returns int soname "galaxy.so";
+ERROR HY000: Function 'bloomfilter' already exists
+create function hyperloglog returns int soname "galaxy.so";
+ERROR HY000: Function 'hyperloglog' already exists
+create function hllndv returns int soname "galaxy.so";
+ERROR HY000: Function 'hllndv' already exists
+drop function bloomfilter;
+ERROR HY000: DROP FUNCTION can't drop a dynamically registered user defined function
+drop function hyperloglog;
+ERROR HY000: DROP FUNCTION can't drop a dynamically registered user defined function
+drop function hllndv;
+ERROR HY000: DROP FUNCTION can't drop a dynamically registered user defined function
+UNINSTALL PLUGIN galaxy;
+select * from performance_schema.user_defined_functions where UDF_NAME in ('hyperloglog', 'hllndv', 'bloomfilter');
+UDF_NAME	UDF_RETURN_TYPE	UDF_TYPE	UDF_LIBRARY	UDF_USAGE_COUNT

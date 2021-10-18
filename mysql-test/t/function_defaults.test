@@ -1,0 +1,15 @@
+--echo #
+--echo # Test of function defaults for any server.
+--echo # We run the same tests with different settings for better coverage.
+--echo #
+
+--echo #
+--echo # Function defaults run 2. Six digits scale on seconds
+--echo # precision. InnoDB.
+--echo #
+set default_storage_engine=innodb;
+let $current_timestamp=CURRENT_TIMESTAMP(6);
+let $now=NOW(6);
+let $timestamp=TIMESTAMP(6);
+let $datetime=DATETIME(6);
+source 'include/function_defaults.inc';

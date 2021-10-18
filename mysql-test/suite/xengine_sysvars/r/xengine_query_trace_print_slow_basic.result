@@ -1,0 +1,67 @@
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES('TRUE');
+INSERT INTO valid_values VALUES('FALSE');
+CREATE TABLE invalid_values (value varchar(255));
+INSERT INTO invalid_values VALUES('aaa');
+INSERT INTO invalid_values VALUES('\'aaa\'');
+INSERT INTO invalid_values VALUES('123');
+INSERT INTO invalid_values VALUES('\'123\'');
+SET @start_global_value = @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+SELECT @start_global_value;
+@start_global_value
+1
+'# Setting to valid values in global scope#'
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_PRINT_SLOW to TRUE"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW   = TRUE;
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW = DEFAULT;
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_PRINT_SLOW to FALSE"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW   = FALSE;
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+0
+"Setting the global scope variable back to default"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW = DEFAULT;
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+"Trying to set variable @@session.XENGINE_QUERY_TRACE_PRINT_SLOW to 444. It should fail because it is not session."
+SET @@session.XENGINE_QUERY_TRACE_PRINT_SLOW   = 444;
+ERROR HY000: Variable 'xengine_query_trace_print_slow' is a GLOBAL variable and should be set with SET GLOBAL
+'# Testing with invalid values in global scope #'
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_PRINT_SLOW to aaa"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW   = aaa;
+Got one of the listed errors
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_PRINT_SLOW to 'aaa'"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW   = 'aaa';
+Got one of the listed errors
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_PRINT_SLOW to 123"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW   = 123;
+Got one of the listed errors
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+"Trying to set variable @@global.XENGINE_QUERY_TRACE_PRINT_SLOW to '123'"
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW   = '123';
+Got one of the listed errors
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+SET @@global.XENGINE_QUERY_TRACE_PRINT_SLOW = @start_global_value;
+SELECT @@global.XENGINE_QUERY_TRACE_PRINT_SLOW;
+@@global.XENGINE_QUERY_TRACE_PRINT_SLOW
+1
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

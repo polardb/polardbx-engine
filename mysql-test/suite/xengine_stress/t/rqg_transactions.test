@@ -1,0 +1,22 @@
+--source suite/xengine/include/have_xengine.inc
+
+call mtr.add_suppression("Deadlock found when trying to get lock");
+
+# RQG's transactions test
+let $TARGET_DB = rqg_transactions;
+let $GRAMMAR_FILES = transactions/transactions.yy transactions/repeatable_read.yy transactions/transaction_durability.yy transactions/transactions-flat.yy transactions/combinations.yy transactions/repeatable_read.yy transactions/transaction_durability.yy transactions/transactions-flat.yy;
+let $DATA_FILE = transactions/transactions.zz;
+let $RQG_QUERIES = 500;
+let $RQG_DURATION = 100;
+let $OTHER_ARGS = '--errorlevel=FAILURE';
+
+--disable_warnings
+eval CREATE DATABASE IF NOT EXISTS $TARGET_DB;
+--enable_warnings
+
+--source ../include/rqg.inc
+
+eval DROP DATABASE $TARGET_DB;
+
+
+--source suite/xengine/include/check_xengine_log_error.inc

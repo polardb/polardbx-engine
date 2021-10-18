@@ -1,0 +1,18 @@
+select @@xengine_idle_tasks_schedule_time into @saved_xengine_idle_tasks_schedule_time;
+CREATE TABLE test_compaction(c1 int primary key, c2 int) ENGINE=xengine;
+insert into test_compaction value(1, 1);
+insert into test_compaction value(2, 2);
+insert into test_compaction value(3, 3);
+set global xengine_idle_tasks_schedule_time=1;
+set global xengine_force_flush_memtable_now=on;
+select a.level, a.layer, a.extents from information_schema.xengine_subtable as a, information_schema.xengine_ddl as b where a.subtable_id=b.subtable_id and b.TABLE_NAME="test_compaction";
+level	layer	extents
+0	1	1
+1	1	0
+2	1	0
+select a.level, a.layer, a.extents from information_schema.xengine_subtable as a, information_schema.xengine_ddl as b where a.subtable_id=b.subtable_id and b.TABLE_NAME="test_compaction";
+level	layer	extents
+1	1	0
+2	1	1
+drop table test_compaction;
+set global xengine_idle_tasks_schedule_time=@saved_xengine_idle_tasks_schedule_time;

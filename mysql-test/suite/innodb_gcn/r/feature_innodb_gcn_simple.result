@@ -1,0 +1,251 @@
+set global innodb_undo_retention=1800;
+set global innodb_undo_space_reserved_size=1024;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+id INT NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+*** TEST: read with timestamp should see transaction or not
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+begin;
+set innodb_snapshot_seq = @base_seq + 101;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+set innodb_commit_seq = @base_seq + 103;
+commit;
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+begin;
+set innodb_snapshot_seq = @base_seq + 102;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+rollback;
+begin;
+set innodb_snapshot_seq = @base_seq + 104;
+select * from t1;
+id	value
+0	UPDATED!
+1	one
+2	UPDATED!
+3	three
+rollback;
+*** TEST: Read prepared data should block - not visible
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 201;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+begin;
+set innodb_snapshot_seq = @base_seq + 203;
+select * from t1;
+set innodb_commit_seq = @base_seq + 204;
+xa commit 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+id	value
+0	zero
+1	one
+2	two
+3	three
+*** TEST: Read prepared data should block - visible
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 301;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+begin;
+set innodb_snapshot_seq = @base_seq + 303;
+select * from t1;
+set innodb_commit_seq = @base_seq + 302;
+xa commit 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+id	value
+0	UPDATED!
+1	one
+2	UPDATED!
+3	three
+*** TEST: Read prepared data should block - rollbacked
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 401;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+begin;
+set innodb_snapshot_seq = @base_seq + 403;
+select * from t1;
+xa rollback 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+id	value
+0	zero
+1	one
+2	two
+3	three
+*** TEST: read with timestamp should never see running transaction
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+begin;
+set innodb_snapshot_seq = @base_seq + 501;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+begin;
+set innodb_snapshot_seq = @base_seq + 502;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+rollback;
+set innodb_commit_seq = @base_seq + 503;
+commit;
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+*** TEST: XA commit read-only transaction
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 601;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+xa end 't';
+xa prepare 't';
+set innodb_commit_seq = @base_seq + 604;
+xa commit 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+*** TEST: XA commit empty transaction
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 701;
+xa end 't';
+xa prepare 't';
+set innodb_commit_seq = @base_seq + 704;
+xa commit 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+*** TEST: XA rollback read-only transaction
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 801;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+xa end 't';
+xa prepare 't';
+xa rollback 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+*** TEST: XA rollback empty transaction
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 901;
+xa end 't';
+xa prepare 't';
+xa rollback 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+*** TEST: Read prepared data but timeout
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq +  1001;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+set session innodb_global_query_wait_timeout=2;
+begin;
+set innodb_snapshot_seq = @base_seq +  1003;
+select * from t1;
+set innodb_commit_seq = @base_seq +  1004;
+xa commit 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+rollback;
+set session innodb_global_query_wait_timeout=default;
+*** TEST: Distributed read using secondary index prepared timeout
+CREATE TABLE t2 (
+id INT NOT NULL,
+sec INT NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id),
+KEY sec(sec)
+) ENGINE=InnoDB;
+INSERT INTO t2 VALUES (0, 0, 'zero'), (1, 1, 'one'), (2, 2, 'two'), (3, 3, 'three');
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 1501;
+select * from t2;
+id	sec	value
+0	0	zero
+1	1	one
+2	2	two
+3	3	three
+update t2 set value = 'UPDATED!' where sec = 2;
+xa end 't';
+xa prepare 't';
+set session innodb_global_query_wait_timeout=2;
+begin;
+set innodb_snapshot_seq = @base_seq + 1503;
+select * from t2 force index(sec) where sec = 2;
+set innodb_commit_seq = @base_seq + 1504;
+xa commit 't';
+include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select * from t2;
+id	sec	value
+0	0	zero
+1	1	one
+2	2	two
+3	3	three
+rollback;
+DROP TABLE t1;
+DROP TABLE t2;
+set global innodb_undo_space_reserved_size=default;
+set global innodb_undo_retention = default;

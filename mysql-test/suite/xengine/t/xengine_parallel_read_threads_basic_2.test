@@ -1,0 +1,83 @@
+SET @start_global_value = @@global.xengine_parallel_read_threads;
+SELECT @start_global_value;
+
+#
+#insert many rows and select count(*)
+#
+connect(con1, localhost, root,,);
+connection default;
+
+create table t1(id int primary key auto_increment, b text) engine=xengine;
+let $i=1;
+let $batch = 1000;
+let $delta = 2;
+let $max = 2000;
+
+--disable_query_log
+eval begin;
+while ($i < $max) {
+  eval insert into t1 values($i, repeat('a', 65535));
+  expr $i = $i + $delta;
+  expr $ci = $i % $batch;
+
+  if ($ci == 0) {
+    eval commit;
+    eval begin;
+  }
+}
+eval commit;
+--enable_query_log
+set global xengine_force_flush_memtable_now=1;
+select count(*) from t1;
+select count(*) from t1 where id > 0;
+
+--disable_query_log
+eval begin;
+let $i=2;
+while ($i < $max) {
+  eval insert into t1 values($i, repeat('a', 65535));
+  expr $i = $i + $delta;
+  expr $ci = $i % $batch;
+
+  if ($ci == 0) {
+    eval commit;
+    eval begin;
+  }
+}
+eval commit;
+--enable_query_log
+--replace_column 3 #
+select table_name, subtable_name, subtable_id, sum(extents) > 0 from information_schema.xengine_subtable where table_name='test.t1';
+select count(*) from t1;
+select count(*) from t1 where id > 0;
+
+set xengine_parallel_read_threads=2;
+select count(*) from t1;
+select count(*) from t1 where id > 0;
+
+set xengine_parallel_read_threads=8;
+select count(*) from t1;
+select count(*) from t1 where id > 0;
+
+set global xengine_force_flush_memtable_now=1;
+--replace_column 3 #
+select table_name, subtable_name, subtable_id, sum(extents) > 0 from information_schema.xengine_subtable where table_name='test.t1';
+select count(*) from t1;
+select count(*) from t1 where id > 0;
+
+set xengine_parallel_read_threads=2;
+select count(*) from t1;
+select count(*) from t1 where id > 0;
+
+set xengine_parallel_read_threads=8;
+select count(*) from t1;
+select count(*) from t1 where id > 0;
+
+#
+# Cleanup
+#
+SET @@global.xengine_parallel_read_threads = @start_global_value;
+SELECT @@global.xengine_parallel_read_threads;
+drop table t1;
+
+

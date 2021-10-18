@@ -1,0 +1,1 @@
+--gtid_mode=ON --enforce_gtid_consistency --loose-xengine_unsafe_for_binlog=true

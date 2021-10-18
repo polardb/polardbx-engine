@@ -1,0 +1,20 @@
+--source suite/xengine/include/have_xengine.inc
+
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES(10);
+INSERT INTO valid_values VALUES(200);
+INSERT INTO valid_values VALUES(1000);
+
+CREATE TABLE invalid_values (value varchar(255));
+INSERT INTO invalid_values VALUES('\'aaa\'');
+INSERT INTO invalid_values VALUES('\'bbb\'');
+INSERT INTO invalid_values VALUES('\'-1\'');
+INSERT INTO invalid_values VALUES('\'101\'');
+
+--let $sys_var=XENGINE_RATE_LIMITER_BYTES_PER_SEC
+--let $read_only=0
+--let $session=0
+--source ../inc/xengine_sys_var.inc
+
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

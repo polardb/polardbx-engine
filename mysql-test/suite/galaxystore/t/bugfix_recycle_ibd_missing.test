@@ -1,0 +1,46 @@
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+--disable_ps_protocol
+
+call mtr.add_suppression("Cannot rename");
+call mtr.add_suppression("Operating system error number 2 in a file operation");
+call mtr.add_suppression("The error means the system cannot find the path specified");
+call mtr.add_suppression("returned OS error 71");
+call mtr.add_suppression("Failed to delete the datafile of tablespace");
+
+
+--LET MYSQLD_DATADIR =`SELECT @@datadir`
+
+create table test.t1(id int);
+
+--remove_file $MYSQLD_DATADIR/test/t1.ibd
+flush tables;
+
+set session recycle_bin=on;
+--error ER_ERROR_ON_RENAME
+drop table test.t1;
+show create table t1;
+--error ER_NO_SUCH_TABLE
+show create table __recycle_bin__.__innodb_165;
+
+set session recycle_bin=off;
+drop table test.t1;
+
+
+create table test.t1(id int);
+
+--remove_file $MYSQLD_DATADIR/test/t1.ibd
+flush tables;
+
+
+set session recycle_bin=on;
+--error ER_ERROR_ON_RENAME
+truncate table test.t1;
+show create table t1;
+--error ER_NO_SUCH_TABLE
+show create table __recycle_bin__.__innodb_165;
+
+set session recycle_bin=off;
+drop table test.t1;
+
+--disable_ps_protocol

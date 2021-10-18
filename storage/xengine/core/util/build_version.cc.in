@@ -1,0 +1,4 @@
+#include "build_version.h"
+const char* xengine_build_git_sha = "xengine_build_git_sha:@@GIT_SHA@@";
+const char* xengine_build_git_date = "xengine_build_git_date:@@GIT_DATE_TIME@@";
+const char* xengine_build_compile_date = __DATE__;

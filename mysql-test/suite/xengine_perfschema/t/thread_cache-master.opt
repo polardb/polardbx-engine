@@ -1,0 +1,2 @@
+--loose-performance_schema_max_thread_class=200
+--default_storage_engine=xengine

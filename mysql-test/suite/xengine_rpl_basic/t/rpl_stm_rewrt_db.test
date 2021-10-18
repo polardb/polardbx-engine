@@ -1,0 +1,11 @@
+# TBF - difference in row level logging
+-- source include/have_binlog_format_statement.inc
+-- source include/master-slave.inc
+
+-- source extra/rpl_tests/rpl_rewrt_db.test
+
+-- source include/rpl_end.inc
+
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

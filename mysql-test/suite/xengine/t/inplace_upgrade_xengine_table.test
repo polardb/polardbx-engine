@@ -1,0 +1,12 @@
+--source suite/xengine/include/have_xengine.inc
+
+--let $MYSQLD_DATADIR = `select @@datadir`
+
+--let $ZIP_FILE= $MYSQLTEST_VARDIR/std_data/upgrade/xengine_0229_data.zip
+
+--source inplace_upgrade_xengine_table.inc
+
+--let $ZIP_FILE= $MYSQLTEST_VARDIR/std_data/upgrade/xengine_0430_data.zip
+
+--source inplace_upgrade_xengine_table.inc
+

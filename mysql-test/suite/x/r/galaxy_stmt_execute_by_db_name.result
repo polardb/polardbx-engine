@@ -1,0 +1,68 @@
+RUN drop schema if exists xtest
+
+0 rows affected
+RUN drop schema if exists ytest
+
+0 rows affected
+RUN create schema xtest
+
+1 rows affected
+RUN create schema ytest
+
+1 rows affected
+RUN use xtest
+
+0 rows affected
+RUN create table mytable_x (pk int primary key auto_increment, data varchar(100))
+
+0 rows affected
+RUN use ytest
+
+0 rows affected
+RUN create table mytable_y (pk int primary key auto_increment, data varchar(100))
+
+0 rows affected
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable_x values (DEFAULT, \'one\')"
+  db_name: "xtest"
+}
+
+
+1 rows affected
+last insert id: 1
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable_y values (DEFAULT, \'two\')"
+  db_name: "xtest"
+}
+
+Got expected error:
+Mysqlx.Error {
+  severity: ERROR
+  code: 1146
+  msg: "Table \'xtest.mytable_y\' doesn\'t exist"
+  sql_state: "42S02"
+}
+
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'three\')"
+  db_name: "xpchild"
+}
+
+Got expected error:
+Mysqlx.Error {
+  severity: ERROR
+  code: 1049
+  msg: "Unknown database \'xpchild\'"
+  sql_state: "42000"
+}
+
+RUN drop schema if exists xtest
+
+1 rows affected
+RUN drop schema if exists ytest
+
+1 rows affected
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok

@@ -1,0 +1,3496 @@
+###################################################################
+case 1 duplicate entry for DML
+###################################################################
+case 1.1 based on existing PRIMARY KEY
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c int, PRIMARY KEY(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ERROR 23000: Duplicate entry '1111' for key 'PRIMARY'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 1.2 based on existing UNIQUE SECONDARY KEY
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int, UNIQUE KEY uk(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ERROR 23000: Duplicate entry '1111' for key 'uk'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `uk` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 1.3 based on existing UNIQUE SECONDARY KEY with HIDDEN KEY
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10), c int, UNIQUE KEY uk(b))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ERROR 23000: Duplicate entry '1111' for key 'uk'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  UNIQUE KEY `uk` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 2 duplicate entry on VARCHAR for DDL based on existing data
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+###################################################################
+case 2.1 DDL to add UNIQUE SECONDARY KEY
+###################################################################
+ALTER TABLE t1 ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'uk'
+###################################################################
+case 2.2 DDL to add UNIQUE SECONDARY KEY and MODIFY PRIMARY KEY
+###################################################################
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(c), ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'uk'
+###################################################################
+case 2.3 DDL to MODIFY PRIMARY KEY
+###################################################################
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'PRIMARY'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 3 duplicate entry on CHAR for DDL based on existing data
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b CHAR(10) NOT NULL, c int NOT NULL)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+###################################################################
+case 3.1 DDL to add UNIQUE SECONDARY KEY
+###################################################################
+ALTER TABLE t1 ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'uk'
+###################################################################
+case 3.2 DDL to add UNIQUE SECONDARY KEY and MODIFY PRIMARY KEY
+###################################################################
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(c), ADD UNIQUE KEY uk(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'uk'
+###################################################################
+case 3.3 DDL to MODIFY PRIMARY KEY
+###################################################################
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'PRIMARY'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+# Establish another connection (user=root) for concurrent DML
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with latin1 and latin1_bin
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with gbk and gbk_bin
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with gbk and gbk_chinese_ci
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with utf8 and utf8_bin
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with utf8 and utf8_general_ci
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with utf8mb4 and utf8mb4_bin
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with utf8mb4 and utf8mb4_general_ci
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_varchar.inc with utf8mb4 and utf8mb4_0900_ai_ci
+###################################################################
+case 4 duplicate entry on VARCHAR for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '2222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	2222	4
+3	2222	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with latin1 and latin1_bin
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE latin1_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with gbk and gbk_bin
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE gbk_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with gbk and gbk_chinese_ci
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with utf8 and utf8_bin
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with utf8 and utf8_general_ci
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with utf8mb4 and utf8mb4_bin
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with utf8mb4 and utf8mb4_general_ci
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+# Test suite/xengine/t/online_ddl_duplicate_entry_blob.inc with utf8mb4 and utf8mb4_0900_ai_ci
+###################################################################
+case 4 duplicate entry on BLOB for DDL and online DML
+###################################################################
+case 4.1 DDL to modify PRIMARY KEY to BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222111', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222111	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.2 DDL to ADD UNIQUE SECONDARY KEY on BLOB column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c INT NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_create_sk_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD UNIQUE KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222' for key 'b'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222333	6
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` text NOT NULL,
+  `c` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;

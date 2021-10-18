@@ -1,0 +1,22 @@
+--source suite/xengine/include/have_xengine.inc
+
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES(1);
+INSERT INTO valid_values VALUES(0);
+INSERT INTO valid_values VALUES('on');
+INSERT INTO valid_values VALUES('off');
+INSERT INTO valid_values VALUES('true');
+INSERT INTO valid_values VALUES('false');
+
+CREATE TABLE invalid_values (value varchar(255));
+INSERT INTO invalid_values VALUES('\'aaa\'');
+INSERT INTO invalid_values VALUES(2);
+INSERT INTO invalid_values VALUES(1000);
+
+--let $sys_var=XENGINE_LOCK_SCANNED_ROWS
+--let $read_only=0
+--let $session=1
+--source ../inc/xengine_sys_var.inc
+
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

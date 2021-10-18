@@ -1,0 +1,238 @@
+set global xengine_strict_collation_check=1;
+set names utf8mb4;
+drop table if exists tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8mb4 collate utf8mb4_general_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a\xE4' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'AAcc');
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8mb4 collate utf8mb4_0900_ai_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a\xE4' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'AAcc');
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8mb4 collate utf8mb4_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a\xE4' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	a中
+1	a国
+1	aabb
+1	aAcc
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8mb4 collate utf8mb4_general_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a中' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8mb4 collate utf8mb4_0900_ai_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'A中');
+ERROR 23000: Duplicate entry 'A中' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aAcc');
+ERROR 23000: Duplicate entry 'aA' for key 'idx_uk'
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8mb4 collate utf8mb4_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a中' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	a中
+1	a国
+1	aabb
+1	aAcc
+set names utf8;
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8 collate utf8_general_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a\xE4' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'AAcc');
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=utf8 collate utf8_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a\xE4' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	a中
+1	a国
+1	aabb
+1	aAcc
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8 collate utf8_general_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a中' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=utf8 collate utf8_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'a中');
+insert into tt values(1,'a国');
+insert into tt values(1,'a中');
+ERROR 23000: Duplicate entry 'a中' for key 'idx_uk'
+insert into tt values(1,'aabb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	a中
+1	a国
+1	aabb
+1	aAcc
+set names gbk;
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=gbk collate gbk_chinese_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'acbb');
+insert into tt values(1,'AAcc');
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=gbk collate gbk_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'acbb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	aa
+1	ab
+1	acbb
+1	aAcc
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=gbk collate gbk_chinese_ci;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'acbb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=gbk collate gbk_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'acbb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	aa
+1	ab
+1	acbb
+1	aAcc
+set names latin1;
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=latin1;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'acbb');
+insert into tt values(1,'AAcc');
+drop table tt;
+create table tt(id int, c1 blob) engine=xengine charset=latin1 collate latin1_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'acbb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	aa
+1	ab
+1	acbb
+1	aAcc
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=latin1;
+alter table tt add unique index idx_uk(c1(2));
+ERROR HY000: Unsupported collation on string indexed column c1. Consider change to other collation (binary, gbk_bin, gbk_chinese_ci, latin1_bin, utf8_bin, utf8_general_ci, utf8mb4_0900_ai_ci, utf8mb4_bin, utf8mb4_general_ci).
+drop table tt;
+create table tt(id int, c1 text) engine=xengine charset=latin1 collate latin1_bin;
+alter table tt add unique index idx_uk(c1(2));
+insert into tt values(1,'aa');
+insert into tt values(1,'ab');
+insert into tt values(1,'aa');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'acbb');
+insert into tt values(1,'aacc');
+ERROR 23000: Duplicate entry 'aa' for key 'idx_uk'
+insert into tt values(1,'aAcc');
+select * from tt;
+id	c1
+1	aa
+1	ab
+1	acbb
+1	aAcc
+drop table tt;
+set global xengine_strict_collation_check=0;

@@ -1,0 +1,100 @@
+DROP TABLE IF EXISTS test_commit_middle;
+CREATE TABLE test_commit_middle (id INT AUTO_INCREMENT PRIMARY KEY, c1 INT, index idx(c1)) ENGINE=xengine;
+CREATE PROCEDURE fill_table(cnt int)
+begin
+declare i int default 0;
+repeat insert into test_commit_middle(c1) values(i);
+set i=i+1;
+until i > cnt
+end repeat;
+end$$
+call fill_table(5000);
+begin;
+insert into test_commit_middle values(10001,10001),(10002,10002),(10003,10003);
+delete from test_commit_middle where id>0;
+commit;
+select * from test_commit_middle;
+id	c1
+10001	10001
+10002	10002
+10003	10003
+delete from test_commit_middle;
+call fill_table(5000);
+begin;
+insert into test_commit_middle values(1,1),(2,2),(3,3);
+delete from test_commit_middle where id>0;
+commit;
+select * from test_commit_middle;
+id	c1
+delete from test_commit_middle;
+call fill_table(5000);
+begin;
+insert into test_commit_middle values(30001,30001),(30002,30002),(30003,30003);
+update test_commit_middle set c1=c1+1;
+commit;
+select count(*) from test_commit_middle;
+count(*)
+5004
+delete from test_commit_middle;
+call fill_table(5000);
+begin;
+insert into test_commit_middle values(1,1),(2,2),(3,3);
+update test_commit_middle set c1=c1+1;
+commit;
+select count(*) from test_commit_middle;
+count(*)
+5004
+delete from test_commit_middle;
+call fill_table(5000);
+begin;
+insert into test_commit_middle values(50001,50001),(50002,50002),(50003,50003);
+insert into test_commit_middle(c1) select c1 from test_commit_middle;
+commit;
+delete from test_commit_middle;
+call fill_table(5000);
+begin;
+insert into test_commit_middle values(1,1),(2,2),(3,3);
+insert into test_commit_middle(c1) select c1 from test_commit_middle;
+commit;
+CREATE TABLE t1 (id1 bigint(20),id2 bigint(20),id3 bigint(20),PRIMARY KEY (id1, id2, id3)) ENGINE=xengine;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+CREATE TABLE t2 (id1 bigint(20),id2 bigint(20),PRIMARY KEY (id1, id2)) ENGINE=xengine;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+DELETE t2, t1 FROM t2 LEFT JOIN t1 ON t2.id2 = t1.id2 AND t2.id1 = t1.id1 WHERE t2.id1 = 0;
+select count(*) from t1;
+count(*)
+0
+select count(*) from t2;
+count(*)
+0
+create table test_version (id int primary key auto_increment,seq_id int, gmt_create datetime,gmt_modified datetime,version int,status varchar(20));
+insert into test_version (seq_id, gmt_create,gmt_modified,version,status) values (1111,NOW(),NOW(),0,'normal');
+select id,seq_id,version,status from test_version;
+id	seq_id	version	status
+1	1111	0	normal
+set autocommit=off;
+begin;
+select id from test_version where seq_id = 1111 and status = 'normal';
+id
+1
+update test_version set status = 'deleted', version = version + 1, gmt_modified = now() where id = 1 and version = 0;
+insert into test_version (seq_id, gmt_create,gmt_modified,version,status) values (1111,NOW(),NOW(),0,'normal');
+select id,seq_id,version,status from test_version;
+id	seq_id	version	status
+1	1111	1	deleted
+2	1111	0	normal
+commit;
+select id,seq_id,version,status from test_version;
+id	seq_id	version	status
+1	1111	1	deleted
+2	1111	0	normal
+DROP TABLE test_commit_middle;
+DROP PROCEDURE fill_table;
+drop table t1;
+drop table t2;
+drop table test_version;

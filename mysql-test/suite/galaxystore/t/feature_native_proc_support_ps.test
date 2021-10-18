@@ -1,0 +1,6 @@
+-- source include/have_debug.inc
+connection default;
+
+prepare p1 from "call mysql.dummy_2(1, 'xpchild')";
+execute p1;
+deallocate prepare p1;

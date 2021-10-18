@@ -1,0 +1,254 @@
+
+-----------------------------------------------------------------------
+- Locking issues case 1.1:
+-   Locking rows that do not exist when using all primary key columns in
+-   a WHERE clause
+-   using REPEATABLE READ transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id1 INT, id2 INT, value INT, PRIMARY KEY(id1, id2)) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,1,0), (3,3,0), (4,4,0), (6,6,0);
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t0 WHERE id1=1 AND id2=5 FOR UPDATE;
+id1	id2	value
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+INSERT INTO t0 VALUES (1,5,0);
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SELECT * FROM t0 WHERE id1=1 AND id2=5 FOR UPDATE;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+COMMIT;
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 1.1:
+-   Locking rows that do not exist when using all primary key columns in
+-   a WHERE clause
+-   using READ COMMITTED transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id1 INT, id2 INT, value INT, PRIMARY KEY(id1, id2)) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,1,0), (3,3,0), (4,4,0), (6,6,0);
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SELECT * FROM t0 WHERE id1=1 AND id2=5 FOR UPDATE;
+id1	id2	value
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+INSERT INTO t0 VALUES (1,5,0);
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SELECT * FROM t0 WHERE id1=1 AND id2=5 FOR UPDATE;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+COMMIT;
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 1.2:
+-   Locking rows that do not exist without using all primary key
+-   columns in a WHERE clause
+-   using REPEATABLE READ transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id1 INT, id2 INT, value INT, PRIMARY KEY(id1, id2)) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,1,0), (3,3,0), (4,4,0), (6,6,0);
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t0 WHERE id1=1 FOR UPDATE;
+id1	id2	value
+1	1	0
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t0 WHERE id1=1 AND id2=4 FOR UPDATE;
+id1	id2	value
+INSERT INTO t0 VALUES (1,5,0);
+COMMIT;
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 1.2:
+-   Locking rows that do not exist without using all primary key
+-   columns in a WHERE clause
+-   using READ COMMITTED transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id1 INT, id2 INT, value INT, PRIMARY KEY(id1, id2)) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,1,0), (3,3,0), (4,4,0), (6,6,0);
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SELECT * FROM t0 WHERE id1=1 FOR UPDATE;
+id1	id2	value
+1	1	0
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SELECT * FROM t0 WHERE id1=1 AND id2=4 FOR UPDATE;
+id1	id2	value
+INSERT INTO t0 VALUES (1,5,0);
+COMMIT;
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 2:
+-   Rows that are scanned but do not match the WHERE are not locked
+-   using REPEATABLE READ transaction isolation level unless
+-   xengine_lock_scanned_rows is on
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+SELECT @@global.xengine_lock_scanned_rows;
+@@global.xengine_lock_scanned_rows
+0
+CREATE TABLE t0(id INT PRIMARY KEY, value INT) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,0), (2,1), (3,0), (4,0), (5,1);
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+id	value
+2	1
+5	1
+UPDATE t0 SET VALUE=10 WHERE id=1;
+UPDATE t0 SET VALUE=10 WHERE id=5;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+UPDATE t0 SET value=100 WHERE id in (4,5) and value>0;
+SELECT * FROM t0 WHERE id=4 FOR UPDATE;
+id	value
+4	0
+COMMIT;
+SELECT * FROM t0;
+id	value
+1	10
+2	1
+3	0
+4	0
+5	1
+COMMIT;
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 2:
+-   Rows that are scanned but do not match the WHERE are not locked
+-   using READ COMMITTED transaction isolation level unless
+-   xengine_lock_scanned_rows is on
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+SELECT @@global.xengine_lock_scanned_rows;
+@@global.xengine_lock_scanned_rows
+0
+CREATE TABLE t0(id INT PRIMARY KEY, value INT) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,0), (2,1), (3,0), (4,0), (5,1);
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+id	value
+2	1
+5	1
+UPDATE t0 SET VALUE=10 WHERE id=1;
+UPDATE t0 SET VALUE=10 WHERE id=5;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+UPDATE t0 SET value=100 WHERE id in (4,5) and value>0;
+SELECT * FROM t0 WHERE id=4 FOR UPDATE;
+id	value
+4	0
+COMMIT;
+SELECT * FROM t0;
+id	value
+1	10
+2	1
+3	0
+4	0
+5	1
+COMMIT;
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 2:
+-   Rows that are scanned but do not match the WHERE are not locked
+-   using REPEATABLE READ transaction isolation level unless
+-   xengine_lock_scanned_rows is on
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+SELECT @@global.xengine_lock_scanned_rows;
+@@global.xengine_lock_scanned_rows
+0
+SET GLOBAL xengine_lock_scanned_rows=ON;
+CREATE TABLE t0(id INT PRIMARY KEY, value INT) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,0), (2,1), (3,0), (4,0), (5,1);
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+id	value
+2	1
+5	1
+UPDATE t0 SET VALUE=10 WHERE id=1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+COMMIT;
+DROP TABLE t0;
+SET GLOBAL xengine_lock_scanned_rows=0;
+
+-----------------------------------------------------------------------
+- Locking issues case 2:
+-   Rows that are scanned but do not match the WHERE are not locked
+-   using READ COMMITTED transaction isolation level unless
+-   xengine_lock_scanned_rows is on
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+SELECT @@global.xengine_lock_scanned_rows;
+@@global.xengine_lock_scanned_rows
+0
+SET GLOBAL xengine_lock_scanned_rows=ON;
+CREATE TABLE t0(id INT PRIMARY KEY, value INT) ENGINE=XENGINE;
+INSERT INTO t0 VALUES (1,0), (2,1), (3,0), (4,0), (5,1);
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+id	value
+2	1
+5	1
+UPDATE t0 SET VALUE=10 WHERE id=1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+COMMIT;
+DROP TABLE t0;
+SET GLOBAL xengine_lock_scanned_rows=0;
+
+-----------------------------------------------------------------------
+- Locking issues case 3:
+-   After creating a snapshot, other clients updating rows
+-   using REPEATABLE READ transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id INT AUTO_INCREMENT PRIMARY KEY, value INT) ENGINE=XENGINE;
+Inserting 200,000 rows
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+Timeout in wait_condition.inc for SELECT 1 FROM information_schema.processlist
+WHERE id = 43 AND state = "Sending data"
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+UPDATE t0 SET VALUE=VALUE+1 WHERE id=190000;
+id	value
+ERROR: 0
+DROP TABLE t0;
+
+-----------------------------------------------------------------------
+- Locking issues case 3:
+-   After creating a snapshot, other clients updating rows
+-   using READ COMMITTED transaction isolation level
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS t0;
+CREATE TABLE t0(id INT AUTO_INCREMENT PRIMARY KEY, value INT) ENGINE=XENGINE;
+Inserting 200,000 rows
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT * FROM t0 WHERE value > 0 FOR UPDATE;
+Timeout in wait_condition.inc for SELECT 1 FROM information_schema.processlist
+WHERE id = 45 AND state = "Sending data"
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+UPDATE t0 SET VALUE=VALUE+1 WHERE id=190000;
+id	value
+ERROR: 0
+DROP TABLE t0;

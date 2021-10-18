@@ -1,0 +1,9 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# BIT column type
+#
+
+--source type_bit.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

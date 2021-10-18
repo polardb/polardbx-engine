@@ -1,0 +1,1 @@
+--xengine_flush_log_at_trx_commit=1 --xengine_max_background_compactions=4 --xengine_max_background_flushes=2

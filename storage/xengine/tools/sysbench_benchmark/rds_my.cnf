@@ -1,0 +1,193 @@
+# Copyright (c) 2020, Alibaba Group Holding Limited
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+# http://www.apache.org/licenses/LICENSE-2.0
+
+# 3 Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[mysqld_safe]
+
+[client]
+
+[mysqld]
+mysqlx=0
+xengine=1
+
+server-id=1
+core-file
+secure_file_priv=''
+
+default_authentication_plugin=mysql_native_password
+
+
+# thread pool settings
+thread_stack             = 512K
+thread_cache_size        = 256
+thread_pool_enabled      = 1
+thread_pool_size         = 100
+
+#pid-file                 = /home/sysbench_test/performace/rdsdata/mysqld.pid
+#basedir                  = /home/sysbench_test/performace/install
+#datadir                  = /home/sysbench_test/performace/rdsdata/data
+
+# tmp dir settings
+#tmpdir                   = /home/sysbench_test/performace/rdsdata/tmp/
+#slave-load-tmpdir        = /home/sysbench_test/performace/rdsdata/tmp/
+
+# 
+#character-sets-dir       = /home/sysbench_test/performace/rdsdata/share/mysql/charsets/
+
+# skip options 
+skip-name-resolve
+skip-symbolic-links
+skip-external-locking
+skip-slave-start
+
+# res settings
+back_log                 = 1500
+max_connections          = 8000
+max_connect_errors       = 10000
+connect-timeout          = 5
+wait-timeout             = 28800
+interactive-timeout      = 28800
+slave-net-timeout        = 600
+net_read_timeout         = 30
+net_write_timeout        = 60
+net_retry_count          = 10
+net_buffer_length        = 16384
+max_allowed_packet       = 64M
+
+performance_schema       = ON
+thread_stack             = 512K
+thread_cache_size        = 256
+
+# time zone
+default-time-zone        = system
+character-set-server     = latin1
+
+# tmp & heap 
+tmp_table_size           = 512M
+max_heap_table_size      = 512M
+
+#skip-log-bin 
+log_bin                  = binlog
+sync_binlog              = 0
+binlog_order_commits     = 0
+#replication
+#relay-log               = relay-log
+#relay_log_index         = relay-log.index
+#relay-log-purge         = 1
+#replicate-wild-ignore-table     = mysql.%
+#replicate-wild-ignore-table     = test.%
+#slave_skip_errors=all
+
+
+# slow query log
+long-query-time          = 1
+# general query log
+general_log              = OFF
+#general_log_file          = /home/sysbench_test/performace/rdsdata/log/mysql.log
+#log-error                = /home/sysbench_test/performace/rdsdata/log/mysql.err
+
+
+# run tpcc needed
+max_prepared_stmt_count = 1000000
+xengine_lock_wait_timeout=100
+################## X-Enginge config
+#data  dir
+#xengine_datadir=/home/sysbench_test/performace/rdsdata/data/xengine
+#xengine_wal_dir=/home/sysbench_test/performace/rdsdata/data/xengine
+
+#memory & cache
+xengine_db_write_buffer_size=100G
+xengine_db_total_write_buffer_size=100G
+xengine_block_cache_size=100G
+xengine_row_cache_size=10G
+xengine_block_size=16384
+xengine_max_total_wal_size=30G
+
+#write buffer
+xengine_write_buffer_size=512M
+xengine_max_write_buffer_number=1000
+xengine_max_write_buffer_number_to_maintain=1000
+
+
+#data durability property
+xengine_flush_log_at_trx_commit=1
+xengine_enable_2pc=0
+
+#transaction pipline performance
+
+
+xengine_batch_group_slot_array_size=5
+xengine_batch_group_max_group_size=15
+xengine_batch_group_max_leader_wait_time_us=50
+  
+#compaciton
+xengine_min_write_buffer_number_to_merge=1
+xengine_level0_file_num_compaction_trigger=64
+xengine_level0_layer_num_compaction_trigger=8
+xengine_level1_extents_major_compaction_trigger=1000
+xengine_disable_auto_compactions=false
+xengine_level2_usage_percent=70
+xengine_flush_delete_percent=70
+xengine_compaction_delete_percent=50
+xengine_flush_delete_percent_trigger=700000
+xengine_flush_delete_record_trigger=700000
+xengine_scan_add_blocks_limit=100
+xengine_compression_per_level=kNoCompression
+
+
+##################  Innodb config
+#innodb_log_group_home_dir       = /home/sysbench_test/performace/rdsdata/data
+#innodb_data_home_dir            = /home/sysbench_test/performace/rdsdata/data
+
+innodb_buffer_pool_size         = 100G
+innodb_buffer_pool_instances    = 1
+innodb_data_file_path           = ibdata:100M:autoextend
+innodb_log_file_size            = 100M
+innodb_log_files_in_group       = 2
+
+transaction_isolation           = READ-COMMITTED 
+innodb_file_per_table
+innodb_open_files               = 4000
+innodb_max_dirty_pages_pct      = 90
+innodb_use_native_aio = 1
+innodb_stats_persistent = 1
+innodb_spin_wait_delay = 30
+innodb_adaptive_hash_index = 0
+innodb_flush_log_at_trx_commit  = 1
+innodb_log_buffer_size          = 64M
+innodb_lock_wait_timeout        = 50
+innodb_doublewrite=0
+innodb_thread_concurrency=0
+innodb_adaptive_flushing = 1
+innodb_flush_neighbors = 0
+innodb_read_io_threads = 4
+innodb_write_io_threads = 4
+innodb_io_capacity = 4000
+innodb_purge_threads = 1
+innodb_adaptive_hash_index = 1
+innodb_flush_method = O_DIRECT_NO_FSYNC
+innodb_change_buffering = all
+innodb_monitor_enable = '%'
+##################### End of Innodb
+
+[mysqldump]
+quick
+max_allowed_packet              = 64M
+
+[mysql]
+disable-auto-rehash
+default-character-set           = utf8
+connect-timeout                 = 3
+
+
+[mysqlhotcopy]
+interactive-timeout

@@ -1,0 +1,32 @@
+--echo #
+--echo # File purge
+--echo #
+
+SET @old_innodb_data_file_purge = @@global.innodb_data_file_purge;
+SET @@global.innodb_data_file_purge = ON;
+
+SET @old_innodb_data_file_purge_max_size = @@global.innodb_data_file_purge_max_size;
+SET @@global.innodb_data_file_purge_max_size = 16;
+
+SET @old_innodb_data_file_purge_interval = @@global.innodb_data_file_purge_interval;
+SET @@global.innodb_data_file_purge_interval = 10000;
+
+create database db_x;
+use db_x;
+create table t(id int, col1 varchar(8192))engine = innodb;
+insert into t values(1, repeat('xpchild', 1000));
+let $loop=14;
+while ($loop) {
+  insert into t select * from t;
+  dec $loop;
+}
+select count(*) from t;
+drop table t;
+
+select count(*) from information_schema.innodb_purge_files;
+
+drop database db_x;
+
+SET @@global.innodb_data_file_purge=@old_innodb_data_file_purge;
+SET @@global.innodb_data_file_purge_max_size=@old_innodb_data_file_purge_max_size;
+SET @@global.innodb_data_file_purge_interval=@old_innodb_data_file_purge_interval;

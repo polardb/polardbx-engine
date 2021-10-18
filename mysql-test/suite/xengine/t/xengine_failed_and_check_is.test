@@ -1,0 +1,48 @@
+--disable_query_log
+call mtr.add_suppression(".*XEngine: Failed to parse input compress_opts");
+call mtr.add_suppression(".*Plugin 'XENGINE' init function returned error.");
+call mtr.add_suppression(".*Plugin 'XENGINE' registration as a STORAGE ENGINE failed.");
+call mtr.add_suppression(".*Plugin 'XENGINE_.*' init function returned error.");
+call mtr.add_suppression(".*Plugin 'XENGINE_.*' registration as a INFORMATION SCHEMA failed.");
+--enable_query_log
+
+SHOW STORAGE ENGINES;
+
+USE information_schema;
+SHOW TABLES LIKE '%XENGINE%';
+
+--let $assert_file=$MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text=Found XENGINE human-made error
+--let $assert_select= .*XEngine: Failed to parse input compress_opts
+--let $assert_count= 1
+--let $assert_only_after= CURRENT_TEST: xengine.xengine_failed_and_check_is
+--source include/assert_grep.inc
+
+--let $assert_file=$MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text=Found XENGINE init failed
+--let $assert_select= .*Plugin 'XENGINE' init function returned error.
+--let $assert_count= 1
+--let $assert_only_after= CURRENT_TEST: xengine.xengine_failed_and_check_is
+--source include/assert_grep.inc
+
+--let $assert_file=$MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text=Found XENGINE register failed
+--let $assert_select= .*Plugin 'XENGINE' registration as a STORAGE ENGINE failed.
+--let $assert_count= 1
+--let $assert_only_after= CURRENT_TEST: xengine.xengine_failed_and_check_is
+--source include/assert_grep.inc
+
+--let $assert_file=$MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text=Found XENGINE information_schema table ERROR log for 19 times.
+--let $assert_select= .*Plugin 'XENGINE_.*' init function returned error.
+--let $assert_count= 19
+--let $assert_only_after= CURRENT_TEST: xengine.xengine_failed_and_check_is
+--source include/assert_grep.inc
+
+--let $assert_file=$MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text=Found XENGINE information_schema table plugin register failed log for 19 times.
+--let $assert_select= .*Plugin 'XENGINE_.*' registration as a INFORMATION SCHEMA failed.
+--let $assert_count= 19
+--let $assert_only_after= CURRENT_TEST: xengine.xengine_failed_and_check_is
+--source include/assert_grep.inc
+--source suite/xengine/include/check_xengine_log_error.inc

@@ -1,0 +1,16 @@
+--source include/big_test.inc
+--source suite/xengine/include/have_xengine.inc
+
+let $isolation_level = REPEATABLE READ;
+--source suite/xengine/include/locking_issues_case4.inc
+
+let $isolation_level = READ COMMITTED;
+--source suite/xengine/include/locking_issues_case4.inc
+
+let $isolation_level = REPEATABLE READ;
+--source suite/xengine/include/locking_issues_case5.inc
+
+let $isolation_level = READ COMMITTED;
+--source suite/xengine/include/locking_issues_case5.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

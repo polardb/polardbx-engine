@@ -1,0 +1,101 @@
+SET @old_ccl_queue_bucket_count=@@global.ccl_queue_bucket_count;
+SET @old_ccl_queue_bucket_size=@@global.ccl_queue_bucket_size;
+
+
+create database db_queue;
+use db_queue;
+create table t(id int, col1 int, col2 varchar(100));
+
+#
+# test the parameter
+#
+
+show global variables like 'ccl_queue_bucket%';
+
+set global ccl_queue_bucket_count=1;
+set global ccl_queue_bucket_size=1;
+
+show global variables like 'ccl_queue_bucket%';
+
+call dbms_ccl.show_ccl_queue();
+call dbms_ccl.flush_ccl_queue();
+
+#
+# test ccl_queue_value
+#
+
+set global ccl_queue_bucket_count=default;
+set global ccl_queue_bucket_size=default;
+
+call dbms_ccl.flush_ccl_queue();
+
+insert /*+ ccl_queue_value(1) */  into t values(1, 1, 'xpchild');
+call dbms_ccl.show_ccl_queue();
+
+select /*+ ccl_queue_value(1) */* from t;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_value(1) */ t set col1 = col1+1 where id = 1;
+call dbms_ccl.show_ccl_queue();
+
+delete /*+ ccl_queue_value(1) */ from t where id = 0;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_value("xpchild") */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_value(1) ccl_queue_value("xpchild") */
+          t set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_value(NULL) */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+
+explain update /*+ ccl_queue_value(1) ccl_queue_value("xpchild") */
+          t set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+
+#
+# test ccl_queue_field
+#
+
+call dbms_ccl.flush_ccl_queue();
+
+insert /*+ ccl_queue_field(1) */  into t values(1, 1, 'xpchild');
+
+insert /*+ ccl_queue_field(NULL) */  into t values(1, 1, 'xpchild');
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_field("ID") */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_field("col1") */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id+1 = 1;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id = 1+1;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id is NULL;
+call dbms_ccl.show_ccl_queue();
+
+update /*+ ccl_queue_field("col1") */ t  set col1 = col1+1 where id =1 and col1 =1;
+call dbms_ccl.show_ccl_queue();
+
+select /*+ ccl_queue_field("id") */ * from (select * from t where id = 1) b;
+call dbms_ccl.show_ccl_queue();
+
+explain update /*+ ccl_queue_field("col1") */ t  set col1 = col1+1 where id =1 and col1 =1;
+call dbms_ccl.show_ccl_queue();
+
+
+drop table t;
+drop database db_queue;
+SET @@global.ccl_queue_bucket_count = @old_ccl_queue_bucket_count;
+SET @@global.ccl_queue_bucket_size=@old_ccl_queue_bucket_size;
+

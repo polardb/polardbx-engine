@@ -1,0 +1,22 @@
+--source suite/xengine/include/have_xengine.inc
+
+CREATE TABLE valid_values (value varchar(255));
+INSERT INTO valid_values VALUES(0);
+INSERT INTO valid_values VALUES(1);
+INSERT INTO valid_values VALUES(2);
+
+CREATE TABLE invalid_values (value varchar(255));
+# value will truncated to maximum value 2
+#INSERT INTO invalid_values VALUES(3);
+INSERT INTO invalid_values VALUES('\'aaa\'');
+INSERT INTO invalid_values VALUES('\'bbb\'');
+INSERT INTO invalid_values VALUES('\'-1\'');
+INSERT INTO invalid_values VALUES('\'101\'');
+
+--let $sys_var=XENGINE_DISABLE_ONLINE_DDL
+--let $read_only=0
+--let $session=0
+--source ../inc/xengine_sys_var.inc
+
+DROP TABLE valid_values;
+DROP TABLE invalid_values;

@@ -1,0 +1,61 @@
+create table t1 (a bigint);
+lock tables t1 write;
+insert into t1 values(0);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+unlock tables;
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;
+create table t1 (a bigint);
+insert into t1 values(0);
+lock tables t1 write;
+delete from t1;
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+unlock tables;
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;
+create table t1 (a bigint);
+insert into t1 values(0);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+drop table t1;
+create table t1 (a mediumtext, fulltext key key1(a)) charset utf8 collate utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+insert into t1 values ('hello');
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+drop table t1;
+create temporary table t1(a int, index(a));
+insert into t1 values('1'),('2'),('3'),('4'),('5');
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+show index from t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	a	1	a	A	5	NULL	NULL	YES	BTREE			YES	NULL
+drop table t1;
+End of 4.1 tests
+create table t1(a int);
+analyze table t1 extended;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'extended' at line 1
+optimize table t1 extended;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'extended' at line 1
+drop table t1;
+End of 5.0 tests

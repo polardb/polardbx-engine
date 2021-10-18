@@ -1,0 +1,30 @@
+SELECT @@innodb_undo_tablespaces;
+@@innodb_undo_tablespaces
+6
+use information_schema;
+select * from INNODB_TABLESPACES where space >= 4294967276 and space <= 4294967279;
+SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
+4294967279	innodb_undo_001	0	Undo	16384	0	Undo	0	0	0	8.0.18	1	N	active
+4294967278	innodb_undo_002	0	Undo	16384	0	Undo	0	0	0	8.0.18	1	N	active
+4294967277	innodb_undo_003	0	Undo	16384	0	Undo	0	0	0	8.0.18	1	N	active
+4294967276	innodb_undo_004	0	Undo	16384	0	Undo	0	0	0	8.0.18	1	N	active
+select * from INNODB_TABLESPACES_BRIEF where space >= 4294967276 and space <= 4294967279;
+SPACE	NAME	PATH	FLAG	SPACE_TYPE
+4294967279	innodb_undo_001	./undo_001	0	Single
+4294967278	innodb_undo_002	./undo_002	0	Single
+4294967277	innodb_undo_003	./undo_003	0	Single
+4294967276	innodb_undo_004	./undo_004	0	Single
+select * from INNODB_DATAFILES where space >= 4294967276 and space <= 4294967279;
+SPACE	PATH
+4294967279	./undo_001
+4294967278	./undo_002
+4294967277	./undo_003
+4294967276	./undo_004
+drop tablespace innodb_undo_001;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+drop tablespace innodb_undo_002;
+ERROR 42000: InnoDB: Tablespace names starting with `innodb_` are reserved.
+ALTER UNDO TABLESPACE innodb_undo_001 SET INACTIVE;
+ERROR 42000: Cannot ALTER LIZARD TRANSACTION TABLESPACE `innodb_undo_001` because it is a permanent active tablespace.
+ALTER UNDO TABLESPACE innodb_undo_002 SET INACTIVE;
+ERROR 42000: Cannot ALTER LIZARD TRANSACTION TABLESPACE `innodb_undo_002` because it is a permanent active tablespace.

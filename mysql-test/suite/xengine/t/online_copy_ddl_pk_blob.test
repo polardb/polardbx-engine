@@ -1,0 +1,53 @@
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--echo ###################################################################
+--echo case 1 Drop primary key
+--echo ###################################################################
+# inplace alter on drop primary key not supported
+CREATE TABLE t1(b TEXT NOT NULL, c int, PRIMARY KEY(b(10)))ENGINE=xengine;
+INSERT INTO t1 VALUES('1111111', 2);
+INSERT INTO t1 VALUES('2222222', 4);
+
+--error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
+ALTER TABLE t1 DROP PRIMARY KEY, ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW CREATE TABLE t1;
+--echo Trying COPY ALGORITHM
+ALTER TABLE t1 DROP PRIMARY KEY;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+
+--echo ###################################################################
+--echo case 2 Modify a primary key
+--echo ###################################################################
+--echo case 2.1 Change from an INT column to a TEXT column
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(10)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.2 Change from an INT column to a TEXT column with conflict in base
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b TEXT NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+
+--error 1062
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(10)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # Establish another connection (user=root) for concurrent DML
+connect (dml,localhost,root,,);
+connection default;
+
+--let $test_file = suite/xengine/t/online_copy_ddl_pk_blob.inc
+--source suite/xengine/include/xengine_full_charset.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

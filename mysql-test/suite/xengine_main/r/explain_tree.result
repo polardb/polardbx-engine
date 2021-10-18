@@ -1,0 +1,510 @@
+set optimizer_switch='batched_key_access=off,block_nested_loop=off,mrr_cost_based=off';
+CREATE TABLE t1 ( f1 INT );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1;
+EXPLAIN
+-> Table scan on t1  (cost=2.84 rows=3)
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT );
+CREATE TABLE t2 ( f1 INT );
+EXPLAIN FORMAT=tree INSERT INTO t2 SELECT * FROM t1;
+EXPLAIN
+-> Insert into t2
+    -> Table scan on t1  (cost=2.61 rows=1)
+
+DROP TABLE t1, t2;
+CREATE TABLE t1 ( f1 INT );
+CREATE TABLE t2 ( f2 INT );
+EXPLAIN FORMAT=tree UPDATE t1, t2 SET f1=f1+2, f2=f2+1 WHERE f1 = f2;
+EXPLAIN
+-> Update t1, t2
+    -> Nested loop inner join  (cost=5.22 rows=1)
+        -> Table scan on t1  (cost=2.61 rows=1)
+        -> Filter: (t2.f2 = t1.f1)  (cost=2.61 rows=1)
+            -> Table scan on t2  (cost=2.61 rows=1)
+
+DROP TABLE t1, t2;
+CREATE TABLE t1 ( f1 INT );
+CREATE TABLE t2 ( f2 INT );
+EXPLAIN FORMAT=tree DELETE t1, t2 FROM t1, t2;
+EXPLAIN
+-> Delete from t1, t2
+    -> Nested loop inner join  (cost=5.22 rows=1)
+        -> Table scan on t1  (cost=2.61 rows=1)
+        -> Table scan on t2  (cost=2.61 rows=1)
+
+DROP TABLE t1, t2;
+CREATE TABLE t1 ( f1 INT );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT f1, (SELECT MIN(f1) FROM t1 i WHERE i.f1 > t1.f1) < 3 FROM t1;
+EXPLAIN
+-> Table scan on t1  (cost=2.84 rows=3)
+-> Select #2 (subquery in projection; dependent)
+    -> Aggregate: min(i.f1)
+        -> Filter: (i.f1 > t1.f1)  (cost=2.64 rows=1)
+            -> Table scan on i  (cost=2.64 rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.f1' of SELECT #2 was resolved in SELECT #1
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 ORDER BY f1 DESC;
+EXPLAIN
+-> Index scan on t1 using PRIMARY (reverse)  (cost=2.84 rows=3)
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT, INDEX ( f1 ) );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT SUM(f1) FROM t1;
+EXPLAIN
+-> Aggregate: sum(t1.f1)
+    -> Index scan on t1 using f1  (cost=2.84 rows=3)
+
+EXPLAIN FORMAT=tree SELECT f1 FROM t1 GROUP BY f1;
+EXPLAIN
+-> Group (computed in earlier step, no aggregates)
+    -> Index range scan on t1 using index_for_group_by(f1)  (cost=0.75 rows=2)
+
+EXPLAIN FORMAT=tree SELECT f1,COUNT(*) FROM t1 GROUP BY f1;
+EXPLAIN
+-> Group aggregate: count(0)
+    -> Index scan on t1 using f1  (cost=2.84 rows=3)
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE f1=2;
+EXPLAIN
+-> Rows fetched before execution
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+CREATE TABLE t2 ( f1 INT PRIMARY KEY );
+INSERT INTO t2 SELECT * FROM t1;
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN t2 ON t1.f1 = t2.f1 + 2 AND t2.f1 = 3;
+EXPLAIN
+-> Nested loop left join  (cost=3.39 rows=3)
+    -> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+    -> Filter: (t1.f1 = <cache>((3 + 2)))  (cost=0.12 rows=1)
+        -> Constant row from t2  (cost=0.12 rows=1)
+
+DROP TABLE t1, t2;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+CREATE TABLE t2 AS SELECT * FROM t1;
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN t2 USING (f1) WHERE t1.f1=2;
+EXPLAIN
+-> Nested loop left join
+    -> Rows fetched before execution
+    -> Filter: (t2.f1 = 2)  (cost=2.84 rows=3)
+        -> Table scan on t2  (cost=2.84 rows=3)
+
+DROP TABLE t1, t2;
+CREATE TABLE t1 ( a INT );
+CREATE TABLE t2 ( a INT );
+CREATE TABLE t3 ( a INT, b INT );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t2 VALUES ( 3 );
+INSERT INTO t3 VALUES ( 2, 0 );
+ANALYZE TABLE t1, t2, t3;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN ( t2 LEFT JOIN t3 USING (a) ) ON t3.b IS NULL;
+EXPLAIN
+-> Nested loop left join  (cost=5.22 rows=1)
+    -> Table scan on t1  (cost=2.61 rows=1)
+    -> Filter: (t3.b is null)  (cost=5.22 rows=1)
+        -> Nested loop left join  (cost=5.22 rows=1)
+            -> Table scan on t2  (cost=2.61 rows=1)
+            -> Filter: (t3.a = t2.a)  (cost=2.61 rows=1)
+                -> Table scan on t3  (cost=2.61 rows=1)
+
+DROP TABLE t1, t2, t3;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+CREATE TABLE t2 AS SELECT * FROM t1;
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN t2 USING (f1) WHERE t2.f1 IS NULL;
+EXPLAIN
+-> Filter: (t2.f1 is null)  (cost=11.95 rows=3)
+    -> Nested loop anti-join  (cost=11.95 rows=3)
+        -> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+        -> Filter: (t2.f1 = t1.f1)  (cost=2.77 rows=1)
+            -> Table scan on t2  (cost=2.77 rows=3)
+
+DROP TABLE t1, t2;
+CREATE TABLE t1 (a INT, b INT);
+CREATE TABLE t2 (a INT, c INT, KEY(a));
+INSERT INTO t1 VALUES (1, 1), (2, 2);
+INSERT INTO t2 VALUES (1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
+(2, 1), (2, 2), (2, 3), (2, 4), (2, 5),
+(3, 1), (3, 2), (3, 3), (3, 4), (3, 5),
+(4, 1), (4, 2), (4, 3), (4, 4), (4, 5);
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+FLUSH STATUS;
+EXPLAIN FORMAT=tree SELECT DISTINCT b FROM t1 LEFT JOIN t2 USING(a) WHERE c <= 3;
+EXPLAIN
+-> Table scan on <temporary>
+    -> Temporary table with deduplication
+        -> Nested loop inner join
+            -> Table scan on t1  (cost=2.73 rows=2)
+            -> Limit: 1 row(s)
+                -> Filter: (t2.c <= 3)  (cost=0.53 rows=1)
+                    -> Index lookup on t2 using a (a=t1.a)  (cost=0.53 rows=2)
+
+DROP TABLE t1, t2;
+CREATE TABLE t1 ( f1 INT );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 ORDER BY f1 DESC;
+EXPLAIN
+-> Sort: t1.f1 DESC  (cost=2.84 rows=3)
+    -> Table scan on t1
+
+DROP TABLE t1;
+CREATE TABLE t1 ( a BLOB, b INT );
+INSERT INTO t1 VALUES ('a', 0);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT 0 AS foo FROM t1 WHERE 0 = (SELECT group_concat(b) FROM t1 t GROUP BY t1.a) ;
+EXPLAIN
+-> Filter: (0 = (select #2))  (cost=2.61 rows=1)
+    -> Table scan on t1  (cost=2.61 rows=1)
+    -> Select #2 (subquery in condition; dependent)
+        -> Group aggregate: group_concat(t.b separator ',')
+            -> Sort row IDs: <temporary>.a
+                -> Table scan on <temporary>
+                    -> Temporary table
+                        -> Table scan on t  (cost=2.61 rows=1)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.a' of SELECT #2 was resolved in SELECT #1
+DROP TABLE t1;
+CREATE TABLE t1 (a text, b varchar(10));
+INSERT INTO t1 VALUES (repeat('1', 1300),'one'), (repeat('1', 1300),'two');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT SUBSTRING(a,1,10), LENGTH(a) FROM t1 GROUP BY a;
+EXPLAIN
+-> Table scan on <temporary>
+    -> Temporary table with deduplication
+        -> Table scan on t1  (cost=2.73 rows=2)
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 VARCHAR(100) );
+INSERT INTO t1 VALUES ('abc');
+INSERT INTO t1 VALUES ('abc');
+INSERT INTO t1 VALUES ('def');
+INSERT INTO t1 VALUES ('def');
+INSERT INTO t1 VALUES ('ghi');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT DISTINCT f1 FROM t1 LIMIT 2;
+EXPLAIN
+-> Limit: 2 row(s)
+    -> Table scan on <temporary>
+        -> Temporary table with deduplication
+            -> Limit table size: 2 unique row(s)
+                -> Table scan on t1  (cost=3.06 rows=5)
+
+DROP TABLE t1;
+CREATE TABLE t1 (a int PRIMARY KEY);
+INSERT INTO t1 values (1), (2);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree INSERT INTO t1 SELECT a + 2 FROM t1 LIMIT 1;
+EXPLAIN
+-> Insert into t1
+    -> Limit: 1 row(s)
+        -> Table scan on <temporary>
+            -> Temporary table
+                -> Limit table size: 1 row(s)
+                    -> Index scan on t1 using PRIMARY  (cost=2.73 rows=2)
+
+DROP TABLE t1;
+CREATE TABLE t1 (a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES (1,3), (2,4), (1,5),
+(1,3), (2,1), (1,5), (1,7), (3,1),
+(3,2), (3,1), (2,4);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT DISTINCT (COUNT(DISTINCT b) + 1) AS c FROM t1 GROUP BY a;
+EXPLAIN
+-> Table scan on <temporary>
+    -> Temporary table with deduplication
+        -> Table scan on <temporary>
+            -> Temporary table
+                -> Group aggregate: count(distinct t1.b)
+                    -> Sort: t1.a  (cost=3.74 rows=11)
+                        -> Table scan on t1
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE f1 = ( SELECT MIN(f1) FROM t1 AS i WHERE i.f1 > t1.f1 );
+EXPLAIN
+-> Filter: (t1.f1 = (select #2))  (cost=2.84 rows=3)
+    -> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+    -> Select #2 (subquery in condition; dependent)
+        -> Aggregate: min(i.f1)
+            -> Filter: (i.f1 > t1.f1)  (cost=2.64 rows=1)
+                -> Index range scan on i (re-planned for each iteration)  (cost=2.64 rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.f1' of SELECT #2 was resolved in SELECT #1
+EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE f1 > ( SELECT f1 FROM t1 LIMIT 1 );
+EXPLAIN
+-> Filter: (t1.f1 > (select #2))  (cost=0.47 rows=1)
+    -> Index range scan on t1 using PRIMARY  (cost=0.47 rows=1)
+    -> Select #2 (subquery in condition; run only once)
+        -> Limit: 1 row(s)
+            -> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE f1 = ( SELECT ( SELECT MIN(f1) FROM t1 AS ii WHERE ii.f1 > t1.f1 ) > i.f1 FROM t1 AS i ) ;
+EXPLAIN
+-> Filter: (t1.f1 = (select #2))  (cost=2.84 rows=3)
+    -> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+    -> Select #2 (subquery in condition; dependent)
+        -> Index scan on i using PRIMARY  (cost=2.84 rows=3)
+        -> Select #3 (subquery in projection; dependent)
+            -> Aggregate: min(ii.f1)
+                -> Filter: (ii.f1 > t1.f1)  (cost=2.64 rows=1)
+                    -> Index range scan on ii (re-planned for each iteration)  (cost=2.64 rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.f1' of SELECT #3 was resolved in SELECT #1
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT ( SELECT ( SELECT ( SELECT MIN(f1) FROM t1 i WHERE i.f1 > t1.f1 ) + 1 ) + 1 ) FROM t1;
+EXPLAIN
+-> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+-> Select #2 (subquery in projection; dependent)
+    -> Rows fetched before execution
+    -> Select #3 (subquery in projection; dependent)
+        -> Rows fetched before execution
+        -> Select #4 (subquery in projection; dependent)
+            -> Aggregate: min(i.f1)
+                -> Filter: (i.f1 > t1.f1)  (cost=2.64 rows=1)
+                    -> Index range scan on i (re-planned for each iteration)  (cost=2.64 rows=3)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.f1' of SELECT #4 was resolved in SELECT #1
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT PRIMARY KEY );
+INSERT INTO t1 VALUES ( 1 );
+INSERT INTO t1 VALUES ( 2 );
+INSERT INTO t1 VALUES ( 3 );
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT ( SELECT f1 FROM t1 UNION SELECT f1 + 10 FROM t1 LIMIT 1 ) FROM t1;
+EXPLAIN
+-> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+-> Select #2 (subquery in projection; run only once)
+    -> Limit: 1 row(s)
+        -> Table scan on <union temporary>  (cost=2.50 rows=0)
+            -> Union materialize with deduplication
+                -> Limit table size: 1 unique row(s)
+                    -> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+                -> Limit table size: 1 unique row(s)
+                    -> Index scan on t1 using PRIMARY  (cost=2.84 rows=3)
+
+DROP TABLE t1;
+CREATE TABLE t1 (a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES (1,3), (2,4), (1,5),
+(1,3), (2,1), (1,5), (1,7), (3,1),
+(3,2), (3,1), (2,4);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE a > 3 ORDER BY b;
+EXPLAIN
+-> Sort: t1.b  (cost=3.74 rows=11)
+    -> Filter: (t1.a > 3)
+        -> Table scan on t1
+
+DROP TABLE t1;
+CREATE TABLE t1 (i INT);
+EXPLAIN INSERT INTO t1 VALUES (10);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Note	1003	insert into `test`.`t1` values (10)
+EXPLAIN FORMAT=tree INSERT INTO t1 VALUES (10);
+EXPLAIN
+<not executable by iterator executor>
+
+DROP TABLE t1;
+CREATE TABLE t1 (a INTEGER, b INTEGER);
+INSERT INTO t1 VALUES (1,3), (2,4), (1,5),
+(1,3), (2,1), (1,5), (1,7), (3,1),
+(3,2), (3,1), (2,4);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=tree SELECT * FROM t1 ORDER BY b LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)
+    -> Sort: t1.b, limit input to 3 row(s) per chunk  (cost=3.74 rows=11)
+        -> Table scan on t1
+
+DROP TABLE t1;
+CREATE TABLE t1 ( a INTEGER );
+CREATE TABLE t2 ( a INTEGER );
+CREATE TABLE t3 ( a INTEGER );
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN t2 USING ( a ),
+LATERAL ( SELECT * FROM t3 WHERE t3.a = t2.a LIMIT 1 ) t3d,
+LATERAL ( SELECT * FROM t3 WHERE t3.a > t1.a LIMIT 1 ) t4d;
+EXPLAIN
+-> Nested loop inner join
+    -> Nested loop inner join
+        -> Invalidate materialized tables (row from t2)  (cost=5.22 rows=1)
+            -> Nested loop left join  (cost=5.22 rows=1)
+                -> Invalidate materialized tables (row from t1)  (cost=2.61 rows=1)
+                    -> Table scan on t1  (cost=2.61 rows=1)
+                -> Filter: (t2.a = t1.a)  (cost=2.61 rows=1)
+                    -> Table scan on t2  (cost=2.61 rows=1)
+        -> Table scan on t3d
+            -> Materialize (invalidate on row from t2)
+                -> Limit: 1 row(s)
+                    -> Filter: (t3.a = t2.a)  (cost=2.61 rows=1)
+                        -> Table scan on t3  (cost=2.61 rows=1)
+    -> Table scan on t4d
+        -> Materialize (invalidate on row from t1)
+            -> Limit: 1 row(s)
+                -> Filter: (t3.a > t1.a)  (cost=2.61 rows=1)
+                    -> Table scan on t3  (cost=2.61 rows=1)
+
+Warnings:
+Note	1276	Field or reference 'test.t2.a' of SELECT #2 was resolved in SELECT #1
+Note	1276	Field or reference 'test.t1.a' of SELECT #3 was resolved in SELECT #1
+DROP TABLE t1, t2, t3;
+CREATE TABLE t1 ( a INTEGER );
+CREATE TABLE t2 ( a INTEGER );
+CREATE TABLE t3 ( a INTEGER );
+CREATE TABLE t4 ( a INTEGER );
+EXPLAIN FORMAT=tree SELECT * FROM t1 LEFT JOIN (
+t2 LEFT JOIN t3 USING ( a ) CROSS JOIN
+LATERAL ( SELECT * FROM t4 WHERE t4.a = t3.a LIMIT 1 ) t4d
+) ON t1.a = t4d.a;
+EXPLAIN
+-> Nested loop left join
+    -> Table scan on t1  (cost=2.61 rows=1)
+    -> Nested loop inner join
+        -> Invalidate materialized tables (row from t3)  (cost=5.22 rows=1)
+            -> Nested loop left join  (cost=5.22 rows=1)
+                -> Table scan on t2  (cost=2.61 rows=1)
+                -> Filter: (t3.a = t2.a)  (cost=2.61 rows=1)
+                    -> Table scan on t3  (cost=2.61 rows=1)
+        -> Index lookup on t4d using <auto_key0> (a=t1.a)
+            -> Materialize (invalidate on row from t3)
+                -> Limit: 1 row(s)
+                    -> Filter: (t4.a = t3.a)  (cost=2.61 rows=1)
+                        -> Table scan on t4  (cost=2.61 rows=1)
+
+Warnings:
+Note	1276	Field or reference 'test.t3.a' of SELECT #2 was resolved in SELECT #1
+DROP TABLE t1, t2, t3, t4;
+CREATE TABLE t1 ( f1 INTEGER );
+EXPLAIN FORMAT=TREE SELECT * FROM ( SELECT * FROM t1 LIMIT 2 OFFSET 1 ) AS alias1
+WHERE f1 <= ANY ( SELECT f1 FROM t1 ) ORDER BY f1;
+EXPLAIN
+-> Sort: alias1.f1
+    -> Filter: <nop>((alias1.f1 <= (select #3))) [other sub-iterators not shown]
+        -> Table scan on alias1
+            -> Materialize
+                -> Limit/Offset: 2/1 row(s)
+                    -> Table scan on t1  (cost=2.61 rows=1)
+
+DROP TABLE t1;
+CREATE TABLE t1 ( f1 INT );
+CREATE TABLE t2 ( f1 INT );
+EXPLAIN format=tree WITH my_cte AS ( SELECT * FROM t1 LIMIT 3 ) SELECT * FROM my_cte, t2;
+EXPLAIN
+-> Nested loop inner join
+    -> Table scan on t2  (cost=2.61 rows=1)
+    -> Table scan on my_cte
+        -> Materialize CTE my_cte
+            -> Limit: 3 row(s)
+                -> Table scan on t1  (cost=2.61 rows=1)
+
+DROP TABLE t1;
+DROP TABLE t2;

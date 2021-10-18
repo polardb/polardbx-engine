@@ -1,0 +1,323 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+--disable_ps_protocol
+
+call mtr.add_suppression("Fail to recycle table");
+call mtr.add_suppression("Incorrect key file");
+
+connection master;
+create database db_recycle;
+create database db_recycle_2;
+create user super_1@'%' identified by 'pass';
+create user super_2@'%' identified by 'pass';
+
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+create user normal_3@'%' identified by 'pass';
+create user normal_4@'%' identified by 'pass';
+create user normal_5@'%' identified by 'pass';
+
+grant all on *.* to super_1@'%';
+grant all on *.* to super_2@'%';
+
+grant all on db_recycle.* to normal_1@'%' ;
+grant all on __recycle_bin__.* to normal_1@'%' ;
+grant create tablespace on *.* to normal_1@'%' ;
+grant SYSTEM_VARIABLES_ADMIN on *.* to normal_1@'%';
+
+grant select on db_recycle.* to normal_2@'%' ;
+grant all on db_recycle_2.* to normal_2@'%' ;
+grant select on __recycle_bin__.* to normal_2@'%' ;
+
+grant select on db_recycle.* to normal_3@'%' ;
+grant select on db_recycle_2.* to normal_3@'%' ;
+grant all on __recycle_bin__.* to normal_3@'%' ;
+
+grant select on db_recycle.* to normal_4@'%' ;
+grant all on db_recycle_2.* to normal_4@'%' ;
+grant select,alter,drop on __recycle_bin__.* to normal_4@'%' ;
+
+grant select on db_recycle.* to normal_5@'%' ;
+grant select,insert,create on db_recycle_2.* to normal_5@'%' ;
+grant all on __recycle_bin__.* to normal_5@'%' ;
+
+--sync_slave_with_master
+
+connect(m_super_1, 127.0.0.1, super_1, pass, db_recycle, $MASTER_MYPORT);
+connect(s_super_2, 127.0.0.1, super_1, pass, db_recycle, $SLAVE_MYPORT);
+
+connect(m_normal_1, 127.0.0.1, normal_1, pass, db_recycle, $MASTER_MYPORT);
+connect(m_normal_2, 127.0.0.1, normal_2, pass, db_recycle, $MASTER_MYPORT);
+connect(m_normal_3, 127.0.0.1, normal_3, pass, db_recycle, $MASTER_MYPORT);
+connect(m_normal_4, 127.0.0.1, normal_4, pass, db_recycle, $MASTER_MYPORT);
+connect(m_normal_5, 127.0.0.1, normal_5, pass, db_recycle, $MASTER_MYPORT);
+
+connection slave;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+
+
+--echo ------------------------------------------------------
+--echo 1. Normal
+--echo    -- Restore the table after drop;
+--echo ------------------------------------------------------
+
+connection m_super_1;
+set global recycle_scheduler=off;
+
+
+use db_recycle;
+create table t1(id int);
+drop table t1;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+show grants;
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
+call dbms_recycle.restore_table("__innodb_165", "", "");
+show tables;
+
+set sql_log_bin = 0;
+drop table t1;
+set sql_log_bin = 1;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_recycle.restore_table("__innodb_165", "");
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_recycle.restore_table("__innodb_165", "", "", "");
+
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
+call dbms_recycle.restore_table("__innodb_165");
+set sql_log_bin = 0;
+drop table t1;
+set sql_log_bin = 1;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
+call dbms_recycle.restore_table("__innodb_165", "db_recycle", "t2");
+show tables;
+
+set recycle_bin = 0;
+set sql_log_bin = 0;
+drop table t2;
+set sql_log_bin = 1;
+set recycle_bin = 1;
+
+
+connection m_super_1;
+set global recycle_scheduler=on;
+
+
+
+--echo ------------------------------------------------------
+--echo 2. DB and Table check
+--echo    -- The origin table must exists and the dest table must not exists;
+--echo ------------------------------------------------------
+
+connection m_super_1;
+set global recycle_scheduler=off;
+
+
+use db_recycle;
+create table t1(id int);
+drop table t1;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_recycle.restore_table("", "", "");
+
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
+call dbms_recycle.restore_table("__innodb_155", "", "");
+
+create table t1(id int);
+--error ER_TABLE_EXISTS_ERROR
+call dbms_recycle.restore_table("__innodb_165", "", "");
+
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
+
+show tables;
+set recycle_bin = 0;
+drop table t1;
+set sql_log_bin = 0;
+drop table db_recycle_2.t1;
+set sql_log_bin = 1;
+set recycle_bin = 1;
+
+
+connection m_super_1;
+set global recycle_scheduler=on;
+
+
+
+--echo ------------------------------------------------------
+--echo 3. Privileges
+--echo    -- Restore table need SUPER_ACL
+--echo ------------------------------------------------------
+
+connection m_super_1;
+set global recycle_scheduler=off;
+
+
+use db_recycle;
+create table t1(id int);
+create table t2(id int);
+drop table t1;
+drop table t2;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+
+connection m_normal_1;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
+
+
+connection m_normal_2;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t1");
+
+
+connection m_normal_3;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
+
+
+connection m_normal_4;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call dbms_recycle.restore_table("__innodb_166", "db_recycle_2", "t1");
+
+
+connection m_normal_5;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call dbms_recycle.restore_table("__innodb_165", "db_recycle_2", "t2");
+
+
+connection m_super_1;
+use db_recycle_2;
+show tables;
+set recycle_bin = 0;
+set recycle_bin = 1;
+set global recycle_scheduler=on;
+
+
+
+--echo ------------------------------------------------------
+--echo 4. Rename
+--echo ------------------------------------------------------
+
+connection m_super_1;
+set global recycle_scheduler=off;
+
+
+connection m_normal_1;
+use db_recycle;
+create table t1(id int);
+drop table t1;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+#show grants;
+#--error ER_DBACCESS_DENIED_ERROR
+#rename table __recycle_bin__.__innodb_165 to db_recycle.t1;
+#show tables;
+
+
+#--error ER_DBACCESS_DENIED_ERROR
+#rename table __recycle_bin__.__innodb_165 to db_recycle.t2;
+#show tables;
+
+call dbms_recycle.purge_table("__innodb_165");
+
+
+connection m_super_1;
+set global recycle_scheduler=on;
+
+
+
+
+--echo ------------------------------------------------------
+--echo 5. Foreign key
+--echo ------------------------------------------------------
+
+connection m_super_1;
+set global recycle_scheduler=off;
+
+use db_recycle;
+
+CREATE TABLE p1 (
+    id INT NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=INNODB;
+
+CREATE TABLE c1 (
+    id INT,
+    parent_id INT,
+    INDEX par_ind (parent_id),
+    FOREIGN KEY (parent_id)
+        REFERENCES p1(id)
+        ON DELETE CASCADE
+) ENGINE=INNODB;
+
+drop table c1;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
+call dbms_recycle.restore_table("__innodb_148", "", "");
+show create table c1;
+
+
+set recycle_bin = 0;
+drop table p1;
+set sql_log_bin = 0;
+drop table c1;
+set sql_log_bin = 1;
+set recycle_bin = 1;
+
+
+connection m_super_1;
+set global recycle_scheduler=on;
+
+
+
+
+--echo ------------------------------------------------------
+--echo ** Clean up **
+--echo ------------------------------------------------------
+
+connection master;
+drop database db_recycle;
+drop database db_recycle_2;
+drop user super_1@'%';
+drop user super_2@'%';
+drop user normal_1@'%';
+drop user normal_2@'%';
+drop user normal_3@'%';
+drop user normal_4@'%';
+drop user normal_5@'%';
+
+connection slave;
+set global read_only = @start_read_only;
+
+connection master;
+--sync_slave_with_master
+--source include/rpl_end.inc
+--enable_ps_protocol

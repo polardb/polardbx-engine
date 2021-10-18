@@ -1,0 +1,10 @@
+--source suite/xengine/include/have_xengine.inc
+
+# 
+# OPTIMIZE TABLE statements
+#
+
+--source include/big_test.inc
+--source optimize_table.inc
+
+--source suite/xengine/include/check_xengine_log_error.inc

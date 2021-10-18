@@ -1,0 +1,451 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+CREATE TABLE `t1` (
+`a` int(10) unsigned NOT NULL DEFAULT '0',
+`b` bigint(20) unsigned NOT NULL DEFAULT '0',
+`c` bigint(20) unsigned NOT NULL DEFAULT '0',
+`d` bigint(20) unsigned NOT NULL DEFAULT '0',
+`e` varbinary(64) DEFAULT NULL,
+`f` int(10) NOT NULL DEFAULT '0',
+`g` int(10) NOT NULL DEFAULT '0',
+`h` int(10) unsigned NOT NULL DEFAULT '0',
+PRIMARY KEY (`a`,`b`),
+KEY `key1` (`a`, `e`(1)),
+KEY `key2` (`a`,`h`)
+) ENGINE=XENGINE;
+ERROR 42000: Unknown storage engine 'XENGINE'
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+CREATE TABLE `t1` (
+`a` int(10) unsigned NOT NULL DEFAULT '0',
+`b` bigint(20) unsigned NOT NULL DEFAULT '0',
+`c` bigint(20) unsigned NOT NULL DEFAULT '0',
+`d` bigint(20) unsigned NOT NULL DEFAULT '0',
+`e` varbinary(64) DEFAULT NULL,
+`f` int(10) NOT NULL DEFAULT '0',
+`g` int(10) NOT NULL DEFAULT '0',
+`h` int(10) unsigned NOT NULL DEFAULT '0',
+PRIMARY KEY (`a`,`b`),
+KEY `key1` (`a`, `e`(1)),
+KEY `key2` (`a`,`h`)
+) ENGINE=INNODB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t1 VALUES(99, 99999, 99999, 99999, 'abcdewfreiuwrg13648', 123, 456, 789);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/rpl_reconnect.inc
+START SLAVE;
+include/wait_for_slave_to_start.inc
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+a	b	c	d	e	f	g	h
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+a	b	c	d	e	f	g	h
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789
+CREATE TABLE `t2` (
+`a` int(10) unsigned NOT NULL DEFAULT '0',
+`b` bigint(20) unsigned NOT NULL DEFAULT '0',
+`c` bigint(20) unsigned NOT NULL DEFAULT '0',
+`d` bigint(20) unsigned NOT NULL DEFAULT '0',
+`e` varbinary(64) DEFAULT NULL,
+`f` int(10) NOT NULL DEFAULT '0',
+`g` int(10) NOT NULL DEFAULT '0',
+`h` int(10) unsigned NOT NULL DEFAULT '0',
+PRIMARY KEY (`a`,`b`),
+KEY `key1` (`a`, `e`(1)),
+KEY `key2` (`a`,`h`)
+) ENGINE=INNODB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t2 VALUES(99, 99999, 99999, 99999, 'abcdewfreiuwrg13648', 123, 456, 789);
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t2;
+a	b	c	d	e	f	g	h
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t2;
+a	b	c	d	e	f	g	h
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789
+ALTER TABLE t1 ADD COLUMN data VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t2 ADD COLUMN data VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t1 ADD INDEX k_0(`data`);
+ALTER TABLE t2 ADD INDEX k_0(`data`);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+SELECT * FROM t2;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+SELECT * FROM t2;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+include/rpl_end.inc
+include/rpl_init.inc [topology=2->1]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+INSERT INTO t1 VALUES(678, 1234590, 1234590, 1234590, 'abcdewfreiuwrg13648', 123, 456, 789, NULL);
+INSERT INTO t2 VALUES(678, 1234590, 1234590, 1234590, 'abcdewfreiuwrg13648', 123, 456, 789, NULL);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+678	1234590	1234590	1234590	abcdewfreiuwrg13648	123	456	789	NULL
+SELECT * FROM t2;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+678	1234590	1234590	1234590	abcdewfreiuwrg13648	123	456	789	NULL
+include/save_master_pos.inc
+include/sync_slave_io.inc
+include/sync_slave_sql.inc
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+678	1234590	1234590	1234590	abcdewfreiuwrg13648	123	456	789	NULL
+SELECT * FROM t2;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+678	1234590	1234590	1234590	abcdewfreiuwrg13648	123	456	789	NULL
+include/rpl_reconnect.inc
+START SLAVE;
+Warnings:
+Note	3083	Replication thread(s) for channel '' are already runnning.
+include/wait_for_slave_to_start.inc
+CREATE TABLE `t3` (
+`a` int(10) unsigned NOT NULL DEFAULT '0',
+`b` bigint(20) unsigned NOT NULL DEFAULT '0',
+`c` bigint(20) unsigned NOT NULL DEFAULT '0',
+`d` bigint(20) unsigned NOT NULL DEFAULT '0',
+`e` varbinary(64) DEFAULT NULL,
+`f` int(10) NOT NULL DEFAULT '0',
+`g` int(10) NOT NULL DEFAULT '0',
+`h` int(10) unsigned NOT NULL DEFAULT '0',
+PRIMARY KEY (`a`,`b`),
+KEY `key1` (`a`, `e`(1)),
+KEY `key2` (`a`,`h`)
+) ENGINE=XENGINE;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t3 VALUES(99, 99999, 99999, 99999, 'abcdewfreiuwrg13648', 123, 456, 789);
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t3;
+a	b	c	d	e	f	g	h
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789
+include/save_master_pos.inc
+include/sync_slave_io.inc
+include/sync_slave_sql.inc
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t3;
+a	b	c	d	e	f	g	h
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789
+ALTER TABLE t3 ADD COLUMN data VARCHAR(100) DEFAULT '1234567890', ALGORITHM=INSTANT;
+ALTER TABLE t3 ADD INDEX k_0(`data`);
+INSERT INTO t3 VALUES(678, 1234590, 1234590, 1234590, 'abcdewfreiuwrg13648', 123, 456, 789, NULL);
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t3;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+678	1234590	1234590	1234590	abcdewfreiuwrg13648	123	456	789	NULL
+include/save_master_pos.inc
+include/sync_slave_io.inc
+include/sync_slave_sql.inc
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int(10) unsigned NOT NULL DEFAULT '0',
+  `b` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `c` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `d` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `e` varbinary(64) DEFAULT NULL,
+  `f` int(10) NOT NULL DEFAULT '0',
+  `g` int(10) NOT NULL DEFAULT '0',
+  `h` int(10) unsigned NOT NULL DEFAULT '0',
+  `data` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '1234567890',
+  PRIMARY KEY (`a`,`b`),
+  KEY `key1` (`a`,`e`(1)),
+  KEY `key2` (`a`,`h`),
+  KEY `k_0` (`data`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t3;
+a	b	c	d	e	f	g	h	data
+99	99999	99999	99999	abcdewfreiuwrg13648	123	456	789	1234567890
+678	1234590	1234590	1234590	abcdewfreiuwrg13648	123	456	789	NULL
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;
+include/rpl_end.inc

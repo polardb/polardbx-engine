@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS a;
+create table a (id int, value int,  primary key (id) comment 'cf_a') engine=xengine;
+alter table a add index v (value) COMMENT 'cf_a';
+select count(*) from a force index(primary);
+count(*)
+30000
+select count(*) from a force index(v);
+count(*)
+30000
+DROP TABLE a;

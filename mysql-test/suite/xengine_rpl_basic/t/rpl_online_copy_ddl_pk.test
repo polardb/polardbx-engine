@@ -1,0 +1,1705 @@
+--source include/master-slave.inc
+--source suite/xengine/include/have_xengine.inc
+--source include/have_debug.inc
+
+--echo ###################################################################
+--echo case 1 Modify a primary key
+--echo ###################################################################
+--echo case 1.1 Change from an INT column to a VARCHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int);
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.2 Change from an INT column to a VARCHAR column with conflict in base
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int);
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+--error 1062
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.3 Change from an INT column to a part of VARCHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int);
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 1.4 Change from an INT column to a part of VARCHAR column with conflict in base
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int);
+INSERT INTO t1 VALUES(1, '11111111', 2);
+INSERT INTO t1 VALUES(2, '11112222', 4);
+--error 1062
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+
+--echo ###################################################################
+--echo case 2 Modify a primary key with concurrent DML
+--echo ###################################################################
+--echo # Establish another connection (user=root) for concurrent DML
+connect (dml,localhost,root,,);
+connection master;
+
+--echo ###################################################################
+--echo case 2.1 Change from an INT column to a VARCHAR column with concurrent DML
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int);
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, '3333333', 6);
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+--echo # Switch to connection master
+connection master;
+# receive the result of ALTER TABLE, expected modify pk successfully
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.2 Change from an INT column to a VARCHAR column but has duplication conflict with concurrent DML
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int);
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(3, '2222222', 6);
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+--echo # Switch to connection master
+connection master;
+# receive the result of ALTER TABLE, expected modify pk failed
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 2.3 Change from an INT column to another INT column but has duplication conflict with UPDATE from concurrent DML
+--echo ###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b INT NOT NULL);
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(2, 2);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t1 SET b=2 WHERE a=1;
+  UPDATE t1 SET b=1 WHERE a=2;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+--echo # Switch to connection master
+connection master;
+# receive the result of ALTER TABLE, expected modify pk failed
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+
+--echo ###################################################################
+--echo case 3 Add new primary key
+--echo ###################################################################
+--echo case 3.1: Add new primary key with an INT column
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(2, '1');
+INSERT INTO t1 VALUES(2, '2');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.2: Add new primary key with two INT columns
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b INT NOT NULL, c INT);
+INSERT INTO t1 VALUES(2, 2, 2);
+INSERT INTO t1 VALUES(2, 2, 4);
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, 1, 2);
+INSERT INTO t1 VALUES(2, 2, 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.3: Add new primary key with a CHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL);
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.4: Add new primary key with two CHAR columns
+--echo ###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL);
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.5: Add new primary key with a VARCHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL);
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.6: Add new primary key with two VARCHAR columns
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL);
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.7: Add new primary key with a part of a VARCHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL);
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.8: Add new primary key with a part of two VARCHAR columns
+--echo ###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL);
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.9: Add new primary key with an INT column and a CHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL);
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.10: Add new primary key with an INT column and a VARCHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT);
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.11: Add new primary key with an INT column and a part of VARCHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT);
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 3.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT);
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+SELECT * FROM t1;
+
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+
+--echo ###################################################################
+--echo case 4 Add new primary key with concurrent DML
+--echo ###################################################################
+--echo case 4.0: no conflict
+--echo ###################################################################
+CREATE TABLE t1(id INT NOT NULL, c1 INT, c2 VARCHAR(100), c3 INT) ;
+INSERT INTO t1 VALUES(1,11,'abc',111);
+INSERT INTO t1 VALUES(2,12,'abc',222);
+INSERT INTO t1 VALUES(3,13,'abc',333);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(id), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+  # wait the online DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(6,6,'6666',6),(7,7,'777777',7);
+  SELECT * FROM t1;
+  UPDATE t1 SET c2='aaaa' WHERE id > 6;
+  SELECT * FROM t1;
+  UPDATE t1 SET c1=99 WHERE id > 6;
+  SELECT * FROM t1;
+  DELETE FROM t1 WHERE id=1;
+  SELECT * FROM t1;
+
+  # signal create pk ddl the key2 has been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index successfully
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.1: key1 in d1 duplicates with key2 in d2
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(2, '2222222');
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.1.1: key1 in d1 duplicates with key2 in d2, but with a pre deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  DELETE FROM t1 where a=2;
+  INSERT INTO t1 VALUES(2, '2222222');
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.1.2: key1 in d1 duplicates with key2 in d2, but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(2, '2222222');
+  DELETE FROM t1 where a=2;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.1.3: key1 in d1 duplicates with updated key2 in d2
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t1 SET a=2 WHERE a=1;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.1.4: key1 in d1 duplicates with updated key2 in d2 but with pre deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE a=2;
+  UPDATE t1 SET a=2 WHERE a=1;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.1.5: key1 in d1 duplicates with updated key2 in d2 but with post deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t1 SET a=2 WHERE a=1;
+  DELETE FROM t1 WHERE a=2;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.2: key1 in d1 duplicates with key2 in d3
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(2, '2222222');
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.2.1: key1 in d1 duplicates with key2 in d3, but with a pre deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  DELETE FROM t1 where a=2;
+  INSERT INTO t1 VALUES(2, '2222222');
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.2.2: key1 in d1 duplicates with key2 in d3, but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(2, '2222222');
+  DELETE FROM t1 where a=2;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.2.3: key1 in d1 duplicates with updated key2 in d3
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t1 SET a=2 WHERE a=1;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.2.4: key1 in d1 duplicates with updated key2 in d3 but with pre deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE a=2;
+  UPDATE t1 SET a=2 WHERE a=1;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.2.5: key1 in d1 duplicates with updated key2 in d3 but with post deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t1 SET a=2 WHERE a=1;
+  DELETE FROM t1 WHERE a=2;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.3: key1 in d1 duplicates with key2 in d4
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(2, '2222222');
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.3.1: key1 in d1 duplicates with key2 in d4, but with a pre deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  DELETE FROM t1 where a=2;
+  INSERT INTO t1 VALUES(2, '2222222');
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.3.2: key1 in d1 duplicates with key2 in d4, but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  INSERT INTO t1 VALUES(2, '2222222');
+  DELETE FROM t1 where a=2;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.3.3: key1 in d1 duplicates with updated key2 in d4
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t1 SET a=2 WHERE a=1;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.3.4: key1 in d1 duplicates with updated key2 in d4 but with pre deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  DELETE FROM t1 WHERE a=2;
+  UPDATE t1 SET a=2 WHERE a=1;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.3.5: key1 in d1 duplicates with updated key2 in d4 but with post deletion
+--echo ###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10));
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to dml connection
+  connection dml;
+  # wait the modify pk ddl enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  UPDATE t1 SET a=2 WHERE a=1;
+  DELETE FROM t1 WHERE a=2;
+  SELECT * FROM t1;
+  # signal modify pk DDL that DML finished
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.4: key1 in d2 duplicates with key2 in d2
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.4.1: key1 in d2 duplicates with key2 in d2 but has a pre deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  DELETE FROM t1 WHERE a=2;
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index successfully
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.4.2: key1 in d2 duplicates with key2 in d2 but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  INSERT INTO t1 VALUES(2, 4);
+  DELETE FROM t1 WHERE a=2;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.4.3: key1 in d2 duplicates with updated key2 in d2
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and update key2
+  INSERT INTO t1 VALUES(2, 3);
+  UPDATE t1 SET a=2 WHERE a=1;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_done';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.5: key1 in d2 duplicates with key2 in d3
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.5.1: key1 in d2 duplicates with key2 in d3 but has a pre deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  DELETE FROM t1 WHERE a=2;
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index successfully
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.5.2: key1 in d2 duplicates with key2 in d3 but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  INSERT INTO t1 VALUES(2, 4);
+  DELETE FROM t1 WHERE a=2;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.5.3: key1 in d2 duplicates with updated key2 in d3
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  # update key2
+  UPDATE t1 SET a=2 WHERE a=1;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.6: key1 in d2 duplicates with key2 in d4
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.6.1: key1 in d2 duplicates with key2 in d4 but has a pre deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  DELETE FROM t1 WHERE a=2;
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index successfully
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.6.2: key1 in d2 duplicates with key2 in d4 but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  INSERT INTO t1 VALUES(2, 4);
+  DELETE FROM t1 WHERE a=2;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.6.3: key1 in d2 duplicates with updated key2 in d4
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_copy_ddl_scan_base_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  # update key2
+  UPDATE t1 SET a=2 WHERE a=3;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.7: key1 in d3 duplicates with key2 in d4
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.7.1: key1 in d3 duplicates with key2 in d4 but has a pre deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  DELETE FROM t1 WHERE a=2;
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index successfully
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.7.2: key1 in d3 duplicates with key2 in d4 but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  INSERT INTO t1 VALUES(2, 4);
+  DELETE FROM t1 WHERE a=2;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.7.3: key1 in d3 duplicates with updated key2 in d4
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_begin point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+  # insert key1
+  INSERT INTO t1 VALUES(2, 3);
+  SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+  # update key2
+  UPDATE t1 SET a=2 WHERE a=3;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.8: key1 in d4 duplicates with key2 in d4
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.8.1: key1 in d4 duplicates with key2 in d4 but has a pre deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  DELETE FROM t1 WHERE a=2;
+  INSERT INTO t1 VALUES(2, 4);
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index successfully
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.8.2: key1 in d4 duplicates with key2 in d4 but with a post deletion
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  INSERT INTO t1 VALUES(2, 4);
+  DELETE FROM t1 WHERE a=2;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.8.3: key1 in d4 duplicates with updated key2 in d4
+--echo ###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT);
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+send ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+
+  --echo # Switch to connection dml
+  connection dml;
+
+  # wait the DDL enter the inplace_unique_check_constraint_done point
+  SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+  # insert key1 and key2
+  INSERT INTO t1 VALUES(2, 3);
+  # update key2
+  UPDATE t1 SET a=2 WHERE a=3;
+  select * from t1;
+  # signal DDL that the key1 and key2 have been inserted
+  SET DEBUG_SYNC= 'now SIGNAL dml_end';
+
+--echo # Switch to connection master
+connection master;
+# receive the result of alter table, expected create index fail
+--error 1062
+reap;
+CHECK TABLE t1;
+SELECT * FROM t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+--echo ###################################################################
+--echo case 4.13: Add new primary key for big table, which xdb_merge.add cann't detect conflict
+--echo ###################################################################
+select @@xengine_sort_buffer_size into @saved_sort_buffer_size;
+set global xengine_sort_buffer_size=64*1024*1024;
+
+CREATE TABLE t1(id INT NOT NULL, c1 TEXT(10485760));
+
+let $count=100;
+let $i=0;
+--disable_query_log
+while($i < $count) {
+  # each record is about 10MB
+  --eval INSERT INTO t1 VALUES($i, repeat('0123456789', 1048576));
+  inc $i;
+}
+let $i=0;
+while($i < 10) {
+  # each record is about 10MB
+  --eval INSERT INTO t1 VALUES($i, repeat('0123456789', 1048576));
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) AS `ROWs`, COUNT(DISTINCT(id)) AS `IDs`  FROM t1;
+--echo # Add PRIMARY KEY should fail with Duplicate Entry
+--error 1062
+ALTER TABLE t1 ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+
+CHECK TABLE t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+# Add primary key without conflict
+CREATE TABLE t1(id INT NOT NULL, c1 TEXT(10485760));
+
+let $count=100;
+let $i=0;
+--disable_query_log
+while($i < $count) {
+  # each record is about 10MB
+  --eval INSERT INTO t1 VALUES($i, repeat('0123456789', 1048576));
+  inc $i;
+}
+let $i=100;
+while($i < 110) {
+  # each record is about 10MB
+  --eval INSERT INTO t1 VALUES($i, repeat('0123456789', 1048576));
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) AS `ROWs`, COUNT(DISTINCT(id)) AS `IDs`  FROM t1;
+--echo # Add PRIMARY KEY should succeed
+ALTER TABLE t1 ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+
+CHECK TABLE t1;
+--let $table_1= t1
+--source ../include/online_ddl_checksum.inc
+DROP TABLE t1;
+
+set global xengine_sort_buffer_size=@saved_sort_buffer_size;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc
+
+
+--connection master
+--source suite/xengine/include/check_xengine_log_error.inc

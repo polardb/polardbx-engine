@@ -1,0 +1,3 @@
+$PFS_EXAMPLE_OPT
+--default_storage_engine=xengine
+

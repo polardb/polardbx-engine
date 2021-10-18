@@ -1,0 +1,4291 @@
+###################################################################
+case 1 Drop primary key
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10), c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 DROP PRIMARY KEY, ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: With INPLACE DDL, XEngine only allows that DROP PRIMARY KEY is combined with ADD PRIMARY KEY. Try ALGORITHM=COPY.
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	a	A	#	NULL	NULL		SE_SPECIFIC			YES	NULL
+Trying COPY ALGORITHM
+ALTER TABLE t1 DROP PRIMARY KEY;
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+DROP TABLE t1;
+###################################################################
+case 2 Modify a primary key
+###################################################################
+case 2.0 Change to an nullable column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b INT DEFAULT NULL)ENGINE=XENGINE;
+INSERT INTO t1(a) VALUES(1),(2);
+INSERT INTO t1 VALUES(3, 2),(4, 1);
+SELECT * FROM t1;
+a	b
+1	NULL
+2	NULL
+3	2
+4	1
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: cannot silently convert NULL values, as required in this SQL_MODE. Try ALGORITHM=COPY.
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b);
+ERROR 23000: Duplicate entry '0' for key 'PRIMARY'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b
+1	NULL
+2	NULL
+3	2
+4	1
+DROP TABLE t1;
+###################################################################
+case 2.1 Change from an INT column to a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	b	A	#	NULL	NULL		SE_SPECIFIC			YES	NULL
+DROP TABLE t1;
+###################################################################
+case 2.2 Change from an INT column to a VARCHAR column with conflict in base
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	a	A	#	NULL	NULL		SE_SPECIFIC			YES	NULL
+DROP TABLE t1;
+###################################################################
+case 2.3 Change from an INT column to a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	b	A	#	4	NULL		SE_SPECIFIC			YES	NULL
+DROP TABLE t1;
+###################################################################
+case 2.4 Change from an INT column to a part of VARCHAR column with conflict in base
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '11111111', 2);
+INSERT INTO t1 VALUES(2, '11112222', 4);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '1111' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	a	A	#	NULL	NULL		SE_SPECIFIC			YES	NULL
+DROP TABLE t1;
+###################################################################
+case 3 Modify a primary key with concurrent DML
+###################################################################
+# Establish another connection (user=root) for concurrent DML
+###################################################################
+case 3.1 Change from an INT column to a VARCHAR column with concurrent DML
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '3333333', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	3333333	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	3333333	6
+DROP TABLE t1;
+###################################################################
+case 3.2 Change from an INT column to a VARCHAR column but has duplication conflict with concurrent DML
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b VARCHAR(10) NOT NULL, c int)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(3, '2222222', 6);
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222222	6
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2222222' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+3	2222222	6
+DROP TABLE t1;
+###################################################################
+case 3.3 Change from an INT column to another INT column but has duplication conflict with UPDATE from concurrent DML
+###################################################################
+CREATE TABLE t1(a INT PRIMARY KEY, b INT NOT NULL)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(2, 2);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t1 SET b=2 WHERE a=1;
+UPDATE t1 SET b=1 WHERE a=2;
+SELECT * FROM t1;
+a	b
+1	2
+2	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b
+1	2
+2	1
+DROP TABLE t1;
+###################################################################
+case 4 Add new primary key
+###################################################################
+case 4.0: Add new primary key with an nullable column
+###################################################################
+CREATE TABLE t1(a INT, b INT DEFAULT NULL)ENGINE=XENGINE;
+INSERT INTO t1(a) VALUES(1),(2);
+INSERT INTO t1 VALUES(3, 2),(4, 1);
+SELECT * FROM t1;
+a	b
+1	NULL
+2	NULL
+3	2
+4	1
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: cannot silently convert NULL values, as required in this SQL_MODE. Try ALGORITHM=COPY.
+ALTER TABLE t1 ADD PRIMARY KEY(b);
+ERROR 23000: Duplicate entry '0' for key 'PRIMARY'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1;
+a	b
+1	NULL
+2	NULL
+3	2
+4	1
+DROP TABLE t1;
+###################################################################
+case 4.1: Add new primary key with an INT column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(2, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	1
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	a	A	2	NULL	NULL		SE_SPECIFIC			YES	NULL
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+DROP TABLE t1;
+###################################################################
+case 4.2: Add new primary key with two INT columns
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b INT NOT NULL, c INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(2, 2, 2);
+INSERT INTO t1 VALUES(2, 2, 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2	2
+2	2	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, 1, 2);
+INSERT INTO t1 VALUES(2, 2, 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with latin1 and latin1_bin
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE latin1_bin NOT NULL,
+  `c` char(10) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` varchar(10) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` varchar(10) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE latin1_bin NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE latin1_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET latin1 COLLATE latin1_bin;
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE latin1_bin NOT NULL,
+  `c` varchar(100) COLLATE latin1_bin NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with gbk and gbk_bin
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE gbk_bin NOT NULL,
+  `c` char(10) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` varchar(10) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` varchar(10) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE gbk_bin NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE gbk_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET gbk COLLATE gbk_bin;
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE gbk_bin NOT NULL,
+  `c` varchar(100) COLLATE gbk_bin NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk COLLATE=gbk_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with gbk and gbk_chinese_ci
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) NOT NULL,
+  `c` char(10) NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET gbk COLLATE gbk_chinese_ci;
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) NOT NULL,
+  `c` varchar(100) NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=gbk
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with utf8 and utf8_bin
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE utf8_bin NOT NULL,
+  `c` char(10) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` varchar(10) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` varchar(10) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8_bin NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET utf8 COLLATE utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8_bin NOT NULL,
+  `c` varchar(100) COLLATE utf8_bin NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with utf8 and utf8_general_ci
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) NOT NULL,
+  `c` char(10) NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET utf8 COLLATE utf8_general_ci;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_general_ci' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) NOT NULL,
+  `c` varchar(100) NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with utf8mb4 and utf8mb4_bin
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` char(10) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_bin NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET utf8mb4 COLLATE utf8mb4_bin;
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_bin NOT NULL,
+  `c` varchar(100) COLLATE utf8mb4_bin NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with utf8mb4 and utf8mb4_general_ci
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `c` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+# Test suite/xengine/t/online_copy_ddl_pk_4.inc with utf8mb4 and utf8mb4_0900_ai_ci
+###################################################################
+case 4.3: Add new primary key with a CHAR column
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.4: Add new primary key with two CHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b CHAR(10) NOT NULL, c CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '2', '2');
+INSERT INTO t1 VALUES(2, '2', '2');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2	2
+2	2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1', '2');
+INSERT INTO t1 VALUES(2, '2', '4');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1	2
+2	2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` char(10) NOT NULL,
+  `c` char(10) NOT NULL,
+  PRIMARY KEY (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.5: Add new primary key with a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '2222');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222
+2	2222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111');
+INSERT INTO t1 VALUES(2, '2222');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111
+2	2222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.6: Add new primary key with two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '2222', '3333');
+ALTER TABLE t1 ADD PRIMARY KEY(b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-3333' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	2222	3333
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222', '3333');
+INSERT INTO t1 VALUES(2, '4444', '6666');
+ALTER TABLE t1 ADD PRIMARY KEY(b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222	3333
+2	4444	6666
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.7: Add new primary key with a part of a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '2222111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+1	2222111
+2	2222222
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111');
+INSERT INTO t1 VALUES(2, '2222222');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1111111
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.8: Add new primary key with a part of two VARCHAR columns
+###################################################################
+CREATE TABLE t1(a INT, b VARCHAR(10) NOT NULL, c VARCHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(1, '2222111', '2222333');
+INSERT INTO t1 VALUES(2, '2222222', '2222666');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2222-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+1	2222111	2222333
+2	2222222	2222666
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '2222222', '3333111');
+INSERT INTO t1 VALUES(2, '4444444', '6666111');
+ALTER TABLE t1 ADD PRIMARY KEY(b(4), c(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	2222222	3333111
+2	4444444	6666111
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` varchar(10) NOT NULL,
+  PRIMARY KEY (`b`(4),`c`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.9: Add new primary key with an INT column and a CHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(2, '2');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b
+2	2
+2	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) NOT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.10: Add new primary key with an INT column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(2, '2222', 1);
+INSERT INTO t1 VALUES(2, '2222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222	1
+2	2222	2
+DELETE  FROM t1;
+INSERT INTO t1 VALUES(1, '1111', 2);
+INSERT INTO t1 VALUES(2, '1111', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111	2
+2	1111	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.11: Add new primary key with an INT column and a part of VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b VARCHAR(10) NOT NULL, c INT)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(2, '2222111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c
+2	2222111	2
+2	2222222	4
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111111', 2);
+INSERT INTO t1 VALUES(2, '2222222', 4);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b(4)), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c
+1	1111111	2
+2	2222222	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) NOT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`(4))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.12: Add new primary key with an INT column, a CHAR column and a VARCHAR column
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10) NOT NULL, c VARCHAR(100) NOT NULL, d INT)CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES(2, '2222', '222222', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+ERROR 23000: Duplicate entry '2-2222-222222' for key 'PRIMARY'
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SELECT * FROM t1;
+a	b	c	d
+2	2222	222222	1
+2	2222	222222	2
+DELETE FROM t1;
+INSERT INTO t1 VALUES(1, '1111', '111111', 1);
+INSERT INTO t1 VALUES(2, '2222', '222222', 2);
+ALTER TABLE t1 ADD PRIMARY KEY(a, b, c), ALGORITHM=INPLACE, LOCK=DEFAULT;
+Adding a primary key successfully
+SELECT * FROM t1;
+a	b	c	d
+1	1111	111111	1
+2	2222	222222	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) NOT NULL,
+  `c` varchar(100) NOT NULL,
+  `d` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`,`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+###################################################################
+case 4.13: Add new primary key for big table, which xdb_merge.add cann't detect conflict
+###################################################################
+CREATE TABLE t1(id INT NOT NULL, c1 TEXT(10485760))ENGINE=XENGINE;
+
+select @@xengine_sort_buffer_size into @saved_sort_buffer_size;
+set global xengine_sort_buffer_size=4*1024*1024;
+INSERT INTO t1 VALUES(1, repeat('0123456789', 1048576));
+INSERT INTO t1 VALUES(2, repeat('0123456789', 1048576));
+ALTER TABLE t1 ADD primary KEY(id), ALGORITHM=INPLACE;
+ERROR HY001: xengine_sort_buffer_size is too small to process merge. Please set xengine_sort_buffer_size to a higher value.
+set global xengine_sort_buffer_size=11*1024*1024;
+ALTER TABLE t1 ADD primary KEY(id), ALGORITHM=INPLACE;
+drop table t1;
+CREATE TABLE t1(id INT NOT NULL, c1 TEXT(10485760))ENGINE=XENGINE;
+count(*)
+100
+ERROR HY001: xengine_sort_buffer_size is too small to process merge. Please set xengine_sort_buffer_size to a higher value.
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` longtext COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT COUNT(*) AS `ROWs`, COUNT(DISTINCT(id)) AS `IDs`  FROM t1;
+ROWs	IDs
+110	100
+# Add PRIMARY KEY should fail with Duplicate Entry
+ALTER TABLE t1 ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+ERROR 23000: Duplicate entry '0' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` longtext COLLATE utf8mb4_general_ci
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+CREATE TABLE t1(id INT NOT NULL, c1 TEXT(10485760))ENGINE=XENGINE;
+SELECT COUNT(*) AS `ROWs`, COUNT(DISTINCT(id)) AS `IDs`  FROM t1;
+ROWs	IDs
+110	110
+# Add PRIMARY KEY should succeed
+ALTER TABLE t1 ADD PRIMARY KEY(id), ALGORITHM=INPLACE;
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` longtext COLLATE utf8mb4_general_ci,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+set global xengine_sort_buffer_size=@saved_sort_buffer_size;
+###################################################################
+case 5 Add new primary key with concurrent DML
+###################################################################
+case 5.0: no conflict
+###################################################################
+CREATE TABLE t1(id INT NOT NULL, c1 INT, c2 VARCHAR(100), c3 INT) ENGINE=XENGINE;
+INSERT INTO t1 VALUES(1,11,'abc',111);
+INSERT INTO t1 VALUES(2,12,'abc',222);
+INSERT INTO t1 VALUES(3,13,'abc',333);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(id), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(6,6,'6666',6),(7,7,'777777',7);
+SELECT * FROM t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	777777	7
+UPDATE t1 SET c2='aaaa' WHERE id > 6;
+SELECT * FROM t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	7	aaaa	7
+UPDATE t1 SET c1=99 WHERE id > 6;
+SELECT * FROM t1;
+id	c1	c2	c3
+1	11	abc	111
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+DELETE FROM t1 WHERE id=1;
+SELECT * FROM t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+id	c1	c2	c3
+2	12	abc	222
+3	13	abc	333
+6	6	6666	6
+7	99	aaaa	7
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.1: key1 in d1 duplicates with key2 in d2
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, '2222222');
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	2222222
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.1.1: key1 in d1 duplicates with key2 in d2, but with a pre deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+DELETE FROM t1 where a=2;
+INSERT INTO t1 VALUES(2, '2222222');
+SELECT * FROM t1;
+a	b
+1	1
+2	2222222
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.1.2: key1 in d1 duplicates with key2 in d2, but with a post deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, '2222222');
+DELETE FROM t1 where a=2;
+SELECT * FROM t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.1.3: key1 in d1 duplicates with updated key2 in d2
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t1 SET a=2 WHERE a=1;
+SELECT * FROM t1;
+a	b
+2	1
+2	2
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.1.4: key1 in d1 duplicates with updated key2 in d2 but with pre deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+DELETE FROM t1 WHERE a=2;
+UPDATE t1 SET a=2 WHERE a=1;
+SELECT * FROM t1;
+a	b
+2	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.1.5: key1 in d1 duplicates with updated key2 in d2 but with post deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t1 SET a=2 WHERE a=1;
+DELETE FROM t1 WHERE a=2;
+SELECT * FROM t1;
+a	b
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.2: key1 in d1 duplicates with key2 in d3
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, '2222222');
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	2222222
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.2.1: key1 in d1 duplicates with key2 in d3, but with a pre deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+DELETE FROM t1 where a=2;
+INSERT INTO t1 VALUES(2, '2222222');
+SELECT * FROM t1;
+a	b
+1	1
+2	2222222
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.2.2: key1 in d1 duplicates with key2 in d3, but with a post deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, '2222222');
+DELETE FROM t1 where a=2;
+SELECT * FROM t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.2.3: key1 in d1 duplicates with updated key2 in d3
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t1 SET a=2 WHERE a=1;
+SELECT * FROM t1;
+a	b
+2	1
+2	2
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.2.4: key1 in d1 duplicates with updated key2 in d3 but with pre deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+DELETE FROM t1 WHERE a=2;
+UPDATE t1 SET a=2 WHERE a=1;
+SELECT * FROM t1;
+a	b
+2	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.2.5: key1 in d1 duplicates with updated key2 in d3 but with post deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t1 SET a=2 WHERE a=1;
+DELETE FROM t1 WHERE a=2;
+SELECT * FROM t1;
+a	b
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.3: key1 in d1 duplicates with key2 in d4
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, '2222222');
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	2222222
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	2
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.3.1: key1 in d1 duplicates with key2 in d4, but with a pre deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+DELETE FROM t1 where a=2;
+INSERT INTO t1 VALUES(2, '2222222');
+SELECT * FROM t1;
+a	b
+1	1
+2	2222222
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	2222222
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.3.2: key1 in d1 duplicates with key2 in d4, but with a post deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, '2222222');
+DELETE FROM t1 where a=2;
+SELECT * FROM t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.3.3: key1 in d1 duplicates with updated key2 in d4
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t1 SET a=2 WHERE a=1;
+SELECT * FROM t1;
+a	b
+2	1
+2	2
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+2	2
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.3.4: key1 in d1 duplicates with updated key2 in d4 but with pre deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+DELETE FROM t1 WHERE a=2;
+UPDATE t1 SET a=2 WHERE a=1;
+SELECT * FROM t1;
+a	b
+2	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.3.5: key1 in d1 duplicates with updated key2 in d4 but with post deletion
+###################################################################
+CREATE TABLE t1(a INT NOT NULL, b CHAR(10))ENGINE=xengine;
+INSERT INTO t1 VALUES(1, '1');
+INSERT INTO t1 VALUES(2, '2');
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to dml connection
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+UPDATE t1 SET a=2 WHERE a=1;
+DELETE FROM t1 WHERE a=2;
+SELECT * FROM t1;
+a	b
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` char(10) COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.4: key1 in d2 duplicates with key2 in d2
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	3
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	3
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.4.1: key1 in d2 duplicates with key2 in d2 but has a pre deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+DELETE FROM t1 WHERE a=2;
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.4.2: key1 in d2 duplicates with key2 in d2 but with a post deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+INSERT INTO t1 VALUES(2, 4);
+DELETE FROM t1 WHERE a=2;
+select * from t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.4.3: key1 in d2 duplicates with updated key2 in d2
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin SIGNAL start_dml WAIT_FOR dml_done';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+UPDATE t1 SET a=2 WHERE a=1;
+select * from t1;
+a	b
+2	1
+3	4
+2	3
+SET DEBUG_SYNC= 'now SIGNAL dml_done';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+3	4
+2	3
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.5: key1 in d2 duplicates with key2 in d3
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	3
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	3
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.5.1: key1 in d2 duplicates with key2 in d3 but has a pre deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+DELETE FROM t1 WHERE a=2;
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.5.2: key1 in d2 duplicates with key2 in d3 but with a post deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+INSERT INTO t1 VALUES(2, 4);
+DELETE FROM t1 WHERE a=2;
+select * from t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.5.3: key1 in d2 duplicates with updated key2 in d3
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin      SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+UPDATE t1 SET a=2 WHERE a=1;
+select * from t1;
+a	b
+2	1
+3	4
+2	3
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+2	1
+3	4
+2	3
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.6: key1 in d2 duplicates with key2 in d4
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	3
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	3
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.6.1: key1 in d2 duplicates with key2 in d4 but has a pre deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+DELETE FROM t1 WHERE a=2;
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.6.2: key1 in d2 duplicates with key2 in d4 but with a post deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+INSERT INTO t1 VALUES(2, 4);
+DELETE FROM t1 WHERE a=2;
+select * from t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.6.3: key1 in d2 duplicates with updated key2 in d4
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_copy_ddl_scan_base_begin     SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+UPDATE t1 SET a=2 WHERE a=3;
+select * from t1;
+a	b
+1	1
+2	4
+2	3
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+2	3
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.7: key1 in d3 duplicates with key2 in d4
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	3
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	3
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.7.1: key1 in d3 duplicates with key2 in d4 but has a pre deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+DELETE FROM t1 WHERE a=2;
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.7.2: key1 in d3 duplicates with key2 in d4 but with a post deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+INSERT INTO t1 VALUES(2, 4);
+DELETE FROM t1 WHERE a=2;
+select * from t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.7.3: key1 in d3 duplicates with updated key2 in d4
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_begin SIGNAL start_dml1 WAIT_FOR dml1_end';
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done  SIGNAL start_dml2 WAIT_FOR dml2_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml1';
+INSERT INTO t1 VALUES(2, 3);
+SET DEBUG_SYNC= 'now SIGNAL dml1_end';
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml2';
+UPDATE t1 SET a=2 WHERE a=3;
+select * from t1;
+a	b
+1	1
+2	4
+2	3
+SET DEBUG_SYNC= 'now SIGNAL dml2_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+2	3
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.8: key1 in d4 duplicates with key2 in d4
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	3
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	3
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.8.1: key1 in d4 duplicates with key2 in d4 but has a pre deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+DELETE FROM t1 WHERE a=2;
+INSERT INTO t1 VALUES(2, 4);
+select * from t1;
+a	b
+1	1
+2	4
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+# Switch to connection default
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.8.2: key1 in d4 duplicates with key2 in d4 but with a post deletion
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+INSERT INTO t1 VALUES(2, 4);
+DELETE FROM t1 WHERE a=2;
+select * from t1;
+a	b
+1	1
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;
+###################################################################
+case 5.8.3: key1 in d4 duplicates with updated key2 in d4
+###################################################################
+CREATE TABLE t1 (a INT NOT NULL, b INT)ENGINE=xengine;
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(3, 4);
+SET DEBUG_SYNC= 'xengine.inplace_unique_check_constraint_done SIGNAL start_dml WAIT_FOR dml_end';
+ALTER TABLE t1 ADD PRIMARY KEY(a), ALGORITHM=INPLACE, LOCK=DEFAULT;
+# Switch to connection dml
+SET DEBUG_SYNC= 'now WAIT_FOR start_dml';
+INSERT INTO t1 VALUES(2, 3);
+UPDATE t1 SET a=2 WHERE a=3;
+select * from t1;
+a	b
+1	1
+2	4
+2	3
+SET DEBUG_SYNC= 'now SIGNAL dml_end';
+# Switch to connection default
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1;
+a	b
+1	1
+2	4
+2	3
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+DROP TABLE t1;

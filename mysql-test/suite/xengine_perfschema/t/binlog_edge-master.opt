@@ -1,0 +1,2 @@
+--binlog-ignore-db=my_local_db
+--default_storage_engine=xengine

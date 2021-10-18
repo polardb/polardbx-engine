@@ -1,0 +1,20 @@
+#### suite/xengine_ext/t/innodb_views.test
+
+--source include/no_valgrind_without_big.inc
+
+let $engine_type= XENGINE;
+
+USE test;
+--source suite/xengine_ext/include/innodb_tb2.inc
+--disable_warnings
+DROP DATABASE IF EXISTS test1;
+--enable_warnings
+CREATE DATABASE test1;
+USE test1;
+--source suite/xengine_ext/include/innodb_tb2.inc
+USE test;
+
+--source suite/xengine_ext/views/views_master.inc
+DROP DATABASE test1;
+DROP TABLE test.tb2;
+

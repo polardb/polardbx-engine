@@ -1,0 +1,48 @@
+#!/bin/bash 
+#
+#/*******************************************************************************
+#*  Script Name:    getsql.sh
+#*  Date Created:   2009.02.17
+#*  Author:         Joseph Wiiliams 
+#*  Purpose:        extract lines from log file within time block
+#*
+#*  Parameter:      date      - A day of month in question (dd)
+#*                  starttime - A start time in (HH:mm)
+#*                  endtime   - An end  time in (HH:mm)
+#*                  
+#******************************************************************************/
+#
+#-----------------------------------------------------------------------------
+# command line parameters
+#-----------------------------------------------------------------------------
+date=$1
+starttime=$2
+endtime=$3
+# 
+host=$(hostname -s)
+#
+# change date format to match sql log date format
+newdate=`date +%y%m$1`
+#
+# clean up previous data files
+if  [ -d /tmp/$host/sql ] 
+then
+    rm -rf /tmp/$host/sql
+fi
+mkdir -p /tmp/$host/sql
+#
+# create the beginning and ending time search variables
+startdate="$newdate $2"
+enddate="$newdate $3"
+cat $host.log | grep $startdate
+# 
+#  create the awk command and write it to a temporary  run file 
+cmd="/$startdate/,/$enddate/ {print \$0} "
+echo $cmd > /tmp/$host/sql/cmd.$$
+#
+# execute the command 
+awk -f /tmp/$host/sql/cmd.$$ /usr/local/Calpont/mysql/db/$host.log > /tmp/$host/sql/temp.log
+#
+exit
+#
+# End of Script

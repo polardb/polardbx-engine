@@ -1,0 +1,13 @@
+--source suite/xengine/include/have_xengine.inc
+
+#
+# Index type BTREE
+#
+
+let $index_type = BTREE;
+
+--source index.inc
+
+let $index_type =;
+
+--source suite/xengine/include/check_xengine_log_error.inc

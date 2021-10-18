@@ -1,0 +1,5 @@
+--source suite/xengine/include/have_xengine.inc
+
+create table t (id int primary key) engine=xengine;
+drop table t;
+--source suite/xengine/include/check_xengine_log_error.inc

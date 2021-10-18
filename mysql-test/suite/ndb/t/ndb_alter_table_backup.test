@@ -1,0 +1,45 @@
+#############################################################
+# Author: Guangbao
+# Date: 2007-10-31
+# Purpose: mix backup/restore test for basic online alter table
+##############################################################
+
+--source include/have_ndb.inc
+--source suite/ndb/include/backup_restore_setup.inc
+
+##############################
+# mix endian restore section #
+##############################
+#
+# Restore backup files (from little endian)
+#
+--echo *********************************
+--echo * restore tables w/ new column from little endian
+--echo *********************************
+--exec $NDB_RESTORE -b 1 -n 1 -m -r $NDB_SAVED_BACKUPS/51_d2_le >> $NDB_TOOLS_OUTPUT 2>&1
+--exec $NDB_RESTORE -b 1 -n 2 -r $NDB_SAVED_BACKUPS/51_d2_le >> $NDB_TOOLS_OUTPUT 2>&1
+
+--disable_query_log
+call mtr.add_suppression("NDB: Table upgrade required");
+--enable_query_log
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+SHOW WARNINGS;
+--exec $NDB_DROP_TABLE --no-defaults -d test t1 >> $NDB_TOOLS_OUTPUT
+
+#
+# Restore backup files (from big endian)
+#
+--echo *********************************
+--echo * restore tables w/ new column from big endian
+--echo *********************************
+--exec $NDB_RESTORE -b 1 -n 1 -m -r $NDB_SAVED_BACKUPS/51_d2_be >> $NDB_TOOLS_OUTPUT 2>&1
+--exec $NDB_RESTORE -b 1 -n 2 -r $NDB_SAVED_BACKUPS/51_d2_be >> $NDB_TOOLS_OUTPUT 2>&1
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+SHOW WARNINGS;
+
+--exec $NDB_DROP_TABLE --no-defaults -d test t1 >> $NDB_TOOLS_OUTPUT
+--remove_file $NDB_TOOLS_OUTPUT

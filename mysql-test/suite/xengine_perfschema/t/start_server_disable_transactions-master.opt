@@ -1,0 +1,2 @@
+--loose-performance-schema-instrument='transaction=OFF'
+--default_storage_engine=xengine

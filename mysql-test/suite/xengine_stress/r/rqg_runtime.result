@@ -1,0 +1,25 @@
+call mtr.add_suppression("Did not write failed ");
+call mtr.add_suppression("Can't open and lock privilege tables");
+SET @ORIG_EVENT_SCHEDULER = @@EVENT_SCHEDULER;
+CREATE DATABASE IF NOT EXISTS rqg_runtime;
+Running test with grammar file runtime/alter_online.yy
+rqg test success!
+DROP DATABASE rqg_runtime;
+CREATE USER otto@localhost;
+CREATE DATABASE IF NOT EXISTS rqg_runtime;
+Running test with grammar file runtime/concurrency_1.yy
+rqg test success!
+DROP DATABASE rqg_runtime;
+CREATE DATABASE IF NOT EXISTS rqg_runtime;
+Running test with grammar file runtime/connect_kill_sql.yy
+rqg test success!
+DROP DATABASE rqg_runtime;
+CREATE DATABASE IF NOT EXISTS rqg_runtime;
+Running test with grammar file runtime/metadata_stability.yy
+rqg test success!
+DROP DATABASE rqg_runtime;
+DROP USER otto@localhost;
+DROP TABLE IF EXISTS test.executors;
+DROP DATABASE IF EXISTS testdb_N;
+DROP DATABASE IF EXISTS testdb_S;
+SET GLOBAL EVENT_SCHEDULER = @ORIG_EVENT_SCHEDULER;

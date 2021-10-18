@@ -1,0 +1,472 @@
+drop table if exists t1;
+CREATE TABLE t1 (a INT, b INT, KEY ka(a), KEY kab(a,b)) ENGINE=XENGINE;
+INSERT INTO t1 (a, b) VALUES (1, 5);
+INSERT INTO t1 (a, b) VALUES (2, 6);
+INSERT INTO t1 (a, b) VALUES (3, 7);
+ALTER TABLE t1 ADD INDEX kb(b), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `ka` (`a`),
+  KEY `kab` (`a`,`b`),
+  KEY `kb` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(kb) WHERE b > 5;
+a	b
+2	6
+3	7
+SELECT * FROM t1 FORCE INDEX(kab) WHERE a > 2;
+a	b
+3	7
+DROP TABLE t1;
+CREATE TABLE t1 (a INT, b INT, KEY ka(a), KEY kab(a,b)) ENGINE=XENGINE;
+INSERT INTO t1 (a, b) VALUES (1, 5);
+INSERT INTO t1 (a, b) VALUES (2, 6);
+INSERT INTO t1 (a, b) VALUES (3, 7);
+ALTER TABLE t1 ADD INDEX kb(b), DROP INDEX ka, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `kab` (`a`,`b`),
+  KEY `kb` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(kb) WHERE b > 5;
+a	b
+2	6
+3	7
+SELECT * FROM t1 FORCE INDEX(kab) WHERE a > 2;
+a	b
+3	7
+DROP TABLE t1;
+CREATE TABLE t1 (a INT, b INT, KEY ka(a), KEY kab(a,b)) ENGINE=XENGINE;
+INSERT INTO t1 (a, b) VALUES (1, 5);
+INSERT INTO t1 (a, b) VALUES (2, 6);
+INSERT INTO t1 (a, b) VALUES (3, 7);
+ALTER TABLE t1 DROP INDEX ka, DROP INDEX kab, ALGORITHM=INPLACE;
+ALTER TABLE t1 ADD INDEX kb(b), ADD INDEX kab(a,b), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `kb` (`b`),
+  KEY `kab` (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(kb) WHERE b > 5;
+a	b
+2	6
+3	7
+SELECT * FROM t1 FORCE INDEX(kab) WHERE a > 2;
+a	b
+3	7
+DROP TABLE t1;
+CREATE TABLE t1 (a INT, b INT, KEY ka(a), KEY kab(a,b)) ENGINE=XENGINE;
+INSERT INTO t1 (a, b) VALUES (1, 5);
+INSERT INTO t1 (a, b) VALUES (2, 6);
+INSERT INTO t1 (a, b) VALUES (3, 7);
+ALTER TABLE t1 ADD INDEX kb(b), DROP INDEX ka, ADD INDEX kba(b,a), DROP INDEX kab, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `kb` (`b`),
+  KEY `kba` (`b`,`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(kb) WHERE b > 5;
+a	b
+2	6
+3	7
+SELECT * FROM t1 FORCE INDEX(kba) WHERE a > 2;
+a	b
+3	7
+DROP TABLE t1;
+CREATE TABLE t1 (a INT, b INT, KEY ka(a), KEY kab(a,b)) ENGINE=XENGINE;
+ALTER TABLE t1 DROP INDEX ka, ADD INDEX ka(b), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `kab` (`a`,`b`),
+  KEY `ka` (`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(ka) WHERE b > 5;
+a	b
+SELECT * FROM t1 FORCE INDEX(kab) WHERE a > 2;
+a	b
+DROP TABLE t1;
+CREATE TABLE t1 (pk CHAR(8) PRIMARY KEY, a VARCHAR(11), b INT UNSIGNED) ENGINE=XENGINE charset utf8 collate utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` char(8) COLLATE utf8_bin NOT NULL,
+  `a` varchar(11) COLLATE utf8_bin DEFAULT NULL,
+  `b` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SHOW COLUMNS IN t1;
+Field	Type	Null	Key	Default	Extra
+pk	char(8)	NO	PRI	NULL	
+a	varchar(11)	YES		NULL	
+b	int(10) unsigned	YES		NULL	
+INSERT INTO t1 VALUES ('aaa', '1111', 1);
+INSERT INTO t1 VALUES ('bbb', '2222', 2);
+INSERT INTO t1 VALUES ('ccc', '3333', 3);
+ALTER TABLE t1 ADD INDEX kab(a,b), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` char(8) COLLATE utf8_bin NOT NULL,
+  `a` varchar(11) COLLATE utf8_bin DEFAULT NULL,
+  `b` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`pk`),
+  KEY `kab` (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(kab) WHERE a > '2' AND b < 3;
+pk	a	b
+bbb	2222	2
+DROP TABLE t1;
+CREATE TABLE t1 (pk CHAR(8) PRIMARY KEY, a VARCHAR(11), b INT UNSIGNED) ENGINE=XENGINE charset utf8 collate utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` char(8) COLLATE utf8_bin NOT NULL,
+  `a` varchar(11) COLLATE utf8_bin DEFAULT NULL,
+  `b` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SHOW COLUMNS IN t1;
+Field	Type	Null	Key	Default	Extra
+pk	char(8)	NO	PRI	NULL	
+a	varchar(11)	YES		NULL	
+b	int(10) unsigned	YES		NULL	
+INSERT INTO t1 VALUES ('aaa', '1111', 1);
+INSERT INTO t1 VALUES ('bbb', '2222', 2);
+INSERT INTO t1 VALUES ('ccc', '3333', 3);
+ALTER TABLE t1 ADD INDEX kab(a,b), ALGORITHM=INPLACE;
+ALTER TABLE t1 ADD INDEX ka(a), DROP INDEX kab, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` char(8) COLLATE utf8_bin NOT NULL,
+  `a` varchar(11) COLLATE utf8_bin DEFAULT NULL,
+  `b` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`pk`),
+  KEY `ka` (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(ka) WHERE a > '2' AND b < 3;
+pk	a	b
+bbb	2222	2
+DROP TABLE t1;
+CREATE TABLE t1 (pk CHAR(8) PRIMARY KEY, a VARCHAR(11), b INT UNSIGNED) ENGINE=XENGINE charset utf8 collate utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` char(8) COLLATE utf8_bin NOT NULL,
+  `a` varchar(11) COLLATE utf8_bin DEFAULT NULL,
+  `b` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+SHOW COLUMNS IN t1;
+Field	Type	Null	Key	Default	Extra
+pk	char(8)	NO	PRI	NULL	
+a	varchar(11)	YES		NULL	
+b	int(10) unsigned	YES		NULL	
+INSERT INTO t1 VALUES ('aaa', '1111', 1);
+INSERT INTO t1 VALUES ('bbb', '2222', 2);
+INSERT INTO t1 VALUES ('ccc', '3333', 3);
+ALTER TABLE t1 ADD INDEX kab(a,b), ADD INDEX ka(a), ADD INDEX kb(b), ALGORITHM=INPLACE;
+ALTER TABLE t1 DROP INDEX ka, DROP INDEX kb, ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `pk` char(8) COLLATE utf8_bin NOT NULL,
+  `a` varchar(11) COLLATE utf8_bin DEFAULT NULL,
+  `b` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`pk`),
+  KEY `kab` (`a`,`b`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(kab) WHERE a > '2' AND b < 3;
+pk	a	b
+bbb	2222	2
+DROP TABLE t1;
+CREATE TABLE t1 (a INT, b INT, KEY ka(a), KEY kab(a,b)) ENGINE=XENGINE;
+INSERT INTO t1 (a, b) VALUES (1, 5);
+INSERT INTO t1 (a, b) VALUES (2, 6);
+INSERT INTO t1 (a, b) VALUES (3, 7);
+CREATE INDEX kb on t1 (b);
+CREATE INDEX kba on t1 (b,a);
+DROP INDEX ka on t1;
+DROP INDEX kab on t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  KEY `kb` (`b`),
+  KEY `kba` (`b`,`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(kb) WHERE b > 5;
+a	b
+2	6
+3	7
+SELECT * FROM t1 FORCE INDEX(kba) WHERE a > 2;
+a	b
+3	7
+DROP TABLE t1;
+CREATE TABLE t1 (i INT, j INT, k INT, PRIMARY KEY (i), KEY(j)) ENGINE = XENGINE PARTITION BY KEY(i) PARTITIONS 4;
+ERROR 42000: Create partitioned table is not supported yet in xengine.
+CREATE TABLE t1 (i INT, j INT, k INT, PRIMARY KEY (i), KEY(j)) ENGINE = XENGINE;
+ALTER TABLE t1 ADD INDEX kij(i,j), ALGORITHM=INPLACE;
+DROP INDEX kij ON t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i` int(11) NOT NULL,
+  `j` int(11) DEFAULT NULL,
+  `k` int(11) DEFAULT NULL,
+  PRIMARY KEY (`i`),
+  KEY `j` (`j`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SELECT * FROM t1 ORDER BY i LIMIT 10;
+i	j	k
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+7	7	7
+8	8	8
+9	9	9
+10	10	10
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+100
+DROP TABLE t1;
+CREATE TABLE t1 (a INT, b TEXT);
+ALTER TABLE t1 ADD KEY kb(b(10));
+ALTER TABLE t1 ADD PRIMARY KEY(a);
+DROP TABLE t1;
+# Establish connection con1 (user=root)
+# Switch to connection con1
+CREATE TABLE t1 (i INT, j INT, PRIMARY KEY (i)) ENGINE = XENGINE;
+INSERT INTO t1 VALUES (1,1);
+# Disconnecting on con1
+# Establish connection con2 (user=root)
+# Switch to connection con2
+ALTER TABLE t1 ADD INDEX kj(j), ALGORITHM=INPLACE;
+SELECT COUNT(*) FROM t1 FORCE INDEX(PRIMARY);
+COUNT(*)
+1
+SELECT COUNT(*) FROM t1 FORCE INDEX(kj);
+COUNT(*)
+1
+DROP TABLE t1;
+# Establish connection con1 (user=root)
+# Establish connection con2 (user=root)
+# Switch to connection con1
+CREATE TABLE t1 (i INT, j INT, PRIMARY KEY (i)) ENGINE = XENGINE;
+INSERT INTO t1 VALUES (1,1);
+# Switch to connection con2
+SELECT COUNT(*) FROM t1 FORCE INDEX(PRIMARY);
+COUNT(*)
+1
+ALTER TABLE t1 ADD INDEX kj(j), ALGORITHM=INPLACE;
+SELECT COUNT(*) FROM t1 FORCE INDEX(PRIMARY);
+COUNT(*)
+1
+SELECT COUNT(*) FROM t1 FORCE INDEX(kj);
+COUNT(*)
+1
+DROP TABLE t1;
+SET @prior_xengine_strict_collation_check= @@xengine_strict_collation_check;
+SET global xengine_strict_collation_check = off;
+CREATE TABLE t1 (a VARCHAR(80)) ENGINE=XENGINE charset latin1;
+INSERT INTO t1 (a) VALUES (REPEAT("a", 80));
+INSERT INTO t1 (a) VALUES (REPEAT("a", 80));
+INSERT INTO t1 (a) VALUES (REPEAT("a", 80));
+INSERT INTO t1 (a) VALUES (REPEAT("a", 80));
+ALTER TABLE t1 ADD INDEX ka(a), ALGORITHM=INPLACE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` varchar(80) DEFAULT NULL,
+  KEY `ka` (`a`)
+) ENGINE=XENGINE DEFAULT CHARSET=latin1
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT * FROM t1 FORCE INDEX(ka) WHERE a > "";
+a
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+DROP TABLE t1;
+SET global xengine_strict_collation_check = @prior_xengine_strict_collation_check;
+CREATE TABLE t1 (i INT, j INT, PRIMARY KEY (i)) ENGINE = XENGINE;
+set information_schema_stats_expiry = 0;
+set global xengine_force_flush_memtable_now=1;
+ALTER TABLE t1 ADD INDEX kj(j), ALGORITHM=INPLACE;
+larger
+1
+# restart
+larger
+1
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+larger
+1
+# restart
+larger
+1
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+select 2097152 < 2097152 * 1.5 as "same";
+same
+1
+DROP TABLE t1;
+CREATE TABLE t1 (i INT PRIMARY KEY, j INT) ENGINE = XENGINE;
+INSERT INTO t1 VALUES (1,2), (2,4), (3,6), (4,8), (5,10);
+ALTER TABLE t1 ADD INDEX kj(j), ALGORITHM=INPLACE;
+SET GLOBAL xengine_force_flush_memtable_now = 1;
+SELECT * FROM INFORMATION_SCHEMA.XENGINE_INDEX_FILE_MAP
+WHERE INDEX_NUMBER =
+(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL
+WHERE TABLE_NAME = 't1' AND INDEX_NAME = "PRIMARY");
+SUBTABLE_ID	INDEX_NUMBER	SST_NAME	NUM_ROWS	DATA_SIZE	ENTRY_DELETES	ENTRY_SINGLEDELETES	ENTRY_MERGES	ENTRY_OTHERS	DISTINCT_KEYS_PREFIX
+SELECT * FROM INFORMATION_SCHEMA.XENGINE_INDEX_FILE_MAP
+WHERE INDEX_NUMBER =
+(SELECT INDEX_NUMBER FROM INFORMATION_SCHEMA.XENGINE_DDL
+WHERE TABLE_NAME = 't1' AND INDEX_NAME = "kj");
+SUBTABLE_ID	INDEX_NUMBER	SST_NAME	NUM_ROWS	DATA_SIZE	ENTRY_DELETES	ENTRY_SINGLEDELETES	ENTRY_MERGES	ENTRY_OTHERS	DISTINCT_KEYS_PREFIX
+DROP TABLE t1;
+CREATE TABLE t1 (
+a INT PRIMARY KEY,
+b INT,
+c INT,
+KEY kbc(b,c)) ENGINE = XENGINE;
+INSERT INTO t1 (a,b,c) VALUES (1,1,1);
+INSERT INTO t1 (a,b,c) VALUES (2,2,2);
+INSERT INTO t1 (a,b,c) VALUES (3,3,3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kbc` (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 DROP INDEX kbc, ADD INDEX kbc(b,c), ALGORITHM=INPLACE;
+ALTER TABLE t1 DROP INDEX kbc;
+DROP TABLE t1;
+CREATE TABLE t1 (
+a INT PRIMARY KEY,
+b INT,
+c INT,
+UNIQUE KEY kbc(b,c)) ENGINE = XENGINE;
+INSERT INTO t1 (a,b,c) VALUES (1,1,1);
+INSERT INTO t1 (a,b,c) VALUES (2,2,2);
+INSERT INTO t1 (a,b,c) VALUES (3,3,3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `kbc` (`b`,`c`)
+) ENGINE=XENGINE DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+ALTER TABLE t1 DROP INDEX kbc, ADD INDEX kbc(b,c), ALGORITHM=INPLACE;
+SELECT SLEEP(5);
+SLEEP(5)
+0
+ALTER TABLE t1 DROP INDEX kbc;
+DROP TABLE t1;
+CREATE TABLE t1 (
+a INT PRIMARY KEY,
+b varchar(10),
+index kb(b(5))
+) ENGINE = XENGINE charset utf8 collate utf8_bin;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+INSERT INTO t1 (a,b) VALUES (1,'1111122222');
+INSERT INTO t1 (a,b) VALUES (2,'2222233333');
+INSERT INTO t1 (a,b) VALUES (3,'3333344444');
+ALTER TABLE t1 DROP INDEX kb, ADD INDEX kb(b(8)), ALGORITHM=INPLACE;
+SELECT * FROM t1 FORCE INDEX(kb);
+a	b
+1	1111122222
+2	2222233333
+3	3333344444
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int(11) NOT NULL,
+  `b` varchar(10) COLLATE utf8_bin DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `kb` (`b`(8))
+) ENGINE=XENGINE DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+DROP TABLE t1;
