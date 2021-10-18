@@ -213,9 +213,12 @@ fi
 if [ x"$mach_type" = x"aarch64" ]; then # ARM64
     CC=gcc
     CXX=g++
-else # X86
+elif [[ -e /opt/rh/devtoolset-7/root/usr/bin/gcc ]]; then 
     CC=/opt/rh/devtoolset-7/root/usr/bin/gcc
     CXX=/opt/rh/devtoolset-7/root/usr/bin/g++
+else  # X86
+    CC=gcc
+    CXX=g++
 fi
 
 # Update choosed version
