@@ -44,8 +44,7 @@ create temporary table tmp(a int);
 select * from tmp as of gcn 1;
 ERROR HY000: Snapshot (as of) expression not allowed for 'tmp', cause it is not a innodb base table
 drop table tmp;
-select * from information_schema.INNODB_TABLESPACE_MASTER_KEY as of gcn 1;
-table_space	master_key_id
+select * from information_schema.PLUGINS as of gcn 1;
 select * from tt as of gcn 1 as alias for update;
 ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
 select * from tt as of gcn 1 as alias LOCK IN SHARE MODE;

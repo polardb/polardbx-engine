@@ -726,6 +726,8 @@ handle_new_error:
       lizard::gp_wait_suspend_thread(trx);
       if (trx->error_state != DB_SUCCESS) {
         ut_ad(trx->error_state == DB_LOCK_WAIT_TIMEOUT);
+        que_thr_stop_for_mysql(thr);
+
         goto handle_new_error;
       }
 
