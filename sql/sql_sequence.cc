@@ -313,9 +313,8 @@ Sql_cmd *PT_create_sequence_stmt::make_cmd(THD *thd) {
   @retval         true      Failure
 */
 bool Sql_cmd_create_sequence::execute(THD *thd) {
-  LEX *const lex = thd->lex;
   DBUG_ENTER("Sql_cmd_create_sequence::execute");
-  DBUG_ASSERT(lex->sequence_info);
+  DBUG_ASSERT(thd->lex->sequence_info);
 
   DBUG_RETURN(super::execute(thd));
 }

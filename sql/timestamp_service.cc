@@ -118,7 +118,7 @@ bool TimestampService::get_timestamp(uint64_t &ts, const uint64_t batch) {
       batch > TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE) {
     char errmsg[256] = {0};
     sprintf(errmsg,
-            "Can not reserve %llu timestamp value, valid range is [%llu, %llu]",
+            "Can not reserve %lu timestamp value, valid range is [%d, %d]",
             batch, TIMESTAMP_SEQUENCE_MIN_BATCH_SIZE,
             TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE);
     m_thd->get_stmt_da()->set_overwrite_status(true);
@@ -132,7 +132,9 @@ bool TimestampService::get_timestamp(uint64_t &ts, const uint64_t batch) {
 
   bitmap_set_bit(m_table->read_set, Sequence_field::FIELD_NUM_NEXTVAL);
 
-  if (error = m_table->file->ha_rnd_init(true)) {
+  error = m_table->file->ha_rnd_init(true);
+
+  if (error) {
     m_table->file->print_error(error, MYF(0));
     ret = true;
   } else {

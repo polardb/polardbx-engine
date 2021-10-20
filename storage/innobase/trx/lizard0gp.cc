@@ -455,7 +455,9 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
                                  btr_pcur_t *pcur, lizard::Vision *vision,
                                  dberr_t *error) {
   txn_lookup_t txn_lookup;
+#ifdef UNIV_DEBUG
   bool looped = false;
+#endif
   ut_ad(index->is_clustered());
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
@@ -509,7 +511,9 @@ retry:
         /** 2.2. Already commit, judge it again */
       case TRX_STATE_COMMITTED_IN_MEMORY:
         ut_ad(looped == false);
+#ifdef UNIV_DEBUG
         looped = true;
+#endif
         goto retry;
 
         /** 2.3. Blocking trx is prepared, and its commit has been blocked */
