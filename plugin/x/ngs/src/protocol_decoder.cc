@@ -120,7 +120,7 @@ Protocol_decoder::Decode_error Protocol_decoder::read_and_decode_impl(
   m_vio_input_stream.reset_byte_count();
 
   /** Galaxy X-protocol */
-  bool result;
+  bool result = true;
   gx::GSession_id gsession_id;
   gx::GVersion gversion;
   switch (m_vio->get_ptype()) {

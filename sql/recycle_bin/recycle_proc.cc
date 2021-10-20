@@ -157,7 +157,8 @@ void Sql_cmd_recycle_proc_show::send_result(THD *thd, bool error) {
 }
 
 /* Override the default send result. */
-void Sql_cmd_recycle_proc_purge::send_result(THD *thd, bool error) {
+void Sql_cmd_recycle_proc_purge::send_result(THD *thd MY_ATTRIBUTE((unused)),
+                                             bool error) {
   DBUG_ENTER("Sql_cmd_recycle_proc_purge::send_result");
   if (error) {
     DBUG_ASSERT(thd->is_error());

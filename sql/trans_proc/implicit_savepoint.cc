@@ -77,7 +77,8 @@ bool Sql_cmd_trans_proc_implicit_savepoint::pc_execute(THD *thd) {
   @param[in]    thd           Thread context
   @param[in]    error         Whether current proc runs into error
 */
-void Sql_cmd_trans_proc_implicit_savepoint::send_result(THD *thd, bool error) {
+void Sql_cmd_trans_proc_implicit_savepoint::send_result(THD *thd MY_ATTRIBUTE((unused)),
+                                                        bool error) {
   DBUG_ENTER("Sql_cmd_trans_proc_implicit_savepoint::send_result");
 
   if (error) {
