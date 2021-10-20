@@ -74,7 +74,7 @@ XA COMMIT 'xatest';
 connection con2;
 --error ER_LOCK_WAIT_TIMEOUT
 --reap;
-
+INSERT INTO t VALUES(4, 1);
 
 
 connection con1;

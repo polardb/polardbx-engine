@@ -2485,7 +2485,9 @@ static Sys_var_ulong Sys_log_throttle_queries_not_using_indexes(
     ON_UPDATE(update_log_throttle_queries_not_using_indexes));
 
 static bool update_log_error_verbosity(sys_var *, THD *, enum_var_type) {
+#ifdef WITH_XENGINE_STORAGE_ENGINE
   mysql_set_xengine_info_log_level(log_error_verbosity);
+#endif
   return (log_builtins_filter_update_verbosity(log_error_verbosity) < 0);
 }
 

@@ -183,8 +183,10 @@
 #include "sql/recycle_bin/recycle_parse.h"
 #include "sql/outline/outline_digest.h"
 #include "sql/outline/outline_interface.h"
+#ifdef WITH_XENGINE_STORAGE_ENGINE
 // TEMPORARILY to trace what happens in xengine during a slow query
 #include "storage/xengine/core/monitoring/query_perf_context.h"
+#endif
 
 #include "ppi/ppi_statement.h"
 
@@ -1581,8 +1583,10 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
   DBUG_TRACE;
   DBUG_PRINT("info", ("command: %d", command));
 
+#ifdef WITH_XENGINE_STORAGE_ENGINE
   QUERY_TRACE_RESET();
   QUERY_TRACE_BEGIN(xengine::monitor::TracePoint::SERVER_OPERATION);
+#endif
 
   Sql_cmd_clone *clone_cmd = nullptr;
 
@@ -1911,7 +1915,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         size_t length =
             static_cast<size_t>(packet_end - beginning_of_next_stmt);
 
+#ifdef WITH_XENGINE_STORAGE_ENGINE
         QUERY_TRACE_END(); // end SERVER_OPERATION trace
+#endif
 
         log_slow_statement(thd, query_start_status_ptr);
         if (query_start_status_ptr) {
@@ -1945,8 +1951,10 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         thd->profiling->set_query_source(beginning_of_next_stmt, length);
 #endif
 
+#ifdef WITH_XENGINE_STORAGE_ENGINE
         QUERY_TRACE_RESET();
         QUERY_TRACE_BEGIN(xengine::monitor::TracePoint::SERVER_OPERATION);
+#endif
 
         /* PSI begin */
         thd->m_digest = &thd->m_digest_state;
@@ -2262,7 +2270,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
   }
 
 done:
+#ifdef WITH_XENGINE_STORAGE_ENGINE
   QUERY_TRACE_END(); // end SERVER_OPERATION trace
+#endif
   assert(thd->open_tables == nullptr ||
          (thd->locked_tables_mode == LTM_LOCK_TABLES));
 
