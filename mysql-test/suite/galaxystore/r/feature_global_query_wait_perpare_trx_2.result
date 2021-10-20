@@ -32,5 +32,6 @@ set session innodb_global_query_wait_timeout=2;
 select * from t as of gcn 2048;;
 XA COMMIT 'xatest';
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+INSERT INTO t VALUES(4, 1);
 set global innodb_rds_flashback_enabled=default;
 drop table t;
