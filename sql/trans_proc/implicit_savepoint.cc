@@ -56,13 +56,13 @@ bool Sql_cmd_trans_proc_implicit_savepoint::pc_execute(THD *thd) {
       cmd.append("`") ||
       cmd.append(STRING_WITH_LEN(MYSQL_IMPLICIT_SAVEPOINT)) ||
       cmd.append("`"))
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
 
   thd->set_query(cmd.lex_cstring());
   thd->set_query_id(next_query_id());
 
   if (parser_state.init(thd, thd->query().str, thd->query().length))
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
 
   stmt_ctx.start_statement();
 
