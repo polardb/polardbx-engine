@@ -25,9 +25,11 @@
 #include "util/common.h"
 #include "logger/logger.h"
 
+#ifdef __x86_64__
 #include <x86intrin.h>
 #include <emmintrin.h>
 #include <immintrin.h>
+#endif
 #include <cstdio>
 #include <queue>
 
@@ -253,7 +255,9 @@ public:
 
 class ARTNode16 : public ARTNodeBase {
 private:
+#ifdef __x86_64__
   typedef __m128i SIMD_REG;
+#endif
   static const int32_t FANOUT = 16;
   static const uint8_t FLIP_MASK = 0x80;
 
