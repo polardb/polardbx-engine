@@ -466,6 +466,7 @@ uint8_t ARTNode16::flip_sign(uint8_t key) {
  * Find the position of the first key which is greater than or equal to target
  */
 bool ARTNode16::find_pos(uint8_t key, int32_t &pos) {
+#ifdef __x86_64__
   pos = 0;
   if (is_empty()) {
     return false;
@@ -475,6 +476,13 @@ bool ARTNode16::find_pos(uint8_t key, int32_t &pos) {
     pos = _popcnt32(_mm_movemask_epi8(_mm_cmplt_epi8(node_key_reg, target_reg)) & ((1 << count()) - 1));
     return pos < count() && key_[pos] == flip_sign(key) ? true : false;
   }
+#else
+  pos = 0;
+  while (pos < count() && key_[pos] < key) {
+    pos++;
+  }
+  return pos < count() && key_[pos] == key ? true : false;
+#endif
 }
 
 int ARTNode16::copy_to_larger(ARTNodeBase *larger) {
