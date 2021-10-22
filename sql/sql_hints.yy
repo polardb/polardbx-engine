@@ -96,9 +96,6 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 %token HASH_JOIN_HINT
 %token NO_HASH_JOIN_HINT
 
-%token CCL_QUEUE_FIELD_HINT
-%token CCL_QUEUE_VALUE_HINT
-
 /* Other tokens */
 
 %token HINT_ARG_NUMBER
@@ -109,6 +106,7 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 
 %token HINT_CLOSE
 %token HINT_ERROR
+
 /* Rds tokens */
 
 %token CCL_QUEUE_FIELD_HINT 

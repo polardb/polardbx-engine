@@ -30,6 +30,12 @@
   with code from \<algorithm\> or similar.
 */
 
+/* Define some general constants */
+#ifndef TRUE
+#define TRUE		(1)	/* Logical true */
+#define FALSE		(0)	/* Logical false */
+#endif
+
 #ifndef MYSQL_ABI_CHECK
 #include <stddef.h>
 #endif
