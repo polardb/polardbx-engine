@@ -258,22 +258,41 @@ int Sequence_share::enter_cond(THD *thd) {
 }
 
 Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values,
-                                                  ulonglong batch) {
+                                                  SR_ctx *sr_ctx) {
   DBUG_ENTER("quick_read");
 
   mysql_mutex_assert_owner(&m_mutex);
   assert(m_cache_state != CACHE_STATE_LOADING);
 
   /* If cache is not valid, need load and flush cache. */
-  if (m_cache_state == CACHE_STATE_INVALID)
+  if (m_cache_state == CACHE_STATE_INVALID) {
+    /** If SKIP, CHANGE TO BATCH */
+    Sequence_skip *skip = sr_ctx->get_skip_ptr();
+    /**
+      We didn't know how much range to load since first nextval_skip didn't know
+      current nextval, then didn't calc the batch size.
+      So delay the batch size calculation to calc_digital_next_round.
+    */
+    if (skip->is_skip()) {
+      sr_ctx->set_first_skip();
+      assert(sr_ctx->batch() == 1);
+    }
+    assert(sr_ctx->is_inherit() == false);
+
     DBUG_RETURN(CACHE_REQUEST_NEED_LOAD);
+  }
 
   assert(m_cache_state == CACHE_STATE_VALID);
 
-  if (m_type == Sequence_type::DIGITAL)
-    DBUG_RETURN(digital_quick_read(local_values));
-  else
-    DBUG_RETURN(timestamp_quick_read(local_values, batch));
+  if (m_type == Sequence_type::DIGITAL) {
+    if (sr_ctx->get_skip_ptr()->is_skip()) {
+      DBUG_RETURN(digital_skip_read(local_values, sr_ctx));
+    } else {
+      DBUG_RETURN(digital_quick_read(local_values, sr_ctx));
+    }
+  } else {
+    DBUG_RETURN(timestamp_quick_read(local_values, sr_ctx->batch()));
+  }
 }
 
 /**
@@ -379,6 +398,57 @@ retry:
 }
 
 /**
+  Quickly nextval_skip operation according to current cache
+  [nextval, m_cache_end].
+*/
+Sequence_cache_request Sequence_share::digital_skip_read(
+    ulonglong *local_values, SR_ctx *sr_ctx) {
+  ulonglong *nextval_ptr;
+  ulonglong *currval_ptr;
+  ulonglong *increment_ptr;
+  Sequence_skip *skip;
+  ulonglong skipped_to;
+  DBUG_ENTER("Sequence_share::digital_skip_read");
+
+  assert(sr_ctx->batch() == 1);
+  assert(sr_ctx->is_inherit() == false);
+
+  skip = sr_ctx->get_skip_ptr();
+  assert(skip->is_skip());
+  skipped_to = skip->skipped_to();
+
+  nextval_ptr = &m_caches[SF_NEXTVAL];
+  currval_ptr = &m_caches[SF_CURRVAL];
+  increment_ptr = &m_caches[SF_INCREMENT];
+
+  /** Skipped value should be in [nextval - max_value] */
+  if (skipped_to < *nextval_ptr || skipped_to >= m_caches[SF_MAXVALUE]) {
+    DBUG_RETURN(Sequence_cache_request::CACHE_REQUEST_SKIP_ERROR);
+  } else if (skipped_to >= *nextval_ptr && skipped_to < m_cache_end) {
+    /** directly skip */
+    *currval_ptr = *nextval_ptr;
+    memcpy(local_values, m_caches, sizeof(m_caches));
+    if ((m_cache_end - skipped_to) >= *increment_ptr) {
+      *nextval_ptr = (skipped_to + *increment_ptr);
+    } else {
+      *nextval_ptr = m_cache_end;
+    }
+    DBUG_RETURN(CACHE_REQUEST_HIT);
+  } else {
+    /**
+      Both batch and skip operation will be changed into batch attributes.
+      because calc_next_round only need to know how much will you need.
+    */
+    ulonglong batch = (skipped_to - *nextval_ptr) / *increment_ptr + 1;
+    /** Need load a batch */
+    sr_ctx->set_batch(batch);
+    sr_ctx->inherit(*nextval_ptr);
+    sr_ctx->clear_skip();
+    DBUG_RETURN(CACHE_REQUEST_ROUND_OUT);
+  }
+}
+
+/**
   Retrieve the nextval from cache directly.
 
   @param[out]     local_values    Used to store into thd->sequence_last_value
@@ -386,10 +456,11 @@ retry:
   @retval         request         Cache request result
 */
 Sequence_cache_request Sequence_share::digital_quick_read(
-    ulonglong *local_values) {
+    ulonglong *local_values, SR_ctx *sr_ctx) {
   ulonglong *nextval_ptr;
   ulonglong *currval_ptr;
   ulonglong *increment_ptr;
+  ulonglong batch;
   bool last_round;
   DBUG_ENTER("Sequence_share::quick_read");
 
@@ -399,6 +470,9 @@ Sequence_cache_request Sequence_share::digital_quick_read(
   nextval_ptr = &m_caches[SF_NEXTVAL];
   currval_ptr = &m_caches[SF_CURRVAL];
   increment_ptr = &m_caches[SF_INCREMENT];
+  batch = sr_ctx->batch();
+
+  assert(batch > 0);
 
   /* If cache_end roll upon maxvalue, then it is last round */
   last_round = (m_caches[SF_MAXVALUE] == m_cache_end);
@@ -409,29 +483,40 @@ Sequence_cache_request Sequence_share::digital_quick_read(
     if (*nextval_ptr > m_cache_end) DBUG_RETURN(CACHE_REQUEST_ROUND_OUT);
   }
 
-  /* Retrieve values from cache directly */
-  {
+  /** Here, at least still have one available number. */
+  longlong left = (m_cache_end - *nextval_ptr) / *increment_ptr - 1;
+  if (left <= 0) {
+    left = 1;
+  } else {
+    left = left + 1;
+  }
+
+  if (((ulonglong)left) >= batch) {
+    /* Retrieve values from cache directly */
     assert(*nextval_ptr <= m_cache_end);
     *currval_ptr = *nextval_ptr;
     memcpy(local_values, m_caches, sizeof(m_caches));
-    if ((m_cache_end - *nextval_ptr) >= *increment_ptr)
-      *nextval_ptr += *increment_ptr;
+    if ((m_cache_end - *nextval_ptr) >= (*increment_ptr * batch))
+      *nextval_ptr += (*increment_ptr * batch);
     else {
       *nextval_ptr = m_cache_end;
       invalidate();
     }
+    DBUG_RETURN(CACHE_REQUEST_HIT);
+  } else {
+    sr_ctx->inherit(*nextval_ptr);
+    DBUG_RETURN(CACHE_REQUEST_ROUND_OUT);
   }
-  DBUG_RETURN(CACHE_REQUEST_HIT);
 }
 
 /**
   param[in/out]   durable   Read from record and calc next round to write
 */
-int Sequence_share::calc_digital_next_round(ulonglong *durable) {
+int Sequence_share::calc_digital_next_round(ulonglong *durable,
+                                            SR_ctx *sr_ctx) {
   DBUG_ENTER("calc_digital_next_round");
   assert(m_type == Sequence_type::DIGITAL);
   /** We have copy the record from table into m_caches */
-
   ulonglong begin;
 
   /* Step 1: decide the begin value */
@@ -454,11 +539,26 @@ int Sequence_share::calc_digital_next_round(ulonglong *durable) {
     DBUG_RETURN(HA_ERR_SEQUENCE_INVALID);
   }
 
+  ulonglong batch = sr_ctx->batch();
+
+  /** If it's first skip nextval, calc the batch size. */
+  if (sr_ctx->is_first_skip()) {
+    assert(batch == 1);
+    ulonglong skipped_to = sr_ctx->get_skip_ptr()->skipped_to();
+    if (skipped_to < begin) {
+      DBUG_RETURN(HA_ERR_SEQUENCE_SKIP_ERROR);
+    }
+    batch = (skipped_to - begin) / m_caches[SF_INCREMENT] + 1;
+  }
+
+  /** Bigger cache size and batch size as next round buffer */
+  ulonglong cache = m_caches[SF_CACHE] > batch ? m_caches[SF_CACHE] : batch;
+
   /* Step 3: calc the left counter to cache */
   longlong left = (m_caches[SF_MAXVALUE] - begin) / m_caches[SF_INCREMENT] - 1;
 
   /* The left counter is less than cache size */
-  if (left < 0 || ((ulonglong)left) <= m_caches[SF_CACHE]) {
+  if (left < 0 || ((ulonglong)left) <= cache) {
     /* If cycle, start again; else will report error! */
     m_cache_end = m_caches[SF_MAXVALUE];
 
@@ -468,12 +568,16 @@ int Sequence_share::calc_digital_next_round(ulonglong *durable) {
     } else
       durable[SF_NEXTVAL] = m_caches[SF_MAXVALUE];
   } else {
-    m_cache_end = begin + (m_caches[SF_CACHE] + 1) * m_caches[SF_INCREMENT];
+    m_cache_end = begin + (cache + 1) * m_caches[SF_INCREMENT];
     durable[SF_NEXTVAL] = m_cache_end;
     assert(m_cache_end < m_caches[SF_MAXVALUE]);
   }
 
-  m_caches[SF_NEXTVAL] = begin;
+  if (sr_ctx->is_inherit()) {
+    m_caches[SF_NEXTVAL] = sr_ctx->get_inherit_value();
+  } else {
+    m_caches[SF_NEXTVAL] = begin;
+  }
 
   DBUG_RETURN(0);
 }
@@ -487,7 +591,7 @@ int Sequence_share::calc_digital_next_round(ulonglong *durable) {
   @retval         0             Success
   @retval         ~0            Failure
 */
-int Sequence_share::reload_cache(TABLE *table, bool *changed) {
+int Sequence_share::reload_cache(TABLE *table, bool *changed, SR_ctx *sr_ctx) {
   int err = 0;
   st_sequence_field_info *field_info;
   Field **field;
@@ -513,7 +617,7 @@ int Sequence_share::reload_cache(TABLE *table, bool *changed) {
     m_caches[field_info->field_num] = durable[field_info->field_num];
 
   if (m_type == Sequence_type::DIGITAL) {
-    err = calc_digital_next_round(durable);
+    err = calc_digital_next_round(durable, sr_ctx);
   } else {
     err = calc_timestamp_next_round(durable);
   }
@@ -559,7 +663,7 @@ int Sequence_share::reload_cache(TABLE *table, bool *changed) {
   @retval         0               Success
   @retval         ~0              Failure
 */
-int ha_sequence::ha_flush_cache(TABLE *) {
+int ha_sequence::ha_flush_cache(TABLE *, void *ctx) {
   int error = 0;
   bool changed;
   DBUG_ENTER("ha_sequence::ha_flush_cache");
@@ -567,11 +671,13 @@ int ha_sequence::ha_flush_cache(TABLE *) {
 
   Bitmap_helper helper(table, m_share);
 
+  SR_ctx *sr_ctx = static_cast<SR_ctx *>(ctx);
+
   if ((error = m_file->ha_rnd_init(true))) goto err;
 
   if ((error = m_file->ha_rnd_next(table->record[0]))) goto err;
 
-  if ((error = m_share->reload_cache(table, &changed))) goto err;
+  if ((error = m_share->reload_cache(table, &changed, sr_ctx))) goto err;
 
   if (!error && changed) {
     if ((error = m_file->ha_update_row(table->record[1], table->record[0])))
@@ -768,6 +874,8 @@ void ha_sequence::init_variables() {
   m_share = nullptr;
   m_batch = 1;
 
+  m_skip.reset();
+
   start_of_scan = 0;
   DBUG_VOID_RETURN;
 }
@@ -904,6 +1012,7 @@ int ha_sequence::rnd_init(bool scan) {
   m_scan_mode = table->sequence_scan.get();
   m_iter_mode = Sequence_iter_mode::IT_NON;
   m_batch = table->sequence_scan.get_batch();
+  m_skip = table->sequence_scan.get_skip();
 
   assert(m_batch <= TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE);
 
@@ -964,6 +1073,7 @@ int ha_sequence::rnd_next(uchar *buf) {
 
     assert(m_iter_mode == Sequence_iter_mode::IT_NEXTVAL);
 
+    SR_ctx sr_ctx(m_batch, m_skip);
     Share_locker_helper share_locker(m_share);
 
   retry_once:
@@ -977,11 +1087,18 @@ int ha_sequence::rnd_next(uchar *buf) {
     if ((error = m_share->enter_cond(ha_thd()))) {
       DBUG_RETURN(error);
     }
-    cache_request = m_share->quick_read(local_values, m_batch);
+
+    /** Set sequence request context */
+    sr_ctx.init(m_batch, m_skip);
+    cache_request = m_share->quick_read(local_values, &sr_ctx);
     switch (cache_request) {
       case Sequence_cache_request::CACHE_REQUEST_HIT: {
         share_locker.release();
         goto end;
+      }
+      case Sequence_cache_request::CACHE_REQUEST_SKIP_ERROR: {
+        error = HA_ERR_SEQUENCE_SKIP_ERROR;
+        break;
       }
       case Sequence_cache_request::CACHE_REQUEST_ERROR: {
         error = HA_ERR_SEQUENCE_ACCESS_FAILURE;
@@ -995,7 +1112,7 @@ int ha_sequence::rnd_next(uchar *buf) {
       case Sequence_cache_request::CACHE_REQUEST_NEED_LOAD:
       case Sequence_cache_request::CACHE_REQUEST_ROUND_OUT: {
         if (retry_time > 0) {
-          error = scroll_sequence(table, cache_request, &share_locker);
+          error = scroll_sequence(table, cache_request, &share_locker, &sr_ctx);
           share_locker.complete_load(error);
           if (error) {
             break;
@@ -1278,9 +1395,9 @@ int ha_sequence::external_lock(THD *thd, int lock_type) {
   @retval         0         Success
   @retval         ~0        Failure
 */
-int ha_sequence::scroll_sequence(TABLE *table,
-                                 Sequence_cache_request cache_request,
-                                 Share_locker_helper *helper) {
+int ha_sequence::scroll_sequence(
+    TABLE *table, Sequence_cache_request cache_request,
+    Share_locker_helper *helper, SR_ctx *sr_ctx) {
   DBUG_ENTER("ha_sequence::scroll_sequence");
   assert(cache_request ==
                   Sequence_cache_request::CACHE_REQUEST_NEED_LOAD ||
@@ -1291,7 +1408,7 @@ int ha_sequence::scroll_sequence(TABLE *table,
 
   /* Sequence transaction do the reload */
   Reload_sequence_cache_ctx ctx(ha_thd(), table_share);
-  DBUG_RETURN(ctx.reload_sequence_cache(table));
+  DBUG_RETURN(ctx.reload_sequence_cache(table, (void *)sr_ctx));
 }
 
 /**
@@ -1358,6 +1475,10 @@ void ha_sequence::print_error(int error, myf errflag) {
     }
     case HA_ERR_SEQUENCE_NOT_DEFINED: {
       my_error(ER_SEQUENCE_NOT_DEFINED, MYF(0), sequence_db, sequence_name);
+      DBUG_VOID_RETURN;
+    }
+    case HA_ERR_SEQUENCE_SKIP_ERROR: {
+      my_error(ER_SEQUENCE_SKIP_ERROR, MYF(0), sequence_db, sequence_name);
       DBUG_VOID_RETURN;
     }
     /*

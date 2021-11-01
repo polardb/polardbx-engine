@@ -74,7 +74,7 @@ class Reload_sequence_cache_ctx {
     @retval         0                 Success
     @retval         ~0                Failure
   */
-  int reload_sequence_cache(TABLE *super_table);
+  int reload_sequence_cache(TABLE *super_table, void *ctx);
 
  private:
   Sequence_transaction m_trans;

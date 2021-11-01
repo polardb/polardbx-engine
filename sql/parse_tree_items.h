@@ -182,6 +182,7 @@ class PTI_function_call_nonkeyword_sysdate : public Parse_tree_item {
 class PTI_udf_expr : public Parse_tree_item {
   typedef Parse_tree_item super;
   friend class Item_seq_func;
+  friend class Item_func_nextval;
 
   Item *expr;
   LEX_STRING select_alias;

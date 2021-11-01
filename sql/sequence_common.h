@@ -40,6 +40,9 @@ class Create_func;
 
 extern PSI_memory_key key_memory_sequence_last_value;
 
+#define SEQUENCE_DEFAULT_BATCH_SIZE (1)
+#define SEQUENCE_MAX_BATCH_SIZE (100 * 10000)
+
 /**
   Sequence table field value structure.
 */
@@ -216,6 +219,42 @@ class Sequence_property {
   plugin_ref m_plugin;
 };
 
+/** Support nextval_skip(sequence, value) */
+struct Sequence_skip {
+ public:
+  Sequence_skip(bool skip, ulonglong value)
+      : m_skip(skip), m_skipped_to(value) {}
+  Sequence_skip() : m_skip(false), m_skipped_to(0) {}
+
+  Sequence_skip(const Sequence_skip &skip) {
+    m_skip = skip.m_skip;
+    m_skipped_to = skip.m_skipped_to;
+  }
+
+  Sequence_skip &operator=(const Sequence_skip &skip) {
+    m_skip = skip.m_skip;
+    m_skipped_to = skip.m_skipped_to;
+    return *this;
+  }
+
+  void reset() {
+    m_skip = false;
+    m_skipped_to = 0;
+  }
+
+  void init(ulonglong value) {
+    m_skip = true;
+    m_skipped_to = value;
+  }
+
+  bool is_skip() { return m_skip; }
+  ulonglong skipped_to() { return m_skipped_to; }
+
+ private:
+  bool m_skip;
+  ulonglong m_skipped_to;
+};
+
 /**
   Sequence scan mode in TABLE object.
 */
@@ -238,12 +277,13 @@ class Sequence_scan {
     IT_NON_NEXTVAL, /* Query non nextval, maybe currval or others */
   };
 
-  Sequence_scan() : m_mode(ORIGINAL_SCAN), m_batch(1) {}
+  Sequence_scan() : m_mode(ORIGINAL_SCAN), m_batch(1), m_skip() {}
   Sequence_scan(const Sequence_scan& seq_scan) : m_mode(seq_scan.m_mode) {}
 
   void reset() {
     m_mode = ORIGINAL_SCAN;
     m_batch = 1;
+    m_skip.reset();
   }
   void set(Scan_mode mode) { m_mode = mode; }
   Scan_mode get() { return m_mode; }
@@ -251,11 +291,16 @@ class Sequence_scan {
   void set_batch(ulonglong batch) { m_batch = batch; }
   ulonglong get_batch() { return m_batch; }
 
+  Sequence_skip get_skip() { return m_skip; }
+  void set_skip(Sequence_skip skip) { m_skip = skip; }
+  void set_skip(ulonglong value) { m_skip.init(value); }
+
   /* Overlap the assignment operator */
   Sequence_scan &operator=(const Sequence_scan &rhs) {
     if (this != &rhs) {
       this->m_mode = rhs.m_mode;
       this->m_batch = rhs.m_batch;
+      this->m_skip = rhs.m_skip;
     }
     return *this;
   }
@@ -267,6 +312,8 @@ class Sequence_scan {
     timestamp sequence
  */
   ulonglong m_batch;
+
+  Sequence_skip m_skip;
 };
 
 typedef Sequence_scan::Scan_mode Sequence_scan_mode;
@@ -380,6 +427,7 @@ extern void on_user_sp_status_changed(const char *db, const char *name,
 extern bool is_seq_func_name(const char *name);
 extern bool is_seq_nextval_func_name(const char *name);
 extern bool is_seq_currval_func_name(const char *name);
+extern bool is_seq_nextval_skip_func_name(const char *name);
 
 extern ulonglong time_system_ms(void);
 

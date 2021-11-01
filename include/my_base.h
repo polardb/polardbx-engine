@@ -999,30 +999,31 @@ Information in the data-dictionary needs to be updated. */
 #define HA_ERR_SEQUENCE_NOT_DEFINED 212    /* Sequence is not yet defined */
 #define HA_ERR_SEQUENCE_ACCESS_FAILURE 213 /* Sequence access failure */
 #define HA_ERR_SEQUENCE_RETRY_TIMEOUT 214  /* Sequence retry timeout */
+#define HA_ERR_SEQUENCE_SKIP_ERROR 215     /* Sequence skip error */
 /* Sequence Engine errors end */
 
 /* These errors are for xengine */
-#define HA_ERR_INVALID_NULL_ERROR 215
+#define HA_ERR_INVALID_NULL_ERROR 216
 /* xengine errors end */
 
 /* These errors are for lizard */
 
 /* The snapshot to find is out of scope */
-#define HA_ERR_SNAPSHOT_OUT_OF_RANGE 216
+#define HA_ERR_SNAPSHOT_OUT_OF_RANGE 217
 
 /* Flashback-like query encountered an internal error */
-#define HA_ERR_AS_OF_INTERNAL 217
+#define HA_ERR_AS_OF_INTERNAL 218
 
 /* The definition of the table required by the query has changed */
-#define HA_ERR_AS_OF_TABLE_DEF_CHANGED 218
+#define HA_ERR_AS_OF_TABLE_DEF_CHANGED 219
 
 /* The snapshot is so old that the required historical data has been deleted */
-#define HA_ERR_SNAPSHOT_TOO_OLD 219
+#define HA_ERR_SNAPSHOT_TOO_OLD 220
 
 /* lizard errors end */
 
 /** Copy of last error number */
-#define HA_ERR_LAST 219
+#define HA_ERR_LAST 220
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

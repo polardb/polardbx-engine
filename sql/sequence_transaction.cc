@@ -111,7 +111,8 @@ bool THD::is_autonomous_transaction() const {
   @retval         0                 Success
   @retval         ~0                Failure
 */
-int Reload_sequence_cache_ctx::reload_sequence_cache(TABLE *super_table) {
+int Reload_sequence_cache_ctx::reload_sequence_cache(TABLE *super_table,
+                                                     void *sr_ctx) {
   int error = 0;
   TABLE *table;
   DBUG_ENTER("Reload_sequence_cache_ctx::reload_sequence_cache");
@@ -131,7 +132,7 @@ int Reload_sequence_cache_ctx::reload_sequence_cache(TABLE *super_table) {
 
   table = m_trans.get_otx()->get_table();
 
-  if ((error = table->file->ha_flush_cache(super_table))) {
+  if ((error = table->file->ha_flush_cache(super_table, sr_ctx))) {
     trans_rollback_stmt(m_thd);
     trans_rollback(m_thd);
     /* Here the error is handler error, so return it directly. */

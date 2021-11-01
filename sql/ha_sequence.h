@@ -58,6 +58,63 @@ extern handlerton *sequence_hton;
 /* Max number of timestamp value that could be reserved in one request */
 #define TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE 60000
 
+/*
+  Request context
+
+  It's mainly used to tranfer batch size,
+  and decide whether nextval to inherit when calc_number_next_round;
+*/
+class Sequence_request_context {
+ public:
+  explicit Sequence_request_context(ulonglong size, Sequence_skip skip)
+      : m_skip(skip),
+        m_inherit(false),
+        m_nextval(0),
+        m_batch(size),
+        m_first_skip(false) {}
+
+  void inherit(ulonglong size) {
+    assert(m_inherit == false);
+    m_inherit = true;
+    m_nextval = size;
+  }
+
+  void init(ulonglong size, Sequence_skip skip) {
+    m_skip = skip;
+    m_inherit = false;
+    m_nextval = 0;
+    m_batch = size;
+    m_first_skip = false;
+  }
+
+  bool is_inherit() { return m_inherit; }
+
+  ulonglong get_inherit_value() {
+    assert(m_inherit);
+    return m_nextval;
+  }
+
+  Sequence_skip *get_skip_ptr() { return &m_skip; }
+
+  ulonglong batch() { return m_batch; }
+  void set_batch(ulonglong batch) { m_batch = batch; }
+
+  void clear_skip() { m_skip.reset(); }
+
+  bool is_first_skip() { return m_first_skip; }
+  void set_first_skip() { m_first_skip = true; }
+
+ private:
+  Sequence_skip m_skip;
+  bool m_inherit;
+  ulonglong m_nextval;
+  ulonglong m_batch;
+
+  bool m_first_skip;
+};
+
+typedef class Sequence_request_context SR_ctx;
+
 /**
   The sequence caches class definition, that's allowed to be accessed
   simultaneously while protected by mutex.
@@ -91,7 +148,8 @@ class Sequence_share {
     CACHE_REQUEST_NEED_LOAD,
     CACHE_REQUEST_ROUND_OUT,
     CACHE_REQUEST_ERROR,
-    CACHE_REQUEST_RETRY_TIMEOUT
+    CACHE_REQUEST_RETRY_TIMEOUT,
+    CACHE_REQUEST_SKIP_ERROR
   };
 
   Sequence_share() {}
@@ -139,9 +197,9 @@ class Sequence_share {
     @retval         0             Success
     @retval         ~0            Failure
   */
-  int reload_cache(TABLE *table, bool *changed);
+  int reload_cache(TABLE *table, bool *changed, SR_ctx *sr_ctx);
   int calc_timestamp_next_round(ulonglong *durable);
-  int calc_digital_next_round(ulonglong *durable);
+  int calc_digital_next_round(ulonglong *durable, SR_ctx *sr_ctx);
 
   /**
     Retrieve the nextval from cache directly.
@@ -151,8 +209,9 @@ class Sequence_share {
 
     @retval         request         Cache request result
   */
-  Cache_request quick_read(ulonglong *local_values, ulonglong batch);
-  Cache_request digital_quick_read(ulonglong *local_values);
+  Cache_request quick_read(ulonglong *local_values, SR_ctx *sr_ctx);
+  Cache_request digital_quick_read(ulonglong *local_values, SR_ctx *sr_ctx);
+  Cache_request digital_skip_read(ulonglong *local_values, SR_ctx *sr_ctx);
   Cache_request timestamp_quick_read(ulonglong *local_values, ulonglong batch);
   /**
     Validate cache.
@@ -511,7 +570,7 @@ class ha_sequence : public handler {
     @retval         ~0        Failure
   */
   int scroll_sequence(TABLE *table, Sequence_cache_request request,
-                      Share_locker_helper *helper);
+                      Share_locker_helper *helper, SR_ctx *sr_ctx);
 
   /**
     Rename sequence table name.
@@ -545,7 +604,7 @@ class ha_sequence : public handler {
     @retval         0               Success
     @retval         ~0              Failure
   */
-  int ha_flush_cache(TABLE *) override;
+  int ha_flush_cache(TABLE *, void *ctx) override;
 
   /**
     Fill values into sequence table fields from iterated local_values
@@ -583,6 +642,8 @@ class ha_sequence : public handler {
 
   Sequence_scan_mode m_scan_mode;
   Sequence_iter_mode m_iter_mode;
+
+  Sequence_skip m_skip;
 };
 
 /**

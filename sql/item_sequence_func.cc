@@ -43,8 +43,7 @@
 
   @{
 */
-
-bool Item_seq_func::parse_parameter() {
+bool Item_func_currval::parse_parameter() {
   assert(!m_table_list);
 
   if (!m_para_list) {
@@ -62,7 +61,60 @@ bool Item_seq_func::parse_parameter() {
     my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
     return true;
   }
+  return parse_table_ident();
+}
 
+bool Item_func_nextval::parse_parameter() {
+  assert(!m_table_list);
+
+  if (!m_para_list) {
+    assert(m_table);
+    return false;
+  }
+
+  assert(!m_table && !m_db);
+
+  if (check_param_count()) return true;
+  /**
+    Grammar entry：IDENT_sys '(' opt_udf_expr_list ')',
+    and here udf_expr expected: ident or ident.ident.
+  */
+  if (parse_table_ident()) return true;
+
+  PTI_udf_expr *para = nullptr;
+  Item_int *item = nullptr;
+  if (m_para_list->elements() == 2) {
+    if ((para = dynamic_cast<PTI_udf_expr *>(m_para_list->value[1])) &&
+        (item = dynamic_cast<Item_int *>(para->expr))) {
+      unsigned long long value = item->val_int();
+      if (check_value()) {
+        return true;
+      } else {
+        set_value(value);
+      }
+    } else {
+      my_error(ER_WRONG_PARAMETERS_TO_NATIVE_FCT, MYF(0), func_name());
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
+
+/**
+  All sequence function first parameter is table_ident.
+*/
+bool Item_seq_func::parse_table_ident() {
+  assert(m_para_list->elements() >= 1);
+
+  assert(!m_table && !m_db);
+
+  /**
+    Grammar entry：IDENT_sys '(' opt_udf_expr_list ')',
+    and here udf_expr expected: ident or ident.ident.
+  */
   PTI_udf_expr *para = dynamic_cast<PTI_udf_expr *>(m_para_list->value[0]);
   if (!para) {
     my_error(ER_WRONG_PARAMETERS_TO_NATIVE_FCT, MYF(0), func_name());
@@ -99,6 +151,45 @@ bool Item_seq_func::parse_parameter() {
   return true;
 }
 
+void Item_func_nextval::set_sequence_scan() {
+  TABLE *table = m_table_list->table;
+  table->sequence_scan.set_batch(m_value);
+}
+
+void Item_func_nextval_skip::set_sequence_scan() {
+  TABLE *table = m_table_list->table;
+  table->sequence_scan.set_skip(m_value);
+}
+
+bool Item_func_nextval::check_param_count() {
+  uint elements = m_para_list->elements();
+
+  if (elements != 1 && elements != 2) {
+    my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+    return true;
+  }
+  return false;
+}
+
+bool Item_func_nextval_skip::check_param_count() {
+  uint elements = m_para_list->elements();
+
+  if (elements != 2) {
+    my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+    return true;
+  }
+  return false;
+}
+
+bool Item_func_nextval::check_value() {
+  if (m_value <= 0 || m_value > SEQUENCE_MAX_BATCH_SIZE) {
+    my_error(ER_SEQUENCE_BATCH_SIZE_INVALID, MYF(0), func_name());
+    return true;
+  }
+  return false;
+}
+
+bool Item_func_nextval_skip::check_value() { return false; }
 /**
   NEXTVAL() function implementation.
 */
@@ -110,6 +201,8 @@ longlong Item_func_nextval::val_int() {
   assert(table->file);
 
   bitmap_set_bit(table->read_set, Sequence_field::FIELD_NUM_NEXTVAL);
+
+  set_sequence_scan();
 
   if (table->file->ha_rnd_init(1))
     goto err;
