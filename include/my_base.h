@@ -1015,8 +1015,10 @@ Information in the data-dictionary needs to be updated. */
 /* The snapshot is so old that the required historical data has been deleted */
 #define HA_ERR_SNAPSHOT_TOO_OLD 217
 
+#define HA_ERR_SEQUENCE_SKIP_ERROR 218
+
 /** Copy of last error number */
-#define HA_ERR_LAST 217
+#define HA_ERR_LAST 218
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

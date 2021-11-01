@@ -9315,6 +9315,12 @@ ER_TIMESTAMP_SERVICE_ERROR
 ER_IMPLICIT_SAVEPOINT_FAILED
   eng "Failed to create implicit savepoint for current statement."
 
+ER_SEQUENCE_BATCH_SIZE_INVALID
+  eng "Batch size is not in a valid range in the call to native function '%-.192s'"
+
+ER_SEQUENCE_SKIP_ERROR
+   eng "Nextval skipped to is not valid in sequence '%-.192s.%-.192s'"
+
 #
 #  End of RDS error message.
 #
