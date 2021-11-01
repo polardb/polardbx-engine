@@ -44,7 +44,8 @@ class Item_seq_func : public Item_int_func {
       : Item_int_func(pos), m_thd(thd), m_db(nullptr), m_table(nullptr),
         m_para_list(para_list), m_table_list(nullptr) {}
 
-  bool parse_parameter();
+  virtual bool parse_parameter() = 0;
+  bool parse_table_ident();
 
   virtual bool add_table_to_lex_list(Parse_context *pc) = 0;
 
@@ -73,16 +74,43 @@ class Item_seq_func : public Item_int_func {
 class Item_func_nextval : public Item_seq_func {
  public:
   Item_func_nextval(const POS &pos, THD *thd, const char *db, const char *table)
-      : Item_seq_func(pos, thd, db, table) {}
+      : Item_seq_func(pos, thd, db, table),
+        m_value(SEQUENCE_DEFAULT_BATCH_SIZE) {}
   Item_func_nextval(const POS &pos, THD *thd, const PT_item_list *para_list)
-      : Item_seq_func(pos, thd, para_list) {}
+      : Item_seq_func(pos, thd, para_list),
+        m_value(SEQUENCE_DEFAULT_BATCH_SIZE) {}
 
   longlong val_int();
 
   const char *func_name() const { return "nextval"; }
 
+  virtual void set_sequence_scan();
+  virtual bool check_value();
+  virtual bool check_param_count();
+
  protected:
   bool add_table_to_lex_list(Parse_context *pc);
+  bool parse_parameter();
+  void set_value(unsigned long long value) { m_value = value; }
+
+  unsigned long long m_value;
+};
+
+class Item_func_nextval_skip: public Item_func_nextval {
+ public:
+  Item_func_nextval_skip(const POS &pos, THD *thd, const char *db,
+                         const char *table)
+      : Item_func_nextval(pos, thd, db, table) {}
+
+  Item_func_nextval_skip(const POS &pos, THD *thd,
+                         const PT_item_list *para_list)
+      : Item_func_nextval(pos, thd, para_list) {}
+
+  virtual void set_sequence_scan();
+  virtual bool check_value();
+  virtual bool check_param_count();
+
+  const char *func_name() const { return "nextval_skip"; }
 };
 
 /**
@@ -101,6 +129,7 @@ class Item_func_currval : public Item_seq_func {
 
  protected:
   bool add_table_to_lex_list(Parse_context *pc);
+  bool parse_parameter();
 };
 
 #endif

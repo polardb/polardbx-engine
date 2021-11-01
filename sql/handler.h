@@ -6583,7 +6583,7 @@ class handler {
   friend class DsMrr_impl;
 
  public:
-  virtual int ha_flush_cache(TABLE *) { return HA_ERR_WRONG_COMMAND; }
+  virtual int ha_flush_cache(TABLE *, void *) { return HA_ERR_WRONG_COMMAND; }
 
   /* Rotate storage engine data file */
   int ha_rotate_table(const char *name, const dd::Table *table_def);
