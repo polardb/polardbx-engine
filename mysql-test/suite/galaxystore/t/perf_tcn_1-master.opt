@@ -1,0 +1,2 @@
+--innodb_tcn_cache_level=block
+--innodb_tcn_block_cache_type=random

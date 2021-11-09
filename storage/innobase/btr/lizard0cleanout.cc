@@ -422,6 +422,9 @@ Cursor::Cursor(const Cursor &cursor) {
     m_index = cursor.m_index;
     m_modify_clock = cursor.m_modify_clock;
     m_withdraw_clock = cursor.m_withdraw_clock;
+    m_page_id.copy_from(cursor.m_page_id);
+    m_is_used_by_tcn = cursor.m_is_used_by_tcn;
+    m_txns = cursor.m_txns;
   }
 }
 
@@ -433,6 +436,9 @@ Cursor &Cursor::operator=(const Cursor &cursor) {
     m_index = cursor.m_index;
     m_modify_clock = cursor.m_modify_clock;
     m_withdraw_clock = cursor.m_withdraw_clock;
+    m_page_id.copy_from(cursor.m_page_id);
+    m_is_used_by_tcn = cursor.m_is_used_by_tcn;
+    m_txns = cursor.m_txns;
   }
   return *this;
 }
@@ -442,6 +448,7 @@ bool Cursor::store_position(btr_pcur_t *pcur) {
   m_block = pcur->get_block();
   m_index = btr_cur_get_index(pcur->get_btr_cur());
   m_old_rec = page_cur_get_rec(pcur->get_page_cur());
+  m_page_id.copy_from(m_block->page.id);
 
 #ifdef UNIV_DEBUG
   auto page = page_align(m_old_rec);
@@ -501,6 +508,27 @@ bool Cleanout_cursors::push_trx(trx_id_t trx_id, txn_commit_t txn_commit) {
 void Cleanout_cursors::push_cursor(const Cursor &cursor) {
   m_cursors.push_back(cursor);
   m_cursor_num++;
+}
+
+/**
+  Put the cursor that needed to cleanout into vector.
+
+  @param[in]      page_id
+  @param[in]      index
+*/
+void Cleanout_cursors::push_cursor_by_page(const Cursor &cursor,
+                                           trx_id_t trx_id,
+                                           txn_commit_t txn_commit) {
+  DBUG_ASSERT(cursor.used_by_tcn());
+  if (m_cursors.size() > 0 &&
+      m_cursors.back().page_id().equals_to(cursor.page_id())) {
+    m_cursors.back().push_back(trx_id, txn_commit);
+  } else {
+    /** Attention Txn_commits copy */
+    m_cursors.push_back(cursor);
+    m_cursors.back().push_back(trx_id, txn_commit);
+    m_cursor_num++;
+  }
 }
 
 bool Cleanout_cursors::is_empty() {
