@@ -49,6 +49,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <ostream>
 
+#include "lizard0tcn.h"
+
 // Forward declaration
 struct fil_addr_t;
 
@@ -1498,6 +1500,8 @@ struct buf_block_t {
   /** Get the page type of the current buffer block as string.
   @return page type of the current buffer block as string. */
   const char *get_page_type_str() const;
+
+  lizard::Cache_tcn *cache_tcn;
 };
 
 /** Check if a buf_block_t object is in a valid state
@@ -2131,5 +2135,10 @@ struct CheckUnzipLRUAndLRUList {
 #endif /* UNIV_DEBUG || defined UNIV_BUF_DEBUG */
 
 #include "buf0buf.ic"
+
+namespace lizard {
+void allocate_block_tcn(buf_block_t *block);
+void deallocate_block_tcn(buf_block_t *block);
+}  // namespace lizard
 
 #endif /* !buf0buf_h */
