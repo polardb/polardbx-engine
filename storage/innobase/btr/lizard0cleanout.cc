@@ -417,7 +417,7 @@ Cleanout_pages::~Cleanout_pages() {
 /* Lizard cleanout by cursor. */
 /*----------------------------------------------------------------*/
 
-Cursor::Cursor(const Cursor &cursor) {
+Cursor::Cursor(const Cursor &cursor) : m_page_id(cursor.page_id()) {
   ut_ad(cursor.stored());
 
   if (this != &cursor) {
@@ -427,6 +427,9 @@ Cursor::Cursor(const Cursor &cursor) {
     m_index = cursor.m_index;
     m_modify_clock = cursor.m_modify_clock;
     m_block_when_stored = cursor.m_block_when_stored;
+    m_page_id.reset(cursor.m_page_id.space(), cursor.m_page_id.page_no());
+    m_is_used_by_tcn = cursor.m_is_used_by_tcn;
+    m_txns = cursor.m_txns;
   }
 }
 
@@ -438,6 +441,9 @@ Cursor &Cursor::operator=(const Cursor &cursor) {
     m_index = cursor.m_index;
     m_modify_clock = cursor.m_modify_clock;
     m_block_when_stored = cursor.m_block_when_stored;
+    m_page_id.reset(cursor.m_page_id.space(), cursor.m_page_id.page_no());
+    m_is_used_by_tcn = cursor.m_is_used_by_tcn;
+    m_txns = cursor.m_txns;
   }
   return *this;
 }
@@ -447,8 +453,11 @@ bool Cursor::store_position(btr_pcur_t *pcur) {
   m_block = pcur->get_block();
   m_index = pcur->get_btr_cur()->index;
   m_old_rec = page_cur_get_rec(pcur->get_page_cur());
+  m_page_id.reset(m_block->page.id.space(), m_block->page.id.page_no());
 
+#ifdef UNIV_DEBUG
   auto page = page_align(m_old_rec);
+#endif
 
   ut_ad(!page_is_empty(page) && page_is_leaf(page));
 
@@ -510,6 +519,27 @@ bool Cleanout_cursors::push_trx(trx_id_t trx_id, txn_commit_t txn_commit) {
 void Cleanout_cursors::push_cursor(const Cursor &cursor) {
   m_cursors.push_back(cursor);
   m_cursor_num++;
+}
+
+/**
+  Put the cursor that needed to cleanout into vector.
+
+  @param[in]      page_id
+  @param[in]      index
+*/
+void Cleanout_cursors::push_cursor_by_page(const Cursor &cursor,
+                                           trx_id_t trx_id,
+                                           txn_commit_t txn_commit) {
+  ut_ad(cursor.used_by_tcn());
+  if (m_cursors.size() > 0 &&
+      m_cursors.back().page_id() == (cursor.page_id())) {
+    m_cursors.back().push_back(trx_id, txn_commit);
+  } else {
+    /** Attention Txn_commits copy */
+    m_cursors.push_back(cursor);
+    m_cursors.back().push_back(trx_id, txn_commit);
+    m_cursor_num++;
+  }
 }
 
 bool Cleanout_cursors::is_empty() {

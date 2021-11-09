@@ -467,7 +467,10 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
                                  btr_pcur_t *pcur, lizard::Vision *vision,
                                  dberr_t *error) {
   txn_lookup_t txn_lookup;
+  bool cache_hit = false;
+#ifdef UNIV_DEBUG
   bool looped = false;
+#endif
   ut_ad(index->is_clustered());
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
@@ -493,13 +496,21 @@ retry:
       row_get_rec_undo_ptr(rec, index, offsets),
       GCN_NULL,
   };
-  txn_undo_hdr_lookup(&txn_rec, &txn_lookup, nullptr);
+
+  cache_hit = lizard::trx_search_tcn(trx, pcur, &txn_rec, &txn_lookup);
+  if (!cache_hit) {
+    txn_undo_hdr_lookup(&txn_rec, &txn_lookup, nullptr);
+  }
 
   /** 1. Already committed; */
   if (txn_lookup.real_state >= TXN_STATE_COMMITTED) {
     ut_a(txn_lookup.real_state != TXN_STATE_UNDO_CORRUPTED);
     assert_commit_scn_allocated(txn_lookup.real_image);
     ut_a(txn_rec.gcn != GCN_NULL);
+
+    if (!cache_hit) {
+      lizard::trx_cache_tcn(trx, trx_id, txn_rec, rec, index, offsets, pcur);
+    }
 
     return (vision->modifications_visible(&txn_rec, index->table->name));
   } else {
@@ -521,7 +532,9 @@ retry:
         /** 2.2. Already commit, judge it again */
       case TRX_STATE_COMMITTED_IN_MEMORY:
         ut_ad(looped == false);
+#ifdef UNIV_DEBUG
         looped = true;
+#endif
         goto retry;
 
         /** 2.3. Blocking trx is prepared, and its commit has been blocked */

@@ -62,6 +62,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0trx.h"
 #include "lizard0gp0types.h"
 #include "lizard0xa.h"
+#include "lizard0tcn.h"
+
 
 // Forward declaration
 struct mtr_t;
@@ -1172,6 +1174,9 @@ struct trx_t {
 
   /** Descripe XA attributes from server */
   XAD xad;
+
+  /** Cache tcn information. */
+  lizard::Session_tcn *session_tcn;
 };
 
 #ifndef UNIV_HOTBACKUP

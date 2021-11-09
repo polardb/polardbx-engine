@@ -272,17 +272,31 @@ class Cleanout_pages {
 
 class Cursor {
  public:
-  explicit Cursor()
+  explicit Cursor(page_id_t page_id)
       : m_old_stored(false),
         m_old_rec(nullptr),
         m_block(nullptr),
         m_index(nullptr),
         m_modify_clock(0),
-        m_block_when_stored() {
+        m_block_when_stored(),
+        m_page_id(page_id),
+        m_is_used_by_tcn(false) {
     m_block_when_stored.clear();
   }
 
-  Cursor(const Cursor &);
+  explicit Cursor(bool is_tcn, page_id_t page_id)
+      : m_old_stored(false),
+        m_old_rec(nullptr),
+        m_block(nullptr),
+        m_index(nullptr),
+        m_modify_clock(0),
+        m_block_when_stored(),
+        m_page_id(page_id),
+        m_is_used_by_tcn(is_tcn) {
+    m_block_when_stored.clear();
+  }
+
+  Cursor(const Cursor &cursor);
 
   Cursor &operator=(const Cursor &);
 
@@ -298,6 +312,16 @@ class Cursor {
 
   buf_block_t *get_block() const { return m_block; }
 
+  page_id_t page_id() const { return m_page_id; }
+
+  const Txn_commits *txns() const { return &m_txns; }
+
+  void push_back(trx_id_t trx_id, txn_commit_t txn_commit) {
+    m_txns.insert(std::pair<trx_id_t, txn_commit_t>(trx_id, txn_commit));
+  }
+
+  bool used_by_tcn() const { return m_is_used_by_tcn; }
+
  private:
   bool m_old_stored;
 
@@ -310,6 +334,13 @@ class Cursor {
   uint64_t m_modify_clock;
 
   buf::Block_hint m_block_when_stored;
+
+  page_id_t m_page_id;
+
+  /** Used by TCN cache */
+  Txn_commits m_txns;
+
+  bool m_is_used_by_tcn;
 };
 
 /** All the cursors need to cleanout within pcur */
@@ -360,6 +391,9 @@ class Cleanout_cursors {
     @param[in]      index
   */
   void push_cursor(const Cursor &cursor);
+
+  void push_cursor_by_page(const Cursor &cursor, trx_id_t trx_id,
+                           txn_commit_t txn_commit);
 
  private:
   Cursors m_cursors;

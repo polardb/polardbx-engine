@@ -323,6 +323,23 @@ ulint row_cleanout_after_read(row_prebuilt_t *prebuilt);
 bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
                           const dict_index_t *index, const ulint *offsets,
                           btr_pcur_t *pcur);
+/**
+  Collect the tcn which need to cache.
+
+  @param[in]        trx_id
+  @param[in]        txn_rec         txn description and state
+  @param[in]        rec             current rec
+  @param[in]        index           cluster index
+  @parma[in]        offsets         rec_get_offsets(rec, index)
+  @param[in/out]    pcur            cursor
+
+  @retval           true            collected
+  @retval           false           didn't collect
+*/
+
+bool tcn_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
+                 const dict_index_t *index, const ulint *offsets,
+                 btr_pcur_t *pcur);
 
 /**
   Whether the transaction on the record has committed

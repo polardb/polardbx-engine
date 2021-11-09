@@ -88,6 +88,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0stateful_latching_rules.h"
 #endif /* UNIV_DEBUG */
 
+#include "lizard0tcn.h"
+
 #ifdef HAVE_LIBNUMA
 #include <numa.h>
 #include <numaif.h>
@@ -808,6 +810,8 @@ static void buf_block_init(
   block->lock.is_block_lock = true;
 
   ut_ad(rw_lock_validate(&(block->lock)));
+
+  block->cache_tcn = nullptr;
 }
 /* We maintain our private view of innobase_should_madvise_buf_pool() which we
 initialize at the beginning of buf_pool_init() and then update when the
@@ -1269,6 +1273,7 @@ static void buf_pool_create(buf_pool_t *buf_pool, ulint buf_pool_size,
           for (i = chunk->size; i--; block++) {
             mutex_free(&block->mutex);
             rw_lock_free(&block->lock);
+            lizard::deallocate_block_tcn(block);
 
             ut_d(rw_lock_free(&block->debug_latch));
           }
@@ -1403,6 +1408,7 @@ static void buf_pool_free_instance(buf_pool_t *buf_pool) {
     for (ulint i = chunk->size; i--; block++) {
       mutex_free(&block->mutex);
       rw_lock_free(&block->lock);
+      lizard::deallocate_block_tcn(block);
 
       ut_d(rw_lock_free(&block->debug_latch));
     }

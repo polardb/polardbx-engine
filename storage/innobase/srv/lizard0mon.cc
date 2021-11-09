@@ -97,6 +97,16 @@ static void export_lizard_status(void) {
   lizard_vars.commit_gcn = lizard_sys_get_gcn();
 
   lizard_vars.purged_gcn = lizard_sys_get_purged_gcn();
+
+#ifdef UNIV_DEBUG
+  lizard_vars.block_tcn_cache_hit = lizard_stats.block_tcn_cache_hit;
+  lizard_vars.block_tcn_cache_miss = lizard_stats.block_tcn_cache_miss;
+  lizard_vars.block_tcn_cache_evict = lizard_stats.block_tcn_cache_evict;
+
+  lizard_vars.session_tcn_cache_hit = lizard_stats.session_tcn_cache_hit;
+  lizard_vars.session_tcn_cache_miss = lizard_stats.session_tcn_cache_miss;
+  lizard_vars.session_tcn_cache_evict = lizard_stats.session_tcn_cache_evict;
+#endif
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -167,13 +177,33 @@ static SHOW_VAR lizard_status_variables[] = {
      SHOW_SCOPE_GLOBAL},
 
     {"undo_retention_stats", Undo_retention::status, SHOW_CHAR,
-    SHOW_SCOPE_GLOBAL},
+     SHOW_SCOPE_GLOBAL},
 
     {"commit_gcn", (char *)&lizard_vars.commit_gcn, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
     {"purged_gcn", (char *)&lizard_vars.purged_gcn, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+
+#ifdef UNIV_DEBUG
+    {"block_tcn_cache_hit", (char *)&lizard_vars.block_tcn_cache_hit, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"block_tcn_cache_miss", (char *)&lizard_vars.block_tcn_cache_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"block_tcn_cache_evict", (char *)&lizard_vars.block_tcn_cache_evict,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"session_tcn_cache_hit", (char *)&lizard_vars.session_tcn_cache_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"session_tcn_cache_miss", (char *)&lizard_vars.session_tcn_cache_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"session_tcn_cache_evict", (char *)&lizard_vars.session_tcn_cache_evict,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+#endif
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

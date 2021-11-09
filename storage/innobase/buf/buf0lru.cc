@@ -55,6 +55,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "ut0byte.h"
 #include "ut0rnd.h"
+#include "lizard0tcn.h"
 
 /** The number of blocks from the LRU_old pointer onward, including
 the block pointed to, must be buf_pool->LRU_old_ratio/BUF_LRU_OLD_RATIO_DIV
@@ -2044,6 +2045,8 @@ void buf_LRU_block_free_non_file_page(buf_block_t *block) {
     block->page.size.copy_from(page_size_t(block->page.size.logical(),
                                            block->page.size.logical(), false));
   }
+
+  lizard::deallocate_block_tcn(block);
 
 #ifndef UNIV_HOTBACKUP
   buf_page_prepare_for_free(&block->page);

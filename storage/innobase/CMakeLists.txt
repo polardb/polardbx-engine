@@ -277,7 +277,9 @@ SET(INNOBASE_SOURCES
   dict/lizard0scn0hist.cc
   row/lizard0mysql.cc
   trx/lizard0gp.cc
-  trx/lizard0xa.cc)
+  trx/lizard0xa.cc
+  trx/lizard0tcn.cc
+  ut/lizard0iv.cc)
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
 IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11)

@@ -87,6 +87,7 @@ convert_flashback_query_timestamp_to_scn(row_prebuilt_t *prebuilt,
 dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   TABLE *table;
   trx_t *trx;
+  bool err = false;
   dict_index_t *clust_index;
   scn_t fbq_scn = SCN_NULL;
   gcn_t fbq_gcn = GCN_NULL;
@@ -135,8 +136,12 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
       fbq_gcn = table->snapshot.get_asof_gcn();
       ut_ad(fbq_gcn != GCN_NULL && fbq_scn == SCN_NULL);
 
-      DBUG_EXECUTE_IF("simulate_gcn_def_changed_error",
-                      { goto simulate_error; });
+      DBUG_EXECUTE_IF("simulate_gcn_def_changed_error", { err = true; });
+
+      /* handle the simulated error */
+      if (err) {
+        goto simulate_error;
+      }
 
       /* required undo has been purged */
       if (fbq_gcn < purge_sys->purged_gcn.get()) {

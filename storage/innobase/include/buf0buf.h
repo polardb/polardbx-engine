@@ -49,6 +49,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <ostream>
 
+#include "lizard0tcn.h"
+
 // Forward declaration
 struct fil_addr_t;
 
@@ -1901,6 +1903,8 @@ struct buf_block_t {
   page_zip_des_t const *get_page_zip() const noexcept {
     return page.zip.data != nullptr ? &page.zip : nullptr;
   }
+
+  lizard::Cache_tcn *cache_tcn;
 };
 
 /** Check if a buf_block_t object is in a valid state
@@ -2651,5 +2655,10 @@ inline void buf_block_reset_page_type_on_mismatch(buf_block_t &block,
   }
 }
 #include "buf0buf.ic"
+
+namespace lizard {
+void allocate_block_tcn(buf_block_t *block);
+void deallocate_block_tcn(buf_block_t *block);
+}  // namespace lizard
 
 #endif /* !buf0buf_h */

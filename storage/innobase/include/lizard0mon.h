@@ -94,6 +94,16 @@ struct lizard_var_t {
 
   /* Max purged gcn, snapshot gcn before that is too old to asof select. */
   ulint purged_gcn;
+
+#ifdef UNIV_DEBUG
+  ulint block_tcn_cache_hit;
+  ulint block_tcn_cache_miss;
+  ulint block_tcn_cache_evict;
+
+  ulint session_tcn_cache_hit;
+  ulint session_tcn_cache_miss;
+  ulint session_tcn_cache_evict;
+#endif
 };
 
 struct lizard_stats_t {
@@ -149,6 +159,16 @@ struct lizard_stats_t {
   ulint_ctr_1_t cleanout_cursor_collect;
 
   ulint_ctr_1_t cleanout_cursor_restore_failed;
+
+#ifdef UNIV_DEBUG
+  ulint_ctr_1_t block_tcn_cache_hit;
+  ulint_ctr_1_t block_tcn_cache_miss;
+  ulint_ctr_1_t block_tcn_cache_evict;
+
+  ulint_ctr_1_t session_tcn_cache_hit;
+  ulint_ctr_1_t session_tcn_cache_miss;
+  ulint_ctr_1_t session_tcn_cache_evict;
+#endif
 };
 
 namespace lizard {
@@ -158,6 +178,50 @@ extern lizard_stats_t lizard_stats;
 int show_lizard_vars(THD *thd, SHOW_VAR *var, char *buff);
 
 }  // namespace lizard
+
+#ifdef UNIV_DEBUG
+
+#define BLOCK_TCN_CACHE_HIT                         \
+  do {                                              \
+    lizard::lizard_stats.block_tcn_cache_hit.inc(); \
+  } while (0)
+
+#define BLOCK_TCN_CACHE_MISS                         \
+  do {                                               \
+    lizard::lizard_stats.block_tcn_cache_miss.inc(); \
+  } while (0)
+
+#define BLOCK_TCN_CACHE_EVICT                         \
+  do {                                                \
+    lizard::lizard_stats.block_tcn_cache_evict.inc(); \
+  } while (0)
+
+#define SESSION_TCN_CACHE_HIT                        \
+  do {                                                \
+    lizard::lizard_stats.session_tcn_cache_hit.inc(); \
+  } while (0)
+
+#define SESSION_TCN_CACHE_MISS                         \
+  do {                                                 \
+    lizard::lizard_stats.session_tcn_cache_miss.inc(); \
+  } while (0)
+
+#define SESSION_TCN_CACHE_EVICT                         \
+  do {                                                  \
+    lizard::lizard_stats.session_tcn_cache_evict.inc(); \
+  } while (0)
+#else
+
+#define BLOCK_TCN_CACHE_HIT
+#define BLOCK_TCN_CACHE_MISS
+#define BLOCK_TCN_CACHE_EVICT
+#define SESSION_TCN_CACHE_HIT
+#define SESSION_TCN_CACHE_MISS
+#define SESSION_TCN_CACHE_EVICT
+
+#endif
+
+
 
 #define LIZARD_MONITOR_INC_TXN_CACHED(NUMBER)                             \
   do {                                                                    \

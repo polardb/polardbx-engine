@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0mon.h"
 #include "lizard0page.h"
 #include "lizard0undo.h"
+#include "lizard0tcn.h"
 
 #include "my_dbug.h"
 
@@ -666,7 +667,7 @@ bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
   ut_ad(page_no == page_get_page_no(page_align(rec)));
 
   if (cleanout_mode == CLEANOUT_BY_CURSOR) {
-    Cursor cursor;
+    Cursor cursor(pcur->get_block()->get_page_id());
     cursor.store_position(pcur);
     pcur->m_cleanout_cursors->push_cursor(cursor);
     pcur->m_cleanout_cursors->push_trx(trx_id, txn_rec);
@@ -681,6 +682,44 @@ bool row_cleanout_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
 
     lizard_stats.cleanout_page_collect.inc();
   }
+
+  return true;
+}
+
+/**
+  Collect the cursor which need to cache by tcn.
+
+  @param[in]        trx_id
+  @param[in]        txn_rec         txn description and state
+  @param[in]        rec             current rec
+  @param[in]        index           cluster index
+  @parma[in]        offsets         rec_get_offsets(rec, index)
+  @param[in/out]    pcur            cursor
+
+  @retval           true            collected
+  @retval           false           didn't collect
+*/
+
+bool tcn_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
+                 const dict_index_t *index, const ulint *offsets,
+                 btr_pcur_t *pcur) {
+  if (!pcur || pcur->m_cleanout_cursors == nullptr) return false;
+
+  /** If disabled, skip it. */
+  if (opt_cleanout_disable) return false;
+
+  assert_row_lizard_valid(rec, index, offsets);
+  ut_ad(index->is_clustered());
+  // pcur->get_page_cur()->index might be nullptr for now.
+  // ut_ad(index == pcur->get_page_cur()->index);
+  ut_ad(rec == pcur->get_rec());
+
+  page_no_t page_no = page_get_page_no(pcur->get_page());
+  ut_ad(page_no == page_get_page_no(page_align(rec)));
+
+  Cursor cursor(true, pcur->get_block()->get_page_id());
+  cursor.store_position(pcur);
+  pcur->m_cleanout_cursors->push_cursor_by_page(cursor, trx_id, txn_rec);
 
   return true;
 }
@@ -714,25 +753,38 @@ struct Cleanout {
 
     heap = mem_heap_create(UNIV_PAGE_SIZE + 200, UT_LOCATION_HERE);
 
-    if (page_rec_is_user_rec(rec)) {
-      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
-      trx_id = row_get_rec_trx_id(rec, index, offsets);
+    if (!cursor.used_by_tcn()) {
+      /** Normal cleanout */
+      if (page_rec_is_user_rec(rec)) {
+        offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+                                  UT_LOCATION_HERE, &heap);
+        trx_id = row_get_rec_trx_id(rec, index, offsets);
 
-      /** If trx state is active ,try to cleanout */
-      if (row_get_rec_undo_ptr_is_active(rec, index, offsets)) {
-        auto it = m_txns->find(trx_id);
-        if (it != m_txns->end()) {
-          txn_rec = it->second;
-          /** Modify the scn and undo ptr */
-          row_upd_rec_lizard_fields_in_cleanout(
-              rec, buf_block_get_page_zip(block), index, offsets, &txn_rec);
+        /** If trx state is active ,try to cleanout */
+        if (row_get_rec_undo_ptr_is_active(rec, index, offsets)) {
+          auto it = m_txns->find(trx_id);
+          if (it != m_txns->end()) {
+            txn_rec = it->second;
+            /** Modify the scn and undo ptr */
+            row_upd_rec_lizard_fields_in_cleanout(
+                rec, buf_block_get_page_zip(block), index, offsets, &txn_rec);
 
-          /** Write the redo log */
-          btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &txn_rec, &mtr);
+            /** Write the redo log */
+            btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &txn_rec, &mtr);
 
-          cleaned++;
+            cleaned++;
+          }
         }
+      }
+    } else {
+      /** Cache tcn */
+      if (block->cache_tcn == nullptr) {
+        allocate_block_tcn(block);
+      }
+      for (auto it : *(cursor.txns())) {
+        tcn_t value(it.second);
+        block->cache_tcn->insert(value);
+        TCN_CACHE_AGGR(BLOCK_LEVEL, EVICT);
       }
     }
 

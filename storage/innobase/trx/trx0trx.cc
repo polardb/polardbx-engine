@@ -81,6 +81,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 #include "lizard0gp.h"
 #include "lizard0xa.h"
+#include "lizard0tcn.h"
 
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
@@ -302,6 +303,12 @@ struct TrxFactory {
     mutex_create(LATCH_ID_TRX_UNDO, &trx->undo_mutex);
 
     lock_trx_alloc_locks(trx);
+
+    if (lizard::innodb_tcn_cache_level == SESSION_LEVEL) {
+      trx->session_tcn = new lizard::Session_tcn();
+    } else {
+      trx->session_tcn = nullptr;
+    }
   }
 
   /** Release resources held by the transaction object.
@@ -362,6 +369,11 @@ struct TrxFactory {
     trx->xad.~XAD();
 
     trx->vision.~Vision();
+
+    if (trx->session_tcn != nullptr) {
+      delete trx->session_tcn;
+      trx->session_tcn = nullptr;
+    }
   }
 
   /** Enforce any invariants here, this is called before the transaction
