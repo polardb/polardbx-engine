@@ -30,6 +30,8 @@ typedef int8_t GVersion;
 
 const GSession_id DEFAULT_GSESSION_ID = 1UL;
 
+const GSession_id AUTO_COMMIT_GSESSION_ID_MASK = static_cast<GSession_id>(0x8000000000000000ULL);
+
 const GVersion INVALID_GVERSION = -1;
 
 /** Version history */
@@ -81,6 +83,12 @@ typedef struct GRequest {
       version = INVALID_GVERSION;
     else
       version = GVERSION_FIRST;
+  }
+
+  void init(const GRequest &another) {
+    ptype = another.ptype;
+    sid = another.sid;
+    version = another.version;
   }
 
   uint8_t size() { return header_size(ptype); }

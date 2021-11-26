@@ -25,10 +25,13 @@
 #ifndef PLUGIN_X_NGS_INCLUDE_NGS_VIO_WRAPPER_H_
 #define PLUGIN_X_NGS_INCLUDE_NGS_VIO_WRAPPER_H_
 
+#include <atomic>
+
 #include "plugin/x/ngs/include/ngs/interface/vio_interface.h"
 #include "plugin/x/ngs/include/ngs/thread.h"
 #include "plugin/x/src/helper/multithread/mutex.h"
 #include "plugin/x/src/io/connection_type.h"
+#include "plugin/x/src/xpl_performance_schema.h"
 
 #include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
 
@@ -64,8 +67,18 @@ class Vio_wrapper : public Vio_interface {
   /** Galaxy X-protocol */
   gx::Protocol_type m_ptype;
 
+  /** Galaxy parallel */
+  xpl::Mutex m_send_mutex{KEY_mutex_gx_vio_send};
+  std::atomic<bool> m_corrupted{false};
+
  public:
   gx::Protocol_type get_ptype() { return m_ptype; }
+
+  inline xpl::Mutex &get_send_mutex() override { return m_send_mutex; }
+
+  inline std::atomic<bool> &is_corrupted() override { return m_corrupted; }
+
+  bool prepare_for_parallel() override;
 };
 
 }  // namespace ngs

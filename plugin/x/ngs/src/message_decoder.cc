@@ -180,9 +180,10 @@ Covered by:
 
 */
 Decode_error Message_decoder::parse_and_dispatch(
+    const gx::GRequest &grequest,
     const uint8_t message_type, const uint32_t message_size,
     xpl::Vio_input_stream *net_input_stream) {
-  return parse_protobuf_frame(message_type, message_size, net_input_stream);
+  return parse_protobuf_frame(grequest, message_type, message_size, net_input_stream);
 }
 
 Error_code Message_decoder::parse_coded_stream_generic(
@@ -213,12 +214,14 @@ Error_code Message_decoder::parse_coded_stream_generic(
 }
 
 Decode_error Message_decoder::parse_protobuf_frame(
+    const gx::GRequest &grequest,
     const uint8_t message_type, const uint32_t message_size,
     xpl::Vio_input_stream *net_stream) {
   DBUG_TRACE;
   Message_request request;
 
   m_cache.alloc_message(message_type, &request);
+  request.get_galaxy_request().init(grequest);
 
   if (request.get_message()) {
     google::protobuf::io::CodedInputStream stream(net_stream);
@@ -235,7 +238,8 @@ Decode_error Message_decoder::parse_protobuf_frame(
     if (net_stream->was_io_error())
       return details::get_network_error(net_stream);
 
-    if (error) return Decode_error{error};
+    if (error)
+      return Decode_error{error};
 
     if (stream.BytesUntilLimit())
       return Decode_error{

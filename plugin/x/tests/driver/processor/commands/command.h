@@ -74,6 +74,8 @@ class Command {
                   const std::string &args);
   Result cmd_title(std::istream &input, Execution_context *context,
                    const std::string &args);
+  Result cmd_switchsid(std::istream &input, Execution_context *context,
+                       const std::string &args);
   Result cmd_recvtype(std::istream &input, Execution_context *context,
                       const std::string &args);
   Result cmd_recvok(std::istream &input, Execution_context *context,

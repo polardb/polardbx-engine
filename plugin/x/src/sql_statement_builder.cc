@@ -65,6 +65,7 @@ void Sql_statement_builder::build(const std::string &query,
   for (int i = 0; i < args.size(); ++i) {
     ngs::Getter_any::put_scalar_value_to_functor(args.Get(i), inserter);
   }
+  m_qb->format_finalize();
 }
 
 void Sql_statement_builder::build(const std::string &query,

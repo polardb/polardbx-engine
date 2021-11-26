@@ -1,0 +1,155 @@
+RUN CREATE USER 'x_root'@'galaxy' IDENTIFIED WITH 'mysql_native_password'
+
+0 rows affected
+RUN GRANT ALL ON *.*TO 'x_root'@'galaxy' WITH GRANT OPTION
+
+0 rows affected
+RUN FLUSH PRIVILEGES
+
+0 rows affected
+RUN set global galaxyx_enable_galaxy_kill_log = OFF
+
+0 rows affected
+RUN drop schema if exists xtest
+
+0 rows affected
+RUN create schema xtest
+
+1 rows affected
+RUN use xtest
+
+0 rows affected
+RUN create table mytable (pk int primary key auto_increment, data varchar(100))
+
+0 rows affected
+RUN create procedure result_and_error ()
+begin
+  select 1;
+  select * from invalid_table;
+end
+
+0 rows affected
+send Mysqlx.Session.NewSession {
+}
+
+Mysqlx.Ok {
+}
+
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'one\')"
+  db_name: "xtest"
+}
+
+
+1 rows affected
+last insert id: 1
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'two\')"
+}
+
+
+1 rows affected
+last insert id: 2
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'three\')"
+}
+
+
+1 rows affected
+last insert id: 3
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "select * from mytable"
+  db_name: "xtest"
+  token: 10000
+}
+
+pk	data
+1	one
+2	two
+3	three
+0 rows affected
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "select * from mytable"
+  db_name: "xtest"
+  token: 10000
+}
+
+Got expected error:
+Mysqlx.Error {
+  severity: FATAL
+  code: 11245
+  msg: "Session not found in galaxy parallel"
+  sql_state: "HY000"
+}
+
+send Mysqlx.Session.NewSession {
+}
+
+Mysqlx.Ok {
+}
+
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "select * from mytable"
+  db_name: "xtest"
+  token: 10000
+}
+
+pk	data
+1	one
+2	two
+3	three
+0 rows affected
+send Mysqlx.Session.KillSession {
+  type: CONNECTION
+  x_session_id: 4
+}
+
+Got expected error:
+Mysqlx.Error {
+  severity: FATAL
+  code: 11245
+  msg: "Session to kill not found in galaxy parallel"
+  sql_state: "HY000"
+}
+
+send Mysqlx.Session.Close {
+}
+
+Mysqlx.Ok {
+}
+
+send Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "select * from mytable"
+  token: 10000
+}
+
+Got expected error:
+Mysqlx.Error {
+  severity: FATAL
+  code: 11245
+  msg: "Session not found in galaxy parallel"
+  sql_state: "HY000"
+}
+
+send Mysqlx.Session.Close {
+}
+
+Mysqlx.Ok {
+}
+
+RUN set global galaxyx_enable_galaxy_kill_log = ON
+
+0 rows affected
+RUN drop schema if exists xtest
+
+1 rows affected
+RUN DROP USER 'x_root'@'galaxy'
+
+0 rows affected
+RUN FLUSH PRIVILEGES
+
+0 rows affected
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok

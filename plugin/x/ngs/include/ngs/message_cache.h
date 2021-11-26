@@ -57,6 +57,8 @@ class Message_cache {
   Mysqlx::Prepare::Deallocate m_prepare_deallocate;
 
   Mysqlx::Sql::GalaxyStmtExecute m_galaxy_stmt_execute;
+  Mysqlx::Session::KillSession m_kill_session;
+  Mysqlx::Sql::TokenOffer m_token_offer;
 };
 
 }  // namespace ngs

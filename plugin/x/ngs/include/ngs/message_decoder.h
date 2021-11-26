@@ -133,7 +133,8 @@ class Message_decoder {
 
     @return Error_code is used only to pass logic error.
   */
-  Decode_error parse_and_dispatch(const uint8_t message_type,
+  Decode_error parse_and_dispatch(const gx::GRequest &grequest,
+                                  const uint8_t message_type,
                                   const uint32_t message_size,
                                   xpl::Vio_input_stream *stream);
 
@@ -144,7 +145,8 @@ class Message_decoder {
                                         const uint8_t inner_message_type,
                                         const uint32_t inner_message_size);
 
-  Decode_error parse_protobuf_frame(const uint8_t message_type,
+  Decode_error parse_protobuf_frame(const gx::GRequest &grequest,
+                                    const uint8_t message_type,
                                     const uint32_t message_size,
                                     xpl::Vio_input_stream *net_input_stream);
 

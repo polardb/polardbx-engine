@@ -25,6 +25,7 @@
 #ifndef PLUGIN_X_NGS_INCLUDE_NGS_INTERFACE_VIO_INTERFACE_H_
 #define PLUGIN_X_NGS_INCLUDE_NGS_INTERFACE_VIO_INTERFACE_H_
 
+#include <atomic>
 #include <string>
 
 #include "my_inttypes.h"
@@ -32,10 +33,10 @@
 #include "mysql/psi/psi_socket.h"
 #include "violite.h"
 
+#include "plugin/x/src/helper/multithread/mutex.h"
 #include "plugin/x/src/io/connection_type.h"
 
 #include "plugin/x/ngs/include/ngs/galaxy_protocol.h"
-
 
 namespace ngs {
 
@@ -65,6 +66,11 @@ class Vio_interface {
 
   /** Galaxy X-protocol */
   virtual gx::Protocol_type get_ptype() = 0;
+
+  /** Galaxy parallel */
+  virtual xpl::Mutex &get_send_mutex() = 0;
+  virtual std::atomic<bool> &is_corrupted() = 0;
+  virtual bool prepare_for_parallel() = 0;
 };
 
 }  // namespace ngs

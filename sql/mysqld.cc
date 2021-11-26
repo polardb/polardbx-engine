@@ -711,10 +711,10 @@ The documentation is based on the source files such as:
 #include "typelib.h"
 #include "violite.h"
 
-#include "sql/package/package_interface.h"
 #include "sql/ccl/ccl_interface.h"
-#include "sql/sequence_common.h"
 #include "sql/outline/outline_interface.h"
+#include "sql/package/package_interface.h"
+#include "sql/sequence_common.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -789,6 +789,7 @@ The documentation is based on the source files such as:
 #include "../components/mysql_server/log_builtins_imp.h"
 #include "../components/mysql_server/server_component.h"
 #include "sql/auth/dynamic_privileges_impl.h"
+#include "sql/common/reload.h"
 #include "sql/dd/dd.h"                       // dd::shutdown
 #include "sql/dd/dd_kill_immunizer.h"        // dd::DD_kill_immunizer
 #include "sql/dd/dictionary.h"               // dd::get_dictionary
@@ -796,7 +797,6 @@ The documentation is based on the source files such as:
 #include "sql/dd/upgrade/server.h"      // dd::upgrade::upgrade_system_schemas
 #include "sql/dd/upgrade_57/upgrade.h"  // dd::upgrade_57::in_progress
 #include "sql/srv_session.h"
-#include "sql/common/reload.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle.h"
@@ -1899,6 +1899,10 @@ class Set_kill_conn : public Do_THD_Impl {
 
       MYSQL_CALLBACK(Connection_handler_manager::event_functions,
                      post_kill_notification, (killing_thd));
+      // And THD galaxy cb.
+      if (killing_thd != nullptr)
+        MYSQL_CALLBACK(killing_thd->galaxy_parallel_monitor,
+                       post_kill_notification, (killing_thd));
     }
 
     if (killing_thd->is_killable && killing_thd->kill_immunizer == NULL) {
@@ -6906,7 +6910,6 @@ int mysqld_main(int argc, char **argv)
   /* Start recycle scheduler thread */
   if (im::recycle_bin::recycle_scheduler_start(opt_initialize))
     unireg_abort(MYSQLD_ABORT_EXIT);
-
 
 #ifndef _WIN32
   //  Start signal handler thread.

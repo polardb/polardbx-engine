@@ -116,6 +116,16 @@ bool Message_cache::alloc_message(const uint8_t message_type,
       message = &m_galaxy_stmt_execute;
       break;
 
+      // SESS_NEW has no content so just pass nullptr;
+
+    case Mysqlx::ClientMessages::SESS_KILL:
+      message = &m_kill_session;
+      break;
+
+    case Mysqlx::ClientMessages::TOKEN_OFFER:
+      message = &m_token_offer;
+      break;
+
     default:
       break;
   }

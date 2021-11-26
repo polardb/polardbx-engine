@@ -41,6 +41,7 @@ namespace ngs {
 
 class Server_interface;
 class Protocol_encoder_interface;
+class Memory_block_pool;
 
 class Client_interface {
  public:
@@ -107,6 +108,10 @@ class Client_interface {
       const Mysqlx::Connection::CapabilitiesGet &msg) = 0;
   virtual void set_capabilities(
       const Mysqlx::Connection::CapabilitiesSet &msg) = 0;
+
+  /** Galaxy parallel */
+  virtual Protocol_encoder_interface *allocate_encoder(
+      Memory_block_pool *memory_block) = 0;
 };
 
 }  // namespace ngs

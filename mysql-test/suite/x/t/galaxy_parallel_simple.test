@@ -1,0 +1,115 @@
+
+## Test galaxy parallel basic behavior
+
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+## Test starts here
+--write_file $MYSQL_TMP_DIR/galaxy_parallel_simple.tmp
+## Test data
+-->sql
+
+## give access of galaxy session.
+CREATE USER 'x_root'@'galaxy' IDENTIFIED WITH 'mysql_native_password';
+GRANT ALL ON *.*TO 'x_root'@'galaxy' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+
+drop schema if exists xtest;
+create schema xtest;
+use xtest;
+create table mytable (pk int primary key auto_increment, data varchar(100));
+delimiter //
+create procedure result_and_error ()
+begin
+  select 1;
+  select * from invalid_table;
+end//
+-->endsql
+
+
+## switch GSession ID to 2(1 is default session)
+-->switchsid 2
+
+## first start new session
+Mysqlx.Session.NewSession {
+}
+
+## expect Mysqlx.Ok
+-->recv
+
+Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'one\')"
+  db_name: "xtest"
+}
+
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recvresult
+Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'two\')"
+}
+
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recvresult
+Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'three\')"
+}
+
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recvresult
+Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "select * from mytable"
+  token: 10000
+}
+
+## expect Mysqlx.Resultset.ColumnMetaData
+-->recv
+## expect Mysqlx.Resultset.ColumnMetaData
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.Row
+-->recv
+## expect Mysqlx.Resultset.FetchDone
+-->recv
+## expect Notice
+-->recv
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recv
+
+## Test warning.
+Mysqlx.Sql.GalaxyStmtExecute {
+  stmt: "drop table if exists `not_exist`"
+  token: 10000
+}
+
+## warning
+-->recv
+## affected
+-->recv
+## expect Mysqlx.Sql.StmtExecuteOk
+-->recv
+
+## close session.
+Mysqlx.Session.Close {
+}
+
+## expect Mysqlx.Ok
+-->recv
+
+## switch back to default session.
+-->switchsid 1
+
+## Cleanup
+-->sql
+drop schema if exists xtest;
+DROP USER 'x_root'@'galaxy';
+FLUSH PRIVILEGES;
+-->endsql
+EOF
+
+--exec $GALAXYXTEST -ux_root --password='' --file=$MYSQL_TMP_DIR/galaxy_parallel_simple.tmp 2>&1
+
+## Cleanup
+--remove_file $MYSQL_TMP_DIR/galaxy_parallel_simple.tmp
+--source include/xplugin_drop_user.inc

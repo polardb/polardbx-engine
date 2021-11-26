@@ -80,6 +80,17 @@ void Protocol_encoder::abort_row() { m_row_builder.abort_row(); }
 
 bool Protocol_encoder::send_row() {
   m_row_builder.end_row();
+
+  // Do flow control.
+  if (m_flow_control != nullptr && !m_flow_control->flow_consume(1)) {
+    m_xproto_encoder.encode_token_done();
+    if (!send_raw_buffer(Mysqlx::ServerMessages::RESULTSET_TOKEN_DONE))
+      return false;  // IO error.
+    // Now do wait.
+    if (!m_flow_control->flow_wait())
+      return false;  // IO error.
+  }
+
   get_protocol_monitor().on_row_send();
 
   return send_raw_buffer(Mysqlx::ServerMessages::RESULTSET_ROW);

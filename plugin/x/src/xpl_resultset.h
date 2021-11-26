@@ -33,6 +33,12 @@
 #include "plugin/x/src/custom_command_delegates.h"
 #include "plugin/x/src/streaming_command_delegate.h"
 
+namespace ngs {
+
+class Protocol_encoder_interface;
+
+}  // namespace ngs
+
 namespace xpl {
 
 class Process_resultset : public ngs::Resultset_interface {
@@ -105,6 +111,11 @@ template <typename T = Streaming_command_delegate>
 class Streaming_resultset : public ngs::Resultset_interface {
  public:
   Streaming_resultset(ngs::Session_interface *session,
+                      const bool compact_metadata)
+      : m_streaming_delegate(session) {
+    m_streaming_delegate.set_compact_metadata(compact_metadata);
+  }
+  Streaming_resultset(Galaxy_session_context &session,
                       const bool compact_metadata)
       : m_streaming_delegate(session) {
     m_streaming_delegate.set_compact_metadata(compact_metadata);

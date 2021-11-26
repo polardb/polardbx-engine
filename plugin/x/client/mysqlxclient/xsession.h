@@ -602,9 +602,14 @@ class XSession {
   /**
     Get the galaxy session id
 
-    @retval       GSesssion id
+    @retval       GSession id
    */
   virtual gx::GSession_id gsession_id() const = 0;
+  /**
+   * Set the galaxy session id
+   * @param sid GSession id
+   */
+  virtual void set_gsession_id(gx::GSession_id sid) = 0;
   /**
     Build the protocol galaxy header content before connection since
     the first packet need the header format.

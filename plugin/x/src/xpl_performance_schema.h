@@ -59,6 +59,10 @@ extern PSI_mutex_key KEY_mutex_x_listener_unix_socket_sync;
 extern PSI_mutex_key KEY_mutex_x_broker_context_sync;
 extern PSI_mutex_key KEY_mutex_x_server_state_sync;
 extern PSI_mutex_key KEY_mutex_x_socket_acceptors_sync;
+extern PSI_mutex_key KEY_mutex_gx_session_pool_work;
+extern PSI_mutex_key KEY_mutex_gx_session_pool_kill;
+extern PSI_mutex_key KEY_mutex_gx_vio_send;
+extern PSI_mutex_key KEY_mutex_gx_flow_control;
 
 extern PSI_cond_key KEY_cond_x_scheduler_dynamic_worker_pending;
 extern PSI_cond_key KEY_cond_x_scheduler_dynamic_thread_exit;
@@ -67,6 +71,8 @@ extern PSI_cond_key KEY_cond_x_listener_unix_socket_sync;
 extern PSI_cond_key KEY_cond_x_broker_context_sync;
 extern PSI_cond_key KEY_cond_x_server_state_sync;
 extern PSI_cond_key KEY_cond_x_socket_acceptors_sync;
+extern PSI_cond_key KEY_cond_gx_session_pool_work;
+extern PSI_cond_key KEY_cond_gx_flow_control;
 
 extern PSI_rwlock_key KEY_rwlock_x_client_list_clients;
 extern PSI_rwlock_key KEY_rwlock_x_sha256_password_cache;

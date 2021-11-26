@@ -48,12 +48,30 @@ import "mysqlx_datatypes.proto";
 
 message GalaxyStmtExecute {
   optional string namespace = 3 [ default = "sql" ];
-  required bytes stmt = 1;
+  optional bytes stmt = 1;
+  optional bytes stmt_digest = 12;
+  optional bytes hint = 13;
+  optional bool chunk_result = 14 [default = false];
+  optional bool feed_back = 16 [default = false];
   repeated Mysqlx.Datatypes.Any args = 2;
   optional bool compact_metadata = 4 [ default = false ];
 
   // Galaxy Store
   optional string db_name = 5;
+  repeated Mysqlx.Datatypes.SessionVariable session_variables = 6;
+  optional string encoding = 7;
+  optional int32 token = 8;
+
+  optional bool reset_error = 9;
+  optional uint64 snapshot_seq = 10;
+  optional uint64 commit_seq = 11;
+  optional bool use_cts_transaction = 15;
 
   option (client_message_id) = GALAXY_STMT_EXECUTE; // comment_out_if PROTOBUF_LITE
+}
+
+message TokenOffer {
+  optional int32 token = 1 [ default = -1];
+
+  option (client_message_id) = TOKEN_OFFER; // comment_out_if PROTOBUF_LITE
 }

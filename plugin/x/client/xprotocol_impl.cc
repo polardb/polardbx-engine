@@ -925,6 +925,10 @@ std::unique_ptr<Protocol_impl::Message> Protocol_impl::alloc_message(
       break;
     case Mysqlx::ServerMessages::RESULT_TSO:
       ret_val.reset(new Mysqlx::ResultTSO());
+      break;
+    case Mysqlx::ServerMessages::RESULTSET_TOKEN_DONE:
+      ret_val.reset(new Mysqlx::Resultset::TokenDone());
+      break;
   }
 
   return ret_val;

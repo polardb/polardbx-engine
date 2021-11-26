@@ -552,6 +552,11 @@ message Row {
   option (server_message_id) = RESULTSET_ROW; // comment_out_if PROTOBUF_LITE
 }
 
+message TokenDone {
+  optional int32 token_left = 1 [ default = 0];
+
+  option (server_message_id) = RESULTSET_TOKEN_DONE; // comment_out_if PROTOBUF_LITE
+}
 
 // a hint about the higher-level encoding of a BYTES field
 //

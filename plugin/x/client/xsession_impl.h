@@ -110,9 +110,17 @@ class Session_impl : public XSession {
   /**
     Get the galaxy session id
 
-    @retval       GSesssion id
+    @retval       GSession id
    */
   gx::GSession_id gsession_id() const override { return m_context->m_gsid; }
+
+  /**
+   * Set the galaxy session id
+   * @param sid GSession id
+   */
+  void set_gsession_id(gx::GSession_id sid) {
+    m_context->m_gsid = sid;
+  }
 
   /**
     Build the protocol galaxy header content before connection since

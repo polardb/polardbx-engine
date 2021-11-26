@@ -54,7 +54,11 @@ Client::Client(std::shared_ptr<ngs::Vio_interface> connection,
   if (pmon) pmon->init(this);
 }
 
-Client::~Client() { ngs::free_object(m_protocol_monitor); }
+Client::~Client() {
+  // Kill session manager before free protocol monitor(used in sub session).
+  if (m_session) m_session->on_free();
+  ngs::free_object(m_protocol_monitor);
+}
 
 Capabilities_configurator *Client::capabilities_configurator() {
   Capabilities_configurator *caps = ngs::Client::capabilities_configurator();
@@ -175,15 +179,15 @@ void Protocol_monitor::init(Client *client) { m_client = client; }
 
 namespace {
 
-template <ngs::Common_status_variables::Variable ngs::Common_status_variables::
-              *variable>
+template <ngs::Common_status_variables::Variable ngs::Common_status_variables::*
+              variable>
 inline void update_status(ngs::Session_interface *session) {
   if (session) ++(session->get_status_variables().*variable);
   ++(Global_status_variables::instance().*variable);
 }
 
-template <ngs::Common_status_variables::Variable ngs::Common_status_variables::
-              *variable>
+template <ngs::Common_status_variables::Variable ngs::Common_status_variables::*
+              variable>
 inline void update_status(ngs::Session_interface *session,
                           const uint32_t value) {
   if (session) (session->get_status_variables().*variable) += value;

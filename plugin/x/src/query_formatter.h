@@ -27,11 +27,14 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "plugin/x/ngs/include/ngs/memory.h"
 #include "plugin/x/src/helper/to_string.h"
@@ -109,6 +112,53 @@ class Query_formatter {
   ngs::PFS_string &m_query;
   CHARSET_INFO &m_charset;
   std::size_t m_last_tag_position;
+  std::size_t m_prev_start_position{0};
+
+  /** Fast query string builder buffer. */
+  std::vector<std::unique_ptr<std::string>> m_bufs;
+  static constexpr size_t BLOCK_BUF_SIZE = 0x10000;  // 64KB
+
+  inline std::string &reserve_buf(size_t size) {
+    if (m_bufs.empty()) {
+      auto block = std::make_unique<std::string>();
+      block->reserve(size > BLOCK_BUF_SIZE ? size : BLOCK_BUF_SIZE);
+      m_bufs.emplace_back(std::move(block));
+      return *m_bufs.back();
+    }
+    if (size <= BLOCK_BUF_SIZE) {
+      // Allocate new if now not enough.
+      auto &now = *m_bufs.back();
+      if (now.size() + size <= BLOCK_BUF_SIZE) return now;
+      // Allocate new one.
+      auto block = std::make_unique<std::string>();
+      block->reserve(BLOCK_BUF_SIZE);
+      m_bufs.emplace_back(std::move(block));
+      return *m_bufs.back();
+    }
+    // Too big for single block. Just allocate big block.
+    auto block = std::make_unique<std::string>();
+    block->reserve(size);
+    m_bufs.emplace_back(std::move(block));
+    return *m_bufs.back();
+  }
+
+ public:
+  inline void finalize() {
+    // Concat last one.
+    if (m_prev_start_position < m_query.size())
+      reserve_buf(0).append(m_query.data() + m_prev_start_position,
+                            m_query.size() - m_prev_start_position);
+    // Form full stmt.
+    size_t sz = 0;
+    for (const auto &block : m_bufs) sz += block->size();
+    m_query.resize(sz);
+    auto ptr = const_cast<char *>(m_query.data());
+    for (const auto &block : m_bufs) {
+      ::memcpy(ptr, block->data(), block->size());
+      ptr += block->size();
+    }
+    m_bufs.clear();
+  }
 };
 
 template <>

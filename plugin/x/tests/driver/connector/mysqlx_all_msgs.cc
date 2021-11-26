@@ -168,5 +168,17 @@ static struct init_message_factory {
     client_message<Mysqlx::Sql::GalaxyStmtExecute>(
         Mysqlx::ClientMessages::GALAXY_STMT_EXECUTE, "GALAXY_STMT_EXECUTE",
         "Mysqlx.Sql.GalaxyStmtExecute");
+    client_message<Mysqlx::Session::NewSession>(
+        Mysqlx::ClientMessages::SESS_NEW, "SESS_NEW",
+        "Mysqlx.Session.NewSession");
+    client_message<Mysqlx::Session::KillSession>(
+        Mysqlx::ClientMessages::SESS_KILL, "SESS_KILL",
+        "Mysqlx.Session.KillSession");
+    client_message<Mysqlx::Sql::TokenOffer>(Mysqlx::ClientMessages::TOKEN_OFFER,
+                                            "TOKEN_OFFER",
+                                            "Mysqlx.Sql.TokenOffer");
+    server_message<Mysqlx::Resultset::TokenDone>(
+        Mysqlx::ServerMessages::RESULTSET_TOKEN_DONE, "RESULTSET_TOKEN_DONE",
+        "Mysqlx.Resultset.TokenDone");
   }
 } init_message_factory;

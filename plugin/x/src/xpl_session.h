@@ -38,6 +38,7 @@
 #include "plugin/x/src/sql_data_context.h"
 #include "plugin/x/src/xpl_dispatcher.h"
 #include "plugin/x/src/xpl_global_status_variables.h"
+#include "plugin/x/src/galaxy_parallel_handler.h"
 
 namespace xpl {
 
@@ -52,6 +53,9 @@ class Session : public ngs::Session {
   ~Session() override;
 
  public:  // impl ngs::Session_interface
+  inline void on_free() override {
+    m_galaxy_parallel_handler.on_free();
+  }
   ngs::Error_code init() override;
   void on_auth_success(
       const ngs::Authentication_interface::Response &response) override;
@@ -101,6 +105,9 @@ class Session : public ngs::Session {
   ngs::Session_status_variables m_status_variables;
   bool m_was_authenticated;
   Document_id_aggregator m_document_id_aggregator;
+
+  // Galaxy parallel handler.
+  Galaxy_parallel_handler m_galaxy_parallel_handler{*this};
 };
 
 }  // namespace xpl

@@ -125,6 +125,9 @@ class Sql_data_context : public ngs::Sql_session_interface {
   std::string get_user_name() const;
   std::string get_host_or_ip() const;
 
+  // Allow parallel session switch user directly.
+  friend class Galaxy_session_context;
+
   ngs::Error_code switch_to_user(const char *username, const char *hostname,
                                  const char *address, const char *db);
 
