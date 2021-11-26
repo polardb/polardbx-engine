@@ -67,6 +67,7 @@
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
 #include "sql/query_result.h"
+#include "sql/recycle_bin/recycle.h"
 #include "sql/rpl_rli.h"    // Relay_log_info
 #include "sql/rpl_slave.h"  // rpl_master_erroneous_autoinc
 #include "sql/rpl_transaction_write_set_ctx.h"
@@ -88,12 +89,11 @@
 #include "sql/table.h"
 #include "sql/tc_log.h"
 #include "sql/thr_malloc.h"
+#include "sql/trans_proc/common.h"
 #include "sql/transaction.h"  // trans_rollback
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
 #include "thr_mutex.h"
-#include "sql/trans_proc/common.h"
-#include "sql/recycle_bin/recycle.h"
 
 #include "ppi/ppi_statement.h"
 
@@ -1222,9 +1222,12 @@ void THD::awake(THD::killed_state state_to_set) {
     }
 
     /* Send an event to the scheduler that a thread should be killed. */
-    if (!slave_thread)
+    if (!slave_thread) {
       MYSQL_CALLBACK(Connection_handler_manager::event_functions,
                      post_kill_notification, (this));
+      // And THD galaxy cb.
+      MYSQL_CALLBACK(galaxy_parallel_monitor, post_kill_notification, (this));
+    }
   }
 
   /* Interrupt target waiting inside a storage engine. */

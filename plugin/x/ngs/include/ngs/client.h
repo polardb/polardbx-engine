@@ -204,6 +204,11 @@ class Client : public Client_interface {
   void on_client_addr(const bool skip_resolve_name);
   void on_accept();
   bool create_session();
+
+ public:
+  /** Galaxy parallel */
+  Protocol_encoder_interface *allocate_encoder(
+      Memory_block_pool *memory_block) override;
 };
 
 }  // namespace ngs

@@ -70,6 +70,7 @@ class Session_interface {
   virtual Error_code init() = 0;
 
  public:
+  virtual void on_free() = 0; // For galaxy parallel kill and free resources.
   virtual void on_close(const bool update_old_state = false) = 0;
   virtual void on_kill() = 0;
   virtual void on_auth_success(

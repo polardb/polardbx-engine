@@ -117,6 +117,7 @@ The following commands may appear in the input script:
   and set the variable <varname>
 -->recverror <errno>
   Read a message and ensure that it's an error of the expected type
+-->switchsid <GSession_id>
 -->recvtype (<msgtype> [<msg_fied>] [<expected_field_value>] [be-quiet])|<msgid>
   - In case when user specified <msgtype> - read one message and print it,
     checks if its type is <msgtype>, additionally its fields may be matched.

@@ -124,8 +124,10 @@ Query_string_builder &Query_string_builder::put(const char *s, size_t length) {
   return *this;
 }
 
-Query_formatter Query_string_builder::format() {
-  return Query_formatter(m_str, *m_charset);
+Query_formatter &Query_string_builder::format() {
+  if (!m_formatter)
+    m_formatter = std::make_unique<Query_formatter>(m_str, *m_charset);
+  return *m_formatter;
 }
 
 }  // namespace xpl

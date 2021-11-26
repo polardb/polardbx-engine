@@ -28,6 +28,7 @@
 #include "plugin/x/ngs/include/ngs/protocol/protocol_protobuf.h"
 #include "plugin/x/src/mysql_variables.h"
 #include "plugin/x/src/xpl_error.h"
+#include "plugin/x/src/xpl_log.h"
 
 const uint32_t k_on_idle_timeout_value = 500;
 
@@ -123,6 +124,7 @@ Protocol_decoder::Decode_error Protocol_decoder::read_and_decode_impl(
   bool result = true;
   gx::GSession_id gsession_id;
   gx::GVersion gversion;
+  gx::GRequest grequest;
   switch (m_vio->get_ptype()) {
     case gx::Protocol_type::MYSQLX:
       result = read_header(&message_type, &message_size, wait_for_io);
@@ -130,6 +132,11 @@ Protocol_decoder::Decode_error Protocol_decoder::read_and_decode_impl(
     case gx::Protocol_type::GALAXYX:
       result = read_header(&gsession_id, &gversion, &message_type,
                            &message_size, wait_for_io);
+      if (gversion != gx::GVERSION_FIRST) {
+        log_error(ER_XPLUGIN_ERROR_MSG, "Bad galaxyx protocol version.");
+        return Decode_error(true);  // Bad protocol version.
+      }
+      grequest.init(gx::Protocol_type::GALAXYX, gsession_id);
       break;
   }
 
@@ -156,7 +163,7 @@ Protocol_decoder::Decode_error Protocol_decoder::read_and_decode_impl(
   m_vio_input_stream.lock_data(protobuf_payload_size);
 
   const auto error_code = m_message_decoder.parse_and_dispatch(
-      message_type, protobuf_payload_size, &m_vio_input_stream);
+      grequest, message_type, protobuf_payload_size, &m_vio_input_stream);
 
   m_vio_input_stream.unlock_data();
 

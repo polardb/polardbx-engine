@@ -47,7 +47,11 @@ class Synchronize {
     }
 
     void wait() { m_sync->m_cond.wait(m_sync->m_mutex); }
+    void timed_wait(unsigned long long nanoseconds) {
+      m_sync->m_cond.timed_wait(m_sync->m_mutex, nanoseconds);
+    }
     void notify() { m_sync->m_cond.signal(); }
+    void broadcast() { m_sync->m_cond.broadcast(); }
 
    private:
     friend class Synchronize;

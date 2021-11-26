@@ -87,6 +87,10 @@ message ClientMessages {
 
     // Special Galaxy define message from here.
     GALAXY_STMT_EXECUTE = 101;
+
+    SESS_NEW = 110;
+    SESS_KILL = 111;
+    TOKEN_OFFER = 112;
     GET_TSO = 113;
   }
 }
@@ -120,6 +124,7 @@ message ServerMessages {
     SQL_STMT_EXECUTE_OK = 17;
     RESULTSET_FETCH_DONE_MORE_OUT_PARAMS = 18;
 
+    RESULTSET_TOKEN_DONE = 100;
     RESULT_TSO = 101;
   }
 }

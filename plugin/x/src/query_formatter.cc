@@ -237,27 +237,13 @@ void Query_formatter::put_value_and_escape(const char *value,
 }
 
 void Query_formatter::put_value(const char *value, const std::size_t length) {
-  const uint8_t tag_size = 1;
-  const std::size_t length_source = m_query.length();
-  const std::size_t length_target = m_query.length() + length - tag_size;
+  // Concat previous first.
+  auto len = m_last_tag_position - m_prev_start_position;
+  reserve_buf(len).append(m_query.data() + m_prev_start_position, len);
 
-  if (length_source < length_target) {
-    m_query.resize(length_target, '\0');
-  }
-
-  ngs::PFS_string::iterator tag_position =
-      m_query.begin() + m_last_tag_position;
-  ngs::PFS_string::iterator move_to = tag_position + length;
-  ngs::PFS_string::iterator move_from = tag_position + tag_size;
-
-  std::copy(move_from, m_query.begin() + length_source, move_to);
-  std::copy(value, value + length, tag_position);
-
-  m_last_tag_position += length;
-
-  if (m_query.length() != length_target) {
-    m_query.resize(length_target);
-  }
+  // Concat value.
+  reserve_buf(length).append(value, length);
+  m_prev_start_position = ++m_last_tag_position;  // Jump to next.
 }
 
 std::size_t Query_formatter::count_tags() const {

@@ -46,6 +46,7 @@ Session::Session(ngs::Client_interface *client,
       m_document_id_aggregator(&client->server().get_document_id_generator()) {}
 
 Session::~Session() {
+  m_galaxy_parallel_handler.on_free();
   m_sql.deinit();
 
   if (m_was_authenticated)
@@ -68,9 +69,20 @@ bool Session::handle_ready_message(ngs::Message_request &command) {
     return true;
   }
 
-  if (ngs::Session::handle_ready_message(command)) return true;
+  auto is_galaxy =
+      command.get_galaxy_request().ptype == gx::Protocol_type::GALAXYX;
+  auto sid = command.get_galaxy_request().sid;
+  if ((!is_galaxy || 0 == sid || gx::DEFAULT_GSESSION_ID == sid) &&
+      ngs::Session::handle_ready_message(command))
+    return true;
 
   try {
+    if (is_galaxy && sid > gx::DEFAULT_GSESSION_ID)
+      return m_galaxy_parallel_handler.execute(command);
+    // Restore original encoder header.
+    m_encoder->build_header(
+        is_galaxy ? gx::Protocol_type::GALAXYX : gx::Protocol_type::MYSQLX,
+        sid);
     return m_dispatcher.execute(command);
   } catch (ngs::Error_code &err) {
     m_encoder->send_result(err);

@@ -101,3 +101,7 @@ message Any {
   optional Array  array  = 4;
 }
 
+message SessionVariable {
+  required string key = 1;
+  required Mysqlx.Datatypes.Scalar value = 2;
+}

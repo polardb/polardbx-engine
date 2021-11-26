@@ -21,6 +21,8 @@
 #ifndef SQL_OUTLINE_OUTLINE_INCLUDED
 #define SQL_OUTLINE_OUTLINE_INCLUDED
 
+#include <atomic>
+
 #include "sql/outline/outline_common.h"
 #include "sql/outline/outline_table_common.h"
 

@@ -49,7 +49,12 @@ struct Vio;
 
 /* Simple vio interface in C;  The functions are implemented in violite.c */
 
-#if !defined(_WIN32) && !defined(HAVE_KQUEUE) && !defined(__SUNPRO_CC)
+// Disable ppoll because we may invoke read and write(and do io wait) at same
+// time, atomic flag in Vio denied this behavior.
+#define DISABLE_PPOLL 1
+
+#if !defined(_WIN32) && !defined(HAVE_KQUEUE) && !defined(__SUNPRO_CC) && \
+    !defined(DISABLE_PPOLL)
 #define USE_PPOLL_IN_VIO
 #endif
 

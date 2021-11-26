@@ -105,11 +105,11 @@
 #include "sql/sql_plugin_ref.h"
 #include "sql/sys_vars_resource_mgr.h"  // Session_sysvar_resource_manager
 #include "sql/system_variables.h"       // system_variables
-#include "sql/transaction_info.h"       // Ha_trx_info
+#include "sql/trans_proc/returning_parse.h"
+#include "sql/transaction_info.h"  // Ha_trx_info
 #include "sql_string.h"
 #include "thr_lock.h"
 #include "violite.h"
-#include "sql/trans_proc/returning_parse.h"
 
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_interface.h"
@@ -118,7 +118,7 @@ namespace im {
 namespace recycle_bin {
 class Recycle_state;
 }
-}
+}  // namespace im
 
 #include "ppi/ppi_statement.h"
 
@@ -146,6 +146,7 @@ struct TABLE;
 struct TABLE_LIST;
 struct User_level_lock;
 struct YYLTYPE;
+struct THD_event_functions;
 
 namespace dd {
 namespace cache {
@@ -1201,8 +1202,7 @@ class THD : public MDL_context_owner,
     /// Asserts that current_thd has locked this plan, if it does not own it.
     void assert_plan_is_locked_if_other() const
 #ifdef DBUG_OFF
-    {
-    }
+        {}
 #else
         ;
 #endif
@@ -1212,7 +1212,8 @@ class THD : public MDL_context_owner,
           sql_command(SQLCOM_END),
           lex(NULL),
           modification_plan(NULL),
-          is_ps(false) {}
+          is_ps(false) {
+    }
 
     /**
       Set query plan.
@@ -4225,15 +4226,31 @@ class THD : public MDL_context_owner,
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
   }
 
-  void reset_prepare_gcn() {
-    variables.innodb_prepare_gcn = MYSQL_GCN_NULL;
-  }
+  void reset_prepare_gcn() { variables.innodb_prepare_gcn = MYSQL_GCN_NULL; }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
 
   ulonglong get_commit_gcn() { return variables.innodb_commit_gcn; }
 
   ulonglong get_prepare_gcn() { return variables.innodb_prepare_gcn; }
+
+  /** For galaxy parallel thread pool. */
+  THD_event_functions *galaxy_parallel_monitor = nullptr;
+  void *galaxy_parallel_context = nullptr;
+  bool galaxy_parallel_record = false;
+
+  inline void register_galaxy_parallel_monitor(THD_event_functions *cb,
+                                               void *ctx) {
+    galaxy_parallel_monitor = cb;
+    galaxy_parallel_context = ctx;
+    galaxy_parallel_record = false;
+  }
+
+  inline void clear_galaxy_parallel_monitor() {
+    galaxy_parallel_monitor = nullptr;
+    galaxy_parallel_context = nullptr;
+    galaxy_parallel_record = false;
+  }
 };
 
 inline ulonglong thd_get_snapshot_gcn(THD *thd) {

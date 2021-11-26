@@ -110,6 +110,12 @@ class Protocol_encoder : public Protocol_encoder_interface {
   static void log_protobuf(const char *direction_name, const Message *request);
   static void log_protobuf(uint8_t type);
 
+  /** Galaxy parallel flow control. */
+  inline void set_flow_control(
+      xpl::Galaxy_flow_control *flow_control) override {
+    m_flow_control = flow_control;
+  }
+
  private:
   Protocol_encoder(const Protocol_encoder &) = delete;
   Protocol_encoder &operator=(const Protocol_encoder &) = delete;
@@ -128,6 +134,9 @@ class Protocol_encoder : public Protocol_encoder_interface {
   protocol::XRow_encoder m_row_builder{&m_xproto_encoder};
   std::unique_ptr<xpl::iface::Protocol_flusher> m_flusher;
   uint32_t m_messages_sent{0};
+
+  /** Galaxy parallel flow control. */
+  xpl::Galaxy_flow_control *m_flow_control{nullptr};
 
   bool on_message(const uint8_t type);
   bool send_raw_buffer(const uint8_t type);

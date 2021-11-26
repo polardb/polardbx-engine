@@ -48,6 +48,7 @@ class Session : public Session_interface {
   Session_id session_id() const override { return m_id; }
 
  public:
+  inline void on_free() override {}
   void on_close(const bool update_old_state = false) override;
   void on_auth_success(
       const Authentication_interface::Response &response) override;

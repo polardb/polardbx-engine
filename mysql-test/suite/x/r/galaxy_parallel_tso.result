@@ -1,0 +1,62 @@
+call mtr.add_suppression("Timestamp service failed to open");
+call mtr.add_suppression("tso get failed");
+RUN CREATE USER 'x_root'@'galaxy' IDENTIFIED WITH 'mysql_native_password'
+
+0 rows affected
+RUN GRANT ALL ON *.*TO 'x_root'@'galaxy' WITH GRANT OPTION
+
+0 rows affected
+RUN FLUSH PRIVILEGES
+
+0 rows affected
+RUN create sequence mysql.gts_base cache 1 timestamp
+
+0 rows affected
+send Mysqlx.Session.NewSession {
+}
+
+Mysqlx.Ok {
+}
+
+send Mysqlx.GetTSO {
+  leader_name: "zzy"
+  batch_count: 10
+}
+
+Mysqlx.ResultTSO {
+  error_no: 0
+  ts: x
+}
+
+RUN drop sequence if exists mysql.gts_base
+
+0 rows affected
+send Mysqlx.GetTSO {
+  leader_name: "zzy"
+  batch_count: 10
+}
+
+Got expected error:
+Mysqlx.Error {
+  severity: ERROR
+  code: 5500
+  msg: "tso acquire failed"
+  sql_state: "HY000"
+}
+
+send Mysqlx.Session.Close {
+}
+
+Mysqlx.Ok {
+}
+
+RUN DROP USER 'x_root'@'galaxy'
+
+0 rows affected
+RUN FLUSH PRIVILEGES
+
+0 rows affected
+Mysqlx.Ok {
+  msg: "bye!"
+}
+ok

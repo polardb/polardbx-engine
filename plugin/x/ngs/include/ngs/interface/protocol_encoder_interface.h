@@ -34,6 +34,7 @@
 #include "plugin/x/ngs/include/ngs/protocol/message.h"
 #include "plugin/x/ngs/include/ngs/protocol/metadata_builder.h"
 #include "plugin/x/ngs/include/ngs/protocol_flusher.h"
+#include "plugin/x/src/galaxy_flow_control.h"
 
 namespace protocol {
 
@@ -127,6 +128,9 @@ class Protocol_encoder_interface {
   virtual void build_header(gx::Protocol_type ptype, gx::GSession_id gs_id) = 0;
 
   virtual void send_tso(const uint64_t tso, int32_t err_no) = 0;
+
+  /** Galaxy parallel flow control. */
+  virtual void set_flow_control(xpl::Galaxy_flow_control *flow_control) = 0;
 };
 
 }  // namespace ngs

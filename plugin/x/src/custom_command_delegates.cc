@@ -23,6 +23,7 @@
  */
 
 #include "plugin/x/src/custom_command_delegates.h"
+#include "plugin/x/src/galaxy_session_context.h"
 
 #include <cinttypes>
 
@@ -108,6 +109,9 @@ bool Crud_command_delegate::try_send_notices(
 Stmt_command_delegate::Stmt_command_delegate(ngs::Session_interface *session)
     : Streaming_command_delegate(session) {}
 
+Stmt_command_delegate::Stmt_command_delegate(Galaxy_session_context &session)
+    : Streaming_command_delegate(session) {}
+
 Stmt_command_delegate::~Stmt_command_delegate() { on_destruction(); }
 
 bool Stmt_command_delegate::try_send_notices(
@@ -168,9 +172,14 @@ bool Prepare_command_delegate::try_send_notices(
   if (m_notice_level.test(Notice_level_flags::k_send_generated_insert_id))
     if (last_insert_id > 0) m_proto->send_notice_last_insert_id(last_insert_id);
 
-  if (m_notice_level.test(Notice_level_flags::k_send_generated_document_ids))
-    m_proto->send_notice_generated_document_ids(
-        m_session->get_document_id_aggregator().get_ids());
+  if (m_notice_level.test(Notice_level_flags::k_send_generated_document_ids)) {
+    if (m_session != nullptr)
+      m_proto->send_notice_generated_document_ids(
+          m_session->get_document_id_aggregator().get_ids());
+    else if (m_galaxy_session != nullptr)
+      m_proto->send_notice_generated_document_ids(
+          m_galaxy_session->get_document_id_aggregator().get_ids());
+  }
 
   return true;
 }

@@ -40,6 +40,7 @@
 #include "plugin/x/ngs/include/ngs/protocol/protocol_const.h"
 #include "plugin/x/ngs/include/ngs/protocol/protocol_protobuf.h"
 #include "plugin/x/protocol/encoders/encoding_xrow.h"
+#include "plugin/x/src/galaxy_session_context.h"
 #include "plugin/x/src/notices.h"
 #include "plugin/x/src/xpl_log.h"
 
@@ -106,7 +107,18 @@ Streaming_command_delegate::Streaming_command_delegate(
       m_notice_queue(&session->get_notice_output_queue()),
       m_sent_result(false),
       m_compact_metadata(false),
-      m_session(session) {}
+      m_session(session),
+      m_galaxy_session(nullptr) {}
+
+Streaming_command_delegate::Streaming_command_delegate(
+    Galaxy_session_context &session)
+    : m_proto(&session.encoder()),
+      m_metadata(session.encoder().get_metadata_builder()->get_columns()),
+      m_notice_queue(&session.notice_output_queue()),
+      m_sent_result(false),
+      m_compact_metadata(false),
+      m_session(nullptr),
+      m_galaxy_session(&session) {}
 
 Streaming_command_delegate::~Streaming_command_delegate() { on_destruction(); }
 
@@ -553,9 +565,14 @@ bool Streaming_command_delegate::defer_on_warning(
   if (!m_send_notice_deferred) {
     Command_delegate::handle_ok(server_status, statement_warn_count,
                                 affected_rows, last_insert_id, message);
-    bool show_warnings =
-        m_session->get_notice_configuration().is_notice_enabled(
-            ngs::Notice_type::k_warning);
+    bool show_warnings = false;
+    if (m_session != nullptr)
+      show_warnings = m_session->get_notice_configuration().is_notice_enabled(
+          ngs::Notice_type::k_warning);
+    else if (m_galaxy_session != nullptr)
+      show_warnings =
+          m_galaxy_session->get_notice_configuration().is_notice_enabled(
+              ngs::Notice_type::k_warning);
     if (statement_warn_count > 0 && show_warnings) {
       // We cannot send a warning at this point because it would use
       // m_session->data_context() in here and we are already in
@@ -565,7 +582,10 @@ bool Streaming_command_delegate::defer_on_warning(
       return true;
     }
   } else {
-    notices::send_warnings(m_session->data_context(), *m_proto);
+    if (m_session != nullptr)
+      notices::send_warnings(m_session->data_context(), *m_proto);
+    else if (m_galaxy_session != nullptr)
+      notices::send_warnings(m_galaxy_session->data_context(), *m_proto);
   }
   return false;
 }

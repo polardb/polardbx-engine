@@ -17,10 +17,10 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef PLUGIN_X_SRC_VARIABLES_GALAXY_VARIABLES_H
 #define PLUGIN_X_SRC_VARIABLES_GALAXY_VARIABLES_H
 
+class THD;
 struct SYS_VAR;
 
 namespace gx {
@@ -28,9 +28,25 @@ namespace gx {
 class Galaxy_system_variables {
  public:
   static unsigned int m_port;
+  static unsigned int m_max_queued_messages;
+  static unsigned int m_galaxy_worker_threads_per_tcp;
+  static unsigned int m_galaxy_worker_threads_shrink_time;
+  static bool m_enable_galaxy_session_pool_log;
+  static bool m_enable_galaxy_kill_log;
+  static unsigned int m_socket_recv_buffer;
+  static unsigned int m_socket_send_buffer;
 
   static struct SYS_VAR *m_system_variables[];
+
+  template <typename Copy_type>
+  static void update_func(THD *thd, SYS_VAR *var, void *tgt, const void *save);
 };
+
+template <typename Copy_type>
+void Galaxy_system_variables::update_func(THD *thd, SYS_VAR *, void *tgt,
+                                          const void *save) {
+  *static_cast<Copy_type *>(tgt) = *static_cast<const Copy_type *>(save);
+}
 
 }  // namespace gx
 

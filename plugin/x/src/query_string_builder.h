@@ -27,6 +27,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -97,7 +98,16 @@ class Query_string_builder {
 
   Query_string_builder &put(const char *s, size_t length);
 
-  Query_formatter format();
+  // Note: format_finalize should work with format.
+  //       (Only Arg_inserter use this now)
+  Query_formatter &format();
+
+  inline void format_finalize() {
+    if (m_formatter) {
+      m_formatter->finalize();
+      m_formatter.reset();  // Free it.
+    }
+  }
 
   Query_string_builder &put(const char *s) { return put(s, strlen(s)); }
 
@@ -146,6 +156,9 @@ class Query_string_builder {
   static void init_charset();
   static std::once_flag m_charset_initialized;
   static CHARSET_INFO *m_charset;
+
+  /** Try reuse the formatter. */
+  std::unique_ptr<Query_formatter> m_formatter;
 };
 
 }  // namespace xpl

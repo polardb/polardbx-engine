@@ -589,4 +589,15 @@ bool Client::create_session() {
   }
   return true;
 }
+
+Protocol_encoder_interface *Client::allocate_encoder(
+    Memory_block_pool *memory_block) {
+  // Reuse the socket, error callback  and monitor.
+  auto enc = allocate_object<Protocol_encoder>(
+      m_connection,
+      std::bind(&Client::on_network_error, this, std::placeholders::_1),
+      m_protocol_monitor, memory_block);
+  enc->get_flusher()->set_write_timeout(m_write_timeout);
+  return enc;
+}
 }  // namespace ngs

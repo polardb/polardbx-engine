@@ -30,6 +30,8 @@
 
 namespace ngs {
 
+#define GALAXY_PACKET_DEBUG 0
+
 constexpr int k_number_of_pages_that_trigger_flush = 5;
 
 // Alias for return types
@@ -121,35 +123,98 @@ bool Protocol_flusher::flush() {
   const bool is_valid_socket = INVALID_SOCKET != m_socket->get_fd();
 
   if (is_valid_socket) {
-    details::Write_visitor writter(m_socket.get());
+    ssize_t result;
+    {
+      // Flush within scope lock to keep message good.
+      MUTEX_LOCK(lck, m_socket->get_send_mutex());
 
-    m_socket->set_timeout_in_ms(ngs::Vio_interface::Direction::k_write,
-                                m_write_timeout * 1000);
+      if (m_socket->is_corrupted().load(std::memory_order_acquire)) {
+        log_debug("Error corrupted socket.");
+        m_io_error = true;
+        m_on_error(errno);
+        // Let the client of galaxy parallel know the connection is corrupt.
+        m_socket->shutdown();
+        return false;
+      }
 
-    auto page = m_encoder->m_buffer->m_front;
+      details::Write_visitor writter(m_socket.get());
 
-    if (0 == page->get_used_bytes()) {
-      return true;
-    }
+      m_socket->set_timeout_in_ms(ngs::Vio_interface::Direction::k_write,
+                                  m_write_timeout * 1000);
 
-    while (page) {
-      if (!writter.visit(reinterpret_cast<const char *>(page->m_begin_data),
-                         page->get_used_bytes()))
-        break;
-      page = page->m_next_page;
+      auto page = m_encoder->m_buffer->m_front;
+
+      if (0 == page->get_used_bytes()) {
+        return true;
+      }
+
+      while (page) {
+        if (!writter.visit(reinterpret_cast<const char *>(page->m_begin_data),
+                           page->get_used_bytes()))
+          break;
+        page = page->m_next_page;
+      }
+
+#if GALAXY_PACKET_DEBUG
+      {
+        auto p_page = m_encoder->m_buffer->m_front;
+        auto p_ptr = p_page->m_begin_data;
+        LogPluginErrMsg(WARNING_LEVEL, ER_XPLUGIN_ERROR_MSG,
+                        "GP: flush sid:%lu", *(uint64_t *)p_ptr);
+      }
+#endif
+
+#if GALAXY_PACKET_DEBUG
+      // Check all message is good.
+      {
+        auto p_page = m_encoder->m_buffer->m_front;
+        auto p_ptr = p_page->m_begin_data;
+        while (true) {
+          auto rest = p_page->m_current_data - p_ptr;
+          if (0 == rest) {
+            if (nullptr == p_page->m_next_page) break;  // All done.
+            // Check next page.
+            p_page = p_page->m_next_page;
+            p_ptr = p_page->m_begin_data;
+            continue;
+          }
+          assert(rest >= 14);
+          auto len = *(uint32_t *)(p_ptr + 9) + 13;
+          assert(len <= 16 * 1026 * 1024);
+          if (rest >= len) {
+            p_ptr += len;
+          } else {
+            len -= rest;
+            while (len > 0) {
+              p_page = p_page->m_next_page;
+              assert(p_page != nullptr);
+              rest = p_page->get_used_bytes();
+              if (rest >= len) {
+                p_ptr = p_page->m_begin_data + len;
+                len = 0;
+              } else
+                len -= rest;
+            }
+            assert(0 == len);
+          }
+        }
+      }
+#endif
+
+      result = writter.get_result();
+      if (result <= 0) {
+        log_debug("Error writing to client: %s (%i)", strerror(errno), errno);
+        m_socket->is_corrupted().store(true, std::memory_order_release);
+        m_io_error = true;
+        m_on_error(errno);
+        // Let the client of galaxy parallel know the connection is corrupt.
+        m_socket->shutdown();
+        return false;
+      }
     }
 
     m_encoder->buffer_reset();
-
-    const ssize_t result = writter.get_result();
-    if (result <= 0) {
-      log_debug("Error writing to client: %s (%i)", strerror(errno), errno);
-      m_io_error = true;
-      m_on_error(errno);
-      return false;
-    }
-
-    m_protocol_monitor->on_send(static_cast<long>(writter.get_result()));
+    m_protocol_monitor->on_send(static_cast<long>(result));
   }
 
   return true;

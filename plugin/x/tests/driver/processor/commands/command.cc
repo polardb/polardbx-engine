@@ -24,6 +24,7 @@
 
 #include "plugin/x/tests/driver/processor/commands/command.h"
 
+#include <cstdlib>
 #include <algorithm>
 #include <fstream>
 #include <functional>
@@ -127,6 +128,7 @@ xpl::chrono::Time_point Command::m_start_measure;
 Command::Command() {
   m_commands["title"] = &Command::cmd_title;
   m_commands["echo"] = &Command::cmd_echo;
+  m_commands["switchsid"] = &Command::cmd_switchsid;
   m_commands["recvtype"] = &Command::cmd_recvtype;
   m_commands["recvok"] = &Command::cmd_recvok;
   m_commands["recvmessage"] = &Command::cmd_recvmessage;
@@ -267,6 +269,25 @@ Command::Result Command::cmd_title(std::istream &input,
   } else {
     context->print("\n\n");
   }
+
+  return Result::Continue;
+}
+
+Command::Result Command::cmd_switchsid(std::istream &input,
+                                      Execution_context *context,
+                                      const std::string &args) {
+  std::vector<std::string> vargs;
+  aux::split(vargs, args, " ", true);
+
+  if (vargs.size() != 1) {
+    std::stringstream error_message;
+    error_message << "Received wrong number of arguments, got:" << vargs.size();
+    throw std::logic_error(error_message.str());
+  }
+
+  auto sid = ::atoll(vargs[0].c_str());
+  context->session()->set_gsession_id(sid);
+  context->session()->build_protocol_header(gx::Protocol_type::GALAXYX);
 
   return Result::Continue;
 }
@@ -2366,6 +2387,7 @@ void print_help_commands() {
   std::cout << "-->recverror <errno>\n";
   std::cout << "  Read a message and ensure that it's an error of the "
                "expected type\n";
+  std::cout << "-->switchsid <GSession_id>\n";
   std::cout << "-->recvtype (<msgtype> [<msg_fied>] [<expected_field_value>] ["
             << CMD_ARG_BE_QUIET << "])|<msgid>"
             << "\n";

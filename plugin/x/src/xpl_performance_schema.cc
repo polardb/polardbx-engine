@@ -54,6 +54,11 @@ PSI_mutex_key KEY_mutex_x_broker_context_sync;
 PSI_mutex_key KEY_mutex_x_server_state_sync;
 PSI_mutex_key KEY_mutex_x_socket_acceptors_sync;
 
+PSI_mutex_key KEY_mutex_gx_session_pool_work;
+PSI_mutex_key KEY_mutex_gx_session_pool_kill;
+PSI_mutex_key KEY_mutex_gx_vio_send;
+PSI_mutex_key KEY_mutex_gx_flow_control;
+
 static PSI_mutex_info all_x_mutexes[] = {
     {&KEY_mutex_x_lock_list_access, "lock_list_access", 0, 0, PSI_DOCUMENT_ME},
     {&KEY_mutex_x_scheduler_dynamic_worker_pending,
@@ -87,6 +92,15 @@ static PSI_mutex_info all_x_mutexes[] = {
      PSI_DOCUMENT_ME},
 };
 
+static PSI_mutex_info all_gx_mutexes[] = {
+    {&KEY_mutex_gx_session_pool_work, "gx_session_pool_work", 0, 0,
+     PSI_DOCUMENT_ME},
+    {&KEY_mutex_gx_session_pool_kill, "gx_session_pool_kill", 0, 0,
+     PSI_DOCUMENT_ME},
+    {&KEY_mutex_gx_vio_send, "gx_vio_send", 0, 0, PSI_DOCUMENT_ME},
+    {&KEY_mutex_gx_flow_control, "gx_flow_control", 0, 0, PSI_DOCUMENT_ME},
+};
+
 PSI_cond_key KEY_cond_x_scheduler_dynamic_worker_pending;
 PSI_cond_key KEY_cond_x_scheduler_dynamic_thread_exit;
 PSI_cond_key KEY_cond_x_listener_tcp_sync;
@@ -94,6 +108,9 @@ PSI_cond_key KEY_cond_x_listener_unix_socket_sync;
 PSI_cond_key KEY_cond_x_broker_context_sync;
 PSI_cond_key KEY_cond_x_server_state_sync;
 PSI_cond_key KEY_cond_x_socket_acceptors_sync;
+
+PSI_cond_key KEY_cond_gx_session_pool_work;
+PSI_cond_key KEY_cond_gx_flow_control;
 
 static PSI_cond_info all_x_conds[] = {
     {&KEY_cond_x_scheduler_dynamic_worker_pending,
@@ -108,6 +125,12 @@ static PSI_cond_info all_x_conds[] = {
     {&KEY_cond_x_server_state_sync, "server_state_sync", 0, 0, PSI_DOCUMENT_ME},
     {&KEY_cond_x_socket_acceptors_sync, "socket_acceptors_sync", 0, 0,
      PSI_DOCUMENT_ME},
+};
+
+static PSI_cond_info all_gx_conds[] = {
+    {&KEY_cond_gx_session_pool_work, "gx_session_pool_work", 0, 0,
+     PSI_DOCUMENT_ME},
+    {&KEY_cond_gx_flow_control, "gx_flow_control", 0, 0, PSI_DOCUMENT_ME},
 };
 
 PSI_rwlock_key KEY_rwlock_x_client_list_clients;
@@ -173,5 +196,12 @@ void xpl_init_performance_schema() {
                         static_cast<int>(array_elements(all_x_sockets)));
   mysql_memory_register(category, all_x_memory,
                         static_cast<int>(array_elements(all_x_memory)));
+
+  const char *const category_gx = "galaxyx";
+  mysql_mutex_register(category_gx, all_gx_mutexes,
+                       static_cast<int>(array_elements(all_gx_mutexes)));
+  mysql_cond_register(category_gx, all_gx_conds,
+                      static_cast<int>(array_elements(all_gx_conds)));
+
 #endif  // HAVE_PSI_INTERFACE
 }

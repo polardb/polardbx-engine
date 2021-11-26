@@ -44,9 +44,12 @@ class Protocol_encoder_interface;
 
 namespace xpl {
 
+class Galaxy_session_context;
+
 class Streaming_command_delegate : public ngs::Command_delegate {
  public:
   Streaming_command_delegate(ngs::Session_interface *session);
+  Streaming_command_delegate(Galaxy_session_context &session);
   Streaming_command_delegate(const Streaming_command_delegate &) = default;
   virtual ~Streaming_command_delegate();
 
@@ -113,6 +116,7 @@ class Streaming_command_delegate : public ngs::Command_delegate {
   bool m_send_notice_deferred = false;
   int m_filled_column_counter = 0;
   ngs::Session_interface *m_session;
+  Galaxy_session_context *m_galaxy_session;
 };
 
 }  // namespace xpl

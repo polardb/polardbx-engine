@@ -337,6 +337,10 @@ class XMessage_encoder_base : public Base_type {
     Base_type::template empty_xmessage<tags::FetchDone::server_id>();
   }
 
+  void encode_token_done() {
+    Base_type::template empty_xmessage<tags::TokenDone::server_id>();
+  }
+
   void encode_stmt_execute_ok() {
     Base_type::template empty_xmessage<tags::StmtExecuteOk::server_id>();
   }
