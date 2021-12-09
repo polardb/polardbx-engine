@@ -2239,6 +2239,8 @@ written */
     trx_finalize_for_fts(trx, trx->undo_no != 0);
   }
 
+  lizard::trx_cache_tcn(trx);
+
   trx_mutex_enter(trx);
   trx->dict_operation = TRX_DICT_OP_NONE;
 

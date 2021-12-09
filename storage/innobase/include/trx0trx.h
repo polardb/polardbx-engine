@@ -1176,7 +1176,7 @@ struct trx_t {
   XAD xad;
 
   /** Cache tcn information. */
-  lizard::Session_tcn *session_tcn;
+  lizard::Cache_tcn *session_tcn;
 };
 
 #ifndef UNIV_HOTBACKUP

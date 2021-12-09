@@ -147,25 +147,70 @@ template <typename Element_type, typename Key_type, typename Value_type,
 class Random_array
     : public Cache_interface<Element_type, Key_type, Value_type> {
  public:
-  Random_array() {
-    /** TODO: Beware of any potential side effects when members are not
-    primitive types. */
-    memset((void *)m_elements, 0x0, sizeof(m_elements));
-  }
+  Random_array() {}
 
   virtual ~Random_array() {}
 
+  virtual bool do_before_operation(size_t pos) { return false; }
+
+  virtual void do_after_operation(bool required, size_t pos) {}
+
   virtual bool insert(Value_type value) override {
-    m_elements[ut_hash_ulint(value.key(), Prealloc)] = value;
-    return false;
+    size_t pos = ut_hash_ulint(value.key(), Prealloc);
+    bool pre_check = do_before_operation(pos);
+    if (!pre_check) {
+      m_elements[pos] = value;
+    }
+    do_after_operation(!pre_check, pos);
+
+    return pre_check;
   }
 
   virtual Value_type search(Key_type key) override {
-    return m_elements[ut_hash_ulint(key, Prealloc)];
+    size_t pos = ut_hash_ulint(key, Prealloc);
+    bool pre_check = do_before_operation(pos);
+    Value_type value;
+    if (!pre_check) {
+      value = m_elements[pos];
+    }
+    do_after_operation(!pre_check, pos);
+    return value;
   }
 
  private:
   Value_type m_elements[Prealloc];
+};
+
+#define ATOMIC_RANDOM_ARRAY_RETRY_MAX_TIMES 10
+
+template <typename Element_type, typename Key_type, typename Value_type,
+          size_t Prealloc>
+class Atomic_random_array
+    : public Random_array<Element_type, Key_type, Value_type, Prealloc> {
+ public:
+  Atomic_random_array() {}
+
+  virtual bool do_before_operation(size_t pos) override {
+    uint loop = 0;
+    bool expected = false;
+  retry:
+    if (loop++ > ATOMIC_RANDOM_ARRAY_RETRY_MAX_TIMES) return true;
+
+    if (m_used[pos].compare_exchange_strong(expected, true)) {
+      return false;
+    } else {
+      goto retry;
+    }
+  }
+
+  virtual void do_after_operation(bool required, size_t pos) override {
+    if (required) {
+      m_used[pos].store(false);
+    }
+  }
+
+ private:
+  std::atomic<bool> m_used[Prealloc];
 };
 
 /**
