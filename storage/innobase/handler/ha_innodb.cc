@@ -1385,6 +1385,11 @@ static int innodb_shutdown(handlerton *, ha_panic_function) {
     os_event_global_destroy();
   }
 
+  if (lizard::global_tcn_cache != nullptr) {
+    delete lizard::global_tcn_cache;
+    lizard::global_tcn_cache = nullptr;
+  }
+
   return 0;
 }
 
@@ -4959,6 +4964,8 @@ static int innodb_init(void *p) {
       Encryption::check_keyring() == false) {
     return innodb_init_abort();
   }
+
+  lizard::global_tcn_cache = new lizard::Global_tcn();
 
   return 0;
 }
@@ -22676,6 +22683,12 @@ static MYSQL_SYSVAR_ENUM(tcn_block_cache_type,
                          PLUGIN_VAR_OPCMDARG, "block cache type.", NULL, NULL,
                          BLOCK_LRU, &innodb_tcn_block_cache_type_typelib);
 
+static MYSQL_SYSVAR_BOOL(tcn_cache_replace_after_commit,
+                         lizard::innodb_tcn_cache_replace_after_commit,
+                         PLUGIN_VAR_OPCMDARG,
+                         "whether to replace global tcn cache after commit",
+                         NULL, NULL, true);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -22910,6 +22923,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(transaction_group),
     MYSQL_SYSVAR(tcn_cache_level),
     MYSQL_SYSVAR(tcn_block_cache_type),
+    MYSQL_SYSVAR(tcn_cache_replace_after_commit),
     NULL};
 
 mysql_declare_plugin(innobase){

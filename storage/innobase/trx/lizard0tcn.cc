@@ -38,18 +38,30 @@ namespace lizard {
 
 ulong innodb_tcn_cache_level = BLOCK_LEVEL;
 ulong innodb_tcn_block_cache_type = BLOCK_LRU;
+bool innodb_tcn_cache_replace_after_commit = true;
+
+Cache_tcn *global_tcn_cache = nullptr;
 
 /** Search */
 bool trx_search_tcn(trx_t *trx, btr_pcur_t *pcur, txn_rec_t *txn_rec,
                     txn_lookup_t *txn_lookup) {
   tcn_t tcn;
-  if (innodb_tcn_cache_level == BLOCK_LEVEL) {
-    Cache_tcn *cont = pcur->get_block()->cache_tcn;
-    if (cont) tcn = cont->search(txn_rec->trx_id);
-  } else {
-    Session_tcn *cont = trx->session_tcn;
-    if (cont) tcn = cont->search(txn_rec->trx_id);
+  Cache_tcn *cont = nullptr;
+  switch (innodb_tcn_cache_level) {
+    case BLOCK_LEVEL:
+      cont =  pcur->get_block()->cache_tcn;
+      break;
+    case SESSION_LEVEL:
+      cont = trx->session_tcn;
+      break;
+    case GLOBAL_LEVEL:
+      cont = global_tcn_cache;
+      break;
+    default:
+      ut_ad(0);
+      cont = nullptr;
   }
+  if (cont) tcn = cont->search(txn_rec->trx_id);
 
   if (tcn.trx_id == txn_rec->trx_id) {
     txn_rec->scn = tcn.scn;
@@ -69,16 +81,40 @@ bool trx_search_tcn(trx_t *trx, btr_pcur_t *pcur, txn_rec_t *txn_rec,
 void trx_cache_tcn(trx_t *trx, trx_id_t trx_id, txn_rec_t &txn_rec,
                    const rec_t *rec, const dict_index_t *index,
                    const ulint *offsets, btr_pcur_t *pcur) {
-  if (innodb_tcn_cache_level == BLOCK_LEVEL) {
-    /** Collect tcn first, cache it when cleanout by holding X lock */
-    tcn_collect(trx_id, txn_rec, rec, index, offsets, pcur);
-  } else {
-    /** Direct insert into session cache. */
-    Session_tcn *cont = trx->session_tcn;
-    if (cont) {
-      tcn_t value(txn_rec);
-      cont->insert(value);
-      TCN_CACHE_AGGR(SESSION_LEVEL, EVICT);
+  Cache_tcn *cont = nullptr;
+  switch (innodb_tcn_cache_level) {
+    case BLOCK_LEVEL:
+      tcn_collect(trx_id, txn_rec, rec, index, offsets, pcur);
+      cont = nullptr;
+      break;
+    case SESSION_LEVEL:
+      cont = trx->session_tcn;
+      break;
+    case GLOBAL_LEVEL:
+      cont = global_tcn_cache;
+      break;
+    default:
+      ut_ad(0);
+      cont = nullptr;
+  }
+  if (cont) {
+    tcn_t value(txn_rec);
+    cont->insert(value);
+    TCN_CACHE_AGGR(innodb_tcn_cache_level, EVICT);
+  }
+}
+
+/** Cache the commit info into global tcn cache after commit. */
+void trx_cache_tcn(trx_t *trx) {
+  if (innodb_tcn_cache_replace_after_commit &&
+      innodb_tcn_cache_level == GLOBAL_LEVEL && global_tcn_cache != nullptr) {
+    commit_scn_t cmmt = trx->txn_desc.cmmt;
+    trx_id_t trx_id = trx->id;
+
+    if (trx_id != 0 && cmmt.scn != SCN_NULL && cmmt.gcn != GCN_NULL) {
+      tcn_t value(trx_id, cmmt);
+      global_tcn_cache->insert(value);
+      TCN_CACHE_AGGR(innodb_tcn_cache_level, EVICT);
     }
   }
 }

@@ -96,6 +96,10 @@ struct lizard_var_t {
   ulint session_tcn_cache_hit;
   ulint session_tcn_cache_miss;
   ulint session_tcn_cache_evict;
+
+  ulint global_tcn_cache_hit;
+  ulint global_tcn_cache_miss;
+  ulint global_tcn_cache_evict;
 #endif
 };
 
@@ -161,6 +165,10 @@ struct lizard_stats_t {
   ulint_ctr_1_t session_tcn_cache_hit;
   ulint_ctr_1_t session_tcn_cache_miss;
   ulint_ctr_1_t session_tcn_cache_evict;
+
+  ulint_ctr_1_t global_tcn_cache_hit;
+  ulint_ctr_1_t global_tcn_cache_miss;
+  ulint_ctr_1_t global_tcn_cache_evict;
 #endif
 };
 
@@ -203,6 +211,21 @@ int show_lizard_vars(THD *thd, SHOW_VAR *var, char *buff);
   do {                                                  \
     lizard::lizard_stats.session_tcn_cache_evict.inc(); \
   } while (0)
+
+#define GLOBAL_TCN_CACHE_HIT                         \
+  do {                                               \
+    lizard::lizard_stats.global_tcn_cache_hit.inc(); \
+  } while (0)
+
+#define GLOBAL_TCN_CACHE_MISS                         \
+  do {                                                \
+    lizard::lizard_stats.global_tcn_cache_miss.inc(); \
+  } while (0)
+
+#define GLOBAL_TCN_CACHE_EVICT                         \
+  do {                                                 \
+    lizard::lizard_stats.global_tcn_cache_evict.inc(); \
+  } while (0)
 #else
 
 #define BLOCK_TCN_CACHE_HIT
@@ -211,6 +234,9 @@ int show_lizard_vars(THD *thd, SHOW_VAR *var, char *buff);
 #define SESSION_TCN_CACHE_HIT
 #define SESSION_TCN_CACHE_MISS
 #define SESSION_TCN_CACHE_EVICT
+#define GLOBAL_TCN_CACHE_HIT
+#define GLOBAL_TCN_CACHE_MISS
+#define GLOBAL_TCN_CACHE_EVICT
 
 #endif
 
