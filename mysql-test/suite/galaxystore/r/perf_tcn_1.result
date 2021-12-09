@@ -19,6 +19,9 @@ Lizard_block_tcn_cache_evict	150
 Lizard_session_tcn_cache_hit	0
 Lizard_session_tcn_cache_miss	0
 Lizard_session_tcn_cache_evict	0
+Lizard_global_tcn_cache_hit	0
+Lizard_global_tcn_cache_miss	0
+Lizard_global_tcn_cache_evict	0
 select count(*) from db_1.t1 as of gcn 2048 where id > 0;
 count(*)
 100
@@ -33,5 +36,8 @@ Lizard_block_tcn_cache_evict	250
 Lizard_session_tcn_cache_hit	0
 Lizard_session_tcn_cache_miss	0
 Lizard_session_tcn_cache_evict	0
+Lizard_global_tcn_cache_hit	0
+Lizard_global_tcn_cache_miss	0
+Lizard_global_tcn_cache_evict	0
 drop table db_1.t1;
 drop database db_1;

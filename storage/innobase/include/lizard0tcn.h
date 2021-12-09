@@ -50,6 +50,7 @@ namespace lizard {
 
 extern ulong innodb_tcn_cache_level;
 extern ulong innodb_tcn_block_cache_type;
+extern bool innodb_tcn_cache_replace_after_commit;
 
 typedef struct tcn_t {
   /** Transaction id that has committed. */
@@ -66,6 +67,11 @@ typedef struct tcn_t {
   }
   explicit tcn_t(txn_commit_t cmmt) {
     trx_id = cmmt.trx_id;
+    scn = cmmt.scn;
+    gcn = cmmt.gcn;
+  }
+  explicit tcn_t(trx_id_t id, commit_scn_t cmmt) {
+    trx_id = id;
     scn = cmmt.scn;
     gcn = cmmt.gcn;
   }
@@ -114,17 +120,22 @@ typedef struct tcn_node_t {
 #define LRU_TCN_SIZE 20
 #define ARRAY_TCN_SIZE 50
 #define SESSION_TCN_SIZE 2000
-#define GLOBAL_TCN_SIZE 10000
+#define GLOBAL_TCN_SIZE (1024 * 1024 * 4)
 
 using Cache_tcn = Cache_interface<tcn_node_t, trx_id_t, tcn_t>;
 
 using Lru_tcn = Lru_list<tcn_node_t, trx_id_t, tcn_t, LRU_TCN_SIZE>;
-template bool iv_hash_insert(iv_hash_t<tcn_node_t, LRU_TCN_SIZE> *hash,
-                             tcn_node_t *elem);
 
 using Array_tcn = Random_array<tcn_node_t, trx_id_t, tcn_t, ARRAY_TCN_SIZE>;
 
 using Session_tcn = Lru_list<tcn_node_t, trx_id_t, tcn_t, SESSION_TCN_SIZE>;
+
+using Global_tcn =
+    Atomic_random_array<tcn_node_t, trx_id_t, tcn_t, GLOBAL_TCN_SIZE>;
+
+template bool iv_hash_insert(iv_hash_t<tcn_node_t, LRU_TCN_SIZE> *hash,
+                             tcn_node_t *elem);
+
 template bool iv_hash_insert(iv_hash_t<tcn_node_t, SESSION_TCN_SIZE> *hash,
                              tcn_node_t *elem);
 
@@ -135,16 +146,22 @@ void trx_cache_tcn(trx_t *trx, trx_id_t trx_id, txn_rec_t &txn_rec,
                    const rec_t *rec, const dict_index_t *index,
                    const ulint *offsets, btr_pcur_t *pcur);
 
+void trx_cache_tcn(trx_t *trx);
+
+extern Cache_tcn *global_tcn_cache;
+
 }  // namespace lizard
 
 #ifdef UNIV_DEBUG
 
-#define TCN_CACHE_AGGR(TYPE, WHAT) \
-  do {                             \
-    if (TYPE == BLOCK_LEVEL)       \
-      BLOCK_TCN_CACHE_##WHAT;      \
-    else                           \
-      SESSION_TCN_CACHE_##WHAT;    \
+#define TCN_CACHE_AGGR(TYPE, WHAT)  \
+  do {                              \
+    if (TYPE == BLOCK_LEVEL)        \
+      BLOCK_TCN_CACHE_##WHAT;       \
+    else if (TYPE == SESSION_LEVEL) \
+      SESSION_TCN_CACHE_##WHAT;     \
+    else                            \
+      GLOBAL_TCN_CACHE_##WHAT;      \
   } while (0)
 
 #else
