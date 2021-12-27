@@ -922,6 +922,7 @@ bool ha_sequence::fill_into_sequence_fields(THD *thd, TABLE *table,
 
   if (it != thd->get_sequence_hash()->end()) {
     entry = it->second;
+    entry->set_version(m_share->m_version);
   } else {
     entry = new Sequence_last_value();
     entry->set_version(m_share->m_version);
