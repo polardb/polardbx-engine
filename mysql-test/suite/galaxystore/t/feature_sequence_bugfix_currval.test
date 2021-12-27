@@ -1,0 +1,48 @@
+--source include/have_binlog_format_row.inc
+
+--disable_warnings
+
+connection default;
+
+create database s_db;
+create user normal_1@'%' identified by 'pass';
+create user normal_2@'%' identified by 'pass';
+
+grant all on s_db.* to normal_1@'%' ;
+grant all on s_db.* to normal_2@'%' ;
+
+connect(m_normal_1, 127.0.0.1, normal_1, pass, s_db);
+connect(m_normal_2, 127.0.0.1, normal_2, pass, s_db);
+
+--echo ####################################
+--echo 1.test batch and skip when first call.
+--echo ####################################
+
+connection m_normal_1;
+use s_db;
+create sequence s1 start with 1 maxvalue 10 increment by 1 nocache;
+select nextval(s1);
+select currval(s1);
+drop sequence s1;
+
+create sequence s1 start with 1 maxvalue 10 increment by 1 nocache;
+select nextval(s1);
+select currval(s1);
+drop sequence s1;
+
+
+
+
+
+
+
+
+disconnect m_normal_1;
+disconnect m_normal_2;
+
+connection default;
+drop database s_db;
+drop user normal_1@'%';
+drop user normal_2@'%';
+
+--enable_warnings
