@@ -207,7 +207,7 @@ bool check_sequence_values_valid(Sequence_type type, const ulonglong *items) {
         items[Sequence_field::FIELD_NUM_START] >=
             items[Sequence_field::FIELD_NUM_MINVALUE] &&
         items[Sequence_field::FIELD_NUM_INCREMENT] >= 1 &&
-        items[Sequence_field::FIELD_NUM_MAXVALUE] >
+        items[Sequence_field::FIELD_NUM_MAXVALUE] >=
             items[Sequence_field::FIELD_NUM_START])
       DBUG_RETURN(false);
   } else {
@@ -453,9 +453,28 @@ class Create_next_skip_func : public Create_func {
   ~Create_next_skip_func() override {}
 };
 
+/**
+  Builder for 'NEXTVAL_SHOW'.
+*/
+class Create_next_show_func : public Create_func {
+ public:
+  static Create_next_show_func s_singleton;
+
+  Item *create_func(THD *thd, LEX_STRING name MY_ATTRIBUTE((unused)),
+                    PT_item_list *item_list) override {
+    return new (thd->mem_root) Item_func_nextval_show(POS(), thd, item_list);
+  }
+
+ protected:
+  /* Single instance */
+  Create_next_show_func() {}
+  ~Create_next_show_func() override {}
+};
+
 Create_next_func Create_next_func::s_singleton;
 Create_curr_func Create_curr_func::s_singleton;
 Create_next_skip_func Create_next_skip_func::s_singleton;
+Create_next_show_func Create_next_show_func::s_singleton;
 
 /**
   Return the item builder of 'NEXTVAL' and 'CURRVAL'
@@ -470,6 +489,8 @@ Create_func *find_sequence_function_builder(const LEX_STRING &f_name) {
     return &Create_curr_func::s_singleton;
   else if (is_seq_nextval_skip_func_name(f_name.str))
     return &Create_next_skip_func::s_singleton;
+  else if (is_seq_nextval_show_func_name(f_name.str))
+    return &Create_next_show_func::s_singleton;
   else
     return nullptr;
 }
@@ -486,6 +507,7 @@ static const dd::String_type nextval_name = "nextval";
 static const dd::String_type currval_name = "currval";
 
 static const dd::String_type nextval_skip_name = "nextval_skip";
+static const dd::String_type nextval_show_name = "nextval_show";
 
 extern bool opt_initialize;
 
@@ -711,7 +733,8 @@ void on_user_sp_status_changed(const char *db, const char *name,
 
 bool is_seq_func_name(const char *name) {
   return is_seq_nextval_func_name(name) || is_seq_currval_func_name(name) ||
-         is_seq_nextval_skip_func_name(name);
+         is_seq_nextval_skip_func_name(name) ||
+         is_seq_nextval_show_func_name(name);
 }
 
 bool is_seq_nextval_func_name(const char *name) {
@@ -720,6 +743,10 @@ bool is_seq_nextval_func_name(const char *name) {
 
 bool is_seq_nextval_skip_func_name(const char *name) {
   return !my_strcasecmp(system_charset_info, name, nextval_skip_name.c_str());
+}
+
+bool is_seq_nextval_show_func_name(const char *name) {
+  return !my_strcasecmp(system_charset_info, name, nextval_show_name.c_str());
 }
 
 bool is_seq_currval_func_name(const char *name) {

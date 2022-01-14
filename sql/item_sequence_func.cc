@@ -46,8 +46,7 @@
 bool Item_func_currval::parse_parameter() {
   assert(!m_table_list);
 
-  if (!m_para_list) {
-    assert(m_table);
+  if (!m_para_list && m_table) {
     return false;
   }
 
@@ -57,7 +56,7 @@ bool Item_func_currval::parse_parameter() {
     Grammar entry：IDENT_sys '(' opt_udf_expr_list ')',
     and here udf_expr expected: ident or ident.ident.
   */
-  if (m_para_list->elements() != 1) {
+  if (!m_para_list || m_para_list->elements() != 1) {
     my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
     return true;
   }
@@ -67,8 +66,7 @@ bool Item_func_currval::parse_parameter() {
 bool Item_func_nextval::parse_parameter() {
   assert(!m_table_list);
 
-  if (!m_para_list) {
-    assert(m_table);
+  if (!m_para_list && m_table) {
     return false;
   }
 
@@ -161,8 +159,20 @@ void Item_func_nextval_skip::set_sequence_scan() {
   table->sequence_scan.set_skip(m_value);
 }
 
+void Item_func_nextval_show::set_sequence_scan() {
+  TABLE *table = m_table_list->table;
+  table->sequence_scan.set_operation_show_cache();
+}
+
 bool Item_func_nextval::check_param_count() {
-  uint elements = m_para_list->elements();
+  uint elements = 0;
+
+  if (!m_para_list) {
+    my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+    return true;
+  }
+
+  elements = m_para_list->elements();
 
   if (elements != 1 && elements != 2) {
     my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
@@ -172,9 +182,31 @@ bool Item_func_nextval::check_param_count() {
 }
 
 bool Item_func_nextval_skip::check_param_count() {
-  uint elements = m_para_list->elements();
+  uint elements = 0;
 
+  if (!m_para_list) {
+    my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+    return true;
+  }
+
+  elements = m_para_list->elements();
   if (elements != 2) {
+    my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+    return true;
+  }
+  return false;
+}
+
+bool Item_func_nextval_show::check_param_count() {
+  uint elements = 0;
+
+  if (!m_para_list) {
+    my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+    return true;
+  }
+
+  elements = m_para_list->elements();
+  if (elements != 1) {
     my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
     return true;
   }
@@ -190,6 +222,9 @@ bool Item_func_nextval::check_value() {
 }
 
 bool Item_func_nextval_skip::check_value() { return false; }
+
+bool Item_func_nextval_show::check_value() { return false; }
+
 /**
   NEXTVAL() function implementation.
 */

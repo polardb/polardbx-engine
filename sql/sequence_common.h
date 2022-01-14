@@ -219,6 +219,45 @@ class Sequence_property {
   plugin_ref m_plugin;
 };
 
+/* 
+ *  Support some operation for sequence
+ *  1. nextval_show(sequence) 
+ */
+struct Sequence_operation {
+ public:
+  enum Operation_type {
+    OPERATION_NONE,
+    OPERATION_SHOW_CACHE
+  };
+
+  Sequence_operation(): m_type(OPERATION_NONE) {}
+
+  Sequence_operation(const Sequence_operation &operation) {
+    m_type = operation.m_type;
+  }
+
+  Sequence_operation &operator=(const Sequence_operation &operation) {
+    m_type = operation.m_type;
+    return *this;
+  }
+
+  void set_type(Operation_type type) { 
+    m_type = type;
+  }
+
+  void reset() {
+    m_type = OPERATION_NONE; 
+  }
+
+  bool is_show_cache() {
+    return m_type == OPERATION_SHOW_CACHE;
+  }
+
+ private:
+  Operation_type m_type;
+};
+
+
 /** Support nextval_skip(sequence, value) */
 struct Sequence_skip {
  public:
@@ -277,13 +316,15 @@ class Sequence_scan {
     IT_NON_NEXTVAL, /* Query non nextval, maybe currval or others */
   };
 
-  Sequence_scan() : m_mode(ORIGINAL_SCAN), m_batch(1), m_skip() {}
+  Sequence_scan()
+      : m_mode(ORIGINAL_SCAN), m_batch(1), m_skip(), m_operation() {}
   Sequence_scan(const Sequence_scan& seq_scan) : m_mode(seq_scan.m_mode) {}
 
   void reset() {
     m_mode = ORIGINAL_SCAN;
     m_batch = 1;
     m_skip.reset();
+    m_operation.reset();
   }
   void set(Scan_mode mode) { m_mode = mode; }
   Scan_mode get() { return m_mode; }
@@ -295,12 +336,18 @@ class Sequence_scan {
   void set_skip(Sequence_skip skip) { m_skip = skip; }
   void set_skip(ulonglong value) { m_skip.init(value); }
 
+  Sequence_operation get_operation() { return m_operation; }
+  void set_operation_show_cache() {
+    m_operation.set_type(Sequence_operation::OPERATION_SHOW_CACHE);
+  }
+
   /* Overlap the assignment operator */
   Sequence_scan &operator=(const Sequence_scan &rhs) {
     if (this != &rhs) {
       this->m_mode = rhs.m_mode;
       this->m_batch = rhs.m_batch;
       this->m_skip = rhs.m_skip;
+      this->m_operation = rhs.m_operation;
     }
     return *this;
   }
@@ -314,10 +361,12 @@ class Sequence_scan {
   ulonglong m_batch;
 
   Sequence_skip m_skip;
+  Sequence_operation m_operation;
 };
 
 typedef Sequence_scan::Scan_mode Sequence_scan_mode;
 typedef Sequence_scan::Iter_mode Sequence_iter_mode;
+typedef Sequence_operation::Operation_type Sequence_operation_type;
 
 /**
   Sequence currval that was saved in THD object.
@@ -428,6 +477,7 @@ extern bool is_seq_func_name(const char *name);
 extern bool is_seq_nextval_func_name(const char *name);
 extern bool is_seq_currval_func_name(const char *name);
 extern bool is_seq_nextval_skip_func_name(const char *name);
+extern bool is_seq_nextval_show_func_name(const char *name);
 
 extern ulonglong time_system_ms(void);
 

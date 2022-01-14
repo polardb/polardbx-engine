@@ -128,6 +128,8 @@ master_verify_checksum
 master_verify_checksum
 max_length_for_sort_data
 max_length_for_sort_data
+only_report_warning_when_skip_sequence
+only_report_warning_when_skip_sequence
 opt_indexstat
 opt_indexstat
 opt_tablestat

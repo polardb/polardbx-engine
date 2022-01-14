@@ -784,6 +784,10 @@ The following options may be given as the first argument:
  resources were counted for each user + host vs. per
  account). This option is deprecated and will be removed
  in a future version.
+ --only-report-warning-when-skip-sequence 
+ Whether reporting warning when the value skipped to is
+ not valid instead of raising error
+ (Defaults to on; use --skip-only-report-warning-when-skip-sequence to disable.)
  --open-files-limit=# 
  If this is not 0, then mysqld will use this value to
  reserve file descriptors to use with setrlimit(). If this
@@ -1920,6 +1924,7 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
+only-report-warning-when-skip-sequence TRUE
 opt-indexstat TRUE
 opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000

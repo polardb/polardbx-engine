@@ -31,6 +31,8 @@
 
 class THD;
 
+extern bool opt_only_report_warning_when_skip_sequence;
+
 /* Global sequence engine handlerton variable, inited when plugin_register */
 extern handlerton *sequence_hton;
 
@@ -66,12 +68,14 @@ extern handlerton *sequence_hton;
 */
 class Sequence_request_context {
  public:
-  explicit Sequence_request_context(ulonglong size, Sequence_skip skip)
+  explicit Sequence_request_context(ulonglong size, Sequence_skip skip,
+                                    Sequence_operation operation)
       : m_skip(skip),
         m_inherit(false),
         m_nextval(0),
         m_batch(size),
-        m_first_skip(false) {}
+        m_first_skip(false),
+        m_operation(operation) {}
 
   void inherit(ulonglong size) {
     assert(m_inherit == false);
@@ -79,12 +83,13 @@ class Sequence_request_context {
     m_nextval = size;
   }
 
-  void init(ulonglong size, Sequence_skip skip) {
+  void init(ulonglong size, Sequence_skip skip, Sequence_operation operation) {
     m_skip = skip;
     m_inherit = false;
     m_nextval = 0;
     m_batch = size;
     m_first_skip = false;
+    m_operation = operation;
   }
 
   bool is_inherit() { return m_inherit; }
@@ -104,6 +109,9 @@ class Sequence_request_context {
   bool is_first_skip() { return m_first_skip; }
   void set_first_skip() { m_first_skip = true; }
 
+  Sequence_operation get_operation() { return m_operation; }
+  void clear_operation() { m_operation.reset(); }
+
  private:
   Sequence_skip m_skip;
   bool m_inherit;
@@ -111,6 +119,8 @@ class Sequence_request_context {
   ulonglong m_batch;
 
   bool m_first_skip;
+
+  Sequence_operation m_operation;
 };
 
 typedef class Sequence_request_context SR_ctx;
@@ -212,7 +222,38 @@ class Sequence_share {
   Cache_request quick_read(ulonglong *local_values, SR_ctx *sr_ctx);
   Cache_request digital_quick_read(ulonglong *local_values, SR_ctx *sr_ctx);
   Cache_request digital_skip_read(ulonglong *local_values, SR_ctx *sr_ctx);
-  Cache_request timestamp_quick_read(ulonglong *local_values, ulonglong batch);
+  Cache_request timestamp_quick_read(ulonglong *local_values, SR_ctx *sr_ctx);
+
+
+  /**
+     Show the next value store in cache. It will reload cache if 
+    current cache has run out.
+
+    Show cache will set local_values to 0 if the sequence has 
+    run out
+
+    @param[out]     local_values           local value array
+    @param[in]       sr_ctx                   sequence request context
+    @param[in]       is_run_out             sequence has run out
+
+    @retval            cache request result
+  */
+  Cache_request show_cache(ulonglong *local_values, SR_ctx *sr_ctx);
+
+  /**
+     handle some specific errors:
+    1. skip_sequence will raise no error if 
+        opt_only_report_warning_when_skip_sequence is setted
+    2. HA_ERR_SEQUENCE_SKIP_ERROR will not invalidate cache
+
+    3. other errors will make cache invalidate and return input error
+
+    @param[in]       error                     error no
+
+    @retval            error                      error no
+  */
+  int handle_specific_error(int error, ulonglong *local_values);
+  
   /**
     Validate cache.
   */
@@ -644,6 +685,7 @@ class ha_sequence : public handler {
   Sequence_iter_mode m_iter_mode;
 
   Sequence_skip m_skip;
+  Sequence_operation m_operation;
 };
 
 /**

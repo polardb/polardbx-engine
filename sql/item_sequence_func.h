@@ -117,6 +117,24 @@ class Item_func_nextval_skip: public Item_func_nextval {
   const char *func_name() const override { return "nextval_skip"; }
 };
 
+
+class Item_func_nextval_show: public Item_func_nextval {
+ public:
+  Item_func_nextval_show(const POS &pos, THD *thd, const char *db,
+                         const char *table)
+      : Item_func_nextval(pos, thd, db, table) {}
+
+  Item_func_nextval_show(const POS &pos, THD *thd,
+                         const PT_item_list *para_list)
+      : Item_func_nextval(pos, thd, para_list) {}
+
+  void set_sequence_scan() override;
+  bool check_value() override;
+  bool check_param_count() override;
+
+  const char *func_name() const override { return "nextval_show"; }
+};
+
 /**
   Implementation of sequence function: CURRVAL()
 */

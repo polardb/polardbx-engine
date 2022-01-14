@@ -89,6 +89,8 @@ static void init_sequence_psi_keys() {
 }
 #endif /* HAVE_PSI_INTERFACE */
 
+bool opt_only_report_warning_when_skip_sequence = false;
+
 /* Global sequence engine handlerton */
 handlerton *sequence_hton;
 
@@ -256,6 +258,37 @@ int Sequence_share::enter_cond(THD *thd) {
   }
   return 0;
 }
+/**
+     handle some specific errors:
+    1. skip_sequence will raise no error if
+        opt_only_report_warning_when_skip_sequence is setted
+    2. HA_ERR_SEQUENCE_SKIP_ERROR will not invalidate cache
+
+    3. other errors will make cache invalidate and return input error
+
+    @param[in]       error                     error no
+
+    @retval            error                      error no
+*/
+int Sequence_share::handle_specific_error(int error, ulonglong *local_values) {
+  DBUG_ENTER("handle_specific_error");
+
+  switch (error) {
+    case HA_ERR_SEQUENCE_SKIP_ERROR:
+      if (opt_only_report_warning_when_skip_sequence) {
+        memcpy(local_values, m_caches, sizeof(m_caches));
+        push_warning_printf(current_thd, Sql_condition::SL_WARNING,
+                            ER_SEQUENCE_SKIP_ERROR,
+                            "Nextval skipped to is not valid, nothing will be done");
+        DBUG_RETURN(0);
+      }
+      DBUG_RETURN(error);
+    default:
+      break;
+  }
+  invalidate();
+  DBUG_RETURN(error);
+}
 
 Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values,
                                                   SR_ctx *sr_ctx) {
@@ -291,7 +324,7 @@ Sequence_cache_request Sequence_share::quick_read(ulonglong *local_values,
       DBUG_RETURN(digital_quick_read(local_values, sr_ctx));
     }
   } else {
-    DBUG_RETURN(timestamp_quick_read(local_values, sr_ctx->batch()));
+    DBUG_RETURN(timestamp_quick_read(local_values, sr_ctx));
   }
 }
 
@@ -337,11 +370,11 @@ retry:
   @param[in]          batch             number of timestamp value requested.
 */
 Sequence_cache_request Sequence_share::timestamp_quick_read(
-    ulonglong *local_values, ulonglong batch) {
+    ulonglong *local_values, SR_ctx *sr_ctx) {
   DBUG_ENTER("Sequence_share::timestamp_quick_read");
 
   mysql_mutex_assert_owner(&m_mutex);
-
+  ulonglong batch = sr_ctx->batch();
   ulonglong retry_counter = 0;
 
   /**
@@ -375,6 +408,10 @@ retry:
   if (now < m_low_limit) goto retry;
 
   if (now >= m_cache_end) DBUG_RETURN(CACHE_REQUEST_ROUND_OUT);
+
+  if (sr_ctx->get_operation().is_show_cache()) {
+    DBUG_RETURN(show_cache(local_values, sr_ctx));
+  }
 
   if (now == m_last_time) {
     m_counter++;
@@ -483,6 +520,10 @@ Sequence_cache_request Sequence_share::digital_quick_read(
     if (*nextval_ptr > m_cache_end) DBUG_RETURN(CACHE_REQUEST_ROUND_OUT);
   }
 
+  if (sr_ctx->get_operation().is_show_cache()) {
+    DBUG_RETURN(show_cache(local_values, sr_ctx));
+  }
+
   /** Here, at least still have one available number. */
   longlong left = (m_cache_end - *nextval_ptr) / *increment_ptr - 1;
   if (left <= 0) {
@@ -545,7 +586,7 @@ int Sequence_share::calc_digital_next_round(ulonglong *durable,
   if (sr_ctx->is_first_skip()) {
     assert(batch == 1);
     ulonglong skipped_to = sr_ctx->get_skip_ptr()->skipped_to();
-    if (skipped_to < begin) {
+    if (skipped_to < begin || skipped_to >= m_caches[SF_MAXVALUE]) {
       DBUG_RETURN(HA_ERR_SEQUENCE_SKIP_ERROR);
     }
     batch = (skipped_to - begin) / m_caches[SF_INCREMENT] + 1;
@@ -581,6 +622,24 @@ int Sequence_share::calc_digital_next_round(ulonglong *durable,
 
   DBUG_RETURN(0);
 }
+/**
+     Show the next value store in cache. It will reload cache if
+    current cache has run out.
+
+    @param[out]     local_values           local value array
+    @param[in]       sr_ctx                    sequence request context
+
+    @retval            cache request
+*/
+Sequence_cache_request Sequence_share::show_cache(ulonglong *local_values,
+                                                  SR_ctx *sr_ctx) {
+  DBUG_ENTER("show_cache");
+
+  local_values[SF_NEXTVAL] = m_caches[SF_NEXTVAL];
+
+  sr_ctx->clear_operation();
+  DBUG_RETURN(CACHE_REQUEST_HIT);
+}
 
 /**
   Reload the sequence value cache.
@@ -613,7 +672,7 @@ int Sequence_share::reload_cache(TABLE *table, bool *changed, SR_ctx *sr_ctx) {
     DBUG_RETURN(HA_ERR_SEQUENCE_INVALID);
 
   /* Step 1: overlap the cache using durable values */
-  for (field_info = seq_fields; field_info->field_name; field_info++)
+  for (field_info = seq_fields; field_info->field_name; field_info++) 
     m_caches[field_info->field_num] = durable[field_info->field_num];
 
   if (m_type == Sequence_type::DIGITAL) {
@@ -875,6 +934,7 @@ void ha_sequence::init_variables() {
   m_batch = 1;
 
   m_skip.reset();
+  m_operation.reset();
 
   start_of_scan = 0;
   DBUG_VOID_RETURN;
@@ -1013,6 +1073,7 @@ int ha_sequence::rnd_init(bool scan) {
   m_iter_mode = Sequence_iter_mode::IT_NON;
   m_batch = table->sequence_scan.get_batch();
   m_skip = table->sequence_scan.get_skip();
+  m_operation = table->sequence_scan.get_operation();
 
   assert(m_batch <= TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE);
 
@@ -1073,7 +1134,7 @@ int ha_sequence::rnd_next(uchar *buf) {
 
     assert(m_iter_mode == Sequence_iter_mode::IT_NEXTVAL);
 
-    SR_ctx sr_ctx(m_batch, m_skip);
+    SR_ctx sr_ctx(m_batch, m_skip, m_operation);
     Share_locker_helper share_locker(m_share);
 
   retry_once:
@@ -1089,7 +1150,7 @@ int ha_sequence::rnd_next(uchar *buf) {
     }
 
     /** Set sequence request context */
-    sr_ctx.init(m_batch, m_skip);
+    sr_ctx.init(m_batch, m_skip, m_operation);
     cache_request = m_share->quick_read(local_values, &sr_ctx);
     switch (cache_request) {
       case Sequence_cache_request::CACHE_REQUEST_HIT: {
@@ -1128,8 +1189,7 @@ int ha_sequence::rnd_next(uchar *buf) {
       }
     } /* switch end */
 
-    /* Here is the switch error result, if success, will goto end.  */
-    m_share->invalidate();
+    error = m_share->handle_specific_error(error, local_values);
     DBUG_RETURN(error);
   } else
     DBUG_RETURN(HA_ERR_END_OF_FILE); /* if (start_of_scan) end */
