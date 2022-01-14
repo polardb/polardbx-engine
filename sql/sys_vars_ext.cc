@@ -43,6 +43,7 @@
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
 #include "sql/sys_vars.h"
+#include "sql/ha_sequence.h"
 
 static Sys_var_ulong Sys_ccl_wait_timeout(
     "ccl_wait_timeout", "Timeout in seconds to wait when concurrency control.",
@@ -278,5 +279,12 @@ static Sys_var_ulonglong Sys_innodb_prepare_seq(
     "innodb_prepare_seq", "Innodb xa prepare sequence",
     HINT_UPDATEABLE SESSION_ONLY(innodb_prepare_gcn), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+
+static Sys_var_bool Sys_only_report_warning_when_skip(
+    "only_report_warning_when_skip_sequence",
+    "Whether reporting warning when the value skipped to is not valid "
+    "instead of raising error",
+    GLOBAL_VAR(opt_only_report_warning_when_skip_sequence), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 /* RDS DEFINED */

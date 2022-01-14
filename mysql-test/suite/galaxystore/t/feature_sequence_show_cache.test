@@ -1,0 +1,120 @@
+--source include/have_binlog_format_row.inc
+
+--disable_warnings
+
+connect(con_u1, 127.0.0.1, root,,);
+connect(con_u2, 127.0.0.1, root,,);
+
+connection default;
+
+create database seq_db;
+use seq_db;
+
+create table s_fake (a int, primary key (a));
+create sequence s_nocache start with 1 maxvalue 1000 increment by 1 nocache;
+create sequence s_cache start with 1 maxvalue 1000 increment by 3 cache 3;
+create sequence s_time timestamp cache 2;
+
+--echo ####################################
+--echo 0. show cache parameters
+--echo ####################################
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select nextval_show();
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select nextval_show(s_nocache, 1);
+
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select nextval_show("table_err");
+
+--error ER_NO_SUCH_TABLE
+select nextval_show(table_err);
+
+--error ER_TABLE_IS_NOT_SEQUENCE
+select nextval_show(s_fake);
+
+
+--echo ####################################
+--echo 1. base show cache 
+--echo ####################################
+connection con_u1;
+use seq_db;
+
+select nextval_show(s_nocache);
+select nextval_show(s_cache);
+
+--replace_column 1 # 
+select nextval_show(s_time);
+
+
+select nextval(s_nocache);
+select nextval(s_cache);
+
+--replace_column 1 # 
+select nextval(s_time);
+
+select nextval_show(s_nocache);
+select nextval_show(s_cache);
+
+connection con_u2;
+use seq_db;
+
+select nextval_show(s_nocache);
+select nextval_show(s_cache);
+
+
+--echo ####################################
+--echo 2.show cache will reload table for digest 
+--echo ####################################
+connection default;
+
+select nextval(s_cache);
+select nextval(s_cache);
+select nextval(s_cache);
+
+select * from s_cache;
+select nextval_show(s_cache);
+select * from s_cache;
+
+--echo ####################################
+--echo 3.show cache after skip
+--echo ####################################
+
+select nextval_skip(s_nocache, 10);
+select nextval_skip(s_cache, 30);
+
+select nextval_show(s_nocache);
+select nextval_show(s_cache);
+
+select nextval(s_nocache);
+select nextval(s_cache);
+
+select nextval_show(s_nocache);
+select nextval_show(s_cache);
+
+--echo ####################################
+--echo 4.show cache when run out
+--echo ####################################
+
+select nextval_skip(s_nocache, 999);
+select nextval_skip(s_cache, 999);
+
+select nextval(s_nocache);
+select nextval(s_cache);
+
+--error ER_SEQUENCE_RUN_OUT
+select nextval(s_nocache);
+
+--error ER_SEQUENCE_RUN_OUT
+select nextval(s_cache);
+
+--error ER_SEQUENCE_RUN_OUT
+select nextval_show(s_nocache);
+
+--error ER_SEQUENCE_RUN_OUT
+select nextval_show(s_cache);
+
+drop database seq_db;
+
+--enable_warnings
