@@ -1,0 +1,126 @@
+create database seq_db;
+use seq_db;
+create table s_fake (a int, primary key (a));
+create sequence s_nocache start with 1 maxvalue 1000 increment by 1 nocache;
+create sequence s_cache start with 1 maxvalue 1000 increment by 3 cache 3;
+create sequence s_time timestamp cache 2;
+####################################
+0. show cache parameters
+####################################
+select nextval_show();
+ERROR 42000: Incorrect parameter count in the call to native function 'nextval_show'
+select nextval_show(s_nocache, 1);
+ERROR 42000: Incorrect parameter count in the call to native function 'nextval_show'
+select nextval_show("table_err");
+ERROR 42000: Incorrect parameters in the call to native function 'nextval_show'
+select nextval_show(table_err);
+ERROR 42S02: Table 'seq_db.table_err' doesn't exist
+select nextval_show(s_fake);
+ERROR HY000: Table 'seq_db.s_fake' should be sequence
+####################################
+1. base show cache 
+####################################
+use seq_db;
+select nextval_show(s_nocache);
+nextval_show(s_nocache)
+1
+select nextval_show(s_cache);
+nextval_show(s_cache)
+1
+select nextval_show(s_time);
+nextval_show(s_time)
+#
+select nextval(s_nocache);
+nextval(s_nocache)
+1
+select nextval(s_cache);
+nextval(s_cache)
+1
+select nextval(s_time);
+nextval(s_time)
+#
+select nextval_show(s_nocache);
+nextval_show(s_nocache)
+2
+select nextval_show(s_cache);
+nextval_show(s_cache)
+4
+use seq_db;
+select nextval_show(s_nocache);
+nextval_show(s_nocache)
+2
+select nextval_show(s_cache);
+nextval_show(s_cache)
+4
+####################################
+2.show cache will reload table for digest 
+####################################
+select nextval(s_cache);
+nextval(s_cache)
+4
+select nextval(s_cache);
+nextval(s_cache)
+7
+select nextval(s_cache);
+nextval(s_cache)
+10
+select * from s_cache;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+0	13	1	1000	1	3	3	0	0
+select nextval_show(s_cache);
+nextval_show(s_cache)
+13
+select * from s_cache;
+currval	nextval	minvalue	maxvalue	start	increment	cache	cycle	round
+0	25	1	1000	1	3	3	0	0
+####################################
+3.show cache after skip
+####################################
+select nextval_skip(s_nocache, 10);
+nextval_skip(s_nocache, 10)
+2
+select nextval_skip(s_cache, 30);
+nextval_skip(s_cache, 30)
+13
+select nextval_show(s_nocache);
+nextval_show(s_nocache)
+11
+select nextval_show(s_cache);
+nextval_show(s_cache)
+33
+select nextval(s_nocache);
+nextval(s_nocache)
+11
+select nextval(s_cache);
+nextval(s_cache)
+33
+select nextval_show(s_nocache);
+nextval_show(s_nocache)
+12
+select nextval_show(s_cache);
+nextval_show(s_cache)
+36
+####################################
+4.show cache when run out
+####################################
+select nextval_skip(s_nocache, 999);
+nextval_skip(s_nocache, 999)
+12
+select nextval_skip(s_cache, 999);
+nextval_skip(s_cache, 999)
+36
+select nextval(s_nocache);
+nextval(s_nocache)
+1000
+select nextval(s_cache);
+nextval(s_cache)
+1000
+select nextval(s_nocache);
+ERROR HY000: Sequence 'seq_db.s_nocache' has run out.
+select nextval(s_cache);
+ERROR HY000: Sequence 'seq_db.s_cache' has run out.
+select nextval_show(s_nocache);
+ERROR HY000: Sequence 'seq_db.s_nocache' has run out.
+select nextval_show(s_cache);
+ERROR HY000: Sequence 'seq_db.s_cache' has run out.
+drop database seq_db;
