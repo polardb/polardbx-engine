@@ -108,6 +108,11 @@ class Binlog_sender : Gtid_mode_copy {
   const char *m_last_file;
   my_off_t m_last_pos;
 
+  // current MYSQL_BIN_LOG being processed
+  MYSQL_BIN_LOG *mysql_consensus_log;
+  // the previous consensus index being send
+  uint64_t current_index;
+
   /*
     Needed to be able to evaluate if buffer needs to be resized (shrunk).
   */
@@ -199,6 +204,17 @@ class Binlog_sender : Gtid_mode_copy {
     @return It returns 0 if succeeds, otherwise 1 is returned.
   */
   int send_binlog(File_reader *reader, my_off_t start_pos);
+
+  /**
+    It travels the binlog file and find the first user event's timestamp
+
+
+     @param[in] log_cache  IO_CACHE of the binlog will be sent
+     @param[in] end_pos    Only the events before end_pos are sent
+
+     @return It returns 0 if failed.
+  */
+  uint32 find_first_user_event_timestamp(File_reader *reader, my_off_t end_pos);
 
   /**
     It sends some events in a binlog file to the client.
@@ -368,8 +384,13 @@ class Binlog_sender : Gtid_mode_copy {
   inline int wait_new_events(my_off_t log_pos);
   inline int wait_with_heartbeat(my_off_t log_pos);
   inline int wait_without_heartbeat();
-
   int wait_commit_index_update(my_off_t log_pos, uint64_t index);
+ 
+  /**
+    Because of the design of binlog-relaylog combination,
+    X-Cluster revises each event before sending it to slave.
+  */
+  void revise_event(uchar *event_ptr, size_t event_len, uint32 fake_ctime, my_off_t log_pos);
 
 #ifndef DBUG_OFF
   /* It is used to count the events that have been sent. */
