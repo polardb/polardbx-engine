@@ -43,6 +43,7 @@
 #include "mysql/components/services/psi_stage_bits.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysql/psi/mysql_mutex.h"
+#include "mysql/service_thd_wait.h"
 #include "sql/binlog_reader.h"
 #include "sql/debug_sync.h"  // debug_sync_set_action
 #include "sql/derror.h"      // ER_THD
@@ -63,6 +64,9 @@
 #include "sql_string.h"
 #include "typelib.h"
 #include "unsafe_string_append.h"
+
+#include "consensus_log_manager.h"
+#include "bl_consensus_log.h"
 
 #ifndef DBUG_OFF
 static uint binlog_dump_count = 0;
@@ -130,6 +134,7 @@ Binlog_sender::Binlog_sender(THD *thd, const char *start_file,
       m_errno(0),
       m_last_file(nullptr),
       m_last_pos(0),
+      mysql_consensus_log(0),
       m_half_buffer_size_req_counter(0),
       m_new_shrink_size(PACKET_MIN_SIZE),
       m_flag(flag),
@@ -154,13 +159,17 @@ void Binlog_sender::init() {
   DBUG_PRINT("info", ("Initial packet->alloced_length: %zu",
                       m_packet.alloced_length()));
 
-  if (!mysql_bin_log.is_open()) {
+  consensus_log_manager.lock_consensus(TRUE);
+  mysql_consensus_log= consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
+  if (!mysql_consensus_log->is_open()) {
     set_fatal_error("Binary log is not open");
+    consensus_log_manager.unlock_consensus();
     return;
   }
 
   if (DBUG_EVALUATE_IF("simulate_no_server_id", true, server_id == 0)) {
     set_fatal_error("Misconfigured master - master server_id is 0");
+    consensus_log_manager.unlock_consensus();
     return;
   }
 
@@ -174,11 +183,17 @@ void Binlog_sender::init() {
               "instead of ON.",
               get_gtid_mode_string(gtid_mode));
       set_fatal_error(buf);
+      consensus_log_manager.unlock_consensus();
       return;
     }
   }
 
-  if (check_start_file()) return;
+  if (check_start_file()) {
+    consensus_log_manager.unlock_consensus();
+    return;
+  }
+
+  consensus_log_manager.unlock_consensus();
 
   LogErr(INFORMATION_LEVEL, ER_RPL_BINLOG_STARTING_DUMP, thd->thread_id(),
          thd->server_id, m_start_file, m_start_pos);
@@ -307,31 +322,36 @@ void Binlog_sender::run() {
           "wait_for continue_dump_thread no_clear_event";
       DBUG_ASSERT(!debug_sync_set_action(m_thd, STRING_WITH_LEN(act)));
     };);
-    mysql_bin_log.lock_index();
-    if (!mysql_bin_log.is_open()) {
-      if (mysql_bin_log.open_index_file(mysql_bin_log.get_index_fname(),
+    consensus_log_manager.lock_consensus(TRUE);
+    mysql_consensus_log= consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
+    mysql_consensus_log->lock_index();
+    if (!mysql_consensus_log->is_open()) {
+      if (mysql_consensus_log->open_index_file(mysql_consensus_log->get_index_fname(),
                                         log_file, false)) {
         set_fatal_error(
             "Binary log is not open and failed to open index file "
             "to retrieve next file.");
-        mysql_bin_log.unlock_index();
+        mysql_consensus_log->unlock_index();
+        consensus_log_manager.unlock_consensus();
         break;
       }
       is_index_file_reopened_on_binlog_disable = true;
     }
-    int error = mysql_bin_log.find_next_log(&m_linfo, 0);
-    mysql_bin_log.unlock_index();
+    int error = mysql_consensus_log->find_next_log(&m_linfo, 0);
+    mysql_consensus_log->unlock_index();
     if (unlikely(error)) {
       DBUG_EXECUTE_IF("waiting_for_disable_binlog", {
         const char act[] = "now signal consumed_binlog";
         DBUG_ASSERT(!debug_sync_set_action(m_thd, STRING_WITH_LEN(act)));
       };);
       if (is_index_file_reopened_on_binlog_disable)
-        mysql_bin_log.close(LOG_CLOSE_INDEX, true /*need_lock_log=true*/,
+        mysql_consensus_log->close(LOG_CLOSE_INDEX, true /*need_lock_log=true*/,
                             true /*need_lock_index=true*/);
       set_fatal_error("could not find next log");
+      consensus_log_manager.unlock_consensus();
       break;
     }
+    consensus_log_manager.unlock_consensus();
 
     start_pos = BIN_LOG_HEADER_SIZE;
     reader.close();
@@ -416,22 +436,26 @@ int Binlog_sender::get_binlog_end_pos(File_reader *reader, my_off_t *end_pos) {
   my_off_t read_pos = reader->position();
 
   do {
+    consensus_log_manager.lock_consensus(TRUE);
+    mysql_consensus_log = consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
     /*
       MYSQL_BIN_LOG::binlog_end_pos is atomic. We should only acquire the
       LOCK_binlog_end_pos if we reached the end of the hot log and are going
       to wait for updates on the binary log (Binlog_sender::wait_new_event()).
     */
-    *end_pos = mysql_bin_log.get_binlog_end_pos();
+    *end_pos = mysql_consensus_log->get_binlog_end_pos();
 
     /* If this is a cold binlog file, we are done getting the end pos */
-    if (unlikely(!mysql_bin_log.is_active(m_linfo.log_file_name))) {
+    if (unlikely(!mysql_consensus_log->is_active(m_linfo.log_file_name))) {
       *end_pos = 0;
+      consensus_log_manager.unlock_consensus();
       return 0;
     }
 
     DBUG_PRINT("info", ("Reading file %s, seek pos %llu, end_pos is %llu",
                         m_linfo.log_file_name, read_pos, *end_pos));
-    DBUG_PRINT("info", ("Active file is %s", mysql_bin_log.get_log_fname()));
+    DBUG_PRINT("info", ("Active file is %s", mysql_consensus_log->get_log_fname()));
+    consensus_log_manager.unlock_consensus();
 
     if (read_pos < *end_pos) return 0;
 
@@ -444,6 +468,39 @@ int Binlog_sender::get_binlog_end_pos(File_reader *reader, my_off_t *end_pos) {
   return 1;
 }
 
+uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader, my_off_t end_pos)
+{
+  my_off_t old_pos, log_pos;
+  String tmp;
+  tmp.copy(m_packet);
+  tmp.length(m_packet.length());
+  uint32 create_time= 0;
+
+  old_pos= log_pos= reader->position();
+  while(log_pos < end_pos)
+  {
+    uchar* event_ptr;
+    uint32 event_len= 0;
+    if (unlikely(read_event(reader,
+                            &event_ptr, &event_len)))
+      break;
+    if (!Log_event::is_local_event_type(static_cast<Log_event_type>(event_ptr[EVENT_TYPE_OFFSET])))
+    {
+      create_time= uint4korr(event_ptr);
+#ifndef DBUG_OFF
+      sql_print_information("Binlog first user event timestamp is %u", create_time);
+#endif
+      break;
+    }
+    log_pos= reader->position();
+  }
+  reader->seek(old_pos); // rewind
+  m_packet.copy(tmp);
+  m_packet.length(tmp.length());
+  set_last_pos(reader->position());
+  return create_time;
+}
+
 int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
   DBUG_TRACE;
 
@@ -452,6 +509,9 @@ int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
   my_off_t log_pos = reader->position();
   my_off_t exclude_group_end_pos = 0;
   bool in_exclude_group = false;
+ 
+  /* read the first user log_event to get the correct timestamp */
+  uint32 fake_create_time= find_first_user_event_timestamp(reader, end_pos);
 
   while (likely(log_pos < end_pos) || end_pos == 0) {
     uchar *event_ptr = nullptr;
@@ -498,6 +558,9 @@ int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
     }
 
     log_pos = reader->position();
+
+    /* X-Cluster revises event before send it out */
+    revise_event(event_ptr, event_len, fake_create_time, log_pos);
 
     if (before_send_hook(log_file, log_pos)) return 1;
     /*
@@ -646,28 +709,35 @@ int Binlog_sender::wait_new_events(my_off_t log_pos) {
   int ret = 0;
   PSI_stage_info old_stage;
 
-  mysql_bin_log.lock_binlog_end_pos();
+  consensus_log_manager.lock_consensus(TRUE);
+  mysql_consensus_log= consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
+
+  mysql_consensus_log->lock_binlog_end_pos();
   /*
     If the binary log was updated before reaching this waiting point,
     there is no need to wait.
   */
-  if (mysql_bin_log.get_binlog_end_pos() > log_pos ||
-      !mysql_bin_log.is_active(m_linfo.log_file_name)) {
-    mysql_bin_log.unlock_binlog_end_pos();
+  if (mysql_consensus_log->get_binlog_end_pos() > log_pos ||
+      !mysql_consensus_log->is_active(m_linfo.log_file_name)) {
+    mysql_consensus_log->unlock_binlog_end_pos();
+    consensus_log_manager.unlock_consensus();
     return ret;
   }
 
-  m_thd->ENTER_COND(mysql_bin_log.get_log_cond(),
-                    mysql_bin_log.get_binlog_end_pos_lock(),
+  m_thd->ENTER_COND(mysql_consensus_log->get_log_cond(),
+                    mysql_consensus_log->get_binlog_end_pos_lock(),
                     &stage_master_has_sent_all_binlog_to_slave, &old_stage);
 
+  thd_wait_begin(m_thd, THD_WAIT_BINLOG);
   if (m_heartbeat_period.count() > 0)
     ret = wait_with_heartbeat(log_pos);
   else
     ret = wait_without_heartbeat();
+  thd_wait_end(m_thd);
 
-  mysql_bin_log.unlock_binlog_end_pos();
+  mysql_consensus_log->unlock_binlog_end_pos();
   m_thd->EXIT_COND(&old_stage);
+  consensus_log_manager.unlock_consensus();
   return ret;
 }
 
@@ -680,7 +750,7 @@ inline int Binlog_sender::wait_with_heartbeat(my_off_t log_pos) {
 
   do {
     set_timespec_nsec(&ts, m_heartbeat_period.count());
-    ret = mysql_bin_log.wait_for_update(&ts);
+    ret = mysql_consensus_log->wait_for_update(&ts);
     if (!is_timeout(ret)) break;
 
 #ifndef DBUG_OFF
@@ -699,7 +769,7 @@ inline int Binlog_sender::wait_with_heartbeat(my_off_t log_pos) {
 }
 
 inline int Binlog_sender::wait_without_heartbeat() {
-  return mysql_bin_log.wait_for_update(nullptr);
+  return mysql_consensus_log->wait_for_update(nullptr);
 }
 
 void Binlog_sender::init_heartbeat_period() {
@@ -722,7 +792,7 @@ int Binlog_sender::check_start_file() {
   const char *errmsg;
 
   if (m_start_file[0] != '\0') {
-    mysql_bin_log.make_log_name(index_entry_name, m_start_file);
+    mysql_consensus_log->make_log_name(index_entry_name, m_start_file);
     name_ptr = index_entry_name;
   } else if (m_using_gtid_protocol) {
     /*
@@ -808,7 +878,7 @@ int Binlog_sender::check_start_file() {
     }
     global_sid_lock->unlock();
     Gtid first_gtid = {0, 0};
-    if (mysql_bin_log.find_first_log_not_in_gtid_set(
+    if (mysql_consensus_log->find_first_log_not_in_gtid_set(
             index_entry_name, m_exclude_gtid, &first_gtid, &errmsg)) {
       set_fatal_error(errmsg);
       return 1;
@@ -836,7 +906,7 @@ int Binlog_sender::check_start_file() {
     then starts from the first file in index file.
   */
 
-  if (mysql_bin_log.find_log_pos(&m_linfo, name_ptr, true)) {
+  if (mysql_consensus_log->find_log_pos(&m_linfo, name_ptr, true)) {
     set_fatal_error(
         "Could not find first log file name in binary log "
         "index file");
@@ -1043,6 +1113,13 @@ int Binlog_sender::send_format_description_event(File_reader *reader,
     event_updated = true;
   }
 
+  /* X-Cluster: unset relay_log flag if exists */
+  if (uint2korr(event_ptr + FLAGS_OFFSET) & LOG_EVENT_RELAY_LOG_F)
+  {
+    event_ptr[FLAGS_OFFSET] &= ~LOG_EVENT_RELAY_LOG_F;
+    event_updated= true;
+  }
+
   /* fix the checksum due to latest changes in header */
   if (event_checksum_on() && event_updated)
     calc_event_checksum(event_ptr, event_len);
@@ -1055,6 +1132,12 @@ int Binlog_sender::has_previous_gtid_log_event(File_reader *reader,
   uchar *event = nullptr;
   uint32 event_len;
   *found = false;
+
+#ifdef NORMANDY_TEST
+  /* TODO: fix bug */
+  *found= true;
+  return 0;
+#endif
 
   if (read_event(reader, &event, &event_len) || event == nullptr) {
     if (reader->get_error_type() == Binlog_read_error::READ_EOF) return 0;
@@ -1355,7 +1438,85 @@ void Binlog_sender::calc_shrink_buffer_size(size_t current_size) {
 */
 int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index)
 {
-  log_pos = index;
-  index = log_pos;
-  assert(0);
+#ifndef DBUG_OFF
+  ulong hb_info_counter= 0;
+#endif
+  longlong sec_cnt= 0;
+  bool hb_send= false;
+  String tmp;
+  /* heartbeat period is measured by second */
+  uint ratio = std::max(1000000ULL / opt_consensus_check_commit_index_interval, 1ULL);
+  while (consensus_ptr->checkCommitIndex(index - 1,
+      consensus_log_manager.get_current_term()) < index)
+  {
+    my_sleep(opt_consensus_check_commit_index_interval);
+    if (unlikely(m_thd->killed))
+      return 1;
+    // send heartbeat event
+    if (m_heartbeat_period.count() > 0)
+    {
+      sec_cnt++;
+      if (m_heartbeat_period.count() == (sec_cnt / ratio))
+      {
+        sec_cnt= 0;
+#ifndef DBUG_OFF
+        if (hb_info_counter < 3)
+        {
+          sql_print_information("master sends heartbeat message");
+          hb_info_counter++;
+          if (hb_info_counter == 3)
+            sql_print_information("the rest of heartbeat info skipped ...");
+        }
+#endif
+        if (!hb_send)
+        {
+          /* Save a copy of the buffer content. */
+          tmp.copy(m_packet);
+          tmp.length(m_packet.length());
+          hb_send= true;
+        }
+
+        if (send_heartbeat_event(log_pos))
+          return 1;
+      }
+    }
+  }
+  current_index= index;
+  if (hb_send)
+  {
+    /* Restore the copy back. */
+    m_packet.copy(tmp);
+    m_packet.length(tmp.length());
+  }
+  DBUG_ASSERT(current_index <= consensus_ptr->getCommitIndex());
+#ifndef DBUG_OFF
+  sql_print_information("master sends consensus index %lu", current_index);
+#endif
+
+  return 0;
+}
+
+void Binlog_sender::revise_event(uchar *event_ptr, size_t event_len, uint32 fake_ctime, my_off_t log_pos)
+{
+  Log_event_type event_type= (Log_event_type)event_ptr[EVENT_TYPE_OFFSET];
+  /* X-Cluster: hack the timestamp of the first several events in each binlog file */
+  if ((event_type == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
+       event_type == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT)
+      && fake_ctime != 0)
+  {
+    int4store(event_ptr, fake_ctime);
+  }
+
+  /* X-Cluster: unset relay_log flag if exists */
+  if (uint2korr(event_ptr + FLAGS_OFFSET) & LOG_EVENT_RELAY_LOG_F)
+  {
+    event_ptr[FLAGS_OFFSET] &= ~LOG_EVENT_RELAY_LOG_F;
+  }
+
+  /* X-Cluster: reset each binlog event's log_pos (end_log_pos) to the correct value */
+  int4store(event_ptr + LOG_POS_OFFSET, log_pos);
+
+  /* X-Cluster: recalculate the checksum if necessary */
+  if (event_checksum_on())
+    calc_event_checksum(event_ptr, event_len);
 }

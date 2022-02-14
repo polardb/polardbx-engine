@@ -83,6 +83,20 @@ class Rpl_applier_reader {
   */
   Log_event *read_next_event();
 
+  bool is_reading_active_log() { return m_reading_active_log; }
+  Relaylog_file_reader &relaylog_file_reader() { return m_relaylog_file_reader; }
+  /**
+     It checks if the relaylog file reader should be reopened and then reopens
+     the reader if receiver thread truncated some data from active relay log.
+     The caller must hold m_rli->data_lock
+
+     @retval    false    Success
+     @retval    true     Error
+  */
+  bool reopen_log_reader_if_needed();
+  /* purge logs by xpaxos module and reset the log file index offset */
+  LOG_INFO *get_log_info() { return &m_linfo; }
+
  private:
   Relaylog_file_reader m_relaylog_file_reader;
   Relay_log_info *m_rli = nullptr;
@@ -146,17 +160,6 @@ class Rpl_applier_reader {
            relaylog.lock_binlog_end_pos().
   */
   bool wait_for_new_event();
-
-  /**
-     It checks if the relaylog file reader should be reopened and then reopens
-     the reader if receiver thread truncated some data from active relay log.
-     The caller must hold m_rli->data_lock
-
-     @retval    false    Success
-     @retval    true     Error
-  */
-  bool reopen_log_reader_if_needed();
-
   /* reset seconds_behind_master when starting to wait for events coming */
   void reset_seconds_behind_master();
   /* relay_log_space_limit should be disabled temporarily in some cases. */
