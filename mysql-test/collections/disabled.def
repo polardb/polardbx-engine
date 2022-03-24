@@ -168,7 +168,7 @@ perfschema.persisted_variables : WL#21509040 RESET PERSIST
 perfschema.idx_compare_mems_by_thread_by_event_name : WL#21509040 disable temp
 perfschema.idx_compare_socket_instances             : WL#21509040 ipv6
 performance_schema.socket_instances                 : WL#21509040 ipv6
-
+service_sys_var_registration.sys_var_service_cl     : WL#21509040 not support restart --log-in
 test_services.test_host_application_signal_plugin   : WL#21509040 disable temp
 test_services.test_services                         : WL#21509040 disable temp
 test_service_sql_api.test_session_info              : WL#21509040 disable temp
@@ -273,6 +273,19 @@ binlog_nogtid.binlog_row_ctype_cp932                       : WL#21509040 disable
 binlog_nogtid.binlog_row_ctype_ucs                         : WL#21509040 disable temp
 binlog_nogtid.binlog_row_kill_create_select                : WL#21509040 disable temp
 binlog_nogtid.binlog_xa_gtid_consistency_violation         : WL#21509040 disable temp
+
+
+federated.federated                            : WL#001 x-cluster does not support master / slave mode
+federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_13118                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_25714                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_35333                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_connection_attrs           : WL#001 x-cluster does not support master / slave mode
+federated.federated_debug                      : WL#001 x-cluster does not support master / slave mode
+federated.federated_get_table_share            : WL#001 x-cluster does not support master / slave mode
+federated.federated_innodb                     : WL#001 x-cluster does not support master / slave mode
+federated.federated_server                     : WL#001 x-cluster does not support master / slave mode
+federated.percona_bug1739734                   : WL#001 x-cluster does not support master / slave mode
 
 # max_parts suite tests
 max_parts.innodb-import-partition-1                         : BUG#27413612 Fails consistently on hudson jobs. Disabled until bug is fixed.
