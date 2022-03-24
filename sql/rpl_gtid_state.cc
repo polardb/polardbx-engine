@@ -679,6 +679,21 @@ int Gtid_state::save(const Gtid_set *gtid_set) {
   return ret;
 }
 
+int Gtid_state::set_previous_logged_gtids_relaylog(const Gtid_set *gtid_set, Checkable_rwlock *sid_lock) {
+  sid_lock->wrlock();
+  executed_gtids.get_sid_map()->get_sid_lock()->wrlock();
+  int ret= (const_cast<Gtid_set*>(gtid_set)->add_gtid_set(&executed_gtids) != RETURN_STATUS_OK);
+  executed_gtids.get_sid_map()->get_sid_lock()->unlock();
+  if (!ret) {
+    gtids_only_in_table.get_sid_map()->get_sid_lock()->wrlock();
+    const_cast<Gtid_set*>(gtid_set)->remove_gtid_set(&gtids_only_in_table);
+    gtids_only_in_table.get_sid_map()->get_sid_lock()->unlock();
+  }
+  sid_lock->unlock();
+
+  return ret;
+}
+
 int Gtid_state::save_gtids_of_last_binlog_into_table() {
   DBUG_TRACE;
   int ret = 0;
@@ -859,7 +874,9 @@ void Gtid_state::update_gtids_impl_own_gtid(THD *thd, bool is_commit) {
     */
     executed_gtids._add_gtid(thd->owned_gtid);
     thd->rpl_thd_ctx.session_gtids_ctx().notify_after_gtid_executed_update(thd);
-    if (thd->slave_thread && opt_bin_log && !opt_log_slave_updates) {
+    /* paxos replay thread can't add executed gtid to lost and not in table set */
+    if (thd->slave_thread && opt_bin_log && !opt_log_slave_updates &&
+       !thd->xpaxos_replication_channel) {
       lost_gtids._add_gtid(thd->owned_gtid);
       gtids_only_in_table._add_gtid(thd->owned_gtid);
     }

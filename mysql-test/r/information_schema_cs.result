@@ -59,9 +59,17 @@ create view v1 (c) as
 SELECT table_name FROM information_schema.TABLES
 WHERE table_schema IN ('mysql', 'information_schema', 'test', 'mysqltest') AND
 table_name COLLATE utf8_general_ci not like 'ndb_%' AND
+table_name COLLATE utf8_general_ci not like 'xengine_%' AND
 table_name COLLATE utf8_general_ci not like 'innodb_%';
 select * from v1;
 c
+ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE
+ALISQL_CLUSTER_CONSENSUS_STATUS
+ALISQL_CLUSTER_GLOBAL
+ALISQL_CLUSTER_HEALTH
+ALISQL_CLUSTER_LEARNER_SOURCE
+ALISQL_CLUSTER_LOCAL
+ALISQL_CLUSTER_PREFETCH_CHANNEL
 CHARACTER_SETS
 CHECK_CONSTRAINTS
 COLLATIONS
@@ -69,6 +77,7 @@ COLLATION_CHARACTER_SET_APPLICABILITY
 COLUMNS
 COLUMN_PRIVILEGES
 COLUMN_STATISTICS
+CONSENSUS_COMMIT_POSITION
 ENGINES
 EVENTS
 FILES
@@ -103,6 +112,7 @@ VIEW_TABLE_USAGE
 columns_priv
 component
 concurrency_control
+consensus_info
 db
 default_roles
 engine_cost
@@ -627,8 +637,8 @@ from information_schema.tables
 where table_schema='information_schema'
 order by table_name collate utf8_general_ci limit 2;
 TABLE_NAME	TABLE_TYPE	ENGINE
-CHARACTER_SETS	SYSTEM VIEW	NULL
-CHECK_CONSTRAINTS	SYSTEM VIEW	NULL
+ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	SYSTEM VIEW	NULL
+ALISQL_CLUSTER_CONSENSUS_STATUS	SYSTEM VIEW	NULL
 show tables from information_schema like "T%";
 Tables_in_information_schema (T%)
 TABLES
@@ -797,6 +807,7 @@ information_schema	VIEWS	VIEW_DEFINITION
 select table_name, column_name, data_type from information_schema.columns
 where table_schema not in ('performance_schema', 'sys')
 and data_type = 'datetime'
+  and table_name COLLATE utf8_general_ci not like 'xengine_%'
   and table_name COLLATE utf8_general_ci not like 'innodb_%' order by table_name, column_name;
 TABLE_NAME	COLUMN_NAME	DATA_TYPE
 EVENTS	ENDS	datetime
@@ -868,10 +879,11 @@ flush privileges;
 SELECT table_schema, count(*) FROM information_schema.TABLES WHERE
 table_schema IN ('mysql', 'information_schema', 'test', 'mysqltest')
 AND table_name not like 'ndb%' AND table_name COLLATE utf8_general_ci not like 'innodb_%'
+AND table_name COLLATE utf8_general_ci not like 'xengine_%'
 GROUP BY TABLE_SCHEMA;
 TABLE_SCHEMA	count(*)
-information_schema	36
-mysql	33
+information_schema	46
+mysql	34
 create table t1 (i int, j int);
 create trigger trg1 before insert on t1 for each row
 begin
@@ -1318,14 +1330,22 @@ c2.table_schema='information_schema' and
 (c2.column_type = 'varchar(7)' or c2.column_type = 'varchar(20)')
 group by c2.column_type order by num limit 1)
 and t.table_name not like 'INNODB_%'
+        and t.table_name not like 'XENGINE_%'
 group by t.table_name order by num1, t.table_name COLLATE utf8_general_ci;
 TABLE_NAME	group_concat(t.table_schema, '.', t.table_name)	num1
+ALISQL_CLUSTER_CONSENSUS_STATUS	information_schema.ALISQL_CLUSTER_CONSENSUS_STATUS	1
+ALISQL_CLUSTER_GLOBAL	information_schema.ALISQL_CLUSTER_GLOBAL	1
+ALISQL_CLUSTER_HEALTH	information_schema.ALISQL_CLUSTER_HEALTH	1
+ALISQL_CLUSTER_LEARNER_SOURCE	information_schema.ALISQL_CLUSTER_LEARNER_SOURCE	1
+ALISQL_CLUSTER_LOCAL	information_schema.ALISQL_CLUSTER_LOCAL	1
+ALISQL_CLUSTER_PREFETCH_CHANNEL	information_schema.ALISQL_CLUSTER_PREFETCH_CHANNEL	1
 CHARACTER_SETS	information_schema.CHARACTER_SETS	1
 CHECK_CONSTRAINTS	information_schema.CHECK_CONSTRAINTS	1
 COLLATIONS	information_schema.COLLATIONS	1
 COLUMNS	information_schema.COLUMNS	1
 COLUMN_PRIVILEGES	information_schema.COLUMN_PRIVILEGES	1
 COLUMN_STATISTICS	information_schema.COLUMN_STATISTICS	1
+CONSENSUS_COMMIT_POSITION	information_schema.CONSENSUS_COMMIT_POSITION	1
 ENGINES	information_schema.ENGINES	1
 EVENTS	information_schema.EVENTS	1
 FILES	information_schema.FILES	1
@@ -2435,9 +2455,17 @@ c2.column_name LIKE '%SCHEMA%'
         )
 AND t.table_name NOT LIKE 'ndb%'
   AND t.table_name NOT LIKE 'INNODB%'
+  AND t.table_name NOT LIKE 'XENGINE%'
   ORDER BY t.table_name COLLATE utf8_general_ci,
 c1.column_name COLLATE utf8_general_ci;
 TABLE_NAME	COLUMN_NAME
+ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	TIME
+ALISQL_CLUSTER_CONSENSUS_STATUS	SERVER_ID
+ALISQL_CLUSTER_GLOBAL	SERVER_ID
+ALISQL_CLUSTER_HEALTH	SERVER_ID
+ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_SERVER_ID
+ALISQL_CLUSTER_LOCAL	SERVER_ID
+ALISQL_CLUSTER_PREFETCH_CHANNEL	CHANNEL_ID
 CHARACTER_SETS	CHARACTER_SET_NAME
 CHECK_CONSTRAINTS	CONSTRAINT_SCHEMA
 COLLATIONS	COLLATION_NAME
@@ -2445,6 +2473,7 @@ COLLATION_CHARACTER_SET_APPLICABILITY	COLLATION_NAME
 COLUMNS	TABLE_SCHEMA
 COLUMN_PRIVILEGES	TABLE_SCHEMA
 COLUMN_STATISTICS	SCHEMA_NAME
+CONSENSUS_COMMIT_POSITION	LOGNAME
 ENGINES	ENGINE
 EVENTS	EVENT_SCHEMA
 FILES	TABLE_SCHEMA
@@ -2492,9 +2521,17 @@ c2.column_name LIKE '%SCHEMA%'
         )
 AND t.table_name NOT LIKE 'ndb%'
   AND t.table_name NOT LIKE 'INNODB%'
+  AND t.table_name NOT LIKE 'XENGINE%'
   ORDER BY t.table_name COLLATE utf8_general_ci,
 c1.column_name COLLATE utf8_general_ci;
 TABLE_NAME	COLUMN_NAME
+ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	TIME
+ALISQL_CLUSTER_CONSENSUS_STATUS	SERVER_ID
+ALISQL_CLUSTER_GLOBAL	SERVER_ID
+ALISQL_CLUSTER_HEALTH	SERVER_ID
+ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_SERVER_ID
+ALISQL_CLUSTER_LOCAL	SERVER_ID
+ALISQL_CLUSTER_PREFETCH_CHANNEL	CHANNEL_ID
 CHARACTER_SETS	CHARACTER_SET_NAME
 CHECK_CONSTRAINTS	CONSTRAINT_SCHEMA
 COLLATIONS	COLLATION_NAME
@@ -2502,6 +2539,7 @@ COLLATION_CHARACTER_SET_APPLICABILITY	COLLATION_NAME
 COLUMNS	TABLE_SCHEMA
 COLUMN_PRIVILEGES	TABLE_SCHEMA
 COLUMN_STATISTICS	SCHEMA_NAME
+CONSENSUS_COMMIT_POSITION	LOGNAME
 ENGINES	ENGINE
 EVENTS	EVENT_SCHEMA
 FILES	TABLE_SCHEMA

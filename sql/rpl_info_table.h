@@ -93,6 +93,11 @@ class Rpl_info_table : public Rpl_info_handler {
   */
   bool is_transactional;
 
+  /**
+    Force to use new thd to update the info table.
+  */
+  bool force_use_new_thd;
+
   int do_init_info();
   int do_init_info(uint instance);
   int do_init_info(enum_find_method method, uint instance);
@@ -100,6 +105,7 @@ class Rpl_info_table : public Rpl_info_handler {
   enum_return_check do_check_info(uint instance);
   void do_end_info();
   int do_flush_info(const bool force);
+  int do_flush_info_force_new_thd(const bool force);
   int do_remove_info();
   int do_clean_info();
   /**

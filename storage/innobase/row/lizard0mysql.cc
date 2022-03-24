@@ -102,8 +102,6 @@ convert_flashback_query_timestamp_to_scn(row_prebuilt_t *prebuilt,
 */
 dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   TABLE *table;
-  trx_t *trx;
-  bool err = false;
   dict_index_t *clust_index;
   scn_t fbq_scn = SCN_NULL;
   gcn_t fbq_gcn = GCN_NULL;
@@ -111,25 +109,12 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   ut_ad(prebuilt);
 
   table = prebuilt->m_mysql_table;
-  trx = prebuilt->trx;
 
   /* forbid as-of query */
   if (!srv_scn_valid_enabled) return DB_SUCCESS;
 
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_set()) return DB_SUCCESS;
-
-  if (trx) {
-    /* Change gcn on vision to current snapshot gcn. */
-    gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
-    if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
-
-    /* Set gcn on m_asof_query if exist. */
-    if (trx->vision.is_asof_gcn()) {
-      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
-      return DB_SUCCESS;
-    }
-  }
 
 #if defined TURN_MVCC_SEARCH_TO_AS_OF
 
@@ -153,12 +138,8 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
       fbq_gcn = table->snapshot.get_asof_gcn();
       ut_ad(fbq_gcn != GCN_NULL && fbq_scn == SCN_NULL);
 
-      DBUG_EXECUTE_IF("simulate_gcn_def_changed_error", { err = true; });
-
-      /* handle the simulated error */
-      if (err) {
-        goto simulate_error;
-      }
+      DBUG_EXECUTE_IF("simulate_gcn_def_changed_error",
+                      { goto simulate_error; });
 
       /* required undo has been purged */
       if (fbq_gcn < purge_sys->purged_gcn.get()) {
@@ -217,6 +198,7 @@ simulate_error:
 
   /* set as as-of query */
   prebuilt->m_asof_query.set(fbq_scn, fbq_gcn);
+  lizard::lizard_sys->scn.set_snapshot_gcn(fbq_gcn);
 
   return DB_SUCCESS;
 }

@@ -38,8 +38,14 @@ mysql_pfs_key_t lizard_scn_mutex_key;
 
 namespace lizard {
 
+bool srv_snapshot_update_gcn = false;
+
 /** Constructor of SCN */
-SCN::SCN() : m_scn(SCN_NULL), m_gcn(GCN_NULL), m_inited(false) {
+SCN::SCN()
+    : m_scn(SCN_NULL),
+      m_gcn(GCN_NULL),
+      m_snapshot_gcn(GCN_NULL),
+      m_inited(false) {
   mutex_create(LATCH_ID_LIZARD_SCN, &m_mutex);
 }
 
@@ -62,6 +68,7 @@ void SCN::init() {
                              LIZARD_SCN_NUMBER_MAGIN);
 
   m_gcn = mach_read_from_8(lzd_hdr + LIZARD_SYS_GCN);
+  m_snapshot_gcn = m_gcn.load();
 
   lizard_sys->min_safe_scn = m_scn.load();
 
@@ -125,13 +132,16 @@ scn_t SCN::new_scn() {
 std::pair<commit_scn_t, bool> SCN::new_commit_scn(gcn_t gcn) {
   commit_scn_t cmmt = COMMIT_SCN_NULL;
 
-  if (gcn != GCN_NULL && gcn > m_gcn) {
-    // TODO: the flush frequency of gcn.
-    m_gcn = gcn;
+  if (gcn != GCN_NULL)
+    cmmt.gcn = gcn;
+  else 
+    cmmt.gcn = acquire_gcn(true);
+
+  if (cmmt.gcn > m_gcn) {
+    m_gcn = cmmt.gcn;
     flush_gcn();
   }
 
-  cmmt.gcn = (gcn != GCN_NULL) ? gcn : m_gcn.load();
   cmmt.scn = new_scn();
 
   ut_ad(cmmt.scn > SCN_RESERVERD_MAX);
@@ -156,9 +166,48 @@ scn_t SCN::acquire_scn(bool mutex_hold) {
   return ret;
 }
 
+/** Get current scn which is committed.
+@param[in]  true if m_mutex is hold
+@return     m_scn */
+gcn_t SCN::acquire_gcn(bool mutex_hold) {
+  gcn_t ret;
+  if (!mutex_hold) {
+    mutex_enter(&m_mutex);
+  }
+
+  if (srv_snapshot_update_gcn)
+    ret = m_gcn > m_snapshot_gcn ? m_gcn.load() : m_snapshot_gcn.load();
+  else 
+    ret = m_gcn.load();
+
+  if (!mutex_hold) {
+    mutex_exit(&m_mutex);
+  }
+  return ret;
+}
+
 scn_t SCN::get_scn() { return m_scn.load(); }
 
 gcn_t SCN::get_gcn() { return m_gcn.load(); }
+
+void SCN::set_snapshot_gcn(gcn_t gcn, bool mutex_hold) { 
+
+  if(gcn == GCN_NULL || gcn == GCN_INITIAL) 
+    return;
+
+  if (!mutex_hold) {
+    mutex_enter(&m_mutex);
+  }
+
+  if( gcn > m_snapshot_gcn )
+    m_snapshot_gcn = gcn;
+
+  if (!mutex_hold) {
+    mutex_exit(&m_mutex);
+  }
+}
+
+gcn_t SCN::get_snapshot_gcn() { return m_snapshot_gcn.load(); }
 
 /**
   Check the commit scn state
@@ -169,7 +218,7 @@ gcn_t SCN::get_gcn() { return m_gcn.load(); }
 */
 enum scn_state_t commit_scn_state(const commit_scn_t &cmmt) {
   /** The init value */
-  if (cmmt.scn == SCN_NULL && cmmt.utc == UTC_NULL && cmmt.gcn == GCN_NULL)
+  if (cmmt.scn == SCN_NULL && cmmt.utc == UTC_NULL)
     return SCN_STATE_INITIAL;
 
   /** The assigned commit scn value */

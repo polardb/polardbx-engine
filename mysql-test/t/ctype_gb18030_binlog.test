@@ -1,3 +1,6 @@
+# reset master only support by debug version
+--source include/have_debug_new.inc
+
 --source include/force_myisam_default.inc
 --source include/have_myisam.inc
 

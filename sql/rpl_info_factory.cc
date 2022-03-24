@@ -59,6 +59,7 @@
 #include "sql/table.h"
 #include "sql_string.h"
 #include "thr_lock.h"
+#include "consensus_info.h"
 
 /*
   Defines meta information on diferent repositories.
@@ -69,6 +70,61 @@ Rpl_info_factory::struct_table_data Rpl_info_factory::mi_table_data;
 Rpl_info_factory::struct_file_data Rpl_info_factory::mi_file_data;
 Rpl_info_factory::struct_file_data Rpl_info_factory::worker_file_data;
 Rpl_info_factory::struct_table_data Rpl_info_factory::worker_table_data;
+Rpl_info_factory::struct_table_data Rpl_info_factory::consensus_table_data;
+Rpl_info_factory::struct_file_data Rpl_info_factory::consensus_file_data;
+
+Consensus_info *Rpl_info_factory::create_consensus_info()
+{
+  Consensus_info* consensus_info = NULL;
+  Rpl_info_handler*  handler_src = NULL;
+  Rpl_info_handler*  handler_dest = NULL;
+  // uint instances = 1;
+  const char *msg = "Failed to allocate memory for the consensus info "
+    "structure";
+  DBUG_ENTER("Rpl_info_factory::create_consensus_info");
+  if (!(consensus_info = new Consensus_info(
+#ifdef HAVE_PSI_INTERFACE
+    &key_consensus_info_run_lock,
+    &key_consensus_info_data_lock,
+    &key_consensus_info_sleep_lock,
+    &key_consensus_info_thd_lock,
+    &key_consensus_info_data_cond,
+    &key_consensus_info_start_cond,
+    &key_consensus_info_stop_cond,
+    &key_consensus_info_sleep_cond
+#endif
+  )))
+    goto err;
+  if (init_repositories(consensus_table_data, consensus_file_data, INFO_REPOSITORY_TABLE,
+    &handler_src, &handler_dest, &msg))
+    goto err;
+  if (handler_dest->get_rpl_info_type() != INFO_REPOSITORY_TABLE)
+  {
+    sql_print_error("Consensus: Wrong repository. Respository should be TABLE");
+    goto err;
+  }
+  
+  consensus_info->set_rpl_info_handler(handler_dest);
+  if (consensus_info->set_info_search_keys(handler_dest))
+    goto err;
+  delete handler_src;
+  DBUG_RETURN(consensus_info);
+err:
+  delete handler_src;
+  delete handler_dest;
+  if (consensus_info)
+  {
+    /*
+    The handler was previously deleted so we need to remove
+    any reference to it.
+    */
+    consensus_info->set_rpl_info_handler(NULL);
+    delete consensus_info;
+  }
+  sql_print_error("Error creating consensus info: %s.", msg);
+  DBUG_RETURN(NULL);
+}
+
 
 /**
   Creates a Master info repository whose type is defined as a parameter.
@@ -547,6 +603,19 @@ void Rpl_info_factory::init_repository_metadata() {
                          relay_log_info_file_name);
   worker_file_data.name_indexed = true;
   Slave_worker::set_nullable_fields(&worker_file_data.nullable_fields);
+}
+
+void Rpl_info_factory::init_consensus_repo_metadata()
+{
+  consensus_table_data.n_fields = Consensus_info::get_number_info_consensus_fields();
+  consensus_table_data.schema = MYSQL_SCHEMA_NAME.str;
+  consensus_table_data.name = CONSENSUS_INFO_NAME.str;
+  consensus_file_data.n_fields = Consensus_info::get_number_info_consensus_fields();
+  my_stpcpy(consensus_file_data.name, "consensus_info");
+  my_stpcpy(consensus_file_data.pattern, "consensus_info");
+  consensus_file_data.name_indexed = false;
+  Consensus_info::set_nullable_fields(&consensus_table_data.nullable_fields);
+  Consensus_info::set_nullable_fields(&consensus_file_data.nullable_fields);
 }
 
 /**
@@ -1149,8 +1218,8 @@ bool Rpl_info_factory::create_slave_info_objects(
   for (std::vector<std::string>::iterator it = channel_list.begin();
        it != channel_list.end(); ++it) {
     const char *cname = (*it).c_str();
-    bool is_default_channel =
-        !strcmp(cname, pchannel_map->get_default_channel());
+    // bool is_default_channel =
+    //   !strcmp(cname, pchannel_map->get_default_channel());
     channel_error = !(mi = create_mi_and_rli_objects(
                           mi_option, rli_option, cname,
                           (channel_list.size() == 1) ? 1 : 0, pchannel_map));
@@ -1158,9 +1227,10 @@ bool Rpl_info_factory::create_slave_info_objects(
       Read the channel configuration from the repository if the channel name
       was read from the repository.
     */
-    if (!channel_error &&
-        (!is_default_channel || default_channel_existed_previously)) {
-      bool ignore_if_no_info = (channel_list.size() == 1) ? true : false;
+    if (!channel_error /*&&
+        (!is_default_channel || default_channel_existed_previously) */) {
+      // bool ignore_if_no_info = (channel_list.size() == 1) ? true : false;
+      bool ignore_if_no_info = false;
       channel_error =
           load_mi_and_rli_from_repositories(mi, ignore_if_no_info, thread_mask);
     }
@@ -1209,7 +1279,12 @@ Master_info *Rpl_info_factory::create_mi_and_rli_objects(
   if (!(mi = Rpl_info_factory::create_mi(mi_option, channel, to_decide_repo)))
     return nullptr;
 
-  if (!(rli = Rpl_info_factory::create_rli(rli_option, relay_log_recovery,
+  bool is_xpaxos_channel =
+      channel_map.is_xpaxos_replication_channel_name(mi->get_channel());
+
+  bool is_slave_recovery = is_xpaxos_channel ? false : relay_log_recovery;
+
+  if (!(rli = Rpl_info_factory::create_rli(rli_option, is_slave_recovery,
                                            channel, to_decide_repo))) {
     mi->channel_wrlock();
     delete mi;
@@ -1220,6 +1295,9 @@ Master_info *Rpl_info_factory::create_mi_and_rli_objects(
   /* Set the cross dependencies used all over the code */
   mi->set_relay_log_info(rli);
   rli->set_master_info(mi);
+
+  if (is_xpaxos_channel)
+    rli->replicate_same_server_id= true;
 
   /* Add to multisource map*/
   if (pchannel_map->add_mi(channel, mi)) {

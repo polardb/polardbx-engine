@@ -37,6 +37,8 @@ const char *Multisource_info::default_channel = "";
 const char *Multisource_info::group_replication_channel_names[] = {
     "group_replication_applier", "group_replication_recovery"};
 
+const char *Multisource_info::xpaxos_channel = "xpaxos_applier";
+
 bool Multisource_info::add_mi(const char *channel_name, Master_info *mi) {
   DBUG_TRACE;
 
@@ -178,6 +180,15 @@ bool Multisource_info::is_group_replication_channel_name(const char *channel,
   else
     return !strcmp(channel, group_replication_channel_names[0]) ||
            !strcmp(channel, group_replication_channel_names[1]);
+}
+
+bool Multisource_info::is_xpaxos_replication_channel_name(const char* channel)
+{
+  /* for capability */
+  if (!channel)
+    return true;
+  return !strcmp(channel, default_channel) ||
+         !strcmp(channel, xpaxos_channel);
 }
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE

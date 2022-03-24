@@ -125,6 +125,7 @@ class Multisource_info {
   static const char *default_channel;
   Master_info *default_channel_mi;
   static const char *group_replication_channel_names[];
+  static const char *xpaxos_channel;
 
   /**
     This lock was designed to protect the channel_map from adding or removing
@@ -210,6 +211,11 @@ class Multisource_info {
     return default_channel_mi;
   }
 
+  void reset_default_channel_mi() {
+    m_channel_map_lock->assert_some_lock();
+    default_channel_mi = NULL;
+  }
+
   /**
     Remove the entry corresponding to the channel, from the
     replication_channel_map and sets index in the  multisource_mi to 0;
@@ -224,6 +230,11 @@ class Multisource_info {
     Get the default channel for this multisourced_slave;
   */
   inline const char *get_default_channel() { return default_channel; }
+
+  /**
+    Get the default channel for this multisourced_slave;
+  */
+  inline const char* get_xpaxos_channel() { return xpaxos_channel; }
 
   /**
     Get the number of instances of Master_info in the map.
@@ -287,6 +298,17 @@ class Multisource_info {
   */
   bool is_group_replication_channel_name(const char *channel,
                                          bool is_applier = false);
+
+  /**
+    Returns if a channel name is one paxos replication names
+
+    @param channel    the channel name to test
+
+    @return
+      @retval      true   the name is a reserved name
+      @retval      false  non reserved name
+  */
+  bool is_xpaxos_replication_channel_name(const char* channel);
 
   /**
      Forward iterators to initiate traversing of a map.

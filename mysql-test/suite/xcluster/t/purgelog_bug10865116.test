@@ -1,0 +1,18 @@
+flush logs;
+create table ttt (id int);
+insert into ttt values(1);
+#purge consensus_log before 100;
+call dbms_consensus.purge_log(100);
+insert into ttt values(2);
+insert into ttt values(3);
+flush logs;
+insert into ttt values(4);
+--replace_column 1 # 2 # 3 #
+show consensus logs;
+#purge consensus_log before 100;
+call dbms_consensus.purge_log(100);
+insert into ttt values(5);
+flush logs;
+drop table ttt;
+--replace_column 1 # 2 # 3 #
+show consensus logs;

@@ -1,4 +1,4 @@
-
+--source include/have_debug_new.inc 
 --source include/no_valgrind_without_big.inc
 
 # Binlog is required
@@ -2659,6 +2659,7 @@ SHOW VARIABLES LIKE "master_info_repository";
 SHOW VARIABLES LIKE "relay_log_info_repository";
 
 SET GLOBAL master_info_repository= 'FILE';
+--error ER_CHANGE_RPL_INFO_REPOSITORY_FAILURE
 SET GLOBAL relay_log_info_repository= 'FILE';
 
 SHOW VARIABLES LIKE "master_info_repository";

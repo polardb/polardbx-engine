@@ -1,3 +1,4 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
 set global innodb_undo_retention=1800;
 set global innodb_undo_space_reserved_size=1024;
 
@@ -14,9 +15,14 @@ CREATE TABLE t1 (
 INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
 
 connect (conn1,localhost,root,,);
---source suite/innodb_gcn/include/init_conn_base_seq.inc
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
 connect (conn2,localhost,root,,);
---source suite/innodb_gcn/include/init_conn_base_seq.inc
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
 
 --echo *** TEST: read with timestamp should see transaction or not
 

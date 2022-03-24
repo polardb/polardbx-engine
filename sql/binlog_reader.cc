@@ -23,6 +23,7 @@
 #include "sql/binlog_reader.h"
 #include "my_byteorder.h"
 #include "sql/log_event.h"
+#include "sql/log_event_ext.h"
 
 unsigned char *Default_binlog_event_allocator::allocate(size_t size) {
   DBUG_EXECUTE_IF("simulate_allocate_failure", return nullptr;);
@@ -272,6 +273,18 @@ Binlog_read_error::Error_type binlog_event_deserialize(
     case binary_log::WRITE_ROWS_EVENT:
       ev = new Write_rows_log_event(buf, fde);
       break;
+    case binary_log::CONSENSUS_LOG_EVENT:
+      ev = new Consensus_log_event(buf, 0, fde);
+      break;
+    case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
+      ev = new Previous_consensus_index_log_event(buf, 0, fde);
+      break;
+    case binary_log::CONSENSUS_CLUSTER_INFO_EVENT:
+      ev = new Consensus_cluster_info_log_event(buf, 0, fde);
+      break;
+    case binary_log::CONSENSUS_EMPTY_EVENT:
+      ev = new Consensus_empty_log_event(buf, 0, fde);
+      break;
     case binary_log::UPDATE_ROWS_EVENT:
       ev = new Update_rows_log_event(buf, fde);
       break;
@@ -289,6 +302,9 @@ Binlog_read_error::Error_type binlog_event_deserialize(
       break;
     case binary_log::PARTIAL_UPDATE_ROWS_EVENT:
       ev = new Update_rows_log_event(buf, fde);
+      break;
+    case binary_log::GCN_LOG_EVENT:
+      ev = new Gcn_log_event(buf, fde);
       break;
     default:
       /*

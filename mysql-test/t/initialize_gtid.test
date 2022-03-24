@@ -46,7 +46,7 @@ EOF
 --echo # Run the server with:
 --echo #   --initialize-insecure
 --echo #   $init_args
---exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR $init_args --init-file=$BOOTSTRAP_SQL > $MYSQLD_LOG 2>&1
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR $init_args --init-file=$BOOTSTRAP_SQL --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23400@1' > $MYSQLD_LOG 2>&1
 
 --echo # Restart the server against DDIR
 --exec echo "restart:--datadir=$DDIR $init_args" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect

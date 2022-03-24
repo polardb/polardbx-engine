@@ -53,7 +53,7 @@ while ($i)
 # 329 (337 for index_free_pct) for 16k page size,
 # 357 also for 16k page size, but with SCN and undo_ptr columns
 # 662 for 8k page size & 1392 for 4k page size
---replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 337 {check_valid} 357 {checked_valid} 662 {checked_valid} 1392 {checked_valid} 346 {checked_valid}
+--replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 337 {check_valid} 357 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
 --eval $check_cnt
 
 --source include/shutdown_mysqld.inc
@@ -92,8 +92,9 @@ WHERE LOWER(variable_name) = 'innodb_buffer_pool_load_status';
 --enable_warnings
 
 # Accept 83 for 64k page size, 163 for 32k page size, 329 for 16k page size,
+# 329 (337 for index_free_pct) for 16k page size,
 # 662 for 8k page size & 1392 for 4k page size
---replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
+--replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 337 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
 --eval $check_cnt
 
 call mtr.add_suppression("Error parsing");
@@ -176,7 +177,7 @@ write_file $BOOTSTRAP_SQL;
 CREATE DATABASE test;
 EOF
 
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb-data-home-dir= --innodb_data_file_path=$MYSQL_TMP_DIR/datadir1/ibdata:16M:autoextend --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL</dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1 --innodb-page-size=$start_page_size;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb-data-home-dir= --innodb_data_file_path=$MYSQL_TMP_DIR/datadir1/ibdata:16M:autoextend --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29223@1' </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1 --innodb-page-size=$start_page_size;
 
 # Run the bootstrap command
 --exec $NEW_CMD

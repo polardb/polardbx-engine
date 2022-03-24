@@ -1,0 +1,243 @@
+--source include/have_debug.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+create table t1 (a int , primary key (a));
+
+connect(con_u1, 127.0.0.1, root,,);
+connect(con_u2, 127.0.0.1, root,,);
+connection con_u1;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+connection con_u2;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+--echo # innodb_snapshot_update_gcn = true
+set global innodb_snapshot_update_gcn = true;
+
+--echo # global query with normal trx, xa trx
+connection con_u1;
+xa begin 'x10000';
+insert into t1 values (10000);
+xa end 'x10000';
+xa prepare 'x10000';
+
+set innodb_commit_seq = @base_seq +10000;
+xa commit 'x10000';
+
+xa begin 'x12000';
+set innodb_snapshot_seq = @base_seq +12000;
+select * from t1;
+
+connection con_u2;
+insert into t1 values (12001);
+
+xa begin 'x12002';
+insert into t1 values (12002);
+xa end 'x12002';
+xa commit 'x12002' one phase;
+
+xa begin 'x13000';
+insert into t1 values (13000);
+xa end 'x13000';
+xa prepare 'x13000';
+set innodb_commit_seq = @base_seq +13000;
+xa commit 'x13000';
+
+connection con_u1;
+select * from t1;
+xa end 'x12000';
+xa commit 'x12000' one phase;
+
+xa begin 'x14000';
+set innodb_snapshot_seq = @base_seq +14000;
+select * from t1;
+xa end 'x14000';
+xa commit 'x14000' one phase;
+
+insert into t1 values (14001);
+
+connection default;
+
+--echo # restart && global query
+--let $wait_counter=10000
+--let $restart_parameters = restart: --innodb_snapshot_update_gcn=true
+--source include/restart_mysqld.inc
+--source include/wait_until_connected_again.inc
+
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+xa begin 'x12000';
+set innodb_snapshot_seq = @base_seq +12000;
+select * from t1;
+xa end 'x12000';
+xa commit 'x12000' one phase;
+
+delete from t1;
+
+# If innodb_snapshot_update_gcn is false,
+# crash recovery will not keep the consistency of global query.
+# The gcn of record may be bigger than persisted gcn.
+
+--echo # crash && global query 
+
+xa begin 'x15000';
+insert into t1 values (15000);
+xa end 'x15000';
+xa prepare 'x15000';
+set innodb_commit_seq = @base_seq +15000;
+xa commit 'x15000';
+
+xa begin 'x15001';
+set innodb_snapshot_seq = @base_seq +15001;
+select * from t1 where a >= 13000;
+xa end 'x15001';
+xa commit 'x15001' one phase;
+
+set debug ='d,ib_trx_crash_during_commit';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST
+insert into t1 values (15001);
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+xa begin 'x15001';
+set innodb_snapshot_seq = @base_seq +15001;
+select * from t1 where a >= 13000;
+xa end 'x15001';
+xa commit 'x15001' one phase;
+truncate table t1;
+
+disconnect con_u1;
+disconnect con_u2;
+
+--echo # innodb_snapshot_update_gcn = false
+connection default;
+set global innodb_snapshot_update_gcn = false;
+
+connect(con_u1, 127.0.0.1, root,,);
+connect(con_u2, 127.0.0.1, root,,);
+
+connection con_u1;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+connection con_u2;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+--echo # global query with normal trx, xa trx
+connection con_u1;
+xa begin 'x20000';
+insert into t1 values (20000);
+xa end 'x20000';
+xa prepare 'x20000';
+set innodb_commit_seq = @base_seq +20000;
+xa commit 'x20000';
+
+xa begin 'x22000';
+set innodb_snapshot_seq = @base_seq +22000;
+select * from t1;
+
+connection con_u2;
+insert into t1 values (22001);
+
+xa begin 'x22002';
+insert into t1 values (22002);
+xa end 'x22002';
+xa commit 'x22002' one phase;
+
+xa begin 'x23000';
+insert into t1 values (23000);
+xa end 'x23000';
+xa prepare 'x23000';
+set innodb_commit_seq = @base_seq +23000;
+xa commit 'x23000';
+
+connection con_u1;
+select * from t1;
+xa end 'x22000';
+xa commit 'x22000' one phase;
+
+xa begin 'x24000';
+set innodb_snapshot_seq = @base_seq +24000;
+select * from t1;
+xa end 'x24000';
+xa commit 'x24000' one phase;
+
+insert into t1 values (24001);
+
+connection default;
+
+--echo # restart && global query
+--let $wait_counter=10000
+--let $restart_parameters = restart: --innodb_snapshot_update_gcn=false
+--source include/restart_mysqld.inc
+--source include/wait_until_connected_again.inc
+
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+xa begin 'x22000';
+set innodb_snapshot_seq = @base_seq +22000;
+select * from t1;
+xa end 'x22000';
+xa commit 'x22000' one phase;
+
+delete from t1;
+
+--echo # crash && global query 
+
+xa begin 'x25000';
+insert into t1 values (25000);
+xa end 'x25000';
+xa prepare 'x25000';
+set innodb_commit_seq = @base_seq +25000;
+xa commit 'x25000';
+
+xa begin 'x25001';
+set innodb_snapshot_seq = @base_seq +25001;
+select * from t1 where a >= 23000;
+xa end 'x25001';
+xa commit 'x25001' one phase;
+
+set debug ='d,ib_trx_crash_during_commit';
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+--error CR_SERVER_LOST
+insert into t1 values (25001);
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+xa begin 'x25001';
+set innodb_snapshot_seq = @base_seq +25001;
+select * from t1 where a >= 23000;
+xa end 'x25001';
+xa commit 'x25001' one phase;
+
+drop table t1;
+set global innodb_snapshot_update_gcn = default;
+
+disconnect con_u1;
+disconnect con_u2;

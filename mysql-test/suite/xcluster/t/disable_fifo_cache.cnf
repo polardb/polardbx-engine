@@ -1,0 +1,4 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+consensus_disable_fifo_cache=ON

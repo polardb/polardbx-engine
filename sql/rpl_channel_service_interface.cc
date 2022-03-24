@@ -103,6 +103,7 @@ int initialize_channel_service_interface() {
 
 static void set_mi_settings(Master_info *mi,
                             Channel_creation_info *channel_info) {
+  bool is_paxos_channel= channel_map.is_xpaxos_replication_channel_name(mi->get_channel());
   mysql_mutex_lock(mi->rli->relay_log.get_log_lock());
   mysql_mutex_lock(&mi->data_lock);
 
@@ -112,6 +113,10 @@ static void set_mi_settings(Master_info *mi,
       (channel_info->replicate_same_server_id == RPL_SERVICE_SERVER_DEFAULT)
           ? replicate_same_server_id
           : channel_info->replicate_same_server_id;
+
+  if (is_paxos_channel)
+    mi->rli->replicate_same_server_id= true;
+
 
   mi->rli->opt_slave_parallel_workers =
       (channel_info->channel_mts_parallel_workers == RPL_SERVICE_SERVER_DEFAULT)

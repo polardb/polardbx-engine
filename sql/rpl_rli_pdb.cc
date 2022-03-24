@@ -71,6 +71,7 @@
 #include "sql/table.h"
 #include "sql/transaction_info.h"
 #include "thr_mutex.h"
+#include "sql/log_event_ext.h"
 
 #ifndef DBUG_OFF
 ulong w_rr = 0;
@@ -145,10 +146,15 @@ bool handle_slave_worker_stop(Slave_worker *worker, Slave_job_item *job_item) {
   } else if (rli->exit_counter == rli->slave_parallel_workers) {
     // over steppers should exit with accepting STOP
     if (group_index > rli->max_updated_index) {
-      worker->running_status = Slave_worker::STOP_ACCEPTED;
-      mysql_cond_signal(&worker->jobs_cond);
-      mysql_mutex_unlock(&rli->exit_count_lock);
-      return (true);
+      bool is_xpaxos_channel = rli->info_thd->xpaxos_replication_channel;
+      if ((is_xpaxos_channel && !rli->force_apply_queue_before_stop) ||
+          !is_xpaxos_channel) {
+        sql_print_information("group_index > rli->max_updated_index, set running_status to STOP_ACCEPTED");
+        worker->running_status = Slave_worker::STOP_ACCEPTED;
+        mysql_cond_signal(&worker->jobs_cond);
+        mysql_mutex_unlock(&rli->exit_count_lock);
+        return (true);
+      }
     }
   }
   mysql_mutex_unlock(&rli->exit_count_lock);
@@ -212,7 +218,11 @@ const char *info_slave_worker_fields[] = {
     /*
       Channel on which this workers are acting
     */
-    "channel_name"};
+    "channel_name",
+
+    "checkpoint_consensus_apply_index",
+
+    "consensus_apply_index"};
 
 /*
   Number of records in the mts partition hash below which
@@ -268,6 +278,7 @@ Slave_worker::Slave_worker(Relay_log_info *rli,
   DBUG_ASSERT(internal_id == id + 1);
   checkpoint_relay_log_name[0] = 0;
   checkpoint_master_log_name[0] = 0;
+  checkpoint_consensus_apply_index = 0;
 
   mysql_mutex_init(key_mutex_slave_parallel_worker, &jobs_lock,
                    MY_MUTEX_INIT_FAST);
@@ -348,6 +359,7 @@ int Slave_worker::init_worker(Relay_log_info *rli, ulong i) {
   jobs.entry = jobs.size = c_rli->mts_slave_worker_queue_len_max;
   jobs.inited_queue = true;
   curr_group_seen_gtid = false;
+  curr_group_seen_gcn = false;
 #ifndef DBUG_OFF
   curr_group_seen_sequence_number = false;
 #endif
@@ -486,6 +498,8 @@ bool Slave_worker::read_info(Rpl_info_handler *from) {
   ulong temp_checkpoint_relay_log_pos = 0;
   ulong temp_checkpoint_master_log_pos = 0;
   ulong temp_checkpoint_seqno = 0;
+  ulong temp_checkpoint_consensus_apply_index = 0;
+  ulong temp_consensus_apply_index = 0;
   ulong nbytes = 0;
   uchar *buffer = (uchar *)group_executed.bitmap;
   int temp_internal_id = 0;
@@ -509,7 +523,9 @@ bool Slave_worker::read_info(Rpl_info_handler *from) {
       !!from->get_info(&nbytes, 0UL) ||
       !!from->get_info(buffer, (size_t)nbytes, (uchar *)0) ||
       /* default is empty string */
-      !!from->get_info(channel, sizeof(channel), ""))
+      !!from->get_info(channel, sizeof(channel), (char *)"") ||
+      !!from->get_info(&temp_checkpoint_consensus_apply_index, 0UL) ||
+      !!from->get_info(&temp_consensus_apply_index,  0UL))
     return true;
 
   DBUG_ASSERT(nbytes <= no_bytes_in_map(&group_executed));
@@ -520,6 +536,8 @@ bool Slave_worker::read_info(Rpl_info_handler *from) {
   checkpoint_relay_log_pos = temp_checkpoint_relay_log_pos;
   checkpoint_master_log_pos = temp_checkpoint_master_log_pos;
   worker_checkpoint_seqno = temp_checkpoint_seqno;
+  checkpoint_consensus_apply_index = temp_checkpoint_consensus_apply_index;
+  consensus_apply_index = temp_consensus_apply_index;
 
   return false;
 }
@@ -569,7 +587,9 @@ bool Slave_worker::write_info(Rpl_info_handler *to) {
       to->set_info(checkpoint_master_log_name) ||
       to->set_info((ulong)checkpoint_master_log_pos) ||
       to->set_info(worker_checkpoint_seqno) || to->set_info(nbytes) ||
-      to->set_info(buffer, (size_t)nbytes) || to->set_info(channel))
+      to->set_info(buffer, (size_t)nbytes) || to->set_info(channel) ||
+      to->set_info((ulong)checkpoint_consensus_apply_index) ||
+      to->set_info((ulong)consensus_apply_index))
     return true;
 
   return false;
@@ -648,6 +668,7 @@ bool Slave_worker::commit_positions(Log_event *ev, Slave_job_group *ptr_g,
       if (bitmap_is_set(&group_shifted, pos))
         bitmap_set_bit(&group_executed, pos - ptr_g->shifted);
     }
+    checkpoint_consensus_apply_index = ptr_g->checkpoint_consensus_index;
   }
   /*
     Extracts an updated relay-log name to store in Worker's rli.
@@ -665,6 +686,7 @@ bool Slave_worker::commit_positions(Log_event *ev, Slave_job_group *ptr_g,
   worker_checkpoint_seqno = ptr_g->checkpoint_seqno;
   group_relay_log_pos = ev->future_event_relay_log_pos;
   group_master_log_pos = ev->common_header->log_pos;
+  consensus_apply_index = ev->consensus_index;
 
   /*
     Directly accessing c_rli->get_group_master_log_name() does not
@@ -1256,6 +1278,7 @@ void Slave_worker::slave_worker_ends_group(Log_event *ev, int error) {
 #endif
   }
   curr_group_seen_gtid = false;
+  curr_group_seen_gcn = false;
 }
 
 /**
@@ -1518,6 +1541,7 @@ void Slave_worker::do_report(loglevel level, int err_code, const char *msg,
   const char *log_name =
       const_cast<Slave_worker *>(this)->get_master_log_name();
   ulonglong log_pos = const_cast<Slave_worker *>(this)->get_master_log_pos();
+  ulonglong consensus_index = const_cast<Slave_worker*>(this)->get_consensus_apply_index() + 1;
   bool is_group_replication_applier_channel =
       channel_map.is_group_replication_channel_name(c_rli->get_channel(), true);
   const Gtid_specification *gtid_next = &info_thd->variables.gtid_next;
@@ -1545,12 +1569,12 @@ void Slave_worker::do_report(loglevel level, int err_code, const char *msg,
                "Coordinator stopped because there were error(s) in the "
                "worker(s). "
                "The most recent failure being: Worker %u failed executing "
-               "transaction '%s' at master log %s, end_log_pos %llu. "
+               "transaction '%s' at master log %s, end_log_pos %llu, consensus_index %llu. "
                "See error log and/or "
                "performance_schema.replication_applier_status_by_worker "
                "table for "
                "more details about this failure or others, if any.",
-               internal_id, buff_gtid, log_name, log_pos);
+               internal_id, buff_gtid, log_name, log_pos, consensus_index);
     }
 
     /*
@@ -1571,8 +1595,8 @@ void Slave_worker::do_report(loglevel level, int err_code, const char *msg,
   } else {
     snprintf(buff_coord, sizeof(buff_coord),
              "Worker %u failed executing transaction '%s' at "
-             "master log %s, end_log_pos %llu",
-             internal_id, buff_gtid, log_name, log_pos);
+             "master log %s, end_log_pos %llu, consensus_index %llu",
+             internal_id, buff_gtid, log_name, log_pos, consensus_index);
   }
 
   /*
@@ -1691,7 +1715,7 @@ int Slave_worker::slave_worker_exec_event(Log_event *ev) {
 #endif
 
   // Address partioning only in database mode
-  if (!is_gtid_event(ev) && is_mts_db_partitioned(rli)) {
+  if (!is_gtid_event(ev) && is_mts_db_partitioned(rli) && !is_gcn_event(ev)) {
     if (ev->contains_partition_info(end_group_sets_max_dbs)) {
       uint num_dbs = ev->mts_number_dbs();
 
@@ -1908,7 +1932,8 @@ bool Slave_worker::read_and_apply_events(uint start_relay_number,
   bool arrive_end = false;
   Relaylog_file_reader relaylog_file_reader(opt_slave_sql_verify_checksum);
 
-  relay_log_number_to_name(start_relay_number, file_name);
+  DBUG_ASSERT(rli != NULL);
+  rli->relay_log_number_to_name(start_relay_number, file_name);
 
   while (!arrive_end) {
     Log_event *ev = nullptr;
@@ -2487,11 +2512,11 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
       WL#7592 refines the original assert disjunction formula
       with the final disjunct.
     */
-    DBUG_ASSERT(seen_begin || is_gtid_event(ev) ||
+    DBUG_ASSERT(seen_begin || is_gtid_event(ev) || is_gcn_event(ev) ||
                 ev->get_type_code() == binary_log::QUERY_EVENT ||
                 is_mts_db_partitioned(rli) || worker->id == 0 || seen_gtid);
 
-    if (ev->ends_group() || (!seen_begin && !is_gtid_event(ev) &&
+    if (ev->ends_group() || (!seen_begin && !is_gtid_event(ev) && !is_gcn_event(ev) &&
                              (ev->get_type_code() == binary_log::QUERY_EVENT ||
                               /* break through by LC only in GTID off */
                               (!seen_gtid && !is_mts_db_partitioned(rli)))))

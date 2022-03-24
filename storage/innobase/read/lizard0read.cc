@@ -42,6 +42,8 @@ mysql_pfs_key_t lizard_vision_list_mutex_key;
 
 namespace lizard {
 
+bool srv_equal_gcn_visible = false;
+
 /** Global visions */
 VisionContainer *vision_container;
 
@@ -351,7 +353,10 @@ bool Vision::modifications_visible_asof_gcn(txn_rec_t *txn_rec) const {
 
   ut_ad(txn_rec->gcn != GCN_NULL);
 
-  return txn_rec->gcn <= m_asof_gcn;
+  if (srv_equal_gcn_visible)
+    return txn_rec->gcn <= m_asof_gcn;
+  else
+    return txn_rec->gcn < m_asof_gcn;
 }
 
 /**

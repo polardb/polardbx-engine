@@ -1,0 +1,3 @@
+show consensus logs;
+Log_name	File_size	Start_log_index
+aaaa.000001	#	1

@@ -8,6 +8,7 @@ CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_SCHEMA	TABLE_NAME	CON
 def	mysql	PRIMARY	mysql	columns_priv	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	component	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	concurrency_control	PRIMARY KEY	YES
+def	mysql	PRIMARY	mysql	consensus_info	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	db	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	default_roles	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	engine_cost	PRIMARY KEY	YES

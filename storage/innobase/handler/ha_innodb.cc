@@ -116,6 +116,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fts0priv.h"
 #include "fts0types.h"
 #include "ha_innodb.h"
+#include "ha_innodb_ext.h"
 #include "ha_innopart.h"
 #include "ha_prototypes.h"
 #include "i_s.h"
@@ -4710,6 +4711,8 @@ static int innodb_init(void *p) {
   handlerton *innobase_hton = (handlerton *)p;
   innodb_hton_ptr = innobase_hton;
 
+  innobase_init_ext(innobase_hton);
+
   innobase_hton->state = SHOW_OPTION_YES;
   innobase_hton->db_type = DB_TYPE_INNODB;
   innobase_hton->savepoint_offset = sizeof(trx_named_savept_t);
@@ -5476,6 +5479,23 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
       /* Don't do write + flush right now. For group commit
       to work we want to do the flush later. */
       trx->flush_log_later = true;
+    }
+
+    assert_trx_scn_initial(trx);
+    /*
+      The value of thd->m_extra_desc.m_commit_gcn is GCN_NULL 
+    if server do not need to write binlog.
+    
+      It will store gcn value into  thd->m_extra_desc.m_commit_gcn 
+    where writing gcn log event. 
+
+       Some function trx is not start and will not enter trx_commit_for_mysql(trx).
+     It will not reset trx->txn_desc.cmmt.gcn after innobase_commit and It need not
+     set trx->txn_desc.cmmt.gcn. (log_and_commit_acl_ddl)
+    */
+    if (trx_is_started(trx)) {
+      ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
+      trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn;
     }
 
     innobase_commit_low(trx);
@@ -19614,11 +19634,13 @@ static xa_status_code innobase_commit_by_xid(
   if (trx != NULL) {
     TrxInInnoDB trx_in_innodb(trx);
 
-    /* Set xid commit_gcn to trx. */
-    ut_a(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
-
-    if (xid->get_commit_gcn() != lizard::GCN_NULL)
-      trx->txn_desc.cmmt.gcn = xid->get_commit_gcn();
+    assert_trx_scn_initial(trx);
+    /*
+        The value of xid->get_commit_gcn() is GCN_NULL 
+      if binlog contains no gcn event.
+    */
+    ut_a(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);		 
+    trx->txn_desc.cmmt.gcn = xid->get_commit_gcn();
 
     innobase_commit_low(trx);
     ut_ad(trx->mysql_thd == NULL);
@@ -22689,6 +22711,20 @@ static MYSQL_SYSVAR_BOOL(tcn_cache_replace_after_commit,
                          "whether to replace global tcn cache after commit",
                          NULL, NULL, true);
 
+static MYSQL_SYSVAR_BOOL(snapshot_update_gcn,
+                         lizard::srv_snapshot_update_gcn,
+                         PLUGIN_VAR_OPCMDARG,
+                         "whether using snapshot gcn when acquiring a new gcn, "
+                         "then updating commit gcn",
+                         NULL, NULL, TRUE);
+
+static MYSQL_SYSVAR_BOOL(equal_gcn_visible,
+                         lizard::srv_equal_gcn_visible,
+                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+                         "whether the record is visible to a vision which gcn is "
+                         "equal to the gcn stored in record",
+                         NULL, NULL, FALSE);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -22924,6 +22960,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(tcn_cache_level),
     MYSQL_SYSVAR(tcn_block_cache_type),
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
+    MYSQL_SYSVAR(snapshot_update_gcn),
+    MYSQL_SYSVAR(equal_gcn_visible),
     NULL};
 
 mysql_declare_plugin(innobase){
@@ -23870,3 +23908,5 @@ void ha_innobase::get_create_info(const char *table, const dd::Table *table_def,
 bool thd_get_transaction_group(THD *thd) {
   return THDVAR(thd, transaction_group);
 }
+
+#include "ha_innodb_ext.cc"

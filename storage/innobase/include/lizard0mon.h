@@ -82,7 +82,10 @@ struct lizard_var_t {
 
   ulint cleanout_cursor_restore_failed;
 
-  /* Commit gcn for next transition. */
+  /*Max Snapshot gcn. */
+  ulint snapshot_gcn;
+
+  /*Max commit gcn. */
   ulint commit_gcn;
 
   /* Max purged gcn, snapshot gcn before that is too old to asof select. */

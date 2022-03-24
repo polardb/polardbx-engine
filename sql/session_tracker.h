@@ -40,10 +40,12 @@ enum enum_session_tracker {
   CURRENT_SCHEMA_TRACKER,  /* Current schema */
   SESSION_STATE_CHANGE_TRACKER,
   SESSION_GTIDS_TRACKER,   /* Tracks GTIDs */
-  TRANSACTION_INFO_TRACKER /* Transaction state */
+  TRANSACTION_INFO_TRACKER, /* Transaction state */
+  SESSION_INDEX_TRACKER = 30    /* consensus index */
 };
 
-#define SESSION_TRACKER_END TRANSACTION_INFO_TRACKER
+#define SESSION_TRACKER_END_ORACLE TRANSACTION_INFO_TRACKER
+#define SESSION_TRACKER_END SESSION_INDEX_TRACKER
 
 /**
   State_tracker
@@ -149,7 +151,8 @@ class Session_tracker {
   */
   void store(THD *thd, String &main_buf);
   void deinit() {
-    for (int i = 0; i <= SESSION_TRACKER_END; i++) delete m_trackers[i];
+    for (int i = 0; i <= SESSION_TRACKER_END; i++)
+      if (m_trackers[i]) delete m_trackers[i];
   }
 
   void claim_memory_ownership();
@@ -284,6 +287,22 @@ class Transaction_state_tracker : public State_tracker {
     tx_changed |= (tx_curr_state != tx_reported_state) ? TX_CHG_STATE : 0;
     if (tx_changed != TX_CHG_NONE) mark_as_changed(thd, NULL);
   }
+};
+
+class Session_index_tracker : public State_tracker
+{
+private:
+  void reset();
+
+public:
+  Session_index_tracker() {};
+  bool enable(THD *thd)
+  { return update(thd); }
+  bool check(THD *, set_var *)
+  { return false; }
+  bool update(THD *thd);
+  bool store(THD *thd, String &buf);
+  void mark_as_changed(THD *thd, LEX_CSTRING *tracked_item_name);
 };
 
 #endif /* SESSION_TRACKER_INCLUDED */

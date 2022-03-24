@@ -1,0 +1,54 @@
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_3");
+select server_id, role, instance_type from information_schema.alisql_cluster_local;
+server_id	role	instance_type
+3	Leader	Log
+start slave;
+stop slave;
+call dbms_consensus.add_learner("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+call dbms_consensus.drop_learner("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+call dbms_consensus.add_follower("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+call dbms_consensus.downgrade_follower("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+call dbms_consensus.downgrade_follower("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+call dbms_consensus.upgrade_learner("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+call dbms_consensus.configure_follower("127.0.0.1:10001", 9, 1);
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+call dbms_consensus.configure_learner("127.0.0.1:10001", "127.0.0.1:10002");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+start xpaxos_replication;
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+stop xpaxos_replication;
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+change master to master_host='127.0.0.1';
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+set force_revise=ON;
+start xpaxos_replication;
+ERROR HY000: The server is not allowed to do current operation.
+stop xpaxos_replication;
+ERROR HY000: The server is not allowed to do current operation.
+set force_revise=OFF;
+call dbms_consensus.add_learner("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+set force_revise=ON;
+call dbms_consensus.add_learner("127.0.0.1:10001");
+set force_revise=OFF;
+call dbms_consensus.drop_learner("127.0.0.1:10001");
+ERROR HY000: The consensus node is logger, which is not allowed to to do current operation.
+set force_revise=ON;
+call dbms_consensus.drop_learner("127.0.0.1:10001");
+set force_revise=OFF;
+16
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");

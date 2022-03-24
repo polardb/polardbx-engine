@@ -1,0 +1,28 @@
+show global variables like "event_scheduler";
+Variable_name	Value
+event_scheduler	ON
+show global variables like "event_scheduler";
+Variable_name	Value
+event_scheduler	OFF
+create table t (id int primary key auto_increment , data int);
+insert into t (data) values (1);
+select data from t where id = 1;
+data
+1
+CREATE EVENT sectest ON SCHEDULE EVERY 1 second DO update t set data=data+1 where id=1;
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+show global variables like "event_scheduler";
+Variable_name	Value
+event_scheduler	ON
+show global variables like "event_scheduler";
+Variable_name	Value
+event_scheduler	OFF
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+show global variables like "event_scheduler";
+Variable_name	Value
+event_scheduler	ON
+show global variables like "event_scheduler";
+Variable_name	Value
+event_scheduler	OFF
+drop event sectest;
+drop table t;

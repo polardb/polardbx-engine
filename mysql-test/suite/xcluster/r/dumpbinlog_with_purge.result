@@ -1,0 +1,136 @@
+#
+# ---- test Leader ----
+#
+# start a new learner
+flush local logs;
+flush local logs;
+call dbms_consensus.add_learner('127.0.0.1:24002');
+create table t1(id int);
+insert into t1 values (1);
+call dbms_consensus.drop_learner('127.0.0.1:24002');
+call dbms_consensus.force_single_mode();
+CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MYPORT_1, MASTER_USER='root', MASTER_PASSWORD='', MASTER_LOG_FILE='MASTER_BINLOG', MASTER_LOG_POS=MASTER_POS, MASTER_AUTO_POSITION=0 FOR CHANNEL 'testsync';
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+start slave for channel "testsync";
+insert into t1 values (2);
+select * from t1;
+id
+1
+2
+SELECT MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0;
+MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0
+1
+select * from t1;
+id
+1
+2
+insert into t1 values (3);
+flush local logs;
+call dbms_consensus.force_purge_log(10000000);
+insert into t1 values (4);
+flush local logs;
+insert into t1 values (5);
+insert into t1 values (6);
+select * from t1;
+id
+1
+2
+3
+4
+5
+6
+SELECT MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0;
+MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0
+1
+select * from t1;
+id
+1
+2
+3
+4
+5
+6
+stop slave for channel "testsync";
+#
+# ---- test Follower ----
+#
+flush local logs;
+flush local logs;
+# start a new learner
+call dbms_consensus.add_learner('127.0.0.1:24003');
+insert into t1 values (1);
+call dbms_consensus.drop_learner('127.0.0.1:24003');
+insert into t1 values (2);
+call dbms_consensus.force_single_mode();
+CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MYPORT_2, MASTER_USER='root', MASTER_PASSWORD='', MASTER_LOG_FILE='MASTER_BINLOG', MASTER_LOG_POS=MASTER_POS, MASTER_AUTO_POSITION=0 FOR CHANNEL 'testsync';
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+start slave for channel "testsync";
+insert into t1 values (3);
+select * from t1;
+id
+1
+2
+3
+4
+5
+6
+1
+2
+3
+SELECT MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0;
+MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0
+1
+select * from t1;
+id
+1
+2
+3
+4
+5
+6
+1
+3
+insert into t1 values (4);
+flush local logs;
+call dbms_consensus.force_purge_log(10000000);
+insert into t1 values (5);
+flush local logs;
+insert into t1 values (6);
+insert into t1 values (7);
+select * from t1;
+id
+1
+2
+3
+4
+5
+6
+1
+2
+3
+4
+5
+6
+7
+SELECT MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0;
+MASTER_POS_WAIT('MASTER_BINLOG', MASTER_POS, 0, "testsync") >= 0
+1
+select * from t1;
+id
+1
+2
+3
+4
+5
+6
+1
+3
+4
+5
+6
+7
+drop table t1;

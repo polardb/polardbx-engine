@@ -151,6 +151,9 @@ LEX_CSTRING MI_INFO_NAME = {STRING_WITH_LEN("slave_master_info")};
 /* WORKER_INFO name */
 LEX_CSTRING WORKER_INFO_NAME = {STRING_WITH_LEN("slave_worker_info")};
 
+/* CONSENSUS name */
+LEX_CSTRING CONSENSUS_INFO_NAME = { STRING_WITH_LEN("consensus_info") };
+
 /* GTID_EXECUTED name */
 LEX_CSTRING GTID_EXECUTED_NAME = {STRING_WITH_LEN("gtid_executed")};
 

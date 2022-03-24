@@ -1,0 +1,8 @@
+create table t1(id int);
+insert into t1 values(1);
+insert into t1 values(2);
+ERROR HY000: The consensus follower is not allowed to to do current operation.
+select * from t1;
+id
+1
+drop table t1;

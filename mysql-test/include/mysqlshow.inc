@@ -34,9 +34,9 @@ DROP TABLE t1, t2;
 # the output. This is done to make sure that the same result
 # file is generated with and without NDB
 --replace_result "| ndb_transid_mysql_connection_map      |\n" ""
---exec $MYSQL_SHOW information_schema
+--exec $MYSQL_SHOW information_schema | grep -v XENGINE
 --replace_result "| ndb_transid_mysql_connection_map      |\n" ""
---exec $MYSQL_SHOW INFORMATION_SCHEMA
+--exec $MYSQL_SHOW INFORMATION_SCHEMA | grep -v XENGINE
 --exec $MYSQL_SHOW inf_rmation_schema
 
 #

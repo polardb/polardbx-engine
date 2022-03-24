@@ -88,6 +88,7 @@ static void export_lizard_status(void) {
   lizard_vars.cleanout_cursor_restore_failed =
       lizard_stats.cleanout_cursor_restore_failed;
 
+  lizard_vars.snapshot_gcn = lizard_sys_get_snapshot_gcn();
   lizard_vars.commit_gcn = lizard_sys_get_gcn();
 
   lizard_vars.purged_gcn = lizard_sys_get_purged_gcn();
@@ -178,6 +179,9 @@ static SHOW_VAR lizard_status_variables[] = {
      SHOW_SCOPE_GLOBAL},
 
     {"commit_gcn", (char *)&lizard_vars.commit_gcn, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"snapshot_gcn", (char *)&lizard_vars.snapshot_gcn, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
     {"purged_gcn", (char *)&lizard_vars.purged_gcn, SHOW_LONG,

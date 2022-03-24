@@ -191,6 +191,109 @@ int Rpl_info_table::do_flush_info(const bool force) {
   /*
     Opens and locks the rpl_info table before accessing it.
   */
+  if (access->open_table(thd, to_lex_cstring(str_schema), to_lex_cstring(str_table), get_number_info(),
+                         TL_WRITE, &table, &backup))
+    goto end;
+
+  /*
+    Points the cursor at the row to be read according to the
+    keys. If the row is not found an error is reported.
+  */
+  if ((res = access->find_info(field_values, table)) == NOT_FOUND_ID) {
+    /*
+      Prepares the information to be stored before calling ha_write_row.
+    */
+    empty_record(table);
+    if (access->store_info_values(get_number_info(), table->field,
+                                  field_values))
+      goto end;
+
+    /*
+      Inserts a new row into rpl_info table.
+    */
+    if ((error = table->file->ha_write_row(table->record[0]))) {
+      table->file->print_error(error, MYF(0));
+      /*
+        This makes sure that the error is 1 and not the status returned
+        by the handler.
+      */
+      error = 1;
+      goto end;
+    }
+    error = 0;
+  } else if (res == FOUND_ID) {
+    /*
+      Prepares the information to be stored before calling ha_update_row.
+    */
+    store_record(table, record[1]);
+    if (access->store_info_values(get_number_info(), table->field,
+                                  field_values))
+      goto end;
+
+    /*
+      Updates a row in the rpl_info table.
+    */
+    if ((error =
+             table->file->ha_update_row(table->record[1], table->record[0])) &&
+        error != HA_ERR_RECORD_IS_THE_SAME) {
+      table->file->print_error(error, MYF(0));
+      /*
+        This makes sure that the error is 1 and not the status returned
+        by the handler.
+      */
+      error = 1;
+      goto end;
+    }
+    error = 0;
+  }
+
+end:
+  DBUG_EXECUTE_IF("mts_debug_concurrent_access", {
+    while (thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER &&
+           mts_debug_concurrent_access < 2 && mts_debug_concurrent_access > 0) {
+      DBUG_PRINT("mts", ("Waiting while locks are acquired to show "
+                         "concurrency in mts: %u %u\n",
+                         mts_debug_concurrent_access, thd->thread_id()));
+      my_sleep(6000000);
+    }
+  };);
+
+  /*
+    Unlocks and closes the rpl_info table.
+  */
+  access->close_table(thd, table, &backup, error);
+  thd->is_operating_substatement_implicitly = false;
+  thd->variables.sql_mode = saved_mode;
+  thd->variables.option_bits = saved_options;
+  access->drop_thd(thd);
+  return error;
+}
+
+int Rpl_info_table::do_flush_info_force_new_thd(const bool force) {
+  int error = 1;
+  enum enum_return_id res = FOUND_ID;
+  TABLE *table = NULL;
+  sql_mode_t saved_mode;
+  Open_tables_backup backup;
+
+  DBUG_TRACE;
+
+  if (!(force || (sync_period && ++(sync_counter) >= sync_period)))
+    return 0;
+
+  THD *thd= NULL;
+
+  thd= access->force_create_thd();
+
+  sync_counter = 0;
+  saved_mode = thd->variables.sql_mode;
+  ulonglong saved_options = thd->variables.option_bits;
+  thd->variables.option_bits &= ~OPTION_BIN_LOG;
+  thd->is_operating_substatement_implicitly = true;
+
+  /*
+    Opens and locks the rpl_info table before accessing it.
+  */
   if (access->open_table(thd, to_lex_cstring(str_schema),
                          to_lex_cstring(str_table), get_number_info(), TL_WRITE,
                          &table, &backup))

@@ -136,7 +136,7 @@ let BOOTSTRAP_SQL= $MYSQL_TMP_DIR/tiny_bootstrap.sql;
 --source include/wait_until_disconnected.inc
 
 --echo # 2. initialize the server.
---exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23500@1'
 
 --echo # 3. Restart the server with a different lower_case_table_names setting. Should fail.
 --error 1

@@ -114,6 +114,8 @@
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_interface.h"
 
+#include "sql_class_ext.h"
+
 namespace im {
 namespace recycle_bin {
 class Recycle_state;
@@ -239,6 +241,7 @@ void thd_set_psi(THD *thd, PSI_thread *psi);
 typedef struct rpl_event_coordinates {
   char *file_name;  // binlog file name (directories stripped)
   my_off_t pos;     // event's position in the binlog file
+  uint64_t consensus_index; // log index
 } LOG_POS_COORD;
 
 #define THD_SENTRY_MAGIC 0xfeedd1ff
@@ -1565,9 +1568,25 @@ class THD : public MDL_context_owner,
     these positions instead of maintaining three different ones.
    */
   /**@{*/
+public:
+  uint64 consensus_index;
+  uint64 consensus_term;
+  bool xpaxos_replication_channel;
   const char *m_trans_log_file;
   char *m_trans_fixed_log_file;
   my_off_t m_trans_end_pos;
+
+  enum Consensus_error
+  {
+    CSS_NONE= 0,
+    CSS_LEADERSHIP_CHANGE,
+    CSS_LOG_TOO_LARGE,
+    CSS_SHUTDOWN,
+    CSS_GU_ERROR,
+    CSS_OTHER
+  } consensus_error;
+
+private:
   /**@}*/
   // NOTE: Ideally those two should be in Protocol,
   // but currently its design doesn't allow that.
@@ -4221,49 +4240,32 @@ class THD : public MDL_context_owner,
   /** Hash table to save last CURRVAL value of sequence table */
   Sequence_last_value_hash *seq_thd_hash;
 
-  void reset_gcn() {
+  extra_desc_t m_extra_desc;
+
+  void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
   }
 
-  void reset_prepare_gcn() { variables.innodb_prepare_gcn = MYSQL_GCN_NULL; }
-
-  ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
-
-  ulonglong get_commit_gcn() { return variables.innodb_commit_gcn; }
-
-  ulonglong get_prepare_gcn() { return variables.innodb_prepare_gcn; }
+  ulonglong get_snapshot_gcn() { return m_extra_desc.m_snapshot_gcn; }
+  ulonglong get_commit_gcn() { return m_extra_desc.m_commit_gcn; }
 
   /** For galaxy parallel thread pool. */
   THD_event_functions *galaxy_parallel_monitor = nullptr;
   void *galaxy_parallel_context = nullptr;
   bool galaxy_parallel_record = false;
-
   inline void register_galaxy_parallel_monitor(THD_event_functions *cb,
                                                void *ctx) {
     galaxy_parallel_monitor = cb;
     galaxy_parallel_context = ctx;
     galaxy_parallel_record = false;
   }
-
   inline void clear_galaxy_parallel_monitor() {
     galaxy_parallel_monitor = nullptr;
     galaxy_parallel_context = nullptr;
     galaxy_parallel_record = false;
   }
 };
-
-inline ulonglong thd_get_snapshot_gcn(THD *thd) {
-  if (thd) return thd->get_snapshot_gcn();
-
-  return MYSQL_GCN_NULL;
-}
-
-inline ulonglong thd_get_commit_gcn(THD *thd) {
-  if (thd) return thd->get_commit_gcn();
-
-  return MYSQL_GCN_NULL;
-}
 
 /**
    Return lock_tables_mode for secondary engine.

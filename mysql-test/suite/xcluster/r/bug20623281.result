@@ -1,0 +1,40 @@
+flush local logs;
+flush local logs;
+create database test1;
+drop database test1;
+flush logs;
+flush logs;
+flush logs;
+create database test1;
+call dbms_consensus.purge_log(100000000);
+show consensus logs;
+Log_name	File_size	Start_log_index
+#	#	#
+show consensus_log events from idx1 limit 1;
+ERROR HY000: Error when executing command SHOW CONSENSUSLOG EVENTS: Could not find target log
+show consensus_log events from idx limit 1;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Consensus_log	#	#	#
+show consensus_log events from idx2 limit 1;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+show consensus_log events from idx3 limit 1;
+ERROR HY000: Error when executing command SHOW CONSENSUSLOG EVENTS: Could not find target log
+flush logs;
+flush logs;
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+show consensus_log events from idx2 limit 1;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+show consensus_log events from idx3 limit 1;
+ERROR HY000: Error when executing command SHOW CONSENSUSLOG EVENTS: Could not find target log
+drop database test1;
+show consensus_log events from idx2 limit 1;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Consensus_log	#	#	#
+show consensus_log events from idx3 limit 1;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info

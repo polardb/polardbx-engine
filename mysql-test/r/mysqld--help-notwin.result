@@ -36,8 +36,16 @@ The following options may be given as the first argument:
  library, for example exit() from libc.so
  -a, --ansi          Use ANSI SQL syntax instead of MySQL syntax. This mode
  will also set transaction isolation level 'serializable'.
- --auto-increment-increment[=#] 
+ --appliedindex-force-delay[=#]
+ force set a smaller appliedindex
+ --auto-increment-increment[=#]
  Auto-increment columns are incremented by this
+ --auto-increment-key-high-priority 
+ whether choose auto increment key as high priority key
+ when the table do not contain primary key and not
+ nullable unique key in the process of slave applying
+ events
+ (Defaults to on; use --skip-auto-increment-key-high-priority to disable.)
  --auto-increment-offset[=#] 
  Offset added to Auto-increment columns. Used when
  auto-increment-increment != 1
@@ -191,7 +199,10 @@ The following options may be given as the first argument:
  such updates, only the modified parts of the JSON
  document are included in the binary log, so small changes
  of big documents may need significantly less space.
- --binlog-rows-query-log-events 
+ --binlog-rows-query-key-content 
+ Only writing of key content of Rows_query_log into binary
+ log.
+ --binlog-rows-query-log-events
  Allow writing of Rows_query_log events into binary log.
  --binlog-stmt-cache-size=# 
  The size of the statement cache for updates to
@@ -216,8 +227,6 @@ The following options may be given as the first argument:
  --caching-sha2-password-public-key-path=name 
  A fully qualified path to the public RSA key used for
  authentication.
- --ccl-max-waiting-count=# 
- max waiting count in one ccl rule or bucket
  --ccl-queue-bucket-count=# 
  How many groups when use ccl queue
  --ccl-queue-bucket-size=# 
@@ -241,8 +250,37 @@ The following options may be given as the first argument:
  proxy user mapping should be done according to GRANT
  PROXY privilege definition.
  -r, --chroot=name   Chroot mysqld daemon during startup.
+ --cluster-current-term=#
+ Normandy cluster nodes current term  information
+ --cluster-dump-meta Normandy cluster dump meta
+ --cluster-force-change-meta
+ Normandy cluster force to change meta
+ --cluster-force-recover-index=#
+ Normandy cluster restore from leader set apply index
+ point
+ --cluster-force-single-mode
+ Normandy cluster force to use single mode
+ --cluster-id=#      cluster id
+ --cluster-info=name Normandy cluster nodes ip-port information
+ --cluster-learner-node 
+ Normandy cluster learner node type
+ --cluster-log-type-node
+ Normandy cluster log type instance
+ --cluster-mts-recover-use-index
+ Normandy cluster use idex to recover mts
+ (Defaults to on; use --skip-cluster-mts-recover-use-index to disable.)
+ --cluster-purged-gtid=name
+ Normandy cluster set the purged gtid
+ --cluster-start-index=#
+ Normandy cluster start valid index
  --collation-server=name 
  Set the default collation.
+ --commit-pos-watcher
+ background thread checking and updating binlog commit
+ position
+ (Defaults to on; use --skip-commit-pos-watcher to disable.)
+ --commit-pos-watcher-interval[=#] 
+ interval(us) for background thread commit_pos_watcher
  --completion-type=name 
  The transaction completion type, one of NO_CHAIN, CHAIN,
  RELEASE
@@ -251,92 +289,211 @@ The following options may be given as the first argument:
  NEVER, AUTO, ALWAYS
  --connect-timeout=# The number of seconds the mysqld server is waiting for a
  connect packet before responding with 'Bad handshake'
+ --consensus-auto-leader-transfer
+ whether to enable auto leader transfer in consensus layer
+ (Defaults to on; use --skip-consensus-auto-leader-transfer to disable.)
+ --consensus-auto-leader-transfer-check-seconds[=#]
+ the interval between a leader check its health for a
+ transfer
+ --consensus-auto-reset-match-index
+ enable auto reset match index when consensus follower has
+ fewer logs
+ (Defaults to on; use --skip-consensus-auto-reset-match-index to disable.)
+ --consensus-check-commit-index-interval[=#]
+ check interval for slave calling checkCommitIndex
+ --consensus-check-large-event
+ check consensus large event or not
+ (Defaults to on; use --skip-consensus-check-large-event to disable.)
+ --consensus-checksum
+ Checksum when consensus receive log. Disabled by default.
+ --consensus-configure-change-timeout=#
+ Consensus configure change timeout (ms). Default 1 min
+ --consensus-disable-election
+ Disable consensus election and stepdown. Disabled by
+ default.
+ --consensus-disable-fifo-cache
+ disable consensus fifo cache (run with weak consensus
+ mode)
+ --consensus-dynamic-easyindex
+ Enable dynamic easy addr cidx. Enabled by default.
+ (Defaults to on; use --skip-consensus-dynamic-easyindex to disable.)
+ --consensus-election-timeout=#
+ Consensus election timeout
+ --consensus-flow-control[=name]
+ consensus flow control (<-1: no log send, -1: only send
+ log during heartbeat, 0: no flow control, >0: [TODO] flow
+ control).
+ --consensus-force-promote
+ Try to force promote a follower to leader
+ --consensus-force-recovery
+ for innodb_force_recovery
+ --consensus-force-sync-epoch-diff[=#]
+ consensus forceSync epoch diff
+ --consensus-heartbeat-thread-cnt[=#]
+ Number of consensus heartbeat thread
+ --consensus-io-thread-cnt[=#]
+ Number of consensus io thread
+ --consensus-large-batch-ratio[=#]
+ Large batch ratio of consensus server send at once
+ --consensus-large-event-limit=#
+ Consensus large event limit
+ --consensus-large-event-split-size[=#]
+ split size for large event, dangerous to change this
+ variable
+ --consensus-large-trx
+ consensus large trx or not
+ (Defaults to on; use --skip-consensus-large-trx to disable.)
+ --consensus-large-trx-split-size=#
+ Max size to split large trx into multi consensus logs.
+ (default 2M)
+ --consensus-leader-stop-apply 
+ leader stop apply
+ --consensus-leader-stop-apply-time[=#]
+ leader stop apply time
+ --consensus-learner-heartbeat
+ enable send heartbeat to learner
+ (Defaults to on; use --skip-consensus-learner-heartbeat to disable.)
+ --consensus-learner-pipelining
+ enable pipelining send msg to learner
+ --consensus-learner-timeout=#
+ Consensus learner connection timeout
+ --consensus-log-cache-size[=#]
+ Max cached logs size
+ --consensus-log-level[=name]
+ consensus log level
+ --consensus-max-delay-index[=#]
+ Max index delay for pipeline log delivery
+ --consensus-max-log-size=#
+ Max one log size. (default: 20M)
+ --consensus-max-packet-size[=#]
+ Max package size the consensus server send at once
+ --consensus-min-delay-index[=#]
+ Min index delay for pipeline log delivery
+ --consensus-msg-compress-option[=name]
+ consensus msg compress option to one or multiple
+ addressesip:port type(0: no compression, 1: lz4
+ compression, 2: zstd compression) threshold checksum,
+ if ip:port is *:* it means set option to entire
+ cluster.
+ --consensus-new-follower-threshold[=#]
+ Max delay index to allow a learner becomes a follower
+ --consensus-old-compact-mode
+ set server to old compact mode to use to be compactible
+ with version before 1.2.0.2
+ (Defaults to on; use --skip-consensus-old-compact-mode to disable.)
+ --consensus-optimistic-heartbeat
+ whether to use optimistic heartbeat in consensus layer
+ --consensus-pipelining-timeout[=#]
+ the timeout the consensus server cache the log
+ (milliseconds)
+ --consensus-prefetch-cache-size[=#]
+ Max cached logs size
+ --consensus-prefetch-fast-fetch
+ prefetch speed optimize
+ --consensus-prefetch-wakeup-ratio[=#]
+ prefetch wakeup ratio
+ --consensus-prefetch-window-size[=#]
+ prefetch window size
+ --consensus-replicate-with-cache-log
+ set server to replicate with cache log
+ --consensus-send-timeout=#
+ Consensus send packet timeout
+ --consensus-sync-follower-meta-interva[=#]
+ Interval of leader sync follower's meta for learner
+ source
+ --consensus-worker-thread-cnt[=#]
+ Number of consensus worker thread
+ --consensuslog-revise
+ revise consensuslog before flush to disk
  --console           Write error output on screen; don't remove the console
  window on windows.
  --core-file         Write core on errors.
- --create-admin-listener-thread 
+ --create-admin-listener-thread
  Use a dedicated thread for listening incoming connections
  on admin interface
- --cte-max-recursion-depth=# 
+ --cte-max-recursion-depth=#
  Abort a recursive common table expression if it does more
  than this number of iterations.
  -D, --daemonize     Run mysqld as sysv daemon
  -h, --datadir=name  Path to the database root directory
- --default-authentication-plugin=name 
+ --default-authentication-plugin=name
  The default authentication plugin used by the server to
  hash the password.
- --default-password-lifetime=# 
+ --default-password-lifetime=#
  The number of days after which the password will expire.
- --default-storage-engine=name 
+ --default-storage-engine=name
  The default storage engine for new tables
- --default-table-encryption 
+ --default-table-encryption
  Database and tablespace are created with this default
  encryption property unless the user specifies an explicit
  encryption property.
- --default-time-zone=name 
+ --default-time-zone=name
  Set the default time zone.
- --default-tmp-storage-engine=name 
+ --default-tmp-storage-engine=name
  The default storage engine for new explicit temporary
  tables
- --default-week-format=# 
+ --default-week-format=#
  The default week format used by WEEK() functions
- --delay-key-write[=name] 
+ --delay-key-write[=name]
  Type of DELAY_KEY_WRITE
- --delayed-insert-limit=# 
+ --delayed-insert-limit=#
  After inserting delayed_insert_limit rows, the INSERT
  DELAYED handler will check if there are any SELECT
  statements pending. If so, it allows these to execute
  before continuing. This variable is deprecated along with
  INSERT DELAYED.
- --delayed-insert-timeout=# 
+ --delayed-insert-timeout=#
  How long a INSERT DELAYED thread should wait for INSERT
  statements before terminating. This variable is
  deprecated along with INSERT DELAYED.
- --delayed-queue-size=# 
+ --delayed-queue-size=#
  What size queue (in rows) should be allocated for
  handling INSERT DELAYED. If the queue becomes full, any
  client that does INSERT DELAYED will wait until there is
  room in the queue again. This variable is deprecated
  along with INSERT DELAYED.
- --disabled-storage-engines=name 
+ --disabled-storage-engines=name
  Limit CREATE TABLE for the storage engines listed
- --disconnect-on-expired-password 
+ --disconnect-on-expired-password
  Give clients that don't signal password expiration
  support execution time error(s) instead of connection
  error
  (Defaults to on; use --skip-disconnect-on-expired-password to disable.)
- --disconnect-slave-event-count=# 
+ --disconnect-slave-event-count=#
  Option used by mysql-test for debugging and testing of
  replication.
- --div-precision-increment=# 
+ --div-precision-increment=#
  Precision of the result of '/' operator will be increased
  on that value
- --early-plugin-load=name 
+ --early-plugin-load=name
  Optional semicolon-separated list of plugins to load
  before storage engine initialization, where each plugin
  is identified as name=library, where name is the plugin
  name and library is the plugin library in plugin_dir.
- --end-markers-in-json 
+ --enable-appliedindex-checker
+ enable applied index checker during ordered_commit
+ (Defaults to on; use --skip-enable-appliedindex-checker to disable.)
+ --end-markers-in-json
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
  key (if it has one) near the closing bracket
- --enforce-gtid-consistency[=name] 
+ --enforce-gtid-consistency[=name]
  Prevents execution of statements that would be impossible
  to log in a transactionally safe manner. Currently, the
  disallowed statements include CREATE TEMPORARY TABLE
  inside transactions, all updates to non-transactional
  tables, and CREATE TABLE ... SELECT.
- --eq-range-index-dive-limit=# 
+ --eq-range-index-dive-limit=#
  The optimizer will use existing index statistics instead
  of doing index dives for equality ranges if the number of
  equality ranges for the index is larger than or equal to
  this number. If set to 0, index dives are always used.
- --event-scheduler[=name] 
+ --event-scheduler[=name]
  Enable the event scheduler. Possible values are ON, OFF,
  and DISABLED (keep the event scheduler completely
  deactivated, it cannot be activated run-time)
  -T, --exit-info[=#] Used for debugging. Use at your own risk.
- --expire-logs-days=# 
+ --expire-logs-days=#
  If non-zero, binary logs will be purged after
  expire_logs_days days; If this option alone is set on the
  command line or in a configuration file, it overrides the
@@ -344,7 +501,7 @@ The following options may be given as the first argument:
  options are set to nonzero values,
  binlog-expire-logs-seconds takes priority. Possible
  purges happen at startup and at binary log rotation.
- --explicit-defaults-for-timestamp 
+ --explicit-defaults-for-timestamp
  This option causes CREATE TABLE to create all TIMESTAMP
  columns as NULL with DEFAULT NULL attribute, Without this
  option, TIMESTAMP columns are NOT NULL and have implicit
@@ -359,7 +516,12 @@ The following options may be given as the first argument:
  --flush             Flush MyISAM tables to disk between SQL commands
  --flush-time=#      A dedicated thread is created to flush all tables at the
  given interval
- --ft-boolean-syntax=name 
+ --force-memory-to-innodb
+ memory storage converted to innodb.
+ --force-myisam-to-innodb
+ myisam storage converted to innodb.
+ --force-revise      force revise or not
+ --ft-boolean-syntax=name
  List of operators for MATCH ... AGAINST ( ... IN BOOLEAN
  MODE)
  --ft-max-word-len=# The maximum length of the word to be included in a
@@ -368,34 +530,30 @@ The following options may be given as the first argument:
  --ft-min-word-len=# The minimum length of the word to be included in a
  FULLTEXT index. Note: FULLTEXT indexes must be rebuilt
  after changing this variable
- --ft-query-expansion-limit=# 
+ --ft-query-expansion-limit=#
  Number of best matches to use for query expansion
- --ft-stopword-file=name 
+ --ft-stopword-file=name
  Use stopwords from this file instead of built-in list
- --galaxyx[=name]    Enable or disable galaxyx plugin. Possible values are ON,
- OFF, FORCE (don't start if the plugin fails to load).
- --galaxyx-port[=#]  Port on which Galaxy X-protocol is going to accept
- incoming connections.
  --gdb               Set up signals usable for debugging.
  --general-log       Log connections and queries to a table or log file.
  Defaults to logging to a file hostname.log, or if
  --log-output=TABLE is used, to a table mysql.general_log.
- --general-log-file=name 
+ --general-log-file=name
  Log connections and queries to given file
- --generated-random-password-length=# 
+ --generated-random-password-length=#
  Determines the length randomly generated passwords in
  CREATE USER-,SET PASSWORD- or ALTER USER statements
- --global-query-wait-timeout=# 
+ --global-query-wait-timeout=#
  Timeout in seconds to wait for XA prepared  before
  returning an error.
- --group-concat-max-len=# 
- The maximum length of the result of function 
+ --group-concat-max-len=#
+ The maximum length of the result of function
  GROUP_CONCAT()
- --group-replication-consistency[=name] 
+ --group-replication-consistency[=name]
  Transaction consistency guarantee, possible values:
  EVENTUAL, BEFORE_ON_PRIMARY_FAILOVER, BEFORE, AFTER,
  BEFORE_AND_AFTER
- --gtid-executed-compression-period[=#] 
+ --gtid-executed-compression-period[=#]
  When binlog is disabled, a background thread wakes up to
  compress the gtid_executed table every
  gtid_executed_compression_period transactions, as a
@@ -422,6 +580,12 @@ The following options may be given as the first argument:
  Maximum amount of memory available for generating
  histograms
  --host-cache-size=# How many host names should be cached to avoid resolving.
+ --ignore-index-hint-error 
+ When this option is enabled,using inexistent index in
+ index hint would be allowed
+ --implicit-primary-key 
+ MySQL add the primary key for every tables that haven't
+ any unique indexes automaticly
  --information-schema-stats-expiry=# 
  The number of seconds after which mysqld server will
  fetch data from storage engine and replace the data in
@@ -435,6 +599,10 @@ The following options may be given as the first argument:
  --initialize-insecure 
  Create the default database and exit. Create a super user
  with empty password.
+ --inner-schema-list=name 
+ Inner schema string split by ','
+ --inner-user-list=name 
+ Inner account string split by ','
  --interactive-timeout=# 
  The number of seconds the server waits for activity on an
  interactive connection before closing it
@@ -478,6 +646,9 @@ The following options may be given as the first argument:
  --keyring-migration-destination.
  --keyring-migration-user=name 
  User to login to server.
+ --kill-idle-transaction-timeout=# 
+ If non-zero, number of seconds to wait before killing
+ idle connections that have open transactions
  -L, --language=name Client error messages in given language. May be given as
  a full path. Deprecated. Use --lc-messages-dir instead.
  --large-pages       Enable support for large pages
@@ -488,6 +659,12 @@ The following options may be given as the first argument:
  Set the language used for the month names and the days of
  the week.
  --local-infile      Enable LOAD DATA LOCAL INFILE
+ --lock-instance-mode=name 
+ Instance lock mode: LOCK_NON is nothing to
+ do;LOCK_TABLE_CREATION deny all
+ SQLCOM_CREATE_TABLE;LOCK_WRITE_GROWTH equal read only but
+ allow shrink space;LOCK_WRITE equal read only;LOCK_READ
+ block all query;
  --lock-wait-timeout=# 
  Timeout in seconds to wait for a lock before returning an
  error.
@@ -584,6 +761,10 @@ The following options may be given as the first argument:
  If set to 1 table names are stored in lowercase on disk
  and table names will be case-insensitive.  Should be set
  to 2 if you are using a case insensitive file system
+ --maintain-max-connections=# 
+ The max connection count for maintain user
+ --maintain-user-list=name 
+ maintenace account string split by ','
  --mandatory-roles=name 
  All the specified roles are always considered granted to
  every user and they can't be revoked. Mandatory roles
@@ -727,17 +908,29 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
+ --opt-enable-rds-priv-strategy 
+ When this option is enabled,it will protect reserved
+ account and privileges
+ --opt-indexstat     When this option is enabled,it will accumulate the index
+ statistics
+ (Defaults to on; use --skip-opt-indexstat to disable.)
  --opt-outline-enabled 
  When this option is enabled,it will invoke statement
  outline when execute sql
  (Defaults to on; use --skip-opt-outline-enabled to disable.)
- --optimizer-prune-level=# 
+ --opt-readonly-trans-implicit-commit
+ When this option is enabled,First SELECT statement will
+ commit implicitly on slave for normal user
+ --opt-tablestat     When this option is enabled,it will accumulate the table
+ statistics
+ (Defaults to on; use --skip-opt-tablestat to disable.)
+ --optimizer-prune-level=#
  Controls the heuristic(s) applied during query
  optimization to prune less-promising partial plans from
  the optimizer search space. Meaning: 0 - do not apply any
  heuristic, thus perform exhaustive search; 1 - prune
  plans based on number of retrieved rows
- --optimizer-search-depth=# 
+ --optimizer-search-depth=#
  Maximum depth of search performed by the query optimizer.
  Values larger than the number of relations in a query
  result in better query plans, but take longer to compile
@@ -745,7 +938,7 @@ The following options may be given as the first argument:
  relation result in faster optimization, but may produce
  very bad query plans. If set to 0, the system will
  automatically pick a reasonable value
- --optimizer-switch=name 
+ --optimizer-switch=name
  optimizer_switch=option=val[,option=val...], where option
  is one of {index_merge, index_merge_union,
  index_merge_sort_union, index_merge_intersection,
@@ -795,11 +988,30 @@ The following options may be given as the first argument:
  The minimum number of days that need to pass before a
  password can be reused. Set to 0 (the default) to turn
  the checks off
+ --performance-agent-enabled 
+ When this option is enabled, it will start the
+ performance agent plugin
+ (Defaults to on; use --skip-performance-agent-enabled to disable.)
+ --performance-agent-file-size=# 
+ The file size of each local performance file (mB)
+ --performance-agent-interval=# 
+ The time interval of sampling (second time)
+ -h, --performance-agent-network-device=name 
+ Network device list
+ --performance-agent-perfstat-volume-size=# 
+ The max perfstat records that keeped in memory
  --performance-point-dbug-enabled 
- Enable Performance Point debug mode. 
+ Enable Performance Point debug mode
+ --performance-point-enabled 
+ whether open the performance point system plugin
+ (Defaults to on; use --skip-performance-point-enabled to disable.)
+ --performance-point-iostat-interval=# 
+ The time interval every iostat aggregation (second time)
+ --performance-point-iostat-volume-size=# 
+ The max iostat records that keeped in memory
  --performance-point-lock-rwlock-enabled 
  Enable Performance Point statement level rwlock
- aggregation (enabled by default). 
+ aggregation(enabled by default)
  (Defaults to on; use --skip-performance-point-lock-rwlock-enabled to disable.)
  --performance-schema 
  Enable the performance schema.
@@ -1007,6 +1219,10 @@ The following options may be given as the first argument:
  --preload-buffer-size=# 
  The size of the buffer that is allocated when preloading
  indexes
+ --primary-fast-lookup
+ Directly accesss primary index if using pk to lookup
+ records
+ (Defaults to on; use --skip-primary-fast-lookup to disable.)
  --print-identified-with-as-hex 
  SHOW CREATE USER will print the AS clause as HEX if it
  contains non-prinable characters
@@ -1022,9 +1238,14 @@ The following options may be given as the first argument:
  both client and server support it; otherwise it picks
  zstd if both support it; otherwise it picks uncompressed
  if both support it; otherwise it fails.
- --query-alloc-block-size=# 
+ --proxy-ip-list=name
+ proxy ip list split by ','
+ --push-tran-info-default-interval=#
+ Sets the default interval in ms to push transaction
+ information
+ --query-alloc-block-size=#
  Allocation block size for query parsing and execution
- --query-prealloc-size=# 
+ --query-prealloc-size=#
  Persistent buffer for query parsing and execution
  --range-alloc-block-size=# 
  Allocation block size for storing ranges during
@@ -1037,6 +1258,52 @@ The following options may be given as the first argument:
  optimization of a query, index range scan will not be
  considered for this query. A value of 0 means range
  optimizer does not have any cap on memory. 
+ --rds-audit-log-buffer-size=# 
+ Buffer size for log buffer.
+ --rds-audit-log-connection-policy=name 
+ The policy controlling how the audit log plugin writes
+ connection events to its log file. Supported values are
+ 'ALL' (default), 'ERRORS' and 'NONE'.
+ --rds-audit-log-dir=name 
+ Path to store RDS audit logs. Logs will be put under
+ tmpdir is not specified.
+ --rds-audit-log-enabled 
+ The option to enable or disable audit log.
+ --rds-audit-log-event-buffer-size=# 
+ Buffer size for event buffer.
+ --rds-audit-log-flush 
+ When set to enabled, the current log file will be closed,
+ and a new log file will be created.
+ --rds-audit-log-format=name 
+ The format of audit log, currently only support PLAIN
+ (compatible with MySQL_V1 in RDS MySQL 5.6), JSON will be
+ supported soon.
+ --rds-audit-log-policy=name 
+ The policy controlling how the audit log plugin writes
+ events to its log file. Supported values are 'ALL'
+ (default), 'LOGINS', 'QUERIES' and 'NONE'.
+ --rds-audit-log-row-limit=# 
+ Max number of rows in each audit log file. Log records
+ will be discarded above this number.
+ --rds-audit-log-skip 
+ Whether to skip log recording for current session.
+ --rds-audit-log-statement-policy=name 
+ The policy controlling how the audit log plugin writes
+ query events to its log file. Supported values are 'ALL'
+ (default), 'UPDATES', 'UPDATES_OR_ERRORS', 'ERRORS' and
+ 'NONE'.
+ --rds-audit-log-strategy=name 
+ The audit log strategy, currently support ASYNCHRONOUS,
+ PERFORMANCE, SEMISYNCHRONOUS and SYNCHRONOUS.
+ --rds-expose-priv-list=name 
+ privs exposed to user, split by ','
+ --rds-kill-connections=# 
+ Max conenction count for rds kill user
+ --rds-kill-user-list=name 
+ user can kill non-super user, string split by ','
+ --rds-print-tcp-error 
+ Whether logging detailed information when tcp sock occurs
+ error.
  --rds-version[=#]   The mysql patch version
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
@@ -1049,6 +1316,31 @@ The following options may be given as the first argument:
  --read-rnd-buffer-size=# 
  When reading rows in sorted order after a sort, the rows
  are read through this buffer to avoid a disk seeks
+ --recover-snapshot  recover from the backup of cloud storage and output the
+ committed index
+ --recovery-apply-binlog 
+ Applying binlog to generate the lost data at server
+ startup.
+ --recovery-force-flush-log-trx-size=# 
+ Force persist engine log if a transaction's binlog size
+ exceeds recovery_force_flush_log_trx_size
+ --recovery-inconsistency-abort 
+ Abort the server if there is any inconsistency which
+ cannot be handled.
+ --recovery-inconsistency-check 
+ Check and handle the inconsistency between binlog and
+ engine.
+ --recovery-inconsistency-check-every-start 
+ Check and handle the inconsistency check for every start
+ if it is ture.
+ --recycle-bin       Whether recycle the table which is going to be dropped
+ --recycle-bin-retention=# 
+ Seconds before really purging the recycled table.
+ --recycle-scheduler Enable the recycle scheduler.
+ --recycle-scheduler-interval=# 
+ Interval in seconds for recycle scheduler.
+ --recycle-scheduler-purge-table-print 
+ Print the recycle scheduler process.
  --regexp-stack-limit=# 
  Stack size limit for regular expressions matches
  --regexp-time-limit=# 
@@ -1153,10 +1445,50 @@ The following options may be given as the first argument:
  When this option is enabled, connections attempted using
  insecure transport will be rejected.  Secure transports
  are SSL/TLS, Unix socket or Shared Memory (on Windows).
+ --reset-consensus-prefetch-cache 
+ reset consensus prefetch_cache
+ --rotate-log-table  Whether rotate the data file when flush slow_log or
+ general_log
+ --rotate-log-table-last-name=name 
+ Last rotated log table file name
  --rpl-read-size=#   The size for reads done from the binlog and relay log. It
  must be a multiple of 4kb. Making it larger might help
  with IO stalls while reading these files when they are
  not in the OS buffer cache
+ --rpl-semi-sync-master-enabled 
+ Enable semi-synchronous replication master (disabled by
+ default). 
+ --rpl-semi-sync-master-timeout[=#] 
+ The timeout value (in ms) for semi-synchronous
+ replication in the master
+ --rpl-semi-sync-master-trace-level[=#] 
+ The tracing level for semi-sync replication.
+ --rpl-semi-sync-master-wait-for-slave-count[=#] 
+ How many slaves the events should be replicated to.
+ Semisynchronous replication master will wait until all
+ events of the transaction are replicated to at least
+ rpl_semi_sync_master_wait_for_slave_count slaves
+ --rpl-semi-sync-master-wait-no-slave 
+ Wait until timeout when no semi-synchronous replication
+ slave available (enabled by default). 
+ (Defaults to on; use --skip-rpl-semi-sync-master-wait-no-slave to disable.)
+ --rpl-semi-sync-master-wait-point[=name] 
+ Semisync can wait for slave ACKs at one of two
+ points,AFTER_SYNC or AFTER_COMMIT. AFTER_SYNC is the
+ default value.AFTER_SYNC means that semisynchronous
+ replication waits just after the binary log file is
+ flushed, but before the engine commits, and so guarantees
+ that no other sessions can see the data before replicated
+ to slave. AFTER_COMMIT means that semisynchronous
+ replication waits just after the engine commits. Other
+ sessions may see the data before it is replicated, even
+ though the current session is still waiting for the
+ commit to end successfully.
+ --rpl-semi-sync-slave-enabled 
+ Enable semi-synchronous replication slave (disabled by
+ default). 
+ --rpl-semi-sync-slave-trace-level[=#] 
+ The tracing level for semi-sync replication.
  --rpl-stop-slave-timeout=# 
  Timeout in seconds to wait for slave to stop before
  returning a warning.
@@ -1179,6 +1511,8 @@ The following options may be given as the first argument:
  Controls the amount of global transaction ids to be
  included in the response packet sent by the
  server.(Default: OFF).
+ --session-track-index 
+ Track current index for non-select request.
  --session-track-schema 
  Track changes to the 'default schema'.
  (Defaults to on; use --skip-session-track-schema to disable.)
@@ -1195,6 +1529,9 @@ The following options may be given as the first argument:
  characteristics (isolation level, read only/read write,
  snapshot - but not any work done / data modified within
  the transaction).
+ --set-connection-id-enabled 
+ set_connection_id_enabled enable set thread_id, (2^24,
+ 2^32])
  --sha256-password-proxy-users 
  If set to FALSE (the default), then the sha256_password
  authentication plugin will not signal for authenticated
@@ -1205,6 +1542,7 @@ The following options may be given as the first argument:
  --show-create-table-verbosity 
  When this option is enabled, it increases the verbosity
  of 'SHOW CREATE TABLE'.
+ --show-ipk-info     Show everything about implicit key info
  --show-old-temporals 
  When this option is enabled, the pre-5.6.4 temporal types
  will be marked in the 'SHOW CREATE TABLE' and
@@ -1263,6 +1601,8 @@ The following options may be given as the first argument:
  Max size of Slave Worker queues holding not yet applied
  events. The least possible value must be not less than
  the master side max_allowed_packet.
+ --slave-pr-mode=name 
+ Parallel-replication based on SCHEMA or TABLE
  --slave-preserve-commit-order 
  Force slave workers to make commits in the same order as
  on the master. Disabled by default.
@@ -1338,6 +1678,9 @@ The following options may be given as the first argument:
  removed in a future release).
  --sync-binlog=#     Synchronously flush binary log to disk after every #th
  write to the file. Use 0 to disable synchronous flushing
+ --sync-binlog-redo-together 
+ When sync_binlog is 0, it flush binlog to disk just
+ before flush redo to disk.
  --sync-master-info=# 
  Synchronously flush master info to disk after every #th
  event. Use 0 to disable synchronous flushing
@@ -1380,7 +1723,43 @@ The following options may be given as the first argument:
  --thread-handling=name 
  Define threads usage for handling queries, one of
  one-thread-per-connection, no-threads, loaded-dynamically
+ --thread-pool[=name] 
+ Enable or disable thread_pool plugin. Possible values are
+ ON, OFF, FORCE (don't start if the plugin fails to load).
+ --thread-pool-enabled 
+ Enable or disable thread pool for new connections
+ (Enabled by default).
+ --thread-pool-idle-timeout=# 
+ Timeout in seconds for an idle thread in the thread
+ pool.Worker thread will be shut down after timeout
+ --thread-pool-max-threads=# 
+ Maximum allowed number of worker threads in the thread
+ pool
+ --thread-pool-normal-weights=# 
+ Maximum percent of threads for autocommit dml or query
+ processing
+ --thread-pool-oversubscribe=# 
+ How many additional active worker threads in a group are
+ allowed.
+ --thread-pool-size=# 
+ Number of thread groups in the pool. This parameter is
+ roughly equivalent to maximum number of concurrently
+ executing threads (threads in a waiting state do not
+ count as executing).
+ --thread-pool-stall-limit=# 
+ Maximum query execution time in milliseconds,before an
+ executing non-yielding thread is considered stalled.If a
+ worker thread is stalled, additional worker thread may be
+ created to handle remaining clients.
+ --thread-pool-trans-weights=# 
+ Maximum percent of threads for transaction processing
  --thread-stack=#    The stack size for each thread
+ --thread-stack-warning=# 
+ The warning stack size for each thread
+ --threadpool-info[=name] 
+ Enable or disable THREADPOOL_INFO plugin. Possible values
+ are ON, OFF, FORCE (don't start if the plugin fails to
+ load).
  --tls-ciphersuites=name 
  --tls-version=name  TLS version, permitted values are TLSv1, TLSv1.1,
  TLSv1.2, TLSv1.3
@@ -1425,283 +1804,17 @@ The following options may be given as the first argument:
  (Defaults to on; use --skip-validate-user-plugins to disable.)
  -v, --verbose       Used with --help option for detailed help.
  -V, --version       Output version information and exit.
+ --version-hide-xcluster 
+ hide X-Cluster label in version
  --wait-timeout=#    The number of seconds the server waits for activity on a
  connection before closing it
+ --weak-consensus-mode 
+ set server to weak consensus mode
  --windowing-use-high-precision 
  For SQL window functions, determines whether to enable
  inversion optimization for moving window frames also for
  floating values.
  (Defaults to on; use --skip-windowing-use-high-precision to disable.)
- --xengine[=name]    Enable or disable XENGINE plugin. Possible values are ON,
- OFF, FORCE (don't start if the plugin fails to load).
- --xengine-auto-shrink-enabled 
- DBOptions::auto_shrink_enabled for XEngine
- (Defaults to on; use --skip-xengine-auto-shrink-enabled to disable.)
- --xengine-auto-shrink-schedule-interval=# 
- DBOptions::auto_shrink_schedule_interval for XEngine
- --xengine-base-background-compactions=# 
- DBOptions::base_background_compactions for XEngine
- --xengine-batch-group-max-group-size=# 
- DBOptions::batch_group_max_group_size for XEngine
- --xengine-batch-group-max-leader-wait-time-us=# 
- DBOptions::batch_group_max_leader_wait_time_us for
- XEngine
- --xengine-batch-group-slot-array-size=# 
- DBOptions::batch_group_slot_array_size for XEngine
- --xengine-block-cache-size=# 
- block_cache size for XEngine
- --xengine-block-size=# 
- BlockBasedTableOptions::block_size for XEngine
- --xengine-bottommost-level=# 
- CFOptions::bottommost_level for XEngine
- --xengine-cfstats[=name] 
- Enable or disable XENGINE_CFSTATS plugin. Possible values
- are ON, OFF, FORCE (don't start if the plugin fails to
- load).
- --xengine-columns[=name] 
- Enable or disable XENGINE_COLUMNS plugin. Possible values
- are ON, OFF, FORCE (don't start if the plugin fails to
- load).
- --xengine-compact-cf=# 
- Compact sub table
- --xengine-compaction-delete-percent=# 
- CFOptions::compaction_delete_percent for XEngine
- --xengine-compaction-history[=name] 
- Enable or disable XENGINE_COMPACTION_HISTORY plugin.
- Possible values are ON, OFF, FORCE (don't start if the
- plugin fails to load).
- --xengine-compaction-mode=# 
- DBOptions::compaction_mode for XEngine
- --xengine-compaction-stats[=name] 
- Enable or disable XENGINE_COMPACTION_STATS plugin.
- Possible values are ON, OFF, FORCE (don't start if the
- plugin fails to load).
- --xengine-compaction-task[=name] 
- Enable or disable XENGINE_COMPACTION_TASK plugin.
- Possible values are ON, OFF, FORCE (don't start if the
- plugin fails to load).
- --xengine-compaction-task-extents-limit=# 
- CFOptions::compaction_task_extents_limit for XEngine
- --xengine-compaction-type=# 
- DBOptions::compaction_type for XEngine
- --xengine-compression-options=name 
- CFOptions::compression_opts for XEngine
- --xengine-compression-per-level=name 
- CFOptions::compression_per_level for XEngine
- --xengine-concurrent-writable-file-buffer-num=# 
- DBOptions::concurrent_writable_file_buffer_num for
- XEngine
- --xengine-concurrent-writable-file-buffer-switch-limit=# 
- DBOptions::concurrent_writable_file_buffer_switch_limit
- for XEngine
- --xengine-concurrent-writable-file-single-buffer-size=# 
- DBOptions::concurrent_writable_file_single_buffer_size
- for XEngine
- --xengine-cpu-compaction-thread-num=# 
- DBOptions::cpu_compaction_thread_num for XEngine
- --xengine-datadir[=name] 
- XEngine data directory
- --xengine-db-total-write-buffer-size=# 
- DBOptions::db_total_write_buffer_size for XEngine
- --xengine-db-write-buffer-size=# 
- DBOptions::db_write_buffer_size for XEngine
- --xengine-dbstats[=name] 
- Enable or disable XENGINE_DBSTATS plugin. Possible values
- are ON, OFF, FORCE (don't start if the plugin fails to
- load).
- --xengine-ddl[=name] 
- Enable or disable XENGINE_DDL plugin. Possible values are
- ON, OFF, FORCE (don't start if the plugin fails to load).
- --xengine-deadlock-detect 
- Enables deadlock detection
- --xengine-debug-info[=name] 
- Enable or disable XENGINE_DEBUG_INFO plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-disable-auto-compactions 
- CFOptions::disable_auto_compaction for XEngine
- --xengine-disable-instant-ddl 
- disable instant ddl feature if necessary.
- --xengine-disable-online-ddl=# 
- disable online ddl feature if necessary.0: not disable
- online ddl,1: disable online-rebuild ddl, like modify
- pk,2: disable all type online-ddl include
- rebuild/norebuild
- --xengine-disable-parallel-ddl 
- disable parall ddl feature if necessary.
- --xengine-dump-malloc-stats 
- DBOptions::dump_malloc_stats for XENGINE
- --xengine-dump-memtable-limit-size=# 
- DBOptions::dump_memtable_limit_size for XEngine
- --xengine-enable-2pc 
- Enable two phase commit for XEngine
- (Defaults to on; use --skip-xengine-enable-2pc to disable.)
- --xengine-flush-delete-percent=# 
- CFOptions::flush_delete_percent for XEngine
- --xengine-flush-delete-percent-trigger=# 
- CFOptions::flush_delete_percent_trigger for XEngine
- --xengine-flush-delete-record-trigger=# 
- CFOptions::flush_delete_record_trigger for XEngine
- --xengine-flush-log-at-trx-commit=# 
- Sync on transaction commit. Similar to
- innodb_flush_log_at_trx_commit. 1: sync on commit, 0: not
- sync until wal_bytes_per_sync, 2: sync per second
- --xengine-force-flush-memtable-now 
- Forces memstore flush which may block all write requests
- so be careful
- --xengine-fpga-compaction-thread-num=# 
- DBOptions::fpga_compaction_thread_num for XEngine
- --xengine-global-info[=name] 
- Enable or disable XENGINE_GLOBAL_INFO plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-hotbackup=name 
- Hot Backup
- --xengine-idle-tasks-schedule-time=# 
- DBOptions::idle_tasks_schedule_time for XEngine
- --xengine-index-file-map[=name] 
- Enable or disable XENGINE_INDEX_FILE_MAP plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-level-compaction-dynamic-level-bytes 
- CFOptions::level_compaction_dynamic_level_bytes for
- XEngine
- (Defaults to on; use --skip-xengine-level-compaction-dynamic-level-bytes to disable.)
- --xengine-level0-file-num-compaction-trigger=# 
- CFOptions::level0_file_num_compaction_trigger for XEngine
- --xengine-level0-layer-num-compaction-trigger=# 
- CFOptions::level0_layer_num_compaction_trigger for
- XEngine
- --xengine-level1-extents-major-compaction-trigger=# 
- CFOptions::level1_extents_major_compaction_trigger for
- XEngine
- --xengine-level2-usage-percent=# 
- CFOptions::level2_usage_percent for XEngine
- --xengine-lock-scanned-rows 
- Take and hold locks on rows that are scanned but not
- updated
- --xengine-lock-wait-timeout=# 
- Number of seconds to wait for lock
- --xengine-locks[=name] 
- Enable or disable XENGINE_LOCKS plugin. Possible values
- are ON, OFF, FORCE (don't start if the plugin fails to
- load).
- --xengine-max-background-compactions=# 
- DBOptions::max_background_compactions for XEngine
- --xengine-max-background-dumps=# 
- DBOptions::max_background_dumps for XEngine
- --xengine-max-background-flushes=# 
- DBOptions::max_background_flushes for XEngine
- --xengine-max-free-extent-percent=# 
- DBOptions::max_free_extent_percent for XEngine
- --xengine-max-manifest-file-size=# 
- DBOptions::max_manifest_file_size for XEngine
- --xengine-max-row-locks=# 
- Maximum number of locks a transaction can have
- --xengine-max-shrink-extent-count=# 
- DBOptions::max_shrink_extent_count for XEngine
- --xengine-max-total-wal-size=# 
- DBOptions::max_total_wal_size for XEngine
- --xengine-max-write-buffer-number=# 
- CFOptions::max_write_buffer_number for XEngine
- --xengine-max-write-buffer-number-to-maintain=# 
- CFOptions::max_write_buffer_number_to_maintain for
- XEngine
- --xengine-mem-alloc[=name] 
- Enable or disable XENGINE_MEM_ALLOC plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-memtable=name 
- options for CFOptions::memtable in XEngine
- --xengine-min-write-buffer-number-to-merge=# 
- CFOptions::min_write_buffer_number_to_merge for XEngine
- --xengine-mutex-backtrace-threshold-ns=# 
- DBOptions::mutex_backtrace_threshold_ns for XEngine
- --xengine-parallel-read-threads=# 
- Number of threads to do parallel read.
- --xengine-parallel-recovery-thread-num=# 
- DBOptions::parallel_recovery_thread_num for XEngine.
- Default is 0
- --xengine-parallel-wal-recovery 
- DBOptions::parallel_wal_recovery for XEngine. Default is
- FALSE
- --xengine-pause-background-work 
- Disable all xengine background operations
- --xengine-perf-context[=name] 
- Enable or disable XENGINE_PERF_CONTEXT plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-perf-context-global[=name] 
- Enable or disable XENGINE_PERF_CONTEXT_GLOBAL plugin.
- Possible values are ON, OFF, FORCE (don't start if the
- plugin fails to load).
- --xengine-purge-invalid-subtable-bg 
- Turn on to enable purging invalid subtable in background
- (Defaults to on; use --skip-xengine-purge-invalid-subtable-bg to disable.)
- --xengine-query-trace[=name] 
- Enable or disable XENGINE_QUERY_TRACE plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-query-trace-print-slow 
- if print slow query detail in error log for XEngine
- (Defaults to on; use --skip-xengine-query-trace-print-slow to disable.)
- --xengine-query-trace-sum=name 
- if record query detail in IS table for XEngine
- --xengine-rate-limiter-bytes-per-sec=# 
- DBOptions::rate_limiter bytes_per_sec for XEngine
- --xengine-reset-pending-shrink=# 
- reset subtable's pending shrink
- --xengine-row-cache-size=# 
- row_cache size for XEngine
- --xengine-scan-add-blocks-limit=# 
- CFOptions::scan_add_blocks_limit for XEngine
- --xengine-shrink-allocate-interval=# 
- DBOptions::shrink_allocate_interval for XEngine
- --xengine-shrink-table-space=# 
- Shrink xengine table space
- --xengine-sort-buffer-size=# 
- Memory buffer size for index creation
- --xengine-stats-dump-period-sec=# 
- DBOptions::stats_dump_period_sec for XEngine
- --xengine-strict-collation-check 
- Enforce case sensitive collation for XEngine indexes
- (Defaults to on; use --skip-xengine-strict-collation-check to disable.)
- --xengine-strict-collation-exceptions=name 
- List of tables (using regex) that are excluded from the
- case sensitive collation enforcement
- --xengine-subtable[=name] 
- Enable or disable XENGINE_SUBTABLE plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-table-cache-numshardbits=# 
- DBOptions::table_cache_numshardbits for XEngine
- --xengine-table-cache-size=# 
- DBOptions::table_cache_size for XEngine
- --xengine-table-space[=name] 
- Enable or disable XENGINE_TABLE_SPACE plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xengine-tables[=name] 
- Enable or disable XENGINE_TABLES plugin. Possible values
- are ON, OFF, FORCE (don't start if the plugin fails to
- load).
- --xengine-total-max-shrink-extent-count=# 
- DBOptions::total_max_shrink_extent_count for XEngine
- --xengine-trx[=name] 
- Enable or disable XENGINE_TRX plugin. Possible values are
- ON, OFF, FORCE (don't start if the plugin fails to load).
- --xengine-unsafe-for-binlog 
- Allowing statement based binary logging which may break
- consistency
- --xengine-wal-dir=name 
- DBOptions::wal_dir for XEngine
- --xengine-wal-recovery-mode=# 
- DBOptions::wal_recovery_mode for XEngine. Default is
- kAbsoluteConsistency
- --xengine-write-buffer-size=# 
- CFOptions::write_buffer_size for XEngine
- --xengine-write-disable-wal 
- WriteOptions::disableWAL for XEngine
 
 Variables (--variable-name=value)
 abort-slave-event-count 0
@@ -1709,7 +1822,10 @@ activate-all-roles-on-login FALSE
 admin-address (No default value)
 admin-port 33062
 allow-suspicious-udfs FALSE
+appliedindex-force-delay 0
+auto-detect-certs FALSE
 auto-increment-increment 1
+auto-increment-key-high-priority TRUE
 auto-increment-offset 1
 autocommit TRUE
 automatic-sp-privileges TRUE
@@ -1734,6 +1850,7 @@ binlog-row-event-max-size 8192
 binlog-row-image FULL
 binlog-row-metadata MINIMAL
 binlog-row-value-options 
+binlog-rows-query-key-content FALSE
 binlog-rows-query-log-events FALSE
 binlog-stmt-cache-size 32768
 binlog-transaction-dependency-history-size 25000
@@ -1742,7 +1859,6 @@ block-encryption-mode aes-128-ecb
 bulk-insert-buffer-size 8388608
 caching-sha2-password-private-key-path private_key.pem
 caching-sha2-password-public-key-path public_key.pem
-ccl-max-waiting-count 0
 ccl-queue-bucket-count 4
 ccl-queue-bucket-size 64
 ccl-wait-timeout 86400
@@ -1752,10 +1868,71 @@ character-set-server utf8mb4
 character-sets-dir MYSQL_CHARSETSDIR/
 check-proxy-users FALSE
 chroot (No default value)
+cluster-current-term 0
+cluster-dump-meta FALSE
+cluster-force-change-meta FALSE
+cluster-force-recover-index 0
+cluster-force-single-mode FALSE
+cluster-id 0
+cluster-info (No default value)
+cluster-learner-node FALSE
+cluster-log-type-node FALSE
+cluster-mts-recover-use-index TRUE
+cluster-purged-gtid (No default value)
+cluster-start-index 1
 collation-server utf8mb4_0900_ai_ci
+commit-pos-watcher TRUE
+commit-pos-watcher-interval 1000000
 completion-type NO_CHAIN
 concurrent-insert AUTO
 connect-timeout 10
+consensus-auto-leader-transfer TRUE
+consensus-auto-leader-transfer-check-seconds 60
+consensus-auto-reset-match-index TRUE
+consensus-check-commit-index-interval 1000
+consensus-check-large-event TRUE
+consensus-checksum FALSE
+consensus-configure-change-timeout 60000
+consensus-disable-election FALSE
+consensus-disable-fifo-cache FALSE
+consensus-dynamic-easyindex TRUE
+consensus-election-timeout 5000
+consensus-flow-control (No default value)
+consensus-force-promote FALSE
+consensus-force-recovery FALSE
+consensus-force-sync-epoch-diff 0
+consensus-heartbeat-thread-cnt 0
+consensus-io-thread-cnt 3
+consensus-large-batch-ratio 50
+consensus-large-event-limit 1073741824
+consensus-large-event-split-size 2097152
+consensus-large-trx TRUE
+consensus-large-trx-split-size 2097152
+consensus-leader-stop-apply FALSE
+consensus-leader-stop-apply-time 0
+consensus-learner-heartbeat TRUE
+consensus-learner-pipelining FALSE
+consensus-learner-timeout 0
+consensus-log-cache-size 67108864
+consensus-log-level LOG_ERROR
+consensus-max-delay-index 50000
+consensus-max-log-size 20971520
+consensus-max-packet-size 131072
+consensus-min-delay-index 5000
+consensus-msg-compress-option (No default value)
+consensus-new-follower-threshold 10000
+consensus-old-compact-mode TRUE
+consensus-optimistic-heartbeat FALSE
+consensus-pipelining-timeout 1
+consensus-prefetch-cache-size 67108864
+consensus-prefetch-fast-fetch FALSE
+consensus-prefetch-wakeup-ratio 2
+consensus-prefetch-window-size 10
+consensus-replicate-with-cache-log FALSE
+consensus-send-timeout 0
+consensus-sync-follower-meta-interva 1
+consensus-worker-thread-cnt 3
+consensuslog-revise FALSE
 console FALSE
 create-admin-listener-thread FALSE
 cte-max-recursion-depth 1000
@@ -1775,6 +1952,7 @@ disabled-storage-engines
 disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
+enable-appliedindex-checker TRUE
 end-markers-in-json FALSE
 enforce-gtid-consistency FALSE
 eq-range-index-dive-limit 200
@@ -1784,13 +1962,14 @@ explicit-defaults-for-timestamp TRUE
 external-locking FALSE
 flush FALSE
 flush-time 0
+force-memory-to-innodb FALSE
+force-myisam-to-innodb FALSE
+force-revise FALSE
 ft-boolean-syntax + -><()~*:""&|
 ft-max-word-len 84
 ft-min-word-len 4
 ft-query-expansion-limit 20
 ft-stopword-file (No default value)
-galaxyx ON
-galaxyx-port 33070
 gdb FALSE
 general-log FALSE
 generated-random-password-length 20
@@ -1802,12 +1981,16 @@ gtid-mode OFF
 help TRUE
 histogram-generation-max-mem-size 20000000
 host-cache-size 279
+ignore-index-hint-error FALSE
+implicit-primary-key FALSE
 information-schema-stats-expiry 86400
 init-connect 
 init-file (No default value)
 init-slave 
 initialize TRUE
 initialize-insecure TRUE
+inner-schema-list (No default value)
+inner-user-list (No default value)
 interactive-timeout 28800
 internal-tmp-mem-storage-engine TempTable
 join-buffer-size 262144
@@ -1821,10 +2004,12 @@ keyring-migration-host (No default value)
 keyring-migration-port 0
 keyring-migration-source (No default value)
 keyring-migration-user (No default value)
+kill-idle-transaction-timeout 0
 large-pages FALSE
 lc-messages en_US
 lc-time-names en_US
 local-infile FALSE
+lock-instance-mode LOCK_NON
 lock-wait-timeout 31536000
 log-bin (No default value)
 log-bin-index (No default value)
@@ -1851,6 +2036,8 @@ log-timestamps UTC
 long-query-time 10
 low-priority-updates FALSE
 lower-case-table-names 1
+maintain-max-connections 0
+maintain-user-list (No default value)
 mandatory-roles 
 master-info-file master.info
 master-info-repository TABLE
@@ -1900,7 +2087,11 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
+opt-enable-rds-priv-strategy FALSE
+opt-indexstat TRUE
 opt-outline-enabled TRUE
+opt-readonly-trans-implicit-commit FALSE
+opt-tablestat TRUE
 optimizer-prune-level 1
 optimizer-search-depth 62
 optimizer-switch index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,engine_condition_pushdown=on,index_condition_pushdown=on,mrr=on,mrr_cost_based=on,block_nested_loop=on,batched_key_access=off,materialization=on,semijoin=on,loosescan=on,firstmatch=on,duplicateweedout=on,subquery_materialization_cost_based=on,use_index_extensions=on,condition_fanout_filter=on,derived_merge=on,use_invisible_indexes=off,skip_scan=on,hash_join=on
@@ -1916,7 +2107,15 @@ partial-revokes ####
 password-history 0
 password-require-current FALSE
 password-reuse-interval 0
+performance-agent-enabled TRUE
+performance-agent-file-size 100
+performance-agent-interval 1
+performance-agent-network-device enp,  eth,   em
+performance-agent-perfstat-volume-size 3600
 performance-point-dbug-enabled FALSE
+performance-point-enabled TRUE
+performance-point-iostat-interval 2
+performance-point-iostat-volume-size 10000
 performance-point-lock-rwlock-enabled TRUE
 performance-schema TRUE
 performance-schema-accounts-size -1
@@ -1955,19 +2154,19 @@ performance-schema-max-file-classes 80
 performance-schema-max-file-handles 32768
 performance-schema-max-file-instances -1
 performance-schema-max-index-stat -1
-performance-schema-max-memory-classes 450
+performance-schema-max-memory-classes 512
 performance-schema-max-metadata-locks -1
 performance-schema-max-mutex-classes 300
 performance-schema-max-mutex-instances -1
 performance-schema-max-prepared-statements-instances -1
 performance-schema-max-program-instances -1
-performance-schema-max-rwlock-classes 60
+performance-schema-max-rwlock-classes 80
 performance-schema-max-rwlock-instances -1
 performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-sql-text-length 1024
 performance-schema-max-stage-classes 175
-performance-schema-max-statement-classes 220
+performance-schema-max-statement-classes 224
 performance-schema-max-statement-stack 10
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1
@@ -1983,17 +2182,46 @@ persisted-globals-load TRUE
 port ####
 port-open-timeout 0
 preload-buffer-size 32768
+primary-fast-lookup TRUE
 print-identified-with-as-hex FALSE
 profiling-history-size 15
 protocol-compression-algorithms zlib,zstd,uncompressed
+proxy-ip-list (No default value)
+push-tran-info-default-interval 10
 query-alloc-block-size 8192
 query-prealloc-size 8192
 range-alloc-block-size 4096
 range-optimizer-max-mem-size 8388608
-rds-version 25
+rds-audit-log-buffer-size 8388608
+rds-audit-log-connection-policy ALL
+rds-audit-log-dir (No default value)
+rds-audit-log-enabled FALSE
+rds-audit-log-event-buffer-size 2048
+rds-audit-log-flush FALSE
+rds-audit-log-format PLAIN
+rds-audit-log-policy ALL
+rds-audit-log-row-limit 100000
+rds-audit-log-skip FALSE
+rds-audit-log-statement-policy ALL
+rds-audit-log-strategy ASYNCHRONOUS
+rds-expose-priv-list (No default value)
+rds-kill-connections 0
+rds-kill-user-list (No default value)
+rds-print-tcp-error FALSE
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144
+recover-snapshot FALSE
+recovery-apply-binlog FALSE
+recovery-force-flush-log-trx-size 1048576
+recovery-inconsistency-abort FALSE
+recovery-inconsistency-check FALSE
+recovery-inconsistency-check-every-start FALSE
+recycle-bin FALSE
+recycle-bin-retention 604800
+recycle-scheduler FALSE
+recycle-scheduler-interval 30
+recycle-scheduler-purge-table-print FALSE
 regexp-stack-limit 8000000
 regexp-time-limit 32
 relay-log relaylog
@@ -2009,7 +2237,18 @@ report-password (No default value)
 report-port 0
 report-user (No default value)
 require-secure-transport FALSE
+reset-consensus-prefetch-cache FALSE
+rotate-log-table FALSE
+rotate-log-table-last-name 
 rpl-read-size 8192
+rpl-semi-sync-master-enabled FALSE
+rpl-semi-sync-master-timeout 10000
+rpl-semi-sync-master-trace-level 32
+rpl-semi-sync-master-wait-for-slave-count 1
+rpl-semi-sync-master-wait-no-slave TRUE
+rpl-semi-sync-master-wait-point AFTER_SYNC
+rpl-semi-sync-slave-enabled FALSE
+rpl-semi-sync-slave-trace-level 32
 rpl-stop-slave-timeout 31536000
 safe-user-create FALSE
 schema-definition-cache 256
@@ -2017,12 +2256,15 @@ secondary-engine-cost-threshold 100000
 server-id 1
 server-id-bits 32
 session-track-gtids OFF
+session-track-index FALSE
 session-track-schema TRUE
 session-track-state-change FALSE
 session-track-system-variables time_zone,autocommit,character_set_client,character_set_results,character_set_connection
 session-track-transaction-info OFF
+set-connection-id-enabled FALSE
 sha256-password-proxy-users FALSE
 show-create-table-verbosity FALSE
+show-ipk-info FALSE
 show-old-temporals FALSE
 show-slave-auth-info FALSE
 skip-grant-tables TRUE
@@ -2040,6 +2282,7 @@ slave-net-timeout 60
 slave-parallel-type DATABASE
 slave-parallel-workers 0
 slave-pending-jobs-size-max 134217728
+slave-pr-mode SCHEMA
 slave-preserve-commit-order FALSE
 slave-rows-search-algorithms INDEX_SCAN,HASH_SCAN
 slave-skip-errors (No default value)
@@ -2057,6 +2300,7 @@ stored-program-definition-cache 256
 super-read-only FALSE
 symbolic-links FALSE
 sync-binlog 1
+sync-binlog-redo-together FALSE
 sync-master-info 10000
 sync-relay-log 10000
 sync-relay-log-info 10000
@@ -2069,7 +2313,18 @@ temptable-max-ram 1073741824
 temptable-use-mmap TRUE
 thread-cache-size 9
 thread-handling one-thread-per-connection
+thread-pool ON
+thread-pool-enabled FALSE
+thread-pool-idle-timeout 10
+thread-pool-max-threads 10000
+thread-pool-normal-weights 50
+thread-pool-oversubscribe 16
+thread-pool-size 8
+thread-pool-stall-limit 100
+thread-pool-trans-weights 50
 thread-stack 262144
+thread-stack-warning 143360
+threadpool-info ON
 tls-ciphersuites (No default value)
 tmp-table-size 16777216
 transaction-alloc-block-size 8192
@@ -2082,112 +2337,10 @@ upgrade AUTO
 validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
+version-hide-xcluster FALSE
 wait-timeout 28800
+weak-consensus-mode FALSE
 windowing-use-high-precision TRUE
-xengine ON
-xengine-auto-shrink-enabled TRUE
-xengine-auto-shrink-schedule-interval 3600
-xengine-base-background-compactions 1
-xengine-batch-group-max-group-size 8
-xengine-batch-group-max-leader-wait-time-us 50
-xengine-batch-group-slot-array-size 8
-xengine-block-cache-size 536870912
-xengine-block-size 16384
-xengine-bottommost-level 2
-xengine-cfstats ON
-xengine-columns ON
-xengine-compact-cf 0
-xengine-compaction-delete-percent 70
-xengine-compaction-history ON
-xengine-compaction-mode 0
-xengine-compaction-stats ON
-xengine-compaction-task ON
-xengine-compaction-task-extents-limit 1000
-xengine-compaction-type 0
-xengine-compression-options -14:1:0
-xengine-compression-per-level kNoCompression
-xengine-concurrent-writable-file-buffer-num 4
-xengine-concurrent-writable-file-buffer-switch-limit 32768
-xengine-concurrent-writable-file-single-buffer-size 65536
-xengine-cpu-compaction-thread-num 8
-xengine-datadir ./.xengine
-xengine-db-total-write-buffer-size 107374182400
-xengine-db-write-buffer-size 107374182400
-xengine-dbstats ON
-xengine-ddl ON
-xengine-deadlock-detect FALSE
-xengine-debug-info ON
-xengine-disable-auto-compactions FALSE
-xengine-disable-instant-ddl FALSE
-xengine-disable-online-ddl 0
-xengine-disable-parallel-ddl FALSE
-xengine-dump-malloc-stats FALSE
-xengine-dump-memtable-limit-size 67108864
-xengine-enable-2pc TRUE
-xengine-flush-delete-percent 70
-xengine-flush-delete-percent-trigger 700000
-xengine-flush-delete-record-trigger 700000
-xengine-flush-log-at-trx-commit 1
-xengine-force-flush-memtable-now FALSE
-xengine-fpga-compaction-thread-num 8
-xengine-global-info ON
-xengine-hotbackup 
-xengine-idle-tasks-schedule-time 60
-xengine-index-file-map ON
-xengine-level-compaction-dynamic-level-bytes TRUE
-xengine-level0-file-num-compaction-trigger 64
-xengine-level0-layer-num-compaction-trigger 8
-xengine-level1-extents-major-compaction-trigger 1000
-xengine-level2-usage-percent 70
-xengine-lock-scanned-rows FALSE
-xengine-lock-wait-timeout 1
-xengine-locks ON
-xengine-max-background-compactions 1
-xengine-max-background-dumps 1
-xengine-max-background-flushes 1
-xengine-max-free-extent-percent 10
-xengine-max-manifest-file-size 18446744073709551615
-xengine-max-row-locks 1073741824
-xengine-max-shrink-extent-count 512
-xengine-max-total-wal-size 107374182400
-xengine-max-write-buffer-number 1000
-xengine-max-write-buffer-number-to-maintain 1000
-xengine-mem-alloc ON
-xengine-memtable 
-xengine-min-write-buffer-number-to-merge 2
-xengine-mutex-backtrace-threshold-ns 100000000
-xengine-parallel-read-threads 4
-xengine-parallel-recovery-thread-num 0
-xengine-parallel-wal-recovery FALSE
-xengine-pause-background-work FALSE
-xengine-perf-context ON
-xengine-perf-context-global ON
-xengine-purge-invalid-subtable-bg TRUE
-xengine-query-trace ON
-xengine-query-trace-print-slow TRUE
-xengine-query-trace-sum OFF
-xengine-rate-limiter-bytes-per-sec 0
-xengine-reset-pending-shrink 0
-xengine-row-cache-size 0
-xengine-scan-add-blocks-limit 100
-xengine-shrink-allocate-interval 3600
-xengine-shrink-table-space -1
-xengine-sort-buffer-size 4194304
-xengine-stats-dump-period-sec 600
-xengine-strict-collation-check TRUE
-xengine-strict-collation-exceptions (No default value)
-xengine-subtable ON
-xengine-table-cache-numshardbits 7
-xengine-table-cache-size 1073741824
-xengine-table-space ON
-xengine-tables ON
-xengine-total-max-shrink-extent-count 7680
-xengine-trx ON
-xengine-unsafe-for-binlog FALSE
-xengine-wal-dir 
-xengine-wal-recovery-mode 1
-xengine-write-buffer-size 268435456
-xengine-write-disable-wal FALSE
 
 To see what values a running MySQL server is using, type
 'mysqladmin variables' instead of 'mysqld --verbose --help'.

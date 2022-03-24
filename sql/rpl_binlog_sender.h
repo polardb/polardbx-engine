@@ -369,6 +369,8 @@ class Binlog_sender : Gtid_mode_copy {
   inline int wait_with_heartbeat(my_off_t log_pos);
   inline int wait_without_heartbeat();
 
+  int wait_commit_index_update(my_off_t log_pos, uint64_t index);
+
 #ifndef DBUG_OFF
   /* It is used to count the events that have been sent. */
   int m_event_count;

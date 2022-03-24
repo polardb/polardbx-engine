@@ -66,6 +66,12 @@ int Rpl_info_dummy::do_flush_info(const bool force MY_ATTRIBUTE((unused))) {
   return 0;
 }
 
+int Rpl_info_dummy::do_flush_info_force_new_thd(const bool force MY_ATTRIBUTE((unused)))
+{
+  DBUG_ASSERT(!abort);
+  return 0;
+}
+
 void Rpl_info_dummy::do_end_info() { return; }
 
 int Rpl_info_dummy::do_remove_info() {

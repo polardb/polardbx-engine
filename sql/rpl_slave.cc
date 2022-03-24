@@ -151,6 +151,15 @@
 #include "sql_string.h"
 #include "typelib.h"
 
+#include "consensus_log_manager.h"
+#include "sql/log_event_ext.h"
+
+#ifdef NORMANDY_CLUSTER
+#include "../cluster/consensus/consensus.h"
+#include "bl_consensus_log.h"
+#include "sql/consensus_admin.h"
+#endif
+
 struct mysql_cond_t;
 struct mysql_mutex_t;
 
@@ -293,6 +302,7 @@ static int terminate_slave_thread(THD *thd, mysql_mutex_t *term_lock,
                                   bool force = false);
 static bool check_io_slave_killed(THD *thd, Master_info *mi, const char *info);
 static int mts_event_coord_cmp(LOG_POS_COORD *id1, LOG_POS_COORD *id2);
+static int mts_event_coord_cmp_for_xpaxos_channel(LOG_POS_COORD *id1, LOG_POS_COORD *id2);
 
 static int check_slave_sql_config_conflict(const Relay_log_info *rli);
 
@@ -498,14 +508,16 @@ int init_slave() {
 
   /*
     Loop through the channel_map and start slave threads for each channel.
+    Do not start non-xpaxos channel before consensus module is inited if log_slave_updates is set to ON.
   */
-  if (!opt_skip_slave_start) {
+  if (!opt_skip_slave_start && !opt_log_slave_updates) {
     for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
          it++) {
       mi = it->second;
 
       /* If server id is not set, start_slave_thread() will say it */
-      if (Master_info::is_configured(mi) && mi->rli->inited) {
+      bool is_xpaxos_replication = mi ? channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) : false;
+      if (Master_info::is_configured(mi) && mi->rli->inited && !is_xpaxos_replication) {
         /* same as in start_slave() cache the global var values into rli's
          * members */
         mi->rli->opt_slave_parallel_workers = opt_mts_slave_parallel_workers;
@@ -561,13 +573,17 @@ bool start_slave(THD *thd) {
   DBUG_TRACE;
   Master_info *mi;
   bool channel_configured, error = false;
+  bool is_xpaxos_replication_cmd = thd->lex->sql_command == SQLCOM_START_XPAXOS_REPLICATION;
 
   if (channel_map.get_num_instances() == 1) {
     mi = channel_map.get_default_channel_mi();
     DBUG_ASSERT(mi);
-    if (start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
-                    thd->lex->slave_thd_opt, mi, true))
-      return true;
+    bool is_xpaxos_channel= channel_map.is_xpaxos_replication_channel_name(mi->get_channel());
+    if (is_xpaxos_replication_cmd == is_xpaxos_channel) {
+      if (start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
+                      thd->lex->slave_thd_opt, mi, true))
+        return true;
+    }
   } else {
     /*
       Users cannot start more than one channel's applier thread
@@ -586,17 +602,20 @@ bool start_slave(THD *thd) {
          it++) {
       mi = it->second;
 
+      bool is_xpaxos_channel= mi ? channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) : false;
       channel_configured =
           mi &&                      // Master_info exists
           (mi->inited || mi->reset)  // It is inited or was reset
-          && mi->host[0];            // host is set
+          && (mi->host[0] || is_xpaxos_channel);            // host is set
 
       if (channel_configured) {
-        if (start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
-                        thd->lex->slave_thd_opt, mi, true)) {
-          LogErr(ERROR_LEVEL, ER_RPL_SLAVE_CANT_START_SLAVE_FOR_CHANNEL,
-                 mi->get_channel());
-          error = true;
+        if (is_xpaxos_replication_cmd == is_xpaxos_channel) {
+          if (start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
+                          thd->lex->slave_thd_opt, mi, true)) {
+            LogErr(ERROR_LEVEL, ER_RPL_SLAVE_CANT_START_SLAVE_FOR_CHANNEL,
+                   mi->get_channel());
+            error = true;
+          }
         }
       }
     }
@@ -625,25 +644,31 @@ int stop_slave(THD *thd) {
   bool push_temp_table_warning = true;
   Master_info *mi = nullptr;
   int error = 0;
+  bool is_xpaxos_replication_cmd = thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
 
   if (channel_map.get_num_instances() == 1) {
     mi = channel_map.get_default_channel_mi();
 
     DBUG_ASSERT(!strcmp(mi->get_channel(), channel_map.get_default_channel()));
-
-    error = stop_slave(thd, mi, 1, false /*for_one_channel*/,
-                       &push_temp_table_warning);
+    bool is_xpaxos_channel= channel_map.is_xpaxos_replication_channel_name(mi->get_channel());
+    if (is_xpaxos_channel == is_xpaxos_replication_cmd) {
+      error = stop_slave(thd, mi, 1, false /*for_one_channel*/,
+                         &push_temp_table_warning);
+    }
   } else {
     for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
          it++) {
       mi = it->second;
+      bool is_xpaxos_channel= mi ? channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) : false;
 
-      if (Master_info::is_configured(mi)) {
-        if (stop_slave(thd, mi, 1, false /*for_one_channel*/,
-                       &push_temp_table_warning)) {
-          LogErr(ERROR_LEVEL, ER_RPL_SLAVE_CANT_STOP_SLAVE_FOR_CHANNEL,
-                 mi->get_channel());
-          error = 1;
+      if (mi && (mi->host[0] || is_xpaxos_channel)) {
+        if (is_xpaxos_replication_cmd == is_xpaxos_channel) {
+          if (stop_slave(thd, mi, 1, false /*for_one_channel*/,
+                         &push_temp_table_warning)) {
+            LogErr(ERROR_LEVEL, ER_RPL_SLAVE_CANT_STOP_SLAVE_FOR_CHANNEL,
+                   mi->get_channel());
+            error = 1;
+          }
         }
       }
     }
@@ -699,6 +724,7 @@ bool start_slave_cmd(THD *thd) {
     res = start_slave(thd);
   } else {
     mi = channel_map.get_mi(lex->mi.channel);
+    bool is_xpaxos_replication_cmd = thd->lex->sql_command == SQLCOM_START_XPAXOS_REPLICATION;
 
     /*
       If the channel being used is a group replication channel we need to
@@ -729,16 +755,22 @@ bool start_slave_cmd(THD *thd) {
       goto err;
     }
 
-    if (mi)
+    if (mi &&
+       (channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) == is_xpaxos_replication_cmd))
       res = start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
                         thd->lex->slave_thd_opt, mi, true);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel))
+    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
+            strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
 
     if (!res) my_ok(thd);
   }
 err:
   channel_map.unlock();
+  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+                        thd->m_main_security_ctx.user().str,
+                        thd->m_main_security_ctx.host_or_ip().str,
+                        thd->query().str, res);
   return res;
 }
 
@@ -784,7 +816,7 @@ bool stop_slave_cmd(THD *thd) {
     res = stop_slave(thd);
   else {
     mi = channel_map.get_mi(lex->mi.channel);
-
+    bool is_xpaxos_replication_cmd = thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
     /*
       If the channel being used is a group replication channel we need to
       disable this command here as, in some cases, group replication does not
@@ -815,10 +847,12 @@ bool stop_slave_cmd(THD *thd) {
       return true;
     }
 
-    if (mi)
+    if (mi &&
+        (channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) == is_xpaxos_replication_cmd))
       res = stop_slave(thd, mi, 1 /*net report */, true /*for_one_channel*/,
                        &push_temp_table_warning);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel))
+    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
+             strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
   }
 
@@ -1247,6 +1281,10 @@ int load_mi_and_rli_from_repositories(Master_info *mi, bool ignore_if_no_info,
     }
   }
 
+  // bind relay log info to global consensuslog
+  if (channel_map.is_xpaxos_replication_channel_name(mi->get_channel()))
+    consensus_log_manager.set_relay_log_info(mi->rli);
+
   DBUG_EXECUTE_IF("enable_mts_worker_failure_init",
                   { DBUG_SET("+d,mts_worker_thread_init_fails"); });
 end:
@@ -1624,16 +1662,17 @@ int terminate_slave_threads(Master_info *mi, int thread_mask,
       };);
     }
 
-    if ((error = terminate_slave_thread(
-             mi->info_thd, io_lock, &mi->stop_cond, &mi->slave_running,
-             &total_stop_wait_timeout, need_lock_term, force_io_stop)) &&
-        !force_all) {
-      if (error == 1) {
-        return ER_STOP_SLAVE_IO_THREAD_TIMEOUT;
+    if (!channel_map.is_xpaxos_replication_channel_name(mi->get_channel())) {
+      if ((error = terminate_slave_thread(
+               mi->info_thd, io_lock, &mi->stop_cond, &mi->slave_running,
+               &total_stop_wait_timeout, need_lock_term, force_io_stop)) &&
+          !force_all) {
+        if (error == 1) {
+          return ER_STOP_SLAVE_IO_THREAD_TIMEOUT;
+        }
+        return error;
       }
-      return error;
     }
-
 #ifndef DBUG_OFF
     if (force_io_stop) {
       if (DBUG_EVALUATE_IF("simulate_io_thd_wait_for_disk_space", 1, 0)) {
@@ -1778,10 +1817,12 @@ static int terminate_slave_thread(THD *thd, mysql_mutex_t *term_lock,
     */
     struct timespec abstime;
     set_timespec(&abstime, 2);
+    thd_wait_begin(current_thd, THD_WAIT_BINLOG);
 #ifndef DBUG_OFF
     int error =
 #endif
         mysql_cond_timedwait(term_cond, term_lock, &abstime);
+    thd_wait_end(current_thd);
     if ((*stop_wait_timeout) >= 2)
       (*stop_wait_timeout) = (*stop_wait_timeout) - 2;
     else if (*slave_running) {
@@ -1847,7 +1888,9 @@ bool start_slave_thread(
         registered, we could otherwise go waiting though thd->killed is
         set.
       */
+      thd_wait_begin(thd, THD_WAIT_BINLOG);
       if (!thd->killed) mysql_cond_wait(start_cond, cond_lock);
+      thd_wait_end(thd);
       mysql_mutex_unlock(cond_lock);
       thd->EXIT_COND(&saved_stage);
       mysql_mutex_lock(cond_lock);  // re-acquire it
@@ -1916,14 +1959,15 @@ bool start_slave_threads(bool need_lock_slave, bool wait_for_start,
     lock_cond_io = &mi->run_lock;
     lock_cond_sql = &mi->rli->run_lock;
   }
-
-  if (thread_mask & SLAVE_IO)
-    is_error = start_slave_thread(
+  if (!channel_map.is_xpaxos_replication_channel_name(mi->get_channel())) {
+    if (thread_mask & SLAVE_IO)
+      is_error = start_slave_thread(
 #ifdef HAVE_PSI_THREAD_INTERFACE
-        key_thread_slave_io,
+          key_thread_slave_io,
 #endif
-        handle_slave_io, lock_io, lock_cond_io, cond_io, &mi->slave_running,
-        &mi->slave_run_id, mi);
+          handle_slave_io, lock_io, lock_cond_io, cond_io, &mi->slave_running,
+          &mi->slave_run_id, mi);
+  }
   if (!is_error && (thread_mask & SLAVE_SQL)) {
     /*
       MTS-recovery gaps gathering is placed onto common execution path
@@ -1942,9 +1986,18 @@ bool start_slave_threads(bool need_lock_slave, bool wait_for_start,
 #endif
           handle_slave_sql, lock_sql, lock_cond_sql, cond_sql,
           &mi->rli->slave_running, &mi->rli->slave_run_id, mi);
-    if (is_error)
+    if (is_error) {
       terminate_slave_threads(mi, thread_mask & SLAVE_IO,
                               rpl_stop_slave_timeout, need_lock_slave);
+      if (opt_recover_snapshot) {
+        sql_print_error("start slave threads to get the consensus point failed");
+      }
+    }
+    else if (opt_recover_snapshot) {
+      mysql_mutex_lock(&mi->rli->run_lock);
+      mysql_cond_wait(&mi->rli->stop_cond, &mi->rli->run_lock);
+      mysql_mutex_unlock(&mi->rli->run_lock);
+    }
   }
   return is_error;
 }
@@ -1993,6 +2046,8 @@ void delete_slave_info_objects() {
   Master_info *mi = nullptr;
 
   channel_map.wrlock();
+
+  channel_map.reset_default_channel_mi();
 
   for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
        it++) {
@@ -2887,10 +2942,12 @@ static bool wait_for_relay_log_space(Relay_log_info *rli) {
   mysql_mutex_lock(&rli->log_space_lock);
   thd->ENTER_COND(&rli->log_space_cond, &rli->log_space_lock,
                   &stage_waiting_for_relay_log_space, &old_stage);
+  thd_wait_begin(thd, THD_WAIT_BINLOG);
   while (rli->log_space_limit < rli->log_space_total &&
          !(slave_killed = io_slave_killed(thd, mi)) &&
          !rli->ignore_log_space_limit)
     mysql_cond_wait(&rli->log_space_cond, &rli->log_space_lock);
+  thd_wait_end(thd);
 
   /*
     Makes the IO thread read only one event at a time
@@ -3395,7 +3452,9 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
        condition1: compare the log positions and
        condition2: compare the file names (to handle rotation case)
     */
-    if ((mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()) &&
+    /* X-Cluster does not maintain master log info currently. */
+    if (!mi->rli->info_thd->xpaxos_replication_channel &&
+        (mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()) &&
         (!strcmp(mi->get_master_log_name(),
                  mi->rli->get_group_master_log_name()))) {
       if (mi->slave_running == MYSQL_SLAVE_RUN_CONNECT)
@@ -3577,8 +3636,9 @@ bool show_slave_status(THD *thd) {
       we initialize it to NULL, so that my_free() takes care of it.
     */
     io_gtid_set_buffer_array[idx] = nullptr;
-
-    if (Master_info::is_configured(mi)) {
+    bool is_xpaxos_replication = mi ? channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) : false;
+    if ((mi != NULL && is_xpaxos_replication) ||
+        (Master_info::is_configured(mi) && !is_xpaxos_replication)) {
       const Gtid_set *io_gtid_set = mi->rli->get_gtid_set();
       mi->rli->get_sid_lock()->wrlock();
 
@@ -3623,8 +3683,9 @@ bool show_slave_status(THD *thd) {
   for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
        it++) {
     mi = it->second;
-
-    if (Master_info::is_configured(mi)) {
+    bool is_xpaxos_replication = mi ? channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) : false;
+    if ((mi != NULL && is_xpaxos_replication) ||
+        (Master_info::is_configured(mi) && !is_xpaxos_replication)) {
       if (show_slave_status_send_data(thd, mi, io_gtid_set_buffer_array[idx],
                                       sql_gtid_set_buffer))
         goto err;
@@ -3698,7 +3759,9 @@ bool show_slave_status(THD *thd, Master_info *mi) {
     return true;
   }
 
-  if (Master_info::is_configured(mi)) {
+  bool is_xpaxos_replication = mi ? channel_map.is_xpaxos_replication_channel_name(mi->get_channel()) : false;
+  if ((mi != NULL && is_xpaxos_replication) ||
+      (Master_info::is_configured(mi) && !is_xpaxos_replication)) {
     if (show_slave_status_send_data(thd, mi, io_gtid_set_buffer,
                                     sql_gtid_set_buffer))
       return true;
@@ -3783,7 +3846,7 @@ void set_slave_thread_options(THD *thd) {
      only for client threads.
   */
   ulonglong options = thd->variables.option_bits | OPTION_BIG_SELECTS;
-  if (opt_log_slave_updates)
+  if (opt_log_slave_updates && !thd->xpaxos_replication_channel)
     options |= OPTION_BIN_LOG;
   else
     options &= ~OPTION_BIN_LOG;
@@ -3917,7 +3980,9 @@ static inline bool slave_sleep(THD *thd, time_t seconds, killed_func func,
   thd->ENTER_COND(cond, lock, nullptr, nullptr);
 
   while (!(ret = func(thd, info))) {
+    thd_wait_begin(thd, THD_WAIT_BINLOG);
     int error = mysql_cond_timedwait(cond, lock, &abstime);
+    thd_wait_end(thd);
     if (is_timeout(error)) break;
   }
 
@@ -4339,6 +4404,7 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
           // reset the B-group and Gtid-group marker
           rli->curr_group_seen_begin = rli->curr_group_seen_gtid = false;
           rli->last_assigned_worker = nullptr;
+          rli->curr_group_seen_gcn = false;
         }
         /*
            Stroring GAQ index of the group that the event belongs to
@@ -4428,7 +4494,7 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
         ((ev->get_type_code() != binary_log::XID_EVENT &&
           !is_committed_ddl(*ptr_ev)) ||
          skip_event ||
-         (rli->is_mts_recovery() && !is_gtid_event(ev) &&
+         (rli->is_mts_recovery() && !is_gtid_event(ev) && !is_gcn_event(ev) &&
           (ev->ends_group() || !rli->mts_recovery_group_seen_begin) &&
           bitmap_is_set(&rli->recovery_groups, rli->mts_recovery_index)))) {
 #ifndef DBUG_OFF
@@ -4500,7 +4566,11 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
     if (!error && rli->is_mts_recovery() &&
         ev->get_type_code() != binary_log::ROTATE_EVENT &&
         ev->get_type_code() != binary_log::FORMAT_DESCRIPTION_EVENT &&
-        ev->get_type_code() != binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
+        ev->get_type_code() != binary_log::PREVIOUS_GTIDS_LOG_EVENT &&
+        ev->get_type_code() != binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT &&
+        ev->get_type_code() != binary_log::CONSENSUS_LOG_EVENT &&
+        ev->get_type_code() != binary_log::CONSENSUS_CLUSTER_INFO_EVENT &&
+        ev->get_type_code() != binary_log::CONSENSUS_EMPTY_EVENT) {
       if (ev->starts_group()) {
         rli->mts_recovery_group_seen_begin = true;
       } else if ((ev->ends_group() || !rli->mts_recovery_group_seen_begin) &&
@@ -4670,6 +4740,12 @@ static bool coord_handle_partial_binlogged_transaction(Relay_log_info *rli,
 static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
                                 Rpl_applier_reader *applier_reader) {
   DBUG_TRACE;
+  bool is_xpaxos_replication= thd->xpaxos_replication_channel;
+
+#ifdef NORMANDY_CLUSTER
+  if (1 == check_exec_consensus_log_end_condition(rli, is_xpaxos_replication))
+    return 1;
+#endif
 
   /*
      We acquire this mutex since we need it for all operations except
@@ -4735,9 +4811,11 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
       the Coordinator), we need to initialize it with a timestamp from the first
       event to be executed in parallel.
     */
+    /* only non-local event count timestamp for xpaxos channel */
     if ((!rli->is_parallel_exec() || rli->last_master_timestamp == 0) &&
-        !(ev->is_artificial_event() || ev->is_relay_log_event() ||
+        !(ev->is_artificial_event() || (!is_xpaxos_replication && ev->is_relay_log_event()) ||
           ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT ||
+          (is_xpaxos_replication && ev->is_local_event())||
           ev->server_id == 0)) {
       rli->last_master_timestamp =
           ev->common_header->when.tv_sec + (time_t)ev->exec_time;
@@ -4797,6 +4875,8 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
         return 1;
     }
 
+    update_consensus_apply_pos(rli, ev, is_xpaxos_replication);
+    
     /* ptr_ev can change to NULL indicating MTS coorinator passed to a Worker */
     exec_res = apply_event_and_update_pos(ptr_ev, thd, rli);
     /*
@@ -5706,6 +5786,7 @@ static void *handle_slave_worker(void *arg) {
   struct PSI_thread *psi;
 #endif
 
+  bool is_xpaxos_channel= channel_map.is_xpaxos_replication_channel_name(rli->mi->get_channel());
   my_thread_init();
   DBUG_TRACE;
 
@@ -5725,6 +5806,9 @@ static void *handle_slave_worker(void *arg) {
   psi = PSI_THREAD_CALL(get_thread)();
   thd_set_psi(w->info_thd, psi);
 #endif
+
+  if (is_xpaxos_channel)
+    thd->xpaxos_replication_channel= true;
 
   if (init_slave_thread(thd, SLAVE_THD_WORKER)) {
     // todo make SQL thread killed
@@ -5890,6 +5974,11 @@ int mts_event_coord_cmp(LOG_POS_COORD *id1, LOG_POS_COORD *id2) {
               : (filecmp > 0 ? 1 : (poscmp < 0 ? -1 : (poscmp > 0 ? 1 : 0))));
 }
 
+int mts_event_coord_cmp_for_xpaxos_channel(LOG_POS_COORD *id1, LOG_POS_COORD *id2) {
+  return id1->consensus_index < id2->consensus_index ?
+          -1 : (id1->consensus_index == id2->consensus_index ? 0 : 1);
+}
+
 bool mts_recovery_groups(Relay_log_info *rli) {
   Log_event *ev = nullptr;
   bool is_error = false;
@@ -5904,6 +5993,8 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   my_off_t offset = 0;
   MY_BITMAP *groups = &rli->recovery_groups;
   THD *thd = current_thd;
+  uint64 consensus_index = 0;
+  bool is_xpaxos_channel = channel_map.is_xpaxos_replication_channel_name(rli->mi->get_channel());
 
   DBUG_TRACE;
 
@@ -5936,8 +6027,16 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   /*
     Save relay log position to compare with worker's position.
   */
-  LOG_POS_COORD cp = {const_cast<char *>(rli->get_group_master_log_name()),
-                      rli->get_group_master_log_pos()};
+  // LOG_POS_COORD cp = {(char *)rli->get_group_master_log_name(),
+  //                   rli->get_group_master_log_pos(), rli->get_consensus_apply_index()};
+  LOG_POS_COORD cp;
+  if (is_xpaxos_channel)
+    cp = { (char *) rli->get_group_relay_log_name(),
+      rli->get_group_relay_log_pos(), rli->get_consensus_apply_index() };
+  else
+    cp = { (char *) rli->get_group_master_log_name(),
+      rli->get_group_master_log_pos(), 0 };
+
 
   /*
     Gathers information on valuable workers and stores it in
@@ -5963,19 +6062,31 @@ bool mts_recovery_groups(Relay_log_info *rli) {
       goto err;
     }
 
-    LOG_POS_COORD w_last = {
+    LOG_POS_COORD w_last;
+    if (is_xpaxos_channel)
+      w_last  = {
+        const_cast<char *>(worker->get_group_relay_log_name()),
+        worker->get_group_relay_log_pos(), worker->get_consensus_apply_index()};
+    else
+      w_last  = {
         const_cast<char *>(worker->get_group_master_log_name()),
-        worker->get_group_master_log_pos()};
-    if (mts_event_coord_cmp(&w_last, &cp) > 0) {
+        worker->get_group_master_log_pos(), 0};
+ 
+    if ((!is_xpaxos_channel && mts_event_coord_cmp(&w_last, &cp) > 0) ||
+        (is_xpaxos_channel && mts_event_coord_cmp_for_xpaxos_channel(&w_last, &cp) > 0)) {
       /*
         Inserts information into a dynamic array for further processing.
         The jobs/workers are ordered by the last checkpoint positions
         workers have seen.
       */
       job_worker.worker = worker;
-      job_worker.checkpoint_log_pos = worker->checkpoint_master_log_pos;
-      job_worker.checkpoint_log_name = worker->checkpoint_master_log_name;
-
+      if (is_xpaxos_channel) {
+        job_worker.checkpoint_log_pos= worker->checkpoint_relay_log_pos;
+        job_worker.checkpoint_log_name= worker->checkpoint_relay_log_name;
+      } else {
+        job_worker.checkpoint_log_pos = worker->checkpoint_master_log_pos;
+        job_worker.checkpoint_log_name = worker->checkpoint_master_log_name;
+      }
       above_lwm_jobs.push_back(job_worker);
     } else {
       /*
@@ -6022,24 +6133,44 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   for (Slave_job_group *jg = above_lwm_jobs.begin(); jg != above_lwm_jobs.end();
        ++jg) {
     Slave_worker *w = jg->worker;
-    LOG_POS_COORD w_last = {const_cast<char *>(w->get_group_master_log_name()),
-                            w->get_group_master_log_pos()};
+    LOG_POS_COORD w_last;
+    if (is_xpaxos_channel)
+      w_last = {const_cast<char *>(w->get_group_relay_log_name()),
+                 w->get_group_relay_log_pos(), w->get_consensus_apply_index()};
+    else
+      w_last = {const_cast<char *>(w->get_group_master_log_name()),
+                 w->get_group_master_log_pos(), 0};
+
 
     LogErr(INFORMATION_LEVEL,
            ER_RPL_MTS_GROUP_RECOVERY_RELAY_LOG_INFO_FOR_WORKER, w->id,
            w->get_group_relay_log_name(), w->get_group_relay_log_pos(),
-           w->get_group_master_log_name(), w->get_group_master_log_pos());
+           w->get_group_master_log_name(), w->get_group_master_log_pos(),
+           w->get_consensus_apply_index());
 
     recovery_group_cnt = 0;
     not_reached_commit = true;
-    if (rli->relay_log.find_log_pos(&linfo, rli->get_group_relay_log_name(),
-                                    1)) {
-      LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG,
-             rli->get_group_relay_log_name());
-      goto err;
+ 
+    if (is_xpaxos_channel) {
+      char log_name[FN_REFLEN];
+      uint64 log_pos = 0;
+      uint64 next_index = consensus_log_manager.get_next_trx_index(rli->get_consensus_apply_index());
+      if (consensus_log_manager.get_log_position(next_index , FALSE, log_name, &log_pos)) {
+        sql_print_error("Mts recover cannot find start index %llu.", next_index);
+        abort();
+      }
+      if (rli->relay_log.find_log_pos(&linfo, log_name, 1)) {
+        sql_print_error("Error looking for %s.", log_name);
+        goto err;
+      }
+      offset = log_pos;
+    } else {
+      if (rli->relay_log.find_log_pos(&linfo, rli->get_group_relay_log_name(), 1)) {
+        sql_print_error("Error looking for %s.", rli->get_group_relay_log_name());
+        goto err;
+      }
+      offset = rli->get_group_relay_log_pos();
     }
-    offset = rli->get_group_relay_log_pos();
-
     Relaylog_file_reader relaylog_file_reader(opt_slave_sql_verify_checksum);
 
     for (int checking = 0; not_reached_commit; checking++) {
@@ -6049,13 +6180,35 @@ bool mts_recovery_groups(Relay_log_info *rli) {
         goto err;
       }
 
+      bool in_large_trx = false;
       while (not_reached_commit &&
              (ev = relaylog_file_reader.read_event_object())) {
         DBUG_ASSERT(ev->is_valid());
 
+        size_t event_log_pos = my_b_tell(relaylog_file_reader.get_io_cache());
         if (ev->get_type_code() == binary_log::ROTATE_EVENT ||
             ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT ||
-            ev->get_type_code() == binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
+            ev->get_type_code() == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
+            ev->get_type_code() == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
+            ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT ||
+            ev->get_type_code() == binary_log::CONSENSUS_CLUSTER_INFO_EVENT ||
+            ev->get_type_code() == binary_log::CONSENSUS_EMPTY_EVENT) {
+          if (ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT)
+          {
+            Consensus_log_event * r_ev = (Consensus_log_event*)ev;
+            if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX)
+            {
+              if (!in_large_trx)
+              {
+                consensus_index = r_ev->get_index();
+                in_large_trx = true;
+              }
+            }
+            else if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX_END)
+              in_large_trx = false;
+            else
+              consensus_index = r_ev->get_index();
+          }
           delete ev;
           ev = nullptr;
           continue;
@@ -6073,15 +6226,19 @@ bool mts_recovery_groups(Relay_log_info *rli) {
         } else if ((ev->ends_group() || !flag_group_seen_begin) &&
                    !is_gtid_event(ev)) {
           int ret = 0;
-          LOG_POS_COORD ev_coord = {
-              const_cast<char *>(rli->get_group_master_log_name()),
-              ev->common_header->log_pos};
+          LOG_POS_COORD ev_coord;
+          if (is_xpaxos_channel)
+            ev_coord= { linfo.log_file_name, event_log_pos, consensus_index };
+          else
+            ev_coord= { (char *)rli->get_group_master_log_name(), ev->common_header->log_pos, 0 };
+
           flag_group_seen_begin = false;
           recovery_group_cnt++;
 
           LogErr(INFORMATION_LEVEL, ER_RPL_MTS_GROUP_RECOVERY_RELAY_LOG_INFO,
                  rli->get_group_master_log_name(), ev->common_header->log_pos);
-          if ((ret = mts_event_coord_cmp(&ev_coord, &w_last)) == 0) {
+          if ((ret= is_xpaxos_channel ? mts_event_coord_cmp_for_xpaxos_channel(&ev_coord, &w_last) :
+                mts_event_coord_cmp(&ev_coord, &w_last)) == 0) {
 #ifndef DBUG_OFF
             for (uint i = 0; i <= w->worker_checkpoint_seqno; i++) {
               if (bitmap_is_set(&w->group_executed, i))
@@ -6148,6 +6305,7 @@ bool mts_checkpoint_routine(Relay_log_info *rli, bool force) {
   ulong cnt;
   bool error = false;
   time_t ts = 0;
+  ulonglong rli_appliedindex = 0;
 
   DBUG_TRACE;
 
@@ -6223,6 +6381,13 @@ bool mts_checkpoint_routine(Relay_log_info *rli, bool force) {
     to contain all but rli->group_master_log_name which
     is altered solely by Coordinator at special checkpoints.
   */
+  if (rli->info_thd->xpaxos_replication_channel) {
+    rli->set_consensus_apply_index(rli->gaq->lwm.consensus_index);
+    rli_appliedindex = rli->get_consensus_apply_index();
+    rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex? 0 :
+                        rli_appliedindex - opt_appliedindex_force_delay;
+    consensus_ptr->updateAppliedIndex(rli_appliedindex);
+  }
   rli->set_group_master_log_pos(rli->gaq->lwm.group_master_log_pos);
   rli->set_group_relay_log_pos(rli->gaq->lwm.group_relay_log_pos);
   DBUG_PRINT(
@@ -6419,6 +6584,7 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
   rli->mts_last_online_stat = my_time(0);
   rli->mts_group_status = Relay_log_info::MTS_NOT_IN_GROUP;
   clear_gtid_monitoring_info = true;
+  rli->curr_group_seen_gcn = false;
 
   if (init_hash_workers(rli))  // MTS: mapping_db_to_worker
   {
@@ -6520,7 +6686,9 @@ static void slave_stop_workers(Relay_log_info *rli, bool *mts_inited) {
 
       thd->ENTER_COND(&w->jobs_cond, &w->jobs_lock,
                       &stage_slave_waiting_workers_to_exit, &old_stage);
+      thd_wait_begin(thd, THD_WAIT_BINLOG);
       mysql_cond_wait(&w->jobs_cond, &w->jobs_lock);
+      thd_wait_end(thd);
       mysql_mutex_unlock(&w->jobs_lock);
       thd->EXIT_COND(&old_stage);
       mysql_mutex_lock(&w->jobs_lock);
@@ -6684,13 +6852,17 @@ extern "C" void *handle_slave_sql(void *arg) {
   my_off_t saved_master_log_pos = 0;
   my_off_t saved_skip = 0;
 
+  bool is_xpaxos_channel = channel_map.is_xpaxos_replication_channel_name(((Master_info*)arg)->get_channel());
+  if (is_xpaxos_channel)
+    consensus_log_manager.set_apply_ev_sequence(1);
+
   Relay_log_info *rli = ((Master_info *)arg)->rli;
   const char *errmsg;
   longlong slave_errno = 0;
   bool mts_inited = false;
   Global_THD_manager *thd_manager = Global_THD_manager::get_instance();
   Commit_order_manager *commit_order_mngr = nullptr;
-  Rpl_applier_reader applier_reader(rli);
+  rli->applier_reader.reset(new Rpl_applier_reader(rli));
   Relay_log_info::enum_priv_checks_status priv_check_status =
       Relay_log_info::enum_priv_checks_status::SUCCESS;
 
@@ -6725,7 +6897,7 @@ extern "C" void *handle_slave_sql(void *arg) {
 
     if (opt_slave_preserve_commit_order &&
         rli->opt_slave_parallel_workers > 0 && opt_bin_log &&
-        opt_log_slave_updates)
+        (opt_log_slave_updates && !is_xpaxos_channel))
       commit_order_mngr =
           new Commit_order_manager(rli->opt_slave_parallel_workers);
 
@@ -6749,6 +6921,11 @@ extern "C" void *handle_slave_sql(void *arg) {
     rli->slave_running = 1;
     rli->reported_unsafe_warning = false;
     rli->sql_thread_kill_accepted = false;
+    if (is_xpaxos_channel)
+      rli->force_apply_queue_before_stop = false;
+
+    if (is_xpaxos_channel)
+      thd->xpaxos_replication_channel= true;
 
     if (init_slave_thread(thd, SLAVE_THD_SQL)) {
       /*
@@ -6845,6 +7022,12 @@ extern "C" void *handle_slave_sql(void *arg) {
           "the relay "
           "log info will be consistent");
 
+    if (calculate_consensus_apply_start_pos(rli, is_xpaxos_channel)) {
+      if (!opt_recover_snapshot)
+        mysql_cond_broadcast(&rli->start_cond);
+      mysql_mutex_unlock(&rli->run_lock);
+      goto err;
+    }
     mysql_cond_broadcast(&rli->start_cond);
     mysql_mutex_unlock(&rli->run_lock);
 
@@ -6858,7 +7041,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     rli->trans_retries = 0;  // start from "no error"
     DBUG_PRINT("info", ("rli->trans_retries: %lu", rli->trans_retries));
 
-    if (applier_reader.open(&errmsg)) {
+    if (rli->applier_reader->open(&errmsg)) {
       rli->report(ERROR_LEVEL, ER_SLAVE_FATAL_ERROR, "%s", errmsg);
       goto err;
     }
@@ -6960,7 +7143,7 @@ extern "C" void *handle_slave_sql(void *arg) {
         saved_skip = 0;
       }
 
-      if (exec_relay_log_event(thd, rli, &applier_reader)) {
+      if (exec_relay_log_event(thd, rli, rli->applier_reader.get())) {
         DBUG_PRINT("info", ("exec_relay_log_event() failed"));
 
         // do not scare the user if SQL thread was simply killed or stopped
@@ -7024,7 +7207,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     mysql_mutex_lock(&rli->run_lock);
     /* We need data_lock, at least to wake up any waiting master_pos_wait() */
     mysql_mutex_lock(&rli->data_lock);
-    applier_reader.close();
+    rli->applier_reader->close();
     DBUG_ASSERT(rli->slave_running == 1);  // tracking buffer overrun
     /* When master_pos_wait() wakes up it will check this and terminate */
     rli->slave_running = 0;
@@ -8108,6 +8291,8 @@ int rotate_relay_log(Master_info *mi, bool log_master_fd, bool need_lock,
 
   int error = 0;
 
+  bool is_xpaxos_channel= channel_map.is_xpaxos_replication_channel_name(mi->get_channel());
+
   /*
      We need to test inited because otherwise, new_file() will attempt to lock
      LOCK_log, which may not be inited (if we're not a slave).
@@ -8115,6 +8300,16 @@ int rotate_relay_log(Master_info *mi, bool log_master_fd, bool need_lock,
   if (!rli->inited) {
     DBUG_PRINT("info", ("rli->inited == 0"));
     goto end;
+  }
+
+  if (is_xpaxos_channel) {
+    /* do not rotate in middle of a large trx */
+    if (!consensus_log_manager.get_enable_rotate())
+    {
+      sql_print_error("Fail to rotate log because the last consensus log entry is in middle of a large transaction.");
+      my_error(ER_CONSENSUS_FOLLOWER_NOT_ALLOWED, MYF(0));
+      return 1;
+    }
   }
 
   /* If the relay log is closed, new_file() will do nothing. */
@@ -8437,6 +8632,7 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
                  Master_info *mi, bool set_mts_settings) {
   bool is_error = false;
   int thread_mask;
+  bool is_xpaxos_channel = channel_map.is_xpaxos_replication_channel_name(mi->get_channel());
 
   DBUG_TRACE;
 
@@ -8481,26 +8677,27 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
     if (load_mi_and_rli_from_repositories(mi, false, thread_mask)) {
       is_error = true;
       my_error(ER_MASTER_INFO, MYF(0));
-    } else if (*mi->host || !(thread_mask & SLAVE_IO)) {
+    } else if ((is_xpaxos_channel ? true : *mi->host) || !(thread_mask & SLAVE_IO)) { 
       /*
         If we will start IO thread we need to take care of possible
         options provided through the START SLAVE if there is any.
       */
-      if (thread_mask & SLAVE_IO) {
-        if (connection_param->user) {
-          mi->set_start_user_configured(true);
-          mi->set_user(connection_param->user);
-        }
-        if (connection_param->password) {
-          mi->set_start_user_configured(true);
-          mi->set_password(connection_param->password);
-        }
-        if (connection_param->plugin_auth)
-          mi->set_plugin_auth(connection_param->plugin_auth);
-        if (connection_param->plugin_dir)
-          mi->set_plugin_dir(connection_param->plugin_dir);
+      if (!is_xpaxos_channel) {
+	    if (thread_mask & SLAVE_IO) {
+	      if (connection_param->user) {
+	        mi->set_start_user_configured(true);
+	        mi->set_user(connection_param->user);
+	      }
+	      if (connection_param->password) {
+	        mi->set_start_user_configured(true);
+	        mi->set_password(connection_param->password);
+	      }
+	      if (connection_param->plugin_auth)
+	        mi->set_plugin_auth(connection_param->plugin_auth);
+	      if (connection_param->plugin_dir)
+	        mi->set_plugin_dir(connection_param->plugin_dir);
+	    }
       }
-
       /*
         If we will start SQL thread we will care about UNTIL options If
         not and they are specified we will ignore them and warn user
@@ -8717,11 +8914,15 @@ int reset_slave(THD *thd) {
   if (thd->lex->reset_slave_info.all) {
     /* First do reset_slave for default channel */
     mi = channel_map.get_default_channel_mi();
-    if (mi && reset_slave(thd, mi, thd->lex->reset_slave_info.all)) return 1;
+    if (mi &&
+        (!channel_map.is_xpaxos_replication_channel_name(mi->get_channel())) &&
+        reset_slave(thd, mi, thd->lex->reset_slave_info.all))
+      return 1;
     /* Do while iteration for rest of the channels */
     it = channel_map.begin();
     while (it != channel_map.end()) {
-      if (!it->first.compare(channel_map.get_default_channel())) {
+      if (!it->first.compare(channel_map.get_default_channel()) ||
+          !it->first.compare(channel_map.get_xpaxos_channel())) {
         it++;
         continue;
       }
@@ -8752,6 +8953,12 @@ int reset_slave(THD *thd) {
   } else {
     it = channel_map.begin();
     while (it != channel_map.end()) {
+      if (!it->first.compare(channel_map.get_default_channel()) ||
+          !it->first.compare(channel_map.get_xpaxos_channel()))
+      {
+        it++;
+        continue;
+      }
       mi = it->second;
       DBUG_ASSERT(mi);
       if ((result = reset_slave(thd, mi, thd->lex->reset_slave_info.all)))
@@ -8933,9 +9140,10 @@ bool reset_slave_cmd(THD *thd) {
       command.
     */
     if (mi &&
-        channel_map.is_group_replication_channel_name(mi->get_channel(),
+        ((channel_map.is_group_replication_channel_name(mi->get_channel(),
                                                       true) &&
-        is_group_replication_running()) {
+        is_group_replication_running()) ||
+        channel_map.is_xpaxos_replication_channel_name(mi->get_channel()))) {
       my_error(ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED, MYF(0),
                "RESET SLAVE [ALL] FOR CHANNEL", mi->get_channel());
       channel_map.unlock();
@@ -9924,6 +10132,13 @@ bool change_master_cmd(THD *thd) {
   /* The slave must have been initialized to allow CHANGE MASTER statements */
   if (!is_slave_configured()) {
     my_error(ER_SLAVE_CONFIGURATION, MYF(0));
+    res = true;
+    goto err;
+  }
+
+  // If the chosen name is for xpaxos channel we abort
+  if (channel_map.is_xpaxos_replication_channel_name(lex->mi.channel)) {
+    my_error(ER_SLAVE_CHANNEL_NAME_INVALID_OR_TOO_LONG, MYF(0));
     res = true;
     goto err;
   }

@@ -1,0 +1,16 @@
+--exec $MYSQL --host=127.0.0.1 -P $MYPORT_1 -e "show global variables like 'version'" | grep "X-Cluster-" | wc -l
+show global variables like "version_hide_xcluster";
+set global version_hide_xcluster=ON;
+--exec $MYSQL --host=127.0.0.1 -P $MYPORT_1 -e "show global variables like 'version'" | grep "X-Cluster-" | wc -l
+--exec $MYSQL --host=127.0.0.1 -P $MYPORT_1 -e "show global variables like 'version'" | grep "-" | wc -l
+# test set to same value
+set global version_hide_xcluster=ON;
+--exec $MYSQL --host=127.0.0.1 -P $MYPORT_1 -e "show global variables like 'version'" | grep "X-Cluster-" | wc -l
+--exec $MYSQL --host=127.0.0.1 -P $MYPORT_1 -e "show global variables like 'version'" | grep "-" | wc -l
+show global variables like "version_hide_xcluster";
+set global version_hide_xcluster=OFF;
+--exec $MYSQL --host=127.0.0.1 -P $MYPORT_1 -e "show global variables like 'version'" | grep "X-Cluster-" | wc -l
+# test set to same value
+set global version_hide_xcluster=OFF;
+--exec $MYSQL --host=127.0.0.1 -P $MYPORT_1 -e "show global variables like 'version'" | grep "X-Cluster-" | wc -l
+show global variables like "version_hide_xcluster";

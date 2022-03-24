@@ -77,6 +77,17 @@ if ($SECONDARY_ENGINE_TEST) {
   EOF
 }
 
+# wait leader election
+--sleep 1
+let $wait_timeout= 60;
+let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
+--source include/wait_condition.inc
+
+# wait leader enable read/write
+let $wait_timeout= 60;
+let $wait_condition= select SERVER_READY_FOR_RW='Yes' from information_schema.alisql_cluster_local;
+--source include/wait_condition.inc
+
 # Reset $wait_counter so that its value won't be used on subsequent
 # calls, and default will be used instead.
 if (!$explicit_default_counter)

@@ -1,4 +1,4 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
 create table t1 (n int);
 set global innodb_undo_retention = 100;
 show status like "lizard_commit_gcn";
@@ -27,7 +27,7 @@ set innodb_snapshot_seq = @base_seq + 2;
 select * from t1;
 n
 5
-set innodb_snapshot_seq = @base_seq;
+set innodb_snapshot_seq = @base_seq + 1;
 select * from t1;
 n
 commit;
@@ -41,7 +41,7 @@ set innodb_snapshot_seq = @base_seq + 2;
 select * from t1;
 n
 5
-set innodb_snapshot_seq = @base_seq;
+set innodb_snapshot_seq = @base_seq + 1;
 select * from t1;
 n
 commit;

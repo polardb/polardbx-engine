@@ -1,0 +1,160 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+create table t1 (a int , primary key (a));
+# innodb_snapshot_update_gcn = true
+set global innodb_snapshot_update_gcn = true;
+# global query with normal trx, xa trx
+xa begin 'x10000';
+insert into t1 values (10000);
+xa end 'x10000';
+xa prepare 'x10000';
+set innodb_commit_seq = @base_seq +10000;
+xa commit 'x10000';
+xa begin 'x12000';
+set innodb_snapshot_seq = @base_seq +12000;
+select * from t1;
+a
+10000
+insert into t1 values (12001);
+xa begin 'x12002';
+insert into t1 values (12002);
+xa end 'x12002';
+xa commit 'x12002' one phase;
+xa begin 'x13000';
+insert into t1 values (13000);
+xa end 'x13000';
+xa prepare 'x13000';
+set innodb_commit_seq = @base_seq +13000;
+xa commit 'x13000';
+select * from t1;
+a
+10000
+xa end 'x12000';
+xa commit 'x12000' one phase;
+xa begin 'x14000';
+set innodb_snapshot_seq = @base_seq +14000;
+select * from t1;
+a
+10000
+12001
+12002
+13000
+xa end 'x14000';
+xa commit 'x14000' one phase;
+insert into t1 values (14001);
+# restart && global query
+# restart: --innodb_snapshot_update_gcn=true
+xa begin 'x12000';
+set innodb_snapshot_seq = @base_seq +12000;
+select * from t1;
+a
+10000
+xa end 'x12000';
+xa commit 'x12000' one phase;
+delete from t1;
+# crash && global query 
+xa begin 'x15000';
+insert into t1 values (15000);
+xa end 'x15000';
+xa prepare 'x15000';
+set innodb_commit_seq = @base_seq +15000;
+xa commit 'x15000';
+xa begin 'x15001';
+set innodb_snapshot_seq = @base_seq +15001;
+select * from t1 where a >= 13000;
+a
+15000
+xa end 'x15001';
+xa commit 'x15001' one phase;
+set debug ='d,ib_trx_crash_during_commit';
+insert into t1 values (15001);
+ERROR HY000: Lost connection to MySQL server during query
+xa begin 'x15001';
+set innodb_snapshot_seq = @base_seq +15001;
+select * from t1 where a >= 13000;
+a
+15000
+xa end 'x15001';
+xa commit 'x15001' one phase;
+truncate table t1;
+# innodb_snapshot_update_gcn = false
+set global innodb_snapshot_update_gcn = false;
+# global query with normal trx, xa trx
+xa begin 'x20000';
+insert into t1 values (20000);
+xa end 'x20000';
+xa prepare 'x20000';
+set innodb_commit_seq = @base_seq +20000;
+xa commit 'x20000';
+xa begin 'x22000';
+set innodb_snapshot_seq = @base_seq +22000;
+select * from t1;
+a
+20000
+insert into t1 values (22001);
+xa begin 'x22002';
+insert into t1 values (22002);
+xa end 'x22002';
+xa commit 'x22002' one phase;
+xa begin 'x23000';
+insert into t1 values (23000);
+xa end 'x23000';
+xa prepare 'x23000';
+set innodb_commit_seq = @base_seq +23000;
+xa commit 'x23000';
+select * from t1;
+a
+20000
+22001
+22002
+xa end 'x22000';
+xa commit 'x22000' one phase;
+xa begin 'x24000';
+set innodb_snapshot_seq = @base_seq +24000;
+select * from t1;
+a
+20000
+22001
+22002
+23000
+xa end 'x24000';
+xa commit 'x24000' one phase;
+insert into t1 values (24001);
+# restart && global query
+# restart: --innodb_snapshot_update_gcn=false
+xa begin 'x22000';
+set innodb_snapshot_seq = @base_seq +22000;
+select * from t1;
+a
+20000
+22001
+22002
+xa end 'x22000';
+xa commit 'x22000' one phase;
+delete from t1;
+# crash && global query 
+xa begin 'x25000';
+insert into t1 values (25000);
+xa end 'x25000';
+xa prepare 'x25000';
+set innodb_commit_seq = @base_seq +25000;
+xa commit 'x25000';
+xa begin 'x25001';
+set innodb_snapshot_seq = @base_seq +25001;
+select * from t1 where a >= 23000;
+a
+25000
+xa end 'x25001';
+xa commit 'x25001' one phase;
+set debug ='d,ib_trx_crash_during_commit';
+insert into t1 values (25001);
+ERROR HY000: Lost connection to MySQL server during query
+xa begin 'x25001';
+set innodb_snapshot_seq = @base_seq +25001;
+select * from t1 where a >= 23000;
+a
+25000
+25001
+xa end 'x25001';
+xa commit 'x25001' one phase;
+drop table t1;
+set global innodb_snapshot_update_gcn = default;

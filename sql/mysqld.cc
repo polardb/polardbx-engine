@@ -633,6 +633,8 @@ The documentation is based on the source files such as:
 #include "sql/keycaches.h"     // get_or_create_key_cache
 #include "sql/log.h"
 #include "sql/log_event.h"  // Rows_log_event
+#include "sql/consensus_log_manager.h"
+#include "sql/bl_consensus_log.h"
 #include "sql/log_resource.h"
 #include "sql/mdl.h"
 #include "sql/mdl_context_backup.h"  // mdl_context_backup_manager
@@ -802,6 +804,10 @@ The documentation is based on the source files such as:
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
+
+#include "sql/consensus_log_manager.h"
+#include "sql/sys_vars_consensus.h"
+#include "sql/bl_consensus_log.h"
 
 using std::max;
 using std::min;
@@ -1441,6 +1447,7 @@ char *opt_general_logname, *opt_slow_logname, *opt_bin_logname;
 */
 bool expire_logs_days_supplied = false;
 bool binlog_expire_logs_seconds_supplied = false;
+bool opt_recover_snapshot = false;
 /* Static variables */
 
 static bool opt_myisam_log;
@@ -1974,6 +1981,14 @@ static void close_connections(void) {
 
   Set_kill_conn set_kill_conn;
   thd_manager->do_for_all_thd(&set_kill_conn);
+  sql_print_information("Shutting down consensus module");
+   consensus_log_manager.stop_consensus_commit_pos_watcher();
+  // set close flag to stop workers and apply thread
+#ifdef NORMANDY_CLUSTER
+  if (consensus_ptr && !opt_consensus_force_recovery) {
+    consensus_ptr->shutdown();
+  }
+#endif
   LogErr(INFORMATION_LEVEL, ER_SHUTTING_DOWN_SLAVE_THREADS);
   end_slave();
 
@@ -2126,6 +2141,14 @@ static void unireg_abort(int exit_code) {
   if (mysqld::runtime::is_daemon()) {
     mysqld::runtime::signal_parent(pipe_write_fd, 0);
   }
+
+#endif
+  sql_print_information("Shutting down consensus module");
+  consensus_log_manager.stop_consensus_commit_pos_watcher();
+#ifdef NORMANDY_CLUSTER
+  if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
+    consensus_ptr->shutdown();
+  } 
 #endif
   clean_up(!is_help_or_validate_option() && !daemon_launcher_quiet &&
            (exit_code || !opt_initialize)); /* purecov: inspected */
@@ -2238,6 +2261,14 @@ static void clean_up(bool print_message) {
   dd::shutdown();
 
   Events::deinit();
+  consensus_log_manager.stop_consensus_commit_pos_watcher();
+#ifdef NORMANDY_CLUSTER
+  my_sleep(5000);
+  if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
+    delete consensus_ptr;
+    consensus_ptr = NULL;
+  }
+#endif
   stop_handle_manager();
 
   memcached_shutdown();
@@ -2267,8 +2298,10 @@ static void clean_up(bool print_message) {
   table_def_start_shutdown();
   plugin_shutdown();
   gtid_server_cleanup();  // after plugin_shutdown
+  consensus_log_manager.cleanup();
   delete_optimizer_cost_module();
   ha_end();
+
   if (tc_log) {
     tc_log->close();
     tc_log = NULL;
@@ -3899,6 +3932,9 @@ SHOW_VAR com_status_vars[] = {
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_SHOW_BINLOG_EVENTS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_consensuslogs",
+     (char*) offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_CONSENSUSLOGS]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_binlogs",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_BINLOGS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -4056,6 +4092,12 @@ SHOW_VAR com_status_vars[] = {
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_STOP_GROUP_REPLICATION]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"xpaxos_replication_start", (char*) offsetof(System_status_var,
+                      com_stat[(uint) SQLCOM_START_XPAXOS_REPLICATION]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"xpaxos_replication_stop",  (char*) offsetof(System_status_var,
+                      com_stat[(uint) SQLCOM_STOP_XPAXOS_REPLICATION]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"stmt_execute", (char *)offsetof(System_status_var, com_stmt_execute),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"stmt_close", (char *)offsetof(System_status_var, com_stmt_close),
@@ -4116,6 +4158,9 @@ SHOW_VAR com_status_vars[] = {
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"native_trans_proc",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_TRANS_PROC]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_consensuslog_events",
+     (char*) offsetof(System_status_var, com_stat[(uint) SQLCOM_SHOW_CONSENSUSLOG_EVENTS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
@@ -4294,7 +4339,7 @@ int init_common_variables() {
       key_BINLOG_LOCK_commit_queue, key_BINLOG_LOCK_done,
       key_BINLOG_LOCK_flush_queue, key_BINLOG_LOCK_log,
       key_BINLOG_LOCK_binlog_end_pos, key_BINLOG_LOCK_sync,
-      key_BINLOG_LOCK_sync_queue, key_BINLOG_LOCK_xids, key_BINLOG_COND_done,
+      key_BINLOG_LOCK_sync_queue, key_BINLOG_LOCK_xids, key_BINLOG_LOCK_rotate, key_BINLOG_COND_done,
       key_BINLOG_update_cond, key_BINLOG_prep_xids_cond, key_file_binlog,
       key_file_binlog_index, key_file_binlog_cache,
       key_file_binlog_index_cache);
@@ -4332,6 +4377,7 @@ int init_common_variables() {
       initializing system except if explicitly requested.
     */
     opt_bin_log = false;
+    opt_initialize = true;
   }
 
   strmake(pidfile_name, default_logfile_name, sizeof(pidfile_name) - 5);
@@ -5341,7 +5387,13 @@ static int init_server_components() {
     log_bin_index =
         rpl_make_log_name(key_memory_MYSQL_BIN_LOG_index, opt_binlog_index_name,
                           log_bin_basename, ".index");
+    /*
+      XCLUSTER_RESOLVE : don't set opt_binlog_index_name, otherwise, incorrect file
+      name would be used in following call path,
 
+        Relay_log_info::rli_init_info() -> MYSQL_BIN_LOG::open_index_file()
+    */
+#if 0
     if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
         log_bin_index) {
       strmake(default_binlog_index_name,
@@ -5349,7 +5401,7 @@ static int init_server_components() {
               FN_REFLEN + index_ext_length - 1);
       opt_binlog_index_name = default_binlog_index_name;
     }
-
+#endif
     if (log_bin_basename == NULL || log_bin_index == NULL) {
       LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN, (int)FN_LEN);
       unireg_abort(MYSQLD_ABORT_EXIT);
@@ -5837,6 +5889,12 @@ static int init_server_components() {
       tc_log = &tc_log_mmap;
   }
 
+  // init and bind binlog to consensus log
+  if (consensus_log_manager.init(opt_consensus_log_cache_size, opt_consensus_prefetch_cache_size, opt_consensus_start_index))
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  consensus_log_manager.set_binlog(&mysql_bin_log);
+  mysql_bin_log.is_xpaxos_log= true;
+
   if (Recovered_xa_transactions::init()) {
     LogErr(ERROR_LEVEL, ER_OOM);
     unireg_abort(MYSQLD_ABORT_EXIT);
@@ -5847,8 +5905,11 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
   (void)RUN_HOOK(server_state, before_recovery, (NULL));
-  if (ha_recover(0)) {
-    unireg_abort(MYSQLD_ABORT_EXIT);
+
+  if (opt_initialize) {
+    if (ha_recover(0)) {
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
   }
 
   if (dd::reset_tables_and_tablespaces()) {
@@ -5893,22 +5954,34 @@ static int init_server_components() {
   }
 
   if (opt_bin_log) {
-    /*
-      Configures what object is used by the current log to store processed
-      gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
-      corretly compute the set of previous gtids.
-    */
-    DBUG_ASSERT(!mysql_bin_log.is_relay_log);
-    mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
-    mysql_mutex_lock(log_lock);
+    if (!opt_consensus_force_recovery) {
+      std::vector<std::string> binlog_file_list;
+      mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
 
-    if (mysql_bin_log.open_binlog(opt_bin_logname, 0, max_binlog_size, false,
-                                  true /*need_lock_index=true*/,
-                                  true /*need_sid_lock=true*/, NULL)) {
-      mysql_mutex_unlock(log_lock);
-      unireg_abort(MYSQLD_ABORT_EXIT);
+      if (binlog_file_list.empty()) {
+        /*
+          Configures what object is used by the current log to store processed
+          gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
+          corretly compute the set of previous gtids.
+        */
+        DBUG_ASSERT(!mysql_bin_log.is_relay_log);
+        mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
+        mysql_mutex_lock(log_lock);
+
+        if (mysql_bin_log.open_binlog(opt_bin_logname, 0, max_binlog_size, false,
+                                      true /*need_lock_index=true*/,
+                                      true /*need_sid_lock=true*/, NULL)) {
+          mysql_mutex_unlock(log_lock);
+          return true;
+        }
+        mysql_mutex_unlock(log_lock);
+      } else if (opt_initialize) {
+        // in boostrap case but binlog_file_list is not empty
+        sql_print_error("--initialize specified but the binlog index file '%s' is not empty.",
+                        mysql_bin_log.get_index_fname());
+        return true;
+      }
     }
-    mysql_mutex_unlock(log_lock);
   }
 
   /*
@@ -5939,6 +6012,10 @@ static int init_server_components() {
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--binlog-expire-logs-seconds");
     if (expire_logs_days_supplied)
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--expire_logs_days");
+  }
+
+  if (opt_bin_log && !opt_initialize) {
+    mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
   }
 
   if (opt_myisam_log) (void)mi_log(1);
@@ -6331,7 +6408,7 @@ int mysqld_main(int argc, char **argv)
   */
   init_server_psi_keys();
 
-  im::package_context_init();
+  object_statistics_context_init();
   /* Init conconcurrency control system */
   im::ccl_init();
   /* Init recycle_bin system */
@@ -6341,7 +6418,6 @@ int mysqld_main(int argc, char **argv)
 
   im::package_context_init();
 
-  object_statistics_context_init();
 
   /*
     Now that some instrumentation is in place,
@@ -6367,7 +6443,7 @@ int mysqld_main(int argc, char **argv)
     register_pfs_resource_group_service();
   }
 #endif
-
+  /* Threadpool plugin is installed by default, so skip resource group.
   // Initialize the resource group subsystem.
   auto res_grp_mgr = resourcegroups::Resource_group_mgr::instance();
   if (!is_help_or_validate_option() && !opt_initialize) {
@@ -6376,6 +6452,7 @@ int mysqld_main(int argc, char **argv)
       unireg_abort(MYSQLD_ABORT_EXIT);
     }
   }
+  */
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
   /* Instrument the main thread */
@@ -6606,6 +6683,14 @@ int mysqld_main(int argc, char **argv)
     LogErr(INFORMATION_LEVEL, ER_WARN_NO_SERVERID_SPECIFIED);
 
   /*
+    For x-cluster:
+    bin_log must be set to ON
+  */
+  if (!opt_initialize && consensus_log_manager.option_invalid(opt_bin_log)) {
+    unireg_abort(MYSQLD_SUCCESS_EXIT);
+  }
+
+  /*
     Add server_uuid to the sid_map.  This must be done after
     server_uuid has been initialized in init_server_auto_options and
     after the binary log (and sid_map file) has been initialized in
@@ -6630,7 +6715,7 @@ int mysqld_main(int argc, char **argv)
     if (gtid_state->read_gtid_executed_from_table() == -1) unireg_abort(1);
   }
 
-  if (opt_bin_log) {
+  if (opt_bin_log && opt_initialize) {
     /*
       Initialize GLOBAL.GTID_EXECUTED and GLOBAL.GTID_PURGED from
       gtid_executed table and binlog files during server startup.
@@ -6866,22 +6951,26 @@ int mysqld_main(int argc, char **argv)
     /*
       init_slave() must be called after the thread keys are created.
     */
-    if (server_id != 0)
+    if (server_id != 0 && !opt_consensus_force_recovery)
       init_slave(); /* Ignoring errors while configuring replication. */
 
-    /*
-      If the user specifies a per-channel replication filter through a
-      command-line option (or in a configuration file) for a slave
-      replication channel which does not exist as of now (i.e not
-      present in slave info tables yet), then the per-channel
-      replication filter is discarded with a warning.
-      If the user specifies a per-channel replication filter through
-      a command-line option (or in a configuration file) for group
-      replication channels 'group_replication_recovery' and
-      'group_replication_applier' which is disallowed, then the
-      per-channel replication filter is discarded with a warning.
-    */
-    rpl_channel_filters.discard_all_unattached_filters();
+    if (consensus_log_manager.init_consensus_info()) unireg_abort(MYSQLD_ABORT_EXIT);
+
+    if (!opt_consensus_force_recovery) {
+      /*
+        If the user specifies a per-channel replication filter through a
+        command-line option (or in a configuration file) for a slave
+        replication channel which does not exist as of now (i.e not
+        present in slave info tables yet), then the per-channel
+        replication filter is discarded with a warning.
+        If the user specifies a per-channel replication filter through
+        a command-line option (or in a configuration file) for group
+        replication channels 'group_replication_recovery' and
+        'group_replication_applier' which is disallowed, then the
+        per-channel replication filter is discarded with a warning.
+      */
+      rpl_channel_filters.discard_all_unattached_filters();
+    }
   }
 
 #ifdef WITH_LOCK_ORDER
@@ -6889,6 +6978,12 @@ int mysqld_main(int argc, char **argv)
     LO_activate();
   }
 #endif /* WITH_LOCK_ORDER */
+
+  int consensus_error = consensus_log_manager.init_service();
+  if (consensus_error < 0)
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  else if (consensus_error > 0)
+    unireg_abort(MYSQLD_SUCCESS_EXIT);
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
   initialize_performance_schema_acl(opt_initialize);
@@ -7843,6 +7938,50 @@ struct my_option my_long_options[] = {
      "Set the language used for the month names and the days of the week.",
      &lc_time_names_name, &lc_time_names_name, 0, GET_STR, REQUIRED_ARG, 0, 0,
      0, 0, 0, 0},
+    {"cluster-learner-node", OPT_CLUSTER,
+       "Normandy cluster learner node type",
+       &opt_cluster_learner_node, &opt_cluster_learner_node, 0, GET_BOOL,
+       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-log-type-node", OPT_CLUSTER,
+       "Normandy cluster log type instance",
+       &opt_cluster_log_type_instance, &opt_cluster_log_type_instance, 0, GET_BOOL,
+       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-info", OPT_CLUSTER,
+      "Normandy cluster nodes ip-port information",
+      &opt_cluster_info, &opt_cluster_info, 0, GET_STR,
+      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-purged-gtid", OPT_CLUSTER,
+      "Normandy cluster set the purged gtid",
+      &opt_cluster_purged_gtid, &opt_cluster_purged_gtid, 0, GET_STR,
+      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-current-term", OPT_CLUSTER,
+      "Normandy cluster nodes current term  information",
+      &opt_cluster_current_term, &opt_cluster_current_term, 0, GET_ULL,
+      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-force-recover-index", OPT_CLUSTER,
+      "Normandy cluster restore from leader set apply index point",
+      &opt_cluster_force_recover_index, &opt_cluster_force_recover_index, 0, GET_ULL,
+      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-force-change-meta", OPT_CLUSTER,
+       "Normandy cluster force to change meta",
+       &opt_cluster_force_change_meta, &opt_cluster_force_change_meta, 0, GET_BOOL,
+       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-dump-meta", OPT_CLUSTER,
+       "Normandy cluster dump meta",
+       &opt_cluster_dump_meta, &opt_cluster_dump_meta, 0, GET_BOOL,
+       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-force-single-mode", OPT_CLUSTER,
+       "Normandy cluster force to use single mode",
+       &opt_cluster_force_single_mode, &opt_cluster_force_single_mode, 0, GET_BOOL,
+       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-mts-recover-use-index", OPT_CLUSTER,
+       "Normandy cluster use idex to recover mts",
+       &opt_mts_recover_use_index, &opt_mts_recover_use_index, 0, GET_BOOL,
+       REQUIRED_ARG, 1, 0, 0, 0, 0, 0 },
+    {"cluster-start-index", OPT_CLUSTER,
+       "Normandy cluster start valid index",
+       &opt_consensus_start_index, &opt_consensus_start_index, 0, GET_ULL,
+       REQUIRED_ARG, 1, 1, ULLONG_MAX, 0, 0, 0 },
     {"log-bin", OPT_BIN_LOG,
      "Configures the name prefix to use for binary log files. If the --log-bin "
      "option is not supplied, the name prefix defaults to \"binlog\". If the "
@@ -7911,6 +8050,10 @@ struct my_option my_long_options[] = {
      "(Default: No wait).",
      &mysqld_port_timeout, &mysqld_port_timeout, 0, GET_UINT, REQUIRED_ARG, 0,
      0, 0, 0, 0, 0},
+    {"recover-snapshot", 0,
+     "recover from the backup of cloud storage and output the committed index",
+     &opt_recover_snapshot, &opt_recover_snapshot,
+     0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
     {"replicate-do-db", OPT_REPLICATE_DO_DB,
      "Tells the slave thread to restrict replication to the specified "
      "database. "
@@ -8235,6 +8378,10 @@ static int show_flushstatustime(THD *thd, SHOW_VAR *var, char *buff) {
 static int show_slave_running(THD *, SHOW_VAR *var, char *buff) {
   channel_map.rdlock();
   Master_info *mi = channel_map.get_default_channel_mi();
+#ifdef NORMANDY_TEST
+  if (channel_map.get_mi("test") != NULL)
+    mi= channel_map.get_mi("test");
+#endif
 
   if (mi) {
     var->type = SHOW_MY_BOOL;
@@ -8844,6 +8991,11 @@ SHOW_VAR status_vars[] = {
 #endif
     {"Reload_slave", (char *)im::reload_entry_status, SHOW_ARRAY,
      SHOW_SCOPE_ALL},
+    {"consensus_fifo_cache_used_size",  (char*) &show_fifo_cache_size,     SHOW_FUNC,       SHOW_SCOPE_GLOBAL},
+    {"first_index_in_consensus_fifo_cache",  (char*) &show_first_index_in_fifo_cache,     SHOW_FUNC,       SHOW_SCOPE_GLOBAL},
+    {"consensus_fifo_cache_log_count",  (char*) &show_log_count_in_fifo_cache,     SHOW_FUNC,       SHOW_SCOPE_GLOBAL},
+    {"appliedindex_checker_queue", (char*) &show_appliedindex_checker_queue,     SHOW_FUNC,       SHOW_SCOPE_GLOBAL},
+    {"consensus_easy_pool_size", (char*) &alisql::easy_pool_alloc_byte,     SHOW_LONG,       SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {
@@ -9946,6 +10098,26 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
   return 0;
 }
 
+void fix_xcluster_label() {
+  DBUG_ASSERT(server_version[0] != '\0');
+  /* Fix server_version.*/
+  std::string tmp_version(server_version);
+  if (opt_version_hide_xcluster)
+  {
+    std::size_t res = tmp_version.find("X-Cluster-");
+    if (res != std::string::npos)
+      tmp_version.replace(res, strlen("X-Cluster-"), "");
+  }
+  else
+  {
+    std::size_t res1 = tmp_version.find("X-Cluster-");
+    std::size_t res2 = tmp_version.find("8.0.18-");
+    if (res1 == std::string::npos && res2 != std::string::npos)
+      tmp_version.insert(res2 + strlen("8.0.18-"), "X-Cluster-");
+  }
+  strncpy(server_version, tmp_version.c_str(), SERVER_VERSION_LENGTH);
+}
+
 /*
   Create version name for running mysqld version
   We automaticly add suffixes -debug, -valgrind, -asan, -ubsan
@@ -10487,6 +10659,17 @@ void refresh_status() {
 *****************************************************************************/
 
 #ifdef HAVE_PSI_INTERFACE
+PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_index;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_stage_change;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_commit_pos;
+PSI_mutex_key key_BINLOG_LOCK_rotate;
+
 PSI_mutex_key key_LOCK_tc;
 PSI_mutex_key key_hash_filo_lock;
 PSI_mutex_key key_LOCK_error_log;
@@ -10505,6 +10688,10 @@ PSI_mutex_key key_relay_log_info_sleep_lock;
 PSI_mutex_key key_relay_log_info_thd_lock;
 PSI_mutex_key key_relay_log_info_log_space_lock;
 PSI_mutex_key key_relay_log_info_run_lock;
+PSI_mutex_key key_consensus_info_data_lock;
+PSI_mutex_key key_consensus_info_run_lock;
+PSI_mutex_key key_consensus_info_sleep_lock;
+PSI_mutex_key key_consensus_info_thd_lock;
 PSI_mutex_key key_mutex_slave_parallel_pend_jobs;
 PSI_mutex_key key_mutex_slave_parallel_worker_count;
 PSI_mutex_key key_mutex_slave_parallel_worker;
@@ -10524,6 +10711,7 @@ PSI_mutex_key key_RELAYLOG_LOCK_log_end_pos;
 PSI_mutex_key key_RELAYLOG_LOCK_sync;
 PSI_mutex_key key_RELAYLOG_LOCK_sync_queue;
 PSI_mutex_key key_RELAYLOG_LOCK_xids;
+PSI_mutex_key key_RELAYLOG_LOCK_rotate;
 PSI_mutex_key key_gtid_ensure_index_mutex;
 PSI_mutex_key key_object_cache_mutex;  // TODO need to initialize
 PSI_cond_key key_object_loading_cond;  // TODO need to initialize
@@ -10532,11 +10720,21 @@ PSI_mutex_key key_mts_gaq_LOCK;
 PSI_mutex_key key_thd_timer_mutex;
 PSI_mutex_key key_commit_order_manager_mutex;
 PSI_mutex_key key_mutex_slave_worker_hash;
+PSI_mutex_key key_fifo_cache_cleaner;
 
 /* clang-format off */
 static PSI_mutex_info all_server_mutexes[]=
 {
   { &key_LOCK_tc, "TC_LOG_MMAP::LOCK_tc", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_index, "ConsensusLogIndex::LOCK_consensuslog_index", 0, 0, PSI_DOCUMENT_ME },
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock, "ConsensusLogManager::LOCK_consensuslog_sequence_stage1", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock, "ConsensusLogManager::LOCK_consensuslog_sequence_stage2", 0, 0, PSI_DOCUMENT_ME },
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock, "ConsensusLogManager::LOCK_consensuslog_term", 0, 0, PSI_DOCUMENT_ME },
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock, "ConsensusLogManager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock, "ConsensusLogManager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_Consensus_stage_change, "ConsensusLogManager::LOCK_consnesus_state_change", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "ConsensusRecoveryManager::LOCK_consensuslog_recover_hash", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_commit_pos, "ConsensusLogManager::LOCK_consensus_commit_pos", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_commit, "MYSQL_BIN_LOG::LOCK_commit", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_commit_queue, "MYSQL_BIN_LOG::LOCK_commit_queue", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_done, "MYSQL_BIN_LOG::LOCK_done", 0, 0, PSI_DOCUMENT_ME},
@@ -10547,6 +10745,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_BINLOG_LOCK_sync, "MYSQL_BIN_LOG::LOCK_sync", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_sync_queue, "MYSQL_BIN_LOG::LOCK_sync_queue", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_xids, "MYSQL_BIN_LOG::LOCK_xids", 0, 0, PSI_DOCUMENT_ME},
+  { &key_BINLOG_LOCK_rotate, "MYSQL_BIN_LOG::LOCK_rotate", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_commit, "MYSQL_RELAY_LOG::LOCK_commit", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_commit_queue, "MYSQL_RELAY_LOG::LOCK_commit_queue", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_done, "MYSQL_RELAY_LOG::LOCK_done", 0, 0, PSI_DOCUMENT_ME},
@@ -10557,6 +10756,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_RELAYLOG_LOCK_sync, "MYSQL_RELAY_LOG::LOCK_sync", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_sync_queue, "MYSQL_RELAY_LOG::LOCK_sync_queue", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_xids, "MYSQL_RELAY_LOG::LOCK_xids", 0, 0, PSI_DOCUMENT_ME},
+  { &key_RELAYLOG_LOCK_rotate, "MYSQL_RELAY_LOG::LOCK_rotate", 0, 0, PSI_DOCUMENT_ME},
   { &key_hash_filo_lock, "hash_filo::lock", 0, 0, PSI_DOCUMENT_ME},
   { &Gtid_set::key_gtid_executed_free_intervals_mutex, "Gtid_set::gtid_executed::free_intervals_mutex", 0, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_crypt, "LOCK_crypt", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
@@ -10595,6 +10795,10 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_relay_log_info_thd_lock, "Relay_log_info::info_thd_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_relay_log_info_log_space_lock, "Relay_log_info::log_space_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_relay_log_info_run_lock, "Relay_log_info::run_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_data_lock, "consensus_info::data_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_run_lock, "consensus_info::run_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_sleep_lock, "consensus_info::sleep_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_thd_lock, "consensus_info::info_thd_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_mutex_slave_parallel_pend_jobs, "Relay_log_info::pending_jobs_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_mutex_slave_parallel_worker_count, "Relay_log_info::exit_count_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_mutex_slave_parallel_worker, "Worker_info::jobs_lock", 0, 0, PSI_DOCUMENT_ME},
@@ -10613,6 +10817,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_thd_timer_mutex, "thd_timer_mutex", 0, 0, PSI_DOCUMENT_ME},
   { &key_commit_order_manager_mutex, "Commit_order_manager::m_mutex", 0, 0, PSI_DOCUMENT_ME},
   { &key_mutex_slave_worker_hash, "Relay_log_info::slave_worker_hash_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_fifo_cache_cleaner, "fifo_cache_cleaner", 0, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_default_password_lifetime, "LOCK_default_password_lifetime", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_mandatory_roles, "LOCK_mandatory_roles", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_password_history, "LOCK_password_history", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
@@ -10637,9 +10842,16 @@ PSI_rwlock_key key_rwlock_Binlog_transmit_delegate_lock;
 PSI_rwlock_key key_rwlock_Binlog_relay_IO_delegate_lock;
 PSI_rwlock_key key_rwlock_resource_group_mgr_map_lock;
 
+PSI_rwlock_key key_rwlock_ConsensusLog_status_lock;
+PSI_rwlock_key key_rwlock_ConsensusLog_log_cache_lock;
+PSI_rwlock_key key_rwlock_ConsensusLog_prefetch_channels_hash;
+
 /* clang-format off */
 static PSI_rwlock_info all_server_rwlocks[]=
 {
+  { &key_rwlock_ConsensusLog_status_lock, "ConsensusLogManager::LOCK_consensuslog_sequence", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_rwlock_ConsensusLog_log_cache_lock, "ConsensusLogManager::LOCK_consensuslog_cache", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_rwlock_ConsensusLog_prefetch_channels_hash, "ConsensusPreFetchManager::LOCK_prefetch_channels_hash", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_Binlog_transmit_delegate_lock, "Binlog_transmit_delegate::lock", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_Binlog_relay_IO_delegate_lock, "Binlog_relay_IO_delegate::lock", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_LOCK_logger, "LOGGER::LOCK_logger", 0, 0, PSI_DOCUMENT_ME},
@@ -10691,9 +10903,20 @@ PSI_cond_key key_COND_thr_lock;
 PSI_cond_key key_commit_order_manager_cond;
 PSI_cond_key key_cond_slave_worker_hash;
 
+PSI_cond_key key_COND_ConsensusLog_catchup;
+PSI_cond_key key_COND_Consensus_state_change;
+PSI_cond_key key_COND_prefetch_reuqest;
+PSI_cond_key key_consensus_info_data_cond;
+PSI_cond_key key_consensus_info_start_cond;
+PSI_cond_key key_consensus_info_stop_cond;
+PSI_cond_key key_consensus_info_sleep_cond;
+
 /* clang-format off */
 static PSI_cond_info all_server_conds[]=
 {
+  { &key_COND_ConsensusLog_catchup, "ConsensusLogManager::cond_consensuslog_catchup", 0, 0, PSI_DOCUMENT_ME},
+  { &key_COND_Consensus_state_change, "ConsensusLogManager::cond_consensus_state_change", 0, 0, PSI_DOCUMENT_ME},
+  { &key_COND_prefetch_reuqest, "ConsensusPrefetchManager::cond_prefetch_reuqest", 0, 0, PSI_DOCUMENT_ME},
   { &key_PAGE_cond, "PAGE::cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_active, "TC_LOG_MMAP::COND_active", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_pool, "TC_LOG_MMAP::COND_pool", 0, 0, PSI_DOCUMENT_ME},
@@ -10740,6 +10963,10 @@ PSI_thread_key key_thread_one_connection;
 PSI_thread_key key_thread_compress_gtid_table;
 PSI_thread_key key_thread_parser_service;
 PSI_thread_key key_thread_handle_con_admin_sockets;
+PSI_thread_key key_thread_consensus_stage_change;
+PSI_thread_key key_thread_prefetch;
+PSI_thread_key key_thread_cleaner;
+PSI_thread_key key_thread_consensus_commit_pos_watcher;
 
 /* clang-format off */
 static PSI_thread_info all_server_threads[]=
@@ -10758,6 +10985,10 @@ static PSI_thread_info all_server_threads[]=
   { &key_thread_compress_gtid_table, "compress_gtid_table", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_thread_parser_service, "parser_service", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_thread_handle_con_admin_sockets, "admin_interface", PSI_FLAG_USER, 0, PSI_DOCUMENT_ME},
+  { &key_thread_consensus_stage_change, "consensus_stage_change", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_thread_prefetch, "run_prefetch", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_thread_cleaner, "fifo_cleaner", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_thread_consensus_commit_pos_watcher, "consensus_commit_pos_watcher", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 

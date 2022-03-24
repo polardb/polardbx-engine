@@ -39,6 +39,7 @@ SELECT COUNT(@@SESSION.relay_log_info_repository);
 ####################################################################
 #   Check if Value can set                                         #
 ####################################################################
+--error ER_CHANGE_RPL_INFO_REPOSITORY_FAILURE
 SET @@GLOBAL.relay_log_info_repository= "FILE";
 
 SELECT @@GLOBAL.relay_log_info_repository;

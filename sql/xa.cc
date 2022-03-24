@@ -66,6 +66,7 @@
 #include "sql/sql_error.h"
 #include "sql/sql_list.h"
 #include "sql/sql_plugin.h"  // plugin_foreach
+#include "consensus_log_manager.h"
 #include "sql/sql_table.h"   // filename_to_tablename
 #include "sql/system_variables.h"
 #include "sql/tc_log.h"       // tc_log
@@ -75,6 +76,7 @@
 #include "template_utils.h"
 #include "thr_mutex.h"
 
+#include "consensus_recovery_manager.h"
 const char *XID_STATE::xa_state_names[] = {"NON-EXISTING", "ACTIVE", "IDLE",
                                            "PREPARED", "ROLLBACK ONLY"};
 
@@ -121,6 +123,7 @@ void xid_t::set(my_xid xid) {
   memcpy(data + MYSQL_XID_OFFSET, &xid, sizeof(xid));
   gtrid_length = MYSQL_XID_GTRID_LEN;
   bqual_length = 0;
+  commit_gcn = MYSQL_GCN_NULL;
 }
 
 static bool xacommit_handlerton(THD *, plugin_ref plugin, void *arg) {
@@ -347,11 +350,13 @@ static bool xarecover_handlerton(THD *, plugin_ref plugin, void *arg) {
           XID *xid = &info->list[i].id;
           LogErr(INFORMATION_LEVEL, ER_XA_COMMITTING_XID, xid->xid_to_str(buf));
 #endif
-          /* Use the commit_gcn read from binlog to commit. */
-          XID *xxid = &info->list[i].id;
-          xxid->set_commit_gcn(info->commit_list->at(x));
+          // hton->commit_by_xid(hton, &info->list[i].id);
+          DBUG_EXECUTE_IF("crash_after_recover_commit", DBUG_SUICIDE(););
+          XID* xxid = (XID*)my_memdup(key_memory_XID, info->list + i, sizeof(XID), MYF(0));
 
-          hton->commit_by_xid(hton, &info->list[i].id);
+          /* Use the commit_gcn read from binlog to commit. */
+          xxid->set_commit_gcn(info->commit_list->at(x));
+          consensus_log_manager.get_recovery_manager()->add_xid_to_commit_map(xxid);
         } else {
 #ifndef DBUG_OFF
           char buf[XIDDATASIZE * 4 + 6];  // see xid_to_str
@@ -428,6 +433,44 @@ int ha_recover(const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list) 
   }
   if (info.commit_list) LogErr(SYSTEM_LEVEL, ER_XA_RECOVERY_DONE);
   return 0;
+}
+
+int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager) {
+  DBUG_ENTER("ha_commit_before_commit_index");
+  auto xid_map = consensusLogManager->get_recovery_manager()->get_commit_index_map();
+  uint64 recover_start_apply_index = consensusLogManager->get_consensus_info()->get_start_apply_index();
+  sql_print_information("Recover hanging trx, max consensus index in recover map is %llu, recover start apply index is %llu",
+    consensusLogManager->get_recovery_manager()->get_max_consensus_index_from_recover_trx_hash(), recover_start_apply_index);
+
+  // recover snapshot from a leader
+  if (opt_recover_snapshot && recover_start_apply_index == 0)
+  {
+    consensusLogManager->get_recovery_manager()->truncate_not_confirmed_xids_from_map(
+          consensusLogManager->get_recovery_manager()->get_last_leader_term_index());
+  }
+
+  for (auto map_iter = xid_map.begin(); map_iter != xid_map.end(); map_iter++) {
+    if (recover_start_apply_index == 0 || map_iter->first <= recover_start_apply_index) {
+      plugin_foreach_without_binlog(NULL, xacommit_handlerton,
+        MYSQL_STORAGE_ENGINE_PLUGIN, map_iter->second);
+    } else {
+      // if recover trx index less than start apply index , we should first rollback it and then apply it
+      plugin_foreach_without_binlog(NULL, xarollback_handlerton,
+        MYSQL_STORAGE_ENGINE_PLUGIN, map_iter->second);
+    }
+  }
+
+  DBUG_RETURN(0);
+}
+
+
+int ha_rollback_xids(XID* xid) {
+  DBUG_ENTER("ha_rollback_xids");
+
+  plugin_foreach_without_binlog(NULL, xarollback_handlerton,
+                                MYSQL_STORAGE_ENGINE_PLUGIN, xid);
+
+  DBUG_RETURN(0);
 }
 
 bool xa_trans_force_rollback(THD *thd) {
@@ -652,8 +695,14 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
   else
     xid_state->unset_binlogged();
 
-  /* external_xid do not have mysql_thd, so give it current commit_gcn. */
-  external_xid->set_commit_gcn(thd->get_commit_gcn());
+  /* 
+    External_xid do not have mysql_thd, so give it current commit_gcn. 
+
+    The value of thd->variables.innodb_commit_gcn is from : 
+    1. set variable innodb_commit_gcn = 
+    2. sql_thread apply gcn event
+  */
+  external_xid->set_commit_gcn(thd->variables.innodb_commit_gcn);
 
   res = ha_commit_or_rollback_by_xid(thd, external_xid, !res) || res;
 

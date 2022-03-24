@@ -1,0 +1,447 @@
+******************************************
+
+
+Xmemcached Change log
+
+*******************************************
+
+-----Xmemcached 1.4.3 released----------------------
+
+1.Added 'setConnectTimeout' for XMemcachedClientFactoryBean.Thanks to nick verbeck.
+2.Added environment variable 'xmemcached.heartbeat.max_threads' to sizing heart thread pool size,it's CPUs by default.
+3.Configure heartbeat thread pool,such as daemonizing,priority etc.Thanks to  profondometer.
+4.Catch all exception when removing shutdown hook,make it quietly.
+5.Fixed batch get could not work with namespace.
+6.Fixed NPE when destroying memcached connection.
+
+-----Xmemcached 1.4.2 released-----------------------
+
+1.Upgrade slf4j to 1.7.5
+2.Impl namespace in memcached.
+3.Daemonizing reactor threads.
+4.Supports delete item with CAS value that was gets before.
+5.Remove final modifier on TextCommandFactory?
+6.Improve KetamaMemcachedSessionLocator? using socket address string in a consistent way.
+7.Fixed issues: setEnableHeartBeat could not work ; Trim server addresses before using them ; delete method cloud not work with kestrel latest version etc.
+
+-----Xmemcached 1.4.1 released-----------------------
+1.Fixed some log errors
+2.Fixed could not find class when deserializing in some web containers.
+
+2013-02-19
+-----Xmemcached 1.4.0 released------------------------
+1.Added "setOpTimeout" for client builder.
+2.Monitor timeout request
+3.Added RandomMemcachedSessionLocaltor for kestrel protocol
+4.When timeout exception happens in a connection continuously,we will close it.The maximum number of timeout exception can be set by "setTimeoutExceptionThreshold" method in client,default value
+is 1000.
+5.Added a new constructor for client builder that accepts a string server list.Thanks @bmahe.
+
+2013-01-10
+-----Xmemcached 1.3.9 released------------------------
+1.Added "resetStats" method for statistics MBean to reset statstics.
+2.Added "setEnableHealSession" method to client/builder to enable/disable healing session when disconnected.
+3.Optimize SET operations for binary protocol,36% performnce increased in test.
+4.Fixed incr could not work with custom KeyProvider.
+5.Fixed client statistics error.
+6.Reduce memory consumption on high load.
+7.Added a new environment variable "xmemcached.selector.pool.size" to set reactor pool size.
+8.Limit key length to 250 both in text and binary protocol.
+
+2012-07-16
+-----Xmemcached 1.3.8 released-------------------------
+1.Implemented touch command for text protocol.
+2.Added a new interface KeyProvider to pre-process keys before sending them to memcached.And added a new method "setKeyProvider" to client builder and spring factory bean.
+3.Added flow control for noreply operations and added a new method "setMaxQueuedNoReplyOperations" to to client builder and spring factory bean.
+  It's default value is based on your jvm maximum memory.
+4.Removed "time" field in delete command,it's not valid at all even you pass it.
+5.Changed default operation timeout to five seconds.
+6.Fixed KetamaMemcachedSessionLocator issue when set it to be compatible with nginx upstream consistent hash using memcached default port.Thanks wolfg1969.
+
+2012-6-06
+-----Xmemcached 1.3.7 released-------------------------
+1.Send heartbeat when connection is in read idle instead of sending it periodically.
+2.Added an environment variable xmemcached.heartbeat.max.fail.times to set max heartbeat failure times,default is 3 times.
+
+2012-03-18
+-----Xmemcached 1.3.6 released-------------------------
+1.Fixed issues,includes:161,163,165,169,172,173,176,179,180
+2.Adds new methods for MemcachedClientBuilder:setConnectTimeout and setSanitizeKeys
+2.Make heartbeats as an independent task,not just occur when connections are idle.
+3.Disable nagle algorithm by default.
+4.Decrease default merge factor to 50.
+5.Adds CompressionMode for Transcoder,default is ZIP,but you can choose GZIP mode.
+
+
+2011-09-30
+
+-----Xmemcached 1.3.5 released-------------------------
+Fixed  issue 154 , issue 155
+Thanks ilkinulas and MrRubato.
+
+
+2011-09-07
+-----Xmemcached 1.3.4 released-------------------------
+1.Enable nagle algorithm by default.
+2.Check result returned by inc/dec protocols is number.
+3.Make opTimeout can be configured by XMemcachedClientFactoryBean
+4.Added RoundRobinMemcachedSessionLocator for kestrel or memcacheq cluster
+5.Fixed bug which could cause connection disconnect when decode binary command with error message from memcached.
+6.Add a option in KetamaMemcachedSessionLocator to be be compatible with nginx-upstream-consistent.
+7.Fixed bugs,include issue 132,142,133,139,142,145,150.
+
+Recommend user using xmemcached binary protocol to upgrade.
+
+2011-06-12
+-----Xmemcached 1.3.3 released-------------------------
+1.Implements touch and GAT(get and touch) commands for memcached 1.6.x,adds new methods to MemcachedClient,includes:
+         boolean touch(String key, int exp, long opTimeout);
+         getAndTouch(String key, int newExp, long opTimeout);
+2.Method setLoggingLevelVerbosity works with binary protocol.
+3.Make exception infomation more friendly.
+4.Deprecated KeyIterator and getKeyIterator.
+5.Bug fixed,include:
+issue 126: Error getting memcached Detail Statistics.
+issue 127:Unknow Response status:130
+issue 128: SERVER_ERROR cause session disconnected.
+issue 129: Memory leak after shutdown
+more infomation please see http://code.google.com/p/xmemcached/issues/list
+
+6.Some changes for future version to implement memcached 1.6.x new commands.
+
+
+2011-03-27
+-----Xmemcached 1.3.2 released-------------------------
+
+1.Bug fixed,include:
+issue 113: add a new method for deleting item with operation timeout.
+issue 112: startup xmemcached with down server in failure mode is not expect.
+
+2.Performance turning, 5% performance increase in store commands(add/repleace/set/append/prepend/cas).
+3.Modify pom.xml to make it work on other machines.
+4.Use github as source repository instead googlecode svn.Xmemcache source has benn moved to
+  https://github.com/killme2008/xmemcached
+
+
+2011-01-04
+-----Xmemcached 1.3.1 released-------------------------
+
+1.Keep memcached server list in input order
+
+
+2010-01-04
+-----Xmemcached 1.3 released-------------------------
+
+1.Add failure mode for client.
+2.You could configure a standby node for a memcached server now.
+3.Log4j dependencies is optional now.
+4.Fixed issue 107.
+
+
+2010-10-17
+-----Xmemcached 1.2.6 Released------------------------
+This is a minor version,trying to fix some bugs and turnning for performance:
+1.Add english user guide
+2.Fix bugs,include:
+#issue 85
+#issue 87
+#issue 90
+#issue 94
+#issue 95
+#issue 96
+#issue 97
+3.Change the way to heal connection,increased heal connection interval step by step,and then one minute at last.
+4.Make stopping xmemcached client instance more friendly by sending a quit command to memcached instead of closing socket channel directly.
+5.Every xmemcached instance has a name to identify itself.You could setter/getter it's name by MemcachedClient.setName/getName methods.
+If you don't configure a cache name,xmemcached will choose a name by default.
+
+-------------------------------------------------------
+
+
+2010-06-21
+-----Xmemcached 1.2.5 Released------------------------
+This is a minor version,main changes:
+1.Merge yanf4j into xmemcached,so there is no need for yanf4j anymore.
+2.Support SASL authentication for memcached 1.4.3
+3.Speed up MemcachedClient.shutdown method.
+4.Add a chapter  about memcached distribute to chinese user guide.
+-------------------------------------------------------
+
+2010-03-15
+
+-----XMemcached 1.2.4-bugfixed. Released--------------
+This is a bug fix version for some user to store more than 1M data to memcached.
+1.Fix issue 77.
+
+-----XMemcached 1.2.4. Released--------------
+
+1.Fix bugs,issue 74,issue 68.Using xmemcached to talk with TokyoTyrant is all right now.
+2.Add unit test for bug fixed.
+3.Enable Cached.MAX_VALUE to be modified by user,the vlaue determines the maxium size to store in memcached,default is 1024*1024 bytes.
+4.Modify chinese user guide,fix some errors.
+
+----------------------------------------------------
+
+
+2010-02-08
+
+-----XMemcached 1.2.3. Released--------------
+This is a bug-fixed version,and recommended to upgrade.
+
+1.Fix bug issue 73
+2.Add more test.
+
+----------------------------------------------------
+
+2010-01-11
+
+-----Xmemcached 1.2.2 released----------------
+
+1.Add KeyIterator for iterate keys in memcached.It is avaliable only when using text protocol.You can get a KeyIterator through:
+
+MemcachedClient client=...
+KeyIterator it=client.getKeyIterator(AddrUtil.getOneAddress("localhost:11211"));
+while(it.hasNext())
+{
+   String key=it.next();
+}
+2.Add a new class "net.rubyeye.xmemcached.Counter",which encapsulate the incr/decr methods for easy using,just like AtomicLong.
+
+Counter counter=client.getCounter("counter",0);
+counter.incrementAndGet();
+counter.decrementAndGet();
+counter.addAndGet(-10);
+
+3.Fix bugs,issue 71,issue 72,issue 70 etc.
+
+4.Deprecated net.rubyeye.xmemcached.buffer.BufferAllocator.It is useless now even if you configure it.
+
+5.Upgrade yanf4j to 1.1.0, yanf4j also fix some bugs and introduce mina's IoBuffer.
+
+----------------------------------------------------------
+
+
+
+
+2009-12-03
+
+------Xmemcached 1.2.1 Released----------------
+
+1.Add delete method support for Kestrel 1.2
+
+2.Add TokyoTyrantTranscoder for talking with Tokyo Tyrant.This transcoder add four bytes before value as flag.
+
+3.Add new methods:
+(1)Transcoder.setCompressionThreshold(threshold) Used to set compress threshold,default is 16k.
+(2)MemcachedClient.setSanitizeKeys(true|false)   Enables/disables sanitizing keys by URLEncoding.
+
+4.Remove some deprecated methods,please use other methods instead.
+
+5.Make optimistics for binary protocol implementation.
+
+6.Remove some old codes for test,add new unit tests for binary commands and some new integrating tests.
+
+7.Bug fixes, issue 69 etc.
+
+8.Add chinese user guide.
+
+******************************************************************
+
+2009-10-10
+
+-------xmemcached 1.2.0-stable Released--------
+
+1.Add heartbeat for connection to keepalive,xmemcached enable this feature by default.You can disable it by:
+memcachedClient.setEnableHeartBeat(false);
+
+2.Add new methods for incr/decr,you can pass initial value as parameter now:
+public long incr(final String key, final long num, final long initValue)
+            throws TimeoutException, InterruptedException, MemcachedException;
+public abstract long decr(final String key, final long num, long initValue)
+            throws TimeoutException, InterruptedException, MemcachedException;
+
+3.Bug fixed.This release has fixed some bug that is very important,included issue 57,issue 59 etc.
+
+4.Recommend upgrade.
+
+
+*******************************************
+
+
+2009-09-17
+
+--------xmemcached 1.2.0-RC2-Released----------
+1.Add KestrelCommandFactory for using xmemcached to talk with kestrel(a MQ written in scala).
+Kestrel(http://github.com/robey/kestrel) use memcached text protocol,but not all compatible.
+
+2.Implement a election hash session locator.
+Election hash just like consistent hash,more infomation see (http://devcentral.f5.com/Default.aspx?
+tabid=63&articleType=ArticleView&ArticleID=135&PageID=151)
+
+3.Extend Transcoder interface,add some new methods to configure it.
+
+public void setPackZeros(boolean packZeros);
+public void setPrimitiveAsString(boolean primitiveAsString);
+
+"setPrimitiveAsString" This method is used to set whether to store primitive type as string in memcached.
+"setPackZeros" This method is used to set whether to remove all zero bytes from the MSB of the packed num
+
+
+4.Bug fixed since 1.2.0-RC1.
+
+2009-09-08
+--------xmemcached 1.2.0-RC1-Released-----------
+
+1.Supports all binary protcol of memcached.Add BinaryCommandFactory class to support it.if you want to use
+that,just add one line code:
+
+memcachedClientbuilder.setCommandFactory(new BinaryCommandFactory());
+
+2.Supports hibernate-memcached,about the detail please see wiki page
+http://code.google.com/p/xmemcached/wiki/Hibernate_memcached_integration
+
+3.Compatible with jdk5.
+
+4.Move from common-logging to slf4j.
+
+5.Implement connection pool.Allow to create more connection to one memcached server.Default pool size is one,you can change it like this:
+   memcachedClient.setConnectionPoolSize(2);
+Then,xmemcached will create two connections to one memcached server.Your application must ensure updating data is synchronized between connections.
+
+6.Upgrade yanf4j to 1.0-SNAPSHOT.This version is introduce SocketOption class to configure tcp options easily,and refactoring for implement aio(jdk7 nio2.0).
+
+7.Remove ant build script,simplify maven build.
+
+8.BUG fixed since 1.1.3 and 1.2.0-beta
+
+
+--------------------------------------------
+
+
+
+
+2009-07-13
+--------xmemcached 1.1.3-Released-----------
+1.Upgrade yanf4j to 0.7.0, yanf4j-0.7.0 is a refactoring version and turned for best performance.
+
+2.Disable tcp nagle algorithm by default,change default tcp receive buffer size from 16k to 8k.
+3.Add a new interface MemcachedClientStateListener for listenning xmemcached client's events to callback.MemcachedClient add two methods:
+
+public void addStateListener(MemcachedClientStateListener listener);
+public void removeStateListener(MemcachedClientStateListener listener);
+public Collection<MemcachedClientStateListener> getStateListeners();
+
+4.Make a new benchmark,please see
+http://xmemcached.googlecode.com/svn/trunk/benchmark/benchmark.html
+
+5.Refactoring and bug fixed.Issue 39 etc.
+
+
+--------------------------------------------
+2009-06-22
+--------xmemcached 1.1.2-Released-----------
+1.Supports integrating to spring framework.for example:
+
+ <bean name="memcachedClient"
+        class="net.rubyeye.xmemcached.utils.XMemcachedClientFactoryBean">
+        <property name="servers">
+            <value>localhost:12000 localhost:12001</value>
+        </property>
+ </bean>
+Then you can use memcachedClient bean in other beans.More information is on wiki.
+
+2.Support verbosity protocol.This protocol is used to set logging level for memcached logging output.
+Add two methods to MemcachedClient,include:
+
+setLoggingLevelVerbosity(InetSocketAddress address, int level)
+setLoggingLevelVerbosityWithNoReply(InetSocketAddress address,int level)
+
+3.Support weighted server.Now you can set the memcached servers in different weight.
+The only change is the way to build XMemcachedClient:
+
+
+MemcachedClientBuilder builder = new XMemcachedClientBuilder(AddrUtil.getAddresses("localhost:12000 localhost:12001"),new int[]{1,3});
+builder.setSessionLocator(new KetamaMemcachedSessionLocator());
+MemcachedClient memcachedClient=builder.build();
+
+As you see,now you can pass a weight array to XMemcachedClientBuilder constructor.The array's length must be great or equal to address list size.
+
+4.Support noreply for add,set,replace,cas,append,prepend,delete,incr/decr,flush_all,verbosity protocols.
+Add some new methods in MemcachedClient,include:
+
+setWithNoReply,addWithNoReply,replaceWithNoReply,appendWithNoReply,prependWithNoReply,casWithNoReply
+deleteWithNoReply,incr(decr)WithNoReply,flushAllWithNoReply,setLoggingLevelVerbosityWithNoReply
+
+5.Bug fixed. Issue 35,Issue 36,Issue 37,Issue 38 etc.
+
+6.Improve session monitor.When session is closed by exception or network error,
+monitor will reconnect to the session until success.
+The older version set the interval between reconnecting is 10 seconds,now set it to 0 seconds.
+
+7.Improve JMX supports.Add a new method to XMemcachedClientMBean:
+     /**
+     * Set a memcached server's weight
+     *
+     * @param server
+     * @param weight
+     */
+    public void setServerWeight(String server, int weight);
+
+Change the getServersDescription method's result,add weight to description.
+
+--------------------End--------------------------
+
+******************************************************************
+
+2009-06-07
+--------xmemcached 1.1.1-Released-----------
+1.Migrate yanf4j to 0.61
+2.Add many unit tests.Refactoring for a good Structure,It is ready to introduce
+  the memcached binary protocol support.
+3.Deprecated some classes and interfaces.Include:
+  net.rubyeye.xmemcached.MemcachedProtocolHandler
+  net.rubyeye.xmemcached.buffer.ArrayIoBuffer
+
+4.Deprecated some methods.Includes:
+                     Deprecated                                                Instead
+
+    net.rubyeye.xmemcached.utils.AddrUtil.getAddress(String server) =====> getOneAddress(server)
+    net.rubyeye.xmemcached.MemcachedClient.version()                =====>  getVersions()
+    net.rubyeye.xmemcached.MemcachedClientMemcachedClient.stats(String host, long timeout)
+    net.rubyeye.xmemcached.MemcachedClientMemcachedClient.stats(String host)
+
+5.Add some new methods.Includes:
+      net.rubyeye.xmemcached.MemcachedClientBuilder.getCommandFactory  => CommandFactory getter/setter
+      net.rubyeye.xmemcached.MemcachedClientBuilder.setCommandFactory
+      net.rubyeye.xmemcached.MemcachedClientBuilder.setTranscoder      => Transcoder getter/setter
+      net.rubyeye.xmemcached.MemcachedClientBuilder.getTranscoder
+      net.rubyeye.xmemcached.MemcachedClient.getVersions()   => get all connected memcached servers's versions
+      net.rubyeye.xmemcached.MemcachedClient.getStats()      => get all connected memcached servers's stats.
+      net.rubyeye.xmemcached.MemcachedClient.getStatsByItem(String item)      => get all connected memcached servers's special item stats.
+      net.rubyeye.xmemcached.MemcachedClient.setOpTime()     => set the default operation timeout
+      net.rubyeye.xmemcached.MemcachedClient.getOpTime()     => get the default operation timeout
+      net.rubyeye.xmemcached.MemcachedClient.getAvaliableServers()  => Return avaliable servers
+      net.rubyeye.xmemcached.utils.AddrUtil.getOneAddress    => get a InetSocketAddress from string
+6.Add some new classes.Includes
+      net.rubyeye.xmemcached.codec.MemcachedCodecFactory     => Implements yanf4j CodecFactory
+                                   MemcachedDecoder
+                                   MemcachedEncoder          => decode/encode commands
+      net.rubyeye.xmemcached.command.text.*
+      net.rubyeye.xmemcached.command.*                       => Commmands implemented memcached text protocol
+7.Change CommandFactory from class to interface,TextCommandFactory implement it for creating text protocol based commands.
+
+
+-------------------End---------------------
+
+2009-05-22
+--------xmemcached 1.1.0-Released----------
+1.Improve multi-get operation's performance,It's as fast as spymemcached.It will continue on.
+2.Refactoring:
+   Move classes such as MemcachedTCPSession,MemcachedHandler,MemcachedConnector etc. from package net.rubyeye.xmemcached to  net.rubyeye.xmemcached.impl
+   Introduce interfaces: MemcachedClient,MemcachedClientBuilder
+3.More Unit tests
+4.Move 1.10 from svn trunk to branches/xmemcached-1.10
+
+-------------------End---------------------
+
+*******************************************

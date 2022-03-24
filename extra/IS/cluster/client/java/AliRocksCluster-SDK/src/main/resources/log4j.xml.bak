@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+
+    <!--appender 定义 begin-->
+
+    <!--控制台输出-->
+    <appender name="CONSOLE" class="org.apache.log4j.ConsoleAppender">
+        <param name="threshold" value="debug" />
+        <param name="encoding" value="GBK" />
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="[%d{dd HH:mm:ss,SSS\} %-5p] [%t] %c{2\} - %m%n" />
+        </layout>
+    </appender>
+	
+	<appender name="myFile" class="org.apache.log4j.RollingFileAppender">      
+    	  <!-- 设置日志输出文件名 -->  
+        <!--<param name="File" value="/usr/local/rds/queryTuning.log" /> -->
+        <param name="File" value="SDK.log" />
+        <!-- 设置是否在重新启动服务时，在原有日志的基础添加新日志 -->     
+        <param name="Append" value="true" />
+        <!-- 设置文件大小 -->  
+        <param name="MaxFileSize" value="500MB" />  
+        <!-- 设置文件备份 -->  
+        <param name="MaxBackupIndex" value="15" />     
+        <layout class="org.apache.log4j.PatternLayout">     
+            <param name="ConversionPattern" value="[%d{yyyy-MM-dd HH:mm:ss} %-5p] [%t] - %m%n" />
+        </layout>
+    </appender>
+   
+    <root>
+        <level value="info" />
+        <appender-ref ref="CONSOLE" /> 
+<!--         <appender-ref ref="myFile" /> -->
+<!--          <appender-ref ref="ALL-LOG" />  -->
+    </root>
+
+
+</log4j:configuration>

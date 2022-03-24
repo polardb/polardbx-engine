@@ -1,0 +1,236 @@
+create table t1(id int);
+#
+# binlogged XA PREPARE block flush log
+#
+xa begin '1101';
+insert into t1 values (1101);
+xa end '1101';
+SET DEBUG_SYNC= 'after_binlog_commit WAIT_FOR flush_log';
+xa prepare '1101';
+insert into t1 values (1102);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# binlogged XA Commit block flush log
+#
+SET DEBUG_SYNC= 'after_binlog_commit WAIT_FOR flush_log';
+xa commit '1101';
+insert into t1 values (1103);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# binlogged XA Commit ONE PHASE block flush log
+#
+xa begin '1201';
+insert into t1 values (1201);
+xa end '1201';
+SET DEBUG_SYNC= 'after_binlog_commit WAIT_FOR flush_log';
+xa commit "1201" one phase;
+insert into t1 values (1202);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# binlogged XA Rollback  block flush log
+#
+xa begin '1301';
+insert into t1 values (1301);
+xa end '1301';
+xa prepare '1301';
+SET DEBUG_SYNC= 'after_binlog_rollback WAIT_FOR flush_log';
+xa rollback '1301';
+insert into t1 values (1302);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# Normal trans commit will not block flush log
+#
+begin;
+insert into t1 values (1401);
+SET DEBUG_SYNC= 'after_binlog_commit WAIT_FOR flush_log';
+commit;
+insert into t1 values (1402);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# Normal trans rollback will not block flush log
+#
+begin;
+insert into t1 values (1501);
+SET DEBUG_SYNC= 'after_binlog_rollback WAIT_FOR flush_log';
+commit;
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# xa prepare without binlogged will not block flush log
+#
+xa begin '1601';
+xa end '1601';
+SET DEBUG_SYNC= 'after_binlog_commit WAIT_FOR flush_log';
+xa prepare '1601';
+insert into t1 values (1602);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# xa commit without binlogged will not block flush log
+#
+SET DEBUG_SYNC= 'after_binlog_commit WAIT_FOR flush_log';
+xa commit '1601';
+insert into t1 values (1603);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+#
+# xa rollback without binlogged will not block flush log
+#
+xa begin '1701';
+xa end '1701';
+xa prepare '1701';
+SET DEBUG_SYNC= 'after_binlog_rollback WAIT_FOR flush_log';
+xa rollback '1701';
+insert into t1 values (1701);
+flush logs;
+SET DEBUG_SYNC= 'now signal flush_log';
+include/show_binlog_events.inc
+drop table t1;
+#
+#  XA will not block itself when flush log due to binlog size
+#
+create table t1 (a int,b varchar(8000));
+SET GLOBAL max_binlog_size = 4096;
+#
+#  XA PREPARE binlogged will delay and do binlog rotation
+#
+XA START "1801";
+INSERT INTO t1 VALUES(1, repeat('a', 4096));
+XA END "1801";
+XA PREPARE "1801";
+include/show_binlog_events.inc
+#
+# XA COMMIT binlogged will delay and do binlog rotation
+#
+SET debug_sync =
+"bgc_after_enrolling_for_flush_stage SIGNAL leader_in_flush_stage
+   WAIT_FOR leader_continue";
+XA COMMIT "1801";
+SET debug_sync = "now WAIT_FOR leader_in_flush_stage";
+SET debug_sync =
+"bgc_after_enrolling_for_flush_stage SIGNAL con1_in_flush_stage
+   WAIT_FOR con1_continue";
+INSERT INTO t1 VALUES(1, repeat('a', 4096));
+SET debug_sync = "now WAIT_FOR con1_in_flush_stage";
+SET debug_sync = "now SIGNAL leader_continue";
+SET debug_sync = "now SIGNAL con1_continue";
+include/show_binlog_events.inc
+#
+# xa rollback binlogged will delay and do binlog rotation
+#
+XA START "1901";
+INSERT INTO t1 VALUES(1, repeat('a', 4096));
+XA END "1901";
+XA PREPARE "1901";
+SET debug_sync =
+"bgc_after_enrolling_for_flush_stage SIGNAL leader_in_flush_stage
+   WAIT_FOR leader_continue";
+XA ROLLBACK "1901";
+SET debug_sync = "now WAIT_FOR leader_in_flush_stage";
+SET debug_sync =
+"bgc_after_enrolling_for_flush_stage SIGNAL con1_in_flush_stage
+   WAIT_FOR con1_continue";
+INSERT INTO t1 VALUES(1,repeat('a', 4096));
+SET debug_sync = "now WAIT_FOR con1_in_flush_stage";
+SET debug_sync = "now SIGNAL leader_continue";
+SET debug_sync = "now SIGNAL con1_continue";
+include/show_binlog_events.inc
+#
+# Leader can rotate correctly if XA is in the flush group
+#
+SET debug_sync =
+"bgc_after_enrolling_for_flush_stage SIGNAL leader_in_flush_stage
+   WAIT_FOR leader_continue";
+INSERT INTO t1 VALUES(1, repeat('a', 4096));
+XA START "2001";
+INSERT INTO t1 VALUES(1, "a");
+XA END "2001";
+SET debug_sync = "now WAIT_FOR leader_in_flush_stage";
+SET debug_sync =
+"bgc_after_enrolling_for_flush_stage SIGNAL con1_in_flush_stage
+   WAIT_FOR con1_continue";
+XA PREPARE "2001";
+SET debug_sync = "now WAIT_FOR con1_in_flush_stage";
+SET debug_sync = "now SIGNAL leader_continue";
+SET debug_sync = "now SIGNAL con1_continue";
+include/show_binlog_events.inc
+XA COMMIT "2001";
+#
+# XA COMMIT ONE PHASE binlogged will delay and do binlog rotation
+#
+XA START "2101";
+INSERT INTO t1 VALUES(1, repeat('a', 4096));
+XA END "2101";
+XA COMMIT "2101" ONE PHASE;
+include/show_binlog_events.inc
+#
+# Rotation Error on XA PREPARE no abort
+#
+flush logs;
+SET debug = "d,fault_injection_new_file_rotate_event";
+SET GLOBAL binlog_error_action = IGNORE_ERROR;
+XA START "2201";
+INSERT INTO t1 VALUES(1, repeat('a', 4096));
+XA END "2201";
+XA PREPARE "2201";
+Warnings:
+Error	1026	Error writing file 'master-bin' (errno: 2 - No such file or directory)
+# restart: --skip-core-file
+include/assert_grep.inc [Find Log: Turning logging off for the whole duration]
+XA COMMIT "2201";
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000017	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
+master-bin.000017	#	Query	#	#	XA START X'32323031',X'',1
+master-bin.000017	#	Table_map	#	#	table_id: # (test.t1)
+master-bin.000017	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+master-bin.000017	#	Query	#	#	XA END X'32323031',X'',1
+master-bin.000017	#	XA_prepare	#	#	XA PREPARE X'32323031',X'',1
+master-bin.000017	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
+master-bin.000017	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
+master-bin.000017	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
+master-bin.000017	#	Query	#	#	XA COMMIT X'32323031',X'',1
+#
+# Rotation Error on XA PREPARE and Abort server
+#
+flush logs;
+SET GLOBAL max_binlog_size = 4096;
+SET debug = "d,fault_injection_new_file_rotate_event";
+XA START "2301";
+INSERT INTO t1 VALUES(1, repeat('a', 4096));
+XA END "2301";
+XA PREPARE "2301";
+ERROR HY000: Binary logging not possible. Message: Error writing file 'master-bin' (errno: 2 - No such file or directory), while rotating the binlog. Aborting the server
+# restart: --skip-core-file
+SET GLOBAL max_binlog_size = 4096;
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	4	0	2301
+XA COMMIT "2301";
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000018	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
+master-bin.000018	#	Query	#	#	XA START X'32333031',X'',1
+master-bin.000018	#	Table_map	#	#	table_id: # (test.t1)
+master-bin.000018	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+master-bin.000018	#	Query	#	#	XA END X'32333031',X'',1
+master-bin.000018	#	XA_prepare	#	#	XA PREPARE X'32333031',X'',1
+master-bin.000018	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
+master-bin.000018	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
+master-bin.000018	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
+master-bin.000018	#	Query	#	#	XA COMMIT X'32333031',X'',1
+master-bin.000018	#	Rotate	#	#	master-bin.000019;pos=POS
+drop table t1;

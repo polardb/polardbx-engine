@@ -50,6 +50,8 @@ PSI_memory_key key_memory_Gtid_state_to_string;
 PSI_memory_key key_memory_HASH_ROW_ENTRY;
 PSI_memory_key key_memory_JOIN_CACHE;
 PSI_memory_key key_memory_JSON;
+PSI_memory_key key_memory_ConsensusLogManager;
+PSI_memory_key key_memory_ConsensusPreFetchManager;
 PSI_memory_key key_memory_LOG_POS_COORD;
 PSI_memory_key key_memory_LOG_name;
 PSI_memory_key key_memory_MPVIO_EXT_auth_info;
@@ -397,6 +399,8 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_native_functions, "native_functions",
      PSI_FLAG_ONLY_GLOBAL_STAT, 0, PSI_DOCUMENT_ME},
     {&key_memory_JSON, "JSON", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_ConsensusPreFetchManager, "ConsensusPreFetchManager", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_log_error_loaded_services, "log_error_loaded_services", 0, 0,
      PSI_DOCUMENT_ME},
     {&key_memory_log_error_stack, "log_error_stack", PSI_FLAG_ONLY_GLOBAL_STAT,

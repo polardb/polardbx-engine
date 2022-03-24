@@ -1,3 +1,4 @@
+--source include/have_debug_new.inc
 use test;
 
 #

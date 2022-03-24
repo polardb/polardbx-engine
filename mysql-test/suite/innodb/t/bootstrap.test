@@ -46,7 +46,7 @@ let SEARCH_PATTERN=\[ERROR\] .*MY-\\d+.* File .*ibdata1: 'open' returned OS erro
 --rmdir $bugdir/data/undo_002
 
 --echo # Start mysqld to create tablespaces according to my.cnf
---exec $MYSQLD $args --initialize-insecure
+--exec $MYSQLD $args --initialize-insecure --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29221@1'
 
 --echo # Backup the datadir
 --force-cpdir $bugdir/data $bugdir/data_backup

@@ -1,0 +1,43 @@
+ package lm;
+ 
+ option java_package = "com.ali.alirockscluster.client.commons.socket.message";
+ //option java_package = "com.ali.alirockscluster.pojo.message";
+ option java_outer_classname = "RequestInfoWrapperDO";
+  
+ message requestInfoWrapper
+ { 
+ 	//header
+    optional string    version = 1;  
+    optional string    linkPin = 2; 
+    optional string    appKey = 3;
+    
+    //body
+    optional string    messageID = 4;
+    optional string    cmd = 5;
+    optional string    clusterName = 6;
+    optional string    custInsID = 7;
+    optional string    custInsName = 8;
+    optional string    masterIP = 9;
+    optional string    masterPort = 10;
+    
+    //for rds
+    optional string    slaveIP = 11;
+    optional string    slavePort = 12;
+    optional string    dbType = 13;
+    optional string    diskSize = 14;
+    
+    //for instance
+    optional string	   username = 15;
+    optional string    password = 16;
+    
+    //for jushita 
+    optional string    beginTime = 17;
+    optional string    endTime   = 18;
+    
+    optional string    extConfig = 19;
+    
+    repeated string    sqlList = 20;
+    optional string    custinsUrl = 21;
+    
+    optional string    insType = 22;      
+ }

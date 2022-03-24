@@ -1052,23 +1052,12 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
   if (cmmt_ptr == nullptr) {
     lizard_sys_scn_mutex_enter();
 
-    /** Fetch commit gcn */
-    gcn_t gcn = GCN_NULL;
-
-    /* If have set commit_gcn on trx, just use it. */
-    if (trx->txn_desc.cmmt.gcn != GCN_NULL) {
-      ut_ad(!trx->mysql_thd);
-      gcn = trx->txn_desc.cmmt.gcn;
-      trx->txn_desc.cmmt.gcn = GCN_NULL;
-    } else if (thd_get_commit_gcn(trx->mysql_thd) != GCN_NULL) {
-      gcn = thd_get_commit_gcn(trx->mysql_thd);
-    }
-
-    DBUG_EXECUTE_IF("crash_before_gcn_commit", ut_ad(gcn != GCN_NULL ? 0 : 1););
+    DBUG_EXECUTE_IF("crash_before_gcn_commit",
+                    ut_ad(trx->txn_desc.cmmt.gcn != GCN_NULL ? 0 : 1););
 
     /** Generate a new scn */
     std::pair<commit_scn_t, bool> cmmt_result =
-        lizard_sys->scn.new_commit_scn(gcn);
+        lizard_sys->scn.new_commit_scn(trx->txn_desc.cmmt.gcn);
 
     cmmt = cmmt_result.first;
     ut_a(!cmmt_result.second);

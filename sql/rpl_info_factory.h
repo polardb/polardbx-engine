@@ -24,12 +24,15 @@
 #define RPL_INFO_FACTORY_H
 
 #include <sys/types.h>
+
 #include <string>
 #include <vector>
 
 #include "my_bitmap.h"
 #include "my_io.h"
 #include "sql/rpl_info_handler.h"  // enum_return_check
+
+class Consensus_info;
 
 class Master_info;
 class Multisource_info;
@@ -59,6 +62,9 @@ class Rpl_info_factory {
   */
   static bool configure_channel_replication_filters(Relay_log_info *rli,
                                                     const char *channel_name);
+
+  static Consensus_info *create_consensus_info();
+  static void init_consensus_repo_metadata();
 
   static Master_info *create_mi_and_rli_objects(uint mi_option, uint rli_option,
                                                 const char *channel,
@@ -104,6 +110,8 @@ class Rpl_info_factory {
   static struct_file_data mi_file_data;
   static struct_table_data worker_table_data;
   static struct_file_data worker_file_data;
+  static struct_table_data consensus_table_data;
+  static struct_file_data consensus_file_data;
 
   static void init_repository_metadata();
   static bool decide_repository(Rpl_info *info, uint option,

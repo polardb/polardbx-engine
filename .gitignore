@@ -2608,3 +2608,4 @@ scripts/compaction_tool
 scripts/query_trace_dump
 server_unittest_library.c
 support-files/mysqlrouter-log-rotate
+extra/IS/dependency/protobuf-3.6.1

@@ -167,6 +167,7 @@ Error_log_throttle slave_ignored_err_throttle(
 #include "sql/common/reload.h"
 
 #include "ppi/ppi_statement.h"
+#include "log_event_ext.h"
 
 struct mysql_mutex_t;
 
@@ -337,7 +338,8 @@ static const char *HA_ERR(int i) {
 static void inline slave_rows_error_report(enum loglevel level, int ha_error,
                                            Relay_log_info const *rli, THD *thd,
                                            TABLE *table, const char *type,
-                                           const char *log_name, ulong pos) {
+                                           const char *log_name, ulong pos,
+                                           ulonglong index, ulonglong seq) {
   const char *handler_error = (ha_error ? HA_ERR(ha_error) : nullptr);
   bool is_group_replication_applier_channel =
       channel_map.is_group_replication_channel_name(
@@ -379,18 +381,18 @@ static void inline slave_rows_error_report(enum loglevel level, int ha_error,
                                   : ER_UNKNOWN_ERROR,
                   "Could not execute %s event on table %s.%s;"
                   "%s handler error %s; "
-                  "the event's master log %s, end_log_pos %lu",
+                  "the event's master log %s, end_log_pos %lu, consensus_index %llu, seq %llu",
                   type, table->s->db.str, table->s->table_name.str, buff,
                   handler_error == nullptr ? "<unknown>" : handler_error,
-                  log_name, pos);
+                  log_name, pos, index, seq);
     } else {
       rli->report(level,
                   thd->is_error() ? thd->get_stmt_da()->mysql_errno()
                                   : ER_UNKNOWN_ERROR,
                   "Could not execute %s event on table %s.%s;"
-                  "%s the event's master log %s, end_log_pos %lu",
+                  "%s the event's master log %s, end_log_pos %lu, consensus_index %llu, seq %llu",
                   type, table->s->db.str, table->s->table_name.str, buff,
-                  log_name, pos);
+                  log_name, pos, index, seq);
     }
   }
 }
@@ -837,6 +839,13 @@ static void print_set_option(IO_CACHE *file, uint32 bits_changed, uint32 option,
 #ifdef MYSQL_SERVER
 
 time_t Log_event::get_time() {
+  if (opt_consensuslog_revise && consensus_extra_time && is_control_event()) {
+    if (!common_header->when.tv_sec && !common_header->when.tv_usec) {
+      common_header->when.tv_sec= le32toh(consensus_extra_time);
+      common_header->when.tv_usec= 0;
+    }
+    return (time_t) common_header->when.tv_sec;
+  }
   /* Not previously initialized */
   if (!common_header->when.tv_sec && !common_header->when.tv_usec) {
     THD *tmp_thd = thd ? thd : current_thd;
@@ -917,6 +926,16 @@ const char *Log_event::get_type_str(Log_event_type type) {
       return "XA_prepare";
     case binary_log::PARTIAL_UPDATE_ROWS_EVENT:
       return "Update_rows_partial";
+    case binary_log::CONSENSUS_LOG_EVENT:
+      return "Consensus_log";
+    case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
+      return "Previous_consensus_index";
+    case binary_log::CONSENSUS_CLUSTER_INFO_EVENT:
+      return "Consensus_cluster_info";
+    case binary_log::CONSENSUS_EMPTY_EVENT:
+      return "Consensus_empty";
+    case binary_log::GCN_LOG_EVENT:
+      return "Gcn";
     default:
       return "Unknown"; /* impossible */
   }
@@ -949,6 +968,7 @@ Log_event::Log_event(THD *thd_arg, uint16 flags_arg,
   common_header->when = thd->start_time;
   common_header->log_pos = 0;
   common_header->flags = flags_arg;
+  consensus_extra_time= 0;
 }
 
 /**
@@ -972,6 +992,7 @@ Log_event::Log_event(Log_event_header *header, Log_event_footer *footer,
       thd(nullptr) {
   server_id = ::server_id;
   common_header->unmasked_server_id = server_id;
+  consensus_extra_time= 0;
 }
 #endif /* MYSQL_SERVER */
 
@@ -995,6 +1016,7 @@ Log_event::Log_event(Log_event_header *header, Log_event_footer *footer)
      Mask out any irrelevant parts of the server_id
   */
   server_id = common_header->unmasked_server_id & opt_server_id_mask;
+  consensus_extra_time= 0;
 }
 
 /*
@@ -1024,7 +1046,7 @@ int Log_event::do_update_pos(Relay_log_info *rli) {
   int error = 0;
   DBUG_ASSERT(!rli->belongs_to_client());
 
-  if (rli) error = rli->stmt_done(common_header->log_pos);
+  if (rli) error = rli->stmt_done(common_header->log_pos, consensus_index);
   return error;
 }
 
@@ -1188,6 +1210,11 @@ bool Log_event::need_checksum() {
            which IO thread instantiates via queue_binlog_ver_3_event.
         */
         get_type_code() == binary_log::ROTATE_EVENT ||
+        /*
+           The previous event has its checksum option defined
+           according to the format description event.
+        */
+        get_type_code() == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
         /*
            The previous event has its checksum option defined
            according to the format description event.
@@ -2604,6 +2631,15 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
   char llbuff[22];
   Slave_committed_queue *gaq = rli->gaq;
   DBUG_TRACE;
+  uint gcn_size = rli->curr_group_seen_gcn ? 1 : 0;
+
+  if (is_gcn_event(this)) {
+    Slave_job_item job_item = {this, rli->get_event_relay_log_number(),
+                               rli->get_event_start_pos()};
+    rli->curr_group_da.push_back(job_item);
+    rli->curr_group_seen_gcn = true;
+    return ret_worker;
+  }
 
   /* checking partioning properties and perform corresponding actions */
 
@@ -2625,7 +2661,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
       rli->mts_groups_assigned++;
 
       rli->curr_group_isolated = false;
-      group.reset(common_header->log_pos, rli->mts_groups_assigned);
+      group.reset(common_header->log_pos, rli->mts_groups_assigned, consensus_index);
       // the last occupied GAQ's array index
       gaq->assigned_group_index = gaq->en_queue(&group);
       DBUG_PRINT("info", ("gaq_idx= %ld  gaq->size=%ld",
@@ -2643,7 +2679,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
         // B-event is appended to the Deferred Array associated with GCAP
         rli->curr_group_da.push_back(job_item);
 
-        DBUG_ASSERT(rli->curr_group_da.size() == 1);
+        DBUG_ASSERT(rli->curr_group_da.size() == (1 + gcn_size));
 
         if (starts_group()) {
           // mark the current group as started with explicit B-event
@@ -2686,7 +2722,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
         return nullptr;
       }
 
-      DBUG_ASSERT(rli->curr_group_da.size() == 2);
+      DBUG_ASSERT(rli->curr_group_da.size() == (2 + gcn_size));
       DBUG_ASSERT(starts_group());
       return ret_worker;
     }
@@ -2729,14 +2765,18 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
                                     rli->curr_group_seen_gtid && ends_group();
 
       bool begin_load_query_event =
-          ((rli->curr_group_da.size() == 3 && rli->curr_group_seen_gtid) ||
-           (rli->curr_group_da.size() == 2 && !rli->curr_group_seen_gtid)) &&
+          ((rli->curr_group_da.size() == (3 + gcn_size) &&
+            rli->curr_group_seen_gtid) ||
+           (rli->curr_group_da.size() == (2 + gcn_size) &&
+            !rli->curr_group_seen_gtid)) &&
           (rli->curr_group_da.back().data->get_type_code() ==
            binary_log::BEGIN_LOAD_QUERY_EVENT);
 
       bool delete_file_event =
-          ((rli->curr_group_da.size() == 4 && rli->curr_group_seen_gtid) ||
-           (rli->curr_group_da.size() == 3 && !rli->curr_group_seen_gtid)) &&
+          ((rli->curr_group_da.size() == (4 + gcn_size) &&
+            rli->curr_group_seen_gtid) ||
+           (rli->curr_group_da.size() == (3 + gcn_size) &&
+            !rli->curr_group_seen_gtid)) &&
           (rli->curr_group_da.back().data->get_type_code() ==
            binary_log::DELETE_FILE_EVENT);
 
@@ -2994,14 +3034,26 @@ int Log_event::apply_gtid_event(Relay_log_info *rli) {
   if (rli->curr_group_da.size() < 1) return 1;
 
   Log_event *ev = rli->curr_group_da[0].data;
+  if (rli->curr_group_seen_gcn) {
+    DBUG_ASSERT(rli->curr_group_da.size() == 2);
+    DBUG_ASSERT(ev->get_type_code() == binary_log::GCN_LOG_EVENT);
+    error = ev->do_apply_event(rli);
+    delete ev;
+
+    ev = rli->curr_group_da[1].data;
+  }
+
   DBUG_ASSERT(ev->get_type_code() == binary_log::GTID_LOG_EVENT ||
               ev->get_type_code() == binary_log::ANONYMOUS_GTID_LOG_EVENT);
 
   error = ev->do_apply_event(rli);
   /* Clean up */
   delete ev;
+
   rli->curr_group_da.clear();
   rli->curr_group_seen_gtid = false;
+  rli->curr_group_seen_gcn = false;
+
   /*
     Removes the job from the (G)lobal (A)ssigned (Q)ueue after
     applying it.
@@ -3110,8 +3162,16 @@ int Log_event::apply_event(Relay_log_info *rli) {
             rli->current_mts_submode->get_type() ==
                 MTS_PARALLEL_TYPE_LOGICAL_CLOCK) {
 #ifndef DBUG_OFF
-          DBUG_ASSERT(rli->curr_group_da.size() == 1);
-          Log_event *ev = rli->curr_group_da[0].data;
+          Log_event *ev = nullptr;
+          if(rli->curr_group_seen_gcn) {
+            DBUG_ASSERT(rli->curr_group_da.size() == 2);
+            ev = rli->curr_group_da[0].data;
+            DBUG_ASSERT(ev->get_type_code() == binary_log::GCN_LOG_EVENT);
+            ev = rli->curr_group_da[1].data;
+          } else {
+            DBUG_ASSERT(rli->curr_group_da.size() == 1);
+            ev = rli->curr_group_da[0].data;
+          }
           DBUG_ASSERT(ev->get_type_code() == binary_log::GTID_LOG_EVENT ||
                       ev->get_type_code() ==
                           binary_log::ANONYMOUS_GTID_LOG_EVENT);
@@ -3145,7 +3205,11 @@ int Log_event::apply_event(Relay_log_info *rli) {
 
         if (get_type_code() == binary_log::INCIDENT_EVENT &&
             rli->curr_group_da.size() > 0) {
-          DBUG_ASSERT(rli->curr_group_da.size() == 1);
+          
+          if(rli->curr_group_seen_gcn)
+            DBUG_ASSERT(rli->curr_group_da.size() == 2);
+          else
+            DBUG_ASSERT(rli->curr_group_da.size() == 1);
           /*
             When MTS is enabled, the incident event must be applied by the
             coordinator. So the coordinator applies its GTID right before
@@ -3565,21 +3629,6 @@ bool Query_log_event::write(Basic_ostream *ostream) {
   if (thd && needs_default_table_encryption) {
     *start++ = Q_DEFAULT_TABLE_ENCRYPTION;
     *start++ = thd->variables.default_table_encryption;
-  }
-
-  /* Lizard store variable commit_gcn in binlog. */
-  if (thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
-    *start++ = Q_LIZARD_COMMIT_GCN;
-    int8store(start, thd->get_commit_gcn());
-    start += 8;
-  }
-
-  /* Lizard store variable prepare_gcn in binlog. */
-  if (thd && thd->get_prepare_gcn() != MYSQL_GCN_NULL) {
-    *start++ = Q_LIZARD_PREPARE_GCN;
-    int8store(start, thd->get_prepare_gcn());
-    thd->reset_prepare_gcn();
-    start += 8;
   }
 
   /*
@@ -4306,26 +4355,6 @@ void Query_log_event::print_query_header(
                 "/*!80016 SET @@session.default_table_encryption=%d*/%s\n",
                 default_table_encryption, print_event_info->delimiter);
   }
-
-  /* Lizard print commit_gcn stored in binlog. */
-  if (likely(commit_gcn_assigned) &&
-      (unlikely(print_event_info->commit_gcn != commit_gcn ||
-                !print_event_info->commit_gcn_assigned))) {
-    my_b_printf(file, "SET @@session.innodb_commit_seq=%llu%s\n",
-                (ulonglong)commit_gcn, print_event_info->delimiter);
-    print_event_info->commit_gcn = commit_gcn;
-    print_event_info->commit_gcn_assigned = 1;
-  }
-
-  /* Lizard print prepare_gcn stored in binlog. */
-  if (likely(prepare_gcn_assigned) &&
-      (unlikely(print_event_info->prepare_gcn != prepare_gcn ||
-                !print_event_info->prepare_gcn_assigned))) {
-    my_b_printf(file, "SET @@session.innodb_prepare_seq=%llu%s\n",
-                (ulonglong)prepare_gcn, print_event_info->delimiter);
-    print_event_info->prepare_gcn = prepare_gcn;
-    print_event_info->prepare_gcn_assigned = 1;
-  }
 }
 
 void Query_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
@@ -4694,18 +4723,6 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
           goto end;
         }
         thd->variables.default_table_encryption = default_table_encryption;
-      }
-
-      /* Set commit_gcn to Query_log_event for recovery and slave apply. */
-      if (commit_gcn_assigned) {
-        DBUG_ASSERT(commit_gcn != MYSQL_GCN_NULL);
-        thd->variables.innodb_commit_gcn = commit_gcn;
-      }
-
-      /* Set prepare_gcn to Query_log_event. */
-      if (prepare_gcn_assigned) {
-        DBUG_ASSERT(prepare_gcn != MYSQL_GCN_NULL);
-        thd->variables.innodb_prepare_gcn = prepare_gcn;
       }
 
       thd->table_map_for_update = (table_map)table_map_for_update;
@@ -5603,7 +5620,7 @@ int Rotate_log_event::do_update_pos(Relay_log_info *rli) {
                       : rli->is_in_group();
 
   if ((server_id != ::server_id || rli->replicate_same_server_id) &&
-      !is_relay_log_event() && !in_group) {
+      !is_relay_log_event() && !rli->info_thd->xpaxos_replication_channel && !in_group) {
     if (!is_mts_db_partitioned(rli) && server_id != ::server_id) {
       // force the coordinator to start a new binlog segment.
       static_cast<Mts_submode_logical_clock *>(rli->current_mts_submode)
@@ -6103,11 +6120,13 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   char saved_group_relay_log_name[FN_REFLEN];
   volatile my_off_t saved_group_master_log_pos;
   volatile my_off_t saved_group_relay_log_pos;
+  uint64 saved_consensus_apply_index;
 
   char new_group_master_log_name[FN_REFLEN];
   char new_group_relay_log_name[FN_REFLEN];
   volatile my_off_t new_group_master_log_pos;
   volatile my_off_t new_group_relay_log_pos;
+  uint64 new_consensus_apply_index;
 
   lex_start(thd);
   mysql_reset_thd_for_next_command(thd);
@@ -6138,6 +6157,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   strmake(saved_group_relay_log_name, rli_ptr->get_group_relay_log_name(),
           FN_REFLEN - 1);
   saved_group_relay_log_pos = rli_ptr->get_group_relay_log_pos();
+  saved_consensus_apply_index = rli_ptr->get_consensus_apply_index();
 
   DBUG_PRINT(
       "info",
@@ -6157,6 +6177,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   rli_ptr->inc_event_relay_log_pos();
   rli_ptr->set_group_relay_log_pos(rli_ptr->get_event_relay_log_pos());
   rli_ptr->set_group_relay_log_name(rli_ptr->get_event_relay_log_name());
+  rli_ptr->set_consensus_apply_index(consensus_index);
 
   if (common_header->log_pos)  // 3.23 binlogs don't have log_posx
     rli_ptr->set_group_master_log_pos(common_header->log_pos);
@@ -6205,6 +6226,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   strmake(new_group_relay_log_name, rli_ptr->get_group_relay_log_name(),
           FN_REFLEN - 1);
   new_group_relay_log_pos = rli_ptr->get_group_relay_log_pos();
+  new_consensus_apply_index = rli_ptr->get_consensus_apply_index();
   /*
     Rollback positions in memory just before commit. Position values will be
     reset to their new values only on successful commit operation.
@@ -6214,6 +6236,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   rli_ptr->notify_group_master_log_name_update();
   rli_ptr->set_group_relay_log_name(saved_group_relay_log_name);
   rli_ptr->set_group_relay_log_pos(saved_group_relay_log_pos);
+  rli_ptr->set_consensus_apply_index(saved_consensus_apply_index);
 
   DBUG_PRINT("info", ("Rolling back to group master %s %llu  group relay %s"
                       " %llu\n",
@@ -6240,6 +6263,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
     rli_ptr->notify_group_master_log_name_update();
     rli_ptr->set_group_relay_log_name(new_group_relay_log_name);
     rli_ptr->set_group_relay_log_pos(new_group_relay_log_pos);
+    rli_ptr->set_consensus_apply_index(new_consensus_apply_index);
 
     DBUG_PRINT("info", ("Updating positions on succesful commit to group master"
                         " %s %llu  group relay %s %llu\n",
@@ -8545,7 +8569,7 @@ int Rows_log_event::handle_idempotent_and_ignored_errors(
       slave_rows_error_report(
           ll, error, rli, thd, m_table, get_type_str(),
           const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-          (ulong)common_header->log_pos);
+          (ulong)common_header->log_pos, consensus_index, consensus_sequence);
       thd->get_stmt_da()->reset_condition_info(thd);
       clear_all_errors(thd, const_cast<Relay_log_info *>(rli));
       *err = 0;
@@ -9882,7 +9906,7 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
       slave_rows_error_report(
           INFORMATION_LEVEL, error, rli, thd, table, get_type_str(),
           const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-          (ulong)common_header->log_pos);
+          (ulong)common_header->log_pos, consensus_index, consensus_sequence);
       thd->get_stmt_da()->reset_condition_info(thd);
       clear_all_errors(thd, const_cast<Relay_log_info *>(rli));
       error = 0;
@@ -9896,7 +9920,7 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
     slave_rows_error_report(
         ERROR_LEVEL, error, rli, thd, table, get_type_str(),
         const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-        (ulong)common_header->log_pos);
+        (ulong)common_header->log_pos, consensus_index, consensus_sequence);
     /*
       @todo We should probably not call
       reset_current_stmt_binlog_format_row() from here.
@@ -9915,7 +9939,7 @@ end:
             ERROR_LEVEL, thd->is_error() ? 0 : error, rli, thd, table,
             get_type_str(),
             const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-            (ulong)common_header->log_pos);
+            (ulong)common_header->log_pos, consensus_index, consensus_sequence);
       else {
         rli->report(
             ERROR_LEVEL,
@@ -10062,7 +10086,7 @@ int Rows_log_event::do_update_pos(Relay_log_info *rli) {
       Step the group log position if we are not in a transaction,
       otherwise increase the event log position.
     */
-    error = rli->stmt_done(common_header->log_pos);
+    error = rli->stmt_done(common_header->log_pos, consensus_index);
   } else {
     rli->inc_event_relay_log_pos();
   }
@@ -13551,10 +13575,6 @@ PRINT_EVENT_INFO::PRINT_EVENT_INFO()
       thread_id(0),
       thread_id_printed(false),
       default_table_encryption(0xff),
-      commit_gcn_assigned(0),
-      prepare_gcn_assigned(0),
-      commit_gcn(MYSQL_GCN_NULL),
-      prepare_gcn(MYSQL_GCN_NULL),
       base64_output_mode(BASE64_OUTPUT_UNSPEC),
       printed_fd_event(false),
       have_unflushed_events(false),
@@ -13635,3 +13655,6 @@ size_t my_strmov_quoted_identifier_helper(int q, char *buffer,
   *buffer++ = quote_char;
   return ++written;
 }
+
+#include "consensus_log_event.cc"
+#include "log_event_ext.cc"

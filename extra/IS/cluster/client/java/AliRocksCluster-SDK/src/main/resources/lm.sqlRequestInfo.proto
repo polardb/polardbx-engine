@@ -1,0 +1,25 @@
+ package lm;
+ 
+ option java_package = "com.ali.alirockscluster.client.commons.socket.message";
+ option java_outer_classname = "SQLRequestInfoWrapperDO";
+  
+ message requestInfoWrapper
+ { 
+ 	//header
+    optional string     version = 1;  
+    optional string    linkPin = 2; 
+    optional string    appKey = 3;
+    
+    //body
+    optional string    messageID = 4;
+    optional string    cmd = 5;
+    
+   	optional string    instanceIP = 6;
+   	optional string    instancePort = 7;
+    optional string	   username = 8;
+    optional string    password = 9;
+    optional string    dbName = 10;
+    optional string    dbType = 11;
+    repeated string    sqlList = 12;
+      
+ }

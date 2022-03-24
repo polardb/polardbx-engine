@@ -64,6 +64,7 @@
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/object_table.h"  // dd::Object_table
 #include "sql/discrete_interval.h"      // Discrete_interval
+#include "sql/handler_ext.h"
 #include "sql/key.h"
 #include "sql/sql_const.h"       // SHOW_COMP_OPTION
 #include "sql/sql_list.h"        // SQL_I_List
@@ -147,6 +148,7 @@ typedef bool(stat_print_fn)(THD *thd, const char *type, size_t type_len,
                             const char *file, size_t file_len,
                             const char *status, size_t status_len);
 
+class ConsensusLogManager;
 class ha_statistics;
 class ha_tablespace_statistics;
 
@@ -909,7 +911,14 @@ enum enum_schema_tables : int {
   SCH_TMP_TABLE_KEYS,
   SCH_TABLE_STATISTICS,
   SCH_INDEX_STATISTICS,
-  SCH_LAST = SCH_INDEX_STATISTICS
+  SCH_ALISQL_CLUSTER_GLOBAL,
+  SCH_ALISQL_CLUSTER_LOCAL,
+  SCH_ALISQL_CLUSTER_HEALTH,
+  SCH_ALISQL_CLUSTER_LEARNER_SOURCE,
+  SCH_ALISQL_CONSENSUS_STATUS,
+  SCH_ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE,
+  SCH_CONSENSUS_COMMIT_POSITION,
+  SCH_LAST = SCH_CONSENSUS_COMMIT_POSITION
 };
 
 enum ha_stat_type { HA_ENGINE_STATUS, HA_ENGINE_LOGS, HA_ENGINE_MUTEX };
@@ -2291,6 +2300,8 @@ typedef void (*register_xa_attributes_t)(THD *thd);
   savepoint_*, prepare, recover, and *_by_xid pointers can be 0.
 */
 struct handlerton {
+  handlerton_ext ext;
+
   /**
     Historical marker for if the engine is available or not.
   */
@@ -6843,6 +6854,8 @@ int ha_prepare(THD *thd);
 
 typedef ulonglong my_xid;  // this line is the same as in log_event.h
 int ha_recover(const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list);
+int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager);
+int ha_rollback_xids(XID* xid_vector);
 
 /**
   Perform SE-specific cleanup after recovery of transactions.

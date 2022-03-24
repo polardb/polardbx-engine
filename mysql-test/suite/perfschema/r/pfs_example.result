@@ -18,7 +18,6 @@ wait/synch/rwlock/pfs_example/X	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/Y	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/Z	YES	YES		0	NULL
 wait/synch/sxlock/pfs_example/S1	YES	YES		0	NULL
-wait/synch/sxlock/pfs_example/S2	YES	YES		0	NULL
 select NAME, LOCKED_BY_THREAD_ID is not NULL
 from performance_schema.mutex_instances
 where NAME like "wait/synch/mutex/pfs_example/%";
@@ -36,7 +35,6 @@ wait/synch/rwlock/pfs_example/X	0	0
 wait/synch/rwlock/pfs_example/Y	0	0
 wait/synch/rwlock/pfs_example/Z	0	0
 wait/synch/sxlock/pfs_example/S1	0	0
-wait/synch/sxlock/pfs_example/S2	0	0
 select NAME
 from performance_schema.cond_instances
 where NAME like "wait/synch/%/pfs_example/%";
@@ -72,7 +70,7 @@ Performance_schema_cond_classes_lost	0
 Performance_schema_file_classes_lost	0
 Performance_schema_memory_classes_lost	0
 Performance_schema_mutex_classes_lost	0
-Performance_schema_rwlock_classes_lost	0
+Performance_schema_rwlock_classes_lost	1
 Performance_schema_socket_classes_lost	0
 Performance_schema_stage_classes_lost	0
 Performance_schema_statement_classes_lost	0

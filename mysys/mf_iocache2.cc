@@ -87,6 +87,61 @@ int my_b_copy_to_file(IO_CACHE *cache, FILE *file) {
   return 0;
 }
 
+my_off_t my_b_append_tell(IO_CACHE *info) {
+/*
+  Sometimes we want to make sure that the variable is not put into
+  a register in debugging mode so we can see its value in the core
+*/
+#ifndef DBUG_OFF
+#define dbug_volatile volatile
+#else
+#define dbug_volatile
+#endif
+
+  /*
+    Prevent optimizer from putting res in a register when debugging
+    we need this to be able to see the value of res when the assert fails
+  */
+  dbug_volatile my_off_t res;
+
+  /*
+    We need to lock the append buffer mutex to keep flush_io_cache()
+    from messing with the variables that we need in order to provide the
+    answer to the question.
+  */
+  mysql_mutex_lock(&info->append_buffer_lock);
+
+#ifndef DBUG_OFF
+  /*
+    Make sure EOF is where we think it is. Note that we cannot just use
+    mysql_file_tell() because we have a reader thread that could have left the
+    file offset in a non-EOF location
+  */
+  {
+    volatile my_off_t save_pos;
+    save_pos = mysql_file_tell(info->file, MYF(0));
+    mysql_file_seek(info->file, (my_off_t)0, MY_SEEK_END, MYF(0));
+
+    /*
+      Save the value of mysql_file_tell in res so we can see it when studying
+      coredump
+    */
+    DBUG_ASSERT(info->end_of_file -
+                    (info->append_read_pos - info->write_buffer) ==
+                (res = mysql_file_tell(info->file, MYF(0))));
+    mysql_file_seek(info->file, save_pos, MY_SEEK_SET, MYF(0));
+  }
+#endif
+  res = info->end_of_file + (info->write_pos - info->append_read_pos);
+  mysql_mutex_unlock(&info->append_buffer_lock);
+  return res;
+}
+
+my_off_t my_b_safe_tell(IO_CACHE *info) {
+  if (unlikely(info->type == SEQ_READ_APPEND)) return my_b_append_tell(info);
+  return my_b_tell(info);
+}
+
 /*
   Make next read happen at the given position
   For write cache, make next write happen at the given position

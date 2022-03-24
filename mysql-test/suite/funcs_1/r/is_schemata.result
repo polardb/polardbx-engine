@@ -50,6 +50,7 @@ FROM information_schema.schemata
 WHERE catalog_name IS NOT NULL or sql_path IS NOT NULL
 ORDER BY schema_name;
 CATALOG_NAME	SCHEMA_NAME	SQL_PATH
+def	__recycle_bin__	NULL
 def	information_schema	NULL
 def	mtr	NULL
 def	mysql	NULL

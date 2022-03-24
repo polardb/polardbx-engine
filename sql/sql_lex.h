@@ -2037,6 +2037,38 @@ typedef struct struct_slave_connection {
   void reset();
 } LEX_SLAVE_CONNECTION;
 
+typedef struct struct_consensus_info
+{
+  uint64 log_index;
+  uint node_index;
+  char *node_info;
+  ulong timestamp;
+  bool force_sync;
+  uint election_weight;
+  uint64 learner_source;
+  char *learner_source_node_info;
+  bool apply_mode;
+  bool prefetch_stop_flag;
+  uint64 cluster_id;
+
+  bool check_node_info_format(const char *node_info)
+  {
+    /* precheck to make sure it is a valid ip:port format */
+    if (!node_info) return true;
+    int a, b, c, d, p;
+    if (std::sscanf(node_info,"%d.%d.%d.%d:%d", &a, &b, &c, &d, &p) != 5)
+      return true;
+    if (a >= 0 && a <= 255 &&
+        b >= 0 && b <= 255 &&
+        c >= 0 && c <= 255 &&
+        d >= 0 && d <= 255 &&
+        p >= 0 && p <= 65535)
+      return false;
+    else
+      return true;
+  }
+} LEX_CONSENSUS_INFO;
+
 struct st_sp_chistics {
   LEX_CSTRING comment;
   enum enum_sp_suid_behaviour suid;
@@ -3360,6 +3392,7 @@ struct LEX : public Query_tables_list, public im::Query_blocks_list {
   KEY_CREATE_INFO key_create_info;
   LEX_MASTER_INFO mi;  // used by CHANGE MASTER
   LEX_SLAVE_CONNECTION slave_connection;
+  LEX_CONSENSUS_INFO consensus;
   Server_options server_options;
   USER_RESOURCES mqh;
   LEX_RESET_SLAVE reset_slave_info;

@@ -1,3 +1,4 @@
+--source include/have_debug_new.inc
 # Requires statement logging
 -- source include/force_binlog_format_statement.inc
 # TODO: Create row based version once $MYSQL_BINLOG has new RB version

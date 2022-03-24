@@ -1,0 +1,24 @@
+create table t1 (id int);
+insert into t1 values(1);
+set global consensus_large_trx=OFF;
+set global consensus_check_large_event=OFF;
+set global consensus_large_trx_split_size=1;
+set global consensus_max_log_size=1;
+insert into t1 values(2);
+ERROR HY000: The consensus log is too large for cluster, please split the transcation to small ones.
+insert into t1 values(3);
+ERROR HY000: The consensus log is too large for cluster, please split the transcation to small ones.
+set global consensus_check_large_event=ON;
+set global consensus_max_log_size=20971520;
+set global consensus_large_trx_split_size=2097152;
+set global consensus_large_trx=ON;
+insert into t1 values(4);
+select * from t1;
+id
+1
+4
+select * from t1;
+id
+1
+4
+drop table t1;

@@ -149,8 +149,12 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
               rec_txn.scn <= as_of_scn);
     } else {
       ut_ad(as_of_scn == SCN_NULL);
-      return (rec_txn.gcn != GCN_NULL && as_of_gcn != GCN_NULL &&
-              rec_txn.gcn <= as_of_gcn);
+      if (srv_equal_gcn_visible)
+        return (rec_txn.gcn != GCN_NULL && as_of_gcn != GCN_NULL &&
+                rec_txn.gcn <= as_of_gcn);
+      else
+        return (rec_txn.gcn != GCN_NULL && as_of_gcn != GCN_NULL &&
+                rec_txn.gcn < as_of_gcn);
     }
   } else {
     ut_ad(trx->vision.is_active());

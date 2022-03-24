@@ -196,11 +196,18 @@ scn_t lizard_sys_get_scn() {
   return lizard_sys->scn.get_scn();
 }
 
-/** Get current GCN number */
+/** Get max persisted GCN number */
 gcn_t lizard_sys_get_gcn() {
   ut_a(lizard_sys);
 
   return lizard_sys->scn.get_gcn();
+}
+
+/** Get max snapthot GCN number */
+gcn_t lizard_sys_get_snapshot_gcn() {
+  ut_a(lizard_sys);
+
+  return lizard_sys->scn.get_snapshot_gcn();
 }
 
 /**
@@ -319,6 +326,15 @@ scn_t lizard_sys_get_min_safe_scn() {
   assert_lizard_min_safe_scn_valid();
   /* Get the oldest transaction from serialisation list. */
   return lizard_sys->min_safe_scn.load();
+}
+
+/**
+  Get the max gcn between snapshot gcn and m_gcn
+
+  @retval         the valid gcn. */
+gcn_t lizard_sys_acquire_gcn() {
+  ut_ad(!lizard_sys_scn_mutex_own());
+  return lizard_sys->scn.acquire_gcn(false);
 }
 
 }  // namespace lizard

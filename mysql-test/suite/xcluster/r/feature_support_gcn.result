@@ -1,0 +1,93 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+#
+# leader insert and follower select
+#
+create table t1 (a int, b int, primary key(a));
+set innodb_snapshot_seq = @base_seq +  10010;
+select * from t1;
+insert into t1 values (10011, 10011);
+set innodb_snapshot_seq = @base_seq +  10020;
+select * from t1;
+xa start 'x21';
+insert into t1 values (10021, 10021);
+xa end 'x21';
+xa commit 'x21' one phase;
+xa start 'x31';
+insert into t1 values (10031, 10031);
+xa end 'x31';
+xa prepare 'x31';
+set innodb_commit_seq = @base_seq +  10030;
+xa commit 'x31';
+create  table  t2 (a int, b date)
+partition by range( year(b) )
+subpartition by hash( to_days(b) )
+subpartitions 2 (
+partition p0 values less than (1990),
+partition p1 values less than (2000),
+partition p2 values less than maxvalue);
+set innodb_snapshot_seq = @base_seq +  20010;
+select * from t1;
+insert into t2 values (20011, '1988-12-12');
+set innodb_snapshot_seq = @base_seq +  20020;
+select * from t1;
+xa start 'p21';
+insert into t2 values (20021, '1991-12-12');
+xa end 'p21';
+xa commit 'p21' one phase;
+xa start 'p31';
+insert into t2 values (20031, '1995-12-12');
+xa end 'p31';
+xa prepare 'p31';
+set innodb_commit_seq = @base_seq +  20030;
+xa commit 'p31';
+# Select normal table
+xa begin 'f2';
+set innodb_snapshot_seq = @base_seq +  10010;
+select * from t1;
+a	b
+xa end 'f2';
+xa commit 'f2' one phase;
+xa begin 'f2';
+set innodb_snapshot_seq = @base_seq +  10020;
+select * from t1;
+a	b
+10011	10011
+xa end 'f2';
+xa commit 'f2' one phase;
+set innodb_snapshot_seq = @base_seq +  10030;
+select * from t1;
+a	b
+10011	10011
+10021	10021
+set innodb_snapshot_seq = @base_seq +  10040;
+select * from t1;
+a	b
+10011	10011
+10021	10021
+10031	10031
+# Select partition table
+xa begin 'f3';
+set innodb_snapshot_seq = @base_seq +  20010;
+select * from t2;
+a	b
+xa end 'f3';
+xa commit 'f3' one phase;
+xa begin 'f3';
+set innodb_snapshot_seq = @base_seq +  20020;
+select * from t2;
+a	b
+20011	1988-12-12
+xa end 'f3';
+xa commit 'f3' one phase;
+set innodb_snapshot_seq = @base_seq +  20030;
+select * from t2;
+a	b
+20011	1988-12-12
+20021	1991-12-12
+set innodb_snapshot_seq = @base_seq +  20040;
+select * from t2;
+a	b
+20011	1988-12-12
+20031	1995-12-12
+20021	1991-12-12
+drop table t1, t2;

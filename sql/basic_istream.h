@@ -51,6 +51,19 @@ class Basic_istream {
 };
 
 /**
+   the consensus_log cache must be write and read
+*/
+class Write_cache_istream : public Basic_istream {
+public:
+  Write_cache_istream(IO_CACHE *io_cache) : m_io_cache(io_cache) {}
+
+ssize_t read(unsigned char *buffer, size_t length) override;
+
+private:
+  IO_CACHE *m_io_cache;
+};
+
+/**
    The abstract class for seekable input streams which have fixed length
    and provide seek operation.
 */
@@ -77,6 +90,7 @@ class Basic_seekable_istream : public Basic_istream {
      The total length of the stream.
    */
   virtual my_off_t length() = 0;
+  virtual IO_CACHE *get_io_cache() = 0;
   virtual ~Basic_seekable_istream() {}
 };
 
@@ -119,6 +133,9 @@ class IO_CACHE_istream : public Basic_seekable_istream {
      Get the length of the file.
   */
   my_off_t length() override;
+
+  // for compatible
+  IO_CACHE *get_io_cache() { return &m_io_cache; }
 
  private:
   IO_CACHE m_io_cache;

@@ -213,12 +213,9 @@ fi
 if [ x"$mach_type" = x"aarch64" ]; then # ARM64
     CC=gcc
     CXX=g++
-elif [[ -e /opt/rh/devtoolset-7/root/usr/bin/gcc ]]; then 
+else # X86
     CC=/opt/rh/devtoolset-7/root/usr/bin/gcc
     CXX=/opt/rh/devtoolset-7/root/usr/bin/g++
-else  # X86
-    CC=gcc
-    CXX=g++
 fi
 
 # Update choosed version
@@ -232,7 +229,10 @@ export CC CFLAGS CXX CXXFLAGS
 rm -rf CMakeCache.txt
 make clean
 
-cmake .                               \
+BU="bu-$build_type"
+rm -rf $BU
+mkdir $BU && cd $BU
+cmake ..                               \
     -DFORCE_INSOURCE_BUILD=ON          \
     -DCMAKE_BUILD_TYPE="$build_type"   \
     -DWITH_NORMANDY_CLUSTER=ON         \
@@ -249,6 +249,7 @@ cmake .                               \
     -DMYSQL_MAINTAINER_MODE=0          \
     -DWITH_EMBEDDED_SERVER=0           \
     -DWITH_EXTRA_CHARSETS=all          \
+    -DWITH_SSL=openssl                 \
     -DWITH_ZLIB=bundled                \
     -DWITH_ZSTD=bundled                \
     -DWITH_MYISAM_STORAGE_ENGINE=1     \
@@ -260,7 +261,7 @@ cmake .                               \
     -DWITH_PERFSCHEMA_STORAGE_ENGINE=1 \
     -DWITH_EXAMPLE_STORAGE_ENGINE=0    \
     -DWITH_TEMPTABLE_STORAGE_ENGINE=1  \
-    -DWITH_XENGINE_STORAGE_ENGINE=1    \
+    -DWITH_XENGINE_STORAGE_ENGINE=0    \
     -DWITH_QUERY_TRACE=1               \
     -DWITH_EXTRA_CHARSETS=all          \
     -DDEFAULT_CHARSET=utf8mb4          \
@@ -269,7 +270,7 @@ cmake .                               \
     -DENABLED_LOCAL_INFILE=1           \
     -DWITH_ASAN=$asan                  \
     -DWITH_TSAN=$tsan                  \
-    -DWITH_BOOST="./extra/boost/boost_1_70_0.tar.gz" \
+    -DWITH_BOOST="../extra/boost/boost_1_70_0.tar.gz" \
     -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
     -DWITHOUT_IS_UT=1
 

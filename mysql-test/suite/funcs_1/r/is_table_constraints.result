@@ -56,6 +56,8 @@ ORDER BY table_schema,table_name, constraint_name;
 constraint_catalog	constraint_schema	constraint_name	table_schema	table_name
 def	mysql	PRIMARY	mysql	columns_priv
 def	mysql	PRIMARY	mysql	component
+def	mysql	PRIMARY	mysql	concurrency_control
+def	mysql	PRIMARY	mysql	consensus_info
 def	mysql	PRIMARY	mysql	db
 def	mysql	PRIMARY	mysql	default_roles
 def	mysql	PRIMARY	mysql	engine_cost
@@ -69,8 +71,10 @@ def	mysql	PRIMARY	mysql	help_keyword
 def	mysql	PRIMARY	mysql	help_relation
 def	mysql	name	mysql	help_topic
 def	mysql	PRIMARY	mysql	help_topic
+def	mysql	PRIMARY	mysql	innodb_flashback_snapshot
 def	mysql	PRIMARY	mysql	innodb_index_stats
 def	mysql	PRIMARY	mysql	innodb_table_stats
+def	mysql	PRIMARY	mysql	outline
 def	mysql	PRIMARY	mysql	password_history
 def	mysql	PRIMARY	mysql	plugin
 def	mysql	PRIMARY	mysql	procs_priv

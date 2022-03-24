@@ -1,0 +1,6 @@
+stop xpaxos_replication;
+set debug_sync= "start_slave_after_channel_map_wrlock WAIT_FOR run";
+start xpaxos_replication;
+set debug_sync= "show_status_after_lock_status SIGNAL run";
+show status like "aaa";
+Variable_name	Value

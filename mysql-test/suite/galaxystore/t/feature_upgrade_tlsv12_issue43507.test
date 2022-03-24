@@ -1,0 +1,2 @@
+connection default;
+show global variables like 'tls_version';

@@ -38,6 +38,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include "lex_string.h"
 #include "libbinlogevents/include/binlog_event.h"
@@ -69,6 +70,7 @@
 #include "sql/sql_class.h"    // THD
 #include "sql/system_variables.h"
 #include "sql/table.h"
+#include "sql/rpl_applier_reader.h" // Rpl_applier_reader
 
 class Commit_order_manager;
 class Master_info;
@@ -561,6 +563,7 @@ class Relay_log_info : public Rpl_info {
     max_binlog_size.
   */
  protected:
+  std::atomic<ulonglong> consensus_apply_index;
   /**
      Event group means a group of events of a transaction. group_relay_log_name
      and group_relay_log_pos record the place before where all event groups
@@ -1263,7 +1266,7 @@ class Relay_log_info : public Rpl_info {
     relay log info and used to produce information for <code>SHOW
     SLAVE STATUS</code>.
   */
-  int stmt_done(my_off_t event_log_pos);
+  int stmt_done(my_off_t event_log_pos, uint64_t event_consensus_index);
 
   /**
      Set the value of a replication state flag.
@@ -1355,6 +1358,8 @@ class Relay_log_info : public Rpl_info {
 
   int count_relay_log_space();
 
+  int reset_previous_gtid_set_of_relaylog();
+
   /**
     Initialize the relay log info. This function does a set of operations
     on the rli object like initializing variables, loading information from
@@ -1429,6 +1434,13 @@ class Relay_log_info : public Rpl_info {
     event_relay_log_number = number;
   }
 
+  inline void set_consensus_apply_index(ulonglong log_index)
+  {
+    consensus_apply_index = log_index;
+  }
+
+  inline ulonglong get_consensus_apply_index() { return consensus_apply_index; }
+
   /**
     Given the extension number of the relay log, gets the full
     relay log path. Currently used in Slave_worker::retry_transaction()
@@ -1502,6 +1514,8 @@ class Relay_log_info : public Rpl_info {
     'sql_thread_kill_accepted is set to true when killed status is recognized.
   */
   bool sql_thread_kill_accepted;
+
+  bool force_apply_queue_before_stop;
 
   time_t get_row_stmt_start_timestamp() { return row_stmt_start_timestamp; }
 
@@ -1695,11 +1709,16 @@ class Relay_log_info : public Rpl_info {
   static const int PRIV_CHECKS_HOSTNAME_LENGTH = 255;
 
   /*
+    Add Consensus log apply index in the slave relay log info
+  */
+  static const int LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX = 11;
+
+  /*
     Total lines in relay_log.info.
     This has to be updated every time a member is added or removed.
   */
   static const int MAXIMUM_LINES_IN_RELAY_LOG_INFO_FILE =
-      LINES_IN_RELAY_LOG_INFO_WITH_PRIV_CHECKS_HOSTNAME;
+      LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX;
 
   bool read_info(Rpl_info_handler *from);
   bool write_info(Rpl_info_handler *to);
@@ -1879,6 +1898,12 @@ class Relay_log_info : public Rpl_info {
     @param on_rollback  when true the method carries out rollback action
   */
   virtual void post_commit(bool on_rollback);
+
+  std::unique_ptr<Rpl_applier_reader> applier_reader;
+
+ public:
+  bool curr_group_seen_gcn;
+  uint64 curr_group_gcn;
 };
 
 /**

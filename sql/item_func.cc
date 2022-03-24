@@ -4279,7 +4279,7 @@ longlong Item_master_pos_wait::val_int() {
     null_value = 1;
     return 0;
   }
-  Master_info *mi;
+  Master_info *mi = NULL;
   longlong pos = (ulong)args[1]->val_int();
   double timeout = (arg_count >= 3) ? args[2]->val_real() : 0;
   if (timeout < 0) {
@@ -4306,8 +4306,16 @@ longlong Item_master_pos_wait::val_int() {
 
   } else {
     if (channel_map.get_num_instances() > 1) {
+#ifdef NORMANDY_TEST
+      if (channel_map.get_mi("test") != NULL) {
+        mi= channel_map.get_mi("test");
+      } else {
+        abort();
+      }
+#else
       mi = NULL;
       my_error(ER_SLAVE_MULTIPLE_CHANNELS_CMD, MYF(0));
+#endif
     } else
       mi = channel_map.get_default_channel_mi();
   }
@@ -4486,10 +4494,18 @@ longlong Item_master_gtid_set_wait::val_int() {
     mi = channel_map.get_mi(channel_str->ptr());
   } else {
     if (channel_map.get_num_instances() > 1) {
+#ifdef NORMANDY_TEST
+      if (channel_map.get_mi("test") != NULL) {
+        mi= channel_map.get_mi("test");
+      } else {
+        abort();
+      }
+#else
       channel_map.unlock();
       mi = NULL;
       my_error(ER_SLAVE_MULTIPLE_CHANNELS_CMD, MYF(0));
       return 0;
+#endif
     } else
       mi = channel_map.get_default_channel_mi();
   }

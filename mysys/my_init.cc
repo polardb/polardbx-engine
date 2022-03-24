@@ -90,6 +90,7 @@ static void my_win_init();
 
 bool my_init_done = false;
 ulong my_thread_stack_size = 65536;
+ulong thread_stack_warning = 65536;
 MYSQL_FILE *mysql_stdin = NULL;
 static MYSQL_FILE instrumented_stdin;
 

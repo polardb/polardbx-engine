@@ -373,5 +373,24 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
   return false;
 }
 
+/**
+  Simulate asof syntax by adding Item onto Table_snapshot.
+  @param[in]        thd         current context
+  @param[in/out]    snapshot    ASOF attributes
+*/
+void simulate_snapshot_clause(THD *thd, TABLE_LIST *all_tables) {
+  Item *item = nullptr;
+  ulonglong gcn = thd->variables.innodb_snapshot_gcn;
+  if (gcn != MYSQL_GCN_NULL) {
+    TABLE_LIST *table;
+    for (table = all_tables; table; table = table->next_global) {
+      if (!table->snapshot_expr.is_set()) {
+        item = new (thd->mem_root) Item_int(gcn);
+        table->snapshot_expr.gcn = item;
+      }
+    }
+  }
+}
+
 } // namespace im
 

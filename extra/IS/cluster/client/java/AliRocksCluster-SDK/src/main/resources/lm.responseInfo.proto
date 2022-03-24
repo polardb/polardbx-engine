@@ -1,0 +1,12 @@
+ package lm;
+ 
+
+ option java_package = "com.ali.alirockscluster.client.commons.socket.message";
+ option java_outer_classname = "ResponseInfoWrapperDO";
+  
+ message responseInfoWrapper
+ { 
+ 	//header
+    optional string     messageID = 1;  
+    optional string     errorCode = 2; 
+ }

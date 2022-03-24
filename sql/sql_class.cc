@@ -388,6 +388,9 @@ THD::THD(bool enable_plugins)
       binlog_unsafe_warning_flags(0),
       binlog_table_maps(0),
       binlog_accessed_db_names(NULL),
+      consensus_index(0),
+      consensus_term(0),
+      xpaxos_replication_channel(FALSE),
       m_trans_log_file(NULL),
       m_trans_fixed_log_file(NULL),
       m_trans_end_pos(0),
@@ -485,6 +488,7 @@ THD::THD(bool enable_plugins)
   is_killable = false;
   binlog_evt_union.do_union = false;
   enable_slow_log = 0;
+  consensus_error = CSS_NONE;
   commit_error = CE_NONE;
   tx_commit_pending = false;
   durability_property = HA_REGULAR_DURABILITY;
@@ -571,6 +575,7 @@ THD::THD(bool enable_plugins)
                                               key_memory_sequence_last_value);
 
   recycle_state = new im::recycle_bin::Recycle_state();
+  m_extra_desc.reset();
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {

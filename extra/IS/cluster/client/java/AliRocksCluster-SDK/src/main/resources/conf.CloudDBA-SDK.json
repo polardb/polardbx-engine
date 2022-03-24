@@ -1,0 +1,23 @@
+{
+    "Socket":
+	      {
+	       "SvrIP": "127.0.0.1",
+	       "SvrPort": 8108,
+	       "maxSession":100,
+	       "minSession":10
+	      },
+	       
+	  "Message":
+	      {
+	       "Version": 1,
+	       "LinkPin":"0000",
+	       "AppKey":"clouddba"
+	      },
+	      
+	  "TunningIndex":
+	  	  {
+	  	   "tunning_sequence":"",
+	  	   "TunningMissindex":"",
+	  	   "InstanceDiskCheck":""
+	  	  }
+}

@@ -17,6 +17,15 @@ SET @@global.log_error_verbosity= @orig_log_error_verbosity;
 CREATE TABLE t1 (c1 varchar(30), c2 TEXT, c3 TEXT, c4 TEXT);
 LOAD DATA LOCAL INFILE 'MYSQLTEST_VARDIR/log/test_services_threaded.err' INTO TABLE t1
 FIELDS TERMINATED BY ' [';
+Warnings:
+Warning	1261	Row 71 doesn't contain data for all columns
+Warning	1261	Row 71 doesn't contain data for all columns
+Warning	1261	Row 72 doesn't contain data for all columns
+Warning	1261	Row 72 doesn't contain data for all columns
+Warning	1261	Row 73 doesn't contain data for all columns
+Warning	1261	Row 73 doesn't contain data for all columns
+Warning	1261	Row 74 doesn't contain data for all columns
+Warning	1261	Row 74 doesn't contain data for all columns
 SELECT replace(concat('[',c2,' [',c3,' [',c4),'\r','') AS msg FROM t1 WHERE c4 LIKE '%test_services_threaded%';
 msg
 [Note] [MY-011071] [Server] Plugin test_services_threaded reported: 'Test_services_threaded with_log_message_val: 1'

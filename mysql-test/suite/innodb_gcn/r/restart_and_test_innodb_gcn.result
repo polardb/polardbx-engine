@@ -1,3 +1,4 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
 set global innodb_undo_retention=1800;
 set global innodb_undo_space_reserved_size=1024;
 DROP TABLE IF EXISTS t1;
@@ -7,8 +8,6 @@ value VARCHAR(50) NOT NULL,
 PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
 *** TEST: read with timestamp should see transaction or not
 REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
 begin;

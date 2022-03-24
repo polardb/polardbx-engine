@@ -1,0 +1,52 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+create table t1 (a int , primary key (a));
+show variables like "innodb_equal_gcn_visible";
+Variable_name	Value
+innodb_equal_gcn_visible	OFF
+set global innodb_equal_gcn_visible =false;
+ERROR HY000: Variable 'innodb_equal_gcn_visible' is a read only variable
+# restart: --innodb_equal_gcn_visible=true
+xa begin 'v1';
+set innodb_snapshot_seq = @base_seq +10002;
+select * from t1;
+a
+insert into t1 values (12001);
+xa begin 'x12002';
+insert into t1 values (12002);
+xa end 'x12002';
+xa commit 'x12002' one phase;
+xa begin 'x12003';
+insert into t1 values (12003);
+xa end 'x12003';
+xa prepare 'x12003';
+set innodb_commit_seq = @base_seq +10002;
+xa commit 'x12003';
+select * from t1;
+a
+12001
+12002
+12003
+xa end 'v1';
+xa commit 'v1' one phase;
+delete from t1;
+# restart: --innodb_equal_gcn_visible=false
+xa begin 'v2';
+set innodb_snapshot_seq = @base_seq +20002;
+select * from t1;
+a
+insert into t1 values (22001);
+xa begin 'x22002';
+insert into t1 values (22002);
+xa end 'x22002';
+xa commit 'x22002' one phase;
+xa begin 'x22003';
+insert into t1 values (22003);
+xa end 'x22003';
+xa prepare 'x22003';
+set innodb_commit_seq = @base_seq +20002;
+xa commit 'x22003';
+select * from t1;
+a
+xa end 'v2';
+xa commit 'v2' one phase;
+drop table t1;

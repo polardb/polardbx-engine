@@ -1,3 +1,4 @@
+--source include/have_debug_new.inc
 
 select component_urn from mysql.component;
 

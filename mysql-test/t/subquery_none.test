@@ -1,3 +1,4 @@
+--source include/have_debug_new.inc
 # ER_STACK_OVERRUN_NEED_MORE does not currenly work well with TSan
 --source include/not_tsan.inc
 

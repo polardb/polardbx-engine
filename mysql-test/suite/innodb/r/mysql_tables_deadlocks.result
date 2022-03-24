@@ -43,6 +43,10 @@ Preparing deadlock scenario for mysql.concurrency_control
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
 ROLLBACK;
+Preparing deadlock scenario for mysql.consensus_info
+ROLLBACK;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+ROLLBACK;
 Preparing deadlock scenario for mysql.db
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
