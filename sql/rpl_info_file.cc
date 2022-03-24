@@ -259,6 +259,11 @@ int Rpl_info_file::do_flush_info(const bool force) {
   return error;
 }
 
+int Rpl_info_file::do_flush_info_force_new_thd(const bool force)
+{
+  return do_flush_info(force);
+}
+
 void Rpl_info_file::do_end_info() {
   DBUG_TRACE;
 

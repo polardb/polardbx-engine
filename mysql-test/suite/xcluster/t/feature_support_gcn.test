@@ -1,0 +1,134 @@
+--source include/have_debug.inc
+--source include/paxos.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+
+--connect (c1,127.0.0.1,root,,test,$MYPORT_1)
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+--connect (c2,127.0.0.1,root,,test,$MYPORT_2)
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+--connect (c3,127.0.0.1,root,,test,$MYPORT_3)
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+--echo #
+--echo # leader insert and follower select
+--echo #
+connection c1;
+create table t1 (a int, b int, primary key(a));
+
+set innodb_snapshot_seq = @base_seq +  10010;
+--disable_result_log
+select * from t1;
+insert into t1 values (10011, 10011);
+
+set innodb_snapshot_seq = @base_seq +  10020;
+select * from t1;
+
+xa start 'x21';
+insert into t1 values (10021, 10021);
+xa end 'x21';
+xa commit 'x21' one phase;
+
+xa start 'x31';
+insert into t1 values (10031, 10031);
+xa end 'x31';
+xa prepare 'x31';
+
+set innodb_commit_seq = @base_seq +  10030;
+xa commit 'x31';
+
+create  table  t2 (a int, b date)
+    partition by range( year(b) )
+    subpartition by hash( to_days(b) )
+    subpartitions 2 (
+        partition p0 values less than (1990),
+        partition p1 values less than (2000),
+        partition p2 values less than maxvalue);
+
+set innodb_snapshot_seq = @base_seq +  20010;
+--disable_result_log
+select * from t1;
+
+insert into t2 values (20011, '1988-12-12');
+
+set innodb_snapshot_seq = @base_seq +  20020;
+--disable_result_log
+select * from t1;
+
+xa start 'p21';
+insert into t2 values (20021, '1991-12-12');
+xa end 'p21';
+xa commit 'p21' one phase;
+
+xa start 'p31';
+insert into t2 values (20031, '1995-12-12');
+xa end 'p31';
+xa prepare 'p31';
+
+set innodb_commit_seq = @base_seq +  20030;
+xa commit 'p31';
+--enable_result_log
+
+--echo # Select normal table
+connection c2;
+--source include/wait_apply_catchup.inc
+
+xa begin 'f2';
+set innodb_snapshot_seq = @base_seq +  10010;
+select * from t1;
+xa end 'f2';
+xa commit 'f2' one phase;
+
+xa begin 'f2';
+set innodb_snapshot_seq = @base_seq +  10020;
+select * from t1;
+xa end 'f2';
+xa commit 'f2' one phase;
+
+set innodb_snapshot_seq = @base_seq +  10030;
+select * from t1;
+
+set innodb_snapshot_seq = @base_seq +  10040;
+select * from t1;
+
+--echo # Select partition table
+connection c3;
+--source include/wait_apply_catchup.inc
+
+xa begin 'f3';
+set innodb_snapshot_seq = @base_seq +  20010;
+select * from t2;
+xa end 'f3';
+xa commit 'f3' one phase;
+
+xa begin 'f3';
+set innodb_snapshot_seq = @base_seq +  20020;
+select * from t2;
+xa end 'f3';
+xa commit 'f3' one phase;
+
+set innodb_snapshot_seq = @base_seq +  20030;
+select * from t2;
+
+set innodb_snapshot_seq = @base_seq +  20040;
+select * from t2;
+
+
+connection c1;
+drop table t1, t2;
+
+
+
+
+
+disconnect c1;
+disconnect c2;
+disconnect c3;

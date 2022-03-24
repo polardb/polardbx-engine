@@ -15,6 +15,24 @@ def	mysql	columns_priv	Column_priv	7		NO	set	31	93	NULL	NULL	NULL	utf8	utf8_gene
 def	mysql	component	component_id	1	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(10) unsigned	PRI	auto_increment	select,insert,update,references			NULL
 def	mysql	component	component_group_id	2	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(10) unsigned			select,insert,update,references			NULL
 def	mysql	component	component_urn	3	NULL	NO	text	65535	65535	NULL	NULL	NULL	utf8	utf8_general_ci	text			select,insert,update,references			NULL
+def	mysql	concurrency_control	Id	1	NULL	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint(20)	PRI	auto_increment	select,insert,update,references			NULL
+def	mysql	concurrency_control	Type	2	SELECT	NO	enum	6	18	NULL	NULL	NULL	utf8	utf8_general_ci	enum('SELECT','UPDATE','INSERT','DELETE')			select,insert,update,references			NULL
+def	mysql	concurrency_control	Schema_name	3	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select,insert,update,references			NULL
+def	mysql	concurrency_control	Table_name	4	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select,insert,update,references			NULL
+def	mysql	concurrency_control	Concurrency_count	5	NULL	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint(20)			select,insert,update,references			NULL
+def	mysql	concurrency_control	Keywords	6	NULL	YES	text	65535	65535	NULL	NULL	NULL	utf8	utf8_bin	text			select,insert,update,references			NULL
+def	mysql	concurrency_control	State	7	Y	NO	enum	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	enum('N','Y')			select,insert,update,references			NULL
+def	mysql	concurrency_control	Ordered	8	N	NO	enum	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	enum('N','Y')			select,insert,update,references			NULL
+def	mysql	consensus_info	number_of_lines	1	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(10) unsigned	PRI		select,insert,update,references	Number of lines in the file or rows in the table. Used to version table definitions.		NULL
+def	mysql	consensus_info	vote_for	2	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	current vote for		NULL
+def	mysql	consensus_info	current_term	3	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	current term		NULL
+def	mysql	consensus_info	recover_status	4	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	recover status		NULL
+def	mysql	consensus_info	last_leader_term	5	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	last leader term		NULL
+def	mysql	consensus_info	start_apply_index	6	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	start apply index		NULL
+def	mysql	consensus_info	cluster_id	7	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	cluster identifier		NULL
+def	mysql	consensus_info	cluster_info	8	NULL	YES	varchar	6000	18000	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(6000)			select,insert,update,references	cluster config information		NULL
+def	mysql	consensus_info	cluster_learner_info	9	NULL	YES	varchar	6000	18000	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(6000)			select,insert,update,references	cluster learner config information		NULL
+def	mysql	consensus_info	cluster_config_recover_index	10	NULL	YES	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	cluster config recover index		NULL
 def	mysql	db	Host	1		NO	char	255	255	NULL	NULL	NULL	ascii	ascii_general_ci	char(255)	PRI		select,insert,update,references			NULL
 def	mysql	db	Db	2		NO	char	64	192	NULL	NULL	NULL	utf8	utf8_bin	char(64)	PRI		select,insert,update,references			NULL
 def	mysql	db	User	3		NO	char	32	96	NULL	NULL	NULL	utf8	utf8_bin	char(32)	PRI		select,insert,update,references			NULL
@@ -79,6 +97,9 @@ def	mysql	help_topic	help_category_id	3	NULL	NO	smallint	NULL	NULL	5	0	NULL	NULL
 def	mysql	help_topic	description	4	NULL	NO	text	65535	65535	NULL	NULL	NULL	utf8	utf8_general_ci	text			select,insert,update,references			NULL
 def	mysql	help_topic	example	5	NULL	NO	text	65535	65535	NULL	NULL	NULL	utf8	utf8_general_ci	text			select,insert,update,references			NULL
 def	mysql	help_topic	url	6	NULL	NO	text	65535	65535	NULL	NULL	NULL	utf8	utf8_general_ci	text			select,insert,update,references			NULL
+def	mysql	innodb_flashback_snapshot	scn	1	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned	PRI		select,insert,update,references			NULL
+def	mysql	innodb_flashback_snapshot	utc	2	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned	MUL		select,insert,update,references			NULL
+def	mysql	innodb_flashback_snapshot	memo	3	NULL	YES	text	65535	65535	NULL	NULL	NULL	utf8	utf8_bin	text			select,insert,update,references			NULL
 def	mysql	innodb_index_stats	database_name	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)	PRI		select,insert,update,references			NULL
 def	mysql	innodb_index_stats	table_name	2	NULL	NO	varchar	199	597	NULL	NULL	NULL	utf8	utf8_bin	varchar(199)	PRI		select,insert,update,references			NULL
 def	mysql	innodb_index_stats	index_name	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)	PRI		select,insert,update,references			NULL
@@ -93,6 +114,15 @@ def	mysql	innodb_table_stats	last_update	3	CURRENT_TIMESTAMP	NO	timestamp	NULL	N
 def	mysql	innodb_table_stats	n_rows	4	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references			NULL
 def	mysql	innodb_table_stats	clustered_index_size	5	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references			NULL
 def	mysql	innodb_table_stats	sum_of_other_index_sizes	6	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references			NULL
+def	mysql	outline	Id	1	NULL	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint(20)	PRI	auto_increment	select,insert,update,references			NULL
+def	mysql	outline	Schema_name	2	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select,insert,update,references			NULL
+def	mysql	outline	Digest	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select,insert,update,references			NULL
+def	mysql	outline	Digest_text	4	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8	utf8_bin	longtext			select,insert,update,references			NULL
+def	mysql	outline	Type	5	NULL	NO	enum	12	36	NULL	NULL	NULL	utf8	utf8_general_ci	enum('IGNORE INDEX','USE INDEX','FORCE INDEX','OPTIMIZER')			select,insert,update,references			NULL
+def	mysql	outline	Scope	6		YES	enum	12	36	NULL	NULL	NULL	utf8	utf8_general_ci	enum('','FOR JOIN','FOR ORDER BY','FOR GROUP BY')			select,insert,update,references			NULL
+def	mysql	outline	State	7	Y	NO	enum	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	enum('N','Y')			select,insert,update,references			NULL
+def	mysql	outline	Position	8	NULL	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint(20)			select,insert,update,references			NULL
+def	mysql	outline	Hint	9	NULL	NO	text	65535	65535	NULL	NULL	NULL	utf8	utf8_bin	text			select,insert,update,references			NULL
 def	mysql	password_history	Host	1		NO	char	255	255	NULL	NULL	NULL	ascii	ascii_general_ci	char(255)	PRI		select,insert,update,references			NULL
 def	mysql	password_history	User	2		NO	char	32	96	NULL	NULL	NULL	utf8	utf8_bin	char(32)	PRI		select,insert,update,references			NULL
 def	mysql	password_history	Password_timestamp	3	CURRENT_TIMESTAMP(6)	NO	timestamp	NULL	NULL	NULL	NULL	6	NULL	NULL	timestamp(6)	PRI	DEFAULT_GENERATED	select,insert,update,references			NULL
@@ -174,6 +204,7 @@ def	mysql	slave_relay_log_info	Id	8	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	in
 def	mysql	slave_relay_log_info	Channel_name	9	NULL	NO	char	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	char(64)	PRI		select,insert,update,references	The channel on which the slave is connected to a source. Used in Multisource Replication		NULL
 def	mysql	slave_relay_log_info	Privilege_checks_username	10	NULL	YES	char	32	96	NULL	NULL	NULL	utf8	utf8_bin	char(32)			select,insert,update,references	Username part of PRIVILEGE_CHECKS_USER.		NULL
 def	mysql	slave_relay_log_info	Privilege_checks_hostname	11	NULL	YES	char	255	255	NULL	NULL	NULL	ascii	ascii_general_ci	char(255)			select,insert,update,references	Hostname part of PRIVILEGE_CHECKS_USER.		NULL
+def	mysql	slave_relay_log_info	Consensus_apply_index	12	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	The consensus log applyed index in the consensus log		NULL
 def	mysql	slave_worker_info	Id	1	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(10) unsigned	PRI		select,insert,update,references			NULL
 def	mysql	slave_worker_info	Relay_log_name	2	NULL	NO	text	65535	65535	NULL	NULL	NULL	utf8	utf8_bin	text			select,insert,update,references			NULL
 def	mysql	slave_worker_info	Relay_log_pos	3	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references			NULL
@@ -187,6 +218,8 @@ def	mysql	slave_worker_info	Checkpoint_seqno	10	NULL	NO	int	NULL	NULL	10	0	NULL	
 def	mysql	slave_worker_info	Checkpoint_group_size	11	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int(10) unsigned			select,insert,update,references			NULL
 def	mysql	slave_worker_info	Checkpoint_group_bitmap	12	NULL	NO	blob	65535	65535	NULL	NULL	NULL	NULL	NULL	blob			select,insert,update,references			NULL
 def	mysql	slave_worker_info	Channel_name	13	NULL	NO	char	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	char(64)	PRI		select,insert,update,references	The channel on which the slave is connected to a source. Used in Multisource Replication		NULL
+def	mysql	slave_worker_info	Checkpoint_consensus_apply_index	14	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	Checkpoint index		NULL
+def	mysql	slave_worker_info	Consensus_apply_index	15	NULL	NO	bigint	NULL	NULL	20	0	NULL	NULL	NULL	bigint(20) unsigned			select,insert,update,references	The consensus log applyed index in the consensus log		NULL
 def	mysql	slow_log	start_time	1	CURRENT_TIMESTAMP(6)	NO	timestamp	NULL	NULL	NULL	NULL	6	NULL	NULL	timestamp(6)		DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)	select,insert,update,references			NULL
 def	mysql	slow_log	user_host	2	NULL	NO	mediumtext	16777215	16777215	NULL	NULL	NULL	utf8	utf8_general_ci	mediumtext			select,insert,update,references			NULL
 def	mysql	slow_log	query_time	3	NULL	NO	time	NULL	NULL	NULL	NULL	6	NULL	NULL	time(6)			select,insert,update,references			NULL
@@ -288,6 +321,7 @@ COL_CML	DATA_TYPE	CHARACTER_SET_NAME	COLLATION_NAME
 1.0000	blob	NULL	NULL
 1.0000	mediumblob	NULL	NULL
 1.0000	char	ascii	ascii_general_ci
+1.0000	longtext	utf8	utf8_bin
 1.0000	text	utf8	utf8_bin
 1.0000	mediumtext	utf8	utf8_general_ci
 1.0000	text	utf8	utf8_general_ci
@@ -353,6 +387,24 @@ NULL	mysql	columns_priv	Timestamp	timestamp	NULL	NULL	NULL	NULL	timestamp
 NULL	mysql	component	component_id	int	NULL	NULL	NULL	NULL	int(10) unsigned
 NULL	mysql	component	component_group_id	int	NULL	NULL	NULL	NULL	int(10) unsigned
 1.0000	mysql	component	component_urn	text	65535	65535	utf8	utf8_general_ci	text
+NULL	mysql	concurrency_control	Id	bigint	NULL	NULL	NULL	NULL	bigint(20)
+3.0000	mysql	concurrency_control	Type	enum	6	18	utf8	utf8_general_ci	enum('SELECT','UPDATE','INSERT','DELETE')
+3.0000	mysql	concurrency_control	Schema_name	varchar	64	192	utf8	utf8_bin	varchar(64)
+3.0000	mysql	concurrency_control	Table_name	varchar	64	192	utf8	utf8_bin	varchar(64)
+NULL	mysql	concurrency_control	Concurrency_count	bigint	NULL	NULL	NULL	NULL	bigint(20)
+1.0000	mysql	concurrency_control	Keywords	text	65535	65535	utf8	utf8_bin	text
+3.0000	mysql	concurrency_control	State	enum	1	3	utf8	utf8_general_ci	enum('N','Y')
+3.0000	mysql	concurrency_control	Ordered	enum	1	3	utf8	utf8_general_ci	enum('N','Y')
+NULL	mysql	consensus_info	number_of_lines	int	NULL	NULL	NULL	NULL	int(10) unsigned
+NULL	mysql	consensus_info	vote_for	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	consensus_info	current_term	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	consensus_info	recover_status	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	consensus_info	last_leader_term	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	consensus_info	start_apply_index	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	consensus_info	cluster_id	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+3.0000	mysql	consensus_info	cluster_info	varchar	6000	18000	utf8	utf8_general_ci	varchar(6000)
+3.0000	mysql	consensus_info	cluster_learner_info	varchar	6000	18000	utf8	utf8_general_ci	varchar(6000)
+NULL	mysql	consensus_info	cluster_config_recover_index	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
 1.0000	mysql	db	Host	char	255	255	ascii	ascii_general_ci	char(255)
 3.0000	mysql	db	Db	char	64	192	utf8	utf8_bin	char(64)
 3.0000	mysql	db	User	char	32	96	utf8	utf8_bin	char(32)
@@ -417,6 +469,9 @@ NULL	mysql	help_topic	help_category_id	smallint	NULL	NULL	NULL	NULL	smallint(5) 
 1.0000	mysql	help_topic	description	text	65535	65535	utf8	utf8_general_ci	text
 1.0000	mysql	help_topic	example	text	65535	65535	utf8	utf8_general_ci	text
 1.0000	mysql	help_topic	url	text	65535	65535	utf8	utf8_general_ci	text
+NULL	mysql	innodb_flashback_snapshot	scn	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	innodb_flashback_snapshot	utc	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+1.0000	mysql	innodb_flashback_snapshot	memo	text	65535	65535	utf8	utf8_bin	text
 3.0000	mysql	innodb_index_stats	database_name	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	mysql	innodb_index_stats	table_name	varchar	199	597	utf8	utf8_bin	varchar(199)
 3.0000	mysql	innodb_index_stats	index_name	varchar	64	192	utf8	utf8_bin	varchar(64)
@@ -431,6 +486,15 @@ NULL	mysql	innodb_table_stats	last_update	timestamp	NULL	NULL	NULL	NULL	timestam
 NULL	mysql	innodb_table_stats	n_rows	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
 NULL	mysql	innodb_table_stats	clustered_index_size	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
 NULL	mysql	innodb_table_stats	sum_of_other_index_sizes	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	outline	Id	bigint	NULL	NULL	NULL	NULL	bigint(20)
+3.0000	mysql	outline	Schema_name	varchar	64	192	utf8	utf8_bin	varchar(64)
+3.0000	mysql	outline	Digest	varchar	64	192	utf8	utf8_bin	varchar(64)
+1.0000	mysql	outline	Digest_text	longtext	4294967295	4294967295	utf8	utf8_bin	longtext
+3.0000	mysql	outline	Type	enum	12	36	utf8	utf8_general_ci	enum('IGNORE INDEX','USE INDEX','FORCE INDEX','OPTIMIZER')
+3.0000	mysql	outline	Scope	enum	12	36	utf8	utf8_general_ci	enum('','FOR JOIN','FOR ORDER BY','FOR GROUP BY')
+3.0000	mysql	outline	State	enum	1	3	utf8	utf8_general_ci	enum('N','Y')
+NULL	mysql	outline	Position	bigint	NULL	NULL	NULL	NULL	bigint(20)
+1.0000	mysql	outline	Hint	text	65535	65535	utf8	utf8_bin	text
 1.0000	mysql	password_history	Host	char	255	255	ascii	ascii_general_ci	char(255)
 3.0000	mysql	password_history	User	char	32	96	utf8	utf8_bin	char(32)
 NULL	mysql	password_history	Password_timestamp	timestamp	NULL	NULL	NULL	NULL	timestamp(6)
@@ -512,6 +576,7 @@ NULL	mysql	slave_relay_log_info	Id	int	NULL	NULL	NULL	NULL	int(10) unsigned
 3.0000	mysql	slave_relay_log_info	Channel_name	char	64	192	utf8	utf8_general_ci	char(64)
 3.0000	mysql	slave_relay_log_info	Privilege_checks_username	char	32	96	utf8	utf8_bin	char(32)
 1.0000	mysql	slave_relay_log_info	Privilege_checks_hostname	char	255	255	ascii	ascii_general_ci	char(255)
+NULL	mysql	slave_relay_log_info	Consensus_apply_index	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
 NULL	mysql	slave_worker_info	Id	int	NULL	NULL	NULL	NULL	int(10) unsigned
 1.0000	mysql	slave_worker_info	Relay_log_name	text	65535	65535	utf8	utf8_bin	text
 NULL	mysql	slave_worker_info	Relay_log_pos	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
@@ -525,6 +590,8 @@ NULL	mysql	slave_worker_info	Checkpoint_seqno	int	NULL	NULL	NULL	NULL	int(10) un
 NULL	mysql	slave_worker_info	Checkpoint_group_size	int	NULL	NULL	NULL	NULL	int(10) unsigned
 1.0000	mysql	slave_worker_info	Checkpoint_group_bitmap	blob	65535	65535	NULL	NULL	blob
 3.0000	mysql	slave_worker_info	Channel_name	char	64	192	utf8	utf8_general_ci	char(64)
+NULL	mysql	slave_worker_info	Checkpoint_consensus_apply_index	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
+NULL	mysql	slave_worker_info	Consensus_apply_index	bigint	NULL	NULL	NULL	NULL	bigint(20) unsigned
 NULL	mysql	slow_log	start_time	timestamp	NULL	NULL	NULL	NULL	timestamp(6)
 1.0000	mysql	slow_log	user_host	mediumtext	16777215	16777215	utf8	utf8_general_ci	mediumtext
 NULL	mysql	slow_log	query_time	time	NULL	NULL	NULL	NULL	time(6)

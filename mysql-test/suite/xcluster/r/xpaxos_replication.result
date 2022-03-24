@@ -1,0 +1,42 @@
+stop slave;
+change master to master_host = '127.0.0.1', master_port = 7806, master_user = 'repl', master_password = '123456' for channel 'aaa';
+start slave for channel 'aaa';
+stop slave;
+start slave;
+stop slave for channel "aaa";
+start slave for channel "aaa";
+stop xpaxos_replication;
+ERROR HY000: The server is not allowed to do current operation.
+start xpaxos_replication;
+ERROR HY000: The server is not allowed to do current operation.
+stop slave;
+reset slave all for channel 'aaa';
+stop xpaxos_replication;
+reset slave;
+show consensus logs;
+Log_name	File_size	Start_log_index
+#	#	#
+start xpaxos_replication;
+start slave for channel '';
+ERROR HY000: Slave channel '' does not exist.
+stop slave for channel '';
+ERROR HY000: Slave channel '' does not exist.
+Yes
+Yes
+set global relay_log_info_repository='file';
+ERROR HY000: Failure while changing the type of replication repository: relay_log_info is not inited.
+set global relay_log_info_repository='table';
+select count(1) from mysql.slave_relay_log_info where number_of_workers = (select count(1) from mysql.slave_worker_info);
+count(1)
+1
+set global relay_log_info_repository='file';
+ERROR HY000: This operation cannot be performed with running replication threads; run STOP SLAVE FOR CHANNEL '' first
+stop xpaxos_replication;
+set global relay_log_info_repository='file';
+Warnings:
+Warning	1287	'FILE' is deprecated and will be removed in a future release. Please use 'TABLE' instead
+set global relay_log_info_repository='table';
+start xpaxos_replication;
+select count(1) from mysql.slave_relay_log_info where number_of_workers = (select count(1) from mysql.slave_worker_info);
+count(1)
+1

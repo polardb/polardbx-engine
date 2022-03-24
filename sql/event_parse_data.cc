@@ -499,8 +499,12 @@ void Event_parse_data::check_originator_id(THD *thd) {
     DBUG_PRINT("info", ("Invoked object status set to SLAVESIDE_DISABLED."));
     if ((status == Event_parse_data::ENABLED) ||
         (status == Event_parse_data::DISABLED)) {
-      status = Event_parse_data::SLAVESIDE_DISABLED;
-      status_changed = true;
+      /* X-Cluster set event_scheduler to OFF automatically if role is not leader */
+      if (!thd->xpaxos_replication_channel)
+      {
+        status= Event_parse_data::SLAVESIDE_DISABLED;
+        status_changed= true;
+      }
     }
     originator = thd->server_id;
   } else

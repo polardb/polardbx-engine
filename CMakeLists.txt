@@ -22,6 +22,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
+OPTION(WITH_NORMANDY_CLUSTER "use normandy cluster mode" OFF)
+OPTION(WITH_NORMANDY_TEST "cluster test mode" OFF)
+
 MESSAGE(STATUS "Running cmake version ${CMAKE_VERSION}")
 
 IF(WIN32)
@@ -1326,6 +1329,10 @@ ADD_SUBDIRECTORY(client)
 ADD_SUBDIRECTORY(utilities)
 ADD_SUBDIRECTORY(share)
 ADD_SUBDIRECTORY(libservices)
+
+# Build consensus library, it will be needed when building libraries from
+# sql directory.
+ADD_SUBDIRECTORY(extra/IS)
 
 IF(NOT WITHOUT_SERVER)
   ADD_SUBDIRECTORY(testclients)

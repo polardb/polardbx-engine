@@ -834,10 +834,30 @@ ALTER TABLE slave_master_info
   COMMENT 'Network namespace used for communication with the master server.'
   AFTER Get_public_key;
 
+#
+# Drop slave_master_info consensus column and fix field value only if it exists already.
+#
+SET @have_consensus_col= (SELECT count(1) FROM INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = 'slave_master_info' and COLUMN_NAME = 'Checkpoint_consensus_apply_index');
+SET @cmd="ALTER TABLE slave_master_info DROP COLUMN Checkpoint_consensus_apply_index, DROP COLUMN Consensus_apply_index";
+SET @str = IF(@have_consensus_col = 1, @cmd, 'SET @dummy = 0');
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+SET @cmd="UPDATE slave_master_info SET Tls_version = '', Public_key_path = '', Get_public_key = 0, Network_namespace = '' WHERE Channel_name = '' AND (Tls_version = 0 OR Network_namespace IS NULL)";
+SET @str = IF(@have_consensus_col = 1, @cmd, 'SET @dummy = 0');
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
 # Columns added to keep information about the replication applier thread
 # privilege context user
-ALTER TABLE slave_relay_log_info ADD Privilege_checks_username CHAR(32) COLLATE utf8_bin DEFAULT NULL COMMENT 'Username part of PRIVILEGE_CHECKS_USER.',
-                                 ADD Privilege_checks_hostname CHAR(255) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL COMMENT 'Hostname part of PRIVILEGE_CHECKS_USER.';
+ALTER TABLE slave_relay_log_info ADD Privilege_checks_username CHAR(32) COLLATE utf8_bin DEFAULT NULL COMMENT 'Username part of PRIVILEGE_CHECKS_USER.' AFTER Channel_name,
+                                 ADD Privilege_checks_hostname CHAR(255) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL COMMENT 'Hostname part of PRIVILEGE_CHECKS_USER.' AFTER Privilege_checks_username;
+SET @slave_relay_log_info_columns= (SELECT count(*) FROM INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = 'slave_relay_log_info');
+SET @str='UPDATE slave_relay_log_info SET Number_of_lines = (@slave_relay_log_info_columns - 1)';
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
 
 #
 # Drop legacy NDB distributed privileges function & procedures

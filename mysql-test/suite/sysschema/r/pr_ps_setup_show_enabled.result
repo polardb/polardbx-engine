@@ -236,7 +236,10 @@ innodb/page_flush_coordinator_thread	BACKGROUND
 innodb/scn_history_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
+sql/consensus_commit_pos_watcher	BACKGROUND
+sql/consensus_stage_change	BACKGROUND
 sql/event_scheduler	FOREGROUND
+sql/fifo_cleaner	BACKGROUND
 sql/main	BACKGROUND
 CALL sys.ps_setup_show_enabled(TRUE, TRUE);
 performance_schema_enabled
@@ -288,7 +291,10 @@ innodb/page_flush_coordinator_thread	BACKGROUND
 innodb/scn_history_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
+sql/consensus_commit_pos_watcher	BACKGROUND
+sql/consensus_stage_change	BACKGROUND
 sql/event_scheduler	FOREGROUND
+sql/fifo_cleaner	BACKGROUND
 sql/main	BACKGROUND
 enabled_instruments	timed
 idle	YES

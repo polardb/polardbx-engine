@@ -193,6 +193,17 @@ extern bool plugin_foreach_with_mask(THD *thd, plugin_foreach_func *func,
                                      int type, uint state_mask, void *arg);
 extern bool plugin_foreach_with_mask(THD *thd, plugin_foreach_func **funcs,
                                      int type, uint state_mask, void *arg);
+
+#define plugin_foreach_without_binlog(A, B, C, D) \
+  plugin_foreach_with_mask_without_binlog(A, B, C, PLUGIN_IS_READY, D)
+extern bool plugin_foreach_with_mask_without_binlog(THD *thd,
+                                                    plugin_foreach_func *func,
+                                                    int type, uint state_mask,
+                                                    void *arg);
+extern bool plugin_foreach_with_mask_without_binlog(THD *thd,
+                                                    plugin_foreach_func **func,
+                                                    int type, uint state_mask,
+                                                    void *arg);
 int lock_plugin_data();
 int unlock_plugin_data();
 

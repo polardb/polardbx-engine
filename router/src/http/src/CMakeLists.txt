@@ -39,6 +39,10 @@ ADD_LIBRARY(http_common
   tls_error.cc
   tls_context.cc
   )
+
+# Add dependency, otherwise, parallel build may fail
+ADD_DEPENDENCIES(http_common libssl libcrypto)
+
 TARGET_LINK_LIBRARIES(http_common
   ${LIBEVENT_LIBRARIES}
   ${SSL_LIBRARIES}

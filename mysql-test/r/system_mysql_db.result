@@ -3,6 +3,7 @@ Tables_in_db
 columns_priv
 component
 concurrency_control
+consensus_info
 db
 default_roles
 engine_cost
@@ -17,6 +18,7 @@ help_topic
 innodb_flashback_snapshot
 innodb_index_stats
 innodb_table_stats
+outline
 password_history
 plugin
 procs_priv

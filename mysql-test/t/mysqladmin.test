@@ -139,5 +139,6 @@ DROP USER tester@localhost;
 
 --echo # cleanup
 --remove_file $admin_outfile
+--exec if [ -e $MYSQLTEST_VARDIR/tmp/.mylogin.cnf ]; then rm -f $MYSQLTEST_VARDIR/tmp/.mylogin.cnf; fi
 
 --echo End of tests

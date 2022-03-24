@@ -24,6 +24,13 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/binlog.h"
+#include "sql/consensus_log_manager.h"
+#include "sql/bl_consensus_log.h"
+#include "sql/appliedindex_checker.h"
+
+#include "sql/consensus_log_manager.h"
+#include "sql/bl_consensus_log.h"
+#include "sql/appliedindex_checker.h"
 
 #include "my_config.h"
 
@@ -126,6 +133,9 @@
 #include "sql/xa.h"
 #include "sql_partition.h"
 #include "thr_lock.h"
+#include "sql/binlog_ext.h"
+
+bool opt_gcn_write_event = false;
 
 class Item;
 
@@ -181,8 +191,8 @@ static int binlog_prepare(handlerton *hton, THD *thd, bool all);
 static xa_status_code binlog_xa_commit(handlerton *hton, XID *xid);
 static xa_status_code binlog_xa_rollback(handlerton *hton, XID *xid);
 static void exec_binlog_error_action_abort(const char *err_string);
-static int binlog_recover(Binlog_file_reader *binlog_file_reader,
-                          my_off_t *valid_pos);
+// static int binlog_recover(Binlog_file_reader *binlog_file_reader,
+                          // my_off_t *valid_pos);
 static void binlog_prepare_row_images(const THD *thd, TABLE *table);
 
 static inline bool has_commit_order_manager(THD *thd) {
@@ -303,7 +313,19 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
       m_pipeline_head = std::move(encrypted_ostream);
     }
 
+    snprintf(m_binlog_name, FN_REFLEN, "%s", binlog_name);
     return false;
+  }
+
+  /*
+   open for use the io_cache
+  */
+  bool open() {
+    DBUG_ENTER("Binlog_ofile::open");
+    DBUG_ASSERT(m_pipeline_head == NULL);
+    std::unique_ptr<IO_CACHE_ostream> file_ostream(new IO_CACHE_ostream);
+    m_pipeline_head = std::move(file_ostream);
+    DBUG_RETURN(false);
   }
 
   /**
@@ -365,6 +387,7 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
       ret_ofile->m_pipeline_head = std::move(encrypted_ostream);
       ret_ofile->set_encrypted();
     }
+    ret_ofile->set_binlog_name(binlog_name);
     return ret_ofile;
   }
 
@@ -448,6 +471,9 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
     @return The real file size considering the encryption header.
   */
   my_off_t get_real_file_size() { return m_position + m_encrypted_header_size; }
+
+  // compatible for old access IO_CACHE
+  IO_CACHE *get_io_cache() { return m_pipeline_head->get_io_cache(); }
   /**
     Get the pipeline head.
 
@@ -467,12 +493,17 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
     Set that the log file is encrypted.
   */
   void set_encrypted() { m_encrypted = true; }
+  void set_binlog_name(const char *binlog_name) {
+    snprintf(m_binlog_name, FN_REFLEN, "%s", binlog_name);
+  }
+  const char *get_binlog_name() { return m_binlog_name; }
 
  private:
   my_off_t m_position = 0;
   int m_encrypted_header_size = 0;
   std::unique_ptr<Truncatable_ostream> m_pipeline_head;
   bool m_encrypted = false;
+  char m_binlog_name[FN_REFLEN];
 };
 
 /**
@@ -661,6 +692,7 @@ class binlog_cache_data {
   */
   virtual void reset() {
     compute_statistics();
+    mark_as_rollback = false;
     remove_pending_event();
 
     if (m_cache.reset()) {
@@ -906,6 +938,8 @@ class binlog_cache_data {
       . binlog_cache_disk_use or binlog_stmt_cache_disk_use.
   */
   ulong *ptr_binlog_cache_disk_use;
+
+  bool mark_as_rollback;
 
   binlog_cache_data &operator=(const binlog_cache_data &info);
   binlog_cache_data(const binlog_cache_data &info);
@@ -1238,6 +1272,8 @@ class Binlog_event_writer : public Basic_ostream {
         initial_checksum(my_checksum(0L, nullptr, 0)),
         checksum(initial_checksum),
         end_log_pos(binlog_file->position()) {
+    // revise position(), cache_log of consensus log manager is just a wapper of io_cache
+    end_log_pos = my_b_safe_tell(binlog_file->get_io_cache());
     // Simulate checksum error
     if (DBUG_EVALUATE_IF("fault_injection_crc_value", 1, 0)) checksum--;
   }
@@ -1312,6 +1348,11 @@ class Binlog_event_writer : public Basic_ostream {
     Returns true if per event checksum is enabled.
   */
   bool is_checksum_enabled() { return have_checksum; }
+
+  void inc_end_log_pos(uint32 inc)
+  {
+    end_log_pos+= inc;
+  }
 };
 
 /*
@@ -1361,6 +1402,7 @@ static int binlog_close_connection(handlerton *, THD *thd) {
 
 int binlog_cache_data::write_event(Log_event *ev) {
   DBUG_TRACE;
+  my_off_t oldpos = get_byte_position();
 
   if (ev != nullptr) {
     DBUG_EXECUTE_IF("simulate_disk_full_at_flush_pending",
@@ -1396,6 +1438,17 @@ int binlog_cache_data::write_event(Log_event *ev) {
     DBUG_PRINT("debug",
                ("event_counter= %lu", static_cast<ulong>(event_counter)));
   }
+
+  /* X-Cluster do not allow a log event larger than opt_consensus_large_event_limit */
+  my_off_t newpos = get_byte_position();
+  if (opt_consensus_check_large_event) {
+    if (newpos - oldpos > opt_consensus_large_event_limit || DBUG_EVALUATE_IF("force_large_event", 1, 0)) {
+      sql_print_warning("Log event too large, event type %s, event size %llu.", ev->get_type_str(), newpos - oldpos);
+      mark_as_rollback = true;
+      return 1;
+    }
+  }
+
   return 0;
 }
 
@@ -1616,7 +1669,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
   if (thd->owned_gtid.sidno > 0) {
     DBUG_ASSERT(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
-    if (!opt_bin_log || (thd->slave_thread && !opt_log_slave_updates)) {
+    if (!opt_bin_log || (thd->slave_thread && (!opt_log_slave_updates || thd->xpaxos_replication_channel))) {
       /*
         If the binary log is disabled for this thread (either by
         log_bin=0 or sql_log_bin=0 or by log_slave_updates=0 for a
@@ -1778,10 +1831,6 @@ err:
   return true;
 }
 
-
-static const LEX_CSTRING COMMIT_EXTRA_QEVENT_STR = {
-    STRING_WITH_LEN("/* Record commit GCN */")};
-
 /**
   This function finalizes the cache preparing for commit or rollback.
 
@@ -1800,14 +1849,6 @@ static const LEX_CSTRING COMMIT_EXTRA_QEVENT_STR = {
 int binlog_cache_data::finalize(THD *thd, Log_event *end_event) {
   DBUG_TRACE;
   if (!is_binlog_empty()) {
-    /* Add an query event before commit to store commit_gcn in binlog. */
-    if (end_event && thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
-      Query_log_event qinfo(thd, COMMIT_EXTRA_QEVENT_STR.str,
-                            COMMIT_EXTRA_QEVENT_STR.length, false, false,
-                            true, 0);
-      write_event(&qinfo);
-    }
-
     DBUG_ASSERT(!flags.finalized);
     if (int error = flush_pending_event(thd)) return error;
     if (int error = write_event(end_event)) return error;
@@ -1834,6 +1875,16 @@ int binlog_cache_data::finalize(THD *thd, Log_event *end_event, XID_STATE *xs) {
   if ((error = write_event(&qev))) return error;
 
   return finalize(thd, end_event);
+}
+
+static void correct_binlog_writer_log_pos(Binlog_event_writer *writer)
+{
+  if (!opt_consensuslog_revise)
+    return;
+  writer->inc_end_log_pos(mysql_bin_log.get_binlog_file()->position());
+  writer->inc_end_log_pos(Consensus_log_event::MAX_EVENT_LENGTH);
+  if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
+    writer->inc_end_log_pos(4); // checksum length
 }
 
 /**
@@ -1901,7 +1952,10 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
       non-empty then we get two Anonymous_gtid_log_events, which is
       correct.
     */
-    Binlog_event_writer writer(mysql_bin_log.get_binlog_file());
+    // write to consenus_log_manager
+    Binlog_event_writer writer(consensus_log_manager.get_log_file());
+    /* correct the log_pos temporarily stored in IO_CACHE of consensus_log_manager */
+    correct_binlog_writer_log_pos(&writer);
 
     /* The GTID ownership process might set the commit_error */
     error = (thd->commit_error == THD::CE_FLUSH_ERROR);
@@ -1913,11 +1967,17 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
     };);
 
     if (!error)
+      if ((error = mysql_bin_log_ext.write_gcn(thd, &writer)))
+        thd->commit_error = THD::CE_FLUSH_ERROR;  
+
+    if (!error)
       if ((error = mysql_bin_log.write_gtid(thd, this, &writer)))
         thd->commit_error = THD::CE_FLUSH_ERROR;
-    if (!error) error = mysql_bin_log.write_cache(thd, this, &writer);
 
     if (flags.with_xid && error == 0) *wrote_xid = true;
+
+    if (!error)
+      error = flush_consensus_log(thd, this, &writer, mark_as_rollback, bytes_in_cache);
 
     /*
       Reset have to be after the if above, since it clears the
@@ -2122,6 +2182,29 @@ inline xa_status_code binlog_xa_commit_or_rollback(THD *thd, XID *xid,
       error = mysql_bin_log.commit(thd, true);
     else
       error = mysql_bin_log.rollback(thd, true);
+
+    /*
+      Thd->get_commit_gcn() is not setted if the binlog is disabled
+      in follow conditions:
+      1. opt_bin_log is false
+      2. thread->slave and opt_log_slave_updates is false
+      3. xpaxos_replication_channel
+      (condition from commit_owned_gtids)
+
+      If commit is false or some error occurs, setting gcn is not
+      necessary. Gcn is used for committing transaction.
+    */
+    if (error == TC_LOG::RESULT_SUCCESS && commit &&
+        !((!opt_bin_log ||
+           (thd->slave_thread &&
+            (!opt_log_slave_updates || thd->xpaxos_replication_channel))) &&
+          !thd->is_operating_gtid_table_implicitly &&
+          !thd->is_operating_substatement_implicitly)) {
+      DBUG_ASSERT(xid->get_commit_gcn() == MYSQL_GCN_NULL ||
+                  xid->get_commit_gcn() == thd->get_commit_gcn());
+      xid->set_commit_gcn(thd->get_commit_gcn());
+    }
+
     if (cache_mngr) cache_mngr->has_logged_xid = false;
   }
 
@@ -3400,8 +3483,12 @@ bool mysql_show_binlog_events(THD *thd) {
     this is needed so that the uses sees all its own commands in the binlog
   */
   ha_binlog_wait(thd);
-
-  return show_binlog_events(thd, &mysql_bin_log);
+  consensus_log_manager.lock_consensus(TRUE);
+  MYSQL_BIN_LOG *log = consensus_log_manager.get_status() == BINLOG_WORKING ?
+                       &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
+  bool res= show_binlog_events(thd, log);
+  consensus_log_manager.unlock_consensus();
+  return res;
 }
 
 MYSQL_BIN_LOG::MYSQL_BIN_LOG(uint *sync_period)
@@ -3415,6 +3502,7 @@ MYSQL_BIN_LOG::MYSQL_BIN_LOG(uint *sync_period)
       sync_period_ptr(sync_period),
       sync_counter(0),
       is_relay_log(0),
+      is_xpaxos_log(0),
       checksum_alg_reset(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       relay_log_checksum_alg(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       previous_gtid_set_relaylog(nullptr),
@@ -3444,6 +3532,7 @@ void MYSQL_BIN_LOG::cleanup() {
     mysql_mutex_destroy(&LOCK_sync);
     mysql_mutex_destroy(&LOCK_binlog_end_pos);
     mysql_mutex_destroy(&LOCK_xids);
+    mysql_mutex_destroy(&LOCK_rotate);
     mysql_cond_destroy(&update_cond);
     mysql_cond_destroy(&m_prep_xids_cond);
     stage_manager.deinit();
@@ -3464,6 +3553,7 @@ void MYSQL_BIN_LOG::init_pthread_objects() {
   mysql_mutex_init(m_key_LOCK_binlog_end_pos, &LOCK_binlog_end_pos,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(m_key_LOCK_xids, &LOCK_xids, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(m_key_LOCK_rotate, &LOCK_rotate, MY_MUTEX_INIT_FAST);
   mysql_cond_init(m_key_update_cond, &update_cond);
   mysql_cond_init(m_key_prep_xids_cond, &m_prep_xids_cond);
   stage_manager.init(m_key_LOCK_flush_queue, m_key_LOCK_sync_queue,
@@ -3681,7 +3771,7 @@ bool MYSQL_BIN_LOG::open(PSI_file_key log_file_key, const char *log_name,
 
   write_error = 0;
   myf flags = MY_WME | MY_NABP | MY_WAIT_IF_FULL;
-  if (is_relay_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
+  if (is_relay_log && !is_xpaxos_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
 
   if (!(name = my_strdup(key_memory_MYSQL_LOG_name, log_name, MYF(MY_WME)))) {
     goto err;
@@ -4099,7 +4189,7 @@ enum enum_read_gtids_from_binlog_status {
 static enum_read_gtids_from_binlog_status read_gtids_from_binlog(
     const char *filename, Gtid_set *all_gtids, Gtid_set *prev_gtids,
     Gtid *first_gtid, Sid_map *sid_map, bool verify_checksum,
-    bool is_relay_log) {
+    bool is_relay_log, uint64 last_term) {
   DBUG_TRACE;
   DBUG_PRINT("info", ("Opening file %s", filename));
 
@@ -4143,6 +4233,7 @@ static enum_read_gtids_from_binlog_status read_gtids_from_binlog(
     switch (ev->get_type_code()) {
       case binary_log::FORMAT_DESCRIPTION_EVENT:
       case binary_log::ROTATE_EVENT:
+      case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
         // do nothing; just accept this event and go to next
         break;
       case binary_log::PREVIOUS_GTIDS_LOG_EVENT: {
@@ -4233,6 +4324,17 @@ static enum_read_gtids_from_binlog_status read_gtids_from_binlog(
               /* If the first_gtid was the only thing requested, we are done */
               if (all_gtids == nullptr) ret = GOT_GTIDS, done = true;
             }
+          }
+        }
+        break;
+      }
+      case binary_log::CONSENSUS_LOG_EVENT:
+      {
+        if (last_term != 0) {
+          Consensus_log_event * r_ev = (Consensus_log_event*)ev;
+          uint64 consensus_term = r_ev->get_term();
+          if (consensus_term > last_term) {
+            done = true;
           }
         }
         break;
@@ -4360,7 +4462,8 @@ bool MYSQL_BIN_LOG::find_first_log_not_in_gtid_set(char *binlog_file_name,
     switch (read_gtids_from_binlog(filename, nullptr, &binlog_previous_gtid_set,
                                    first_gtid,
                                    binlog_previous_gtid_set.get_sid_map(),
-                                   opt_master_verify_checksum, is_relay_log)) {
+                                   opt_master_verify_checksum,
+                                   (is_relay_log && !is_xpaxos_log), 0)) {
       case ERROR:
         *errmsg =
             "Error reading header of binary log while looking for "
@@ -4428,7 +4531,8 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
                                    bool verify_checksum, bool need_lock,
                                    Transaction_boundary_parser *trx_parser,
                                    Gtid_monitoring_info *partial_trx,
-                                   bool is_server_starting) {
+                                   bool is_server_starting,
+                                   uint64 last_term) {
   DBUG_TRACE;
   DBUG_PRINT(
       "info",
@@ -4436,13 +4540,13 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
        lost_gtids, lost_gtids == nullptr ? "relay" : "binary", is_relay_log));
 
   Checkable_rwlock *sid_lock =
-      is_relay_log ? all_gtids->get_sid_map()->get_sid_lock() : global_sid_lock;
+      (is_relay_log && all_gtids != NULL) ? all_gtids->get_sid_map()->get_sid_lock() : global_sid_lock;
   /*
     If this is a relay log, we must have the IO thread Master_info trx_parser
     in order to correctly feed it with relay log events.
   */
 #ifndef DBUG_OFF
-  if (is_relay_log) {
+  if (is_relay_log && !is_xpaxos_log) {
     DBUG_ASSERT(trx_parser != nullptr);
     DBUG_ASSERT(lost_gtids == nullptr);
   }
@@ -4491,7 +4595,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
     last binlog file before the server restarts, so we remove
     its file name from filename_list.
   */
-  if (is_server_starting && !is_relay_log && !filename_list.empty())
+  if (is_server_starting && !is_relay_log && !is_xpaxos_log && !filename_list.empty())
     filename_list.pop_back();
 
   error = 0;
@@ -4519,7 +4623,9 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
                           filename, can_stop_reading, reached_first_file));
       switch (read_gtids_from_binlog(
           filename, all_gtids, reached_first_file ? lost_gtids : nullptr,
-          nullptr /* first_gtid */, sid_map, verify_checksum, is_relay_log)) {
+          nullptr /* first_gtid */, sid_map, verify_checksum,
+          (is_relay_log && !is_xpaxos_log) /* except xpaxos log in relay log */,
+          last_term)) {
         case ERROR: {
           error = 1;
           goto end;
@@ -4535,7 +4641,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
             start parsing the relay log to add GTID of transactions that might
             have spanned in distinct relaylog files.
           */
-          if (!is_relay_log) can_stop_reading = true;
+          if (!is_relay_log || is_xpaxos_log) can_stop_reading = true;
           break;
         }
         case NO_GTIDS: {
@@ -4550,7 +4656,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
             GLOBAL.GTID_PURGED should be empty in the case.
           */
           if (binlog_gtid_simple_recovery && is_server_starting &&
-              !is_relay_log) {
+              (!is_relay_log || is_xpaxos_log)) {
             DBUG_ASSERT(all_gtids->is_empty());
             DBUG_ASSERT(lost_gtids->is_empty());
             goto end;
@@ -4571,7 +4677,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
       events from the master in the case of GTID auto positioning be
       disabled.
     */
-    if (is_relay_log && filename_list.size() > 0) {
+    if ((is_relay_log && !is_xpaxos_log) && filename_list.size() > 0) {
       /*
         Suppose the following relaylog:
 
@@ -4659,7 +4765,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
     DBUG_PRINT("info", ("Iterating forwards through binary logs, looking for "
                         "the first binary log that contains both a "
                         "Previous_gtids_log_event and a Gtid_log_event."));
-    DBUG_ASSERT(!is_relay_log);
+    DBUG_ASSERT(!is_relay_log || is_xpaxos_log);
     for (it = filename_list.begin(); it != filename_list.end(); it++) {
       /*
         We should pass a first_gtid to read_gtids_from_binlog when
@@ -4673,7 +4779,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
       switch (read_gtids_from_binlog(
           filename, nullptr, lost_gtids,
           binlog_gtid_simple_recovery ? nullptr : &first_gtid, sid_map,
-          verify_checksum, is_relay_log)) {
+          verify_checksum, (is_relay_log && !is_xpaxos_log), 0)) {
         case ERROR: {
           error = 1;
           /*FALLTHROUGH*/
@@ -4812,15 +4918,23 @@ bool MYSQL_BIN_LOG::open_binlog(
   }
 
   /*
-    don't set LOG_EVENT_BINLOG_IN_USE_F for the relay log
+    don't set LOG_EVENT_BINLOG_IN_USE_F for the relay log && xpaxos log
   */
-  if (!is_relay_log) {
+  if (!is_xpaxos_log && !is_relay_log) {
     s.common_header->flags |= LOG_EVENT_BINLOG_IN_USE_F;
   }
 
   if (is_relay_log) {
     /* relay-log */
     if (relay_log_checksum_alg == binary_log::BINLOG_CHECKSUM_ALG_UNDEF) {
+#ifdef NORMANDY_CLUSTER
+      /*
+      X-Cluster do not send fd event to Follower, so just use binlog_checksum_options.
+      The binlog_checksum_options of Leader and Follower must be set to a same value.
+      */
+      relay_log_checksum_alg= static_cast<enum_binlog_checksum_alg>
+                            (binlog_checksum_options);
+#else
       /* inherit master's A descriptor if one has been received */
       if (opt_slave_sql_verify_checksum == 0)
         /* otherwise use slave's local preference of RL events verification */
@@ -4828,20 +4942,35 @@ bool MYSQL_BIN_LOG::open_binlog(
       else
         relay_log_checksum_alg =
             static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
+#endif
     }
   }
 
   if (!s.is_valid()) goto err;
   s.dont_set_created = null_created_arg;
   /* Set LOG_EVENT_RELAY_LOG_F flag for relay log's FD */
-  if (is_relay_log) s.set_relay_log_event();
+  if (!is_xpaxos_log && is_relay_log) s.set_relay_log_event();
+  if (opt_consensuslog_revise && is_xpaxos_log && is_relay_log)
+    s.consensus_extra_time = consensus_log_manager.get_event_timestamp();
   if (write_event_to_binlog(&s)) goto err;
+
+  // write previous consensus index event
+  if (is_xpaxos_log) {
+    Previous_consensus_index_log_event prev_consensus_index_ev(consensus_log_manager.get_current_index());
+    if (opt_consensuslog_revise && is_relay_log)
+      prev_consensus_index_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
+    if (write_event_to_binlog(&prev_consensus_index_ev)) goto err;
+    std::string file_name(log_file_name);
+    consensus_log_manager.get_log_file_index()->add_to_index_list(consensus_log_manager.get_current_index(),
+                                            prev_consensus_index_ev.common_header->when.tv_sec, file_name);
+  }
+
   /*
     We need to revisit this code and improve it.
     See further comments in the mysqld.
     /Alfranio
   */
-  if (current_thd) {
+  if (current_thd || is_xpaxos_log) {
     Checkable_rwlock *sid_lock = nullptr;
     Gtid_set logged_gtids_binlog(global_sid_map, global_sid_lock);
     Gtid_set *previous_logged_gtids;
@@ -4874,8 +5003,10 @@ bool MYSQL_BIN_LOG::open_binlog(
     DBUG_PRINT("info", ("Generating PREVIOUS_GTIDS for %s file.",
                         is_relay_log ? "relaylog" : "binlog"));
     Previous_gtids_log_event prev_gtids_ev(previous_logged_gtids);
-    if (is_relay_log) prev_gtids_ev.set_relay_log_event();
+    if (!is_xpaxos_log && is_relay_log) prev_gtids_ev.set_relay_log_event();
     if (need_sid_lock) sid_lock->unlock();
+    if (opt_consensuslog_revise && is_xpaxos_log && is_relay_log)
+      prev_gtids_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
     if (write_event_to_binlog(&prev_gtids_ev)) goto err;
   } else  // !(current_thd)
   {
@@ -4910,10 +5041,12 @@ bool MYSQL_BIN_LOG::open_binlog(
 
       DBUG_PRINT("info", ("Generating PREVIOUS_GTIDS for relaylog file."));
       Previous_gtids_log_event prev_gtids_ev(previous_gtid_set_relaylog);
-      prev_gtids_ev.set_relay_log_event();
+      if (!is_xpaxos_log)
+        prev_gtids_ev.set_relay_log_event();
 
       if (need_sid_lock) sid_lock->unlock();
-
+      if (opt_consensuslog_revise && is_xpaxos_log && is_relay_log)
+        prev_gtids_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
       if (write_event_to_binlog(&prev_gtids_ev)) goto err;
     }
   }
@@ -5515,7 +5648,7 @@ bool MYSQL_BIN_LOG::reset_logs(THD *thd, bool delete_only) {
   }
   thd->clear_log_reset();
 
-  ha_reset_logs(thd);
+  if (!is_relay_log) ha_reset_logs(thd);
 
   /*
     We need to get both locks to be sure that no one is trying to
@@ -5688,7 +5821,7 @@ int MYSQL_BIN_LOG::open_crash_safe_index_file() {
 
   if (!my_b_inited(&crash_safe_index_file)) {
     myf flags = MY_WME | MY_NABP | MY_WAIT_IF_FULL;
-    if (is_relay_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
+    if (is_relay_log && !is_xpaxos_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
 
     if ((file = my_open(crash_safe_index_file_name, O_RDWR | O_CREAT,
                         MYF(MY_WME))) < 0 ||
@@ -5818,6 +5951,7 @@ int MYSQL_BIN_LOG::purge_logs(const char *to_log, bool included,
   bool exit_loop = 0;
   LOG_INFO log_info;
   THD *thd = current_thd;
+  std::string file_name;
   DBUG_TRACE;
   DBUG_PRINT("info", ("to_log= %s", to_log));
 
@@ -5890,8 +6024,12 @@ int MYSQL_BIN_LOG::purge_logs(const char *to_log, bool included,
     goto err;
   }
 
-  // Update gtid_state->lost_gtids
-  if (!is_relay_log) {
+  // truncate consensus log file index
+  file_name = std::string(log_info.log_file_name);
+  consensus_log_manager.get_log_file_index()->truncate_before(file_name);
+
+  // Update gtid_state->lost_gtids, relay_log of non paxos log don't need
+  if (!(is_relay_log && !is_xpaxos_log)) {
     global_sid_lock->wrlock();
     error = init_gtid_sets(
         nullptr, const_cast<Gtid_set *>(gtid_state->get_lost_gtids()),
@@ -6485,7 +6623,10 @@ int MYSQL_BIN_LOG::new_file_impl(
       to change base names at some point.
     */
     Rotate_log_event r(new_name + dirname_length(new_name), 0, LOG_EVENT_OFFSET,
-                       is_relay_log ? Rotate_log_event::RELAY_LOG : 0);
+                       (!is_xpaxos_log && is_relay_log) ? Rotate_log_event::RELAY_LOG : 0);
+
+    if (opt_consensuslog_revise && is_xpaxos_log && is_relay_log)
+      r.consensus_extra_time = consensus_log_manager.get_event_timestamp();
 
     if (DBUG_EVALUATE_IF("fault_injection_new_file_rotate_event", (error = 1),
                          false) ||
@@ -7091,6 +7232,8 @@ int MYSQL_BIN_LOG::rotate_and_purge(THD *thd, bool force_rotate) {
   ha_binlog_wait(thd);
 
   DBUG_ASSERT(!is_relay_log);
+  mysql_mutex_lock(consensus_log_manager.get_sequence_stage1_lock());
+  wait_xid_disappear();
   mysql_mutex_lock(&LOCK_log);
   error = rotate(force_rotate, &check_purge);
   /*
@@ -7098,6 +7241,7 @@ int MYSQL_BIN_LOG::rotate_and_purge(THD *thd, bool force_rotate) {
           the mutex. Otherwise causes various deadlocks.
   */
   mysql_mutex_unlock(&LOCK_log);
+  mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
 
   if (!error && check_purge) purge();
 
@@ -7192,7 +7336,8 @@ bool MYSQL_BIN_LOG::do_write_cache(Binlog_cache_storage *cache,
   @retval false error
   @retval true success
 */
-bool MYSQL_BIN_LOG::write_incident(Incident_log_event *ev, THD *thd,
+// FIXME: write incident event will crash
+bool MYSQL_BIN_LOG::write_incident(Incident_log_event *, THD *thd,
                                    bool need_lock_log, const char *err_msg,
                                    bool do_flush_and_sync) {
   uint error = 0;
@@ -7220,12 +7365,23 @@ bool MYSQL_BIN_LOG::write_incident(Incident_log_event *ev, THD *thd,
   if (cache_mngr == nullptr ||
       DBUG_EVALUATE_IF("simulate_write_incident_event_into_binlog_directly", 1,
                        0)) {
-    if (need_lock_log)
+    if (need_lock_log) {
+      mysql_mutex_lock(consensus_log_manager.get_sequence_stage1_lock());
+      wait_xid_disappear();
       mysql_mutex_lock(&LOCK_log);
-    else
+    } else {
+      mysql_mutex_assert_owner(consensus_log_manager.get_sequence_stage1_lock());
       mysql_mutex_assert_owner(&LOCK_log);
+      // TODO : release LOCK_log here may be not safe
+      // only write_cache  need_lock_log is false
+      mysql_mutex_unlock(&LOCK_log);
+      wait_xid_disappear();
+      mysql_mutex_lock(&LOCK_log);
+    }
+#if 0
     /* Write an incident event into binlog directly. */
     error = write_event_to_binlog(ev);
+#endif
     /*
       Write an error to log. So that user might have a chance
       to be alerted and explore incident details.
@@ -7242,6 +7398,7 @@ bool MYSQL_BIN_LOG::write_incident(Incident_log_event *ev, THD *thd,
       /* The trx_cache contains corruption data, so we can reset it. */
       cache_mngr->trx_cache.reset();
     }
+#if 0
     /*
       Write the incident event into stmt_cache, so that a GTID is generated and
       written for it prior to flushing the stmt_cache.
@@ -7253,10 +7410,20 @@ bool MYSQL_BIN_LOG::write_incident(Incident_log_event *ev, THD *thd,
       return error;
     }
 
-    if (need_lock_log)
+#endif
+    if (need_lock_log) {
+      mysql_mutex_lock(consensus_log_manager.get_sequence_stage1_lock());
+      wait_xid_disappear();
       mysql_mutex_lock(&LOCK_log);
-    else
+    } else {
+      mysql_mutex_assert_owner(consensus_log_manager.get_sequence_stage1_lock());
       mysql_mutex_assert_owner(&LOCK_log);
+      // TODO : release LOCK_log here may be not safe
+      // only write_cache  need_lock_log is false
+      mysql_mutex_unlock(&LOCK_log);
+      wait_xid_disappear();
+      mysql_mutex_lock(&LOCK_log);
+    }
   }
 
   if (do_flush_and_sync) {
@@ -7270,7 +7437,10 @@ bool MYSQL_BIN_LOG::write_incident(Incident_log_event *ev, THD *thd,
     }
   }
 
-  if (need_lock_log) mysql_mutex_unlock(&LOCK_log);
+  if (need_lock_log) {
+    mysql_mutex_unlock(&LOCK_log);
+    mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
+  }
 
   /*
     Write an error to log. So that user might have a chance
@@ -7513,7 +7683,7 @@ void MYSQL_BIN_LOG::close(
     mysql_mutex_assert_owner(&LOCK_log);
 
   if (atomic_log_state == LOG_OPENED) {
-    if ((exiting & LOG_CLOSE_STOP_EVENT) != 0) {
+    if (!is_xpaxos_log && (exiting & LOG_CLOSE_STOP_EVENT) != 0) {
       /**
         TODO(WL#7546): Change the implementation to Stop_event after write() is
         moved into libbinlogevents
@@ -7531,7 +7701,7 @@ void MYSQL_BIN_LOG::close(
     }
 
     /* The following update should not be done in relay log files */
-    if (!is_relay_log) {
+    if (!is_xpaxos_log && !is_relay_log) {
       my_off_t offset = BIN_LOG_HEADER_SIZE + FLAGS_OFFSET;
       uchar flags = 0;  // clearing LOG_EVENT_BINLOG_IN_USE_F
       (void)m_binlog_file->update(&flags, 1, offset);
@@ -7643,6 +7813,13 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
     return 1;
   }
 
+  // build consensus log index from all the exist log files
+  if (build_consensus_log_index())
+  {
+    cleanup();
+    return 1;
+  }
+
   if (using_heuristic_recover()) {
     /* generate a new binlog to mask a corrupted one */
     mysql_mutex_lock(&LOCK_log);
@@ -7699,13 +7876,18 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
       Later we will take this value and truncate the log if need be.
     */
     if ((ev = binlog_file_reader.read_event_object()) &&
-        ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT &&
-        (ev->common_header->flags & LOG_EVENT_BINLOG_IN_USE_F ||
-         DBUG_EVALUATE_IF("eval_force_bin_log_recovery", true, false))) {
+        ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT) {
+      enum_binlog_checksum_alg alg = Log_event_footer::get_checksum_alg(ev->temp_buf, ev->buf_len);
+      if (static_cast<enum_binlog_checksum_alg>(binlog_checksum_options) != alg) {
+        sql_print_error("binlog_checksum_options is not the same with binlog format checksum algorithm.");
+        return -1;
+      }
+      DBUG_ASSERT(is_xpaxos_log);
       LogErr(INFORMATION_LEVEL, ER_BINLOG_RECOVERING_AFTER_CRASH_USING,
              opt_name);
       valid_pos = binlog_file_reader.position();
-      error = binlog_recover(&binlog_file_reader, &valid_pos);
+      error = recover_intergrity_for_normandy(&binlog_file_reader,
+                          (Format_description_log_event *)ev, &valid_pos);
       binlog_size = binlog_file_reader.ifile()->length();
     } else
       error = 0;
@@ -7736,11 +7918,13 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
       }
 
       /* Clear LOG_EVENT_BINLOG_IN_USE_F */
-      uchar flags = 0;
-      if (ofile->update(&flags, 1, BIN_LOG_HEADER_SIZE + FLAGS_OFFSET)) {
-        LogErr(ERROR_LEVEL,
-               ER_BINLOG_CANT_CLEAR_IN_USE_FLAG_FOR_CRASHED_BINLOG);
-        return -1;
+      if (!is_xpaxos_log) {
+	    uchar flags = 0;
+	    if (ofile->update(&flags, 1, BIN_LOG_HEADER_SIZE + FLAGS_OFFSET)) {
+	      LogErr(ERROR_LEVEL,
+		     ER_BINLOG_CANT_CLEAR_IN_USE_FLAG_FOR_CRASHED_BINLOG);
+	      return -1;
+	    }
       }
     }  // end if (valid_pos > 0)
   }
@@ -8093,7 +8277,12 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
       return RESULT_ABORTED;
     }
 
-    if (ordered_commit(thd, all, skip_commit)) return RESULT_INCONSISTENT;
+    if (ordered_commit(thd, all, skip_commit)) {
+      // if consensus commit failed, transaction should rollback
+      if (thd->transaction_rollback_request)
+        ha_rollback_low(thd, all);
+      return RESULT_INCONSISTENT;
+    }
 
     DBUG_EXECUTE_IF("ensure_binlog_cache_is_reset", {
       /* Assert that binlog cache is reset at commit time. */
@@ -8147,7 +8336,8 @@ std::pair<int, my_off_t> MYSQL_BIN_LOG::flush_thread_caches(THD *thd) {
       Note that set_trans_pos does not copy the file name. See
       this function documentation for more info.
     */
-    thd->set_trans_pos(log_file_name, m_binlog_file->position());
+    thd->set_trans_pos(log_file_name, m_binlog_file->position() + my_b_tell(consensus_log_manager.get_cache()));
+
     if (wrote_xid) inc_prep_xids(thd);
   }
   DBUG_PRINT("debug", ("bytes: %llu", bytes));
@@ -8180,7 +8370,20 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   DBUG_ASSERT(total_bytes_var && rotate_var && out_queue_var);
   my_off_t total_bytes = 0;
   int flush_error = 1;
-  mysql_mutex_assert_owner(&LOCK_log);
+  // mysql_mutex_assert_owner(&LOCK_log);
+  mysql_mutex_assert_owner(consensus_log_manager.get_sequence_stage1_lock());
+
+  // check if could write binlog according to consenesus layer
+  uint64 term = 0;
+#ifdef NORMANDY_CLUSTER
+  if (!opt_initialize) {
+    alisql::LogEntry log_entry;
+    // use fake buf_size, tell consenesus layer, the entry is not noop
+    BLConsensusLog::packLogEntry((uchar*)("any"), 3, term, 0, BLConsensusLog::UNCERTAIN, log_entry);
+    consensus_ptr->replicateLog(log_entry);
+    term = log_entry.term();
+  }
+#endif
 
   /*
     Fetch the entire flush queue and empty it, so that the next batch
@@ -8190,6 +8393,33 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   */
   THD *first_seen = stage_manager.fetch_queue_for(Stage_manager::FLUSH_STAGE);
   DBUG_ASSERT(first_seen != nullptr);
+
+  mysql_mutex_lock(&LOCK_log);
+  mysql_mutex_lock(consensus_log_manager.get_term_lock());
+
+#ifdef NORMANDY_CLUSTER
+  // before flush do consensus check
+  if (term == 0 ||
+    consensus_log->getCurrentTerm() != term ||
+    term != consensus_log_manager.get_current_term())
+  {
+    for (THD *head = first_seen; head; head = head->next_to_commit)
+    {
+      binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(head);
+      cache_mngr->reset();
+      sql_print_warning("Failed to commit ,because leadership changed, replicate log or check term failed");
+      head->mark_transaction_to_rollback(true);
+      head->commit_error = THD::CE_COMMIT_ERROR;
+      head->get_transaction()->m_flags.commit_low = false;
+      head->consensus_error = THD::CSS_LEADERSHIP_CHANGE;
+    }
+    mysql_mutex_unlock(consensus_log_manager.get_term_lock());
+    mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
+    *out_queue_var= first_seen;
+    return 0;
+  }
+#endif
+
   /*
     We flush prepared records of transactions to the log of storage
     engine (for example, InnoDB redo log) in a group right before
@@ -8198,11 +8428,16 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   ha_flush_logs(true);
   DBUG_EXECUTE_IF("crash_after_flush_engine_log", DBUG_SUICIDE(););
   assign_automatic_gtids_to_flush_group(first_seen);
+  mysql_bin_log_ext.assign_gcn_to_flush_group(first_seen);
   /* Flush thread caches to binary log. */
-  for (THD *head = first_seen; head; head = head->next_to_commit) {
+  for (THD *head = first_seen; head; head = head->next_to_commit)
+  {
+    head->consensus_term = term;
+    // stmt or trx cache flush will generate a consensus index and set thd's consensus_index
     std::pair<int, my_off_t> result = flush_thread_caches(head);
     total_bytes += result.second;
-    if (flush_error == 1) flush_error = result.first;
+    if (flush_error == 1)
+      flush_error = result.first;
 #ifndef DBUG_OFF
     no_flushes++;
 #endif
@@ -8218,6 +8453,9 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   DBUG_PRINT("info", ("no_flushes:= %d", no_flushes));
   no_flushes = 0;
 #endif
+  // must unlock after fetch_queue_for() because we should not make stage queue chaos
+  mysql_mutex_unlock(consensus_log_manager.get_term_lock());
+  mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
   return flush_error;
 }
 
@@ -8260,7 +8498,8 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
 #ifndef DBUG_OFF
     stage_manager.clear_preempt_status(head);
 #endif
-    if (head->get_transaction()->sequence_number != SEQ_UNINIT) {
+    if (head->get_transaction()->sequence_number != SEQ_UNINIT &&
+    head->consensus_error == THD::CSS_NONE) {
       mysql_mutex_lock(&LOCK_slave_trans_dep_tracker);
       m_dependency_tracker.update_max_committed(head);
       mysql_mutex_unlock(&LOCK_slave_trans_dep_tracker);
@@ -8273,13 +8512,15 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
     DBUG_ASSERT(head->commit_error != THD::CE_COMMIT_ERROR);
     Thd_backup_and_restore switch_thd(thd, head);
     bool all = head->get_transaction()->m_flags.real_commit;
+    // xa prepare and normal commit both should wait commit index update
+    MYSQL_BIN_LOG::consensus_before_commit(head);
     if (head->get_transaction()->m_flags.commit_low) {
       /* head is parked to have exited append() */
       DBUG_ASSERT(head->get_transaction()->m_flags.ready_preempt);
       /*
         storage engine commit
        */
-      if (ha_commit_low(head, all, false))
+      if ((!head->transaction_rollback_request) &&  ha_commit_low(head, all, false))
         head->commit_error = THD::CE_COMMIT_ERROR;
     }
     DBUG_PRINT("debug", ("commit_error: %d, commit_pending: %s",
@@ -8387,6 +8628,8 @@ bool MYSQL_BIN_LOG::change_stage(THD *thd MY_ATTRIBUTE((unused)),
   */
   if (!stage_manager.enroll_for(stage, queue, leave_mutex)) {
     DBUG_ASSERT(!thd_get_cache_mngr(thd)->dbug_any_finalized());
+    // follower unlock status lock
+    consensus_log_manager.unlock_consensus();
     return true;
   }
 
@@ -8485,11 +8728,22 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(thd);
     if (cache_mngr) cache_mngr->reset();
   }
-  if (thd->get_transaction()->sequence_number != SEQ_UNINIT) {
+  if (thd->get_transaction()->sequence_number != SEQ_UNINIT &&
+    thd->consensus_error == THD::CSS_NONE) {
     mysql_mutex_lock(&LOCK_slave_trans_dep_tracker);
     m_dependency_tracker.update_max_committed(thd);
     mysql_mutex_unlock(&LOCK_slave_trans_dep_tracker);
   }
+
+  /* whether consensus layer allow to commit */
+  if (thd->get_transaction()->m_flags.commit_low || thd->consensus_error != THD::CSS_NONE)
+    MYSQL_BIN_LOG::consensus_before_commit(thd);
+
+    DBUG_EXECUTE_IF("crash_before_large_trx_commit_late", {
+      /* after waitCommitIndexUpdate */
+    DBUG_SUICIDE();
+  });
+
   if (thd->get_transaction()->m_flags.commit_low) {
     const bool all = thd->get_transaction()->m_flags.real_commit;
     /*
@@ -8520,6 +8774,18 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     }
   } else if (thd->get_transaction()->m_flags.xid_written)
     dec_prep_xids(thd);
+
+  // FIXME: ordered commit need it
+  if (opt_enable_appliedindex_checker)
+    appliedindex_checker.commit(thd->consensus_index);
+  else {
+    uint64 commitIndex = consensus_ptr->getCommitIndex();
+    uint64 tmpi = opt_appliedindex_force_delay >= commitIndex? 0: commitIndex - opt_appliedindex_force_delay;
+    consensus_ptr->updateAppliedIndex(tmpi);
+  }
+
+  if (thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->is_enabled())
+    thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->mark_as_changed(thd, NULL);
 
   /*
     If the ordered commit didn't updated the GTIDs for this thd yet
@@ -8688,6 +8954,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   int flush_error = 0, sync_error = 0;
   my_off_t total_bytes = 0;
   bool do_rotate = false;
+  uint64 group_max_log_index = 0;
 
   DBUG_EXECUTE_IF("crash_commit_before_log", DBUG_SUICIDE(););
   /*
@@ -8729,6 +8996,19 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
 
   DEBUG_SYNC(thd, "bgc_before_flush_stage");
 
+  consensus_log_manager.lock_consensus(true);
+  if ((!opt_initialize && consensus_log_manager.get_status() != Consensus_Log_System_Status::BINLOG_WORKING)||
+        opt_cluster_log_type_instance)  // log type node does not allow to generate binlog
+  { 
+    binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(thd);
+    cache_mngr->reset();
+    thd->mark_transaction_to_rollback(true);
+    thd->commit_error = THD::CE_COMMIT_ERROR;
+    consensus_log_manager.unlock_consensus();
+    my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+    return thd->commit_error;
+  }
+
   /*
     Stage #1: flushing transactions to binary log
 
@@ -8744,13 +9024,14 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
 
     if (mngr->wait_for_its_turn(worker, all)) {
       thd->commit_error = THD::CE_COMMIT_ERROR;
+      consensus_log_manager.unlock_consensus();
       return thd->commit_error;
     }
 
-    if (change_stage(thd, Stage_manager::FLUSH_STAGE, thd, nullptr, &LOCK_log))
+    if (change_stage(thd, Stage_manager::FLUSH_STAGE, thd, nullptr, consensus_log_manager.get_sequence_stage1_lock()))
       return finish_commit(thd);
   } else if (change_stage(thd, Stage_manager::FLUSH_STAGE, thd, nullptr,
-                          &LOCK_log)) {
+                          consensus_log_manager.get_sequence_stage1_lock())) {
     DBUG_PRINT("return", ("Thread ID: %u, commit_error: %d", thd->thread_id(),
                           thd->commit_error));
     return finish_commit(thd);
@@ -8762,7 +9043,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   bool update_binlog_end_pos_after_sync;
   if (unlikely(!is_open())) {
     final_queue = stage_manager.fetch_queue_for(Stage_manager::FLUSH_STAGE);
-    leave_mutex_before_commit_stage = &LOCK_log;
+    leave_mutex_before_commit_stage = consensus_log_manager.get_sequence_stage1_lock();
     /*
       binary log is closed, flush stage and sync stage should be
       ignored. Binlog cache should be cleared, but instead of doing
@@ -8775,8 +9056,14 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   flush_error =
       process_flush_stage_queue(&total_bytes, &do_rotate, &wait_queue);
 
-  if (flush_error == 0 && total_bytes > 0)
+  if (flush_error == 0 && total_bytes > 0) {
+    if (!opt_initialize) /* let the paxos send the log */
+      alisql_server->writeCacheLogDone();
+    DBUG_EXECUTE_IF("crash_before_flush_binlog", { /* let follower get the log */
+      { sleep(2); DBUG_SUICIDE(); }
+    });
     flush_error = flush_cache_to_file(&flush_end_pos);
+  }
   DBUG_EXECUTE_IF("crash_after_flush_binlog", DBUG_SUICIDE(););
 
   update_binlog_end_pos_after_sync = (get_sync_period() == 1);
@@ -8787,7 +9074,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     executed before the before/after_send_hooks on the dump thread
     preventing race conditions among these plug-ins.
   */
-  if (flush_error == 0) {
+  if (flush_error == 0 && flush_end_pos != 0) {
     const char *file_name_ptr = log_file_name + dirname_length(log_file_name);
     DBUG_ASSERT(flush_end_pos != 0);
     if (RUN_HOOK(binlog_storage, after_flush,
@@ -8850,13 +9137,56 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
       tmp_thd = tmp_thd->next_to_commit;
     if (flush_error == 0 && sync_error == 0) {
       tmp_thd->get_trans_fixed_pos(&binlog_file, &pos);
-      update_binlog_end_pos(binlog_file, pos);
+      if (binlog_file != nullptr)
+        update_binlog_end_pos(binlog_file, pos);
+    }
+  }
+
+  // protected by LOCK_sync
+  if (opt_enable_appliedindex_checker)
+  {
+    uint64 maxi= 0, mini= UINT64_MAX, size= 0;
+    for (THD *head = final_queue; head; head = head->next_to_commit)
+    {
+      if (head->consensus_index == 0)
+        continue;
+      maxi = max(head->consensus_index, maxi);
+      mini = min(head->consensus_index, mini);
+      size++;
+    }
+    if (maxi > 0)
+    {
+      intervalType inv {maxi, mini, size};
+      appliedindex_checker.prepare(inv);
     }
   }
 
   DEBUG_SYNC(thd, "bgc_after_sync_stage_before_commit_stage");
+  
+  // leave_mutex_before_commit_stage = &LOCK_sync;
+  // must release LOCK_sync after fetch_queue_for()
+  mysql_mutex_unlock(&LOCK_sync);
 
-  leave_mutex_before_commit_stage = &LOCK_sync;
+  // set last index and write log done out of order is supported
+  for (THD *head = final_queue; head; head = head->next_to_commit)
+  {
+    // find last sync log index
+    if (head->consensus_index > group_max_log_index)
+    {
+      group_max_log_index = head->consensus_index;
+    }
+  }
+  if (group_max_log_index > 0)
+  {
+    consensus_log_manager.set_sync_index_if_greater(group_max_log_index);
+#ifdef NORMANDY_CLUSTER
+    if (!opt_initialize)
+      alisql_server->writeLogDone(group_max_log_index);
+#endif
+  }
+
+  leave_mutex_before_commit_stage = NULL;
+
   /*
     Stage #3: Commit all transactions in order.
 
@@ -8874,6 +9204,13 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     all locks are released but we should not enter into
     commit stage if binlog_error_action is ABORT_SERVER.
   */
+
+  /*Make sure binlog has been passed to follower*/
+  DBUG_EXECUTE_IF("crash_before_large_trx_commit_early", {
+      sleep(2); DBUG_SUICIDE();
+  });
+  DEBUG_SYNC(thd, "sync_before_commit_stage_in_order_commit");
+
 commit_stage:
   /* Clone needs binlog commit order. */
   if ((opt_binlog_order_commits || Clone_handler::need_commit_order()) &&
@@ -8891,6 +9228,8 @@ commit_stage:
 
     if (flush_error == 0 && sync_error == 0)
       sync_error = call_after_sync_hook(commit_queue);
+
+    consensus_log_manager.unlock_consensus();
 
     /*
       process_commit_stage_queue will call update_on_commit or
@@ -8920,6 +9259,7 @@ commit_stage:
       mysql_mutex_unlock(leave_mutex_before_commit_stage);
     if (flush_error == 0 && sync_error == 0)
       sync_error = call_after_sync_hook(final_queue);
+    consensus_log_manager.unlock_consensus();
   }
 
   /*
@@ -8951,187 +9291,54 @@ commit_stage:
   if (DBUG_EVALUATE_IF("force_rotate", 1, 0) ||
       (do_rotate && thd->commit_error == THD::CE_NONE &&
        !is_rotating_caused_by_incident)) {
-    /*
-      Do not force the rotate as several consecutive groups may
-      request unnecessary rotations.
+    consensus_log_manager.lock_consensus(TRUE);
+    if (consensus_log_manager.get_status() == BINLOG_WORKING)
+    {
+      /*
+        Do not force the rotate as several consecutive groups may
+        request unnecessary rotations.
 
-      NOTE: Run purge_logs wo/ holding LOCK_log because it does not
-      need the mutex. Otherwise causes various deadlocks.
-    */
+        NOTE: Run purge_logs wo/ holding LOCK_log because it does not
+        need the mutex. Otherwise causes various deadlocks.
+      */
+      DEBUG_SYNC(thd, "ready_to_do_rotation");
+      bool check_purge = false;
+      bool need_real_rotate = false;
+      mysql_mutex_lock(&LOCK_rotate);
+      need_real_rotate = !rotating;
+      if (!rotating)
+        rotating = TRUE;
+      mysql_mutex_unlock(&LOCK_rotate);
 
-    DEBUG_SYNC(thd, "ready_to_do_rotation");
-    bool check_purge = false;
-    mysql_mutex_lock(&LOCK_log);
-    /*
-      If rotate fails then depends on binlog_error_action variable
-      appropriate action will be taken inside rotate call.
-    */
-    int error = rotate(false, &check_purge);
-    mysql_mutex_unlock(&LOCK_log);
-
-    if (error)
-      thd->commit_error = THD::CE_COMMIT_ERROR;
-    else if (check_purge)
-      purge();
+      if (need_real_rotate)
+      {
+        mysql_mutex_lock(consensus_log_manager.get_sequence_stage1_lock());
+        wait_xid_disappear();
+        mysql_mutex_lock(&LOCK_log);
+        /*
+          If rotate fails then depends on binlog_error_action variable
+          appropriate action will be taken inside rotate call.
+        */
+        int error = rotate(false, &check_purge);
+        //    int error = 0;
+        mysql_mutex_unlock(&LOCK_log);
+        mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
+        if (error)
+          thd->commit_error = THD::CE_COMMIT_ERROR;
+        else if (check_purge)
+          purge();
+        mysql_mutex_lock(&LOCK_rotate);
+        rotating = FALSE;
+        mysql_mutex_unlock(&LOCK_rotate);
+      }
+    }
+    consensus_log_manager.unlock_consensus();
   }
   /*
     flush or sync errors are handled above (using binlog_error_action).
     Hence treat only COMMIT_ERRORs as errors.
   */
   return thd->commit_error == THD::CE_COMMIT_ERROR;
-}
-
-/**
-  MYSQLD server recovers from last crashed binlog.
-
-  @param[in] binlog_file_reader Binlog_file_reader of the crashed binlog.
-  @param[out] valid_pos The position of the last valid transaction or
-                        event(non-transaction) of the crashed binlog.
-                        valid_pos must be non-NULL.
-
-  After a crash, storage engines may contain transactions that are
-  prepared but not committed (in theory any engine, in practice
-  InnoDB).  This function uses the binary log as the source of truth
-  to determine which of these transactions should be committed and
-  which should be rolled back.
-
-  The function collects the XIDs of all transactions that are
-  completely written to the binary log into a hash, and passes this
-  hash to the storage engines through the ha_recover function in the
-  handler interface.  This tells the storage engines to commit all
-  prepared transactions that are in the set, and to roll back all
-  prepared transactions that are not in the set.
-
-  To compute the hash, this function iterates over the last binary log
-  only (i.e. it assumes that 'log' is the last binary log).  It
-  instantiates each event.  For XID-events (i.e. commit to InnoDB), it
-  extracts the xid from the event and stores it in the hash.
-
-  It is enough to iterate over only the last binary log because when
-  the binary log is rotated we force engines to commit (and we fsync
-  the old binary log).
-
-  @retval 0 Success
-  @retval 1 Out of memory, or storage engine returns error.
-*/
-static int binlog_recover(Binlog_file_reader *binlog_file_reader,
-                          my_off_t *valid_pos) {
-  Log_event *ev;
-  /*
-    The flag is used for handling the case that a transaction
-    is partially written to the binlog.
-  */
-  bool in_transaction = false;
-  int memory_page_size = my_getpagesize();
-
-  {
-    MEM_ROOT mem_root(key_memory_binlog_recover_exec, memory_page_size);
-    memroot_unordered_map<my_xid, my_commit_gcn> xids(&mem_root);
-    ulonglong current_commit_gcn = MYSQL_GCN_NULL;
-
-    while ((ev = binlog_file_reader->read_event_object())) {
-      if (ev->get_type_code() == binary_log::QUERY_EVENT &&
-          !strcmp(((Query_log_event *)ev)->query, "BEGIN")) {
-        in_transaction = true;
-        current_commit_gcn = MYSQL_GCN_NULL;
-      }
-
-      if (ev->get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) {
-        current_commit_gcn = MYSQL_GCN_NULL;
-      }
-
-      if (ev->get_type_code() == binary_log::QUERY_EVENT) {
-        if (((Query_log_event *)ev)->commit_gcn_assigned) {
-          current_commit_gcn = ((Query_log_event *)ev)->commit_gcn;
-        }
-        if (!strncmp(((Query_log_event *)ev)->query, "XA START",
-                     strlen("XA START"))) {
-           current_commit_gcn = MYSQL_GCN_NULL;
-        }
-
-        if (!strncmp(((Query_log_event *)ev)->query, "XA COMMIT",
-                     strlen("XA COMMIT"))) {
-          current_commit_gcn = MYSQL_GCN_NULL;
-        }
-      }
-
-      if (ev->get_type_code() == binary_log::QUERY_EVENT &&
-          !strcmp(((Query_log_event *)ev)->query, "COMMIT")) {
-        DBUG_ASSERT(in_transaction == true);
-        in_transaction = false;
-        current_commit_gcn = MYSQL_GCN_NULL;
-      } else if (ev->get_type_code() == binary_log::XID_EVENT ||
-                 is_atomic_ddl_event(ev)) {
-        my_xid xid;
-
-        if (ev->get_type_code() == binary_log::XID_EVENT) {
-          DBUG_ASSERT(in_transaction == true);
-          in_transaction = false;
-          Xid_log_event *xev = (Xid_log_event *)ev;
-          xid = xev->xid;
-        } else {
-          xid = ((Query_log_event *)ev)->ddl_xid;
-        }
-
-        if (!xids.insert(std::make_pair(xid, current_commit_gcn)).second)
-          goto err1;
-      }
-
-      /*
-        Recorded valid position for the crashed binlog file
-        which did not contain incorrect events. The following
-        positions increase the variable valid_pos:
-
-        1 -
-          ...
-          <---> HERE IS VALID <--->
-          GTID
-          BEGIN
-          ...
-          COMMIT
-          ...
-
-        2 -
-          ...
-          <---> HERE IS VALID <--->
-          GTID
-          DDL/UTILITY
-          ...
-
-        In other words, the following positions do not increase
-        the variable valid_pos:
-
-        1 -
-          GTID
-          <---> HERE IS VALID <--->
-          ...
-
-        2 -
-          GTID
-          BEGIN
-          <---> HERE IS VALID <--->
-          ...
-      */
-      if (!in_transaction && !is_gtid_event(ev))
-        *valid_pos = binlog_file_reader->position();
-
-      delete ev;
-    }
-
-    /*
-      Call ha_recover if and only if there is a registered engine that
-      does 2PC, otherwise in DBUG builds calling ha_recover directly
-      will result in an assert. (Production builds would be safe since
-      ha_recover returns right away if total_ha_2pc <= opt_log_bin.)
-     */
-    if (total_ha_2pc > 1 && ha_recover(&xids)) goto err1;
-  }
-
-  return 0;
-
-err1:
-  LogErr(ERROR_LEVEL, ER_BINLOG_CRASH_RECOVERY_FAILED);
-  return 1;
 }
 
 void MYSQL_BIN_LOG::update_binlog_end_pos(bool need_lock) {
@@ -11397,3 +11604,7 @@ mysql_declare_plugin(binlog){
     nullptr, /* config options                  */
     0,
 } mysql_declare_plugin_end;
+
+#include "sql/consensus_binlog.cc"
+#include "sql/consensus_log_manager.cc"
+#include "sql/binlog_ext.cc"

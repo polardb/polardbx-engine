@@ -136,6 +136,8 @@
 #include "varlen_sort.h"
 
 #include "sql/recycle_bin/recycle_table.h"
+#include "sql/binlog_ext.h"
+
 #include "xa_handler.h"
 
 /**
@@ -1864,6 +1866,40 @@ int ha_commit_low(THD *thd, bool all, bool run_after_commit) {
           static_cast<Sql_cmd_xa_commit *>(thd->lex->m_sql_cmd)->get_xa_opt() ==
           XA_ONE_PHASE);
       restore_backup_ha_data = true;
+    }
+
+    /*
+      Thd->get_commit_gcn() is not setted if the binlog is disabled
+      in follow conditions:
+      1. opt_bin_log is false
+      2. thread->slave and opt_log_slave_updates is false
+      3. xpaxos_replication_channel
+      (condition from commit_owned_gtids)
+
+      If commit is false or some error occurs, setting gcn is not
+      necessary. Gcn is used for committing transaction.
+    */
+
+  if ((!opt_bin_log || (thd->slave_thread &&
+      (!opt_log_slave_updates || thd->xpaxos_replication_channel))) &&
+      (all || !thd->in_multi_stmt_transaction_mode()) &&
+      !thd->is_operating_gtid_table_implicitly &&
+      !thd->is_operating_substatement_implicitly) {
+        uint64 gcn = 0;
+        if (thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
+          gcn = thd->variables.innodb_commit_gcn;
+        } else {
+#ifndef DBUG_OFF
+          error = 
+#endif          
+          ha_acquire_gcn(&gcn);
+        }
+
+#ifndef DBUG_OFF
+        if (!error)
+          DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
+#endif
+        thd->m_extra_desc.m_commit_gcn = gcn;
     }
 
     for (; ha_info; ha_info = ha_info_next) {
@@ -8889,3 +8925,5 @@ bool ha_check_reserved_db_name(const char *name) {
                          MYSQL_STORAGE_ENGINE_PLUGIN,
                          const_cast<char *>(name)));
 }
+
+#include "handler_ext.cc"

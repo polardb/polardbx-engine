@@ -6,6 +6,7 @@ mtr.test_suppressions                              OK
 mysql.columns_priv                                 OK
 mysql.component                                    OK
 mysql.concurrency_control                          OK
+mysql.consensus_info                               OK
 mysql.db                                           OK
 mysql.default_roles                                OK
 mysql.engine_cost                                  OK
@@ -55,6 +56,9 @@ mysql.component
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.concurrency_control
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.consensus_info
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.db
@@ -166,6 +170,7 @@ status   : OK
 mysql.columns_priv                                 OK
 mysql.component                                    OK
 mysql.concurrency_control                          OK
+mysql.consensus_info                               OK
 mysql.db                                           OK
 mysql.default_roles                                OK
 mysql.engine_cost                                  OK
@@ -208,6 +213,9 @@ mysql.component
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.concurrency_control
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.consensus_info
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.db

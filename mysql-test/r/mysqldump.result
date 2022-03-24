@@ -5274,14 +5274,13 @@ SET GLOBAL master_info_repository= 'FILE';
 Warnings:
 Warning	1287	'FILE' is deprecated and will be removed in a future release. Please use 'TABLE' instead
 SET GLOBAL relay_log_info_repository= 'FILE';
-Warnings:
-Warning	1287	'FILE' is deprecated and will be removed in a future release. Please use 'TABLE' instead
+ERROR HY000: Failure while changing the type of replication repository: relay_log_info is not inited.
 SHOW VARIABLES LIKE "master_info_repository";
 Variable_name	Value
 master_info_repository	FILE
 SHOW VARIABLES LIKE "relay_log_info_repository";
 Variable_name	Value
-relay_log_info_repository	FILE
+relay_log_info_repository	TABLE
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -5343,6 +5342,7 @@ CREATE TABLE IF NOT EXISTS `slave_relay_log_info` (
   `Channel_name` char(64) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
   `Privilege_checks_username` char(32) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT 'Username part of PRIVILEGE_CHECKS_USER.',
   `Privilege_checks_hostname` char(255) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL COMMENT 'Hostname part of PRIVILEGE_CHECKS_USER.',
+  `Consensus_apply_index` bigint(20) unsigned NOT NULL COMMENT 'The consensus log applyed index in the consensus log',
   PRIMARY KEY (`Channel_name`)
 ) /*!50100 TABLESPACE `mysql` */ ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 ROW_FORMAT=DYNAMIC COMMENT='Relay Log Information';
 /*!40101 SET character_set_client = @saved_cs_client */;

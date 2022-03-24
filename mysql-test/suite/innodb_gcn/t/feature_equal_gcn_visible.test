@@ -1,0 +1,104 @@
+--source include/have_debug.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+create table t1 (a int , primary key (a));
+show variables like "innodb_equal_gcn_visible";
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+set global innodb_equal_gcn_visible =false;
+
+--let $wait_counter=10000
+--let $restart_parameters = restart: --innodb_equal_gcn_visible=true
+--source include/restart_mysqld.inc
+--source include/wait_until_connected_again.inc
+connect(con_u1, 127.0.0.1, root,,);
+connect(con_u2, 127.0.0.1, root,,);
+
+connection con_u1;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+connection con_u2;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+connection con_u1;
+xa begin 'v1';
+set innodb_snapshot_seq = @base_seq +10002;
+select * from t1;
+
+# normal && one phase insert with gcn 10002
+connection con_u2;
+insert into t1 values (12001);
+
+xa begin 'x12002';
+insert into t1 values (12002);
+xa end 'x12002';
+xa commit 'x12002' one phase;
+
+xa begin 'x12003';
+insert into t1 values (12003);
+xa end 'x12003';
+xa prepare 'x12003';
+set innodb_commit_seq = @base_seq +10002;
+xa commit 'x12003';
+
+connection con_u1;
+select * from t1;
+xa end 'v1';
+xa commit 'v1' one phase;
+
+connection default;
+delete from t1;
+
+disconnect con_u1;
+disconnect con_u2;
+
+--let $wait_counter=10000
+--let $restart_parameters = restart: --innodb_equal_gcn_visible=false
+--source include/restart_mysqld.inc
+--source include/wait_until_connected_again.inc
+
+connect(con_u1, 127.0.0.1, root,,);
+connect(con_u2, 127.0.0.1, root,,);
+
+connection con_u1;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+connection con_u2;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+connection con_u1;
+xa begin 'v2';
+set innodb_snapshot_seq = @base_seq +20002;
+select * from t1;
+
+# normal && one phase insert with gcn 20002
+connection con_u2;
+insert into t1 values (22001);
+
+xa begin 'x22002';
+insert into t1 values (22002);
+xa end 'x22002';
+xa commit 'x22002' one phase;
+
+xa begin 'x22003';
+insert into t1 values (22003);
+xa end 'x22003';
+xa prepare 'x22003';
+set innodb_commit_seq = @base_seq +20002;
+xa commit 'x22003';
+
+connection con_u1;
+select * from t1;
+xa end 'v2';
+xa commit 'v2' one phase;
+
+drop table t1;
+disconnect con_u1;
+disconnect con_u2;

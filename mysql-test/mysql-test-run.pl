@@ -130,7 +130,7 @@ my $opt_include_ndbcluster = 0;
 my $opt_lock_order         = env_or_val(MTR_LOCK_ORDER => 0);
 my $opt_max_save_core      = env_or_val(MTR_MAX_SAVE_CORE => 5);
 my $opt_max_save_datadir   = env_or_val(MTR_MAX_SAVE_DATADIR => 20);
-my $opt_max_test_fail      = env_or_val(MTR_MAX_TEST_FAIL => 10);
+my $opt_max_test_fail      = env_or_val(MTR_MAX_TEST_FAIL => 1000);
 my $opt_mysqlx_baseport    = $ENV{'MYSQLXPLUGIN_PORT'} || "auto";
 my $opt_port_base          = $ENV{'MTR_PORT_BASE'} || "auto";
 my $opt_reorder            = 1;
@@ -242,6 +242,10 @@ our $opt_user                      = "root";
 our $opt_valgrind                  = 0;
 our $opt_valgrind_secondary_engine = 0;
 our $opt_verbose                   = 0;
+our $opt_xcluster                  = 1;
+our $xcluster_id_cnt               = 1;
+our $xcluster_info_prefix;
+our $xcluster_bootstrap            = 0;
 # Visual Studio produces executables in different sub-directories
 # based on the configuration used to build them. To make life easier,
 # an environment variable or command-line option may be specified to
@@ -1695,12 +1699,26 @@ sub command_line_setup {
     }
   }
 
+  if ($opt_xcluster) {
+    collect_option('skip-rpl', 1);
+    collect_option('skip-ndb', 1);
+    # TODO will remove for release
+    collect_option('retry', 0);
+    collect_option('retry-failure', 0);
+  }
+
   # Find out type of logging that are being used
-  foreach my $arg (@opt_extra_mysqld_opt) {
-    if ($arg =~ /binlog[-_]format=(\S+)/) {
-      # Save this for collect phase
-      collect_option('binlog-format', $1);
-      mtr_report("Using binlog format '$1'");
+  if ($opt_xcluster) {
+    # force using binlog-format=row
+    collect_option('binlog-format', 'row');
+    mtr_report("Using binlog format 'row'");
+  } else {
+    foreach my $arg (@opt_extra_mysqld_opt) {
+      if ($arg =~ /binlog[-_]format=(\S+)/) {
+        # Save this for collect phase
+        collect_option('binlog-format', $1);
+        mtr_report("Using binlog format '$1'");
+      }
     }
   }
 
@@ -2989,6 +3007,10 @@ sub environment_setup {
   my $pathsep = ":";
   $pathsep = ";" if IS_WINDOWS && !IS_CYGWIN;
   $ENV{'PATH'} = "$ENV{'PATH'}" . $pathsep . $perldir;
+
+  # TODO:(baichen) Server command COM_RDS_PUSH_GTID test
+  #my $exe_rds_push_index = mtr_exe_exists("$path_client_bindir/rds_push_index");
+  #$ENV{'MYSQL_RDS_PUSH_INDEX'} = native_path($exe_rds_push_index);
 }
 
 sub remove_vardir_subs() {
@@ -3773,6 +3795,9 @@ sub initialize_servers {
       remove_stale_vardir();
       setup_vardir();
 
+      if (!$opt_xcluster) {
+        mysql_install_db(default_mysqld(), "$opt_vardir/data/");
+      }
       mysql_install_db(default_mysqld(), "$opt_vardir/data/");
 
       # Save the value of MYSQLD_BOOTSTRAP_CMD before a test with bootstrap
@@ -3855,6 +3880,7 @@ sub mysql_install_db {
   my $install_datadir = $datadir || $mysqld->value('datadir');
 
   mtr_report("Installing system database");
+  $xcluster_bootstrap = 0;
 
   my $args;
   mtr_init_args(\$args);
@@ -3914,6 +3940,9 @@ sub mysql_install_db {
 
   # Create the bootstrap.sql file
   my $bootstrap_sql_file = "$opt_vardir/tmp/bootstrap.sql";
+  if (-f $bootstrap_sql_file) {
+    rmtree($bootstrap_sql_file);
+  }
 
   #Add the init-file to --initialize-insecure process
   mtr_add_arg($args, "--init-file=$bootstrap_sql_file");
@@ -3933,59 +3962,50 @@ sub mysql_install_db {
                   $mysqld->name(), $bootstrap_sql_file);
   }
 
-  if (-f "include/mtr_test_data_timezone.sql") {
-    # Add the offical mysql system tables for a production system.
-    mtr_tofile($bootstrap_sql_file, "use mysql;\n");
+  # if (!$opt_xcluster || $xcluster_id_cnt == 1) {
+  if (!$opt_xcluster || $xcluster_id_cnt) {
+    if (-f "include/mtr_test_data_timezone.sql") {
+      # Add the offical mysql system tables for a production system.
+      mtr_tofile($bootstrap_sql_file, "use mysql;\n");
+      if ($opt_xcluster) {
+	mtr_tofile($bootstrap_sql_file, "SET SQL_MODE='';\n");
+      }
 
-    # Add test data for timezone - this is just a subset, on a real
-    # system these tables will be populated either by mysql_tzinfo_to_sql
-    # or by downloading the timezone table package from our website
-    mtr_appendfile_to_file("include/mtr_test_data_timezone.sql",
-                           $bootstrap_sql_file);
-  } else {
-    mtr_error(
-       "Error: The test_data_timezone.sql not found" . "in working directory.");
-  }
+      # Create mtr database
+      mtr_tofile($bootstrap_sql_file, "CREATE DATABASE mtr;\n");
 
-  if ($opt_skip_sys_schema) {
-    mtr_tofile($bootstrap_sql_file, "DROP DATABASE sys;\n");
-  }
+      # Add test data for timezone - this is just a subset, on a real
+      # system these tables will be populated either by mysql_tzinfo_to_sql
+      # or by downloading the timezone table package from our website
+      mtr_appendfile_to_file("include/mtr_test_data_timezone.sql",
+			     $bootstrap_sql_file);
+    } else {
+      mtr_error(
+	 "Error: The test_data_timezone.sql not found" . "in working directory.");
+    }
 
-  # Update table with better values making it easier to restore when changed
-  mtr_tofile(
-    $bootstrap_sql_file,
-    "UPDATE mysql.tables_priv SET
-               timestamp = CURRENT_TIMESTAMP,
-               Grantor= 'root\@localhost'
-               WHERE USER= 'mysql.session';\n");
+    if ($opt_skip_sys_schema) {
+      mtr_tofile($bootstrap_sql_file, "DROP DATABASE IF NOT EXISTS sys;\n");
+    }
 
-  # Make sure no anonymous accounts exists as a safety precaution
-  mtr_tofile($bootstrap_sql_file, "DELETE FROM mysql.user where user= '';\n");
+    # Update table with better values making it easier to restore when changed
+    mtr_tofile(
+      $bootstrap_sql_file,
+      "UPDATE mysql.tables_priv SET
+		 timestamp = CURRENT_TIMESTAMP,
+		 Grantor= 'root\@localhost'
+		 WHERE USER= 'mysql.session';\n");
 
-  # Create test database
-  if (defined $opt_charset_for_testdb) {
-    mtr_tofile($bootstrap_sql_file,
-               "CREATE DATABASE test CHARACTER SET $opt_charset_for_testdb;\n");
-  } else {
-    mtr_tofile($bootstrap_sql_file, "CREATE DATABASE test;\n");
-  }
+    # Make sure no anonymous accounts exists as a safety precaution
+    mtr_tofile($bootstrap_sql_file, "DELETE FROM mysql.user where user= '';\n");
 
-  # Create mtr database
-  mtr_tofile($bootstrap_sql_file, "CREATE DATABASE mtr;\n");
-
-  mtr_tofile(
-    $bootstrap_sql_file,
-    "insert into mysql.db values('%','test','','Y','Y','Y','Y','Y',
-            'Y','N','Y','Y','Y','Y','Y','Y','Y','Y','N','N','Y','Y'); \n");
-
-  # Inserting in acl table generates a timestamp and conventional way
-  # generates a null timestamp.
-  mtr_tofile($bootstrap_sql_file,
-             "DELETE FROM mysql.proxies_priv where user='root';\n");
-  mtr_tofile(
-    $bootstrap_sql_file,
-    "INSERT INTO mysql.proxies_priv VALUES ('localhost', 'root',
-              '', '', TRUE, '', now());\n");
+    # Create test database
+    if (defined $opt_charset_for_testdb) {
+      mtr_tofile($bootstrap_sql_file,
+		 "CREATE DATABASE test CHARACTER SET $opt_charset_for_testdb;\n");
+    } else {
+      mtr_tofile($bootstrap_sql_file, "CREATE DATABASE test;\n");
+    }
 
   # Add help tables and data for warning detection and suppression
   mtr_tofile($bootstrap_sql_file,
@@ -3994,6 +4014,24 @@ sub mysql_install_db {
   # Add procedures for checking server is restored after testcase
   mtr_tofile($bootstrap_sql_file,
              mtr_grab_file("include/mtr_check.sql"));
+
+    mtr_tofile(
+      $bootstrap_sql_file,
+      "insert into mysql.db values('%','test','','Y','Y','Y','Y','Y',
+	      'Y','N','Y','Y','Y','Y','Y','Y','Y','Y','N','N','Y','Y'); \n");
+
+    # Inserting in acl table generates a timestamp and conventional way
+    # generates a null timestamp.
+    mtr_tofile($bootstrap_sql_file,
+	       "DELETE FROM mysql.proxies_priv where user='root';\n");
+    mtr_tofile(
+      $bootstrap_sql_file,
+      "INSERT INTO mysql.proxies_priv VALUES ('localhost', 'root',
+		'', '', TRUE, '', now());\n");
+  }
+  if ($xcluster_id_cnt == 2 || $xcluster_id_cnt == 3) {
+    mtr_tofile($bootstrap_sql_file, "use mysql;\n");
+  }
 
   if (defined $init_file) {
     # Append the contents of the init-file to the end of bootstrap.sql
@@ -4013,10 +4051,29 @@ sub mysql_install_db {
     exit(0);
   }
 
+  if ( $opt_xcluster ) {
+    #skip bootstrap file (use a fake one)
+    #$bootstrap_sql_file = "$opt_vardir/tmp/bootstrap_fake.sql";
+    #mtr_tofile($bootstrap_sql_file, "\n");
+
+    #args
+    mtr_add_arg($args, "--cluster-id=1");
+    mtr_add_arg($args, "--cluster-start-index=1");
+    mtr_add_arg($args, "--cluster-info=%s@%d", $xcluster_info_prefix, $xcluster_id_cnt);
+    $xcluster_id_cnt++;
+  }
+
   # Log bootstrap command
   my $path_bootstrap_log = "$opt_vardir/log/bootstrap.log";
   mtr_tofile($path_bootstrap_log,
              "$exe_mysqld_bootstrap " . join(" ", @$args) . "\n");
+
+  if ($opt_xcluster) {
+    if (-d $install_datadir) {
+      rmtree($install_datadir);
+    }
+    mkpath("$install_datadir");
+  }
 
   my $res = My::SafeProcess->run(name    => "initialize",
                                  path    => $exe_mysqld_bootstrap,
@@ -4037,6 +4094,10 @@ sub mysql_install_db {
   # and slaves when the server is restarted
   if (-f "$datadir/auto.cnf") {
     unlink "$datadir/auto.cnf";
+  }
+
+  if (-f $bootstrap_sql_file) {
+    rmtree($bootstrap_sql_file);
   }
 }
 
@@ -4072,7 +4133,6 @@ sub run_query {
                                  args   => \$args,
                                  output => $outfile,
                                  error  => $errfile);
-
   return $res;
 }
 
@@ -4110,9 +4170,16 @@ sub check_testcase($$) {
   my %started;
   foreach my $mysqld (mysqlds()) {
     # Skip if server has been restarted with additional options
-    if (defined $mysqld->{'proc'} && !exists $mysqld->{'restart_opts'}) {
-      my $proc = start_check_testcase($tinfo, $mode, $mysqld);
-      $started{ $proc->pid() } = $proc;
+    if ($opt_xcluster) {
+      if (defined $mysqld->{'proc'} && ! exists $mysqld->{'restart_opts'} && $mysqld->name() eq "mysqld.1") {
+        my $proc= start_check_testcase($tinfo, $mode, $mysqld);
+        $started{$proc->pid()}= $proc;
+      }
+    } else {
+      if (defined $mysqld->{'proc'} && !exists $mysqld->{'restart_opts'}) {
+	my $proc = start_check_testcase($tinfo, $mode, $mysqld);
+	$started{ $proc->pid() } = $proc;
+      }
     }
   }
 
@@ -4613,11 +4680,126 @@ sub run_testcase ($) {
     mark_log($path_current_testlog, $tinfo);
 
     if (start_servers($tinfo)) {
+      if ($tinfo->{'skip'}) {
+        mtr_report_test_skipped($tinfo);
+        return 0;
+      }
       report_failure_and_restart($tinfo);
       return 1;
     }
   }
   mark_time_used('restart');
+
+  if ($opt_xcluster) {
+    my $mysqld_leader;
+    my $mysqld_oldleader = undef;
+    my $ret;
+    my $err_cnt = 0;
+    my $mysqld_servers = 0;
+    foreach my $mysqld ( mysqlds() ) {
+      $mysqld_servers++;
+      if (!sleep_until_pid_file_created($mysqld->value('pid-file'),
+                                    $opt_start_timeout,
+                                    $mysqld->{'proc'})
+      ) {
+        my $mname = $mysqld->name();
+        mtr_error("Failed to wait the restart mysqld");
+      }
+      # remember the new leader
+      if ($mysqld->name() eq "mysqld.1") {
+        $mysqld_leader= $mysqld;
+        mtr_verbose("I will become leader: " . $mysqld->name());
+      }
+    }
+    # transfer leader to 1
+    #if ($mysqld_servers > 1) {
+      while (1) {
+	sleep(1);
+	foreach my $mysqld ( mysqlds() ) {
+	  mtr_verbose("Run change leader query: " . $mysqld->name() . "  " . $mysqld->value('port') . "  " . $mysqld->value('socket'));
+	  my $query = "call dbms_consensus.change_leader('127.0.0.1:".($mysqld_leader->value('port')+8000)."')";
+	  $ret = run_query($mysqld, $query);
+	  if ($ret == 0) {
+	    $mysqld_oldleader= $mysqld;
+	    mtr_verbose("I am the old leader: " . $mysqld->name());
+	  }
+	}
+	last if (defined $mysqld_oldleader);
+	$err_cnt++;
+	if ($err_cnt < 5) {
+	  mtr_report("Fail to find old leader, try again...");
+	} else {
+	  mtr_warning("Fail to find old leader after $err_cnt times trying!!!");
+	  report_failure_and_restart($tinfo);
+	  return 1;
+	}
+      }
+      $err_cnt = 0;
+      while (1) {
+	sleep(1); # wait leader election
+	my $query = "call dbms_consensus.change_leader('127.0.0.1:".($mysqld_leader->value('port')+8000)."')";
+	$ret = run_query($mysqld_leader, $query, "run_query.log", "run_query.error");
+	last if ($ret == 0);
+	$err_cnt++;
+	if ($err_cnt >= 10) {
+	  mtr_warning("Fail to change consensus_leader after $err_cnt times trying!!!");
+	  report_failure_and_restart($tinfo);
+	  return 1;
+	}
+	mtr_verbose("Run change leader query again...");
+	my $query = "call dbms_consensus.change_leader('127.0.0.1:".($mysqld_leader->value('port')+8000)."')";
+	run_query($mysqld_oldleader, $query);
+      }
+      mtr_verbose("Finish change leader query.");
+    #}
+    # only run once
+    if ($xcluster_bootstrap == 0) {
+      # load sql
+      my $ret = run_query($mysqld_leader, "CREATE DATABASE IF NOT EXISTS test;");
+      if ($ret != 0) {
+        $tinfo->{'dont_kill_server'} = 1;
+        mtr_warning("Error when execute query1: create database test;");
+        report_failure_and_restart($tinfo);
+        return 1;
+      }
+      $ret = run_query($mysqld_leader, "CREATE DATABASE IF NOT EXISTS mtr;");
+      if ($ret != 0) {
+        mtr_warning("Error when execute query2: create database test;");
+        report_failure_and_restart($tinfo);
+        return 1;
+      }
+      $ret = run_query($mysqld_leader, "CREATE TABLE IF NOT EXISTS mtr.test_suppressions (pattern VARCHAR(255)) ENGINE=MyISAM;");
+      if ($ret != 0) {
+        mtr_warning("Error when execute query3: create database test;");
+        report_failure_and_restart($tinfo);
+        return 1;
+      }
+
+      #unlink db.opt
+      unlink("$opt_vardir/mysqld.1/data/test/db.opt");
+      my $args_leader;
+      mtr_init_args(\$args_leader);
+      mtr_verbose("Get the leader: " . $mysqld_leader->name());
+      mtr_add_arg($args_leader, "--defaults-file=%s", $path_config_file);
+      mtr_add_arg($args_leader, "--defaults-group-suffix=%s", $mysqld_leader->after('mysqld'));
+      #if ( My::SafeProcess->run(
+      #       name   => "load bootstrap.sql",
+      #       path   => $exe_mysql,
+      #       args   => \$args_leader,
+      #       input  => "$opt_vardir/tmp/bootstrap.sql",
+      #       output => "$opt_vardir/log/bootstrap.log",
+      #       error  => "$opt_vardir/log/bootstrap.log"
+      #   ) != 0) {
+      #  mtr_error("Could not load bootstrap.sql file");
+      #}
+
+      #$ret = run_query($mysqld_leader, "flush privileges;");
+      #if ($ret != 0) {
+        #mtr_error("Error when execute query: flush privileges");
+      #}
+      $xcluster_bootstrap= 1;
+    }
+  }
 
   # If '--start' or '--start-dirty' given, stop here to let user manually
   # run tests. If '--wait-all' is also given, do the same, but don't die
@@ -4771,14 +4953,16 @@ sub run_testcase ($) {
     if ($proc eq $test) {
       my $res = $test->exit_status();
 
-      if ($res == 0 and
+      if (!$opt_xcluster) {
+        if ($res == 0 and
           $opt_warnings and
           not defined $tinfo->{'skip_check_warnings'} and
           check_warnings($tinfo)) {
-        # Test case succeeded, but it has produced unexpected warnings,
-        # continue in $res == 1
-        $res = 1;
-        resfile_output($tinfo->{'warnings'}) if $opt_resfile;
+          # Test case succeeded, but it has produced unexpected warnings,
+          # continue in $res == 1
+          $res = 1;
+          resfile_output($tinfo->{'warnings'}) if $opt_resfile;
+        }
       }
 
       my $check_res;
@@ -4900,6 +5084,14 @@ sub run_testcase ($) {
       # Add process to the waiting queue if the check returns 2
       # or stop waiting if it returns 1
       unshift @waiting_procs, $proc if $check_crash == 2;
+      if ($tinfo->{'skip'}) {
+        # skipped
+        mtr_report_test_skipped($tinfo);
+        return 0;
+      }
+      # Keep waiting if it returned 2, if 1 don't wait or stop waiting.
+      # $keep_waiting_proc = 0     if $check_crash == 1;
+      # $keep_waiting_proc = $proc if $check_crash == 2;
       next;
     }
 
@@ -5445,9 +5637,16 @@ sub check_warnings ($) {
   # it possible to wait for any process to exit during the check.
   my %started;
   foreach my $mysqld (mysqlds()) {
-    if (defined $mysqld->{'proc'}) {
-      my $proc = start_check_warnings($tinfo, $mysqld);
-      $started{ $proc->pid() } = $proc;
+    if ($opt_xcluster) {
+      if (defined $mysqld->{'proc'} && $mysqld->name() eq "mysqld.1") {
+        my $proc= start_check_warnings($tinfo, $mysqld);
+        $started{$proc->pid()}= $proc;
+      }
+    } else {
+      if (defined $mysqld->{'proc'}) {
+	my $proc = start_check_warnings($tinfo, $mysqld);
+	$started{ $proc->pid() } = $proc;
+      }
     }
   }
 
@@ -5539,11 +5738,80 @@ sub check_expected_crash_and_restart($$) {
         mysqld_start($mysqld, $mysqld->{'started_opts'},
                      $tinfo, $bootstrap_opts);
 
+        if ($tinfo->{'skip'}) {
+          # skipped
+          return 1;
+        }
+
         if ($tinfo->{'secondary-engine'}) {
           my $restart_flag = 1;
           # Start secondary engine servers.
           start_secondary_engine_servers($tinfo, $restart_flag);
         }
+
+        if ($opt_xcluster && $mysqld->name() eq "mysqld.1") {
+	  # After a expected restart of mysqld.1, we should change leader back to node 1
+          my $mysqld_leader;
+          my $mysqld_oldleader = undef;
+          my $ret;
+          my $err_cnt = 0;
+          my $mysqld_servers = 0;
+	  foreach my $mysqld ( mysqlds() ) {
+            $mysqld_servers++;
+            if (!sleep_until_pid_file_created($mysqld->value('pid-file'),
+                                    $opt_start_timeout,
+                                    $mysqld->{'proc'})
+            ) {
+              my $mname = $mysqld->name();
+              mtr_error("Failed to wait the restart mysqld");
+            }
+            # remember the new leader
+            if ($mysqld->name() eq "mysqld.1") {
+              $mysqld_leader= $mysqld;
+              mtr_verbose("I will become leader: " . $mysqld->name());
+            }
+          }
+          if ($mysqld_servers > 1) {
+	    while (1) {
+	      sleep(1);
+	      foreach my $mysqld ( mysqlds() ) {
+		mtr_verbose("Run change leader query: " . $mysqld->name() . "  " . $mysqld->value('port') . "  " . $mysqld->value('socket'));
+		my $query = "call dbms_consensus.change_leader('127.0.0.1:".($mysqld_leader->value('port')+8000)."')";
+		$ret = run_query($mysqld, $query);
+		if ($ret == 0) {
+		  $mysqld_oldleader = $mysqld;
+		  mtr_verbose("I am the old leader: " . $mysqld->name());
+		}
+	      }
+	      last if (defined $mysqld_oldleader);
+	      $err_cnt++;
+	      if ($err_cnt < 5) {
+		mtr_report("Fail to find old leader, try again...");
+	      } else {
+		mtr_warning("Fail to find old leader after $err_cnt times trying!!!");
+		report_failure_and_restart($tinfo);
+		return 1;
+	      }
+	    }
+	    $err_cnt = 0;
+	    while (1) {
+	      sleep(1); # wait leader election
+	      my $query = "call dbms_consensus.change_leader('127.0.0.1:".($mysqld_leader->value('port')+8000)."')";
+	      $ret = run_query($mysqld_leader, $query, "run_query.log", "run_query.error");
+	      last if ($ret == 0);
+	      $err_cnt++;
+	      if ($err_cnt >= 10) {
+		mtr_warning("Fail to change consensus_leader after $err_cnt times trying!!!");
+		report_failure_and_restart($tinfo);
+		return 1;
+	      }
+	      mtr_verbose("Run change leader query again...");
+	      my $query = "call dbms_consensus.change_leader('127.0.0.1:".($mysqld_leader->value('port')+8000)."')";
+	      run_query($mysqld_oldleader, $query);
+	    }
+	    mtr_verbose("Finish change leader query.");
+          }
+	}
 
         return 1;
       }
@@ -5694,7 +5962,7 @@ sub report_failure_and_restart ($) {
   }
 
   # Shotdown properly if not to be killed (for valgrind)
-  stop_all_servers($tinfo->{'dont_kill_server'} ? $opt_shutdown_timeout : 0);
+  #stop_all_servers($tinfo->{'dont_kill_server'} ? $opt_shutdown_timeout : 0);
 
   $tinfo->{'result'} = 'MTR_RES_FAILED';
 
@@ -5949,6 +6217,19 @@ sub mysqld_start ($$$$) {
 
   foreach my $arg (@$extra_opts) {
     $daemonize_mysqld = 1 if ($arg eq "--daemonize");
+
+    # disable some case with cnf not supported
+    if ($opt_xcluster) {
+      if ($arg eq "--server-id=0") {
+        $tinfo->{'skip'} = 1;
+        $tinfo->{'comment'} = "$arg not support for X-Cluster";
+        return;
+      } if ($arg eq "--skip-log-bin") {
+        $tinfo->{'skip'} = 1;
+        $tinfo->{'comment'} = "$arg not support for X-Cluster";
+        return;
+      }
+    }
   }
 
   if ($opt_valgrind_mysqld) {
@@ -6257,10 +6538,15 @@ sub servers_need_restart($) {
   my @slaves;
 
   foreach my $server (mysqlds()) {
-    if (is_slave($server)) {
-      push(@slaves, $server);
-    } else {
+
+    if ($opt_xcluster) {
       push(@masters, $server);
+    } else {
+      if (is_slave($server)) {
+	push(@slaves, $server);
+      } else {
+	push(@masters, $server);
+      }
     }
   }
 
@@ -6269,7 +6555,19 @@ sub servers_need_restart($) {
   foreach my $master (@masters) {
     if (server_need_restart($tinfo, $master, $master_restarted)) {
       $master_restarted = 1;
-      push(@restart_servers, $master);
+      # cluster restart all server
+      if (!$opt_xcluster) {
+        push(@restart_servers, $master);
+      }
+    }
+  }
+
+  # cluster need restart all server when restart one
+  if ($opt_xcluster) {
+    if ($master_restarted) {
+      foreach my $master (@masters) {
+        push(@restart_servers, $master);
+      }
     }
   }
 
@@ -6408,6 +6706,17 @@ sub start_servers($) {
 
   my $server_id = 0;
   # Start mysqlds
+  $xcluster_id_cnt= 1;
+  #generate xcluster_info_prefix
+  $xcluster_info_prefix= '';
+  my $xcluster_info_arr= ();
+  foreach my $mysqld (mysqlds()) {
+    # X-Cluster: paxos_port = (server_port + 8000)
+    push (@$xcluster_info_arr, '127.0.0.1:'.($mysqld->value('port')+8000));
+  }
+  mtr_verbose('xcluster_info_prefix: ' . join(';', @$xcluster_info_arr));
+  $xcluster_info_prefix= join(';', @$xcluster_info_arr);
+  $ENV{'XCLUSTER_INFO_1'} = $xcluster_info_prefix.'@1';
 
   foreach my $mysqld (mysqlds()) {
     # Group Replication requires a local port to be open on each server
@@ -6464,33 +6773,42 @@ sub start_servers($) {
     if ($basedir eq $mysqld_basedir) {
       # If dirty, keep possibly grown system db
       if (!$opt_start_dirty) {
-        # Copy datadir from installed system db
-        my $path = ($opt_parallel == 1) ? "$opt_vardir" : "$opt_vardir/..";
-        my $install_db = "$path/data/";
-        if (!-d $datadir or
-            (!$bootstrap_opts and
-             !$mysqld->{need_reinitialization})
-        ) {
-          copytree($install_db, $datadir) if -d $install_db;
-          mtr_error("Failed to copy system db to '$datadir'")
-            unless -d $datadir;
-        }
 
-        # Restore the value of bootstrap command for the next run.
-        if ($initial_bootstrap_cmd ne $ENV{'MYSQLD_BOOTSTRAP_CMD'}) {
-          $ENV{'MYSQLD_BOOTSTRAP_CMD'} = $initial_bootstrap_cmd;
+        if (!$opt_xcluster) {
+          # Copy datadir from installed system db
+          my $path = ($opt_parallel == 1) ? "$opt_vardir" : "$opt_vardir/..";
+          my $install_db = "$path/data/";
+          if (!-d $datadir or
+            (!$bootstrap_opts and
+              !$mysqld->{need_reinitialization})
+          ) {
+            copytree($install_db, $datadir) if -d $install_db;
+            mtr_error("Failed to copy system db to '$datadir'")
+            unless -d $datadir;
+          }
+
+          # Restore the value of bootstrap command for the next run.
+          if ($initial_bootstrap_cmd ne $ENV{'MYSQLD_BOOTSTRAP_CMD'}) {
+            $ENV{'MYSQLD_BOOTSTRAP_CMD'} = $initial_bootstrap_cmd;
+          }
+        } else {
+          mysql_install_db($mysqld, $datadir);
+
+          mtr_error("Failed to install system db to '$datadir'")
+          unless -d $datadir;
         }
       }
     } else {
       mysql_install_db($mysqld);    # For versional testing
       mtr_error("Failed to install system db to '$datadir'")
-        unless -d $datadir;
+      unless -d $datadir;
     }
 
     # Reinitialize the data directory if there are bootstrap options
     # in the opt file.
     if ($mysqld->{need_reinitialization}) {
       clean_dir($datadir);
+      $xcluster_id_cnt--;
       mysql_install_db($mysqld, $datadir, $bootstrap_opts);
       $tinfo->{'reinitialized'} = 1;
       # Remove the bootstrap.sql file so that a duplicate set of
@@ -6507,21 +6825,28 @@ sub start_servers($) {
     mark_log($mysqld->value('#log-error'), $tinfo);
 
     # Run <tname>-master.sh
-    if ($mysqld->option('#!run-master-sh') and
-        run_sh_script($tinfo->{master_sh})) {
+    #if ($mysqld->option('#!run-master-sh') and
+        #run_sh_script($tinfo->{master_sh})) {
+    if (run_sh_script($tinfo->{master_sh})) {
       $tinfo->{'comment'} = "Failed to execute '$tinfo->{master_sh}'";
       return 1;
     }
 
     # Run <tname>-slave.sh
-    if ($mysqld->option('#!run-slave-sh') and
-        run_sh_script($tinfo->{slave_sh})) {
-      $tinfo->{'comment'} = "Failed to execute '$tinfo->{slave_sh}'";
-      return 1;
+
+    if (!$opt_xcluster) {
+      if ($mysqld->option('#!run-slave-sh') and
+	  run_sh_script($tinfo->{slave_sh})) {
+	$tinfo->{'comment'} = "Failed to execute '$tinfo->{slave_sh}'";
+	return 1;
+      }
     }
 
     my $extra_opts = get_extra_opts($mysqld, $tinfo);
     mysqld_start($mysqld, $extra_opts, $tinfo, $bootstrap_opts);
+    if ($tinfo->{'skip'}) {
+      return 1;
+    }
 
     # Save this test case information, so next can examine it
     $mysqld->{'started_tinfo'} = $tinfo;

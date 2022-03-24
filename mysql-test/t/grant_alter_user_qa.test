@@ -8,6 +8,8 @@
 # Author  : Lalit Choudhary                                                           #
 #######################################################################################
 
+# reset master only support by debug version
+--source include/have_debug_new.inc
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
 --source include/have_plugin_auth.inc

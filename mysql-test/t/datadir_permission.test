@@ -14,7 +14,7 @@ let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-ski
 
 --echo #
 --echo # Initialize the server with --initialize-insecure
---exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --log-error-verbosity=1 > $outfile 2>&1
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --log-error-verbosity=1 --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:24200@1' > $outfile 2>&1
 
 --echo # Check data directory permission. Expected value : 0750
 --perl

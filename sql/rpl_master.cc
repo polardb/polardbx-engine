@@ -68,6 +68,7 @@
 #include "sql/rpl_gtid.h"
 #include "sql/rpl_handler.h"  // RUN_HOOK
 #include "sql/sql_class.h"    // THD
+#include "sql/consensus_log_manager.h" // ConsensusLogManager
 #include "sql/sql_list.h"
 #include "sql/system_variables.h"
 #include "sql_string.h"
@@ -1159,6 +1160,17 @@ bool reset_master(THD *thd, bool unlock_global_read_lock) {
     ret = true;
     goto end;
   }
+#ifndef NORMANDY_TEST
+
+  if (unlock_global_read_lock) {
+    DBUG_ASSERT(thd->global_read_lock.is_acquired());
+    thd->global_read_lock.unlock_global_read_lock(thd);
+  }
+
+  /* xpaxos do not allow reset master */
+  my_error(ER_CANT_RESET_MASTER, MYF(0), "XPaxos Replication is running");
+  return true;
+#endif
 
   if (mysql_bin_log.is_open()) {
     /*
@@ -1241,9 +1253,12 @@ bool show_master_status(THD *thd) {
   }
   protocol->start_row();
 
-  if (mysql_bin_log.is_open()) {
+  /* For X-Cluster follower, we show relaylog position */
+  consensus_log_manager.lock_consensus(TRUE);
+  MYSQL_BIN_LOG *mysql_consensus_log= consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
+  if (mysql_consensus_log->is_open()) {
     LOG_INFO li;
-    mysql_bin_log.get_current_log(&li);
+    mysql_consensus_log->get_current_log(&li);
     size_t dir_len = dirname_length(li.log_file_name);
     protocol->store(li.log_file_name + dir_len, &my_charset_bin);
     protocol->store((ulonglong)li.pos);
@@ -1252,9 +1267,11 @@ bool show_master_status(THD *thd) {
     protocol->store(gtid_set_buffer, &my_charset_bin);
     if (protocol->end_row()) {
       my_free(gtid_set_buffer);
+      consensus_log_manager.unlock_consensus();
       return true;
     }
   }
+  consensus_log_manager.unlock_consensus();
   my_eof(thd);
   my_free(gtid_set_buffer);
   return false;
@@ -1280,7 +1297,11 @@ bool show_binlogs(THD *thd) {
   Protocol *protocol = thd->get_protocol();
   DBUG_TRACE;
 
-  if (!mysql_bin_log.is_open()) {
+  consensus_log_manager.lock_consensus(TRUE);
+  MYSQL_BIN_LOG *log = consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
+  if (!log->is_open())
+  {
+    consensus_log_manager.unlock_consensus();
     my_error(ER_NO_BINARY_LOGGING, MYF(0));
     return true;
   }
@@ -1293,13 +1314,13 @@ bool show_binlogs(THD *thd) {
                                 Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     return true;
 
-  mysql_mutex_lock(mysql_bin_log.get_log_lock());
+  mysql_mutex_lock(log->get_log_lock());
   DEBUG_SYNC(thd, "show_binlogs_after_lock_log_before_lock_index");
-  mysql_bin_log.lock_index();
-  index_file = mysql_bin_log.get_index_file();
+  log->lock_index();
+  index_file = log->get_index_file();
 
-  mysql_bin_log.raw_get_current_log(&cur);           // dont take mutex
-  mysql_mutex_unlock(mysql_bin_log.get_log_lock());  // lockdep, OK
+  log->raw_get_current_log(&cur);           // dont take mutex
+  mysql_mutex_unlock(log->get_log_lock());  // lockdep, OK
 
   cur_dir_len = dirname_length(cur.log_file_name);
 
@@ -1348,11 +1369,13 @@ bool show_binlogs(THD *thd) {
     }
   }
   if (index_file->error == -1) goto err;
-  mysql_bin_log.unlock_index();
+  log->unlock_index();
+  consensus_log_manager.unlock_consensus();
   my_eof(thd);
   return false;
 
 err:
-  mysql_bin_log.unlock_index();
+  log->unlock_index();
+  consensus_log_manager.unlock_consensus();
   return true;
 }

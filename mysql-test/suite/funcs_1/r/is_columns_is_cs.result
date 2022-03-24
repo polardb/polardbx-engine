@@ -6,6 +6,62 @@ ORDER BY table_schema,
 table_name COLLATE utf8_general_ci,
 ordinal_position;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION	SRS_ID
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	TIME	1		NO	varchar	10	32	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(32)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	COMMAND	2		NO	varchar	170	512	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(512)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_APPEND_LOG	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_REQUEST_VOTE	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_HEARTBEAT	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_APPEND_LOG	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_REQUEST_VOTE	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_HEARTBEAT	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_REPLICATE_LOG	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_IN_CACHE	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_TOTAL	10		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	IP_PORT	2		NO	varchar	21	64	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	MATCH_INDEX	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	NEXT_INDEX	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	ROLE	5		NO	varchar	3	10	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	HAS_VOTED	6		NO	varchar	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	FORCE_SYNC	7		NO	varchar	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	ELECTION_WEIGHT	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	LEARNER_SOURCE	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	APPLIED_INDEX	10		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	PIPELINING	11		NO	varchar	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	SEND_APPLIED	12		NO	varchar	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	IP_PORT	2		NO	varchar	21	64	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	ROLE	3		NO	varchar	3	10	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	CONNECTED	4		NO	varchar	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	LOG_DELAY_NUM	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	APPLY_DELAY_NUM	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_IP_PORT	2		NO	varchar	21	64	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_SERVER_ID	3		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_IP_PORT	4		NO	varchar	21	64	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_LAST_INDEX	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_COMMIT_INDEX	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_MATCH_INDEX	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_NEXT_INDEX	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_APPLIED_INDEX	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_TERM	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_LEADER	3		NO	varchar	21	64	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	COMMIT_INDEX	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_TERM	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_INDEX	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	ROLE	7		NO	varchar	3	10	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	VOTED_FOR	8		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	LAST_APPLY_INDEX	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_READY_FOR_RW	10		NO	varchar	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	INSTANCE_TYPE	11		NO	varchar	3	10	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CHANNEL_ID	1		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	FIRST_INDEX	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	LAST_INDEX	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CACHE_SIZE	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CURRENT_REQUEST	5		NO	varchar	21	64	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	STOP_FLAG	6		NO	varchar	3	10	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(10)			select			NULL
 def	information_schema	CHARACTER_SETS	CHARACTER_SET_NAME	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
 def	information_schema	CHARACTER_SETS	DEFAULT_COLLATE_NAME	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
 def	information_schema	CHARACTER_SETS	DESCRIPTION	3	NULL	NO	varchar	2048	6144	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(2048)			select			NULL
@@ -56,6 +112,9 @@ def	information_schema	COLUMN_STATISTICS	SCHEMA_NAME	1	NULL	NO	varchar	64	192	NU
 def	information_schema	COLUMN_STATISTICS	TABLE_NAME	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	COLUMN_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	HISTOGRAM	4	NULL	NO	json	NULL	NULL	NULL	NULL	NULL	NULL	NULL	json			select			NULL
+def	information_schema	CONSENSUS_COMMIT_POSITION	LOGNAME	1		NO	varchar	170	512	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(512)			select			NULL
+def	information_schema	CONSENSUS_COMMIT_POSITION	POSITION	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21) unsigned			select			NULL
+def	information_schema	CONSENSUS_COMMIT_POSITION	INDEX	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21) unsigned			select			NULL
 def	information_schema	ENGINES	ENGINE	1		NO	varchar	21	64	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
 def	information_schema	ENGINES	SUPPORT	2		NO	varchar	2	8	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(8)			select			NULL
 def	information_schema	ENGINES	COMMENT	3		NO	varchar	26	80	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(80)			select			NULL
@@ -124,6 +183,11 @@ def	information_schema	FILES	CHECK_TIME	35	NULL	YES	binary	0	0	NULL	NULL	NULL	NU
 def	information_schema	FILES	CHECKSUM	36	NULL	YES	binary	0	0	NULL	NULL	NULL	NULL	NULL	binary(0)			select			NULL
 def	information_schema	FILES	STATUS	37	NULL	YES	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select			NULL
 def	information_schema	FILES	EXTRA	38	NULL	YES	varchar	256	768	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(256)			select			NULL
+def	information_schema	INDEX_STATISTICS	TABLE_SCHEMA	1		NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(192)			select			NULL
+def	information_schema	INDEX_STATISTICS	TABLE_NAME	2		NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(192)			select			NULL
+def	information_schema	INDEX_STATISTICS	INDEX_NAME	3		NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(192)			select			NULL
+def	information_schema	INDEX_STATISTICS	ROWS_READ	4		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(21)			select			NULL
+def	information_schema	INDEX_STATISTICS	SCAN_USED	5		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int(21)			select			NULL
 def	information_schema	KEYWORDS	WORD	1	NULL	YES	varchar	29	87	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(29)			select			NULL
 def	information_schema	KEYWORDS	RESERVED	2	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int(11)			select			NULL
 def	information_schema	KEY_COLUMN_USAGE	CONSTRAINT_CATALOG	1		NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
@@ -340,13 +404,13 @@ def	information_schema	TABLE_PRIVILEGES	PRIVILEGE_TYPE	5		NO	varchar	21	64	NULL	
 def	information_schema	TABLE_PRIVILEGES	IS_GRANTABLE	6		NO	varchar	1	3	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(3)			select			NULL
 def	information_schema	TABLE_STATISTICS	TABLE_SCHEMA	1		NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(192)			select			NULL
 def	information_schema	TABLE_STATISTICS	TABLE_NAME	2		NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(192)			select			NULL
-def	information_schema	TABLE_STATISTICS	ROWS_READ	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
-def	information_schema	TABLE_STATISTICS	ROWS_CHANGED	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
-def	information_schema	TABLE_STATISTICS	ROWS_CHANGED_X_INDEXES	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
-def	information_schema	TABLE_STATISTICS	ROWS_INSERTED	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
-def	information_schema	TABLE_STATISTICS	ROWS_DELETED	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
-def	information_schema	TABLE_STATISTICS	ROWS_UPDATED	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
-def	information_schema	TABLE_STATISTICS	ROWS_READ_DELETE_MARK	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_READ	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_CHANGED	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_CHANGED_X_INDEXES	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_INSERTED	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_DELETED	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_UPDATED	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_READ_DELETE_MARK	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint(21)			select			NULL
 def	information_schema	TRIGGERS	TRIGGER_CATALOG	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	TRIGGERS	TRIGGER_SCHEMA	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_bin	varchar(64)			select			NULL
 def	information_schema	TRIGGERS	TRIGGER_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8	utf8_general_ci	varchar(64)			select			NULL
@@ -475,6 +539,62 @@ WHERE table_schema = 'information_schema'
 AND table_name <> 'PROFILING' AND table_name not like 'INNODB_%' AND table_name not like 'ndb%'
 ORDER BY TABLE_SCHEMA, TABLE_NAME COLLATE utf8_general_ci, ORDINAL_POSITION;
 COL_CML	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE
+3.2000	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	TIME	varchar	10	32	utf8	utf8_general_ci	varchar(32)
+3.0118	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	COMMAND	varchar	170	512	utf8	utf8_general_ci	varchar(512)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	SERVER_ID	int	NULL	NULL	NULL	NULL	int(10)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_APPEND_LOG	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_REQUEST_VOTE	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_HEARTBEAT	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_APPEND_LOG	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_REQUEST_VOTE	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_HEARTBEAT	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_REPLICATE_LOG	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_IN_CACHE	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_TOTAL	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	SERVER_ID	int	NULL	NULL	NULL	NULL	int(10)
+3.0476	information_schema	ALISQL_CLUSTER_GLOBAL	IP_PORT	varchar	21	64	utf8	utf8_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	MATCH_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	NEXT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+3.3333	information_schema	ALISQL_CLUSTER_GLOBAL	ROLE	varchar	3	10	utf8	utf8_general_ci	varchar(10)
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	HAS_VOTED	varchar	1	3	utf8	utf8_general_ci	varchar(3)
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	FORCE_SYNC	varchar	1	3	utf8	utf8_general_ci	varchar(3)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	ELECTION_WEIGHT	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	LEARNER_SOURCE	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	APPLIED_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	PIPELINING	varchar	1	3	utf8	utf8_general_ci	varchar(3)
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	SEND_APPLIED	varchar	1	3	utf8	utf8_general_ci	varchar(3)
+NULL	information_schema	ALISQL_CLUSTER_HEALTH	SERVER_ID	int	NULL	NULL	NULL	NULL	int(10)
+3.0476	information_schema	ALISQL_CLUSTER_HEALTH	IP_PORT	varchar	21	64	utf8	utf8_general_ci	varchar(64)
+3.3333	information_schema	ALISQL_CLUSTER_HEALTH	ROLE	varchar	3	10	utf8	utf8_general_ci	varchar(10)
+3.0000	information_schema	ALISQL_CLUSTER_HEALTH	CONNECTED	varchar	1	3	utf8	utf8_general_ci	varchar(3)
+NULL	information_schema	ALISQL_CLUSTER_HEALTH	LOG_DELAY_NUM	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_HEALTH	APPLY_DELAY_NUM	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_SERVER_ID	int	NULL	NULL	NULL	NULL	int(10)
+3.0476	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_IP_PORT	varchar	21	64	utf8	utf8_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_SERVER_ID	int	NULL	NULL	NULL	NULL	int(10)
+3.0476	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_IP_PORT	varchar	21	64	utf8	utf8_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_LAST_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_COMMIT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_MATCH_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_NEXT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_APPLIED_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_ID	int	NULL	NULL	NULL	NULL	int(10)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_TERM	bigint	NULL	NULL	NULL	NULL	bigint(21)
+3.0476	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_LEADER	varchar	21	64	utf8	utf8_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	COMMIT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_TERM	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+3.3333	information_schema	ALISQL_CLUSTER_LOCAL	ROLE	varchar	3	10	utf8	utf8_general_ci	varchar(10)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	VOTED_FOR	int	NULL	NULL	NULL	NULL	int(10)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	LAST_APPLY_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+3.0000	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_READY_FOR_RW	varchar	1	3	utf8	utf8_general_ci	varchar(3)
+3.3333	information_schema	ALISQL_CLUSTER_LOCAL	INSTANCE_TYPE	varchar	3	10	utf8	utf8_general_ci	varchar(10)
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CHANNEL_ID	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	FIRST_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	LAST_INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CACHE_SIZE	bigint	NULL	NULL	NULL	NULL	bigint(21)
+3.0476	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CURRENT_REQUEST	varchar	21	64	utf8	utf8_general_ci	varchar(64)
+3.3333	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	STOP_FLAG	varchar	3	10	utf8	utf8_general_ci	varchar(10)
 3.0000	information_schema	CHARACTER_SETS	CHARACTER_SET_NAME	varchar	64	192	utf8	utf8_general_ci	varchar(64)
 3.0000	information_schema	CHARACTER_SETS	DEFAULT_COLLATE_NAME	varchar	64	192	utf8	utf8_general_ci	varchar(64)
 3.0000	information_schema	CHARACTER_SETS	DESCRIPTION	varchar	2048	6144	utf8	utf8_general_ci	varchar(2048)
@@ -525,6 +645,9 @@ NULL	information_schema	COLUMNS	SRS_ID	int	NULL	NULL	NULL	NULL	int(10) unsigned
 3.0000	information_schema	COLUMN_STATISTICS	TABLE_NAME	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	information_schema	COLUMN_STATISTICS	COLUMN_NAME	varchar	64	192	utf8	utf8_bin	varchar(64)
 NULL	information_schema	COLUMN_STATISTICS	HISTOGRAM	json	NULL	NULL	NULL	NULL	json
+3.0118	information_schema	CONSENSUS_COMMIT_POSITION	LOGNAME	varchar	170	512	utf8	utf8_general_ci	varchar(512)
+NULL	information_schema	CONSENSUS_COMMIT_POSITION	POSITION	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	CONSENSUS_COMMIT_POSITION	INDEX	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 3.0476	information_schema	ENGINES	ENGINE	varchar	21	64	utf8	utf8_general_ci	varchar(64)
 4.0000	information_schema	ENGINES	SUPPORT	varchar	2	8	utf8	utf8_general_ci	varchar(8)
 3.0769	information_schema	ENGINES	COMMENT	varchar	26	80	utf8	utf8_general_ci	varchar(80)
@@ -593,6 +716,11 @@ NULL	information_schema	FILES	CHECK_TIME	binary	0	0	NULL	NULL	binary(0)
 NULL	information_schema	FILES	CHECKSUM	binary	0	0	NULL	NULL	binary(0)
 3.0000	information_schema	FILES	STATUS	varchar	256	768	utf8	utf8_general_ci	varchar(256)
 3.0000	information_schema	FILES	EXTRA	varchar	256	768	utf8	utf8_general_ci	varchar(256)
+3.0000	information_schema	INDEX_STATISTICS	TABLE_SCHEMA	varchar	64	192	utf8	utf8_general_ci	varchar(192)
+3.0000	information_schema	INDEX_STATISTICS	TABLE_NAME	varchar	64	192	utf8	utf8_general_ci	varchar(192)
+3.0000	information_schema	INDEX_STATISTICS	INDEX_NAME	varchar	64	192	utf8	utf8_general_ci	varchar(192)
+NULL	information_schema	INDEX_STATISTICS	ROWS_READ	int	NULL	NULL	NULL	NULL	int(21)
+NULL	information_schema	INDEX_STATISTICS	SCAN_USED	int	NULL	NULL	NULL	NULL	int(21)
 3.0000	information_schema	KEYWORDS	WORD	varchar	29	87	utf8	utf8_general_ci	varchar(29)
 NULL	information_schema	KEYWORDS	RESERVED	int	NULL	NULL	NULL	NULL	int(11)
 3.0000	information_schema	KEY_COLUMN_USAGE	CONSTRAINT_CATALOG	varchar	64	192	utf8	utf8_bin	varchar(64)
@@ -809,13 +937,13 @@ NULL	information_schema	TABLESPACES	NODEGROUP_ID	bigint	NULL	NULL	NULL	NULL	bigi
 3.0000	information_schema	TABLE_PRIVILEGES	IS_GRANTABLE	varchar	1	3	utf8	utf8_general_ci	varchar(3)
 3.0000	information_schema	TABLE_STATISTICS	TABLE_SCHEMA	varchar	64	192	utf8	utf8_general_ci	varchar(192)
 3.0000	information_schema	TABLE_STATISTICS	TABLE_NAME	varchar	64	192	utf8	utf8_general_ci	varchar(192)
-NULL	information_schema	TABLE_STATISTICS	ROWS_READ	bigint	NULL	NULL	NULL	NULL	bigint
-NULL	information_schema	TABLE_STATISTICS	ROWS_CHANGED	bigint	NULL	NULL	NULL	NULL	bigint
-NULL	information_schema	TABLE_STATISTICS	ROWS_CHANGED_X_INDEXES	bigint	NULL	NULL	NULL	NULL	bigint
-NULL	information_schema	TABLE_STATISTICS	ROWS_INSERTED	bigint	NULL	NULL	NULL	NULL	bigint
-NULL	information_schema	TABLE_STATISTICS	ROWS_DELETED	bigint	NULL	NULL	NULL	NULL	bigint
-NULL	information_schema	TABLE_STATISTICS	ROWS_UPDATED	bigint	NULL	NULL	NULL	NULL	bigint
-NULL	information_schema	TABLE_STATISTICS	ROWS_READ_DELETE_MARK	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	TABLE_STATISTICS	ROWS_READ	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	TABLE_STATISTICS	ROWS_CHANGED	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	TABLE_STATISTICS	ROWS_CHANGED_X_INDEXES	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	TABLE_STATISTICS	ROWS_INSERTED	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	TABLE_STATISTICS	ROWS_DELETED	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	TABLE_STATISTICS	ROWS_UPDATED	bigint	NULL	NULL	NULL	NULL	bigint(21)
+NULL	information_schema	TABLE_STATISTICS	ROWS_READ_DELETE_MARK	bigint	NULL	NULL	NULL	NULL	bigint(21)
 3.0000	information_schema	TRIGGERS	TRIGGER_CATALOG	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	information_schema	TRIGGERS	TRIGGER_SCHEMA	varchar	64	192	utf8	utf8_bin	varchar(64)
 3.0000	information_schema	TRIGGERS	TRIGGER_NAME	varchar	64	192	utf8	utf8_general_ci	varchar(64)

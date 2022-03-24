@@ -889,8 +889,10 @@ bool PFS_status_variable_cache::filter_by_name(const SHOW_VAR *show_var) {
     */
     const char *name = show_var->name;
     if (!my_strcasecmp(system_charset_info, name, "Slave_running") ||
+#ifdef DBUG_OFF
         !my_strcasecmp(system_charset_info, name,
                        "Slave_retried_transactions") ||
+#endif
         !my_strcasecmp(system_charset_info, name, "Slave_last_heartbeat") ||
         !my_strcasecmp(system_charset_info, name,
                        "Slave_received_heartbeats") ||

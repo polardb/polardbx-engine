@@ -79,6 +79,7 @@ class Rpl_info_file : public Rpl_info_handler {
   enum_return_check do_check_info(uint instance);
   void do_end_info();
   int do_flush_info(const bool force);
+  int do_flush_info_force_new_thd(const bool force);
   int do_remove_info();
   int do_clean_info();
   /**

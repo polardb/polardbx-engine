@@ -11,11 +11,10 @@ SELECT COUNT(@@SESSION.relay_log_info_repository);
 ERROR HY000: Variable 'relay_log_info_repository' is a GLOBAL variable
 '#---------------------BS_STVARS_002_02----------------------#'
 SET @@GLOBAL.relay_log_info_repository= "FILE";
-Warnings:
-Warning	1287	'FILE' is deprecated and will be removed in a future release. Please use 'TABLE' instead
+ERROR HY000: Failure while changing the type of replication repository: relay_log_info is not inited.
 SELECT @@GLOBAL.relay_log_info_repository;
 @@GLOBAL.relay_log_info_repository
-FILE
+TABLE
 '#---------------------BS_STVARS_002_03----------------------#'
 SELECT @@GLOBAL.relay_log_info_repository = VARIABLE_VALUE
 FROM performance_schema.global_variables

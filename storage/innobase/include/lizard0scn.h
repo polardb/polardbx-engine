@@ -135,6 +135,8 @@ constexpr gcn_t GCN_DYNAMIC_METADATA = GCN_MAX;
 /** The gcn for innodb log ddl */
 constexpr gcn_t GCN_LOG_DDL = GCN_MAX;
 
+extern bool srv_snapshot_update_gcn;
+
 /* The structure of scn number generation */
 class SCN {
  public:
@@ -157,9 +159,15 @@ class SCN {
   @return     m_scn */
   scn_t acquire_scn(bool mutex_hold = false);
 
+  gcn_t acquire_gcn(bool mutex_hold = false);
+
   scn_t get_scn();
 
   gcn_t get_gcn();
+
+  void set_snapshot_gcn(gcn_t gcn, bool mutex_hold = false);
+
+  gcn_t get_snapshot_gcn();
 
   /** lock mutex */
   void lock() {
@@ -195,7 +203,10 @@ class SCN {
 
  private:
   std::atomic<scn_t> m_scn;
+  /*persisted gcn*/
   std::atomic<gcn_t> m_gcn;
+  /*snapshot gcn*/
+  std::atomic<gcn_t> m_snapshot_gcn;
   bool m_inited;
   ib_mutex_t m_mutex;
 };

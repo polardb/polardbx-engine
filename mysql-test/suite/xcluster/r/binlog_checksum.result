@@ -1,0 +1,24 @@
+"master_verify_checksum=OFF, slave_sql_verify_checksum=ON"
+set global master_verify_checksum=OFF;
+set global slave_sql_verify_checksum=OFF;
+set global master_verify_checksum=OFF;
+set global slave_sql_verify_checksum=OFF;
+create table t1(id int, data longblob);
+"master_verify_checksum=ON, slave_sql_verify_checksum=ON"
+set global master_verify_checksum=ON;
+set global slave_sql_verify_checksum=ON;
+set global master_verify_checksum=ON;
+set global slave_sql_verify_checksum=ON;
+"master_verify_checksum=ON, slave_sql_verify_checksum=OFF"
+set global master_verify_checksum=OFF;
+set global slave_sql_verify_checksum=ON;
+set global master_verify_checksum=OFF;
+set global slave_sql_verify_checksum=ON;
+select count(distinct(APPLIED_INDEX)) from information_schema.alisql_cluster_global;
+count(distinct(APPLIED_INDEX))
+1
+drop table t1;
+set global master_verify_checksum=OFF;
+set global slave_sql_verify_checksum=OFF;
+set global master_verify_checksum=OFF;
+set global slave_sql_verify_checksum=OFF;

@@ -129,8 +129,11 @@ extern lizard_sys_t *lizard_sys;
 /** Get current SCN number */
 extern scn_t lizard_sys_get_scn();
 
-/** Get current GCN number */
+/** Get current persisted GCN number */
 extern gcn_t lizard_sys_get_gcn();
+
+/** Get max snapshot GCN number */
+extern gcn_t lizard_sys_get_snapshot_gcn();
 
 /**
   Modify the min active trx id
@@ -183,6 +186,12 @@ void lizard_sys_erase_lists(trx_t *trx);
 /** Check if min_safe_scn is valid */
 void min_safe_scn_valid();
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
+
+/**
+  Get the max gcn between snapshot gcn and m_gcn
+
+  @retval         the valid gcn. */
+gcn_t lizard_sys_acquire_gcn();
 
 }  // namespace lizard
 

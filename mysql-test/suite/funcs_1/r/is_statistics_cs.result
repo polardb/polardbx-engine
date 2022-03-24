@@ -80,6 +80,8 @@ def	mysql	columns_priv	mysql	PRIMARY
 def	mysql	columns_priv	mysql	PRIMARY
 def	mysql	columns_priv	mysql	PRIMARY
 def	mysql	component	mysql	PRIMARY
+def	mysql	concurrency_control	mysql	PRIMARY
+def	mysql	consensus_info	mysql	PRIMARY
 def	mysql	db	mysql	PRIMARY
 def	mysql	db	mysql	PRIMARY
 def	mysql	db	mysql	PRIMARY
@@ -105,12 +107,15 @@ def	mysql	help_relation	mysql	PRIMARY
 def	mysql	help_relation	mysql	PRIMARY
 def	mysql	help_topic	mysql	PRIMARY
 def	mysql	help_topic	mysql	name
+def	mysql	innodb_flashback_snapshot	mysql	PRIMARY
+def	mysql	innodb_flashback_snapshot	mysql	utc
 def	mysql	innodb_index_stats	mysql	PRIMARY
 def	mysql	innodb_index_stats	mysql	PRIMARY
 def	mysql	innodb_index_stats	mysql	PRIMARY
 def	mysql	innodb_index_stats	mysql	PRIMARY
 def	mysql	innodb_table_stats	mysql	PRIMARY
 def	mysql	innodb_table_stats	mysql	PRIMARY
+def	mysql	outline	mysql	PRIMARY
 def	mysql	password_history	mysql	PRIMARY
 def	mysql	password_history	mysql	PRIMARY
 def	mysql	password_history	mysql	PRIMARY
@@ -213,6 +218,8 @@ def	performance_schema	events_statements_summary_by_account_by_event_name	perfor
 def	performance_schema	events_statements_summary_by_account_by_event_name	performance_schema	ACCOUNT
 def	performance_schema	events_statements_summary_by_digest	performance_schema	SCHEMA_NAME
 def	performance_schema	events_statements_summary_by_digest	performance_schema	SCHEMA_NAME
+def	performance_schema	events_statements_summary_by_digest_supplement	performance_schema	SCHEMA_NAME
+def	performance_schema	events_statements_summary_by_digest_supplement	performance_schema	SCHEMA_NAME
 def	performance_schema	events_statements_summary_by_host_by_event_name	performance_schema	HOST
 def	performance_schema	events_statements_summary_by_host_by_event_name	performance_schema	HOST
 def	performance_schema	events_statements_summary_by_program	performance_schema	PRIMARY

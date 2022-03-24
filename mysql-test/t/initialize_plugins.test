@@ -15,7 +15,7 @@
 
 --echo # Must not crash
 --let DEFARGS= --no-defaults --console --socket=$MYSQLD_SOCKET --port=$MYSQLD_PORT --skip-ssl --datadir=$DDIR
---exec $MYSQLD $DEFARGS --initialize $PFS_EXAMPLE_PLUGIN_EMPLOYEE_OPT $PFS_EXAMPLE_PLUGIN_EMPLOYEE_LOAD_ADD > $MYSQLD_LOG 2>&1
+--exec $MYSQLD $DEFARGS --initialize $PFS_EXAMPLE_PLUGIN_EMPLOYEE_OPT $PFS_EXAMPLE_PLUGIN_EMPLOYEE_LOAD_ADD --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29942@1' > $MYSQLD_LOG 2>&1
 
 --echo # Restarting the server
 --source include/start_mysqld.inc

@@ -1,0 +1,4 @@
+!include suite/xcluster/my.cnf
+
+[mysqld.3]
+cluster-log-type-node=ON

@@ -108,6 +108,7 @@ let $script=
   s{((?:master|slave|slave-relay)-bin\.[0-9]{6};pos=)[0-9]+DOLLAR}{DOLLAR1POS};
   s{(binlog\.[0-9]{6};pos=)[0-9]+DOLLAR}{DOLLAR1POS};
   s{SONAME ".*"}{SONAME "LIB"};
+  s{##PREV_CONSENSUS_INDEX: [0-9]+}{##PREV_CONSENSUS_INDEX: #};
   s{DOLLARmysqltest_vardir}{MYSQLTEST_VARDIR}g;
 ||
 --let $pre_script= my DOLLARmysqltest_vardir = DOLLARENV{'MYSQLTEST_VARDIR'};
@@ -158,6 +159,9 @@ if (!$keep_ddl_xid)
 {
   --let $script= $script s{ /\* XID # \*/}{};
 }
+--let $script= $script DOLLAR_ = '' if (m{\t(?:Previous_consensus_index)\t});
+--let $script= $script DOLLAR_ = '' if (m{\t(?:Consensus_log)\t});
+--let $script= $script DOLLAR_ = '' if (m{\t(?:Gcn)\t});
 --delimiter ;
 
 #--let $select_columns= 1 3 6

@@ -29,6 +29,7 @@ SET(REPLICATION_SOURCES
   rows_event.cpp
   statement_events.cpp
   uuid.cpp
+  control_consensus_events.cc
   )
 
 # Configure for building static library

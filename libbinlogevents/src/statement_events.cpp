@@ -87,11 +87,7 @@ Query_event::Query_event(
       ddl_xid(INVALID_XID),
       default_collation_for_utf8mb4_number(0),
       sql_require_primary_key(0xff),
-      default_table_encryption(0xff),
-      commit_gcn_assigned(0),
-      prepare_gcn_assigned(0),
-      commit_gcn(MYSQL_GCN_NULL),
-      prepare_gcn(MYSQL_GCN_NULL) {}
+      default_table_encryption(0xff) {}
 
 /**
   Utility function for the Query_event constructor.
@@ -142,11 +138,7 @@ Query_event::Query_event(const char *buf, const Format_description_event *fde,
       ddl_xid(INVALID_XID),
       default_collation_for_utf8mb4_number(0),
       sql_require_primary_key(0xff),
-      default_table_encryption(0xff),
-      commit_gcn_assigned(0),
-      prepare_gcn_assigned(0),
-      commit_gcn(MYSQL_GCN_NULL),
-      prepare_gcn(MYSQL_GCN_NULL) {
+      default_table_encryption(0xff) {
   BAPI_ENTER("Query_event::Query_event(const char*, ...)");
   READER_TRY_INITIALIZATION;
   READER_ASSERT_POSITION(fde->common_header_len);
@@ -340,14 +332,6 @@ Query_event::Query_event(const char *buf, const Format_description_event *fde,
         break;
       case Q_DEFAULT_TABLE_ENCRYPTION:
         READER_TRY_SET(default_table_encryption, read<uint8_t>);
-        break;
-      case Q_LIZARD_COMMIT_GCN:
-        commit_gcn_assigned = 1;
-        READER_TRY_SET(commit_gcn, read_and_letoh<uint64_t>);
-        break;
-      case Q_LIZARD_PREPARE_GCN:
-        prepare_gcn_assigned = 1;
-        READER_TRY_SET(prepare_gcn, read_and_letoh<uint64_t>);
         break;
       default:
         /* That's why you must write status vars in growing order of code */

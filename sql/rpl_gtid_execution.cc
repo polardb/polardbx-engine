@@ -41,6 +41,7 @@
 #include "sql/sql_lex.h"
 #include "sql/sql_parse.h"  // stmt_causes_implicit_commit
 #include "sql/system_variables.h"
+#include "sql/log.h" // sql_print_warning
 
 bool set_gtid_next(THD *thd, const Gtid_specification &spec) {
   DBUG_TRACE;
@@ -296,9 +297,14 @@ static inline bool is_already_logged_transaction(const THD *thd) {
 
   if (gtid_next_list == nullptr) {
     if (gtid_next->type == ASSIGNED_GTID) {
-      if (thd->owned_gtid.sidno == 0)
-        return true;
-      else
+      if (thd->owned_gtid.sidno == 0) {
+        if (thd->xpaxos_replication_channel) {
+          sql_print_warning("the gtid(%d, %lld) is already logged in paxos channel",
+                             gtid_next->gtid.sidno, gtid_next->gtid.gno);
+          return false;
+        } else
+          return true;
+      } else
         DBUG_ASSERT(thd->owned_gtid.equals(gtid_next->gtid));
     } else
       DBUG_ASSERT(thd->owned_gtid.sidno == 0 ||
@@ -307,7 +313,14 @@ static inline bool is_already_logged_transaction(const THD *thd) {
 #ifdef HAVE_GTID_NEXT_LIST
     if (gtid_next->type == ASSIGNED_GTID) {
       DBUG_ASSERT(gtid_next_list->contains_gtid(gtid_next->gtid));
-      if (!thd->owned_gtid_set.contains_gtid(gtid_next->gtid)) return true;
+      if (!thd->owned_gtid_set.contains_gtid(gtid_next->gtid)) {
+        if (thd->xpaxos_replication_channel) {
+          sql_print_warning("the gtid(%d, %lld) is already logged in paxos channel",
+                             gtid_next->gtid.sidno, gtid_next->gtid.gno);
+          return false;
+        } else
+          return true;
+      }
     }
 #else
     DBUG_ASSERT(0); /*NOTREACHED*/

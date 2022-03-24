@@ -378,6 +378,15 @@ THD *Rpl_info_table_access::create_thd() {
   return (thd);
 }
 
+THD *Rpl_info_table_access::force_create_thd() {
+  THD *thd= NULL;
+  old_thd= current_thd;
+  thd= System_table_access::create_thd();
+  thd->system_thread= SYSTEM_THREAD_INFO_REPOSITORY;
+  thd_created= true;
+  return(thd);
+}
+
 /**
   Destroys the created thread if necessary and restores the
   system_thread information.
@@ -392,4 +401,11 @@ void Rpl_info_table_access::drop_thd(THD *thd) {
     System_table_access::drop_thd(thd);
     thd_created = false;
   }
+
+  if (old_thd)
+  {
+    old_thd->store_globals();
+    old_thd= NULL;
+  }
+
 }

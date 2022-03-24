@@ -325,6 +325,7 @@ struct System_variables {
   bool session_track_schema;
   bool session_track_state_change;
   ulong session_track_transaction_info;
+  bool session_track_index;
 
   /*
     Time in seconds, after which the statistics in mysql.table/index_stats
@@ -344,6 +345,7 @@ struct System_variables {
     'COLUMN_TYPE' field.
   */
   bool show_old_temporals;
+  bool opt_force_revise;
   // Used for replication delay and lag monitoring
   ulonglong original_commit_timestamp;
 

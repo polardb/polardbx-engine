@@ -31,6 +31,7 @@ innodb_gis.rtree_split_geographic : BUG#000 Take too long (timeout)
 large_tests.alter_table : BUG#000 Consume too much space
 rpl_gtid.rpl_wait_for_executed_gtid_set_no_timeout: BUG#000 unstable
 binlog.binlog_max_flush_queue_time_warn : BUG#000 unstable
+binlog.binlog_table_map_optional_metadata : BUG#000 blob metadata
 main.mysqlpump_extended : BUG#000 timeout
 
 # issues with XEngine integrated
@@ -500,3 +501,10 @@ main.myisam_explain_json_non_select_none       : WL#001 test does not work for x
 main.dd_schema_definition_after_upgrade_57_debug                   : WL#001 test runs into core dump
 binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table : WL#001 test runs into core dump
 main.multiaddress_bind                         : WL#001 ipv6
+
+xcluster.smart_uk_conflict                     : WL#001 smart replay mode is not supported
+xcluster.smart_row_image_not_full              : WL#001 smart replay mode is not supported
+xcluster.version_hide_xcluster                 : WL#001 not needed now because version string changed
+xcluster.rpl_mts_table                         : WL#001 system variable 'slave-pr-mode=TABLE' is not supported
+xcluster.long_trx_leader_transfer              : WL#001 testcase issue
+xcluster.gtid                                  : WL#001 GTID is not fully supported now

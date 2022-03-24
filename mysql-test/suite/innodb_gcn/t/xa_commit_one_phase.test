@@ -1,3 +1,5 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
 --disable_warnings
 DROP TABLE IF EXISTS t1;
 --enable_warnings
@@ -11,11 +13,19 @@ CREATE TABLE t1 (
 INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
 
 connect (conn1,localhost,root,,);
---source suite/innodb_gcn/include/init_conn_base_seq.inc
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
 connect (conn2,localhost,root,,);
---source suite/innodb_gcn/include/init_conn_base_seq.inc
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
 connect (conn3,localhost,root,,);
---source suite/innodb_gcn/include/init_conn_base_seq.inc
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
 
 connection conn1;
 

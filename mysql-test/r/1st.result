@@ -12,6 +12,7 @@ Tables_in_mysql
 columns_priv
 component
 concurrency_control
+consensus_info
 db
 default_roles
 engine_cost

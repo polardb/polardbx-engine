@@ -1,3 +1,5 @@
+--source include/have_debug_new.inc
+
 # Tests for PERFORMANCE_SCHEMA
 
 --source include/have_log_bin.inc

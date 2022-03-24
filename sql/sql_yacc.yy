@@ -1263,6 +1263,11 @@ void warn_about_deprecated_binary(THD *thd)
 %token<lexer.keyword> NOCYCLE_SYM                    /* MYSQL */
 %token<lexer.keyword> SEQUENCE_SYM                   /* MYSQL */
 
+/* Tolens for xcluster */
+%token<lexer.keyword> CONSENSUS_SYM
+%token<lexer.keyword> CONSENSUSLOG_SYM
+%token<lexer.keyword> XPAXOS_REPLICATION
+
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
   simple "UNIQUE" and "KEY" attributes:
@@ -2123,6 +2128,7 @@ simple_statement:
         | flush                         { $$= nullptr; }
         | get_diagnostics               { $$= nullptr; }
         | group_replication             { $$= nullptr; }
+        | xpaxos_replication            { $$= nullptr; }
         | grant                         { $$= nullptr; }
         | handler_stmt
         | help                          { $$= nullptr; }
@@ -8481,6 +8487,27 @@ group_replication:
                  }
                ;
 
+xpaxos_replication:
+                 START_SYM XPAXOS_REPLICATION
+                 {
+                   LEX *lex=Lex;
+                   lex->sql_command = SQLCOM_START_XPAXOS_REPLICATION;
+                   lex->type= 0;
+                   lex->slave_thd_opt= 0;
+                   Lex->mi.channel= "";
+                   Lex->mi.for_channel= false;
+                 }
+               | STOP_SYM XPAXOS_REPLICATION
+                 {
+                   LEX *lex=Lex;
+                   lex->sql_command = SQLCOM_STOP_XPAXOS_REPLICATION;
+                   lex->type= 0;
+                   lex->slave_thd_opt= 0;
+                   Lex->mi.channel= "";
+                   Lex->mi.for_channel= false;
+                 }
+               ;
+
 slave:
         slave_start start_slave_opts{}
       | STOP_SYM SLAVE opt_slave_thread_option_list opt_channel
@@ -12795,6 +12822,10 @@ show_param:
           {
             Lex->sql_command = SQLCOM_SHOW_BINLOGS;
           }
+        | CONSENSUS_SYM LOGS_SYM
+          {
+            Lex->sql_command = SQLCOM_SHOW_CONSENSUSLOGS;
+          }
         | SLAVE HOSTS_SYM
           {
             Lex->sql_command = SQLCOM_SHOW_SLAVE_HOSTS;
@@ -12803,6 +12834,16 @@ show_param:
           {
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_SHOW_BINLOG_EVENTS;
+          }
+          opt_limit_clause
+          {
+            if ($6 != NULL)
+              CONTEXTUALIZE($6);
+          }
+        | CONSENSUSLOG_SYM EVENTS_SYM FROM consensus_log_index
+          {
+            LEX *lex= Lex;
+            lex->sql_command= SQLCOM_SHOW_CONSENSUSLOG_EVENTS;
           }
           opt_limit_clause
           {
@@ -13130,6 +13171,11 @@ binlog_in:
 binlog_from:
           /* empty */        { Lex->mi.pos = 4; /* skip magic number */ }
         | FROM ulonglong_num { Lex->mi.pos = $2; }
+        ;
+
+consensus_log_index:
+          /* empty */        { Lex->consensus.log_index = 2; }
+        | ulonglong_num      { Lex->consensus.log_index = $1; }
         ;
 
 opt_wild_or_where:
@@ -14413,6 +14459,7 @@ ident_keywords_unambiguous:
         | GET_MASTER_PUBLIC_KEY_SYM
         | GRANTS
         | GROUP_REPLICATION
+        | XPAXOS_REPLICATION
         | HASH_SYM
         | HISTOGRAM_SYM
         | HISTORY_SYM

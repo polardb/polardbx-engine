@@ -25,6 +25,14 @@
 #include <my_sys.h>
 #include <mysql/psi/mysql_file.h>
 
+ssize_t Write_cache_istream::read(unsigned char *buffer, size_t length) {
+  DBUG_ENTER("IO_CACHE_istream::read");
+  if (my_b_read(m_io_cache, buffer, length) ||
+      DBUG_EVALUATE_IF("simulate_magic_header_io_failure", 1, 0))
+    DBUG_RETURN(m_io_cache->error);
+  DBUG_RETURN(static_cast<longlong>(length));
+}
+
 IO_CACHE_istream::IO_CACHE_istream() {}
 
 IO_CACHE_istream::~IO_CACHE_istream() { close(); }

@@ -1,0 +1,49 @@
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+
+--connection conn2
+select * from information_schema.consensus_commit_position;
+#show consensus commit point;
+flush local logs;
+sleep 1;
+select * from information_schema.consensus_commit_position;
+#show consensus commit point;
+
+--connection default
+--replace_column 2 # 3 #
+select * from information_schema.consensus_commit_position;
+#--replace_column 2 # 3 #
+#show consensus commit point;
+flush local logs;
+sleep 1;
+--replace_column 2 # 3 #
+select * from information_schema.consensus_commit_position;
+#--replace_column 2 # 3 #
+#show consensus commit point;
+
+create table t (id int);
+insert into t values (1);
+--replace_column 2 # 3 #
+select * from information_schema.consensus_commit_position;
+#--replace_column 2 # 3 #
+#show consensus commit point;
+flush local logs;
+sleep 1;
+--replace_column 2 # 3 #
+select * from information_schema.consensus_commit_position;
+#--replace_column 2 # 3 #
+#show consensus commit point;
+insert into t values (2);
+--source include/wait_apply_catchup.inc
+
+--replace_column 2 # 3 #
+select * from information_schema.consensus_commit_position;
+#--replace_column 2 # 3 #
+#show consensus commit point;
+flush local logs;
+flush local logs;
+sleep 1;
+--replace_column 2 # 3 #
+select * from information_schema.consensus_commit_position;
+#--replace_column 2 # 3 #
+#show consensus commit point;
+drop table t;

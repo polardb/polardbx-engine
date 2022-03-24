@@ -36,7 +36,7 @@ enum enum_return_id { FOUND_ID = 1, NOT_FOUND_ID, ERROR_ID };
 
 class Rpl_info_table_access : public System_table_access {
  public:
-  Rpl_info_table_access() : thd_created(false) {}
+  Rpl_info_table_access() : thd_created(false), old_thd(NULL) {}
   virtual ~Rpl_info_table_access() {}
 
   /**
@@ -58,11 +58,12 @@ class Rpl_info_table_access : public System_table_access {
   bool store_info_values(uint max_num_field, Field **fields,
                          Rpl_info_values *field_values);
   THD *create_thd();
+  THD *force_create_thd();
   void drop_thd(THD *thd);
 
  private:
   bool thd_created;
-
+  THD* old_thd;
   Rpl_info_table_access &operator=(const Rpl_info_table_access &info);
   Rpl_info_table_access(const Rpl_info_table_access &info);
 };

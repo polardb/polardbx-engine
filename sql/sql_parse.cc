@@ -39,6 +39,12 @@
 #include <thread>
 #include <utility>
 
+#ifdef NORMANDY_CLUSTER
+#include "bl_consensus_log.h"
+#else
+#include "consensus_log_manager.h"
+#endif
+
 #ifdef HAVE_LSAN_DO_RECOVERABLE_LEAK_CHECK
 #include <sanitizer/lsan_interface.h>
 #endif
@@ -79,6 +85,7 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/binlog.h"  // purge_master_logs
 #include "sql/clone_handler.h"
+#include "sql/consensus_admin.h"
 #include "sql/current_thd.h"
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache::Dictionary_client::Auto_releaser
 #include "sql/dd/dd.h"                       // dd::get_dictionary
@@ -189,6 +196,9 @@
 #endif
 
 #include "ppi/ppi_statement.h"
+#ifdef NORMANDY_TEST
+#include "sql/rpl_msr.h" // channel_map
+#endif
 
 namespace dd {
 class Spatial_reference_system;
@@ -632,8 +642,10 @@ void init_sql_command_flags(void) {
   sql_command_flags[SQLCOM_SHOW_COLLATIONS] =
       CF_STATUS_COMMAND | CF_HAS_RESULT_SET | CF_REEXECUTION_FRAGILE;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] = CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOGS]= CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_SLAVE_HOSTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_BINLOG_EVENTS] = CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_STORAGE_ENGINES] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_PRIVILEGES] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_WARNS] = CF_STATUS_COMMAND | CF_DIAGNOSTIC_STMT;
@@ -966,6 +978,8 @@ void init_sql_command_flags(void) {
   sql_command_flags[SQLCOM_SLAVE_STOP] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_START_GROUP_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_STOP_GROUP_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_START_XPAXOS_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_STOP_XPAXOS_REPLICATION] |=  CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_BEGIN] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CHANGE_MASTER] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CHANGE_REPLICATION_FILTER] |=
@@ -975,6 +989,7 @@ void init_sql_command_flags(void) {
   sql_command_flags[SQLCOM_PURGE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_PURGE_BEFORE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOGS] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_OPEN_TABLES] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_HA_OPEN] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_HA_CLOSE] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -983,6 +998,7 @@ void init_sql_command_flags(void) {
   sql_command_flags[SQLCOM_DELETE_MULTI] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_UPDATE_MULTI] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_BINLOG_EVENTS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS]|=CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DO] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_WARNS] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_EMPTY_QUERY] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -2103,6 +2119,11 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
       error = true;                          // End server
       break;
     case COM_BINLOG_DUMP_GTID:
+      if (opt_cluster_log_type_instance) {
+        my_message(ER_NOT_SUPPORTED_YET,
+        "X-Cluster logger do not support COM_BINLOG_DUMP_GTID command", MYF(0));
+        break;
+      }
       // TODO: access of protocol_classic should be removed
       error = com_binlog_dump_gtid(
           thd, (char *)thd->get_protocol_classic()->get_raw_packet(),
@@ -2429,6 +2450,10 @@ int prepare_schema_table(THD *thd, LEX *lex, Table_ident *table_ident,
   DBUG_TRACE;
 
   switch (schema_table_idx) {
+    case SCH_ALISQL_CLUSTER_GLOBAL:
+    case SCH_ALISQL_CLUSTER_LOCAL:
+    case SCH_ALISQL_CLUSTER_LEARNER_SOURCE:
+    case SCH_ALISQL_CONSENSUS_STATUS:
     case SCH_TMP_TABLE_COLUMNS:
     case SCH_TMP_TABLE_KEYS: {
       DBUG_ASSERT(table_ident);
@@ -2874,6 +2899,12 @@ int mysql_execute_command(THD *thd, bool first_level) {
     res_grp_name[0] = '\0';
   }
 
+#ifdef NORMANDY_CLUSTER
+  if (consensus_command_limit(thd)) {
+    return 1;
+  }
+#endif
+
   if (unlikely(thd->slave_thread)) {
     if (!check_database_filters(thd, thd->db().str, lex->sql_command)) {
       binlog_gtid_end_transaction(thd);
@@ -3146,6 +3177,29 @@ int mysql_execute_command(THD *thd, bool first_level) {
     my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--skip-grant-tables");
     goto error;
   }
+#ifdef NORMANDY_TEST
+  if (lex->sql_command == SQLCOM_CHANGE_MASTER ||
+      lex->sql_command == SQLCOM_SLAVE_START ||
+      lex->sql_command == SQLCOM_SLAVE_STOP)
+  {
+    channel_map.rdlock();
+    if (!lex->mi.for_channel && channel_map.is_xpaxos_replication_channel_name(lex->mi.channel)
+        && channel_map.get_mi("test") != NULL)
+    {
+      lex->mi.for_channel= 1;
+      lex->mi.channel= "test";
+    }
+    if (lex->mi.for_channel
+        && channel_map.is_xpaxos_replication_channel_name(lex->mi.channel)
+        && channel_map.get_mi("test") != NULL)
+    {
+      lex->mi.channel= "test";
+    }
+    channel_map.unlock();
+  }
+#endif
+
+  im::simulate_snapshot_clause(thd, all_tables);
 
   switch (lex->sql_command) {
     case SQLCOM_SHOW_STATUS: {
@@ -3219,6 +3273,10 @@ int mysql_execute_command(THD *thd, bool first_level) {
       break;
 
     case SQLCOM_PURGE: {
+#ifndef NORMANDY_TEST
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "X-Cluster use 'call dbms_consensus.purge_log(number)'");
+      goto error;
+#else
       Security_context *sctx = thd->security_context();
       if (!sctx->check_access(SUPER_ACL) &&
           !sctx->has_global_grant(STRING_WITH_LEN("BINLOG_ADMIN")).first) {
@@ -3229,8 +3287,13 @@ int mysql_execute_command(THD *thd, bool first_level) {
       /* PURGE MASTER LOGS TO 'file' */
       res = purge_master_logs(thd, lex->to_log);
       break;
+#endif
     }
     case SQLCOM_PURGE_BEFORE: {
+#ifndef NORMANDY_TEST
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "X-Cluster use 'call dbms_consensus.purge_log(number)'");
+      goto error;
+#else
       Item *it;
       Security_context *sctx = thd->security_context();
       if (!sctx->check_access(SUPER_ACL) &&
@@ -3255,6 +3318,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
       if (thd->is_error()) goto error;
       res = purge_master_logs_before_date(thd, purge_time);
       break;
+#endif
     }
     case SQLCOM_SHOW_WARNS: {
       res = mysqld_show_warnings(
@@ -3295,6 +3359,12 @@ int mysql_execute_command(THD *thd, bool first_level) {
       res = mysql_show_binlog_events(thd);
       break;
     }
+    case SQLCOM_SHOW_CONSENSUSLOG_EVENTS: {
+      if (check_global_access(thd, REPL_SLAVE_ACL))
+        goto error;
+      res = mysql_show_consensuslog_events(thd);
+      break;
+    }
     case SQLCOM_CHANGE_MASTER: {
       Security_context *sctx = thd->security_context();
       if (!sctx->check_access(SUPER_ACL) &&
@@ -3304,7 +3374,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
                  "SUPER or REPLICATION_SLAVE_ADMIN");
         goto error;
       }
+      consensus_log_manager.lock_consensus(TRUE);
       res = change_master_cmd(thd);
+      consensus_log_manager.unlock_consensus();
       break;
     }
     case SQLCOM_SHOW_SLAVE_STAT: {
@@ -3459,11 +3531,22 @@ int mysql_execute_command(THD *thd, bool first_level) {
       break;
     }
 
+    case SQLCOM_START_XPAXOS_REPLICATION: {
+      consensus_log_manager.lock_consensus(TRUE);
+      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
+        res = start_slave_cmd(thd);
+      else
+        my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+      consensus_log_manager.unlock_consensus();
+      break;
+    }
+
     case SQLCOM_SLAVE_START: {
       res = start_slave_cmd(thd);
       break;
     }
-    case SQLCOM_SLAVE_STOP: {
+ 
+    case SQLCOM_STOP_XPAXOS_REPLICATION: {
       /*
         If the client thread has locked tables, a deadlock is possible.
         Assume that
@@ -3483,9 +3566,50 @@ int mysql_execute_command(THD *thd, bool first_level) {
         goto error;
       }
 
-      res = stop_slave_cmd(thd);
+      consensus_log_manager.lock_consensus(TRUE);
+      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
+      {
+        res= stop_slave_cmd(thd);
+        LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+                          thd->m_main_security_ctx.user().str,
+                          thd->m_main_security_ctx.host_or_ip().str,
+                          thd->query().str, res);
+      }
+      else
+        my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+      consensus_log_manager.unlock_consensus();
       break;
     }
+
+    case SQLCOM_SLAVE_STOP: {
+      /*
+        If the client thread has locked tables, a deadlock is possible.
+        Assume that
+        - the client thread does LOCK TABLE t READ.
+        - then the master updates t.
+        - then the SQL slave thread wants to update t,
+          so it waits for the client thread because t is locked by it.
+        - then the client thread does SLAVE STOP.
+          SLAVE STOP waits for the SQL slave thread to terminate its
+          update t, which waits for the client thread because t is locked by it.
+        To prevent that, refuse SLAVE STOP if the
+        client thread has locked tables
+      */
+      if (thd->locked_tables_mode ||
+	  thd->in_active_multi_stmt_transaction() || thd->global_read_lock.is_acquired())
+      {
+        my_error(ER_LOCK_OR_ACTIVE_TRANSACTION, MYF(0));
+        goto error;
+      }
+
+      res= stop_slave_cmd(thd);
+      LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+                        thd->m_main_security_ctx.user().str,
+                        thd->m_main_security_ctx.host_or_ip().str,
+                        thd->query().str, res);
+      break;
+    }
+ 
     case SQLCOM_RENAME_TABLE: {
       DBUG_ASSERT(first_table == all_tables && first_table != 0);
       TABLE_LIST *table;
@@ -3523,6 +3647,13 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_SHOW_BINLOGS: {
       if (check_global_access(thd, SUPER_ACL | REPL_CLIENT_ACL)) goto error;
       res = show_binlogs(thd);
+      break;
+    }
+    case SQLCOM_SHOW_CONSENSUSLOGS:
+    {
+      if (check_global_access(thd, SUPER_ACL | REPL_CLIENT_ACL))
+       goto error;
+      res = show_consensus_logs(thd);
       break;
     }
     case SQLCOM_SHOW_CREATE:
@@ -4186,6 +4317,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
       thd->mdl_context.release_transactional_locks();
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
+        thd->reset_gcn_variables();
+        thd->m_extra_desc.reset();  
         if (trans_begin(thd)) goto error;
       } else {
         /* Reset the isolation level and access mode if no chaining
@@ -5222,6 +5355,10 @@ void THD::reset_for_next_command() {
   thd->reset_current_stmt_binlog_format_row();
   thd->binlog_unsafe_warning_flags = 0;
   thd->binlog_need_explicit_defaults_ts = false;
+
+  thd->consensus_index = 0;
+  thd->consensus_term = 0;
+  thd->consensus_error = THD::CSS_NONE;
 
   thd->commit_error = THD::CE_NONE;
   thd->durability_property = HA_REGULAR_DURABILITY;

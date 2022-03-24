@@ -1,0 +1,8 @@
+!include suite/xcluster/my.cnf
+
+[mysqld.1]
+slave-exec-mode=smart
+binlog-row-image=minimal
+
+[mysqld.2]
+slave-exec-mode=smart

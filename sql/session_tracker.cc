@@ -58,6 +58,8 @@
 #include "sql/xa.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "bl_consensus_log.h"  /* consensus_ptr */
+#include "sql/log.h"
 
 static void store_lenenc_string(String &to, const char *from, size_t length);
 
@@ -1421,6 +1423,8 @@ bool Session_state_change_tracker::is_state_changed() { return m_changed; }
 */
 
 void Session_tracker::init(const CHARSET_INFO *char_set) {
+  for (int i = 0; i <= SESSION_TRACKER_END; i++)
+    m_trackers[i] = NULL;
   m_trackers[SESSION_SYSVARS_TRACKER] =
       new (std::nothrow) Session_sysvars_tracker(char_set);
   m_trackers[CURRENT_SCHEMA_TRACKER] =
@@ -1430,11 +1434,14 @@ void Session_tracker::init(const CHARSET_INFO *char_set) {
   m_trackers[SESSION_GTIDS_TRACKER] = new (std::nothrow) Session_gtids_tracker;
   m_trackers[TRANSACTION_INFO_TRACKER] =
       new (std::nothrow) Transaction_state_tracker;
+  m_trackers[SESSION_INDEX_TRACKER]=
+    new (std::nothrow) Session_index_tracker;
 }
 
 void Session_tracker::claim_memory_ownership() {
-  for (int i = 0; i <= SESSION_TRACKER_END; i++)
+  for (int i = 0; i <= SESSION_TRACKER_END_ORACLE; i++)
     m_trackers[i]->claim_memory_ownership();
+  m_trackers[SESSION_INDEX_TRACKER]->claim_memory_ownership();
 }
 
 /**
@@ -1443,7 +1450,8 @@ void Session_tracker::claim_memory_ownership() {
   @param thd   The thread handle.
 */
 void Session_tracker::enable(THD *thd) {
-  for (int i = 0; i <= SESSION_TRACKER_END; i++) m_trackers[i]->enable(thd);
+  for (int i = 0; i <= SESSION_TRACKER_END_ORACLE; i++) m_trackers[i]->enable(thd);
+  m_trackers[SESSION_INDEX_TRACKER]->enable(thd);
 }
 
 /**
@@ -1489,9 +1497,10 @@ State_tracker *Session_tracker::get_tracker(
 */
 
 bool Session_tracker::enabled_any() {
-  for (int i = 0; i <= SESSION_TRACKER_END; i++) {
+  for (int i = 0; i <= SESSION_TRACKER_END_ORACLE; i++) {
     if (m_trackers[i]->is_enabled()) return true;
   }
+  if (m_trackers[SESSION_INDEX_TRACKER]->is_enabled()) return true;
   return false;
 }
 
@@ -1505,9 +1514,11 @@ bool Session_tracker::enabled_any() {
 */
 
 bool Session_tracker::changed_any() {
-  for (int i = 0; i <= SESSION_TRACKER_END; i++) {
+  for (int i = 0; i <= SESSION_TRACKER_END_ORACLE; i++) {
     if (m_trackers[i]->is_changed()) return true;
   }
+  // always take SESSION_INDEX_TRACKER as changed if it is enabled
+  if (m_trackers[SESSION_INDEX_TRACKER]->is_enabled()) return true;
   return false;
 }
 
@@ -1527,9 +1538,13 @@ void Session_tracker::store(THD *thd, String &buf) {
   size_t length;
 
   /* Get total length. */
-  for (int i = 0; i <= SESSION_TRACKER_END; i++) {
+  for (int i = 0; i <= SESSION_TRACKER_END_ORACLE; i++) {
     if (m_trackers[i]->is_changed()) m_trackers[i]->store(thd, temp);
   }
+
+  // always store index if it is enabled
+  if (m_trackers[SESSION_INDEX_TRACKER]->is_enabled())
+    m_trackers[SESSION_INDEX_TRACKER]->store(thd, temp);
 
   length = temp.length();
   /* Store length first.. */
@@ -1656,4 +1671,52 @@ void Session_gtids_tracker::reset() {
     m_encoder = NULL;
   }
   m_changed = false;
+}
+
+
+void Session_index_tracker::reset() {
+  m_changed= false;
+}
+
+bool Session_index_tracker::update(THD *thd) {
+  m_enabled= (thd->variables.session_track_index)? true: false;
+  return false;
+}
+
+bool Session_index_tracker::store(THD *thd, String &buf) {
+  /* format of the payload is as follows:
+     [ tracker type] [length] [8-bytes index] */
+  ulonglong ret_index= 0;
+
+  if (is_changed()) {
+    ret_index= (ulonglong)thd->consensus_index;
+    DBUG_EXECUTE_IF("ok_packet_return_index",
+                    sql_print_warning("Sent index in ok packet: (%lld)",
+                                      ret_index);
+                   );
+  }
+  else if (is_enabled()) {
+    ret_index = consensus_ptr->getAppliedIndex();
+    DBUG_EXECUTE_IF("ok_packet_return_index",
+                    sql_print_warning("Sent lastest index in ok packet: (%lld)",
+                                      ret_index);
+                   );
+  }
+
+  if (ret_index) {
+    ulonglong length= sizeof(ulonglong);
+    length += net_length_size(length);
+
+    uchar *to= (uchar *)buf.prep_append(length + 1, EXTRA_ALLOC);
+
+    to= net_store_length(to, (ulonglong)SESSION_TRACK_INDEX);
+    to= net_store_length(to, sizeof(ulonglong));
+    int8store(to, ret_index);
+  }
+  reset();
+  return false;
+}
+
+void Session_index_tracker::mark_as_changed(THD *, LEX_CSTRING *) {
+  m_changed= true;
 }

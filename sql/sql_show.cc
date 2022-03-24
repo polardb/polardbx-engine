@@ -85,6 +85,8 @@
 
 #include "sql/sql_statistics_common.h"
 
+#include "sql_show_consensus.h"
+
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
                                     std::function<bool(const char *)> action);
@@ -4020,6 +4022,22 @@ ST_SCHEMA_TABLE schema_tables[] = {
      fill_schema_table_stats, make_old_format, nullptr, -1, -1, false, 0},
     {"INDEX_STATISTICS", index_stats_fields_info, create_schema_table,
      fill_schema_index_stats, make_old_format, nullptr, -1, -1, false, 0},
+    {"ALISQL_CLUSTER_GLOBAL", alisql_cluster_global_fields_info, create_schema_table,
+     fill_alisql_cluster_global, 0, 0, -1, -1, 0, 0},
+    {"ALISQL_CLUSTER_LOCAL", alisql_cluster_local_fields_info, create_schema_table,
+     fill_alisql_cluster_local, 0, 0, -1, -1, 0, 0},
+    {"ALISQL_CLUSTER_HEALTH", alisql_cluster_health_fields_info, create_schema_table,
+     fill_alisql_cluster_health, 0, 0, -1, -1, 0, 0},
+    {"ALISQL_CLUSTER_LEARNER_SOURCE", alisql_cluster_learner_source_fields_info, create_schema_table,
+     fill_alisql_cluster_learner_source, 0, 0, -1, -1, 0, 0},
+    {"ALISQL_CLUSTER_PREFETCH_CHANNEL", alisql_cluster_prefetch_channel_info, create_schema_table,
+     fill_alisql_cluster_prefetch_channel, 0, 0, -1, -1, 0, 0},
+    {"ALISQL_CLUSTER_CONSENSUS_STATUS", alisql_cluster_consensus_status_fields_info, create_schema_table,
+     fill_alisql_cluster_consensus_status, 0, 0, -1, -1, 0, 0 },
+    {"ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE", alisql_cluster_consensus_membership_change_fields_info, create_schema_table,
+     fill_alisql_cluster_consensus_membership_change, 0, 0, -1, -1, 0, 0},
+    {"CONSENSUS_COMMIT_POSITION", consensus_commit_pos_info, create_schema_table,
+     fill_consensus_commit_pos, make_old_format, 0, -1, -1, 0, 0},
     {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, false, 0}};
 
 int initialize_schema_table(st_plugin_int *plugin) {

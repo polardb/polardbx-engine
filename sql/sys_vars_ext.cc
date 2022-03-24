@@ -268,12 +268,12 @@ static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
 static Sys_var_ulonglong Sys_innodb_snapshot_seq(
     "innodb_snapshot_seq", "Innodb snapshot sequence.",
     HINT_UPDATEABLE SESSION_ONLY(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+    VALID_RANGE(MYSQL_GCN_MIN, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
 
 static Sys_var_ulonglong Sys_innodb_commit_seq(
     "innodb_commit_seq", "Innodb commit sequence",
     HINT_UPDATEABLE SESSION_ONLY(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+    VALID_RANGE(MYSQL_GCN_MIN, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
 
 static Sys_var_ulonglong Sys_innodb_prepare_seq(
     "innodb_prepare_seq", "Innodb xa prepare sequence",
@@ -287,4 +287,11 @@ static Sys_var_bool Sys_only_report_warning_when_skip(
     GLOBAL_VAR(opt_only_report_warning_when_skip_sequence), CMD_LINE(OPT_ARG),
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+extern bool opt_gcn_write_event;
+static Sys_var_bool Sys_gcn_write_event(
+    "gcn_write_event",
+    "Writting a gcn event which content is gcn number for every transaction.",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_gcn_write_event),
+    CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));
 /* RDS DEFINED */

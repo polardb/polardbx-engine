@@ -1,0 +1,5 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+consensus_election_timeout=2000
+consensus_auto_leader_transfer_check_seconds=10

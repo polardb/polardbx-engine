@@ -166,7 +166,7 @@ bool handle_reload_request(THD *thd, unsigned long options, TABLE_LIST *tables,
         than it would help them)
        */
       tmp_write_to_binlog = 0;
-      if (mysql_bin_log.is_open()) {
+      if (!mysql_bin_log.is_closed()) {
         if (mysql_bin_log.rotate_and_purge(thd, true)) *write_to_binlog = -1;
       }
     }

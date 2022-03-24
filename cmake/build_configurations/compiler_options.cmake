@@ -59,6 +59,14 @@ IF(UNIX)
     IF(WITH_VALGRIND)
       STRING_PREPEND(COMMON_CXX_FLAGS  "-fno-inline ")
     ENDIF()
+
+    IF(WITH_NORMANDY_CLUSTER)
+      SET(COMMON_CXX_FLAGS             "-DNORMANDY_CLUSTER ${COMMON_CXX_FLAGS}")
+    ENDIF()
+    IF(WITH_NORMANDY_TEST)
+      SET(COMMON_CXX_FLAGS             "-DNORMANDY_TEST ${COMMON_CXX_FLAGS}")
+    ENDIF()
+
     # Disable floating point expression contractions to avoid result differences
     IF(HAVE_CXX_FLOATING_POINT_FUSED_MADD)
       STRING_APPEND(COMMON_CXX_FLAGS " -ffp-contract=off")

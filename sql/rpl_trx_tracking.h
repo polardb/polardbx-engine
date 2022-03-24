@@ -58,6 +58,7 @@ class Logical_clock {
       : state(other.state.load()), offset(other.offset) {}
 
   int64 step();
+  int64 step_down();
   int64 set_if_greater(int64 new_val);
   int64 get_timestamp();
   int64 get_offset() { return offset; }
@@ -97,6 +98,7 @@ class Commit_order_trx_dependency_tracker {
   }
 
   int64 step();
+  int64 step_down();
   void rotate();
 
  private:
@@ -226,6 +228,7 @@ class Transaction_dependency_tracker {
   int64 get_max_committed_timestamp();
 
   int64 step();
+  int64 step_down();
   void rotate();
 
  public:

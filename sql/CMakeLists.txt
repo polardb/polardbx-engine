@@ -20,6 +20,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
+
+INCLUDE_DIRECTORIES(
+  ${CMAKE_SOURCE_DIR}/libbinlogevents/include
+  ${CMAKE_SOURCE_DIR}/cluster/consensus
+  ${CMAKE_SOURCE_DIR}/cluster/libmyeasy
+  ${CMAKE_SOURCE_DIR}/extra/protobuf/protobuf-3.6.1/src
+)
 INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
 
 MY_INCLUDE_SYSTEM_DIRECTORIES(ICU)
@@ -511,6 +518,7 @@ SET(SQL_SHARED_SOURCES
   sql_select.cc
   sql_servers.cc
   sql_show.cc
+  sql_show_consensus.cc
   sql_show_status.cc
   sql_signal.cc
   sql_state.cc
@@ -550,6 +558,8 @@ SET(SQL_SHARED_SOURCES
   xa.cc
   ssl_acceptor_context.cc
   common/component.cc
+  consensus/consensus_common.cc
+  consensus/consensus_proc.cc
   package/package.cc
   package/package_cache.cc
   package/package_common.cc
@@ -909,8 +919,21 @@ SET(BINLOG_SOURCE
   rpl_utility.cc
   sql_binlog.cc
   stream_cipher.cc
+  bl_consensus_log.cc
+  consensus_prefetch_manager.cc consensus_fifo_cache_manager.cc
+  consensus_info.cc consensus_recovery_manager.cc
+  consensus_log_index.cc appliedindex_checker.cc
+  consensus_admin.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
+
+IF(WITH_NORMANDY_CLUSTER)
+  TARGET_LINK_LIBRARIES(binlog ${CMAKE_SOURCE_DIR}/extra/IS/consensus/bu/libaliconsensus.a)
+  TARGET_LINK_LIBRARIES(binlog ${CMAKE_SOURCE_DIR}/extra/IS/dependency/easy/src/bu/libmyeasy.a)
+  TARGET_LINK_LIBRARIES(binlog ${CMAKE_SOURCE_DIR}/extra/IS/dependency/protobuf-3.6.1/bu/lib64/libprotobuf.a)
+  TARGET_LINK_LIBRARIES(binlog ${CMAKE_SOURCE_DIR}/extra/openssl/libcrypto.a)
+ENDIF()
+
 TARGET_LINK_LIBRARIES(binlog binlogevents_static)
 TARGET_LINK_LIBRARIES(binlog rpl)
 
@@ -947,8 +970,19 @@ SET (SLAVE_SOURCE
   rpl_slave_commit_order_manager.cc
   rpl_slave_until_options.cc
   rpl_trx_boundary_parser.cc
+  consensus_info.cc bl_consensus_log.cc
+  consensus_prefetch_manager.cc consensus_fifo_cache_manager.cc
+  consensus_recovery_manager.cc consensus_log_index.cc appliedindex_checker.cc
   )
 ADD_LIBRARY(slave STATIC ${SLAVE_SOURCE})
+
+IF(WITH_NORMANDY_CLUSTER)
+  TARGET_LINK_LIBRARIES(slave ${CMAKE_SOURCE_DIR}/extra/IS/consensus/bu/libaliconsensus.a)
+  TARGET_LINK_LIBRARIES(slave ${CMAKE_SOURCE_DIR}/extra/IS/dependency/easy/src/bu/libmyeasy.a)
+  TARGET_LINK_LIBRARIES(slave ${CMAKE_SOURCE_DIR}/extra/IS/dependency/protobuf-3.6.1/bu/lib64/libprotobuf.a)
+  TARGET_LINK_LIBRARIES(slave ${CMAKE_SOURCE_DIR}/extra/openssl/libcrypto.a)
+ENDIF()
+
 ADD_DEPENDENCIES(slave GenError)
 TARGET_LINK_LIBRARIES(slave binlog sql_main)
 

@@ -428,10 +428,6 @@ struct PRINT_EVENT_INFO {
   my_thread_id thread_id;
   bool thread_id_printed;
   uint8_t default_table_encryption;
-  bool commit_gcn_assigned;
-  bool prepare_gcn_assigned;
-  uint64_t commit_gcn;
-  uint64_t prepare_gcn;
 
   PRINT_EVENT_INFO();
 
@@ -630,6 +626,8 @@ class Log_event {
   */
   char *temp_buf;
 
+  size_t buf_len;
+
   /*
     This variable determines whether the event is responsible for deallocating
     the memory pointed by temp_buf. When set to true temp_buf is deallocated
@@ -697,6 +695,14 @@ class Log_event {
     A copy of the main rli value stored into event to pass to MTS worker rli
   */
   ulonglong future_event_relay_log_pos;
+
+  ulonglong consensus_index;
+  ulonglong consensus_sequence;
+
+  /**
+    A timestamp given by consensus module.
+  */
+  uint32 consensus_extra_time;
 
 #ifdef MYSQL_SERVER
   THD *thd;
@@ -777,6 +783,35 @@ class Log_event {
 
   Log_event_type get_type_code() const { return common_header->type_code; }
 
+  bool is_control_event() {
+    return common_header->type_code == binary_log::FORMAT_DESCRIPTION_EVENT
+      || common_header->type_code == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT
+      || common_header->type_code == binary_log::PREVIOUS_GTIDS_LOG_EVENT
+      || common_header->type_code == binary_log::CONSENSUS_LOG_EVENT
+      || common_header->type_code == binary_log::ROTATE_EVENT;
+  }
+
+  /* event generate in follower */
+  bool is_local_event() {
+    return common_header->type_code == binary_log::FORMAT_DESCRIPTION_EVENT
+      || common_header->type_code == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT
+      || common_header->type_code == binary_log::PREVIOUS_GTIDS_LOG_EVENT
+      || common_header->type_code == binary_log::CONSENSUS_LOG_EVENT
+      || common_header->type_code == binary_log::ROTATE_EVENT
+      || common_header->type_code == binary_log::CONSENSUS_EMPTY_EVENT
+      || common_header->type_code == binary_log::CONSENSUS_CLUSTER_INFO_EVENT;
+  }
+
+  static bool is_local_event_type(Log_event_type type) {
+    return type == binary_log::FORMAT_DESCRIPTION_EVENT
+      || type == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT
+      || type == binary_log::PREVIOUS_GTIDS_LOG_EVENT
+      || type == binary_log::CONSENSUS_LOG_EVENT
+      || type == binary_log::ROTATE_EVENT
+      || type == binary_log::CONSENSUS_EMPTY_EVENT
+      || type == binary_log::CONSENSUS_CLUSTER_INFO_EVENT;
+  }
+
   /**
     Return true if the event has to be logged using SBR for DMLs.
   */
@@ -838,6 +873,7 @@ class Log_event {
     if (temp_buf) {
       if (m_free_temp_buf_in_destructor) my_free(temp_buf);
       temp_buf = nullptr;
+      buf_len = 0;
     }
   }
   /*
@@ -1857,16 +1893,7 @@ class Stop_log_event : public binary_log::Stop_event, public Log_event {
  private:
 #if defined(MYSQL_SERVER)
   virtual int do_update_pos(Relay_log_info *rli) override;
-  virtual enum_skip_reason do_shall_skip(Relay_log_info *) override {
-    /*
-      Events from ourself should be skipped, but they should not
-      decrease the slave skip counter.
-     */
-    if (this->server_id == ::server_id)
-      return Log_event::EVENT_SKIP_IGNORE;
-    else
-      return Log_event::EVENT_SKIP_NOT;
-  }
+  virtual enum_skip_reason do_shall_skip(Relay_log_info *) override;
 #endif
 };
 
@@ -4192,5 +4219,7 @@ bool net_field_length_checked(const uchar **packet, size_t *max_length, T *out);
 /**
   @} (end of group Replication)
 */
+
+#include "sql/consensus_log_event.h"
 
 #endif /* _log_event_h */

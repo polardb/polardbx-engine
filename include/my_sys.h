@@ -223,6 +223,7 @@ extern void (*fatal_error_handler_hook)(uint my_err, const char *str,
 extern void (*local_message_hook)(enum loglevel ll, uint ecode, va_list args);
 extern uint my_file_limit;
 extern MYSQL_PLUGIN_IMPORT ulong my_thread_stack_size;
+extern ulong thread_stack_warning;
 
 /*
   Hooks for reporting execution stage information. The server implementation
@@ -553,6 +554,8 @@ inline my_off_t my_b_get_pos_in_file(const IO_CACHE *info) {
 
 /* tell write offset in the SEQ_APPEND cache */
 int my_b_copy_to_file(IO_CACHE *cache, FILE *file);
+my_off_t my_b_append_tell(IO_CACHE *info);
+my_off_t my_b_safe_tell(IO_CACHE *info); /* picks the correct tell() */
 
 inline size_t my_b_bytes_in_cache(const IO_CACHE *info) {
   return *info->current_end - *info->current_pos;

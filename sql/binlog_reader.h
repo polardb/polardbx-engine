@@ -214,6 +214,7 @@ class Binlog_event_object_istream {
 
     event->register_temp_buf(reinterpret_cast<char *>(data),
                              ALLOCATOR::DELEGATE_MEMORY_TO_EVENT_OBJECT);
+    event->buf_len = length;
     return event;
   }
 
@@ -344,6 +345,7 @@ class Basic_binlog_file_reader {
   }
   const Format_description_event *format_description_event() { return &m_fde; }
   my_off_t event_start_pos() { return m_event_start_pos; }
+  IO_CACHE *get_io_cache() { return m_ifile.get_io_cache(); }
 
  private:
   Binlog_read_error m_error;

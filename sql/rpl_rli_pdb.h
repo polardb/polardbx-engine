@@ -134,6 +134,8 @@ struct Slave_job_group {
 #endif
         last_committed(other.last_committed),
         sequence_number(other.sequence_number),
+        checkpoint_consensus_index(other.checkpoint_consensus_index),
+        consensus_index(other.consensus_index),
         new_fd_event(other.new_fd_event) {
   }
 
@@ -159,6 +161,8 @@ struct Slave_job_group {
 #endif
     last_committed = other.last_committed;
     sequence_number = other.sequence_number;
+    checkpoint_consensus_index = other.checkpoint_consensus_index;
+    consensus_index = other.consensus_index;
     new_fd_event = other.new_fd_event;
     return *this;
   }
@@ -201,6 +205,8 @@ struct Slave_job_group {
   /* Clock-based scheduler requirement: */
   longlong last_committed;   // commit parent timestamp
   longlong sequence_number;  // transaction's logical timestamp
+  uint64_t checkpoint_consensus_index;
+  uint64_t consensus_index;   // group's consensus index
   /*
     After Coordinator has seen a new FD event, it sets this member to
     point to the new event, once per worker. Coordinator does so
@@ -231,7 +237,7 @@ struct Slave_job_group {
     Coordinator fills the struct with defaults and options at starting of
     a group distribution.
   */
-  void reset(my_off_t master_pos, ulonglong seqno) {
+  void reset(my_off_t master_pos, ulonglong seqno, uint64_t consensus_index_ptr) {
     master_log_pos = master_pos;
     group_master_log_pos = group_relay_log_pos = 0;
     group_master_log_name = nullptr;  // todo: remove
@@ -251,6 +257,8 @@ struct Slave_job_group {
     last_committed = SEQ_UNINIT;
     sequence_number = SEQ_UNINIT;
     new_fd_event = nullptr;
+    checkpoint_consensus_index = 0;
+    consensus_index = consensus_index_ptr;
   }
 };
 
@@ -607,6 +615,7 @@ class Slave_worker : public Relay_log_info {
       worker_checkpoint_seqno;  // the most significant ON bit in group_executed
   /* Initial value of FD-for-execution version until it's gets known. */
   ulong server_version;
+  ulonglong checkpoint_consensus_apply_index;
   enum en_running_state {
     NOT_RUNNING = 0,
     RUNNING = 1,

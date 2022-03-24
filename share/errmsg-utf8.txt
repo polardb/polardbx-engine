@@ -9167,6 +9167,48 @@ ER_CLIENT_PRIVILEGE_CHECKS_USER_NEEDS_RPL_APPLIER_PRIV
 ER_WARN_DA_PRIVILEGE_NOT_REGISTERED
   eng "Dynamic privilege '%s' is not registered with the server."
 
+ER_CONSENSUS_LEADERSHIP_CHANGE
+  eng "The cluster's leadership has already change, please relocate consensus leader and retry."
+
+ER_CONSENSUS_LOG_TOO_LARGE
+  eng "The consensus log is too large for cluster, please split the transcation to small ones."
+
+ER_CONSENSUS_COMMAND_ERROR
+  eng "The consensus membership change failed, error code is %d, error msg: %s"
+
+ER_CONSENSUS_LEADER_NOT_ALLOWED
+  eng "The consensus leader is not allowed to do current operation."
+
+ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
+  eng "The consensus follower is not allowed to to do current operation."
+
+ER_CONSENSUS_SERVER_NOT_READY
+  eng "The server is not allowed to do current operation."
+
+ER_CONSENSUS_OTHER_ERROR
+  eng "Other consensus problem, retry."
+
+ER_CONSENSUS_NOT_SUPPORT
+  eng "Cluster not support this operation."
+
+ER_CONSENSUS_CONFIG_BAD
+  eng "Consensus configuration bad."
+
+ER_CONSENSUS_TOO_MANY_NODE
+  eng "The cluster has too many nodes."
+
+ER_CONSENSUS_IP_PORT_FORMAT
+  eng "The consensus node ip:port format is incorrect."
+
+ER_CONSENSUS_LOG_TYPE_NODE
+  eng "The consensus node is logger, which is not allowed to to do current operation."
+
+ER_DUP_THD_ID
+  eng "thread id %d is duplicate."
+
+ER_INVALID_THD_ID
+  eng "unit_env must between 0x0F00 ~ 0x0FFE."
+
 #
 #  End of 8.0 error messages (server-to-client).
 #  Do NOT add messages intended for the error log above!
@@ -19866,6 +19908,9 @@ ER_WARN_AUTH_ID_WITH_SYSTEM_USER_PRIV_IN_MANDATORY_ROLES
 
 ER_IB_MSG_SKIP_HIDDEN_DIR
   eng "Directory '%s' will not be scanned because it is a hidden directory."
+
+ER_CONSENSUS_CMD_LOG
+  eng "user:%s  host:%s sql:%s result:%d!!!"
 
 # DO NOT add server-to-client messages here!
 # This range is for messages intended for the error log only.

@@ -1,0 +1,7 @@
+!include suite/xcluster/my.cnf 
+
+[mysqld]
+commit_pos_watcher_interval=1000
+
+[mysqld.2]
+commit_pos_watcher=OFF

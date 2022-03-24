@@ -1,0 +1,20 @@
+flush logs;
+create table ttt (id int);
+insert into ttt values(1);
+call dbms_consensus.purge_log(100);
+insert into ttt values(2);
+insert into ttt values(3);
+flush logs;
+insert into ttt values(4);
+show consensus logs;
+Log_name	File_size	Start_log_index
+#	#	#
+#	#	#
+call dbms_consensus.purge_log(100);
+insert into ttt values(5);
+flush logs;
+drop table ttt;
+show consensus logs;
+Log_name	File_size	Start_log_index
+#	#	#
+#	#	#

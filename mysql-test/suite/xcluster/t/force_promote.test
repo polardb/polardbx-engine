@@ -1,0 +1,18 @@
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+select role from information_schema.alisql_cluster_local;
+set global consensus_force_promote=ON;
+sleep 1;
+select role from information_schema.alisql_cluster_local;
+create table t1 (id int);
+insert into t1 values (1);
+--source include/wait_follower_catchup.inc
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+select * from t1;
+select role from information_schema.alisql_cluster_local;
+set global consensus_force_promote=ON;
+sleep 1;
+select role from information_schema.alisql_cluster_local;
+insert into t1 values (1);
+select * from t1;
+drop table t1;

@@ -1,0 +1,4 @@
+--innodb_undo_retention=1800
+--innodb_equal_gcn_visible=false
+--innodb_snapshot_update_gcn=true
+--gcn_write_event=true

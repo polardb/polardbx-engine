@@ -84,7 +84,8 @@ void trans_reset_one_shot_chistics(THD *thd) {
   thd->tx_isolation = (enum_tx_isolation)thd->variables.transaction_isolation;
   thd->tx_read_only = thd->variables.transaction_read_only;
   /* Reset commit and snapshot gcn when transition end. */
-  thd->reset_gcn();
+  thd->reset_gcn_variables();
+  thd->m_extra_desc.reset();
 }
 
 /**
@@ -224,9 +225,6 @@ bool trans_begin(THD *thd, uint flags) {
   }
 #endif
 
-
-  /* This is a defensive action, reset gcn when explicit transaction begin. */
-  thd->reset_gcn();
 
   return res;
 }
@@ -468,7 +466,8 @@ bool trans_rollback_implicit(THD *thd) {
       ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
   res = ha_rollback_trans(thd, true);
-  thd->variables.option_bits &= ~OPTION_BEGIN;
+  if (thd->get_transaction()->xid_state()->has_state(XID_STATE::XA_NOTR))
+    thd->variables.option_bits &= ~OPTION_BEGIN;
   thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
 
   /* Rollback should clear transaction_rollback_request flag. */

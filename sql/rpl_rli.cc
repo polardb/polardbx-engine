@@ -21,6 +21,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/rpl_rli.h"
+#include "sql/consensus_log_manager.h"      // ConsensusLogManager
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,7 +98,8 @@ const char *info_rli_fields[] = {"number_of_lines",
                                  "id",
                                  "channel_name",
                                  "privilege_checks_user",
-                                 "privilege_checks_hostname"};
+                                 "privilege_checks_hostname",
+                                 "consensus_apply_index"};
 
 Relay_log_info::Relay_log_info(bool is_slave_recovery,
 #ifdef HAVE_PSI_INTERFACE
@@ -127,6 +129,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       mi(nullptr),
       error_on_rli_init_info(false),
       gtid_timestamps_warning_logged(false),
+      consensus_apply_index(0),
       group_relay_log_pos(0),
       event_relay_log_number(0),
       event_relay_log_pos(0),
@@ -185,7 +188,8 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       thd_tx_priority(0),
       is_engine_ha_data_detached(false),
       current_event(nullptr),
-      ddl_not_atomic(false) {
+      ddl_not_atomic(false),
+      curr_group_seen_gcn(false) {
   DBUG_TRACE;
 
 #ifdef HAVE_PSI_INTERFACE
@@ -193,7 +197,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
                          key_RELAYLOG_LOCK_commit_queue, key_RELAYLOG_LOCK_done,
                          key_RELAYLOG_LOCK_flush_queue, key_RELAYLOG_LOCK_log,
                          key_RELAYLOG_LOCK_log_end_pos, key_RELAYLOG_LOCK_sync,
-                         key_RELAYLOG_LOCK_sync_queue, key_RELAYLOG_LOCK_xids,
+                         key_RELAYLOG_LOCK_sync_queue, key_RELAYLOG_LOCK_xids, key_RELAYLOG_LOCK_rotate,
                          key_RELAYLOG_COND_done, key_RELAYLOG_update_cond,
                          key_RELAYLOG_prep_xids_cond, key_file_relaylog,
                          key_file_relaylog_index, key_file_relaylog_cache,
@@ -237,6 +241,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
   do_server_version_split(::server_version, slave_version_split);
   until_option = nullptr;
   rpl_filter = nullptr;
+  applier_reader = nullptr;
 }
 
 /**
@@ -1207,7 +1212,7 @@ bool Relay_log_info::cached_charset_compare(char *charset) const {
   return 0;
 }
 
-int Relay_log_info::stmt_done(my_off_t event_master_log_pos) {
+int Relay_log_info::stmt_done(my_off_t event_master_log_pos, uint64_t event_consensus_index) {
   clear_flag(IN_STMT);
 
   DBUG_ASSERT(!belongs_to_client());
@@ -1248,6 +1253,7 @@ int Relay_log_info::stmt_done(my_off_t event_master_log_pos) {
       mts_group_status != MTS_NOT_IN_GROUP) {
     inc_event_relay_log_pos();
   } else {
+    consensus_apply_index = event_consensus_index;
     return inc_group_relay_log_pos(event_master_log_pos,
                                    true /*need_data_lock*/);
   }
@@ -1438,9 +1444,17 @@ bool mysql_show_relaylog_events(THD *thd) {
   channel_map.wrlock();
 
   if (!thd->lex->mi.for_channel && channel_map.get_num_instances() > 1) {
+#ifdef NORMANDY_TEST
+    if (channel_map.is_xpaxos_replication_channel_name(thd->lex->mi.channel)
+        && channel_map.get_mi("test") != NULL) {
+      thd->lex->mi.for_channel= 1;
+      thd->lex->mi.channel= "test";
+    }
+#else
     my_error(ER_SLAVE_MULTIPLE_CHANNELS_CMD, MYF(0));
     res = true;
     goto err;
+#endif
   }
 
   Log_event::init_show_field_list(&field_list);
@@ -1472,6 +1486,23 @@ err:
   return res;
 }
 
+/* reset previous_gtid_set_of_relaylog through gtid_set */
+int Relay_log_info::reset_previous_gtid_set_of_relaylog() {
+  /*
+    it's only called after xpaxos truncate log, don't need to
+    parse partial transactions
+  */
+  if (relay_log.init_gtid_sets(gtid_set, NULL,
+                               opt_slave_sql_verify_checksum,
+                               true/*true=need lock*/,
+                               NULL, NULL)) {
+    sql_print_error("Failed in reset_previous_gtid_set_of_relaylog");
+    return 1;
+  }
+
+  return 0;
+}
+
 int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
   int error = 0;
   enum_return_check check_return = ERROR_CHECKING_REPOSITORY;
@@ -1479,6 +1510,9 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
   DBUG_TRACE;
 
   mysql_mutex_assert_owner(&data_lock);
+
+  bool is_xpaxos_channel =
+      channel_map.is_xpaxos_replication_channel_name(mi->get_channel());
 
   /*
     If Relay_log_info is issued again after a failed init_info(), for
@@ -1577,42 +1611,49 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
     /* name of the index file if opt_relaylog_index_name is set*/
     const char *log_index_name;
 
-    relay_log.is_relay_log = true;
-    ln_without_channel_name =
-        relay_log.generate_name(opt_relay_logname, "-relay-bin", buf);
+    if (is_xpaxos_channel) {
+      /*  set relay log name as same as binlog name */
+      ln = opt_bin_logname;
+      log_index_name = opt_binlog_index_name;
+      relay_log.is_xpaxos_log= true;
+    } else {
+      ln_without_channel_name =
+          relay_log.generate_name(opt_relay_logname, "-relay-bin", buf);
 
-    ln = add_channel_to_relay_log_name(relay_bin_channel, FN_REFLEN,
-                                       ln_without_channel_name);
+      ln = add_channel_to_relay_log_name(relay_bin_channel, FN_REFLEN,
+                                         ln_without_channel_name);
 
-    /* We send the warning only at startup, not after every RESET SLAVE */
-    if (!opt_relay_logname_supplied && !opt_relaylog_index_name_supplied &&
-        !name_warning_sent) {
+      /* We send the warning only at startup, not after every RESET SLAVE */
+      if (!opt_relay_logname_supplied && !opt_relaylog_index_name_supplied &&
+          !name_warning_sent) {
+        /*
+          User didn't give us info to name the relay log index file.
+          Picking `hostname`-relay-bin.index like we do, causes replication to
+          fail if this slave's hostname is changed later. So, we would like to
+          instead require a name. But as we don't want to break many existing
+          setups, we only give warning, not error.
+        */
+        LogErr(WARNING_LEVEL, ER_RPL_PLEASE_USE_OPTION_RELAY_LOG,
+               ln_without_channel_name);
+        name_warning_sent = 1;
+      }
+
       /*
-        User didn't give us info to name the relay log index file.
-        Picking `hostname`-relay-bin.index like we do, causes replication to
-        fail if this slave's hostname is changed later. So, we would like to
-        instead require a name. But as we don't want to break many existing
-        setups, we only give warning, not error.
+         If relay log index option is set, convert into channel specific
+         index file. If the opt_relaylog_index has an extension, we strip
+         it too. This is inconsistent to relay log names.
       */
-      LogErr(WARNING_LEVEL, ER_RPL_PLEASE_USE_OPTION_RELAY_LOG,
-             ln_without_channel_name);
-      name_warning_sent = 1;
+      if (opt_relaylog_index_name_supplied) {
+        char index_file_withoutext[FN_REFLEN];
+        relay_log.generate_name(opt_relaylog_index_name, "",
+                                index_file_withoutext);
+
+        log_index_name = add_channel_to_relay_log_name(
+            relay_bin_index_channel, FN_REFLEN, index_file_withoutext);
+      } else
+        log_index_name = 0;
     }
-
-    /*
-       If relay log index option is set, convert into channel specific
-       index file. If the opt_relaylog_index has an extension, we strip
-       it too. This is inconsistent to relay log names.
-    */
-    if (opt_relaylog_index_name_supplied) {
-      char index_file_withoutext[FN_REFLEN];
-      relay_log.generate_name(opt_relaylog_index_name, "",
-                              index_file_withoutext);
-
-      log_index_name = add_channel_to_relay_log_name(
-          relay_bin_index_channel, FN_REFLEN, index_file_withoutext);
-    } else
-      log_index_name = 0;
+    relay_log.is_relay_log = true;
 
     if (relay_log.open_index_file(log_index_name, ln, true)) {
       LogErr(ERROR_LEVEL, ER_RPL_OPEN_INDEX_FILE_FAILED);
@@ -1669,15 +1710,27 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
     mysql_mutex_t *log_lock = relay_log.get_log_lock();
     mysql_mutex_lock(log_lock);
 
-    if (relay_log.open_binlog(
-            ln, 0, (max_relay_log_size ? max_relay_log_size : max_binlog_size),
-            true, true /*need_lock_index=true*/, true /*need_sid_lock=true*/,
-            mi->get_mi_description_event())) {
-      mysql_mutex_unlock(log_lock);
-      LogErr(ERROR_LEVEL, ER_RPL_CANT_OPEN_LOG_IN_RLI_INIT_INFO);
-      return 1;
+    if (is_xpaxos_channel) {
+      if (relay_log.open_exist_binlog(
+              ln, 0,
+              (max_relay_log_size ? max_relay_log_size : max_binlog_size), true,
+              true /*need_lock_index=true*/, true /*need_sid_lock=true*/,
+              mi->get_mi_description_event())) {
+        mysql_mutex_unlock(log_lock);
+        LogErr(ERROR_LEVEL, ER_RPL_CANT_OPEN_LOG_IN_RLI_INIT_INFO);
+        return 1;
+      }
+    } else {
+      if (relay_log.open_binlog(
+              ln, 0,
+              (max_relay_log_size ? max_relay_log_size : max_binlog_size), true,
+              true /*need_lock_index=true*/, true /*need_sid_lock=true*/,
+              mi->get_mi_description_event())) {
+        mysql_mutex_unlock(log_lock);
+        LogErr(ERROR_LEVEL, ER_RPL_CANT_OPEN_LOG_IN_RLI_INIT_INFO);
+        return 1;
+      }
     }
-
     mysql_mutex_unlock(log_lock);
   }
 
@@ -1699,13 +1752,21 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
   }
 
   if (check_return == REPOSITORY_DOES_NOT_EXIST) {
-    /* Init relay log with first entry in the relay index file */
-    if (reset_group_relay_log_pos(&msg)) {
-      error = 1;
-      goto err;
+    if (is_xpaxos_channel) {
+      group_relay_log_name[0] = 0;
+      group_relay_log_pos = 0;
+      event_relay_log_name[0] = 0;
+      event_relay_log_pos = 0;
+      consensus_apply_index = 0;
+    } else {
+      /* Init relay log with first entry in the relay index file */
+      if (reset_group_relay_log_pos(&msg)) {
+        error = 1;
+        goto err;
+      }
     }
-    group_master_log_name[0] = 0;
-    group_master_log_pos = 0;
+      group_master_log_name[0] = 0;
+      group_master_log_pos = 0;
   } else {
     if (read_info(handler)) {
       msg = "Error reading relay log configuration";
@@ -1718,20 +1779,25 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
       goto err;
     }
 
-    if (is_group_relay_log_name_invalid(&msg)) {
-      LogErr(ERROR_LEVEL, ER_RPL_MTS_RECOVERY_CANT_OPEN_RELAY_LOG,
-             group_relay_log_name, std::to_string(group_relay_log_pos).c_str());
-      error = 1;
-      goto err;
+    if (!is_xpaxos_channel) {
+      if (is_group_relay_log_name_invalid(&msg)) {
+        LogErr(ERROR_LEVEL, ER_RPL_MTS_RECOVERY_CANT_OPEN_RELAY_LOG,
+               group_relay_log_name,
+               std::to_string(group_relay_log_pos).c_str());
+        error = 1;
+        goto err;
+      }
     }
   }
 
   inited = 1;
   error_on_rli_init_info = false;
-  if (flush_info(true)) {
-    msg = "Error reading relay log configuration";
-    error = 1;
-    goto err;
+  if (!is_xpaxos_channel) {
+    if (flush_info(true)) {
+      msg = "Error reading relay log configuration";
+      error = 1;
+      goto err;
+    }
   }
 
   if (count_relay_log_space()) {
@@ -1893,6 +1959,7 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
   ulong temp_group_master_log_pos = 0;
   int temp_sql_delay = 0;
   int temp_internal_id = internal_id;
+  ulong temp_consensus_apply_index = 0;
 
   DBUG_TRACE;
 
@@ -2002,10 +2069,17 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
       hostname = temp_privilege_checks_hostname;
   }
 
+  if (lines >= LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX)
+  {
+    if (!!from->get_info(&temp_consensus_apply_index, 0UL))
+      return true;
+  }
+
   group_relay_log_pos = temp_group_relay_log_pos;
   group_master_log_pos = temp_group_master_log_pos;
   sql_delay = (int32)temp_sql_delay;
   internal_id = (uint)temp_internal_id;
+  consensus_apply_index = temp_consensus_apply_index;
 
   DBUG_EXECUTE_IF("simulate_priv_check_username_above_limit", {
     strcpy(temp_privilege_checks_username,
@@ -2083,6 +2157,9 @@ bool Relay_log_info::write_info(Rpl_info_handler *to) {
         if (to->set_info(nullptr))
       return true;
   }
+
+  if (to->set_info((ulong)consensus_apply_index)) return true;
+
   return false;
 }
 
@@ -2374,12 +2451,16 @@ ulong Relay_log_info::adapt_to_master_version_updown(ulong master_version,
 void Relay_log_info::relay_log_number_to_name(uint number,
                                               char name[FN_REFLEN + 1]) {
   char *str = nullptr;
-  char relay_bin_channel[FN_REFLEN + 1];
-  const char *relay_log_basename_channel = add_channel_to_relay_log_name(
-      relay_bin_channel, FN_REFLEN + 1, relay_log_basename);
+  if (!channel_map.is_xpaxos_replication_channel_name(mi->get_channel())) {
+    char relay_bin_channel[FN_REFLEN + 1];
+    const char *relay_log_basename_channel = add_channel_to_relay_log_name(
+        relay_bin_channel, FN_REFLEN + 1, relay_log_basename);
 
-  /* str points to closing null of relay log basename channel */
-  str = strmake(name, relay_log_basename_channel, FN_REFLEN + 1);
+    /* str points to closing null of relay log basename channel */
+    str = strmake(name, relay_log_basename_channel, FN_REFLEN + 1);
+  } else {
+    str = strmake(name, log_bin_basename, FN_REFLEN + 1);
+  }
   *str++ = '.';
   sprintf(str, "%06u", number);
 }

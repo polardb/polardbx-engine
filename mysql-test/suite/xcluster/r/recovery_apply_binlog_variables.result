@@ -1,0 +1,22 @@
+# variables 
+show variables like "recovery_apply_binlog";
+Variable_name	Value
+recovery_apply_binlog	OFF
+set global recovery_apply_binlog=on;
+ERROR HY000: Variable 'recovery_apply_binlog' is a read only variable
+# restart: --gtid_mode=on --enforce_gtid_consistency=ON --recovery_apply_binlog=on
+show variables like "recovery_apply_binlog";
+Variable_name	Value
+recovery_apply_binlog	ON
+flush logs;
+create table t (a int);
+# restart: --gtid_mode=on --enforce_gtid_consistency=ON --recovery_apply_binlog=on
+show variables like "recovery_apply_binlog";
+Variable_name	Value
+recovery_apply_binlog	ON
+# restart: --gtid_mode=off --recovery_apply_binlog=on
+show variables like "recovery_apply_binlog";
+Variable_name	Value
+recovery_apply_binlog	OFF
+# restart
+drop table t;

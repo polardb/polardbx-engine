@@ -1,3 +1,4 @@
+--source include/have_debug_new.inc
 #
 # Test of update statement that uses many tables.
 #

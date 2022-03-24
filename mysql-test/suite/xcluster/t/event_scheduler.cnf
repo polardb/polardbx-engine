@@ -1,0 +1,4 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+event_scheduler=ON

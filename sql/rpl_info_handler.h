@@ -112,6 +112,10 @@ class Rpl_info_handler {
   */
   int flush_info(const bool force) { return do_flush_info(force); }
 
+  int flush_info_force_new_thd(const bool force) {
+    return do_flush_info_force_new_thd(force);
+  }
+
   /**
     Deletes any information in it and in some cases the repository.
     The decision to remove the repository is delegated to the
@@ -402,6 +406,8 @@ class Rpl_info_handler {
   virtual enum_return_check do_check_info() = 0;
   virtual enum_return_check do_check_info(uint instance) = 0;
   virtual int do_flush_info(const bool force) = 0;
+  /* for consensus_info table, commit phase write meta will cause crash #11004688 */
+  virtual int do_flush_info_force_new_thd(const bool force)= 0;
   virtual int do_remove_info() = 0;
   virtual int do_clean_info() = 0;
   virtual void do_end_info() = 0;

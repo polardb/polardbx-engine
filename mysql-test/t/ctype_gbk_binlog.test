@@ -1,3 +1,5 @@
+# reset master only support by debug version
+--source include/have_debug_new.inc
 
 -- source include/force_binlog_format_statement.inc
 

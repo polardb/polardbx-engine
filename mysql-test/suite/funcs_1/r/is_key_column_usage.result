@@ -130,7 +130,9 @@ def	mysql	PRIMARY	def	mysql	columns_priv	Host
 def	mysql	PRIMARY	def	mysql	columns_priv	Table_name
 def	mysql	PRIMARY	def	mysql	columns_priv	User
 def	mysql	PRIMARY	def	mysql	component	component_id
+def	mysql	PRIMARY	def	mysql	concurrency_control	Id
 def	performance_schema	PRIMARY	def	performance_schema	cond_instances	OBJECT_INSTANCE_BEGIN
+def	mysql	PRIMARY	def	mysql	consensus_info	number_of_lines
 def	performance_schema	PRIMARY	def	performance_schema	data_locks	ENGINE
 def	performance_schema	PRIMARY	def	performance_schema	data_locks	ENGINE_LOCK_ID
 def	mysql	PRIMARY	def	mysql	db	Db
@@ -193,6 +195,7 @@ def	mysql	PRIMARY	def	mysql	help_relation	help_keyword_id
 def	mysql	PRIMARY	def	mysql	help_relation	help_topic_id
 def	mysql	PRIMARY	def	mysql	help_topic	help_topic_id
 def	performance_schema	PRIMARY	def	performance_schema	host_cache	IP
+def	mysql	PRIMARY	def	mysql	innodb_flashback_snapshot	scn
 def	mysql	PRIMARY	def	mysql	innodb_index_stats	database_name
 def	mysql	PRIMARY	def	mysql	innodb_index_stats	index_name
 def	mysql	PRIMARY	def	mysql	innodb_index_stats	stat_name
@@ -204,6 +207,7 @@ def	performance_schema	PRIMARY	def	performance_schema	memory_summary_by_thread_b
 def	performance_schema	PRIMARY	def	performance_schema	memory_summary_global_by_event_name	EVENT_NAME
 def	performance_schema	PRIMARY	def	performance_schema	metadata_locks	OBJECT_INSTANCE_BEGIN
 def	performance_schema	PRIMARY	def	performance_schema	mutex_instances	OBJECT_INSTANCE_BEGIN
+def	mysql	PRIMARY	def	mysql	outline	Id
 def	mysql	PRIMARY	def	mysql	password_history	Host
 def	mysql	PRIMARY	def	mysql	password_history	Password_timestamp
 def	mysql	PRIMARY	def	mysql	password_history	User

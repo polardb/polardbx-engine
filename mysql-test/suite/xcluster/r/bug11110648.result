@@ -1,0 +1,7 @@
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");
+select server_id from information_schema.alisql_cluster_local where role='leader';
+server_id
+1
+create database aaa;
+drop database aaa;

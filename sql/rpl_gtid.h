@@ -3130,6 +3130,17 @@ class Gtid_state {
   */
   int save(const Gtid_set *gtid_set);
   /**
+    Save previous logged gtid of relay log.
+
+    @param gtid_set  store the result in gtid_set.
+
+    @retval
+      0    OK
+    @retval
+      -1   Error
+  */
+  int set_previous_logged_gtids_relaylog(const Gtid_set *gtid_set, Checkable_rwlock *);
+  /**
     Save the set of gtids logged in the last binlog into gtid_executed table.
 
     @retval

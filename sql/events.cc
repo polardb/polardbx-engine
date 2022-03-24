@@ -129,6 +129,7 @@
 Event_queue *Events::event_queue;
 Event_scheduler *Events::scheduler;
 ulong Events::opt_event_scheduler = Events::EVENTS_OFF;
+ulong Events::opt_configured_event_scheduler= Events::EVENTS_OFF;
 
 static bool load_events_from_db(THD *thd, Event_queue *event_queue);
 
@@ -940,6 +941,10 @@ bool Events::init(bool opt_noacl_or_bootstrap) {
     res = true; /* fatal error: request unireg_abort */
     goto end;
   }
+
+  opt_configured_event_scheduler= opt_event_scheduler;
+  /* Leader will set opt_event_scheduler to ON later if opt_configured_event_scheduler is ON */
+  opt_event_scheduler= EVENTS_OFF;
 
   if (event_queue->init_queue() || load_events_from_db(thd, event_queue) ||
       (opt_event_scheduler == EVENTS_ON && scheduler->start(&err_no))) {

@@ -3854,6 +3854,7 @@ static const uint MYSQL_TABLESPACE_DD_ID = 1;
 extern LEX_CSTRING RLI_INFO_NAME;
 extern LEX_CSTRING MI_INFO_NAME;
 extern LEX_CSTRING WORKER_INFO_NAME;
+extern LEX_CSTRING CONSENSUS_INFO_NAME;
 
 inline bool is_infoschema_db(const char *name, size_t len) {
   return (

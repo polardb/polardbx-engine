@@ -198,6 +198,7 @@ typedef ulonglong my_commit_gcn;
 
 // this line is the same as in sql_class.h
 const my_commit_gcn MYSQL_GCN_NULL = __UINT64_MAX__;
+const my_commit_gcn MYSQL_GCN_MIN = 1024;
 
 #define MYSQL_XID_PREFIX "MySQLXid"
 
@@ -274,7 +275,10 @@ typedef struct xid_t {
 
   my_commit_gcn get_commit_gcn() const { return commit_gcn; }
 
-  void set_commit_gcn(my_commit_gcn v) { commit_gcn = v; }
+  void set_commit_gcn(my_commit_gcn v) {
+    DBUG_ASSERT(v >= MYSQL_GCN_MIN);
+    commit_gcn = v;
+  }
 
   void reset() {
     formatID = -1;
@@ -291,6 +295,7 @@ typedef struct xid_t {
     memcpy(data, g, gtrid_length = gl);
     bqual_length = bl;
     if (bl > 0) memcpy(data + gl, b, bl);
+    commit_gcn = MYSQL_GCN_NULL;
     return;
   }
 
@@ -349,13 +354,14 @@ typedef struct xid_t {
 
   bool is_null() const { return formatID == -1; }
 
+  void set(my_xid xid);
+
  public:
   void set(const xid_t *xid) {
     memcpy(this, xid, sizeof(xid->formatID) + xid->key_length());
+    DBUG_ASSERT(xid->commit_gcn >= MYSQL_GCN_MIN);
     commit_gcn = xid->commit_gcn;
   }
-
-  void set(my_xid xid);
 
   void null() { formatID = -1; }
 

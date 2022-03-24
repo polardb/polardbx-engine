@@ -992,18 +992,20 @@ enum enum_session_state_type {
   SESSION_TRACK_STATE_CHANGE,     /**< track session state changes */
   SESSION_TRACK_GTIDS,            /**< See also: session_track_gtids */
   SESSION_TRACK_TRANSACTION_CHARACTERISTICS, /**< Transaction chistics */
-  SESSION_TRACK_TRANSACTION_STATE            /**< Transaction state */
+  SESSION_TRACK_TRANSACTION_STATE,           /**< Transaction state */
+  SESSION_TRACK_INDEX = 30
 };
 
 /** start of ::enum_session_state_type */
 #define SESSION_TRACK_BEGIN SESSION_TRACK_SYSTEM_VARIABLES
 
 /** End of ::enum_session_state_type */
-#define SESSION_TRACK_END SESSION_TRACK_TRANSACTION_STATE
+#define SESSION_TRACK_END_ORACLE  SESSION_TRACK_TRANSACTION_STATE
+#define SESSION_TRACK_END SESSION_TRACK_INDEX
 
 /** is T a valid session state type */
 #define IS_SESSION_STATE_TYPE(T) \
-  (((int)(T) >= SESSION_TRACK_BEGIN) && ((T) <= SESSION_TRACK_END))
+  ((((T) >= SESSION_TRACK_BEGIN) && ((T) <= SESSION_TRACK_END_ORACLE)) || ((T) == SESSION_TRACK_INDEX))
 
 #define net_new_transaction(net) ((net)->pkt_nr = 0)
 

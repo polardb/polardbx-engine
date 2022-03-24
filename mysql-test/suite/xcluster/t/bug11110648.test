@@ -1,0 +1,19 @@
+--disable_query_log
+call mtr.add_suppression('\\[Warning\\] .*');
+--enable_query_log
+
+--source include/paxos.inc
+
+#change consensus_leader to 1;
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1
+eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_1");
+--sleep 1
+#change consensus_leader to 1;
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1
+eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_1");
+--sleep 1
+
+# show i am leader and can r/w
+select server_id from information_schema.alisql_cluster_local where role='leader';
+create database aaa;
+drop database aaa;

@@ -63,6 +63,7 @@
 #endif  // _WIN32
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"  // UUID_LENGTH
+#include "sys_vars_consensus.h"
 
 class Rpl_global_filter;
 class THD;
@@ -130,6 +131,7 @@ int init_common_variables();
 void my_init_signals();
 bool gtid_server_init();
 void gtid_server_cleanup();
+void fix_xcluster_label();
 void clean_up_mysqld_mutexes();
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *files_charset_info;
@@ -195,7 +197,7 @@ enum enum_slave_rows_search_algorithms {
 };
 extern ulonglong slave_rows_search_algorithms_options;
 extern bool opt_require_secure_transport;
-
+extern bool opt_recover_snapshot;
 extern bool opt_slave_preserve_commit_order;
 
 #ifndef DBUG_OFF
@@ -395,6 +397,17 @@ extern PSI_file_key key_file_binlog_index_cache;
 
 #ifdef HAVE_PSI_INTERFACE
 
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_index;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_stage_change;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_commit_pos;
+extern PSI_mutex_key key_BINLOG_LOCK_rotate;
+extern PSI_mutex_key key_RELAYLOG_LOCK_rotate;
 extern PSI_mutex_key key_LOCK_tc;
 extern PSI_mutex_key key_hash_filo_lock;
 extern PSI_mutex_key key_LOCK_error_log;
@@ -413,6 +426,10 @@ extern PSI_mutex_key key_relay_log_info_sleep_lock;
 extern PSI_mutex_key key_relay_log_info_thd_lock;
 extern PSI_mutex_key key_relay_log_info_log_space_lock;
 extern PSI_mutex_key key_relay_log_info_run_lock;
+extern PSI_mutex_key key_consensus_info_data_lock;
+extern PSI_mutex_key key_consensus_info_run_lock;
+extern PSI_mutex_key key_consensus_info_sleep_lock;
+extern PSI_mutex_key key_consensus_info_thd_lock;
 extern PSI_mutex_key key_mutex_slave_parallel_pend_jobs;
 extern PSI_mutex_key key_mutex_slave_parallel_worker;
 extern PSI_mutex_key key_mutex_slave_parallel_worker_count;
@@ -436,9 +453,13 @@ extern PSI_mutex_key key_gtid_ensure_index_mutex;
 extern PSI_mutex_key key_mts_temp_table_LOCK;
 extern PSI_mutex_key key_mts_gaq_LOCK;
 extern PSI_mutex_key key_thd_timer_mutex;
+extern PSI_mutex_key key_fifo_cache_cleaner;
 
 extern PSI_mutex_key key_commit_order_manager_mutex;
 extern PSI_mutex_key key_mutex_slave_worker_hash;
+extern PSI_rwlock_key key_rwlock_ConsensusLog_status_lock;
+extern PSI_rwlock_key key_rwlock_ConsensusLog_log_cache_lock;
+extern PSI_rwlock_key key_rwlock_ConsensusLog_prefetch_channels_hash;
 
 extern PSI_rwlock_key key_rwlock_LOCK_logger;
 extern PSI_rwlock_key key_rwlock_channel_map_lock;
@@ -447,6 +468,13 @@ extern PSI_rwlock_key key_rwlock_receiver_sid_lock;
 extern PSI_rwlock_key key_rwlock_rpl_filter_lock;
 extern PSI_rwlock_key key_rwlock_channel_to_filter_lock;
 extern PSI_rwlock_key key_rwlock_resource_group_mgr_map_lock;
+extern PSI_cond_key key_COND_ConsensusLog_catchup;
+extern PSI_cond_key key_COND_Consensus_state_change;
+extern PSI_cond_key key_COND_prefetch_reuqest;
+extern PSI_cond_key key_consensus_info_data_cond;
+extern PSI_cond_key key_consensus_info_start_cond;
+extern PSI_cond_key key_consensus_info_stop_cond;
+extern PSI_cond_key key_consensus_info_sleep_cond;
 
 extern PSI_cond_key key_PAGE_cond;
 extern PSI_cond_key key_COND_active;
@@ -463,6 +491,10 @@ extern PSI_cond_key key_relay_log_info_log_space_cond;
 extern PSI_cond_key key_relay_log_info_start_cond;
 extern PSI_cond_key key_relay_log_info_stop_cond;
 extern PSI_cond_key key_relay_log_info_sleep_cond;
+extern PSI_cond_key key_consensus_info_data_cond;
+extern PSI_cond_key key_consensus_info_start_cond;
+extern PSI_cond_key key_consensus_info_stop_cond;
+extern PSI_cond_key key_consensus_info_sleep_cond;
 extern PSI_cond_key key_cond_slave_parallel_pend_jobs;
 extern PSI_cond_key key_cond_slave_parallel_worker;
 extern PSI_cond_key key_cond_mts_gaq;
@@ -473,6 +505,10 @@ extern PSI_cond_key key_gtid_ensure_index_cond;
 extern PSI_cond_key key_COND_thr_lock;
 extern PSI_cond_key key_cond_slave_worker_hash;
 extern PSI_cond_key key_commit_order_manager_cond;
+extern PSI_thread_key key_thread_consensus_stage_change;
+extern PSI_thread_key key_thread_prefetch;
+extern PSI_thread_key key_thread_cleaner;
+extern PSI_thread_key key_thread_consensus_commit_pos_watcher;
 extern PSI_thread_key key_thread_bootstrap;
 extern PSI_thread_key key_thread_handle_manager;
 extern PSI_thread_key key_thread_one_connection;

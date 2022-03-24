@@ -22,5 +22,5 @@ if ($invert == 1)
 }
 
 --let $dont_print_pattern= 1
---let $event_sequence= $gtid_event # $event
+--let $event_sequence= Consensus_log # Gcn # $gtid_event # $event
 --source include/assert_binlog_events.inc

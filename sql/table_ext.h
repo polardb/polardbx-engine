@@ -101,6 +101,14 @@ extern void init_table_snapshot(TABLE* table, THD *thd);
 */
 extern bool evaluate_snapshot(THD *thd, const LEX *lex);
 
+/**
+  Simulate asof syntax by adding Item onto Table_snapshot.
+  @param[in]        thd         current context
+  @param[in/out]    table_list  all tables
+*/
+void simulate_snapshot_clause(THD *thd, TABLE_LIST *all_tables);
+
+
 } // namespace im
 
 #endif // table_ext.h

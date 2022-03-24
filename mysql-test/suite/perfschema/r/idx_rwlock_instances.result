@@ -78,4 +78,5 @@ from performance_schema.rwlock_instances
 where NAME = @name;
 READ_LOCKED_BY_COUNT
 #
+#
 OK: handler_read_key incremented

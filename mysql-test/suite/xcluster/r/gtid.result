@@ -1,0 +1,82 @@
+call mtr.add_suppression("The consensus follower is not allowed to to do current operation.");
+create table t(id int);
+insert into t values(0);
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	#			#
+select * from mysql.gtid_executed;
+source_uuid	interval_start	interval_end
+#	4	4
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	#			#
+select * from mysql.gtid_executed;
+source_uuid	interval_start	interval_end
+#	1	1
+#	2	2
+#	3	3
+#	4	4
+#	5	5
+#	6	6
+flush logs;
+select * from mysql.gtid_executed;
+source_uuid	interval_start	interval_end
+#	1	6
+drop table t;
+create table t(id int);
+insert into t values(0);
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_3");
+insert into t values(1);
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	#			#
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");;
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000002	#			#
+drop table t;
+create table t(id int);
+insert into t values(0);
+set debug='+d,crash_commit_before';
+insert into t values(1);
+ERROR HY000: Lost connection to MySQL server during query
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000002	#			#
+drop table t;
+create table t(c text);
+insert into t values('kongzhi');
+set global max_binlog_size=4096;
+set debug="+d,simulate_leader_degrade_slow";
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_2");;
+insert into t values(repeat('1', 1024));
+insert into t values(repeat('1', 1024));
+insert into t values(repeat('1', 1024));
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	#			#
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000003	#			#
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000003	#			#
+set global max_binlog_size=(1024 * 1024 * 1024);
+drop table t;
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");
+create table t(id int);
+insert into t values(0);
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000003	#			#
+set global debug="+d, skip_consensus_fifo_cache";
+set global debug="+d, crash_before_large_trx_commit_early";
+insert into t values(1);
+ERROR HY000: Lost connection to MySQL server during query
+show master status;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000003	#			#
+flush logs;
+insert into t values(2);
+0
+drop table t;

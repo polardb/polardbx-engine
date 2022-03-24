@@ -81,7 +81,7 @@ performance_schema.global_variables WHERE variable_name NOT IN
 while($var_id <= $count_vars)
 {
 --let $var_name= `SELECT var_name FROM global_vars WHERE id=$var_id;`
---error 0,ER_INCORRECT_GLOBAL_LOCAL_VAR,ER_WRONG_ARGUMENTS
+--error 0,ER_INCORRECT_GLOBAL_LOCAL_VAR,ER_WRONG_ARGUMENTS,ER_CONSENSUS_CONFIG_BAD
 --eval SET GLOBAL $var_name = @@global.$var_name
 --inc $var_id
 }
@@ -140,7 +140,7 @@ ORDER BY variable_name;
 while($var_id <= $count_vars)
 {
   --let $var_names= `SELECT var_name FROM all_vars WHERE id=$var_id;`
-  --error 0,ER_INCORRECT_GLOBAL_LOCAL_VAR,ER_WRONG_VALUE_FOR_VAR
+  --error 0,ER_INCORRECT_GLOBAL_LOCAL_VAR,ER_WRONG_VALUE_FOR_VAR,ER_CONSENSUS_CONFIG_BAD
   --eval SET PERSIST $var_names = @@GLOBAL.$var_names
   --inc $var_id
 }
