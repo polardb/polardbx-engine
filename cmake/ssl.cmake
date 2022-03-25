@@ -51,8 +51,6 @@ SET(WITH_SSL_DOC
   "${WITH_SSL_DOC}, \nyes (synonym for system)")
 SET(WITH_SSL_DOC
   "${WITH_SSL_DOC}, \n</path/to/custom/openssl/installation>")
-SET(WITH_SSL_DOC
-  "${WITH_SSL_DOC}, \nopenssl (use openSSL. See extra/openssl")
 
 STRING(REPLACE "\n" "| " WITH_SSL_DOC_STRING "${WITH_SSL_DOC}")
 MACRO (CHANGE_SSL_SETTINGS string)
@@ -97,7 +95,8 @@ ENDMACRO()
 
 MACRO (MYSQL_USE_BUNDLED_OPENSSL)
   SET(SOURCE_DIR "${CMAKE_SOURCE_DIR}/extra/openssl")
-  SET(BINARY_DIR "${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/extra/openssl")
+  #SET(BINARY_DIR "${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/extra/openssl")
+  SET(BINARY_DIR ${SOURCE_DIR})
   SET(SSL_INCLUDE_DIRS ${SOURCE_DIR}/include)
   SET(SSL_DEFINES "-DHAVE_OPENSSL")
   SET(OPENSSL_CONFIGURE_OPTS -fPIC no-shared)
@@ -131,7 +130,7 @@ MACRO (MYSQL_USE_BUNDLED_OPENSSL)
   SET_TARGET_PROPERTIES(libcrypto PROPERTIES IMPORTED_LOCATION "${MY_OPENSSL_LIBCRYPTO}")
   ADD_DEPENDENCIES(libcrypto openssl)
 
-  SET(SSL_LIBRARIES ${MY_OPENSSL_LIBSSL} ${MY_OPENSSL_LIBCRYPTO})
+  SET(SSL_LIBRARIES libssl libcrypto)
   IF(CMAKE_SYSTEM_NAME MATCHES "SunOS")
     SET(SSL_LIBRARIES ${SSL_LIBRARIES} ${LIBSOCKET})
   ENDIF()
@@ -165,7 +164,6 @@ MACRO (MYSQL_CHECK_SSL)
       WITH_SSL STREQUAL "yes" OR
       WITH_SSL_PATH
       )
-
     # Treat "system" the same way as -DWITH_SSL=</path/to/custom/openssl>
     IF((APPLE OR WIN32) AND WITH_SSL STREQUAL "system")
       # FindOpenSSL.cmake knows about
