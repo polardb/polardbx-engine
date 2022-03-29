@@ -101,3 +101,6 @@ select command from information_schema.alisql_cluster_consensus_membership_chang
 --connection conn1
 select server_id, role from information_schema.alisql_cluster_global;
 
+# cleanup
+--exec rm -rf $MYSQL_TMP_DIR/learner*
+--exec rm -f $MYSQL_TMP_DIR/server*
