@@ -6222,11 +6222,11 @@ sub mysqld_start ($$$$) {
     if ($opt_xcluster) {
       if ($arg eq "--server-id=0") {
         $tinfo->{'skip'} = 1;
-        $tinfo->{'comment'} = "$arg not support for X-Cluster";
+        $tinfo->{'comment'} = "$arg not support for GalaxyEngine";
         return;
       } if ($arg eq "--skip-log-bin") {
         $tinfo->{'skip'} = 1;
-        $tinfo->{'comment'} = "$arg not support for X-Cluster";
+        $tinfo->{'comment'} = "$arg not support for GalaxyEngine";
         return;
       }
     }
@@ -6711,7 +6711,7 @@ sub start_servers($) {
   $xcluster_info_prefix= '';
   my $xcluster_info_arr= ();
   foreach my $mysqld (mysqlds()) {
-    # X-Cluster: paxos_port = (server_port + 8000)
+    # GalaxyEngine: paxos_port = (server_port + 8000)
     push (@$xcluster_info_arr, '127.0.0.1:'.($mysqld->value('port')+8000));
   }
   mtr_verbose('xcluster_info_prefix: ' . join(';', @$xcluster_info_arr));

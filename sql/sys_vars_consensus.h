@@ -92,6 +92,5 @@ extern bool opt_consensus_learner_heartbeat;
 extern bool opt_consensus_auto_leader_transfer;
 extern ulonglong opt_consensus_auto_leader_transfer_check_seconds;
 extern bool opt_consensuslog_revise;
-extern bool opt_version_hide_xcluster;
 
 #endif

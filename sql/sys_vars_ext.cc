@@ -45,6 +45,8 @@
 #include "sql/sys_vars.h"
 #include "sql/ha_sequence.h"
 
+static char *galaxyengine_version_ptr = NULL;
+
 static Sys_var_ulong Sys_ccl_wait_timeout(
     "ccl_wait_timeout", "Timeout in seconds to wait when concurrency control.",
     GLOBAL_VAR(im::ccl_wait_timeout), CMD_LINE(REQUIRED_ARG),
@@ -294,4 +296,10 @@ static Sys_var_bool Sys_gcn_write_event(
     READ_ONLY NON_PERSIST GLOBAL_VAR(opt_gcn_write_event),
     CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_charptr Sys_galaxyengine_version(
+    "galaxyengine_version", "Version of the GalaxyEngine",
+    READ_ONLY GLOBAL_VAR(galaxyengine_version_ptr), NO_CMD_LINE, IN_SYSTEM_CHARSET,
+    DEFAULT(GALAXYENGINE_VERSION));
+
 /* RDS DEFINED */

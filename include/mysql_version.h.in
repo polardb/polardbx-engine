@@ -24,6 +24,8 @@
 #define LIBMYSQL_VERSION           "@VERSION@"
 #define LIBMYSQL_VERSION_ID         @MYSQL_VERSION_ID@
 
+#define GALAXYENGINE_VERSION    "0.0.2"
+
 #ifndef LICENSE
 #define LICENSE                     GPL
 #endif /* LICENSE */

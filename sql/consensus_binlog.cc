@@ -1296,7 +1296,7 @@ static void store_gtid_for_xpaxos(const char *buf, Relay_log_info *rli) {
 
 static void revise_one_event(uchar *event_ptr, size_t event_len, size_t log_pos)
 {
-  /* X-Cluster: fix timestamp for non-leader local event */
+  /* GalaxyEngine: fix timestamp for non-leader local event */
   if (consensus_log_manager.get_status() != Consensus_Log_System_Status::BINLOG_WORKING)
   {
     uint32 tt = uint4korr(event_ptr);
@@ -1314,10 +1314,10 @@ static void revise_one_event(uchar *event_ptr, size_t event_len, size_t log_pos)
     }
   }
 
-  /* X-Cluster: reset each binlog event's log_pos (end_log_pos) to the correct value */
+  /* GalaxyEngine: reset each binlog event's log_pos (end_log_pos) to the correct value */
   int4store(event_ptr + LOG_POS_OFFSET, log_pos);
 
-  /* X-Cluster: recalculate the checksum if necessary */
+  /* GalaxyEngine: recalculate the checksum if necessary */
   if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
   {
     ha_checksum crc= checksum_crc32(0L, NULL, 0);
@@ -1975,7 +1975,7 @@ void binlog_commit_pos_watcher(bool *is_running)
         break;
       }
       case binary_log::CONSENSUS_LOG_EVENT:
-        // X-Cluster makes sure the corresponding logEntry exists if index is commitIndex
+        // GalaxyEngine makes sure the corresponding logEntry exists if index is commitIndex
         consensus_log_ev = (Consensus_log_event*)ev;
         if (commitIndex <= consensus_log_ev->get_index())
         {
@@ -2175,7 +2175,7 @@ bool MYSQL_BIN_LOG::open_exist_binlog(const char *log_name,
     {
 #ifdef NORMANDY_CLUSTER
       /*
-      X-Cluster do not send fd event to Follower, so just use binlog_checksum_options.
+      GalaxyEngine do not send fd event to Follower, so just use binlog_checksum_options.
       The binlog_checksum_options of Leader and Follower must be set to a same value.
       */
       relay_log_checksum_alg= static_cast<enum_binlog_checksum_alg>

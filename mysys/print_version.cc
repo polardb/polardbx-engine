@@ -74,3 +74,7 @@ void build_version(const std::string &progname, std::string *destination) {
                 << MACHINE_TYPE << " (" << MYSQL_COMPILATION_COMMENT << ")";
   *destination = output_buffer.str();
 }
+
+void print_galaxyengine_version() {
+  printf("GalaxyEngine  Ver %s \n", GALAXYENGINE_VERSION);
+}

@@ -470,33 +470,33 @@ innodb.table_encrypt_portable_64                  : WL#000 Importing a different
 innodb.portability_tablespace_linux               : WL#000 Lizard didn't support in-place upgrade.
 information_schema.upgrade_cs                     : WL#000 Lizard didn't support in-place upgrade.
 main.read_only_ddl                                : WL#000 Lizard didn't support in-place upgrade.
-# x-cluster
-binlog_gtid.binlog_gtid_log_status_errors      : WL#001 'change master to' does not work for x-cluster
-binlog_gtid.binlog_gtid_show_binlog_events     : WL#001 test does not work for x-cluster (show binlog events)
-binlog_gtid.binlog_gtids_table_gcov            : WL#001 test does not work for x-cluster (show binlog events)
+# GalaxyEngine
+binlog_gtid.binlog_gtid_log_status_errors      : WL#001 'change master to' does not work for GalaxyEngine
+binlog_gtid.binlog_gtid_show_binlog_events     : WL#001 test does not work for GalaxyEngine (show binlog events)
+binlog_gtid.binlog_gtids_table_gcov            : WL#001 test does not work for GalaxyEngine (show binlog events)
 binlog_gtid.binlog_gtid_table_readonly         : WL#001 test runs into core dump
 binlog_gtid.binlog_xa_empty_rollback           : WL#001 new binlog events needs to be handled
-federated.federated                            : WL#001 x-cluster does not support master / slave mode
-federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_13118                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_25714                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_35333                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_connection_attrs           : WL#001 x-cluster does not support master / slave mode
-federated.federated_debug                      : WL#001 x-cluster does not support master / slave mode
-federated.federated_get_table_share            : WL#001 x-cluster does not support master / slave mode
-federated.federated_innodb                     : WL#001 x-cluster does not support master / slave mode
-federated.federated_server                     : WL#001 x-cluster does not support master / slave mode
-federated.percona_bug1739734                   : WL#001 x-cluster does not support master / slave mode
+federated.federated                            : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_archive                    : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_bug_13118                  : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_bug_25714                  : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_bug_35333                  : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_connection_attrs           : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_debug                      : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_get_table_share            : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_innodb                     : WL#001 GalaxyEngine does not support master / slave mode
+federated.federated_server                     : WL#001 GalaxyEngine does not support master / slave mode
+federated.percona_bug1739734                   : WL#001 GalaxyEngine does not support master / slave mode
 innodb.upgrade_fts                             : WL#001 test runs into core dump
 innodb.upgrade_partition                       : WL#001 test runs into core dump
 innodb.create_tablespace                       : WL#001 test runs into core dump
 innodb.create_tablespace_8k                    : WL#001 test runs into core dump
 
 main.all_persisted_variables                   : WL#001 test runs into core dump
-main.log_components_syslog                     : WL#001 test does not work for x-cluster
-main.log_options_cmdline                       : WL#001 test does not work for x-cluster
-main.myisam_explain_json_non_select_all        : WL#001 test does not work for x-cluster
-main.myisam_explain_json_non_select_none       : WL#001 test does not work for x-cluster
+main.log_components_syslog                     : WL#001 test does not work for GalaxyEngine
+main.log_options_cmdline                       : WL#001 test does not work for GalaxyEngine
+main.myisam_explain_json_non_select_all        : WL#001 test does not work for GalaxyEngine
+main.myisam_explain_json_non_select_none       : WL#001 test does not work for GalaxyEngine
 
 main.dd_schema_definition_after_upgrade_57_debug                   : WL#001 test runs into core dump
 binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table : WL#001 test runs into core dump
@@ -504,7 +504,6 @@ main.multiaddress_bind                         : WL#001 ipv6
 
 xcluster.smart_uk_conflict                     : WL#001 smart replay mode is not supported
 xcluster.smart_row_image_not_full              : WL#001 smart replay mode is not supported
-xcluster.version_hide_xcluster                 : WL#001 not needed now because version string changed
 xcluster.rpl_mts_table                         : WL#001 system variable 'slave-pr-mode=TABLE' is not supported
 xcluster.long_trx_leader_transfer              : WL#001 testcase issue
 xcluster.gtid                                  : WL#001 GTID is not fully supported now
