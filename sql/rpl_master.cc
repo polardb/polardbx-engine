@@ -1253,7 +1253,7 @@ bool show_master_status(THD *thd) {
   }
   protocol->start_row();
 
-  /* For X-Cluster follower, we show relaylog position */
+  /* For GalaxyEngine follower, we show relaylog position */
   consensus_log_manager.lock_consensus(TRUE);
   MYSQL_BIN_LOG *mysql_consensus_log= consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
   if (mysql_consensus_log->is_open()) {

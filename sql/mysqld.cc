@@ -6683,7 +6683,7 @@ int mysqld_main(int argc, char **argv)
     LogErr(INFORMATION_LEVEL, ER_WARN_NO_SERVERID_SPECIFIED);
 
   /*
-    For x-cluster:
+    For GalaxyEngine:
     bin_log must be set to ON
   */
   if (!opt_initialize && consensus_log_manager.option_invalid(opt_bin_log)) {
@@ -9008,6 +9008,7 @@ static void print_server_version(void) {
   set_server_version();
 
   print_explicit_version(server_version);
+  print_galaxyengine_version();
 }
 
 /** Compares two options' names, treats - and _ the same */
@@ -10096,26 +10097,6 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
   opt_readonly = read_only;
 
   return 0;
-}
-
-void fix_xcluster_label() {
-  DBUG_ASSERT(server_version[0] != '\0');
-  /* Fix server_version.*/
-  std::string tmp_version(server_version);
-  if (opt_version_hide_xcluster)
-  {
-    std::size_t res = tmp_version.find("X-Cluster-");
-    if (res != std::string::npos)
-      tmp_version.replace(res, strlen("X-Cluster-"), "");
-  }
-  else
-  {
-    std::size_t res1 = tmp_version.find("X-Cluster-");
-    std::size_t res2 = tmp_version.find("8.0.18-");
-    if (res1 == std::string::npos && res2 != std::string::npos)
-      tmp_version.insert(res2 + strlen("8.0.18-"), "X-Cluster-");
-  }
-  strncpy(server_version, tmp_version.c_str(), SERVER_VERSION_LENGTH);
 }
 
 /*

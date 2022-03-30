@@ -131,7 +131,6 @@ int init_common_variables();
 void my_init_signals();
 bool gtid_server_init();
 void gtid_server_cleanup();
-void fix_xcluster_label();
 void clean_up_mysqld_mutexes();
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *files_charset_info;

@@ -1439,7 +1439,7 @@ int binlog_cache_data::write_event(Log_event *ev) {
                ("event_counter= %lu", static_cast<ulong>(event_counter)));
   }
 
-  /* X-Cluster do not allow a log event larger than opt_consensus_large_event_limit */
+  /* GalaxyEngine do not allow a log event larger than opt_consensus_large_event_limit */
   my_off_t newpos = get_byte_position();
   if (opt_consensus_check_large_event) {
     if (newpos - oldpos > opt_consensus_large_event_limit || DBUG_EVALUATE_IF("force_large_event", 1, 0)) {
@@ -4929,7 +4929,7 @@ bool MYSQL_BIN_LOG::open_binlog(
     if (relay_log_checksum_alg == binary_log::BINLOG_CHECKSUM_ALG_UNDEF) {
 #ifdef NORMANDY_CLUSTER
       /*
-      X-Cluster do not send fd event to Follower, so just use binlog_checksum_options.
+      GalaxyEngine do not send fd event to Follower, so just use binlog_checksum_options.
       The binlog_checksum_options of Leader and Follower must be set to a same value.
       */
       relay_log_checksum_alg= static_cast<enum_binlog_checksum_alg>

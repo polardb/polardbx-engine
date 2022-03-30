@@ -361,7 +361,7 @@ int ConsensusLogManager::init_consensus_info() {
       // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
       if (!opt_cluster_info) {
         sql_print_error(
-            "[x-cluster]  cluster_info must be set when the server is running "
+            "GalaxyEngine cluster_info must be set when the server is running "
             "with --initialize(-insecure) ");
         return -1;
       }
@@ -467,7 +467,7 @@ int ConsensusLogManager::init_service() {
       // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
       if (!opt_cluster_info) {
         sql_print_error(
-            "[x-cluster]  cluster_info must be set when the server is running "
+            "GalaxyEngine cluster_info must be set when the server is running "
             "with --initialize(-insecure) ");
         return -1;
       }
@@ -603,7 +603,7 @@ int ConsensusLogManager::init_service() {
     // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
     if (!opt_cluster_info) {
       sql_print_error(
-          "[x-cluster]  cluster_info must be set when the server is running "
+          "GalaxyEngine cluster_info must be set when the server is running "
           "with --initialize(-insecure) ");
       return -1;
     }
@@ -1458,7 +1458,7 @@ bool ConsensusLogManager::is_state_machine_ready()
 
 bool ConsensusLogManager::option_invalid(bool log_bin) {
   if (!log_bin) {
-    sql_print_error("[x-cluster] log_bin must be set to ON");
+    sql_print_error("GalaxyEngine log_bin must be set to ON");
     return true;
   }
 

@@ -488,7 +488,7 @@ int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
       }
     });
 
-    // X-Cluster: only send committed binlog
+    // GalaxyEngine: only send committed binlog
     if (event_type == binary_log::CONSENSUS_LOG_EVENT)
     {
       uint64_t next_consensus_index= uint8korr(event_ptr +
@@ -1351,7 +1351,7 @@ void Binlog_sender::calc_shrink_buffer_size(size_t current_size) {
 }
 
 /*
-  X-Cluster: checkCommitIndex to make sure only send committed log
+  GalaxyEngine: checkCommitIndex to make sure only send committed log
 */
 int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index)
 {

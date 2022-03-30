@@ -94,7 +94,6 @@ bool opt_consensus_learner_heartbeat;
 bool opt_consensus_auto_leader_transfer;
 ulonglong opt_consensus_auto_leader_transfer_check_seconds;
 bool opt_consensuslog_revise;
-bool opt_version_hide_xcluster;
 
 static bool fix_consensus_checksum(sys_var *, THD *, enum_var_type)
 {
@@ -808,16 +807,3 @@ static Sys_var_ulonglong Sys_consensus_auto_leader_transfer_check_seconds(
     GLOBAL_VAR(opt_consensus_auto_leader_transfer_check_seconds), CMD_LINE(OPT_ARG),
     VALID_RANGE(10, 300), DEFAULT(60),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_auto_leader_transfer_check_seconds));
-
-static bool fix_version_hide_xcluster(sys_var *, THD *, enum_var_type)
-{
-  fix_xcluster_label();
-  return false;
-}
-
-static Sys_var_bool Sys_version_hide_xcluster(
-    "version_hide_xcluster",
-    "hide X-Cluster label in version",
-    GLOBAL_VAR(opt_version_hide_xcluster), CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(0), ON_UPDATE(fix_version_hide_xcluster));
