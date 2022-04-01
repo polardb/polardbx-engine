@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <thread>
 
+#include "my_macros.h"
+
 namespace gx {
 
 #if defined(__GNUC__)
