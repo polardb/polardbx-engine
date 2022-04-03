@@ -113,7 +113,7 @@ int DataStorage::set(const std::string &name, const std::string &key,
   write_options.sync= false;
   rocksdb::WriteBatch batch;
   batch.Put(key, value);
-  batch.Put(DataStorage::lastAppliedIndexTag, RDRaftLog::intToString(lastAppliedIndex));
+  batch.Put(DataStorage::lastAppliedIndexTag, RDPaxosLog::intToString(lastAppliedIndex));
   rocksdb::Status status= db->Write(write_options, &batch);
   return (status.ok()) ? 0 : -1;
 }
@@ -133,7 +133,7 @@ int DataStorage::del(const std::string &name, const std::string &key,
   write_options.sync= false;
   rocksdb::WriteBatch batch;
   batch.Delete(key);
-  batch.Put(DataStorage::lastAppliedIndexTag, RDRaftLog::intToString(lastAppliedIndex));
+  batch.Put(DataStorage::lastAppliedIndexTag, RDPaxosLog::intToString(lastAppliedIndex));
   rocksdb::Status status= db->Write(write_options, &batch);
   return (status.ok()) ? 0 : -1;
 }

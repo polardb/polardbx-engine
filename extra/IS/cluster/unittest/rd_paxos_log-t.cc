@@ -10,7 +10,7 @@
  * @author yingqiang.zyq(yingqiang.zyq@alibaba-inc.com)
  * @date 08/01/2016 11:14:06 AM
  * @version 1.0
- * @brief unit test for RDRaftLog
+ * @brief unit test for RDPaxosLog
  **/
 
 #include <unistd.h>
@@ -21,12 +21,12 @@
 
 using namespace alisql;
 
-TEST(RDRaftLog, MetaData)
+TEST(RDPaxosLog, MetaData)
 {
   const char* paxosLogTestDir= "paxosLogTestDir";
   deleteDir(paxosLogTestDir);
   rocksdb::Options options;
-  PaxosLog *rlog= new RDRaftLog(paxosLogTestDir, true, 4 * 1024 * 1024);
+  PaxosLog *rlog= new RDPaxosLog(paxosLogTestDir, true, 4 * 1024 * 1024);
 
   int ret= rlog->setMetaData("VoteFor", 1);
   EXPECT_EQ(ret, 0);
@@ -39,11 +39,11 @@ TEST(RDRaftLog, MetaData)
   delete rlog;
 }
 
-TEST(RDRaftLog, PaxosLog)
+TEST(RDPaxosLog, PaxosLog)
 {
   const char* paxosLogTestDir = "paxosLogTestDir";
   deleteDir(paxosLogTestDir);
-  PaxosLog *rlog= new RDRaftLog(paxosLogTestDir, true, 4 * 1024 * 1024);
+  PaxosLog *rlog= new RDPaxosLog(paxosLogTestDir, true, 4 * 1024 * 1024);
   LogEntry entry;
 
   EXPECT_EQ(rlog->getLastLogIndex(), 0);

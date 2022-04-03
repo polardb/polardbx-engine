@@ -279,7 +279,7 @@ int StateMachine::initLastAppliedIndex()
   int ret= dataStore_->get("", DataStorage::lastAppliedIndexTag, &tag);
   if (ret == 0)
   {
-    lastAppliedIndex_= RDRaftLog::stringToInt(tag);   
+    lastAppliedIndex_= RDPaxosLog::stringToInt(tag);   
   }
   LOG_INFO("Init last applied index as: %ld\n", lastAppliedIndex_);
 }
@@ -331,7 +331,7 @@ int StateMachine::initDataStorage(std::string &subDir)
 int StateMachine::initRaftLog(std::string &subDir)
 {
   std::string paxosLogPath= FLAGS_raftlog_dir + "/" + subDir;
-  paxosLog_= std::shared_ptr<RDRaftLog>(new RDRaftLog(paxosLogPath, FLAGS_data_compress,
+  paxosLog_= std::shared_ptr<RDPaxosLog>(new RDPaxosLog(paxosLogPath, FLAGS_data_compress,
                                        FLAGS_data_write_buffer_size * 1024 * 1024));
   return 0;
 }

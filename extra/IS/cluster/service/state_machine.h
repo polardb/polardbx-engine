@@ -123,7 +123,7 @@ class StateMachine {
     std::vector<std::string> serverMembers_;
     std::vector<std::string> rpcMembers_;
     std::shared_ptr<DataStorage> dataStore_;
-    std::shared_ptr<RDRaftLog> paxosLog_;
+    std::shared_ptr<RDPaxosLog> paxosLog_;
     std::shared_ptr<Paxos> paxos_;
     StateMachineService *srv_;
     boost::unordered_map<uint64_t, ClientRsp> clientRsps_;
