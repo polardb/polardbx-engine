@@ -27,12 +27,12 @@ namespace alisql {
  * @brief class for dst_cli_sdk
  *
  **/
-class RaftGroup
+class PaxosGroup
 {
   public:
-    RaftGroup(const std::string &groupName, 
+    PaxosGroup(const std::string &groupName, 
               const std::vector<std::string> &members);
-    virtual ~RaftGroup();
+    virtual ~PaxosGroup();
     CliSDK* getCliSdk() {return cliSdk_;}
     std::string getGroupName() {return groupName_;}
   private:
@@ -44,7 +44,7 @@ class RaftGroup
 class DstCliSDK
 {
 public:
-  DstCliSDK(const std::string &raftGroupInfo);
+  DstCliSDK(const std::string &paxosGroupInfo);
   virtual ~DstCliSDK();
 
   int put(const std::string &key, std::string &value);
@@ -65,8 +65,8 @@ private:
   memcached_st *memc_;
   memcached_return rc_;
   uint64_t casUnique_;
-  std::vector<RaftGroup*> raftGroups_;
-  std::string raftGroupInfo_;
+  std::vector<PaxosGroup*> paxosGroups_;
+  std::string paxosGroupInfo_;
 };
 
 };/* end of namespace alisql */

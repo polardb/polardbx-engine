@@ -1,17 +1,17 @@
 #include <gflags/gflags.h>
 
-DEFINE_string(rpc_members, "", "ip:port for raft rpc, e.g. myb11111.sqa.zmf:1234");
+DEFINE_string(rpc_members, "", "ip:port for paxos rpc, e.g. myb11111.sqa.zmf:1234");
 DEFINE_string(server_members, "", "ip:port for client server, e.g. myb11111.sqa.zmf:1234");
-DEFINE_string(raft_groups, "", "ip:port for raft group, e.g. 0.0.0.0:1,myb145142.sqa.zmf:10000,myb145142.sqa.zmf:10001,myb145142.sqa.zmf:10002;0.0.0.0:2,e010101083011.zmf:10000,e010101083011.zmf:10001,e010101083011.zmf:10002");
+DEFINE_string(paxos_groups, "", "ip:port for paxos group, e.g. 0.0.0.0:1,myb145142.sqa.zmf:10000,myb145142.sqa.zmf:10001,myb145142.sqa.zmf:10002;0.0.0.0:2,e010101083011.zmf:10000,e010101083011.zmf:10001,e010101083011.zmf:10002");
 DEFINE_int32(server_id, 1, "the offset in members of this node");
 
 DEFINE_string(data_dir, "data", "local directory which store pesistent information");
-DEFINE_string(raftlog_dir, "raftlog", "write-ahead log directory path");
+DEFINE_string(paxoslog_dir, "paxoslog", "write-ahead log directory path");
 
 // For RocksDB
 DEFINE_bool(data_compress, false, "enable snappy compression on rocksdb storage");
 DEFINE_uint64(data_write_buffer_size, 64, "for data, rocksdb write_buffer_size, MB");
-DEFINE_bool(raftlog_sync, true, "do sync when raft log is writen");
+DEFINE_bool(paxoslog_sync, true, "do sync when paxos log is writen");
 DEFINE_uint64(max_write_buffer_number, 5, "the maximum number of write buffers that are built up in memory");
 DEFINE_uint64(min_write_buffer_number_to_merge, 1, "the minimum number of write buffers that will be merged together before writing to storage");
 DEFINE_uint64(max_background_compactions, 6, "maximum number of concurrent background compaction jobs, submitted to the default LOW priority thread pool.");

@@ -22,7 +22,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/slice.h"
 #include "rd_raft_log.h"
-#include "raft.h"
+#include "paxos.h"
 #include "rocksdb/options.h"
 
 namespace alisql {

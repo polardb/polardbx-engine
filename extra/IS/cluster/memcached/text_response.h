@@ -22,7 +22,7 @@
 #include <vector>
 #include "memcached_object.h"
 #include "../service/state_machine_service.h"
-#include "raft.h"
+#include "paxos.h"
 namespace alisql {
 
 /**
@@ -43,14 +43,14 @@ public:
   TextResponse() {};
   virtual ~TextResponse() {};
   void setValueResult(const std::string &key, const std::string &buf, bool cas);
-  void setClusterStatsResult(Raft::ClusterInfoType *cis, uint64_t size);
-  void setLocalStatsResult(Raft::MemberInfoType &mi, uint64_t lastAppliedIndex, uint64_t cmdGet);
+  void setClusterStatsResult(Paxos::ClusterInfoType *cis, uint64_t size);
+  void setLocalStatsResult(Paxos::MemberInfoType &mi, uint64_t lastAppliedIndex, uint64_t cmdGet);
   void setVersionResult();
   std::string getResult() {return result_;}
   void setResult(const char *result) {result_= result;}
   uint64_t getResponseLen();
   void serializeToArray(char *buffer);
-  std::string getStateType(Raft::StateType role);
+  std::string getStateType(Paxos::StateType role);
 
 private:
   void loadObject(const std::string &buf);

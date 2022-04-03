@@ -25,14 +25,14 @@ DECLARE_string(server_members);
 
 namespace alisql {
 
-RaftGroup::RaftGroup(const std::string &groupName, 
+RaftGroup::PaxosGroup(const std::string &groupName, 
                      const std::vector<std::string> &members)
                      : groupName_(groupName)
 {
   cliSdk_= new CliSDK(members);
 }
 
-RaftGroup::~RaftGroup()
+RaftGroup::~PaxosGroup()
 {
   if (cliSdk_ != NULL)
   {
@@ -41,8 +41,8 @@ RaftGroup::~RaftGroup()
   }
 }
 
-DstCliSDK::DstCliSDK(const std::string &raftGroupInfo) 
-          :casUnique_(0), memc_(NULL), rc_(MEMCACHED_SUCCESS), raftGroupInfo_(raftGroupInfo)
+DstCliSDK::DstCliSDK(const std::string &paxosGroupInfo) 
+          :casUnique_(0), memc_(NULL), rc_(MEMCACHED_SUCCESS), paxosGroupInfo_(paxosGroupInfo)
 {
 }
 
@@ -54,36 +54,36 @@ DstCliSDK::~DstCliSDK()
     memc_= NULL;  
   }
 
-  for (int i=0; i < raftGroups_.size(); i++)
+  for (int i=0; i < paxosGroups_.size(); i++)
   {
-    RaftGroup* raftGroup= raftGroups_[i];
-    if (raftGroup != NULL)
+    PaxosGroup* paxosGroup= paxosGroups_[i];
+    if (paxosGroup != NULL)
     {
-      delete raftGroup;
+      delete paxosGroup;
     }
   }
 }
 
 int DstCliSDK::parseArgs()
 {
-  std::vector<std::string> raftGroups;
-  boost::split(raftGroups, raftGroupInfo_,
+  std::vector<std::string> paxosGroups;
+  boost::split(paxosGroups, paxosGroupInfo_,
                boost::is_any_of(";"), boost::token_compress_on);
-  for (int i= 0; i < raftGroups.size(); i++)
+  for (int i= 0; i < paxosGroups.size(); i++)
   {
-    std::string raftGroup= raftGroups[i];
+    std::string paxosGroup= paxosGroups[i];
     std::vector<std::string> members;
-    boost::split(members, raftGroup,
+    boost::split(members, paxosGroup,
                  boost::is_any_of(","), boost::token_compress_on);
     if (members.size() < 2)
     {
-      LOG_INFO("invalid raft group and member name, please check your configuration\n");
+      LOG_INFO("invalid paxos group and member name, please check your configuration\n");
       return -1;
     }
     std::string groupName= members[0];
     members.erase(members.begin());
-    RaftGroup* raftGroupPtr= new RaftGroup(groupName, members);
-    raftGroups_.push_back(raftGroupPtr);
+    PaxosGroup* paxosGroupPtr= new PaxosGroup(groupName, members);
+    paxosGroups_.push_back(paxosGroupPtr);
   }
   return 0;
 }
@@ -107,19 +107,19 @@ int DstCliSDK::init()
     return -1;
   }
   
-  std::string raftGroupNames;
+  std::string paxosGroupNames;
 
-  for (int i= 0; i < raftGroups_.size(); i++)
+  for (int i= 0; i < paxosGroups_.size(); i++)
   {
     if (i != 0)
     {
-      raftGroupNames.append(",");
+      paxosGroupNames.append(",");
     }
-    raftGroupNames.append(raftGroups_[i]->getGroupName());
+    paxosGroupNames.append(paxosGroups_[i]->getGroupName());
   }
 
   memcached_server_st *server_pool;
-  server_pool = memcached_servers_parse(raftGroupNames.c_str());
+  server_pool = memcached_servers_parse(paxosGroupNames.c_str());
   
   rc_= memcached_server_push(memc_, server_pool);
   if (!memcached_success(rc_)) 
@@ -158,11 +158,11 @@ int DstCliSDK::cas(const std::string &key, std::string &value)
 
 int DstCliSDK::showStats()
 { 
-  for (int i= 0; i < raftGroups_.size(); i++)
+  for (int i= 0; i < paxosGroups_.size(); i++)
   {
-    RaftGroup* raftGroup= raftGroups_[i];
-    printf("Raft group: %s\n", raftGroup->getGroupName().c_str());
-    raftGroup->getCliSdk()->showStats();
+    PaxosGroup* paxosGroup= paxosGroups_[i];
+    printf("Paxos group: %s\n", paxosGroup->getGroupName().c_str());
+    paxosGroup->getCliSdk()->showStats();
   }
 
   return 0;
@@ -173,24 +173,24 @@ int DstCliSDK::process(SDKOpr opr, const std::string &key,
 {
   uint32_t groupKey= memcached_generate_hash(memc_, key.c_str(), key.length());
   
-  if (groupKey > raftGroups_.size())
+  if (groupKey > paxosGroups_.size())
   {
-    LOG_INFO("group key is larger than the size of raft group! \n");
+    LOG_INFO("group key is larger than the size of paxos group! \n");
     return -1;
   }
-  RaftGroup* raftGroup= raftGroups_[groupKey];
+  PaxosGroup* paxosGroup= paxosGroups_[groupKey];
   
   if (opr == Cas)
   {
-    raftGroup->getCliSdk()->setCasUnique(casUnique_);
+    paxosGroup->getCliSdk()->setCasUnique(casUnique_);
   }
-  int ret= raftGroup->getCliSdk()->process(opr, key, value);  
+  int ret= paxosGroup->getCliSdk()->process(opr, key, value);  
   if (opr == Gets)
   {
-    casUnique_= raftGroup->getCliSdk()->getCasUnique();
+    casUnique_= paxosGroup->getCliSdk()->getCasUnique();
   }
   
-  rc_= raftGroup->getCliSdk()->getMemcachedRc();
+  rc_= paxosGroup->getCliSdk()->getMemcachedRc();
   return ret;
 }
 } //namespace alisql

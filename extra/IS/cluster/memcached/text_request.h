@@ -19,7 +19,7 @@
 #include <inttypes.h>
 #include "consts_def.h"
 #include <ctime>
-#include "raft.h"
+#include "paxos.h"
 namespace alisql {
 
 // Possible stats categories.

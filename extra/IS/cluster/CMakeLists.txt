@@ -8,10 +8,10 @@ message("CMAKE_C_COMPILER ${CMAKE_C_COMPILER} " )
 
 SET (PRJ_SRC
   ../consensus/algorithm/configuration.cc
-  ../consensus/algorithm/raft.cc
-  ../consensus/algorithm/raft_server.cc
+  ../consensus/algorithm/paxos.cc
+  ../consensus/algorithm/paxos_server.cc
   ../consensus/algorithm/rd_raft_log.cc
-  ../consensus/protocol/raft.pb.cc
+  ../consensus/protocol/paxos.pb.cc
   ../consensus/net/easyNet.cc
   ../consensus/service/service.cc
   ../consensus/service/client_service.cc

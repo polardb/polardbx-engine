@@ -38,23 +38,23 @@ void TextResponse::setValueResult(const std::string &key, const std::string &buf
   result_.append(TEXT_END);
 }
 
-std::string TextResponse::getStateType(Raft::StateType role)
+std::string TextResponse::getStateType(Paxos::StateType role)
 {
   std::string state;
 
-  if (role == Raft::State::FOLLOWER)
+  if (role == Paxos::State::FOLLOWER)
   {
     state= "FOLLOWER";
   }
-  else if (role == Raft::State::CANDIDATE)
+  else if (role == Paxos::State::CANDIDATE)
   {
     state= "CANDIDATE";
   }
-  else if (role == Raft::State::LEADER)
+  else if (role == Paxos::State::LEADER)
   {
     state= "LEADER";
   }
-  else if (role == Raft::State::NOROLE)
+  else if (role == Paxos::State::NOROLE)
   {
     state= "NOROLE";
   }
@@ -66,7 +66,7 @@ std::string TextResponse::getStateType(Raft::StateType role)
   return state;
 }
 
-void TextResponse::setClusterStatsResult(Raft::ClusterInfoType *cis, uint64_t size)
+void TextResponse::setClusterStatsResult(Paxos::ClusterInfoType *cis, uint64_t size)
 {
   std::ostringstream os;
   std::string state;
@@ -87,7 +87,7 @@ void TextResponse::setClusterStatsResult(Raft::ClusterInfoType *cis, uint64_t si
   result_= os.str();
 }
 
-void TextResponse::setLocalStatsResult(Raft::MemberInfoType &mi, uint64_t lastAppliedIndex,
+void TextResponse::setLocalStatsResult(Paxos::MemberInfoType &mi, uint64_t lastAppliedIndex,
                                        uint64_t cmdGet)
 {
   std::ostringstream os;

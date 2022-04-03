@@ -24,7 +24,7 @@
 #include <iostream>
 #include <gflags/gflags.h>
 #include <iostream>
-#include "raft.h"
+#include "paxos.h"
 #include "cli_sdk.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>

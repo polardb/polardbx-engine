@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <algorithm>
 #include "memcached_utils.h"
-#include "raft.h"
+#include "paxos.h"
 
 namespace alisql {
 

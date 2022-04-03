@@ -21,7 +21,7 @@
 #include <string>
 #include <libmemcached/memcached.h>
 #include "../service/state_machine_service.h"
-#include "raft.h"
+#include "paxos.h"
 
 namespace alisql {
 

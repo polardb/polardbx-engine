@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 #include "state_machine_service.h"
-#include "raft.h"
+#include "paxos.h"
 #include "../memcached/memcached_easyNet.h"
 #include "../memcached/text_request.h"
 #include "../memcached/text_response.h"
@@ -101,9 +101,9 @@ class StateMachine {
 
     uint64_t getLastAppliedIndex();
 
-    enum Raft::State getState() {return state_;}
+    enum Paxos::State getState() {return state_;}
 
-    void stateChangeCb(enum Raft::State raftState);
+    void stateChangeCb(enum Paxos::State paxosState);
 
     int getRocksDBOptions(rocksdb::Options &options);
 
@@ -112,9 +112,9 @@ class StateMachine {
   private:
     std::mutex lock_;
     bool stop_;
-    std::atomic<enum Raft::State> state_;
+    std::atomic<enum Paxos::State> state_;
     // Before statemachine transfer to leader, we must make sure all
-    // logs have been applied. leaderTerm_ is set when raft layer
+    // logs have been applied. leaderTerm_ is set when paxos layer
     // transfer to leader in stateChangeCb, after all logs have been,
     // applied we verify that the term has not changed in the meantime,
     // then transfer to leader state.
@@ -123,8 +123,8 @@ class StateMachine {
     std::vector<std::string> serverMembers_;
     std::vector<std::string> rpcMembers_;
     std::shared_ptr<DataStorage> dataStore_;
-    std::shared_ptr<RDRaftLog> raftLog_;
-    std::shared_ptr<Raft> raft_;
+    std::shared_ptr<RDRaftLog> paxosLog_;
+    std::shared_ptr<Paxos> paxos_;
     StateMachineService *srv_;
     boost::unordered_map<uint64_t, ClientRsp> clientRsps_;
     std::thread applyLogThread_;

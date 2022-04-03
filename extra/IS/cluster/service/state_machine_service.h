@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 #include "service.h"
-#include "raft.h"
+#include "paxos.h"
 #include "state_machine.h"
 #include "../memcached/memcached_easyNet.h"
 #include "../memcached/text_request.h"

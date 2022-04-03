@@ -5,7 +5,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <signal.h>
-#include "raft.h"
+#include "paxos.h"
 
 DECLARE_string(rpc_members);
 DECLARE_string(server_members);

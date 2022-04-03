@@ -24,7 +24,7 @@
 #include <iostream>
 #include <gflags/gflags.h>
 #include <iostream>
-#include "raft.h"
+#include "paxos.h"
 #include "dst_cli_sdk.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
@@ -34,7 +34,7 @@ DECLARE_string(cli_cmd);
 DECLARE_string(cli_key);
 DECLARE_string(cli_value);
 DECLARE_uint64(cli_cas);
-DECLARE_string(raft_groups);
+DECLARE_string(paxos_groups);
 
 using namespace alisql;
 
