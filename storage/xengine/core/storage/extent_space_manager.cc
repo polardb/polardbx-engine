@@ -18,6 +18,7 @@
 #include "extent_meta_manager.h"
 #include "extent_space_manager.h"
 #include "storage_meta_struct.h"
+#include "util/sync_point.h"
 
 
 namespace xengine
@@ -244,6 +245,9 @@ int ExtentSpaceManager::allocate(const int64_t table_space_id,
     ret = Status::kInvalidArgument;
     XENGINE_LOG(WARN, "invalid argument", K(ret), K(table_space_id), K(extent_space_type));
   } else {
+#ifndef NDEBUG
+    TEST_SYNC_POINT("ExtentSpaceManager::allocate::inject_allocate_hang");
+#endif
     {
       SpinRLockGuard r_guard(table_space_lock_);
       if (IS_NULL(table_space = get_table_space(table_space_id))) {
@@ -262,6 +266,7 @@ int ExtentSpaceManager::allocate(const int64_t table_space_id,
         ret = Status::kErrorUnexpected;
         XENGINE_LOG(WARN, "unexpected error, fail to emplace to io_info map", K(ret), K(io_info), K(table_space_id), K(extent_space_type));
       }
+      assert(Status::kOk == ret);
     }
 
     if (SUCCED(ret)) {
@@ -287,17 +292,10 @@ int ExtentSpaceManager::recycle(const int64_t table_space_id,
     ret = Status::kInvalidArgument;
     XENGINE_LOG(WARN, "invalid argument", K(ret), K(table_space_id), K(extent_space_type), K(extent_id));
   } else {
-    {
-      SpinRLockGuard r_guard(table_space_lock_);
-      if (IS_NULL(table_space = get_table_space(table_space_id))) {
-        ret = Status::kErrorUnexpected;
-        XENGINE_LOG(WARN, "unexpected error, tablespace should not nullptr", K(ret), K(table_space_id), K(extent_space_type), K(extent_id));
-      } else if (FAILED(table_space->recycle(extent_space_type, extent_id))) {
-        XENGINE_LOG(WARN, "fail to recycle extent", K(ret), K(table_space_id), K(extent_space_type), K(extent_id));
-      }
-    }
-
     if (SUCCED(ret)) {
+#ifndef NDEBUG
+      TEST_SYNC_POINT("ExtentSpaceManager::recycle::inject_recycle_io_info_hang");
+#endif
       SpinWLockGuard w_guard(io_info_map_lock_);
       if (1 != (extent_io_info_map_.erase(extent_id.id()))) {
         ret = Status::kErrorUnexpected;
@@ -310,6 +308,21 @@ int ExtentSpaceManager::recycle(const int64_t table_space_id,
         XENGINE_LOG(WARN, "fail to recycle extent meta", K(ret), K(table_space_id), K(extent_space_type), K(extent_id));
       } else {
         XENGINE_LOG(INFO, "success to recycle extent", K(table_space_id), K(extent_space_type), K(extent_id));
+      }
+    }
+
+    /**after recycle from table space, the extent is allocatable. so recycle from table space after recycle
+    from extent_io_info_map and extent_meta_mgr_*/
+    if (SUCCED(ret)) {
+      SpinRLockGuard r_guard(table_space_lock_);
+      if (IS_NULL(table_space = get_table_space(table_space_id))) {
+        ret = Status::kErrorUnexpected;
+        XENGINE_LOG(WARN, "unexpected error, tablespace should not nullptr",
+                    K(ret), K(table_space_id), K(extent_space_type),
+                    K(extent_id));
+      } else if (FAILED(table_space->recycle(extent_space_type, extent_id))) {
+        XENGINE_LOG(WARN, "fail to recycle extent", K(ret), K(table_space_id),
+                    K(extent_space_type), K(extent_id));
       }
     }
   }

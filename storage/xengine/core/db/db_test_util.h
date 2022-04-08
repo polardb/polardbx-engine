@@ -758,7 +758,7 @@ class DBTestBase : public testing::Test {
 
   bool IsDirectIOSupported();
 
-  common::Status Flush(int cf = 0);
+  common::Status Flush(int cf = 0, bool wait = true);
 
   common::Status CompactRange(int cf, uint32_t compact_type);
 

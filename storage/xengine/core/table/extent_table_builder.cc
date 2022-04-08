@@ -284,7 +284,8 @@ ExtentBasedTableBuilder::ExtentBasedTableBuilder(
     const std::string *compression_dict, const bool skip_filters,
     const std::string &column_family_name,
     const storage::LayerPosition &layer_position, bool is_flush)
-    : rep_(nullptr),
+    : is_inited_(false),
+      rep_(nullptr),
       status_(Status::kOk),
       ioptions_(ioptions),
       table_options_(table_options),
@@ -316,13 +317,27 @@ ExtentBasedTableBuilder::ExtentBasedTableBuilder(
   test_ignore_flush_data_ = false;
 #endif
   meta_size_ = sst_meta_size();
-  int ret = init_one_sst();
-  assert(ret == Status::kOk);
 }
 
 ExtentBasedTableBuilder::~ExtentBasedTableBuilder() {
 //  delete rep_;
   MOD_DELETE_OBJECT(Rep, rep_);
+}
+
+int ExtentBasedTableBuilder::init()
+{
+  int ret = Status::kOk;
+
+  if (is_inited_) {
+    ret = Status::kInitTwice;
+    XENGINE_LOG(WARN, "ExtentBasedTableBuilder has been inited", K(ret));
+  } else if (FAILED(init_one_sst())) {
+    XENGINE_LOG(ERROR, "fail to init sst", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+
+  return ret;
 }
 
 int ExtentBasedTableBuilder::update_block_stats(const Slice& key,
@@ -372,6 +387,11 @@ int ExtentBasedTableBuilder::AddBlock(const Slice& block_contents,
                                       const Slice& block_stats_contents,
                                       const Slice& last_key, 
                                       const bool has_trailer) {
+  if (!is_inited_) {
+    XENGINE_LOG(WARN, "ExtentBasedTableBuilder should been inited first");
+    return Status::kNotInit;
+  }
+
   if (!SupportAddBlock()) {
     __XENGINE_LOG(WARN, "ExtentBasedTableBuilder does not support AddBlock. Mybay HashIndex is used");
     return Status::kNotSupported;
@@ -556,6 +576,11 @@ int ExtentBasedTableBuilder::Add(const Slice& key, const Slice& value) {
     return Status::kOk;
   }
 #endif
+  if (!is_inited_) {
+    XENGINE_LOG(WARN, "ExtentBasedTableBuilder should been inited first");
+    return Status::kNotInit;
+  }
+
   if (LIKELY(value.size() < LARGE_OBJECT_SIZE)) {
     return plain_add(key, value);
   }
@@ -1288,10 +1313,18 @@ int ExtentBasedTableBuilder::insert_block_in_cache(const Slice& block_contents,
 }
 
 int ExtentBasedTableBuilder::Finish() {
-  if (status_ != Status::kOk) return status_;
-
   int ret = Status::kOk;
-  FAIL_RETURN_MSG(finish_one_sst(), "failed on finish_one_sst(%d)", ret);
+
+  if (!is_inited_) {
+    ret = Status::kNotInit;
+    XENGINE_LOG(WARN, "ExtentBasedTableBuilder should been inited first", K(ret));
+  } else if (Status::kOk != status_) {
+    ret = status_;
+    XENGINE_LOG(WARN, "ExtentBasedTableBuilder internal status is wrong", K(ret));
+  } else if (FAILED(finish_one_sst())) {
+    XENGINE_LOG(WARN, "fail to finish one sst", K(ret));
+  }
+
   return ret;
 }
 
@@ -1299,51 +1332,56 @@ int ExtentBasedTableBuilder::Abandon() {
   int ret = Status::kOk;
   storage::ExtentId extent_id;
 
-  /**recycle normal extent has flushed to disk*/
-  for (uint32_t i = 0; SUCCED(ret) && i < mtables_->metas.size(); ++i) {
-    extent_id = mtables_->metas[i].fd.extent_id;
-    if (FAILED(mtables_->space_manager->recycle(
-            mtables_->table_space_id_, storage::HOT_EXTENT_SPACE, extent_id))) {
-      XENGINE_LOG(WARN, "fail to recycle flushed normal extent", K(ret),
-                  K(extent_id));
-    }
-  }
-  mtables_->metas.clear();
-
-  /**recycle lob extent has flushed to disk*/
-  if (SUCCED(ret)) {
-    for (uint32_t i = 0; SUCCED(ret) && i < flushed_lob_extent_ids_.size();
-         ++i) {
-      extent_id = flushed_lob_extent_ids_.at(i);
-      if (FAILED(mtables_->space_manager->recycle(mtables_->table_space_id_,
-                                                  storage::HOT_EXTENT_SPACE,
-                                                  extent_id))) {
-        XENGINE_LOG(WARN, "fail to recycle flushed lob extent", K(ret),
+  if (!is_inited_) {
+    ret = Status::kNotInit;
+    XENGINE_LOG(WARN, "ExtentBasedTableBuilder should been inited first", K(ret));
+  } else {
+    /**recycle normal extent has flushed to disk*/
+    for (uint32_t i = 0; SUCCED(ret) && i < mtables_->metas.size(); ++i) {
+      extent_id = mtables_->metas[i].fd.extent_id;
+      if (FAILED(mtables_->space_manager->recycle(
+              mtables_->table_space_id_, storage::HOT_EXTENT_SPACE, extent_id))) {
+        XENGINE_LOG(WARN, "fail to recycle flushed normal extent", K(ret),
                     K(extent_id));
       }
     }
-  }
-  flushed_lob_extent_ids_.clear();
+    mtables_->metas.clear();
 
-  /**recycle not flushed normal extent*/
-  if (SUCCED(ret) && 0 != not_flushed_normal_extent_id_.id()) {
-    if (FAILED(mtables_->space_manager->recycle(
-            mtables_->table_space_id_, storage::HOT_EXTENT_SPACE,
-            not_flushed_normal_extent_id_, false /*no extent meta*/))) {
-      XENGINE_LOG(WARN, "fail to recycle not flushed normal extent", K(ret),
-                  K(not_flushed_normal_extent_id_));
+    /**recycle lob extent has flushed to disk*/
+    if (SUCCED(ret)) {
+      for (uint32_t i = 0; SUCCED(ret) && i < flushed_lob_extent_ids_.size();
+           ++i) {
+        extent_id = flushed_lob_extent_ids_.at(i);
+        if (FAILED(mtables_->space_manager->recycle(mtables_->table_space_id_,
+                                                    storage::HOT_EXTENT_SPACE,
+                                                    extent_id))) {
+          XENGINE_LOG(WARN, "fail to recycle flushed lob extent", K(ret),
+                      K(extent_id));
+        }
+      }
     }
-  }
+    flushed_lob_extent_ids_.clear();
 
-  /**recycle not flushed lob extent*/
-  if (SUCCED(ret) && 0 != not_flushed_lob_extent_id_.id()) {
-    if (FAILED(mtables_->space_manager->recycle(
-        mtables_->table_space_id_, storage::HOT_EXTENT_SPACE,
-        not_flushed_lob_extent_id_, false /*no extent meta*/))) {
-      XENGINE_LOG(WARN, "fail to recycle the extent", K(ret), K(not_flushed_lob_extent_id_));
-    } else {
-      XENGINE_LOG(INFO, "success to recycle thr not flushed lob extent", K_(not_flushed_lob_extent_id));
-      not_flushed_lob_extent_id_.reset();
+    /**recycle not flushed normal extent*/
+    if (SUCCED(ret) && 0 != not_flushed_normal_extent_id_.id()) {
+      if (FAILED(mtables_->space_manager->recycle(
+              mtables_->table_space_id_, storage::HOT_EXTENT_SPACE,
+              not_flushed_normal_extent_id_, false /*no extent meta*/))) {
+        XENGINE_LOG(WARN, "fail to recycle not flushed normal extent", K(ret),
+                    K(not_flushed_normal_extent_id_));
+      }
+    }
+
+    /**recycle not flushed lob extent*/
+    if (SUCCED(ret) && 0 != not_flushed_lob_extent_id_.id()) {
+      if (FAILED(mtables_->space_manager->recycle(
+          mtables_->table_space_id_, storage::HOT_EXTENT_SPACE,
+          not_flushed_lob_extent_id_, false /*no extent meta*/))) {
+        XENGINE_LOG(WARN, "fail to recycle the extent", K(ret), K(not_flushed_lob_extent_id_));
+      } else {
+        XENGINE_LOG(INFO, "success to recycle thr not flushed lob extent", K_(not_flushed_lob_extent_id));
+        not_flushed_lob_extent_id_.reset();
+      }
     }
   }
 
