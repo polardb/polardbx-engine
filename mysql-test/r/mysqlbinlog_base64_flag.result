@@ -56,7 +56,20 @@ BEGIN
 /*!*/;
 # at 305
 <#>
-ROLLBACK /* added by mysqlbinlog */ /*!*/;
+# at 350
+<#>
+
+BINLOG '
+C7sTURMBAAAALQAAAF4BAAAAAEYAAAAAAAEABHRlc3QAAnQxAAEDAAHYe4B+
+C7sTUR4BAAAALQAAAIsBAAAAAEYAAAAAAAEAAgAB//4BAAAA/gEAAADB4STC
+'/*!*/;
+# at 395
+<#>
+SET TIMESTAMP=1360247563/*!*/;
+COMMIT
+/*!*/;
+# at 468
+<#>
 SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by mysqlbinlog */ /*!*/;
 DELIMITER ;
 # End of log file
