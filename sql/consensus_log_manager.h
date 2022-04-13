@@ -32,6 +32,7 @@
 #include <map>
 #include <atomic>
 #include <queue>
+#include "my_macros.h"
 
   
 #define CACHE_BUFFER_SIZE  (IO_SIZE * 16)

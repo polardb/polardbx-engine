@@ -85,8 +85,13 @@ if [ x"$mysql_mode" = x"57" ]; then
 elif [ x"$mysql_mode" = x"80" ]; then
   use_proto3="ON"
   if [ x"$platforms" = x"x86" ]; then
-    CC=/opt/rh/devtoolset-7/root/usr/bin/gcc
-    CXX=/opt/rh/devtoolset-7/root/usr/bin/g++
+    if [ -e /opt/rh/devtoolset-7/root/usr/bin/gcc ]; then
+      CC=/opt/rh/devtoolset-7/root/usr/bin/gcc
+      CXX=/opt/rh/devtoolset-7/root/usr/bin/g++
+    else
+      CC=gcc
+      CXX=g++
+    fi
   else
   #  CC=/opt/gcc-9.2.0/bin/gcc
   #  CXX=/opt/gcc-9.2.0/bin/g++

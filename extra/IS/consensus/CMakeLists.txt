@@ -159,7 +159,7 @@ IF(WITH_PROTOBUF3)
     OUTPUT ${PROTOBUF_OUTPUT}
     COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/protobuf-3.6.1/cmake &&
     (cmake . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=../bu) &&
-    (make install -j)
+    (make install -j) && ([ -d ../bu/lib64 ] || mv ../bu/lib ../bu/lib64)
     COMMENT "building protobuf3"
   )
   add_custom_target (libprotobuf

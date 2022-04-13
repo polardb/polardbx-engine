@@ -1,5 +1,6 @@
 #include "easy_atomic.h"
 #include "easy_uthread.h"
+#include <sys/signal.h>
 
 /**
  * 用户态线程
