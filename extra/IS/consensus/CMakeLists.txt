@@ -109,9 +109,9 @@ IF (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
 add_custom_command (
   OUTPUT ${LIBEASY_OUTPUT}
   COMMAND [ -d output ] && mkdir output || echo "create output"
-  COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/easy/src && ([ -d
-  bu ] || (mkdir bu && cd bu && cmake -D
-  CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} .. && cd ..) ) && cd
+  COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/easy/src &&
+  (rm -fr bu && mkdir bu && cd bu && cmake -D
+  CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} .. && cd ..) && cd
   bu && make -j && make install
   COMMENT "building libmyeasy"
 )
@@ -119,9 +119,9 @@ ELSE()
 add_custom_command (
   OUTPUT ${LIBEASY_OUTPUT}
   COMMAND [ -d output ] && mkdir output || echo "create output"
-  COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/easy/src && ([ -d
-  bu ] || (mkdir bu && cd bu && cmake -D
-  CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DEASY_SPIN_USE_SYS=1 .. && cd ..) ) && cd
+  COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/easy/src &&
+  (rm -fr bu && mkdir bu && cd bu && cmake -D
+  CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DEASY_SPIN_USE_SYS=1 .. && cd ..) && cd
   bu && make -j && make install
   COMMENT "building libmyeasy"
 )

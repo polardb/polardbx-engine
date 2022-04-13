@@ -226,6 +226,10 @@ cmake_version=`cmake --version | awk 'NR==1 {print $3}'`
 dump_options
 
 export CC CFLAGS CXX CXXFLAGS
+
+# Avoid unexpected cmake rerunning
+rm -rf packaging/deb-in/CMakeFiles/progress.marks
+
 rm -rf CMakeCache.txt
 make clean
 
