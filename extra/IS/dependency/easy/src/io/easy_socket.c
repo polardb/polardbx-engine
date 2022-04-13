@@ -5,6 +5,7 @@
 #include <sys/ioctl.h>
 #include <netinet/tcp.h>
 #include <sys/sendfile.h>
+#include <sys/uio.h>
 
 static int easy_socket_chain_writev(int fd, easy_list_t *l, struct iovec *iovs, int cnt, int *again);
 static int easy_socket_sendfile(int fd, easy_file_buf_t *fb, int *again);

@@ -29,7 +29,7 @@ FilePaxosLog::FilePaxosLog(const std::string &dataDir, LogTypeT type)
  : length_(0), lastLogTerm_(0), async_(false), type_(type), fd_(-1)
 {
 
-  fd_= open(dataDir.c_str(), O_CREAT|O_RDWR|O_APPEND);
+  fd_= open(dataDir.c_str(), O_CREAT|O_RDWR|O_APPEND, 0777);
   log_.reserve(1000);
   initLastLogTerm();
 
