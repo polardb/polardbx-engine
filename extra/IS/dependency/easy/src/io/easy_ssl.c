@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <openssl/ssl_xdb.h>
 #include <pthread.h>
 #include "easy_ssl.h"
 #include "easy_log.h"
@@ -35,7 +36,7 @@ static int easy_ssl_pass_phrase_cb(char *buf, int size, int rwflag, void *conf);
 /**
  * 初始化ssl
  */
-static unsigned long id_function(void)
+/*static unsigned long id_function(void)
 {
     return ((unsigned long) pthread_self());
 }
@@ -47,7 +48,7 @@ static void locking_function(int mode, int type, const char *file, int line)
     } else {
         easy_spin_unlock(&easy_ssl_lock_cs[type]);
     }
-}
+}*/
 int easy_ssl_init()
 {
     if (easy_ssl_connection_index == -1) {
@@ -81,11 +82,11 @@ int easy_ssl_cleanup()
     ENGINE_cleanup();
     EVP_cleanup();
     CRYPTO_cleanup_all_ex_data();
-    ERR_remove_state(0);
+    //ERR_remove_state(0);
     ERR_free_strings();
     //SSL_COMP_free();
     //sk_SSL_COMP_free (SSL_COMP_get_compression_methods());
-    CRYPTO_mem_leaks_fp(stderr);
+    //CRYPTO_mem_leaks_fp(stderr);
     easy_free((char *)easy_ssl_lock_cs);
 
     return EASY_OK;
@@ -292,9 +293,7 @@ static int easy_ssl_handshake(easy_connection_t *c)
         c->read = easy_ssl_read;
         c->write = easy_ssl_write;
 
-        if (c->sc->connection->s3) {
-            c->sc->connection->s3->flags |= SSL3_FLAGS_NO_RENEGOTIATE_CIPHERS;
-        }
+        ored_ssl_s3_flags(c->sc->connection, SSL3_FLAGS_NO_RENEGOTIATE_CIPHERS);
 
         return EASY_OK;
     }
@@ -415,7 +414,6 @@ static void easy_ssl_connection_error(easy_connection_t *c, int sslerr, int err,
         if (n == SSL_R_BLOCK_CIPHER_PAD_IS_WRONG                     /*  129 */
                 || n == SSL_R_DIGEST_CHECK_FAILED                        /*  149 */
                 || n == SSL_R_LENGTH_MISMATCH                            /*  159 */
-                || n == SSL_R_NO_CIPHERS_PASSED                          /*  182 */
                 || n == SSL_R_NO_CIPHERS_SPECIFIED                       /*  183 */
                 || n == SSL_R_NO_SHARED_CIPHER                           /*  193 */
                 || n == SSL_R_RECORD_LENGTH_MISMATCH                     /*  213 */
@@ -1077,25 +1075,31 @@ static int easy_ssl_certificate(easy_ssl_ctx_t *ssl, char *cert, char *key)
 
 static int easy_ssl_generate_rsa512_key(easy_ssl_ctx_t *ssl)
 {
-    RSA                     *key;
+    RSA *rsa;
+    BIGNUM *bn;
+    int ret = EASY_ERROR;
 
     if (SSL_CTX_need_tmp_RSA(ssl->ctx) == 0) {
         return EASY_OK;
     }
 
-    key = RSA_generate_key(512, RSA_F4, NULL, NULL);
+    bn = BN_new();
+    rsa = RSA_new();
 
-    if (key) {
-        SSL_CTX_set_tmp_rsa(ssl->ctx, key);
-
-        RSA_free(key);
-
-        return EASY_OK;
+    if (bn && rsa && BN_set_word(bn, RSA_F4) &&
+        RSA_generate_key_ex(rsa, 512, bn, NULL)) {
+      SSL_CTX_set_tmp_rsa(ssl->ctx, rsa);
+      ret = EASY_OK;
     }
 
-    easy_ssl_error(EASY_LOG_ERROR, "RSA_generate_key(512) failed");
+    if (bn) BN_free(bn);
+    if (rsa) RSA_free(rsa);
 
-    return EASY_ERROR;
+    if (ret != EASY_OK) {
+      easy_ssl_error(EASY_LOG_ERROR, "RSA_generate_key(512) failed");
+    }
+
+    return ret;
 }
 
 static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
@@ -1136,10 +1140,10 @@ static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
             return EASY_ERROR;
         }
 
-        dh->p = BN_bin2bn(dh1024_p, sizeof(dh1024_p), NULL);
-        dh->g = BN_bin2bn(dh1024_g, sizeof(dh1024_g), NULL);
+        dh_set_p(dh, BN_bin2bn(dh1024_p, sizeof(dh1024_p), NULL));
+        dh_set_g(dh, BN_bin2bn(dh1024_g, sizeof(dh1024_g), NULL));
 
-        if (dh->p == NULL || dh->g == NULL) {
+        if (dh_get_p(dh) == NULL || dh_get_g(dh) == NULL) {
             easy_ssl_error(EASY_LOG_ERROR, "BN_bin2bn() failed");
             DH_free(dh);
             return EASY_ERROR;
