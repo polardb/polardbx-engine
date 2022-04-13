@@ -139,6 +139,7 @@ SET(xplugin_SRC
   src/galaxy_parallel_handler.cc
   src/galaxy_session_pool_manager.cc
   src/galaxy_session_context.cc
+  src/galaxy_flow_control.cc
 
   ${ngs_SRC}
 )

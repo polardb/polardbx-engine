@@ -49,8 +49,8 @@ class Galaxy_session_context {
     {
       // Log session destroy.
       char buf[0x100];
-      snprintf(buf, sizeof(buf),
-               "Galaxy session %p sid %zu deinit pool %p.", this, m_sid, &m_pool);
+      snprintf(buf, sizeof(buf), "Galaxy session %p sid %zu deinit pool %p.",
+               this, m_sid, &m_pool);
       log_info(ER_XPLUGIN_ERROR_MSG, buf);
     }
 
@@ -143,6 +143,7 @@ class Galaxy_session_context {
     auto error =
         m_sql.init(client.client_port(), client.connection().get_type());
     if (error) return error;
+    m_flow_control.set_thd(m_sql.get_thd());
     auto user(session.data_context().get_authenticated_user_name());
     return m_sql.switch_to_user(user.c_str(), "galaxy", nullptr, nullptr);
   }
