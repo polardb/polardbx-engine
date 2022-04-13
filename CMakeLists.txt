@@ -403,7 +403,8 @@ ENDIF()
 # Maintainer mode is default on only for debug builds using GCC/G++
 IF(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" OR WITH_DEBUG)
   IF(MY_COMPILER_IS_GNU)
-    SET(MYSQL_MAINTAINER_MODE ON CACHE BOOL
+    # set MYSQL_MAINTAINER_MODE default OFF after import xpaxos
+    SET(MYSQL_MAINTAINER_MODE OFF CACHE BOOL
         "MySQL maintainer-specific development environment")
   ENDIF()
 ENDIF()
