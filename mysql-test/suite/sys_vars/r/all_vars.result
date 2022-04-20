@@ -142,8 +142,24 @@ enable_appliedindex_checker
 enable_appliedindex_checker
 force_revise
 force_revise
+galaxyengine_version
+galaxyengine_version
+galaxyx_enable_galaxy_kill_log
+galaxyx_enable_galaxy_kill_log
+galaxyx_enable_galaxy_session_pool_log
+galaxyx_enable_galaxy_session_pool_log
+galaxyx_galaxy_worker_threads_per_tcp
+galaxyx_galaxy_worker_threads_per_tcp
+galaxyx_galaxy_worker_threads_shrink_time
+galaxyx_galaxy_worker_threads_shrink_time
+galaxyx_max_queued_messages
+galaxyx_max_queued_messages
 galaxyx_port
 galaxyx_port
+galaxyx_socket_recv_buffer
+galaxyx_socket_recv_buffer
+galaxyx_socket_send_buffer
+galaxyx_socket_send_buffer
 gcn_write_event
 gcn_write_event
 generated_random_password_length
@@ -205,6 +221,12 @@ innodb_scn_h_task_enabled
 innodb_snapshot_seq
 innodb_snapshot_update_gcn
 innodb_snapshot_update_gcn
+innodb_tcn_block_cache_type
+innodb_tcn_block_cache_type
+innodb_tcn_cache_level
+innodb_tcn_cache_level
+innodb_tcn_cache_replace_after_commit
+innodb_tcn_cache_replace_after_commit
 innodb_transaction_group
 innodb_transaction_group
 innodb_txn_undo_page_reuse_max_percent
@@ -219,6 +241,8 @@ keyring_operations
 keyring_operations
 mandatory_roles
 mandatory_roles
+only_report_warning_when_skip_sequence
+only_report_warning_when_skip_sequence
 opt_indexstat
 opt_indexstat
 opt_outline_enabled
@@ -272,8 +296,6 @@ tls_ciphersuites
 tls_version
 tls_version
 use_secondary_engine
-version_hide_xcluster
-version_hide_xcluster
 weak_consensus_mode
 weak_consensus_mode
 drop table t1;

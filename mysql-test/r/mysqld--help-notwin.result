@@ -525,8 +525,28 @@ The following options may be given as the first argument:
  Use stopwords from this file instead of built-in list
  --galaxyx[=name]    Enable or disable galaxyx plugin. Possible values are ON,
  OFF, FORCE (don't start if the plugin fails to load).
+ --galaxyx-enable-galaxy-kill-log 
+ Enable galaxy session kill/cancel log(default warning
+ level).
+ (Defaults to on; use --skip-galaxyx-enable-galaxy-kill-log to disable.)
+ --galaxyx-enable-galaxy-session-pool-log 
+ Enable galaxy session pool and thread pool log(default
+ warning level).
+ --galaxyx-galaxy-worker-threads-per-tcp[=#] 
+ Number of worker threads for single galaxy parallel TCP
+ connection.
+ --galaxyx-galaxy-worker-threads-shrink-time[=#] 
+ Time(ms) of shrinking the thread pool when multiple
+ worker threads(over 2/3) are not in state of waiting.
+ --galaxyx-max-queued-messages[=#] 
+ Number of max queued messages that session is going to
+ handle.
  --galaxyx-port[=#]  Port on which Galaxy X-protocol is going to accept
  incoming connections.
+ --galaxyx-socket-recv-buffer[=#] 
+ Receive buffer size for galaxy parallel TCP connection.
+ --galaxyx-socket-send-buffer[=#] 
+ Send buffer size for galaxy parallel TCP connection.
  --gcn-write-event   Writting a gcn event which content is gcn number for
  every transaction.
  (Defaults to on; use --skip-gcn-write-event to disable.)
@@ -875,6 +895,10 @@ The following options may be given as the first argument:
  Enable old-style user limits (before 5.0.3, user
  resources were counted per each user+host vs. per
  account).
+ --only-report-warning-when-skip-sequence 
+ Whether reporting warning when the value skipped to is
+ not valid instead of raising error
+ (Defaults to on; use --skip-only-report-warning-when-skip-sequence to disable.)
  --open-files-limit=# 
  If this is not 0, then mysqld will use this value to
  reserve file descriptors to use with setrlimit(). If this
@@ -1765,7 +1789,14 @@ ft-min-word-len 4
 ft-query-expansion-limit 20
 ft-stopword-file (No default value)
 galaxyx ON
+galaxyx-enable-galaxy-kill-log TRUE
+galaxyx-enable-galaxy-session-pool-log FALSE
+galaxyx-galaxy-worker-threads-per-tcp 2
+galaxyx-galaxy-worker-threads-shrink-time 5000
+galaxyx-max-queued-messages 128
 galaxyx-port 33070
+galaxyx-socket-recv-buffer 16384
+galaxyx-socket-send-buffer 262144
 gcn-write-event TRUE
 gdb FALSE
 general-log FALSE
@@ -1876,6 +1907,7 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
+only-report-warning-when-skip-sequence TRUE
 opt-indexstat TRUE
 opt-outline-enabled TRUE
 opt-performance-point-enabled TRUE
@@ -2070,7 +2102,6 @@ upgrade AUTO
 validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
-version-hide-xcluster FALSE
 wait-timeout 28800
 weak-consensus-mode FALSE
 windowing-use-high-precision TRUE
