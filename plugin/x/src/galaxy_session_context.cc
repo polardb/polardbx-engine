@@ -50,6 +50,13 @@ ngs::Error_code Galaxy_session_context::sql_stmt_execute(
     const Mysqlx::Sql::GalaxyStmtExecute &msg) {
   log_debug("GP: dealing_stmt_exec");
 
+  // reset thd kill status
+  auto thd = m_sql.get_thd();
+  if (thd != nullptr) {
+    if (thd->killed == THD::KILL_QUERY || thd->killed == THD::KILL_TIMEOUT)
+      thd->killed = THD::NOT_KILLED;
+  }
+
   if (msg.has_db_name()) {
     auto &db_name = msg.db_name();
     Empty_resultset empty_rs;
