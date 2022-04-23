@@ -1,0 +1,55 @@
+--source include/have_binlog_format_row.inc
+
+prepare stmt from 'create sequence s1';
+execute stmt;
+show create table s1;
+select s1.nextval;
+drop sequence s1;
+
+prepare stmt from 'create sequence s1 start with 1';
+execute stmt;
+show create table s1;
+select s1.nextval;
+drop sequence s1;
+
+prepare stmt from 'create sequence s1 start with 1 minvalue 1 maxvalue 20 increment by 1 cache 5 cycle';
+execute stmt;
+show create table s1;
+select s1.nextval;
+drop sequence s1;
+
+prepare stmt from 'create sequence s1 nocache';
+execute stmt;
+show create table s1;
+select s1.nextval;
+drop sequence s1;
+
+prepare stmt from 'create sequence s1 cache 5';
+execute stmt;
+show create table s1;
+select s1.nextval;
+drop sequence s1;
+
+prepare stmt from 'create sequence s1 timestamp';
+execute stmt;
+show create table s1;
+--replace_column 1 # 2 #
+select currval, nextval from s1;
+drop sequence s1;
+
+prepare stmt from 'create sequence s1 cycle timestamp';
+execute stmt;
+show create table s1;
+--replace_column 1 # 2 #
+select currval, nextval from s1;
+drop sequence s1;
+
+prepare stmt from 'create sequence s1 cache 5 timestamp';
+execute stmt;
+show create table s1;
+--replace_column 1 # 2 #
+select currval, nextval from s1;
+drop sequence s1;
+
+DEALLOCATE PREPARE stmt;
+

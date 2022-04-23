@@ -305,6 +305,31 @@ Sql_cmd *PT_create_sequence_stmt::make_cmd(THD *thd) {
 }
 
 /**
+  Disable reprepare_observer temporarily.
+*/
+class Disable_reprepare_observer {
+ public:
+  Disable_reprepare_observer(THD *thd) : m_thd(thd) {
+    m_saved = m_thd->get_reprepare_observer();
+    if (m_saved) {
+      m_thd->pop_reprepare_observer();
+      /* One at most */
+      DBUG_ASSERT(m_thd->get_reprepare_observer() == nullptr);
+    }
+  }
+
+  ~Disable_reprepare_observer() {
+    if (m_saved) {
+      m_thd->push_reprepare_observer(m_saved);
+    }
+  }
+
+ private:
+  THD *m_thd;
+  Reprepare_observer *m_saved;
+};
+
+/**
   Create the sequence table and insert a row into table.
 
   @param[in]      thd       User connection context
@@ -315,6 +340,20 @@ Sql_cmd *PT_create_sequence_stmt::make_cmd(THD *thd) {
 bool Sql_cmd_create_sequence::execute(THD *thd) {
   DBUG_ENTER("Sql_cmd_create_sequence::execute");
   DBUG_ASSERT(thd->lex->sequence_info);
+
+  /**
+    When after sequence being created, we insert a row into the table.
+    The insertion progress will open the sequence table, of cause the
+    version of the table share is always different from of the TABLE_LIST
+    during a table creation.
+    In non-prepare mode, mysql considers this as expected and ingores it.
+    But in prepared execution, a reprepare_observer installed and the observer
+    will report an error.
+
+    Actuallly, we can ignore the difference between the share and TABLE_LIST
+    during the sequence creation.
+  */
+  Disable_reprepare_observer disable_ob(thd);
 
   DBUG_RETURN(super::execute(thd));
 }
