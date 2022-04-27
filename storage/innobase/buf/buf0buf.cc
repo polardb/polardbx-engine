@@ -2273,6 +2273,7 @@ withdraw_retry:
           mutex_free(&block->mutex);
           rw_lock_free(&block->lock);
 
+          lizard::deallocate_block_tcn(block);
           ut_d(rw_lock_free(&block->debug_latch));
         }
 
