@@ -66,6 +66,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE -D__STDC_LIMIT_MACROS -O0 
 ENDIF()
 INCLUDE_DIRECTORIES (include io packet thread util packet/http)
 
+SET(SSL_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/../../../../openssl/include/)
+INCLUDE_DIRECTORIES(SYSTEM ${SSL_INCLUDE_DIRS})
+
 add_library (myeasy STATIC ${PRJ_SRC})
 TARGET_LINK_LIBRARIES (myeasy ev)
 
