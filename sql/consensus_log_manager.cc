@@ -975,15 +975,122 @@ uint32 ConsensusLogManager::serialize_cache(uchar **buffer)
 
 int ConsensusLogManager:: truncate_log(uint64 consensus_index)
 {
-  return 0;
+  int error = 0;
+  sql_print_information("Consensus Truncate log , index is %llu", consensus_index);
+  prefetch_manager->stop_prefetch_threads();
+  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  MYSQL_BIN_LOG *log = status == BINLOG_WORKING ? binlog : &(rli_info->relay_log);
+  mysql_mutex_lock(log->get_log_lock());
+
+  // truncate log file
+  Relay_log_info *rli = status == RELAY_LOG_WORKING ? rli_info : NULL;
+  if (log->consensus_truncate_log(consensus_index, rli))
+  {
+    error = 1;
+  }
+  if (status == RELAY_LOG_WORKING && recovery_manager->get_last_leader_term_index() >= consensus_index)
+  {
+    recovery_manager->set_last_leader_term_index(consensus_index - 1);
+  }
+  // truncate commit map
+  recovery_manager->truncate_commit_xid_map(consensus_index);
+
+  // truncate cache
+  fifo_cache_manager->trunc_log_from_cache(consensus_index);
+  prefetch_manager->trunc_log_from_prefetch_cache(consensus_index);
+  mysql_mutex_unlock(log->get_log_lock());
+
+  mysql_mutex_lock(&rli_info->data_lock);
+  // reset the previous_gtid_set_of_relaylog after truncate log
+  if (!error) {
+    error = rli_info->reset_previous_gtid_set_of_relaylog();
+  }
+  mysql_mutex_unlock(&rli_info->data_lock);
+
+  mysql_rwlock_unlock(&LOCK_consensuslog_status);
+  if (error)
+    sql_print_error("ConsensusLogManager::truncate_log error, consensus index: %llu.", consensus_index);
+
+  prefetch_manager->start_prefetch_threads();
+  return error;
 }
 
 
 int ConsensusLogManager::purge_log(uint64 consensus_index)
 {
-  return 0;
-}
+  int error = 0;
+  std::string file_name;
+  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  uint64 purge_index = 0;
 
+  if (status == BINLOG_WORKING)
+  {
+    // server still work as leader, so we should at least retain 1 binlog file
+    // apply pos must at the last binlog file
+    purge_index = consensus_index;
+  }
+  else
+  {
+    uint64 start_apply_index = consensus_info->get_start_apply_index();
+    if (start_apply_index == 0)
+    {
+      // apply thread already start, use slave applied index as purge index
+      purge_index = rli_info->get_consensus_apply_index();
+    }
+    else
+    {
+      // apply thread not start
+      purge_index = start_apply_index;
+    }
+    purge_index = opt_cluster_log_type_instance ? consensus_index : std::min(purge_index, consensus_index);
+  }
+// #ifdef HAVE_REPLICATION   // for call binlog->purge_logs
+  MYSQL_BIN_LOG *log = status == BINLOG_WORKING ? binlog : &(rli_info->relay_log);
+  if (status == RELAY_LOG_WORKING)
+  {
+    mysql_mutex_lock(&rli_info->data_lock);
+  }
+  mysql_mutex_lock(log->get_index_lock());
+  if (log->find_log_by_consensus_index(purge_index, file_name) ||
+    log->purge_logs(file_name.c_str(), FALSE/**include*/, FALSE /*need index lock*/, TRUE /*update threads*/, NULL, TRUE))
+  {
+    error = 1;
+  }
+
+  if (status == BINLOG_WORKING)
+  {
+    mysql_mutex_unlock(log->get_index_lock());
+  }
+  else
+  {
+    /*
+    * Need to update the log pos because purge logs has been called
+    * after fetching initially the log pos at the begining of the method.
+    */
+    if (!opt_cluster_log_type_instance)
+    {
+      LOG_INFO *log_info = rli_info->applier_reader->get_log_info();
+      DBUG_ASSERT(log_info != NULL);
+      if((error=log->find_log_pos(log_info, rli_info->get_event_relay_log_name(),
+                            false/*need_lock_index=false*/)))
+      {
+        char buff[22];
+        sql_print_error("next log error: %d  offset: %s  log: %s",
+                        error,
+                        llstr(log_info->index_file_offset,buff),
+                        rli_info->get_group_relay_log_name());
+        error = 1;
+      }
+    }
+    mysql_mutex_unlock(log->get_index_lock());
+    mysql_mutex_unlock(&rli_info->data_lock);
+  }
+// #endif
+  mysql_rwlock_unlock(&LOCK_consensuslog_status);
+  if (error)
+    sql_print_error("ConsensusLogManager::purge_log error, consensus index: %llu.", consensus_index);
+  return error;
+}
 
 uint64 ConsensusLogManager::get_exist_log_length()
 {
