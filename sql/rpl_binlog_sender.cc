@@ -509,6 +509,8 @@ int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
   my_off_t log_pos = reader->position();
   my_off_t exclude_group_end_pos = 0;
   bool in_exclude_group = false;
+  String tmp_gcn, tmp_consensus_log;
+  bool   gcn_exist = false, consensus_log_exist = false;
  
   /* read the first user log_event to get the correct timestamp */
   uint32 fake_create_time= find_first_user_event_timestamp(reader, end_pos);
@@ -562,6 +564,18 @@ int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
     /* X-Cluster revises event before send it out */
     revise_event(event_ptr, event_len, fake_create_time, log_pos);
 
+    if (event_type == binary_log::CONSENSUS_LOG_EVENT) {
+      consensus_log_exist = true;
+      tmp_consensus_log.copy(m_packet);
+      tmp_consensus_log.length(m_packet.length());
+      continue;
+    } else if (event_type == binary_log::GCN_LOG_EVENT) {
+      gcn_exist = true;
+      tmp_gcn.copy(m_packet);
+      tmp_gcn.length(m_packet.length());
+      continue;
+    }
+
     if (before_send_hook(log_file, log_pos)) return 1;
     /*
       TODO: Set m_exclude_gtid to NULL if all gtids in m_exclude_gtid has
@@ -588,6 +602,9 @@ int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
       }
       DBUG_PRINT("info", ("Event of type %s is skipped",
                           Log_event::get_type_str(event_type)));
+      
+      consensus_log_exist = false;
+      gcn_exist = false;
     } else {
       /*
         A heartbeat is required before sending a event, If some events are
@@ -604,6 +621,27 @@ int Binlog_sender::send_events(File_reader *reader, my_off_t end_pos) {
         exclude_group_end_pos = 0;
 
         /* Restore the copy back. */
+        m_packet.copy(tmp);
+        m_packet.length(tmp.length());
+      }
+
+      if (consensus_log_exist || gcn_exist) {
+        String tmp;
+        tmp.copy(m_packet);
+        tmp.length(m_packet.length());
+
+        if(consensus_log_exist) {
+          m_packet.copy(tmp_consensus_log);
+          if (unlikely(send_packet())) return 1;
+          consensus_log_exist = false;
+        }
+
+        if(gcn_exist) {
+          m_packet.copy(tmp_gcn);
+          if (unlikely(send_packet())) return 1;
+          gcn_exist = false;
+        }
+
         m_packet.copy(tmp);
         m_packet.length(tmp.length());
       }

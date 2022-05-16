@@ -6161,11 +6161,10 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
- /*
+  /*
     If Gtid_mode is ON, set opt_recovery_apply_binlog need to be setted true
     If Gtid_mode is not ON, set opt_recovery_apply_binlog to false
   */
-
   if (opt_recovery_apply_binlog == RECOVERY_APPLY_BINLOG_SAME_AS_GTID) {
     if (gtid_mode == GTID_MODE_ON) {
       sql_print_warning(
