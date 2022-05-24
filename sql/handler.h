@@ -6921,7 +6921,7 @@ bool ha_notify_exclusive_mdl(THD *thd, const MDL_key *mdl_key,
 bool ha_notify_alter_table(THD *thd, const MDL_key *mdl_key,
                            ha_notification_type notification_type);
 
-int commit_owned_gtids(THD *thd, bool all, bool *need_clear_ptr);
+int commit_owned_gtids(THD *thd, bool all, bool *need_clear_ptr, XID_STATE *external_xs = nullptr);
 int commit_owned_gtid_by_partial_command(THD *thd);
 bool set_tx_isolation(THD *thd, enum_tx_isolation tx_isolation, bool one_shot);
 

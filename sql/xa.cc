@@ -759,7 +759,7 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
 
   /* Do not execute gtid wrapper whenever 'res' is true (rm error) */
   bool need_clear_owned_gtid = false;
-  bool gtid_error = commit_owned_gtids(thd, true, &need_clear_owned_gtid);
+  bool gtid_error = commit_owned_gtids(thd, true, &need_clear_owned_gtid, xs);
   if (gtid_error) my_error(ER_XA_RBROLLBACK, MYF(0));
   res = res || gtid_error;
 
@@ -1019,7 +1019,7 @@ bool Sql_cmd_xa_rollback::process_external_xa_rollback(THD *thd,
   }
 
   bool need_clear_owned_gtid = false;
-  bool gtid_error = commit_owned_gtids(thd, true, &need_clear_owned_gtid);
+  bool gtid_error = commit_owned_gtids(thd, true, &need_clear_owned_gtid, xs);
   if (gtid_error) my_error(ER_XA_RBROLLBACK, MYF(0));
   bool res = xs->xa_trans_rolled_back();
 

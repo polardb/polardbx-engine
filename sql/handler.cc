@@ -1503,7 +1503,7 @@ static uint ha_check_and_coalesce_trx_read_only(THD *thd, Ha_trx_info *ha_list,
   @return zero as no error indication, non-zero otherwise
 */
 
-int commit_owned_gtids(THD *thd, bool all, bool *need_clear_owned_gtid_ptr) {
+int commit_owned_gtids(THD *thd, bool all, bool *need_clear_owned_gtid_ptr, XID_STATE *external_xs) {
   DBUG_TRACE;
   int error = 0;
 
@@ -1529,7 +1529,8 @@ int commit_owned_gtids(THD *thd, bool all, bool *need_clear_owned_gtid_ptr) {
       If GTID is not persisted by SE, write it to
       mysql.gtid_executed table.
     */
-    if (thd->owned_gtid.sidno > 0 && !thd->se_persists_gtid()) {
+    if (thd->owned_gtid.sidno > 0 && !thd->se_persists_gtid() &&
+       (!external_xs || external_xs->has_state(XID_STATE::XA_NOTR))) {
       error = gtid_state->save(thd);
     }
   } else {
