@@ -62,6 +62,9 @@
 #include "sql/system_variables.h"
 #include "sql_string.h"
 
+class Binlog_event_writer;
+#include "binlog_ext.h"
+
 using std::list;
 using std::string;
 
@@ -261,7 +264,7 @@ int Gtid_table_persistor::write_row(TABLE *table, const char *sid,
       LogErr(WARNING_LEVEL, ER_GTID_ALREADY_ADDED_BY_USER,
              Gtid_table_access_context::TABLE_NAME.str);
       if (opt_print_gtid_info_during_recovery) {
-        LogErr(WARNING_LEVEL, ER_GTID_ALREADY_ADDED_BY_USER_GNO,
+        LogErr(ERROR_LEVEL, ER_GTID_ALREADY_ADDED_BY_USER_GNO,
              gno_start, gno_end);
       }
 
@@ -368,6 +371,12 @@ int Gtid_table_persistor::save(THD *thd, const Gtid *gtid) {
   /* Save the gtid info into table. */
   error = write_row(table, buf, gtid->gno, gtid->gno);
 
+  if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+    char sz[256];
+    snprintf(sz, sizeof(sz), "%s-(%lld), errno=%d", buf, gtid->gno, error);
+    LogErr(ERROR_LEVEL, ER_GTID_INFO, "[GTID INFO] insert single",  sz);
+  }
+
 end:
   table_access_ctx.deinit(thd, table, 0 != error, false);
 
@@ -407,6 +416,17 @@ int Gtid_table_persistor::save(const Gtid_set *gtid_set, bool compress) {
   }
 
   ret = error = save(table, gtid_set);
+
+  if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+    char sz[16];
+    snprintf(sz, sizeof(sz), "errno=%d", error);
+    LogErr(ERROR_LEVEL, ER_GTID_INFO, "[GTID INFO] insert batch",  sz);
+
+    char *gtidstr;
+    gtid_set->to_string(&gtidstr);
+    LogErr(ERROR_LEVEL, ER_GTID_INFO, "[GTID INFO] insert",  gtidstr);
+    my_free(gtidstr);
+  }
 
 end:
   const int deinit_ret = table_access_ctx.deinit(thd, table, 0 != error, true);

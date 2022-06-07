@@ -128,8 +128,23 @@ void stateChangeCb(alisql::Paxos::StateType state, uint64_t term, uint64_t commi
 }
 
 void wait_commit_index_in_recovery() {
-  while (consensus_ptr->getCommitIndex() < consensus_log_manager.get_recovery_manager()->get_max_consensus_index_from_recover_trx_hash()) {
+  auto mgr = consensus_log_manager.get_recovery_manager();
+
+  if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+    sql_print_error("wait_commit_index_in_recovery(trx): %llu, %llu",
+                    consensus_ptr->getCommitIndex(),
+                    mgr->get_max_consensus_index_from_recover_trx_hash());
+  }
+
+  while (consensus_ptr->getCommitIndex() <
+         mgr->get_max_consensus_index_from_recover_trx_hash()) {
     my_sleep(500);
+  }
+
+  if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+    sql_print_error("wait_commit_index_in_recovery(trx): %llu, %llu",
+                    consensus_ptr->getCommitIndex(),
+                    mgr->get_max_consensus_index_from_recover_trx_hash());
   }
 
   /*
@@ -143,9 +158,21 @@ void wait_commit_index_in_recovery() {
       consensus_log_manager.get_consensus_info()->get_start_apply_index();
 
   if (recover_status == BINLOG_WORKING && start_apply_index == 0) {
-    auto mr = consensus_log_manager.get_recovery_manager();
-    while (consensus_ptr->getCommitIndex() < mr->get_last_leader_term_index()) {
+    if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+      sql_print_error("wait_commit_index_in_recovery(index): %llu, %llu",
+                      consensus_ptr->getCommitIndex(),
+                      mgr->get_last_leader_term_index());
+    }
+
+    while (consensus_ptr->getCommitIndex() <
+           mgr->get_last_leader_term_index()) {
       my_sleep(500);
+    }
+
+    if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+      sql_print_error("wait_commit_index_in_recovery(index): %llu, %llu",
+                      consensus_ptr->getCommitIndex(),
+                      mgr->get_last_leader_term_index());
     }
   }
 }
@@ -1012,7 +1039,12 @@ uint32 ConsensusLogManager::serialize_cache(uchar **buffer)
 int ConsensusLogManager:: truncate_log(uint64 consensus_index)
 {
   int error = 0;
-  sql_print_information("Consensus Truncate log , index is %llu", consensus_index);
+
+  if (opt_print_gtid_info_during_recovery == DETAIL_INFO)
+    sql_print_error("Consensus Truncate log , index is %llu", consensus_index);
+  else
+    sql_print_information("Consensus Truncate log , index is %llu", consensus_index);
+
   prefetch_manager->stop_prefetch_threads();
   mysql_rwlock_rdlock(&LOCK_consensuslog_status);
   MYSQL_BIN_LOG *log = status == BINLOG_WORKING ? binlog : &(rli_info->relay_log);
@@ -1026,6 +1058,10 @@ int ConsensusLogManager:: truncate_log(uint64 consensus_index)
   }
   if (status == RELAY_LOG_WORKING && recovery_manager->get_last_leader_term_index() >= consensus_index)
   {
+    if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+      sql_print_error("truncate_log set_last_leader_term_index to %llu",
+                      consensus_index - 1);
+    }
     recovery_manager->set_last_leader_term_index(consensus_index - 1);
   }
   // truncate commit map
@@ -1552,6 +1588,10 @@ void *run_consensus_stage_change(void *arg)
       continue;
     }
     ConsensusStateChange state_change = consensus_log_manager.get_stage_change_from_queue();
+    if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+      sql_print_error("run_consensus_stage_change start: %d,%d",
+                      state_change.state, consensus_log_manager.get_status());
+    }
     if (state_change.state != alisql::Paxos::LEADER)
     {
       if (consensus_log_manager.get_status() == BINLOG_WORKING)
@@ -1571,6 +1611,11 @@ void *run_consensus_stage_change(void *arg)
  
     consensus_log_manager.unlock_consensus_state_change();
 
+    if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+      sql_print_error("run_consensus_stage_change end: %d,%d,error=%d",
+                      state_change.state, consensus_log_manager.get_status(),
+                      error);
+    }
 
     if (error)
     {

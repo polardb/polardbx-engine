@@ -24,6 +24,7 @@
 #include "sql_parse.h"
 #include "mysql/thread_pool_priv.h"
 #include "log.h"
+#include "binlog_ext.h"
 
 
 int ConsensusRecoveryManager::init()
@@ -189,6 +190,11 @@ int ConsensusRecoveryManager::truncate_not_confirmed_xids_from_map(uint64 max_in
     sql_print_information("Truncate prepared trx from index %llu", index);
     truncate_commit_xid_map(index);
     set_last_leader_term_index(index - 1);
+
+    if (opt_print_gtid_info_during_recovery == DETAIL_INFO) {
+      sql_print_error("truncate_not_confirmed_xids_from_map "
+                      "set_last_leader_term_index to %llu", index - 1);
+    }
   }
 
   return 0;
