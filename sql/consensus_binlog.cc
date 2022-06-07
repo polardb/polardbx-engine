@@ -1283,10 +1283,16 @@ int MYSQL_BIN_LOG::consensus_prefetch_log_entries(THD *thd, uint64 channel_id, u
 
 static void store_gtid_for_xpaxos(const char *buf, Relay_log_info *rli) {
   Log_event_type event_type = (Log_event_type)buf[EVENT_TYPE_OFFSET];
+  Format_description_log_event fd_ev;
+  fd_ev.footer()->checksum_alg =
+      static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
+
+  if (event_type == binary_log::GCN_LOG_EVENT) {
+    buf = buf + Gcn_log_event::get_event_length(fd_ev.footer()->checksum_alg);
+    event_type = (Log_event_type)buf[EVENT_TYPE_OFFSET];
+  }
 
   if (event_type == binary_log::GTID_LOG_EVENT) {
-    Format_description_log_event fd_ev;
-    fd_ev.footer()->checksum_alg = static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
     Gtid_log_event gtid_ev(buf, &fd_ev);
     rli->get_sid_lock()->wrlock();
     rli->add_logged_gtid(rli->get_sid_map()->add_sid(*gtid_ev.get_sid()), gtid_ev.get_gno());

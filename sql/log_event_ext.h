@@ -63,6 +63,11 @@ class Gcn_log_event : public binary_log::Gcn_event, public Log_event {
     return POST_HEADER_LENGTH;
   }
 
+  static size_t get_event_length(enum_binlog_checksum_alg alg) {
+    return LOG_EVENT_HEADER_LEN + POST_HEADER_LENGTH +
+           (alg ? BINLOG_CHECKSUM_LEN : 0);
+  }
+
 #ifdef MYSQL_SERVER
  public:
   bool write_data_header(Basic_ostream *ostream) override;
