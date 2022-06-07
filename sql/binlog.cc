@@ -8283,6 +8283,21 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
     }
 
     if (ordered_commit(thd, all, skip_commit)) {
+      /*
+        If xa commit error, we can not simply roll back the trx of this THD.
+        Because the trx is prepared by 'xa prepare' and its consensus index
+        may reach a majority in the cluster. It must not be rolled back.
+
+        Currently, we crash the server to handle the consistency by recovery.
+      */
+      if (thd && thd->lex && (
+          thd->lex->sql_command == SQLCOM_XA_COMMIT ||
+          thd->lex->sql_command == SQLCOM_XA_ROLLBACK)) {
+        sql_print_warning("'xa commit/rollback' fail, restart to recover");
+        flush_error_log_messages();
+        abort();
+      }
+
       // if consensus commit failed, transaction should rollback
       if (thd->transaction_rollback_request)
         ha_rollback_low(thd, all);
