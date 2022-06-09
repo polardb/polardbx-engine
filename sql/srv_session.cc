@@ -74,6 +74,7 @@
 #include "sql/sql_thd_internal_api.h"  // thd_set_thread_stack
 #include "sql/system_variables.h"
 #include "thr_mutex.h"
+#include "plugin/x/src/galaxy_atomicex.h"
 
 #include "ppi/ppi_statement.h"
 
@@ -290,16 +291,10 @@ class Mutexed_map_thd_srv_session {
   */
   typedef std::pair<const void *, Srv_session *> map_value_t;
 
+  gx::CspinRWLock collection_lock;
   std::map<const THD *, map_value_t> collection;
 
   bool initted;
-  bool psi_initted;
-
-  mysql_rwlock_t LOCK_collection;
-
-#ifdef HAVE_PSI_INTERFACE
-  PSI_rwlock_key key_LOCK_collection;
-#endif
 
  public:
   /**
@@ -311,19 +306,7 @@ class Mutexed_map_thd_srv_session {
   */
   bool init() {
     const char *category = "session";
-    PSI_rwlock_info all_rwlocks[] = {{&key_LOCK_collection,
-                                      "LOCK_srv_session_collection",
-                                      PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}};
-
     initted = true;
-#ifdef HAVE_PSI_INTERFACE
-    psi_initted = true;
-
-    mysql_rwlock_register(category, all_rwlocks,
-                          static_cast<int>(array_elements(all_rwlocks)));
-#endif
-    mysql_rwlock_init(key_LOCK_collection, &LOCK_collection);
-
     return false;
   }
 
@@ -336,8 +319,6 @@ class Mutexed_map_thd_srv_session {
   */
   bool deinit() {
     initted = false;
-    mysql_rwlock_destroy(&LOCK_collection);
-
     return false;
   }
 
@@ -351,8 +332,7 @@ class Mutexed_map_thd_srv_session {
       NULL  if not found
   */
   Srv_session *find(const THD *key) {
-    rwlock_scoped_lock lock(&LOCK_collection, false, __FILE__, __LINE__);
-
+    gx::CautoSpinRWLock lck(collection_lock);
     std::map<const THD *, map_value_t>::iterator it = collection.find(key);
     return (it != collection.end()) ? it->second.second : NULL;
   }
@@ -369,7 +349,7 @@ class Mutexed_map_thd_srv_session {
       true   failure
   */
   bool add(const THD *key, const void *plugin, Srv_session *session) {
-    rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+    gx::CautoSpinRWLock lck(collection_lock, true);
     try {
       collection[key] = std::make_pair(plugin, session);
     } catch (const std::bad_alloc &e) {
@@ -388,7 +368,7 @@ class Mutexed_map_thd_srv_session {
       true   failure
   */
   bool remove(const THD *key) {
-    rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+    gx::CautoSpinRWLock lck(collection_lock, true);
     /*
       If we use erase with the key directly an exception could be thrown. The
       find method never throws. erase() with iterator as parameter also never
@@ -410,7 +390,7 @@ class Mutexed_map_thd_srv_session {
     removed = 0;
 
     {
-      rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+      gx::CautoSpinRWLock lck(collection_lock, true);
 
       for (std::map<const THD *, map_value_t>::iterator it = collection.begin();
            it != collection.end(); ++it) {
@@ -439,7 +419,7 @@ class Mutexed_map_thd_srv_session {
       true   failure
   */
   bool clear() {
-    rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+    gx::CautoSpinRWLock lck(collection_lock, true);
     collection.clear();
     return false;
   }
@@ -448,7 +428,7 @@ class Mutexed_map_thd_srv_session {
     Returns the number of elements in the maps
   */
   unsigned int size() {
-    rwlock_scoped_lock lock(&LOCK_collection, false, __FILE__, __LINE__);
+    gx::CautoSpinRWLock lck(collection_lock);
     return collection.size();
   }
 };
