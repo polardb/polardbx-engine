@@ -139,6 +139,7 @@
 #include "sql/binlog_ext.h"
 
 #include "xa_handler.h"
+#include "sql/binlog_ext.h"
 
 /**
   @def MYSQL_TABLE_IO_WAIT
@@ -1400,6 +1401,8 @@ int ha_prepare(THD *thd) {
     /* Allow GTID to be read by SE for XA prepare. */
     {
       Clone_handler::XA_Operation xa_guard(thd);
+      Binlog_ext::XA_rotate_guard xa_rotate_guard(
+          thd, reinterpret_cast<bool *>(&error));
 
       /* Prepare binlog SE first, if there. */
       while (ha_info != nullptr && error == 0) {
@@ -1504,7 +1507,9 @@ int commit_owned_gtids(THD *thd, bool all, bool *need_clear_owned_gtid_ptr) {
   DBUG_TRACE;
   int error = 0;
 
-  if ((!opt_bin_log || (thd->slave_thread && !opt_log_slave_updates)) &&
+  /* xpaxos replay thread must save gtid into gtid_executed table when transaction commit */
+  if ((!opt_bin_log || (thd->slave_thread &&
+      (!opt_log_slave_updates || thd->xpaxos_replication_channel))) &&
       (all || !thd->in_multi_stmt_transaction_mode()) &&
       !thd->is_operating_gtid_table_implicitly &&
       !thd->is_operating_substatement_implicitly) {

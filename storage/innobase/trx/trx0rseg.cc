@@ -464,6 +464,8 @@ void trx_rsegs_init(lizard::purge_heap_t *purge_heap) {
     }
   }
   undo::spaces->s_unlock();
+
+  gtid_persistor.print_undo_gtids();
 }
 
 /** Create a rollback segment in the given tablespace. This could be either

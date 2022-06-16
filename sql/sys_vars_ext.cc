@@ -323,4 +323,29 @@ static Sys_var_charptr Sys_rotate_log_table_last_name(
     CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(rotate_log_table_last_name),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
 
+extern bool opt_recovery_apply_binlog;
+static Sys_var_bool Sys_recovery_apply_binlog(
+    "recovery_apply_binlog",
+    "Applying binlog to generate the lost data at server startup.",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_recovery_apply_binlog),
+    CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));
+
+extern uint opt_recovery_apply_binlog_skip_counter;
+static Sys_var_uint Sys_recovery_apply_binlog_skip_counter(
+    "recovery_apply_binlog_skip_counter", "recovery_apply_binlog_skip_counter",
+    GLOBAL_VAR(opt_recovery_apply_binlog_skip_counter), 
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, UINT_MAX),
+    DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));
+
+extern uint opt_print_gtid_info_during_recovery;
+static Sys_var_uint Sys_print_gtid_info_during_recovery(
+    "print_gtid_info_during_recovery",
+    "0 - dont print; 1 - print basic info; 2 - print detailed info",
+    NON_PERSIST GLOBAL_VAR(opt_print_gtid_info_during_recovery),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, UINT_MAX),
+    DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));
+
 /* RDS DEFINED */

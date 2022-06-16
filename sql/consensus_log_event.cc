@@ -466,11 +466,8 @@ Log_event::enum_skip_reason Stop_log_event::do_shall_skip(
     Events from ourself should be skipped, but they should not
     decrease the slave skip counter.
   */
-
-  /** TODO: GalaxyEngine */
-  DBUG_ASSERT(0);
-  // if (rli->info_thd->xpaxos_replication_channel)
-  //  return Log_event::EVENT_SKIP_NOT;
+  if (rli->info_thd->xpaxos_replication_channel)
+    return Log_event::EVENT_SKIP_NOT;
   if (this->server_id == ::server_id)
     return Log_event::EVENT_SKIP_IGNORE;
   else

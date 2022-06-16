@@ -40,6 +40,8 @@
 #include "sql/xa.h"
 #include "thr_lock.h"
 
+extern uint opt_print_gtid_info_during_recovery;
+
 class Field;
 
 class Gtid_table_access_context : public System_table_access {

@@ -2798,6 +2798,7 @@ end:
     fix it later.
   */
   DBUG_PRINT("return", ("error: %d", error));
+  DEBUG_SYNC(thd, "after_binlog_rollback");
   return error;
 }
 
@@ -7889,6 +7890,10 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
       error = recover_intergrity_for_normandy(&binlog_file_reader,
                           (Format_description_log_event *)ev, &valid_pos);
       binlog_size = binlog_file_reader.ifile()->length();
+
+      /* set binlog logname for recovery binlog apply*/
+      Binlog_recovery::instance()->set_apply_log_name(log_name);
+
     } else
       error = 0;
 
@@ -8306,6 +8311,7 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
     if (ha_commit_low(thd, all)) return RESULT_INCONSISTENT;
   }
 
+  DEBUG_SYNC(thd, "after_binlog_commit");
   return RESULT_SUCCESS;
 }
 
@@ -8338,7 +8344,10 @@ std::pair<int, my_off_t> MYSQL_BIN_LOG::flush_thread_caches(THD *thd) {
     */
     thd->set_trans_pos(log_file_name, m_binlog_file->position() + my_b_tell(consensus_log_manager.get_cache()));
 
-    if (wrote_xid) inc_prep_xids(thd);
+    if (wrote_xid) 
+      inc_prep_xids(thd);
+    else
+      mysql_bin_log_ext.xa_inc_prep_xids(thd);
   }
   DBUG_PRINT("debug", ("bytes: %llu", bytes));
   return std::make_pair(error, bytes);
@@ -9055,6 +9064,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   DEBUG_SYNC(thd, "waiting_in_the_middle_of_flush_stage");
   flush_error =
       process_flush_stage_queue(&total_bytes, &do_rotate, &wait_queue);
+  if (mysql_bin_log_ext.xa_delay_rotate(thd, do_rotate)) do_rotate = false;
 
   if (flush_error == 0 && total_bytes > 0) {
     if (!opt_initialize) /* let the paxos send the log */

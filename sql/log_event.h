@@ -1787,6 +1787,7 @@ class XA_prepare_log_event : public binary_log::XA_prepare_event,
   int pack_info(Protocol *protocol) override;
   bool do_commit(THD *thd) override;
 #endif
+  void get_xid(XID *xid);
 };
 
 /**

@@ -131,6 +131,23 @@ void wait_commit_index_in_recovery() {
   while (consensus_ptr->getCommitIndex() < consensus_log_manager.get_recovery_manager()->get_max_consensus_index_from_recover_trx_hash()) {
     my_sleep(500);
   }
+
+  /*
+    If the node was leader when shutdown, it should wait for binlog truncation
+    completed to get the corrent binlog end position before applying the lost
+    binlog events on recovery.
+  */
+  auto recover_status =
+      consensus_log_manager.get_consensus_info()->get_recover_status();
+  auto start_apply_index =
+      consensus_log_manager.get_consensus_info()->get_start_apply_index();
+
+  if (recover_status == BINLOG_WORKING && start_apply_index == 0) {
+    auto mr = consensus_log_manager.get_recovery_manager();
+    while (consensus_ptr->getCommitIndex() < mr->get_last_leader_term_index()) {
+      my_sleep(500);
+    }
+  }
 }
 #endif
 
@@ -146,6 +163,8 @@ int gtid_init_after_consensus_setup() {
     const_cast<Gtid_set *>(gtid_state->get_lost_gtids());
   Gtid_set *gtids_only_in_table=
     const_cast<Gtid_set *>(gtid_state->get_gtids_only_in_table());
+  Gtid_set *skip_counter_gtids =
+      Binlog_recovery::instance()->get_skip_counter_gtids();
 
   Gtid_set purged_gtids_from_binlog(global_sid_map, global_sid_lock);
   Gtid_set gtids_in_binlog(global_sid_map, global_sid_lock);
@@ -156,20 +175,29 @@ int gtid_init_after_consensus_setup() {
   uint64_t start_apply_index = consensus_log_manager.get_consensus_info()->get_start_apply_index();
   uint64_t last_term = consensus_log_manager.get_consensus_info()->get_last_leader_term();
   DBUG_ASSERT(log != NULL);
- if (log->init_gtid_sets(&gtids_in_binlog,
-                         &purged_gtids_from_binlog,
-                         opt_master_verify_checksum,
-                         true/*true=need lock*/,
-                         NULL/*trx_parser*/,
-                         NULL/*gtid_partial_trx*/,
-                         true/*is_server_starting*/,
-                         last_term))
-   // unireg_abort(MYSQLD_ABORT_EXIT);
-   return -1;
+  if (log->init_gtid_sets(&gtids_in_binlog,
+                          &purged_gtids_from_binlog,
+                          opt_master_verify_checksum,
+                          true/*true=need lock*/,
+                          NULL/*trx_parser*/,
+                          NULL/*gtid_partial_trx*/,
+                          true/*is_server_starting*/,
+                          last_term))
+    // unireg_abort(MYSQLD_ABORT_EXIT);
+    return -1;
 
   global_sid_lock->wrlock();
-
   uint64 recover_status = consensus_log_manager.get_consensus_info()->get_recover_status();
+
+  if (opt_print_gtid_info_during_recovery) {
+    log_gtid_set("[GTID INFO] After consensus setup. executed_gtids : ",
+                 executed_gtids);
+    log_gtid_set(
+        "[GTID INFO] After consensus setup. purged_gtids_from_binlog : ",
+        &purged_gtids_from_binlog);
+    log_gtid_set("[GTID INFO] After consensus setup. gtids_in_binlog : ",
+                 &gtids_in_binlog);
+  }
   if (!gtids_in_binlog.is_empty() &&
       !gtids_in_binlog.is_subset(executed_gtids))
   {
@@ -194,10 +222,20 @@ int gtid_init_after_consensus_setup() {
            from the crash.
     */
     // only xpaxos leader need add last binlog
-    if (recover_status == BINLOG_WORKING && start_apply_index == 0)
+    if (recover_status == BINLOG_WORKING && start_apply_index == 0) 
     {
-      if (gtid_state->save(&gtids_in_binlog_not_in_table) == -1)
-      {
+#ifndef DBUG_OFF
+      /*
+        all the event in binlog should be applyed in
+        recovery binlog apply.
+      */
+      if (opt_recovery_apply_binlog) {
+        DBUG_ASSERT(gtids_in_binlog_not_in_table.is_empty() ||
+                    gtids_in_binlog_not_in_table.is_subset(skip_counter_gtids));
+      }
+#endif
+
+      if (gtid_state->save(&gtids_in_binlog_not_in_table) == -1) {
         global_sid_lock->unlock();
         // unireg_abort(MYSQLD_ABORT_EXIT);
         return -1;
@@ -206,14 +244,11 @@ int gtid_init_after_consensus_setup() {
     }
   }
 
-#ifndef DBUG_OFF
-//  log_gtid_set("executed_gtids", executed_gtids);
-//  log_gtid_set("purged_gtids_from_binlog", &purged_gtids_from_binlog);
-//  log_gtid_set("gtids_in_binlog", &gtids_in_binlog);
-//  log_gtid_set("gtids_in_binlog_not_in_table", &gtids_in_binlog_not_in_table);
-#endif
-
-
+  if (opt_print_gtid_info_during_recovery) {
+    log_gtid_set(
+        "[GTID INFO] After consensus setup. gtids_in_binlog_not_in_table : ",
+        &gtids_in_binlog_not_in_table);
+  }
   /* gtids_only_in_table= executed_gtids - gtids_in_binlog */
   if (gtids_only_in_table->add_gtid_set(executed_gtids) !=
       RETURN_STATUS_OK)
@@ -492,8 +527,8 @@ int ConsensusLogManager::init_service() {
         sql_print_error("can't get consensus index of snapshot with logger mode ");
         return -1;
       }
-
-      ha_commit_xids_by_recover_map(&consensus_log_manager);
+	    if(ha_commit_xids_by_recover_map(&consensus_log_manager))
+        return -1;
       consensus_log_manager.get_recovery_manager()->clear_all_map();
       if (start_consensus_apply_threads())
         return -1;
@@ -585,7 +620,8 @@ int ConsensusLogManager::init_service() {
 
       wait_commit_index_in_recovery();
 
-      ha_commit_xids_by_recover_map(this);
+      if(ha_commit_xids_by_recover_map(this))
+        return -1;
       get_recovery_manager()->clear_all_map();
 
       if (!opt_cluster_log_type_instance) {

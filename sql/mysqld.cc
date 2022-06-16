@@ -809,6 +809,7 @@ The documentation is based on the source files such as:
 #include "sql/sys_vars_consensus.h"
 #include "sql/bl_consensus_log.h"
 #include "sql/log_table.h"
+#include "sql/binlog_ext.h"
 
 using std::max;
 using std::min;
@@ -2239,6 +2240,222 @@ bool gtid_server_init() {
     gtid_server_cleanup();
   }
   return res;
+}
+
+/**
+  Encapsulate the code initializing binlog together. It includes:
+  - open binlog file
+  - initialize gtid and log Previous_gtid_log_event
+  - purge binlog
+  - initialize and start slave.
+  All above things should not be done until applying binlog in
+  recovery phase is finished.
+
+  @retval true  Error happened.
+  @retval false Succeeds.
+*/
+bool init_binlog() {
+  /*
+    For x-cluster:
+    bin_log must be set to ON
+  */
+  if (!opt_initialize && consensus_log_manager.option_invalid(opt_bin_log)) {
+    return true;
+  }
+
+  if (opt_bin_log) {
+    if (!opt_consensus_force_recovery) {
+      std::vector<std::string> binlog_file_list;
+      mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
+      if (binlog_file_list.empty()) {
+        /*
+          Configures what object is used by the current log to store processed
+          gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
+          corretly compute the set of previous gtids.
+        */
+        DBUG_ASSERT(!mysql_bin_log.is_relay_log);
+        mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
+        mysql_mutex_lock(log_lock);
+
+        if (mysql_bin_log.open_binlog(opt_bin_logname, 0, max_binlog_size, false,
+                                      true /*need_lock_index=true*/,
+                                      true /*need_sid_lock=true*/, NULL)) {
+          mysql_mutex_unlock(log_lock);
+          return true;
+        }
+        mysql_mutex_unlock(log_lock);
+      } else if (opt_initialize) {
+        // in boostrap case but binlog_file_list is not empty
+        sql_print_error("--initialize specified but the binlog index file '%s' is not empty.",
+                        mysql_bin_log.get_index_fname());
+        return true;
+      }
+    }
+
+    if (expire_logs_days > 0 || binlog_expire_logs_seconds > 0) {
+      time_t purge_time = my_time(0) - binlog_expire_logs_seconds -
+                          expire_logs_days * 24 * 60 * 60;
+      DBUG_EXECUTE_IF("expire_logs_always_at_start",
+                      { purge_time = my_time(0); });
+      mysql_bin_log.purge_logs_before_date(purge_time, true);
+    }
+
+    if (!opt_initialize) {
+      mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
+    }
+
+    if (opt_initialize) {
+      /*
+        Initialize GLOBAL.GTID_EXECUTED and GLOBAL.GTID_PURGED from
+        gtid_executed table and binlog files during server startup.
+      */
+      Gtid_set *executed_gtids =
+          const_cast<Gtid_set *>(gtid_state->get_executed_gtids());
+      Gtid_set *lost_gtids = const_cast<Gtid_set *>(gtid_state->get_lost_gtids());
+      Gtid_set *gtids_only_in_table =
+          const_cast<Gtid_set *>(gtid_state->get_gtids_only_in_table());
+      Gtid_set *previous_gtids_logged =
+          const_cast<Gtid_set *>(gtid_state->get_previous_gtids_logged());
+
+      Gtid_set purged_gtids_from_binlog(global_sid_map, global_sid_lock);
+      Gtid_set gtids_in_binlog(global_sid_map, global_sid_lock);
+      Gtid_set gtids_in_binlog_not_in_table(global_sid_map, global_sid_lock);
+
+      if (mysql_bin_log.init_gtid_sets(
+              &gtids_in_binlog, &purged_gtids_from_binlog,
+              opt_master_verify_checksum, true /*true=need lock*/,
+              NULL /*trx_parser*/, NULL /*partial_trx*/,
+              true /*is_server_starting*/))
+        return true;
+
+      global_sid_lock->wrlock();
+
+      purged_gtids_from_binlog.dbug_print("purged_gtids_from_binlog");
+      gtids_in_binlog.dbug_print("gtids_in_binlog");
+
+      if (!gtids_in_binlog.is_empty() &&
+          !gtids_in_binlog.is_subset(executed_gtids)) {
+        gtids_in_binlog_not_in_table.add_gtid_set(&gtids_in_binlog);
+        if (!executed_gtids->is_empty())
+          gtids_in_binlog_not_in_table.remove_gtid_set(executed_gtids);
+        /*
+          Save unsaved GTIDs into gtid_executed table, in the following
+          four cases:
+            1. the upgrade case.
+            2. the case that a slave is provisioned from a backup of
+               the master and the slave is cleaned by RESET MASTER
+               and RESET SLAVE before this.
+            3. the case that no binlog rotation happened from the
+               last RESET MASTER on the server before it crashes.
+            4. The set of GTIDs of the last binlog is not saved into the
+               gtid_executed table if server crashes, so we save it into
+               gtid_executed table and executed_gtids during recovery
+               from the crash.
+        */
+        if (gtid_state->save(&gtids_in_binlog_not_in_table) == -1) {
+          global_sid_lock->unlock();
+          return true;
+        }
+        executed_gtids->add_gtid_set(&gtids_in_binlog_not_in_table);
+      }
+
+      /* gtids_only_in_table= executed_gtids - gtids_in_binlog */
+      if (gtids_only_in_table->add_gtid_set(executed_gtids) != RETURN_STATUS_OK) {
+        global_sid_lock->unlock();
+        return true;
+      }
+      gtids_only_in_table->remove_gtid_set(&gtids_in_binlog);
+      /*
+        lost_gtids = executed_gtids -
+                     (gtids_in_binlog - purged_gtids_from_binlog)
+                   = gtids_only_in_table + purged_gtids_from_binlog;
+      */
+      DBUG_ASSERT(lost_gtids->is_empty());
+      if (lost_gtids->add_gtid_set(gtids_only_in_table) != RETURN_STATUS_OK ||
+          lost_gtids->add_gtid_set(&purged_gtids_from_binlog) !=
+              RETURN_STATUS_OK) {
+        global_sid_lock->unlock();
+        return true;
+      }
+
+      /* Prepare previous_gtids_logged for next binlog */
+      if (previous_gtids_logged->add_gtid_set(&gtids_in_binlog) !=
+          RETURN_STATUS_OK) {
+        global_sid_lock->unlock();
+        return true;
+      }
+
+      /*
+        Write the previous set of gtids at this point because during
+        the creation of the binary log this is not done as we cannot
+        move the init_gtid_sets() to a place before openning the binary
+        log. This requires some investigation.
+
+        /Alfranio
+      */
+      Previous_gtids_log_event prev_gtids_ev(&gtids_in_binlog);
+
+      global_sid_lock->unlock();
+
+      (prev_gtids_ev.common_footer)->checksum_alg =
+          static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
+
+      if (mysql_bin_log.write_event_to_binlog_and_sync(&prev_gtids_ev))
+        return true;
+
+      (void)RUN_HOOK(server_state, after_engine_recovery, (NULL));
+    }
+  }
+
+  /* If running with --initialize, do not start replication. */
+  if (!opt_initialize) {
+    // Make @@slave_skip_errors show the nice human-readable value.
+    set_slave_skip_errors(&opt_slave_skip_errors);
+    /*
+      Group replication filters should be discarded before init_slave(),
+      otherwise the pre-configured filters will be referenced by group
+      replication channels.
+    */
+    rpl_channel_filters.discard_group_replication_filters();
+
+    /*
+      init_slave() must be called after the thread keys are created.
+    */
+    if (server_id != 0 && !opt_consensus_force_recovery)
+      init_slave(); /* Ignoring errors while configuring replication. */
+
+    if (consensus_log_manager.init_consensus_info()) unireg_abort(MYSQLD_ABORT_EXIT);
+
+    if (!opt_consensus_force_recovery) {
+      /*
+        If the user specifies a per-channel replication filter through a
+        command-line option (or in a configuration file) for a slave
+        replication channel which does not exist as of now (i.e not
+        present in slave info tables yet), then the per-channel
+        replication filter is discarded with a warning.
+        If the user specifies a per-channel replication filter through
+        a command-line option (or in a configuration file) for group
+        replication channels 'group_replication_recovery' and
+        'group_replication_applier' which is disallowed, then the
+        per-channel replication filter is discarded with a warning.
+      */
+      rpl_channel_filters.discard_all_unattached_filters();
+    }
+  }
+
+#ifdef WITH_LOCK_ORDER
+  if (!opt_initialize) {
+    LO_activate();
+  }
+#endif /* WITH_LOCK_ORDER */
+
+  int consensus_error = consensus_log_manager.init_service();
+  if (consensus_error < 0)
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  else if (consensus_error > 0)
+    unireg_abort(MYSQLD_SUCCESS_EXIT);
+
+  return false;
 }
 
 // Free connection acceptors
@@ -5903,6 +6120,9 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
+  if (Binlog_recovery::instance() == nullptr) unireg_abort(MYSQLD_ABORT_EXIT);
+  if (Binlog_recovery::instance()->begin()) unireg_abort(MYSQLD_ABORT_EXIT);
+
   if (tc_log->open(opt_bin_log ? opt_bin_logname : opt_tc_log_file)) {
     LogErr(ERROR_LEVEL, ER_CANT_INIT_TC_LOG);
     unireg_abort(MYSQLD_ABORT_EXIT);
@@ -5941,6 +6161,22 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
+ /*
+    If Gtid_mode is ON, set opt_recovery_apply_binlog need to be setted true
+    If Gtid_mode is not ON, set opt_recovery_apply_binlog to false
+  */
+  if (gtid_mode == GTID_MODE_ON && opt_recovery_apply_binlog != true) {
+    sql_print_warning(
+        "gtid_mode is GTID_MODE_ON, turn on recovery_apply_binlog");
+    opt_recovery_apply_binlog = true;
+  }
+
+  if (gtid_mode != GTID_MODE_ON && opt_recovery_apply_binlog == true) {
+    sql_print_warning(
+        "gtid_mode is not GTID_MODE_ON, turn off recovery_apply_binlog");
+    opt_recovery_apply_binlog = false;
+  }
+
   /*
     Each server should have one UUID. We will create it automatically, if it
     does not exist. It should be initialized before opening binlog file. Because
@@ -5954,37 +6190,6 @@ static int init_server_components() {
   if (rpl_encryption.initialize()) {
     LogErr(ERROR_LEVEL, ER_SERVER_RPL_ENCRYPTION_UNABLE_TO_INITIALIZE);
     unireg_abort(MYSQLD_ABORT_EXIT);
-  }
-
-  if (opt_bin_log) {
-    if (!opt_consensus_force_recovery) {
-      std::vector<std::string> binlog_file_list;
-      mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
-
-      if (binlog_file_list.empty()) {
-        /*
-          Configures what object is used by the current log to store processed
-          gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
-          corretly compute the set of previous gtids.
-        */
-        DBUG_ASSERT(!mysql_bin_log.is_relay_log);
-        mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
-        mysql_mutex_lock(log_lock);
-
-        if (mysql_bin_log.open_binlog(opt_bin_logname, 0, max_binlog_size, false,
-                                      true /*need_lock_index=true*/,
-                                      true /*need_sid_lock=true*/, NULL)) {
-          mysql_mutex_unlock(log_lock);
-          return true;
-        }
-        mysql_mutex_unlock(log_lock);
-      } else if (opt_initialize) {
-        // in boostrap case but binlog_file_list is not empty
-        sql_print_error("--initialize specified but the binlog index file '%s' is not empty.",
-                        mysql_bin_log.get_index_fname());
-        return true;
-      }
-    }
   }
 
   /*
@@ -6002,23 +6207,11 @@ static int init_server_components() {
     binlog_expire_logs_seconds = 0;
   DBUG_ASSERT(expire_logs_days == 0 || binlog_expire_logs_seconds == 0);
 
-  if (opt_bin_log) {
-    if (expire_logs_days > 0 || binlog_expire_logs_seconds > 0) {
-      time_t purge_time = my_time(0) - binlog_expire_logs_seconds -
-                          expire_logs_days * 24 * 60 * 60;
-      DBUG_EXECUTE_IF("expire_logs_always_at_start",
-                      { purge_time = my_time(0); });
-      mysql_bin_log.purge_logs_before_date(purge_time, true);
-    }
-  } else {
+  if (!opt_bin_log) {
     if (binlog_expire_logs_seconds_supplied)
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--binlog-expire-logs-seconds");
     if (expire_logs_days_supplied)
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--expire_logs_days");
-  }
-
-  if (opt_bin_log && !opt_initialize) {
-    mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
   }
 
   if (opt_myisam_log) (void)mi_log(1);
@@ -6716,108 +6909,13 @@ int mysqld_main(int argc, char **argv)
   if (!opt_initialize && !opt_initialize_insecure) {
     // Initialize executed_gtids from mysql.gtid_executed table.
     if (gtid_state->read_gtid_executed_from_table() == -1) unireg_abort(1);
-  }
 
-  if (opt_bin_log && opt_initialize) {
-    /*
-      Initialize GLOBAL.GTID_EXECUTED and GLOBAL.GTID_PURGED from
-      gtid_executed table and binlog files during server startup.
-    */
-    Gtid_set *executed_gtids =
-        const_cast<Gtid_set *>(gtid_state->get_executed_gtids());
-    Gtid_set *lost_gtids = const_cast<Gtid_set *>(gtid_state->get_lost_gtids());
-    Gtid_set *gtids_only_in_table =
-        const_cast<Gtid_set *>(gtid_state->get_gtids_only_in_table());
-    Gtid_set *previous_gtids_logged =
-        const_cast<Gtid_set *>(gtid_state->get_previous_gtids_logged());
-
-    Gtid_set purged_gtids_from_binlog(global_sid_map, global_sid_lock);
-    Gtid_set gtids_in_binlog(global_sid_map, global_sid_lock);
-    Gtid_set gtids_in_binlog_not_in_table(global_sid_map, global_sid_lock);
-
-    if (mysql_bin_log.init_gtid_sets(
-            &gtids_in_binlog, &purged_gtids_from_binlog,
-            opt_master_verify_checksum, true /*true=need lock*/,
-            NULL /*trx_parser*/, NULL /*partial_trx*/,
-            true /*is_server_starting*/))
-      unireg_abort(MYSQLD_ABORT_EXIT);
-
-    global_sid_lock->wrlock();
-
-    purged_gtids_from_binlog.dbug_print("purged_gtids_from_binlog");
-    gtids_in_binlog.dbug_print("gtids_in_binlog");
-
-    if (!gtids_in_binlog.is_empty() &&
-        !gtids_in_binlog.is_subset(executed_gtids)) {
-      gtids_in_binlog_not_in_table.add_gtid_set(&gtids_in_binlog);
-      if (!executed_gtids->is_empty())
-        gtids_in_binlog_not_in_table.remove_gtid_set(executed_gtids);
-      /*
-        Save unsaved GTIDs into gtid_executed table, in the following
-        four cases:
-          1. the upgrade case.
-          2. the case that a slave is provisioned from a backup of
-             the master and the slave is cleaned by RESET MASTER
-             and RESET SLAVE before this.
-          3. the case that no binlog rotation happened from the
-             last RESET MASTER on the server before it crashes.
-          4. The set of GTIDs of the last binlog is not saved into the
-             gtid_executed table if server crashes, so we save it into
-             gtid_executed table and executed_gtids during recovery
-             from the crash.
-      */
-      if (gtid_state->save(&gtids_in_binlog_not_in_table) == -1) {
-        global_sid_lock->unlock();
-        unireg_abort(MYSQLD_ABORT_EXIT);
-      }
-      executed_gtids->add_gtid_set(&gtids_in_binlog_not_in_table);
-    }
-
-    /* gtids_only_in_table= executed_gtids - gtids_in_binlog */
-    if (gtids_only_in_table->add_gtid_set(executed_gtids) != RETURN_STATUS_OK) {
+    if (opt_print_gtid_info_during_recovery) {
+      global_sid_lock->wrlock();
+      log_gtid_set("[GTID INFO] Reading from table after gtid_state init : ",
+                   gtid_state->get_executed_gtids());
       global_sid_lock->unlock();
-      unireg_abort(MYSQLD_ABORT_EXIT);
     }
-    gtids_only_in_table->remove_gtid_set(&gtids_in_binlog);
-    /*
-      lost_gtids = executed_gtids -
-                   (gtids_in_binlog - purged_gtids_from_binlog)
-                 = gtids_only_in_table + purged_gtids_from_binlog;
-    */
-    DBUG_ASSERT(lost_gtids->is_empty());
-    if (lost_gtids->add_gtid_set(gtids_only_in_table) != RETURN_STATUS_OK ||
-        lost_gtids->add_gtid_set(&purged_gtids_from_binlog) !=
-            RETURN_STATUS_OK) {
-      global_sid_lock->unlock();
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-
-    /* Prepare previous_gtids_logged for next binlog */
-    if (previous_gtids_logged->add_gtid_set(&gtids_in_binlog) !=
-        RETURN_STATUS_OK) {
-      global_sid_lock->unlock();
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-
-    /*
-      Write the previous set of gtids at this point because during
-      the creation of the binary log this is not done as we cannot
-      move the init_gtid_sets() to a place before openning the binary
-      log. This requires some investigation.
-
-      /Alfranio
-    */
-    Previous_gtids_log_event prev_gtids_ev(&gtids_in_binlog);
-
-    global_sid_lock->unlock();
-
-    (prev_gtids_ev.common_footer)->checksum_alg =
-        static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
-
-    if (mysql_bin_log.write_event_to_binlog_and_sync(&prev_gtids_ev))
-      unireg_abort(MYSQLD_ABORT_EXIT);
-
-    (void)RUN_HOOK(server_state, after_engine_recovery, (NULL));
   }
 
   if (init_ssl_communication()) unireg_abort(MYSQLD_ABORT_EXIT);
@@ -6940,53 +7038,10 @@ int mysqld_main(int argc, char **argv)
 
   binlog_unsafe_map_init();
 
-  /* If running with --initialize, do not start replication. */
-  if (!opt_initialize) {
-    // Make @@slave_skip_errors show the nice human-readable value.
-    set_slave_skip_errors(&opt_slave_skip_errors);
-    /*
-      Group replication filters should be discarded before init_slave(),
-      otherwise the pre-configured filters will be referenced by group
-      replication channels.
-    */
-    rpl_channel_filters.discard_group_replication_filters();
+ if (init_binlog()) unireg_abort(MYSQLD_ABORT_EXIT);
 
-    /*
-      init_slave() must be called after the thread keys are created.
-    */
-    if (server_id != 0 && !opt_consensus_force_recovery)
-      init_slave(); /* Ignoring errors while configuring replication. */
-
-    if (consensus_log_manager.init_consensus_info()) unireg_abort(MYSQLD_ABORT_EXIT);
-
-    if (!opt_consensus_force_recovery) {
-      /*
-        If the user specifies a per-channel replication filter through a
-        command-line option (or in a configuration file) for a slave
-        replication channel which does not exist as of now (i.e not
-        present in slave info tables yet), then the per-channel
-        replication filter is discarded with a warning.
-        If the user specifies a per-channel replication filter through
-        a command-line option (or in a configuration file) for group
-        replication channels 'group_replication_recovery' and
-        'group_replication_applier' which is disallowed, then the
-        per-channel replication filter is discarded with a warning.
-      */
-      rpl_channel_filters.discard_all_unattached_filters();
-    }
-  }
-
-#ifdef WITH_LOCK_ORDER
-  if (!opt_initialize) {
-    LO_activate();
-  }
-#endif /* WITH_LOCK_ORDER */
-
-  int consensus_error = consensus_log_manager.init_service();
-  if (consensus_error < 0)
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  else if (consensus_error > 0)
-    unireg_abort(MYSQLD_SUCCESS_EXIT);
+  if (Binlog_recovery::instance()->end()) unireg_abort(MYSQLD_ABORT_EXIT);
+  Binlog_recovery::destroy();
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
   initialize_performance_schema_acl(opt_initialize);

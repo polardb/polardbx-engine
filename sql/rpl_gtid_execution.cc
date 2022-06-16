@@ -346,8 +346,14 @@ static inline void skip_statement(const THD *thd MY_ATTRIBUTE((unused))) {
 
 #ifndef DBUG_OFF
   const Gtid_set *executed_gtids = gtid_state->get_executed_gtids();
-  global_sid_lock->rdlock();
+  global_sid_lock->wrlock();
   gtid_state->lock_sidno(thd->variables.gtid_next.gtid.sidno);
+
+  char buf[2048], g_buf[2048];
+  executed_gtids->to_string(buf, false);
+  thd->variables.gtid_next.gtid.to_string(global_sid_map, g_buf);
+  sql_print_warning("%s should contain %s, skip it", buf, g_buf);
+
   DBUG_ASSERT(executed_gtids->contains_gtid(thd->variables.gtid_next.gtid));
   gtid_state->unlock_sidno(thd->variables.gtid_next.gtid.sidno);
   global_sid_lock->unlock();

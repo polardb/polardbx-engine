@@ -667,3 +667,39 @@ void Clone_persist_gtid::wait_flush(bool wait, bool compress_gtid,
     ut_ad(false);
   }
 }
+
+void Clone_persist_gtid::add_undo_gtids(const Gtid_desc &gtid_desc) {
+  /* Check if valid descriptor. */
+  if (!gtid_desc.m_is_set) {
+    return;
+  }
+  /* Check if GTID persistence is active. */
+  if (gtid_table_persistor == nullptr) {
+    return;
+  }
+  /* Add input GTID to the set */
+  m_undo_gtids_list.push_back(gtid_desc.m_info);
+}
+
+void Clone_persist_gtid::print_undo_gtids() {
+  Sid_map sid_map(nullptr);
+  Gtid_set print_gtid_set(&sid_map, nullptr);
+
+  for (auto &gtid_info : m_undo_gtids_list) {
+    auto gtid_str = reinterpret_cast<const char *>(&gtid_info[0]);
+    auto status = print_gtid_set.add_gtid_text(gtid_str);
+    if (status != RETURN_STATUS_OK) {
+      m_undo_gtids_list.clear();
+      return ;
+    }
+  }
+
+  m_undo_gtids_list.clear();
+
+  char *gtid_buf = nullptr;
+  if (print_gtid_set.to_string(&gtid_buf, false) == -1) {
+    return;
+  }
+  ib::warn() << "  [GTID INFO] Reading from undo log :" << gtid_buf;
+  my_free(gtid_buf);
+}

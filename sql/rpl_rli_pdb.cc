@@ -1745,7 +1745,22 @@ int Slave_worker::slave_worker_exec_event(Log_event *ev) {
   set_future_event_relay_log_pos(ev->future_event_relay_log_pos);
   set_master_log_pos(static_cast<ulong>(ev->common_header->log_pos));
   set_gaq_index(ev->mts_group_idx);
+
+  DBUG_EXECUTE_IF("xpaxos_worker_apply_prapare_xa_crash", { 
+    if(ev->get_type_code() == binary_log::XA_PREPARE_LOG_EVENT)
+      DBUG_SUICIDE();
+  });
+
   ret = ev->do_apply_event_worker(this);
+
+  if (ret == 0 && thd->xpaxos_replication_channel &&
+      ev->get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) {
+    XID xid;
+    dynamic_cast<XA_prepare_log_event *>(ev)->get_xid(&xid);
+    auto trx = transaction_cache_search(&xid);
+    if (trx) trx->xid_state()->set_binlogged();
+  }
+
   return ret;
 }
 

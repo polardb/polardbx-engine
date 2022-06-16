@@ -1715,6 +1715,11 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
   std::vector<uint64> blob_flag_list;
   std::vector<uint64> blob_crc32_list;
 
+  /*collect gtid and start pos for recovery apply binlog*/
+  Gtid gtid;
+  my_off_t ev_start_pos = 0;
+  gtid.clear();
+
   if (!fdle->is_valid() /*||
     my_hash_init(&xids, &my_charset_bin, TC_LOG_PAGE_SIZE / 3, 0,
   sizeof(my_xid), 0, 0, MYF(0),
@@ -1724,6 +1729,8 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
   // init_alloc_root(key_memory_binlog_recover_exec,
     // &mem_root, TC_LOG_PAGE_SIZE, TC_LOG_PAGE_SIZE);
 
+  /* Gtid->contain need  global_sid_lock->wrlock*/
+  global_sid_lock->wrlock();
 
   while ((ev = binlog_file_reader->read_event_object()) != NULL
     && ev->is_valid())
@@ -1749,7 +1756,10 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
       current_crc32 = rev->get_reserve();
       end_pos = start_pos = my_b_tell(binlog_file_reader->get_io_cache());
       begin_consensus = TRUE;
-    }
+
+      ev_start_pos = binlog_file_reader->event_start_pos();
+
+    } 
     else if (ev->get_type_code() == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT)
     {
       Previous_consensus_index_log_event * prev_consensus_event = (Previous_consensus_index_log_event *)ev;
@@ -1762,9 +1772,7 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
       if (ev->get_type_code() == binary_log::CONSENSUS_CLUSTER_INFO_EVENT)
       {
         rci_ev = (Consensus_cluster_info_log_event*)ev;
-      }
-
-      if (ev->get_type_code() == binary_log::QUERY_EVENT) {
+      } else if (ev->get_type_code() == binary_log::QUERY_EVENT) {
         if (!strcmp(((Query_log_event *)ev)->query, "BEGIN") ||
             !strncmp(((Query_log_event *)ev)->query, "XA START",
                      strlen("XA START"))) {
@@ -1773,7 +1781,7 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
 
         if (!strcmp(((Query_log_event *)ev)->query, "COMMIT") ||
             !strncmp(((Query_log_event *)ev)->query, "XA COMMIT",
-                     strlen("XA START"))) {
+                     strlen("XA COMMIT"))) {
 
 #ifndef DEBUG_OFF
           if(!strcmp(((Query_log_event *)ev)->query, "COMMIT"))
@@ -1793,11 +1801,20 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
       if (ev->get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) {
         in_transaction = FALSE;
         current_commit_gcn = MYSQL_GCN_NULL;
-      }
-
-      if (ev->get_type_code() == binary_log::XID_EVENT)
-      {
-        DBUG_ASSERT(in_transaction == TRUE);
+      } 
+      
+      /* 
+       * is_atomic_ddl_event(ev) should been collect and 
+       * commit or rollback.
+       * 
+       * DDL log operation will fail due to
+       * PolarX move commit or rollback after open_binlog
+       * 
+       * We rollback is_atomic_ddl_event(ev) and executing ddl
+       * again in recovery apply binlog.
+      */
+      if (ev->get_type_code() == binary_log::XID_EVENT) {
+	      DBUG_ASSERT(in_transaction == TRUE);
         in_transaction= FALSE;
 
         if (ev->common_header->unmasked_server_id == server_id)
@@ -1805,13 +1822,29 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
           Xid_log_event *xev = (Xid_log_event *)ev;
           if (recover_term == 0 || current_term > recover_term)
           {
-            consensus_log_manager.get_recovery_manager()->clear_total_xid_map();
+            consensus_log_manager.get_recovery_manager()->clear_xid_gcn_and_gtid_xid_map();
             recover_term = current_term;
           }
-          consensus_log_manager.get_recovery_manager()->add_trx_to_total_commit_map(current_index, xev->xid, current_commit_gcn);
+
+          consensus_log_manager.get_recovery_manager()
+              ->add_trx_to_total_commit_map(current_index, xev->xid,
+                                            current_commit_gcn, gtid);
           current_commit_gcn = MYSQL_GCN_NULL;
         }
       }
+
+
+      if (ev->get_type_code() == binary_log::GTID_LOG_EVENT) {
+        Gtid_log_event *gtid_ev = dynamic_cast<Gtid_log_event *>(ev);
+        gtid.set(gtid_ev->get_sidno(false), gtid_ev->get_gno());
+      }
+
+      if (!in_transaction && !is_gtid_event(ev) && !is_gcn_event(ev)) {
+        Binlog_recovery::instance()->add_gtid(gtid, ev_start_pos,
+                                              current_index);
+        gtid.clear();
+      }
+
       /* find a integrated consensus log */
       if (begin_consensus && end_pos > start_pos && end_pos - start_pos == current_length)
       {
@@ -1830,6 +1863,8 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
           blob_crc32_list.push_back(current_crc32);
           uint64 split_len = opt_consensus_large_event_split_size;
           uint64 blob_start_pos = start_pos, blob_end_pos = start_pos + split_len;
+          uint64 save_position = binlog_file_reader->position();
+
           for (size_t i=0; i<blob_index_list.size(); ++i)
           {
             // fetch_binlog_by_offset(log, blob_start_pos, blob_end_pos, rci_ev, log_content);
@@ -1845,9 +1880,16 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
           blob_crc32_list.clear();
           begin_consensus = FALSE;
           valid_index = current_index;
+          /*
+            fetch_binlog_by_offset will modify the position
+            of binlog_file_reader. 
+          */
+          binlog_file_reader->seek(save_position);
         }
         else
         {
+          uint64 save_position = binlog_file_reader->position();
+
           // copy log to buffer
           // fetch_binlog_by_offset(log, start_pos, end_pos, rci_ev, log_content);
           fetch_binlog_by_offset(*binlog_file_reader, start_pos, end_pos, rci_ev, log_content);
@@ -1855,6 +1897,12 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
               log_content.size(), (uchar*)log_content.c_str(),  (rci_ev != NULL), current_flag, current_crc32);
           begin_consensus = FALSE;
           valid_index = current_index;
+
+          /*
+            fetch_binlog_by_offset will modify the position
+            of binlog_file_reader. 
+          */
+          binlog_file_reader->seek(save_position);
         }
         rci_ev = NULL;
       }
@@ -1868,6 +1916,13 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
 
     delete ev;
   }
+
+  if (opt_print_gtid_info_during_recovery) {
+    log_gtid_set("[GTID INFO] Reading from last binlog : ",
+                 Binlog_recovery::instance()->get_gtids_in_last_file());
+  }
+  global_sid_lock->unlock();
+
 
   if (start_pos < *valid_pos && end_pos > *valid_pos)
     end_pos = *valid_pos;

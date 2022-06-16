@@ -260,6 +260,11 @@ int Gtid_table_persistor::write_row(TABLE *table, const char *sid,
       /* Ignore the duplicate key error, log a warning for it. */
       LogErr(WARNING_LEVEL, ER_GTID_ALREADY_ADDED_BY_USER,
              Gtid_table_access_context::TABLE_NAME.str);
+      if (opt_print_gtid_info_during_recovery) {
+        LogErr(WARNING_LEVEL, ER_GTID_ALREADY_ADDED_BY_USER_GNO,
+             gno_start, gno_end);
+      }
+
     } else {
       table->file->print_error(error, MYF(0));
       /*

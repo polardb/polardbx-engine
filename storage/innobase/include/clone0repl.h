@@ -379,6 +379,13 @@ class Clone_persist_gtid {
   std::atomic<bool> m_active;
 
   unsigned long m_thread_id{0};
+
+ public:
+  void add_undo_gtids(const Gtid_desc &gtid_desc);
+  void print_undo_gtids();
+
+ private:
+  Gitd_info_list m_undo_gtids_list;
 };
 
 #endif /* CLONE_REPL_INCLUDE */

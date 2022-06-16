@@ -692,6 +692,7 @@ void trx_undo_gtid_read_and_persist(trx_ulogf_t *undo_header) {
   the interface requirement. */
   trx_sys_mutex_enter();
   gtid_persistor.add(gtid_desc);
+  gtid_persistor.add_undo_gtids(gtid_desc);
   trx_sys_mutex_exit();
 }
 

@@ -3114,6 +3114,24 @@ int Log_event::apply_event(Relay_log_info *rli) {
           rli->curr_group_seen_begin = false;
         }
       }
+
+    /*
+      The xpaxos_replication_channel will not write binlog after applying 
+      event and it will lost binlogged flag for xa prepare event.
+
+      If follower becomes new leader between xa prepare and xa commit,
+      the operation 'xa commit' of the new leader will not write binlog 
+      and pass to other followers due to losting binlogged flag. 
+      The xa commit will lost in other followers.
+    */
+      if (error == 0 && rli_thd->xpaxos_replication_channel && 
+          get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) {
+        XID xid;
+        dynamic_cast<XA_prepare_log_event *>(this)->get_xid(&xid);
+        auto trx = transaction_cache_search(&xid);
+        if (trx) trx->xid_state()->set_binlogged();
+      }
+
       return error;
     }
   }
@@ -3231,6 +3249,11 @@ int Log_event::apply_event(Relay_log_info *rli) {
       }
     }
 
+    DBUG_EXECUTE_IF("xpaxos_apply_prapare_xa_crash", { 
+      if(get_type_code() == binary_log::XA_PREPARE_LOG_EVENT)
+        DBUG_SUICIDE();
+    });
+
     int error = do_apply_event(rli);
     if (rli->is_processing_trx()) {
       // needed to identify DDL's; uses the same logic as in get_slave_worker()
@@ -3260,6 +3283,24 @@ int Log_event::apply_event(Relay_log_info *rli) {
         };);
       }
     }
+
+    /*
+      The xpaxos_replication_channel will not write binlog after applying 
+      event and it will lost binlogged flag for xa prepare event.
+
+      If follower becomes new leader between xa prepare and xa commit,
+      the operation 'xa commit' of the new leader will not write binlog 
+      and pass to other followers due to losting binlogged flag. 
+      The xa commit will lost in other followers.
+    */
+    if (error == 0 && rli_thd->xpaxos_replication_channel && 
+        get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) {
+      XID xid;
+      dynamic_cast<XA_prepare_log_event *>(this)->get_xid(&xid);
+      auto trx = transaction_cache_search(&xid);
+      if (trx) trx->xid_state()->set_binlogged();
+    }
+
     return error;
   }
 
@@ -4456,6 +4497,11 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
   DBUG_PRINT("info", ("query=%s, q_len_arg=%lu", query,
                       static_cast<unsigned long>(q_len_arg)));
 
+#ifndef DEBUG_OFF
+  if (strcmp("XA START", query) == 0)
+    DBUG_EXECUTE_IF("crash_xa_start_query_event", DBUG_SUICIDE(););
+#endif
+
   /*
     Colleagues: please never free(thd->catalog) in MySQL. This would
     lead to bugs as here thd->catalog is a part of an alloced block,
@@ -5076,6 +5122,16 @@ end:
 }
 
 int Query_log_event::do_update_pos(Relay_log_info *rli) {
+	DBUG_EXECUTE_IF(
+    "crash_after_commit_before_update_pos",
+      if (!strncmp(query, STRING_WITH_LEN("COMMIT")) ||
+          !strncmp(query, STRING_WITH_LEN("XA COMMIT")) ||
+          !strncmp(query, STRING_WITH_LEN("XA ROLLBACK"))) {
+      ha_flush_logs();
+      DBUG_SUICIDE();
+    }
+  );
+
   int ret = Log_event::do_update_pos(rli);
 
   DBUG_EXECUTE_IF(
@@ -6092,6 +6148,8 @@ int Xid_apply_log_event::do_apply_event_worker(Slave_worker *w) {
       goto err;
   }
 
+  DEBUG_SYNC(thd, "sync_before_do_commit_in_xid_apply_log_worker");
+
   DBUG_PRINT(
       "mts",
       ("do_apply group master %s %llu  group relay %s %llu event %s %llu.",
@@ -6107,8 +6165,13 @@ int Xid_apply_log_event::do_apply_event_worker(Slave_worker *w) {
   error = do_commit(thd);
   if (error) {
     if (!skipped_commit_pos) w->rollback_positions(ptr_group);
-  } else if (skipped_commit_pos)
+  } else if (skipped_commit_pos) {
+    DEBUG_SYNC(thd, "sync_after_do_commit_in_xid_apply_log_worker");
+    DBUG_EXECUTE_IF(
+      "crash_after_do_commit_for_xa_prepare_in_mts",
+      DBUG_SUICIDE(););
     error = w->commit_positions(this, ptr_group, w->is_transactional());
+  }
 err:
   return error;
 }
@@ -6193,6 +6256,8 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
     if ((error = rli_ptr->flush_info(true))) goto err;
   }
 
+  DEBUG_SYNC(thd, "sync_before_do_commit_in_xid_apply_log");
+
   DBUG_PRINT(
       "info",
       ("do_apply group master %s %llu  group relay %s %llu event %s %llu\n",
@@ -6256,6 +6321,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
         "crash_after_commit_before_update_pos",
         sql_print_information("Crashing "
                               "crash_after_commit_before_update_pos.");
+        ha_flush_logs();
         DBUG_SUICIDE(););
     /* Update positions on successful commit */
     rli_ptr->set_group_master_log_name(new_group_master_log_name);
@@ -6271,6 +6337,8 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
                         rli_ptr->get_group_master_log_pos(),
                         rli_ptr->get_group_relay_log_name(),
                         rli_ptr->get_group_relay_log_pos()));
+
+    DEBUG_SYNC(thd, "sync_after_do_commit_in_xid_apply_log");
 
     /*
       For transactional repository the positions are flushed ahead of commit.
@@ -6413,6 +6481,11 @@ bool XA_prepare_log_event::do_commit(THD *thd_arg) {
   if (!error) error = mysql_bin_log.gtid_end_transaction(thd_arg);
 
   return error;
+}
+
+void XA_prepare_log_event::get_xid(XID *xid) {
+  xid->set(my_xid.formatID, my_xid.data, my_xid.gtrid_length,
+           my_xid.data + my_xid.gtrid_length, my_xid.bqual_length);
 }
 
 /**************************************************************************

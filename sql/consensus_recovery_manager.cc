@@ -45,11 +45,12 @@ int ConsensusRecoveryManager::cleanup()
   return 0;
 }
 
-void ConsensusRecoveryManager::add_trx_to_total_commit_map(uint64 consensus_index, uint64 xid, ulonglong gcn)
+void ConsensusRecoveryManager::add_trx_to_total_commit_map(uint64 consensus_index, uint64 xid, ulonglong gcn, Gtid gtid)
 {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   total_commit_trx_map[xid] = consensus_index;
   total_xid_gcn_map[xid] = gcn;
+  total_xid_gtid_map[xid] = gtid;
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
@@ -100,6 +101,15 @@ void ConsensusRecoveryManager::clear_total_xid_map()
 {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   total_commit_trx_map.clear();
+  mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
+}
+
+void ConsensusRecoveryManager::clear_xid_gcn_and_gtid_xid_map()
+{
+  mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
+  total_commit_trx_map.clear();
+  total_xid_gcn_map.clear();
+  total_xid_gtid_map.clear();
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 

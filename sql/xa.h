@@ -39,6 +39,7 @@
 #include "sql/sql_list.h"          // List
 #include "sql/sql_plugin_ref.h"    // plugin_ref
 #include "sql/xa_aux.h"            // serialize_xid
+#include "sql/xa_ext.h"
 
 class Protocol;
 class THD;
@@ -425,6 +426,8 @@ class XID_STATE {
   bool m_is_binlogged;
 
  public:
+  XID_context m_ctx;
+
   XID_STATE()
       : xa_state(XA_NOTR),
         in_recovery(false),
@@ -665,6 +668,16 @@ bool transaction_cache_detach(Transaction_ctx *transaction);
 void transaction_cache_delete(Transaction_ctx *transaction);
 
 /**
+  Find the transaction of certain xid from cache.
+
+  @param xid  xid of the of the transaction.
+
+  @return  the returned shared_ptr will include a vaild pointer if found,
+           otherwise the shared_ptr will be empty.
+*/
+std::shared_ptr<Transaction_ctx> transaction_cache_search(XID *xid);
+
+/**
   Release resources occupied by transaction cache.
 */
 
@@ -739,4 +752,13 @@ void cleanup_trans_state(THD *thd);
 */
 
 bool xa_trans_force_rollback(THD *thd);
+
+/**
+  Find the transaction of certain xid from cache.
+  @param xid  xid of the of the transaction.
+  @return  the returned shared_ptr will include a vaild pointer if found,
+           otherwise the shared_ptr will be empty.
+*/
+std::shared_ptr<Transaction_ctx> transaction_cache_search(XID *xid);
+
 #endif

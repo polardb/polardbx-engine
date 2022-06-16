@@ -20075,6 +20075,18 @@ ER_ROLL_FORWARD_SCN
 ER_GALAXY_PLUGIN
   eng "Galaxy Plugin : %s"
 
+ER_GTID_INFO
+  eng "%s: %s"
+
+ER_RPL_GTID_MODE_REQUIRES_RECOVERY_APPLY_BINLOG_ON
+  eng "GTID_MODE = ON requires RECOVERY_APPLY_BINLOG = ON."
+
+ER_GTID_ALREADY_ADDED_BY_USER_GNO
+  eng "[GTID INFO] The transaction owned GTID gno start %ld, end %ld."
+
+ER_RECOVERY_APPLY_BINLOG_ERR_SKIP_COUNTER
+  eng "Recovery: Failed to apply binlog, seek to pos %lu, remain counter %u"
+
 #
 # End of RDS error messages intended to be logged to the server error log.
 #

@@ -75,6 +75,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+#include "sql/binlog_ext.h"
 
 #include "consensus_recovery_manager.h"
 const char *XID_STATE::xa_state_names[] = {"NON-EXISTING", "ACTIVE", "IDLE",
@@ -98,7 +99,7 @@ static const uint MYSQL_XID_OFFSET = MYSQL_XID_PREFIX_LEN + sizeof(server_id);
 static const uint MYSQL_XID_GTRID_LEN = MYSQL_XID_OFFSET + sizeof(my_xid);
 
 static void attach_native_trx(THD *thd);
-static std::shared_ptr<Transaction_ctx> transaction_cache_search(XID *xid);
+std::shared_ptr<Transaction_ctx> transaction_cache_search(XID *xid);
 static bool transaction_cache_insert(XID *xid, Transaction_ctx *transaction);
 static bool transaction_cache_insert_recovery(XID *xid);
 
@@ -438,15 +439,71 @@ int ha_recover(const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list) 
 int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager) {
   DBUG_ENTER("ha_commit_before_commit_index");
   auto xid_map = consensusLogManager->get_recovery_manager()->get_commit_index_map();
+  auto gtid_map = consensusLogManager->get_recovery_manager()->get_total_gtid_map();
+  uint64 recover_status = consensusLogManager->get_consensus_info()->get_recover_status();
+
   uint64 recover_start_apply_index = consensusLogManager->get_consensus_info()->get_start_apply_index();
   sql_print_information("Recover hanging trx, max consensus index in recover map is %llu, recover start apply index is %llu",
     consensusLogManager->get_recovery_manager()->get_max_consensus_index_from_recover_trx_hash(), recover_start_apply_index);
+
+  if (opt_print_gtid_info_during_recovery) {
+    sql_print_warning(
+        "[GTID INFO] Recover status is [%s], recover_start_apply_index[%llu]",
+        recover_status == RELAY_LOG_WORKING ? "RELAY LOG" : "BINLOG",
+        recover_start_apply_index);
+  }
 
   // recover snapshot from a leader
   if (opt_recover_snapshot && recover_start_apply_index == 0)
   {
     consensusLogManager->get_recovery_manager()->truncate_not_confirmed_xids_from_map(
           consensusLogManager->get_recovery_manager()->get_last_leader_term_index());
+  }
+
+  /*
+    In the following scenarios, it will not lost engine data when executing xa prepare,
+    it does not  need to apply binlog again for xa prepare:
+
+    1. For RELAY_LOG_WORKING(follower), binlogs are received from leader 
+       instead of applying events.
+    2. For BINLOG_WORKING but downgrade has done (recover_start_apply_index is 0), sql
+       thread will started to apply events.
+  */ 
+  bool need_apply_binlog = opt_recovery_apply_binlog &&
+                           recover_status == BINLOG_WORKING &&
+                           recover_start_apply_index == 0;
+  if (need_apply_binlog) {
+    global_sid_lock->wrlock();
+
+    Gtid_set *executed_gtids =
+        const_cast<Gtid_set *>(gtid_state->get_executed_gtids());
+    Gtid_set prepare_gtids(executed_gtids->get_sid_map());
+
+    if (opt_print_gtid_info_during_recovery) {
+      log_gtid_set("[GTID INFO] Before commit xids. executed_gtids : ", executed_gtids);
+    }
+
+    for (auto map_iter = xid_map.begin(); map_iter != xid_map.end();
+         map_iter++) {
+      if (recover_start_apply_index == 0 ||
+          map_iter->first <= recover_start_apply_index) {
+        XID *xid = map_iter->second;
+        Gtid gtid = gtid_map.at(xid->get_my_xid());
+
+        DBUG_ASSERT(prepare_gtids.ensure_sidno(gtid.sidno) == RETURN_STATUS_OK);
+        prepare_gtids._add_gtid(gtid);
+      }
+    }
+
+    if (!prepare_gtids.is_empty()) {
+      gtid_state->save(&prepare_gtids);
+      executed_gtids->add_gtid_set(&prepare_gtids);
+    }
+
+    if (opt_print_gtid_info_during_recovery) {
+      log_gtid_set("[GTID INFO] Prepared xids : ", &prepare_gtids);
+    }
+    global_sid_lock->unlock();
   }
 
   for (auto map_iter = xid_map.begin(); map_iter != xid_map.end(); map_iter++) {
@@ -460,9 +517,17 @@ int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager) {
     }
   }
 
+  if (need_apply_binlog) {
+    uint64 recover_index = consensus_log_manager.get_recovery_manager()
+                               ->get_last_leader_term_index();
+
+    Binlog_recovery::instance()->set_end_index(recover_index);
+
+    if (Binlog_recovery::instance()->apply_binlog())
+      DBUG_RETURN(-1);
+  }
   DBUG_RETURN(0);
 }
-
 
 int ha_rollback_xids(XID* xid) {
   DBUG_ENTER("ha_rollback_xids");
@@ -562,6 +627,8 @@ bool Sql_cmd_xa_commit::trans_xa_commit(THD *thd) {
 
   /* Inform clone handler of XA operation. */
   Clone_handler::XA_Operation xa_guard(thd);
+  Binlog_ext::XA_rotate_guard xa_rotate_guard(thd, &res);
+
   if (!xid_state->has_same_xid(m_xid)) {
     res = process_external_xa_commit(thd, m_xid, xid_state);
   } else {
@@ -704,6 +771,16 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
   */
   external_xid->set_commit_gcn(thd->variables.innodb_commit_gcn);
 
+
+  DBUG_EXECUTE_IF("crash_on_external_xa_commit", DBUG_SUICIDE(););
+
+  /*
+    It is committing from another session. Set it to XA_PREPARED,
+    otherwise innodb would not store its gtid into undo log.
+  */
+  if (xid_state->has_state(XID_STATE::XA_NOTR))
+    xid_state->set_state(XID_STATE::XA_PREPARED);
+
   res = ha_commit_or_rollback_by_xid(thd, external_xid, !res) || res;
 
   xid_state->unset_binlogged();
@@ -714,6 +791,7 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
   transaction_cache_delete(transaction.get());
   gtid_state_commit_or_rollback(thd, need_clear_owned_gtid, !gtid_error);
 
+  xid_state->reset();
   return res;
 }
 
@@ -858,6 +936,8 @@ bool Sql_cmd_xa_rollback::trans_xa_rollback(THD *thd) {
 
   /* Inform clone handler of XA operation. */
   Clone_handler::XA_Operation xa_guard(thd);
+  Binlog_ext::XA_rotate_guard xa_rotate_guard(thd, &res);
+
   if (!xid_state->has_same_xid(m_xid)) {
     res = process_external_xa_rollback(thd, m_xid, xid_state);
   } else {
@@ -937,6 +1017,13 @@ bool Sql_cmd_xa_rollback::process_external_xa_rollback(THD *thd,
   else
     xid_state->unset_binlogged();
 
+	/*
+    It is rolling back from another session. Set it to XA_PREPARED,
+    otherwise innodb would not store its gtid into undo log.
+  */
+  if (xid_state->has_state(XID_STATE::XA_NOTR))
+    xid_state->set_state(XID_STATE::XA_PREPARED);
+
   res = ha_commit_or_rollback_by_xid(thd, external_xid, false) || res;
 
   xid_state->unset_binlogged();
@@ -945,6 +1032,8 @@ bool Sql_cmd_xa_rollback::process_external_xa_rollback(THD *thd,
       external_xid->key(), external_xid->key_length());
   transaction_cache_delete(transaction.get());
   gtid_state_commit_or_rollback(thd, need_clear_owned_gtid, !gtid_error);
+
+  xid_state->reset();
   return res || gtid_error;
 }
 
@@ -1478,7 +1567,7 @@ void transaction_cache_free() {
     @retval  != NULL  success
 */
 
-static std::shared_ptr<Transaction_ctx> transaction_cache_search(XID *xid) {
+std::shared_ptr<Transaction_ctx> transaction_cache_search(XID *xid) {
   std::shared_ptr<Transaction_ctx> res{nullptr};
   mysql_mutex_lock(&LOCK_transaction_cache);
 
