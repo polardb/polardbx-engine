@@ -476,7 +476,7 @@ int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager) {
 
     Gtid_set *executed_gtids =
         const_cast<Gtid_set *>(gtid_state->get_executed_gtids());
-    Gtid_set prepare_gtids(executed_gtids->get_sid_map());
+    Gtid_set prepare_gtids(global_sid_map, global_sid_lock);
 
     if (opt_print_gtid_info_during_recovery) {
       log_gtid_set("[GTID INFO] Before commit xids. executed_gtids : ", executed_gtids);
@@ -489,7 +489,9 @@ int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager) {
         XID *xid = map_iter->second;
         Gtid gtid = gtid_map.at(xid->get_my_xid());
 
-        DBUG_ASSERT(prepare_gtids.ensure_sidno(gtid.sidno) == RETURN_STATUS_OK);
+        if (prepare_gtids.ensure_sidno(gtid.sidno) != RETURN_STATUS_OK) {
+          DBUG_RETURN(-1);
+        }
         prepare_gtids._add_gtid(gtid);
       }
     }
