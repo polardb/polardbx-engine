@@ -323,13 +323,15 @@ static Sys_var_charptr Sys_rotate_log_table_last_name(
     CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(rotate_log_table_last_name),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
 
-extern bool opt_recovery_apply_binlog;
-static Sys_var_bool Sys_recovery_apply_binlog(
+extern ulong opt_recovery_apply_binlog;
+static const char *recovery_apply_binlog_type_names[] = {"OFF", "ON", "SAME_AS_GTID"};
+static Sys_var_enum Sys_recovery_apply_binlog(
     "recovery_apply_binlog",
-    "Applying binlog to generate the lost data at server startup.",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_recovery_apply_binlog),
-    CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(0), ON_UPDATE(0));
+    "Applying binlog to generate the lost data at server startup. 0: OFF, 1: ON, 2:SAME_AS_GTID",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_recovery_apply_binlog), 
+    CMD_LINE(OPT_ARG), recovery_apply_binlog_type_names, 
+    DEFAULT(2), NO_MUTEX_GUARD, 
+    NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
 
 extern uint opt_recovery_apply_binlog_skip_counter;
 static Sys_var_uint Sys_recovery_apply_binlog_skip_counter(

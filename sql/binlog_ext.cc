@@ -24,9 +24,9 @@
 #include "sql/xa_ext.h"
 
 Binlog_ext mysql_bin_log_ext;
-bool opt_recovery_apply_binlog = false;
 uint opt_print_gtid_info_during_recovery = 1;
 uint opt_recovery_apply_binlog_skip_counter = 0;
+ulong opt_recovery_apply_binlog = RECOVERY_APPLY_BINLOG_SAME_AS_GTID;
 
 /**
   Write a gtid set into error log.

@@ -2006,6 +2006,7 @@ read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144
 recover-snapshot FALSE
+recovery-apply-binlog 2
 recycle-bin FALSE
 recycle-bin-retention 604800
 recycle-scheduler FALSE

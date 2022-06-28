@@ -22,9 +22,15 @@
 
 #include "sql/binlog.h"
 
-extern bool opt_recovery_apply_binlog;
+extern ulong opt_recovery_apply_binlog;
 extern uint opt_print_gtid_info_during_recovery;
 enum gtid_info_print { DISABLED, BASIC_INFO, DETAIL_INFO };
+
+enum enum_recovery_apply_binlog_type {
+  RECOVERY_APPLY_BINLOG_OFF = 0,
+  RECOVERY_APPLY_BINLOG_ON = 1,
+  RECOVERY_APPLY_BINLOG_SAME_AS_GTID = 2
+};
 
 void log_gtid_set(const char *gtid_set_name, const Gtid_set *gtids);
 

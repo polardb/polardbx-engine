@@ -4,12 +4,13 @@
 --echo # variables 
 connection default;
 
+show variables like "gtid_mode";
 show variables like "recovery_apply_binlog";
 
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
-set global recovery_apply_binlog=on;
+set global recovery_apply_binlog=OFF;
 
---let $restart_parameters = restart: --gtid_mode=on --enforce_gtid_consistency=ON --recovery_apply_binlog=on
+--let $restart_parameters = restart: --gtid_mode=on --enforce_gtid_consistency=ON
 --let $wait_counter=10000
 --source include/restart_mysqld.inc
 
@@ -22,8 +23,7 @@ flush logs;
 
 create table t (a int);
 
---let $restart_parameters = restart: --gtid_mode=on --enforce_gtid_consistency=ON --recovery_apply_binlog=on
---let $wait_counter=10000
+--let $restart_parameters = restart: --gtid_mode=on --enforce_gtid_consistency=ON
 --source include/restart_mysqld.inc
 
 --enable_reconnect
@@ -32,7 +32,7 @@ create table t (a int);
 
 show variables like "recovery_apply_binlog";
 
---let $restart_parameters = restart: --gtid_mode=off --recovery_apply_binlog=on
+--let $restart_parameters = restart: --gtid_mode=off
 --let $wait_counter=10000
 --source include/restart_mysqld.inc
 

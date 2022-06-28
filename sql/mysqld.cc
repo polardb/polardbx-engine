@@ -6165,16 +6165,17 @@ static int init_server_components() {
     If Gtid_mode is ON, set opt_recovery_apply_binlog need to be setted true
     If Gtid_mode is not ON, set opt_recovery_apply_binlog to false
   */
-  if (gtid_mode == GTID_MODE_ON && opt_recovery_apply_binlog != true) {
-    sql_print_warning(
-        "gtid_mode is GTID_MODE_ON, turn on recovery_apply_binlog");
-    opt_recovery_apply_binlog = true;
-  }
 
-  if (gtid_mode != GTID_MODE_ON && opt_recovery_apply_binlog == true) {
-    sql_print_warning(
-        "gtid_mode is not GTID_MODE_ON, turn off recovery_apply_binlog");
-    opt_recovery_apply_binlog = false;
+  if (opt_recovery_apply_binlog == RECOVERY_APPLY_BINLOG_SAME_AS_GTID) {
+    if (gtid_mode == GTID_MODE_ON) {
+      sql_print_warning(
+          "gtid_mode is GTID_MODE_ON, turn on recovery_apply_binlog");
+      opt_recovery_apply_binlog = RECOVERY_APPLY_BINLOG_ON;
+    } else if (gtid_mode == GTID_MODE_OFF) {
+      sql_print_warning(
+          "gtid_mode is GTID_MODE_OFF, turn off recovery_apply_binlog");
+      opt_recovery_apply_binlog = RECOVERY_APPLY_BINLOG_OFF;
+    }
   }
 
   /*
