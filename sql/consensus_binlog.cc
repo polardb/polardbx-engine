@@ -1654,6 +1654,14 @@ void MYSQL_BIN_LOG::consensus_before_commit(THD *thd) {
     // TODO: need write apply index to consensus info table???
     sql_print_warning("Failed to commit ,because previous error or shutdown or leadership changed, system apply index:%llu, thd consensus term:%llu, consensus index:%llu",
       consensus_log_manager.get_consensus_info()->get_start_apply_index(), thd->consensus_term, thd->consensus_index);
+
+    if (thd->commit_error == THD::CE_NONE) {
+      sql_print_warning(
+          "'There are some dirty binlogs, restert to deal with them");
+      flush_error_log_messages();
+      abort();
+    }
+
     thd->mark_transaction_to_rollback(true);
     thd->commit_error = THD::CE_COMMIT_ERROR;
     thd->get_transaction()->m_flags.commit_low = false;
