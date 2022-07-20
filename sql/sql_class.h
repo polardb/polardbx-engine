@@ -4305,6 +4305,7 @@ private:
   void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
+    variables.innodb_current_snapshot_gcn = false;
   }
 
   ulonglong get_snapshot_gcn() { return m_extra_desc.m_snapshot_gcn; }

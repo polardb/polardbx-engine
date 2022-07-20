@@ -42,6 +42,12 @@ typedef enum {
 class Snapshot_info_t {
   Snapshot_type type;
 
+  /**
+   Whether to update snapshot_gcn stored in lizard
+   when convert_fbq_ctx_to_innobase
+  */
+  bool update_snapshot_gcn;
+
   union {
     uint64_t ts;
     uint64_t scn;
@@ -49,7 +55,7 @@ class Snapshot_info_t {
   } value;
 
  public:
-  Snapshot_info_t() : type(SNAPSHOT_NONE) {}
+  Snapshot_info_t() : type(SNAPSHOT_NONE), update_snapshot_gcn(true) {}
 
   bool valid() const { return (type != SNAPSHOT_NONE); }
 
@@ -70,7 +76,10 @@ class Snapshot_info_t {
     return value.gcn;
   }
 
-  void reset() { type = SNAPSHOT_NONE; }
+  void reset() {
+    type = SNAPSHOT_NONE;
+    update_snapshot_gcn = true;
+  }
 
   void set_timestamp(uint64_t ts) {
     DBUG_ASSERT(type == SNAPSHOT_NONE);
@@ -88,6 +97,14 @@ class Snapshot_info_t {
     DBUG_ASSERT(type == SNAPSHOT_NONE);
     type = AS_OF_GCN;
     value.gcn = gcn;
+  }
+
+  void set_update_snapshot_gcn(bool need_update) {
+    update_snapshot_gcn = need_update;
+  }
+
+  bool get_update_snapshot_gcn() {
+    return update_snapshot_gcn;
   }
 };
 
@@ -108,8 +125,18 @@ extern bool evaluate_snapshot(THD *thd, const LEX *lex);
 */
 void simulate_snapshot_clause(THD *thd, TABLE_LIST *all_tables);
 
+/*
+  Set snapshot_info->update_snapshot_gcn to false if
+  snapshot_info is setted to AS_OF_GCN and 
+  thd->variables.innodb_current_snapshot_gcn is used to acquire gcn.
 
-} // namespace im
+  @param[in]        thd            current context
+  @param[in/out]    snapshot_info  snapshot_info obj for setting  
+
+*/
+void set_update_snapshot_gcn_if_needed(THD *thd,
+                                       Snapshot_info_t *snapshot_info);
+}  // namespace im
 
 #endif // table_ext.h
 

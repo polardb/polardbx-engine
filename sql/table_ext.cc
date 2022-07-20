@@ -368,6 +368,8 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
 
     if (table->pos_in_table_list->snapshot_expr.evaluate(&table->snapshot))
       return true;
+
+    set_update_snapshot_gcn_if_needed(thd, &table->snapshot);
   }
 
   return false;
@@ -381,6 +383,15 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
 void simulate_snapshot_clause(THD *thd, TABLE_LIST *all_tables) {
   Item *item = nullptr;
   ulonglong gcn = thd->variables.innodb_snapshot_gcn;
+  
+  /** 
+   * The value is max gcn + 1 if innodb_current_snapshot_gcn is setted.
+   * It will make sure lastest record can be seen by current gcn.
+  */
+  if (gcn == MYSQL_GCN_NULL && thd->variables.innodb_current_snapshot_gcn) {
+    if(!ha_acquire_gcn((uint64 *)&gcn)) gcn = gcn + 1;
+  }
+
   if (gcn != MYSQL_GCN_NULL) {
     TABLE_LIST *table;
     for (table = all_tables; table; table = table->next_global) {
@@ -389,6 +400,18 @@ void simulate_snapshot_clause(THD *thd, TABLE_LIST *all_tables) {
         table->snapshot_expr.gcn = item;
       }
     }
+  }
+}
+
+void set_update_snapshot_gcn_if_needed(THD *thd, Snapshot_info_t *snapshot_info) {
+  if (!thd || !snapshot_info) return;
+
+  if (snapshot_info->get_type() != AS_OF_GCN) return;
+
+  DBUG_ASSERT(snapshot_info->get_update_snapshot_gcn());
+  if (thd->variables.innodb_snapshot_gcn == MYSQL_GCN_NULL &&
+      thd->variables.innodb_current_snapshot_gcn == true) {
+    snapshot_info->set_update_snapshot_gcn(false);
   }
 }
 

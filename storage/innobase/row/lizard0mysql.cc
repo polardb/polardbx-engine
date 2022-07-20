@@ -198,7 +198,9 @@ simulate_error:
 
   /* set as as-of query */
   prebuilt->m_asof_query.set(fbq_scn, fbq_gcn);
-  lizard::lizard_sys->scn.set_snapshot_gcn(fbq_gcn);
+
+  if(table->snapshot.get_update_snapshot_gcn())
+    lizard::lizard_sys->scn.set_snapshot_gcn(fbq_gcn);
 
   return DB_SUCCESS;
 }

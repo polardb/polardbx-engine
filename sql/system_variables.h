@@ -426,6 +426,9 @@ struct System_variables {
   bool rotate_log_table;
 
   char *client_endpoint_ip;
+
+  /** Whether to get current snapshot gcn from innodb. */
+  bool innodb_current_snapshot_gcn;
 };
 
 /**
