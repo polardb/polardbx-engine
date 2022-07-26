@@ -38,6 +38,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
 
+bool svr_write_non_innodb_gtids = false;
+
 /* To get current session thread default THD */
 THD *thd_get_current_thd();
 
@@ -473,7 +475,8 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
     m_compression_counter = 0;
     m_compression_gtid_counter = 0;
     /* Write non-innodb GTIDs before compression. */
-    write_other_gtids();
+    if (svr_write_non_innodb_gtids)
+      write_other_gtids();
     err = gtid_table_persistor->compress(thd);
   }
   if (err != 0) {

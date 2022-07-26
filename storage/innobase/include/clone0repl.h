@@ -41,6 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0sys.h"
 #include "lizard0scn.h"
 
+extern bool svr_write_non_innodb_gtids;
+
 class Clone_persist_gtid;
 
 /** Serialized GTID information size */

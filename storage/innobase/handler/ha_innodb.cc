@@ -213,6 +213,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0file.h"
 #include "lizard0xa.h"
 #include "lizard0tcn.h"
+#include "clone0repl.h"
 
 #ifndef UNIV_HOTBACKUP
 /** Stop printing warnings, if the count exceeds this threshold. */
@@ -22725,6 +22726,12 @@ static MYSQL_SYSVAR_BOOL(equal_gcn_visible,
                          "equal to the gcn stored in record",
                          NULL, NULL, FALSE);
 
+static MYSQL_SYSVAR_BOOL(write_non_innodb_gtids,
+                         svr_write_non_innodb_gtids,
+                         PLUGIN_VAR_OPCMDARG,
+                         "whether to write non-innodb gtids to executed_gtids",
+                         NULL, NULL, false);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -22962,6 +22969,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
     MYSQL_SYSVAR(snapshot_update_gcn),
     MYSQL_SYSVAR(equal_gcn_visible),
+    MYSQL_SYSVAR(write_non_innodb_gtids),
     NULL};
 
 mysql_declare_plugin(innobase){
