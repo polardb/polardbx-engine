@@ -470,8 +470,7 @@ int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager) {
        thread will started to apply events.
   */ 
   bool need_apply_binlog = opt_recovery_apply_binlog &&
-                           recover_status == BINLOG_WORKING &&
-                           recover_start_apply_index == 0;
+                           recover_status == BINLOG_WORKING;
   if (need_apply_binlog) {
     global_sid_lock->wrlock();
 
@@ -518,10 +517,22 @@ int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager) {
   }
 
   if (need_apply_binlog) {
-    uint64 recover_index = consensus_log_manager.get_recovery_manager()
+    uint64 recover_index = 0;
+    uint64 end_index = 0;
+    if (recover_start_apply_index == 0){
+      recover_index = consensus_log_manager.get_recovery_manager()
                                ->get_last_leader_term_index();
+    } else {
+      uint64 rli_apply_index = consensus_log_manager.get_relay_log_info()
+                                   ? consensus_log_manager.get_relay_log_info()
+                                         ->get_consensus_apply_index()
+                                   : 0;
+      recover_index = std::max(recover_start_apply_index, rli_apply_index);
+    }
 
-    Binlog_recovery::instance()->set_end_index(recover_index);
+    end_index = consensus_log_manager.get_next_trx_index(recover_index);
+ 
+    Binlog_recovery::instance()->set_end_index(end_index);
 
     if (Binlog_recovery::instance()->apply_binlog())
       DBUG_RETURN(-1);

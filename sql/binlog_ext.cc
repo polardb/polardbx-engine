@@ -419,7 +419,9 @@ bool Binlog_recovery::apply_binlog() {
         }
     }
 
-    if (current_consensus_index > m_apply_end_index) break;
+    if (current_consensus_index >= m_apply_end_index) 
+      break;
+
   }
 
   if (reader.has_fatal_error()) {

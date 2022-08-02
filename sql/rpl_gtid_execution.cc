@@ -298,11 +298,11 @@ static inline bool is_already_logged_transaction(const THD *thd) {
   if (gtid_next_list == nullptr) {
     if (gtid_next->type == ASSIGNED_GTID) {
       if (thd->owned_gtid.sidno == 0) {
-        if (thd->xpaxos_replication_channel) {
-          sql_print_warning("the gtid(%d, %lld) is already logged in paxos channel",
-                             gtid_next->gtid.sidno, gtid_next->gtid.gno);
-          return false;
-        } else
+        // if (thd->xpaxos_replication_channel) {
+        //   sql_print_warning("the gtid(%d, %lld) is already logged in paxos channel",
+        //                      gtid_next->gtid.sidno, gtid_next->gtid.gno);
+        //   return false;
+        // } else
           return true;
       } else
         DBUG_ASSERT(thd->owned_gtid.equals(gtid_next->gtid));
