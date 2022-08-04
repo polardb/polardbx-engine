@@ -611,6 +611,7 @@ SET(SQL_SHARED_SOURCES
   timestamp_service.cc
   tso/tso_proc.cc
   xa_handler.cc
+  log_table.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

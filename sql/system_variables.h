@@ -422,6 +422,8 @@ struct System_variables {
 
   /** Prepare gcn for next xa prepare. */
   ulonglong innodb_prepare_gcn;
+  
+  bool rotate_log_table;
 };
 
 /**

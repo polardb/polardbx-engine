@@ -136,9 +136,12 @@ bool handle_reload_request(THD *thd, unsigned long options, TABLE_LIST *tables,
     if (reopen_error_log()) result = 1;
   }
 
-  if ((options & REFRESH_SLOW_LOG) && opt_slow_log)
+  if ((options & REFRESH_SLOW_LOG) && opt_slow_log) {
     if (query_logger.reopen_log_file(QUERY_LOG_SLOW)) result = 1;
 
+    /* Rotate slow log if support it. */
+    if (thd && query_logger.rotate_log_table(thd, QUERY_LOG_SLOW)) result = 1;
+  }
   if ((options & REFRESH_GENERAL_LOG) && opt_general_log)
     if (query_logger.reopen_log_file(QUERY_LOG_GENERAL)) result = 1;
 

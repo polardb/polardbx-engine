@@ -178,4 +178,6 @@ class ha_tina : public handler {
   int encode_quote(uchar *buf);
   int find_current_row(uchar *buf);
   int chain_append();
+
+  int rotate_table(const char *name, const dd::Table *table_def);
 };

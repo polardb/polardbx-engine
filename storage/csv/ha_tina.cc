@@ -67,6 +67,8 @@ TODO:
 #include "sql/table.h"
 #include "template_utils.h"
 
+#include "sql/log_table.h"
+
 using std::max;
 using std::min;
 using std::string;
@@ -1583,6 +1585,51 @@ int ha_tina::check(THD *thd, HA_CHECK_OPT *) {
 
 bool ha_tina::check_if_incompatible_data(HA_CREATE_INFO *, uint) {
   return COMPATIBLE_DATA_YES;
+}
+
+/* Rotate the csv data file by adding current_time into file name */
+int ha_tina::rotate_table(const char *name, const dd::Table *) {
+  char name_buff[FN_REFLEN];
+  char rotate_name_buff[FN_REFLEN];
+  File create_file;
+  DBUG_ENTER("ha_tina::rotate_table");
+
+#ifndef DBUG_OFF
+  mysql_mutex_lock(&tina_mutex);
+  DBUG_ASSERT(tina_open_tables->find(name) == tina_open_tables->end());
+  mysql_mutex_unlock(&tina_mutex);
+#endif
+
+  snprintf(rotate_name_buff, sizeof(rotate_name_buff), "%s_%lu%s", name,
+           my_time(0), CSV_EXT);
+
+  if (mysql_file_rename(csv_key_file_data,
+                        fn_format(name_buff, name, "", CSV_EXT,
+                                  MY_REPLACE_EXT | MY_UNPACK_FILENAME),
+                        rotate_name_buff, MYF(0)))
+    DBUG_RETURN(-1);
+
+  if ((create_file =
+           mysql_file_create(csv_key_file_metadata,
+                             fn_format(name_buff, name, "", CSM_EXT,
+                                       MY_REPLACE_EXT | MY_UNPACK_FILENAME),
+                             0, O_RDWR | O_TRUNC, MYF(MY_WME))) < 0)
+    DBUG_RETURN(-1);
+
+  write_meta_file(create_file, 0, false);
+  mysql_file_close(create_file, MYF(0));
+
+  if ((create_file = mysql_file_create(
+           csv_key_file_data, fn_format(name_buff, name, "", CSV_EXT,
+                                        MY_REPLACE_EXT | MY_UNPACK_FILENAME),
+           0, O_RDWR | O_TRUNC, MYF(MY_WME))) < 0)
+    DBUG_RETURN(-1);
+
+  mysql_file_close(create_file, MYF(0));
+
+  /* Copy the rotated file name */
+  strcpy(im::rotate_log_table_last_name, rotate_name_buff);
+  DBUG_RETURN(0);
 }
 
 struct st_mysql_storage_engine csv_storage_engine = {

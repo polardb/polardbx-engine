@@ -79,7 +79,7 @@ BEGIN
     WHERE variable_name NOT IN ('timestamp', 'server_uuid',
                                 'gtid_executed', 'gtid_purged',
                                 'group_replication_group_name',
-                                'keyring_file_data')
+                                'keyring_file_data', 'rotate_log_table_last_name')
   ORDER BY VARIABLE_NAME;
 
   -- Dump all persisted variables, those that may change.

@@ -808,6 +808,7 @@ The documentation is based on the source files such as:
 #include "sql/consensus_log_manager.h"
 #include "sql/sys_vars_consensus.h"
 #include "sql/bl_consensus_log.h"
+#include "sql/log_table.h"
 
 using std::max;
 using std::min;
@@ -4434,6 +4435,8 @@ int init_common_variables() {
 #endif
 
   if (get_options(&remaining_argc, &remaining_argv)) return 1;
+
+  im::update_rotate_log_table_last_name_ptr();
 
   /*
     The opt_bin_log can be false (binary log is disabled) only if
@@ -8996,6 +8999,8 @@ SHOW_VAR status_vars[] = {
     {"consensus_fifo_cache_log_count",  (char*) &show_log_count_in_fifo_cache,     SHOW_FUNC,       SHOW_SCOPE_GLOBAL},
     {"appliedindex_checker_queue", (char*) &show_appliedindex_checker_queue,     SHOW_FUNC,       SHOW_SCOPE_GLOBAL},
     {"consensus_easy_pool_size", (char*) &alisql::easy_pool_alloc_byte,     SHOW_LONG,       SHOW_SCOPE_GLOBAL},
+    {"Rotate_log_table_last_name", (char *)&im::rotate_log_table_last_name_ptr,
+     SHOW_CHAR_PTR, SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {

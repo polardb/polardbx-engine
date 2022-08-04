@@ -428,6 +428,17 @@ class Query_logger {
   */
   enum_log_table_type check_if_log_table(TABLE_LIST *table_list,
                                          bool check_if_opened) const;
+
+  /**
+    Rotate the log table.
+
+    @param[in]      thd       current thread
+    @param[in]      log_type  log table type
+
+    @retval         true      failure
+    @retval         false     success
+  */
+  bool rotate_log_table(THD *thd, enum_log_table_type log_type);
 };
 
 extern Query_logger query_logger;
