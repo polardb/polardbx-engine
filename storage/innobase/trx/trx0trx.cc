@@ -2170,8 +2170,6 @@ written */
     trx_finalize_for_fts(trx, trx->undo_no != 0);
   }
 
-  lizard::trx_cache_tcn(trx);
-
   trx_mutex_enter(trx);
   trx->dict_operation = TRX_DICT_OP_NONE;
 
@@ -2263,6 +2261,8 @@ void trx_commit_low(
     });
 
     mtr_commit(mtr);
+
+    lizard::trx_cache_tcn(trx);
 
     DBUG_PRINT("trx_commit", ("commit lsn at " LSN_PF, mtr->commit_lsn()));
 

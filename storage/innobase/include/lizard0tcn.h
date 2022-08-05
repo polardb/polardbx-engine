@@ -45,6 +45,12 @@ struct dict_index_t;
 
 enum tcn_cache_level { BLOCK_LEVEL = 0, SESSION_LEVEL, GLOBAL_LEVEL };
 enum tcn_block_cache_type { BLOCK_LRU = 0, BLOCK_RANDOM };
+enum tcn_fill_result {
+  TCN_ALREADY_FILLED = 0,
+  TCN_FILLED_FROM_CACHE,
+  TCN_FILLED_FROM_UNDO,
+  TCN_NOT_FILLED
+};
 
 namespace lizard {
 
@@ -149,6 +155,29 @@ void trx_cache_tcn(trx_t *trx, trx_id_t trx_id, txn_rec_t &txn_rec,
 void trx_cache_tcn(trx_t *trx);
 
 extern Cache_tcn *global_tcn_cache;
+
+
+
+/**
+  Filling txn_rec/txn_lookup as follows:
+  1. if txn_rec has been filled, skip doing it 
+  2. search scn/gcn from tcn cache.
+  3. find scn/gcn from txn_undo  
+
+
+  @param[in]       trx      input trx for cache  
+  @param[in]       pcur     input cusor for cache
+  @param[in/out]   txn_rec  txn_rec obj for filling   
+
+  @retval  enum tcn_fill_result
+*/
+tcn_fill_result fill_txn_rec(trx_t *trx, btr_pcur_t *pcur, txn_rec_t *txn_rec,
+                             txn_lookup_entry entry);
+
+tcn_fill_result fill_txn_rec_and_txn_lookup(trx_t *trx, btr_pcur_t *pcur,
+                                            txn_rec_t *txn_rec,
+                                            txn_lookup_t *txn_lookup,
+                                            txn_lookup_entry entry);
 
 }  // namespace lizard
 
