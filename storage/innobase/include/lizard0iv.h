@@ -192,11 +192,13 @@ class Atomic_random_array
 
   virtual bool do_before_operation(size_t pos) override {
     uint loop = 0;
-    bool expected = false;
+    bool expected;
+    uint used_index = (pos%512) * 64;
   retry:
     if (loop++ > ATOMIC_RANDOM_ARRAY_RETRY_MAX_TIMES) return true;
 
-    if (m_used[pos].compare_exchange_strong(expected, true)) {
+    expected = false;
+    if (m_used[used_index].compare_exchange_strong(expected, true)) {
       return false;
     } else {
       goto retry;
@@ -205,12 +207,12 @@ class Atomic_random_array
 
   virtual void do_after_operation(bool required, size_t pos) override {
     if (required) {
-      m_used[pos].store(false);
+      m_used[(pos%512) * 64].store(false);
     }
   }
 
  private:
-  std::atomic<bool> m_used[Prealloc];
+  std::atomic<bool> m_used[512 * 64];
 };
 
 /**

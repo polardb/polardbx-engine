@@ -79,6 +79,9 @@ namespace lizard {
         then will continue, other than give up and assign a fake SCN number.
 */
 
+/** Whether to write redo log when cleanout */
+bool opt_cleanout_write_redo = false;
+
 /** Whether do the safe cleanout */
 bool opt_cleanout_safe_mode = false;
 

@@ -530,6 +530,7 @@ void txn_undo_page_hit_stat(bool hit, const buf_block_t *block,
     if (undo_type == TRX_UNDO_TXN) {
       switch (rw_latch) {
         case RW_X_LATCH:  // called in txn_undo_get_free/trx_undo_reuse_cached
+        case RW_SX_LATCH:
           if (hit)
             lizard_stats.txn_undo_page_write_hit.inc();
           else

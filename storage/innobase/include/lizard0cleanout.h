@@ -87,6 +87,8 @@ typedef std::unordered_map<Undo_hdr_key, bool, std::hash<Undo_hdr_key>,
 /*----------------------------------------------------------------*/
 namespace lizard {
 
+extern bool opt_cleanout_write_redo;
+
 /** Whether do the safe cleanout */
 extern bool opt_cleanout_safe_mode;
 

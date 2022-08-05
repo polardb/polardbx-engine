@@ -467,7 +467,6 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
                                  btr_pcur_t *pcur, lizard::Vision *vision,
                                  dberr_t *error) {
   txn_lookup_t txn_lookup;
-  bool cache_hit = false;
 #ifdef UNIV_DEBUG
   bool looped = false;
 #endif
@@ -497,10 +496,8 @@ retry:
       GCN_NULL,
   };
 
-  cache_hit = lizard::trx_search_tcn(trx, pcur, &txn_rec, &txn_lookup);
-  if (!cache_hit) {
-    txn_undo_hdr_lookup(&txn_rec, &txn_lookup, nullptr, TXN_GCN_READ_SEES);
-  }
+  auto fill_ret = lizard::fill_txn_rec_and_txn_lookup(
+      trx, pcur, &txn_rec, &txn_lookup, TXN_GCN_READ_SEES);
 
   /** 1. Already committed; */
   if (txn_lookup.real_state >= TXN_STATE_COMMITTED) {
@@ -508,7 +505,11 @@ retry:
     assert_commit_scn_allocated(txn_lookup.real_image);
     ut_a(txn_rec.gcn != GCN_NULL);
 
-    if (!cache_hit) {
+    /**
+     * It was cache missing if txn_rec is filled with undo log,
+     * put txn_rec into cache.
+    */
+    if (fill_ret == TCN_FILLED_FROM_UNDO) {
       lizard::trx_cache_tcn(trx, trx_id, txn_rec, rec, index, offsets, pcur);
     }
 

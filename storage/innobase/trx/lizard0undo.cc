@@ -1500,7 +1500,7 @@ bool txn_undo_free_list_validate(trx_rsegf_t *rseg_hdr, page_t *undo_page,
   len = mtr_read_ulint(rseg_hdr + TXN_RSEG_FREE_LIST_SIZE, MLOG_4BYTES, mtr);
   if (len != flst_get_len(rseg_hdr + TXN_RSEG_FREE_LIST)) return false;
 
-  addr = flst_get_last(rseg_hdr + TXN_RSEG_FREE_LIST, mtr);
+  addr = flst_get_first(rseg_hdr + TXN_RSEG_FREE_LIST, mtr);
 
   if (addr.boffset != (TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE)) return false;
 
@@ -1562,7 +1562,7 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
   mlog_write_ulint(rseg_hdr + TXN_RSEG_FREE_LIST_SIZE, free_size + seg_size,
                    MLOG_4BYTES, &mtr);
 
-  flst_add_last(rseg_hdr + TXN_RSEG_FREE_LIST,
+  flst_add_first(rseg_hdr + TXN_RSEG_FREE_LIST,
                 undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, &mtr);
 
   lizard_sys->txn_undo_log_free_list_len.fetch_add(1);

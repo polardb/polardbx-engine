@@ -23563,6 +23563,12 @@ static MYSQL_SYSVAR_BOOL(lizard_stat_enabled, lizard::stat_enabled,
                          "whether to enable lizard statistics", NULL, NULL,
                          false);
 
+static MYSQL_SYSVAR_BOOL(cleanout_write_redo,
+                         lizard::opt_cleanout_write_redo,
+                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+                         "whether to write redo log when cleanout",
+                         NULL, NULL, FALSE);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23810,6 +23816,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(tcn_block_cache_type),
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
     MYSQL_SYSVAR(lizard_stat_enabled),
+    MYSQL_SYSVAR(cleanout_write_redo),
     nullptr};
 
 mysql_declare_plugin(innobase){

@@ -126,4 +126,3 @@ void undo::Tablespaces::mark_txn() {
     }
   }
 }
-

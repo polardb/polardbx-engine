@@ -261,6 +261,7 @@ bool lock_clust_rec_cons_read_sees(
 
   trx_id_t trx_id = row_get_rec_trx_id(rec, index, offsets);
 
+
   /** Lizard: the following codes is a check */
   txn_rec_t txn_rec = {
       trx_id,
@@ -268,9 +269,12 @@ bool lock_clust_rec_cons_read_sees(
       lizard::row_get_rec_undo_ptr(rec, index, offsets),
       lizard::GCN_NULL,
   };
-  cleanout = lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr,
-                                         lizard::TXN_CONS_READ_SEES);
 
+  auto fill_ret =
+      lizard::fill_txn_rec(nullptr, pcur, &txn_rec, lizard::TXN_CONS_READ_SEES);
+
+  /** fill txn_rec with cache or undo should be cleanout */
+  cleanout = (fill_ret != TCN_NOT_FILLED && fill_ret != TCN_ALREADY_FILLED);
   if (cleanout) {
     lizard::row_cleanout_collect(trx_id, txn_rec, rec, index, offsets, pcur);
   }

@@ -131,6 +131,10 @@ namespace lizard {
 extern ulint txn_undo_page_reuse_max_percent;
 
 #define TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF 90
+#define TXN_UNDO_PAGE_REUSE_LIMIT (9 * UNIV_PAGE_SIZE / 10)
+
+#define TXN_UNDO_PAGE_REUSE_MAX_PERCENT \
+  ((TXN_UNDO_PAGE_REUSE_LIMIT * 100) / UNIV_PAGE_SIZE)
 
 /**------------------------------------------------------------------------*/
 /** Initial value of undo ptr  */

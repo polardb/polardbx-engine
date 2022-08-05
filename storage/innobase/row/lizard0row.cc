@@ -548,9 +548,13 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
   rec_txn.trx_id = rec_id;
   rec_txn.gcn = lizard::GCN_NULL;
 
-  /** lookup the scn by UBA address */
-  cleanout =
-      txn_undo_hdr_lookup(&rec_txn, nullptr, nullptr, TXN_MODIFY_CLEANOUT);
+
+  /** lookup the scn by tcn cache or UBA address */
+  auto fill_ret =
+      lizard::fill_txn_rec(nullptr, nullptr, &rec_txn, TXN_MODIFY_CLEANOUT);
+
+  /** fill txn_rec with cache or undo should be cleanout */
+  cleanout = (fill_ret != TCN_NOT_FILLED && fill_ret != TCN_ALREADY_FILLED);
 
   if (cleanout) {
     ut_ad(mtr_memo_contains_flagged(mtr, block, MTR_MEMO_PAGE_X_FIX));
@@ -560,7 +564,8 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
         index, offsets, &rec_txn);
 
     /** Write redo log */
-    btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &rec_txn, mtr);
+    if (opt_cleanout_write_redo)
+      btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &rec_txn, mtr);
   }
 }
 
@@ -595,8 +600,8 @@ bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
       GCN_NULL,
   };
 
-  if (!lizard_undo_ptr_is_active(txn_rec.undo_ptr) ||
-      txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr, TXN_LOCK_CONVERT)) {
+  if (lizard::fill_txn_rec(nullptr, nullptr, &txn_rec, TXN_LOCK_CONVERT) !=
+      TCN_NOT_FILLED) {
     return true;
   }
   return false;
@@ -745,6 +750,8 @@ struct Cleanout {
     mtr_t mtr;
 
     mtr.start();
+    if (!opt_cleanout_write_redo) mtr.set_log_mode(MTR_LOG_NO_REDO);
+
     if (!(restored = cursor.restore_position(&mtr, UT_LOCATION_HERE)))
       goto mtr_end;
 
@@ -821,6 +828,8 @@ struct Cleanout {
     ulint clean_limit = cleanout_max_cleans_on_page;
 
     mtr.start();
+    if (!opt_cleanout_write_redo) mtr.set_log_mode(MTR_LOG_NO_REDO);
+
     index = const_cast<dict_index_t *>(cpage.index());
     ut_ad(index);
 
