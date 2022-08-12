@@ -1344,6 +1344,9 @@ void trans_register_ha(THD *thd, bool all, handlerton *ht_arg,
     gtid_set_performance_schema_values(thd);
   }
 #endif
+  if (ht_arg->db_type != DB_TYPE_BINLOG) {
+    thd->audit_trx_ctx.start_transaction();
+  }
 }
 
 /** XA Prepare one SE.

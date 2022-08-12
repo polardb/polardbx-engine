@@ -233,7 +233,9 @@ MYSQL_RDS_AUDIT_LOG::MYSQL_RDS_AUDIT_LOG(const char *dir, ulong n_buf_size,
                                          ulong n_row_limit, ulong log_format,
                                          ulong log_strategy, ulong log_policy,
                                          ulong log_conn_policy,
-                                         ulong log_stmt_policy, bool enable)
+                                         ulong log_stmt_policy,
+                                         ulong log_version,
+                                         bool enable)
     : m_enabled(false),
       log_dir(dir),
       m_file_id(0),
@@ -306,6 +308,7 @@ MYSQL_RDS_AUDIT_LOG::MYSQL_RDS_AUDIT_LOG(const char *dir, ulong n_buf_size,
   m_policy = (enum_log_policy)log_policy;
   m_conn_policy = (enum_log_connection_policy)log_conn_policy;
   m_stmt_policy = (enum_log_statement_policy)log_stmt_policy;
+  m_version = (enum_log_version)log_version;
 
   /* Open audit log file if necessary. */
   set_enable(enable);
@@ -608,6 +611,35 @@ void MYSQL_RDS_AUDIT_LOG::set_log_strategy(enum_log_strategy strategy) {
                log_strategy_names[m_strategy], log_strategy_names[strategy]);
 
   m_strategy = strategy;
+
+  LOCK_log.wrunlock();
+
+  DBUG_VOID_RETURN;
+}
+
+extern const char *log_version_names[];
+/** Change log version. */
+void MYSQL_RDS_AUDIT_LOG::set_log_version(enum_log_version version) {
+  DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::set_log_version");
+
+  LOCK_log.wrlock();
+  LogPluginErr(INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_VERSION,
+               log_version_names[m_version],
+               log_version_names[version]);
+
+  if (m_enabled) {
+
+    if (is_buffered_write(m_strategy)) {
+      /* Make sure all logs have been flushed to disk. */
+      flush_log_buf(true);
+      DBUG_ASSERT(flushed_offset.load() == buffered_offset.load());
+    }
+
+    /* Rotate to a new log file.  */
+    rotate_log_file_low();
+  }
+
+  m_version = version;
 
   LOCK_log.wrunlock();
 
@@ -952,8 +984,19 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
       }
 
       thread_id = event_rds_connection->thread_id;
-      serialized_len = m_serializer->serialize_connection_event(
+
+      switch (m_version) {
+      case MYSQL_V1:
+        serialized_len = m_serializer->serialize_connection_event_v1(
           event_rds_connection, buf, buf_len);
+        break;
+      case MYSQL_V3:
+        serialized_len = m_serializer->serialize_connection_event_v3(
+            event_rds_connection, buf, buf_len);
+        break;
+      default:
+        assert(0);
+      }
 
       break;
     }
@@ -989,8 +1032,20 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
       }
 
       thread_id = event_rds_query->thread_id;
-      serialized_len =
-          m_serializer->serialize_query_event(event_rds_query, buf, buf_len);
+
+      switch (m_version) {
+      case MYSQL_V1:
+        serialized_len = m_serializer->serialize_query_event_v1(event_rds_query,
+                                                                buf, buf_len);
+        break;
+      case MYSQL_V3:
+        serialized_len = m_serializer->serialize_query_event_v3(event_rds_query,
+                                                                buf, buf_len);
+        break;
+      default:
+        assert(0);
+      }
+
       break;
     }
 

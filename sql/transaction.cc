@@ -56,6 +56,8 @@
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
 
+#include "mysql/plugin_audit.h"
+
 /**
   Helper: Tell tracker (if any) that transaction ended.
 */
@@ -225,6 +227,7 @@ bool trans_begin(THD *thd, uint flags) {
   }
 #endif
 
+  thd->audit_trx_ctx.start_transaction();
 
   return res;
 }

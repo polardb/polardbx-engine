@@ -27,11 +27,18 @@
 /* Abstract class for serializer */
 class Serializer {
  public:
-  virtual uint serialize_connection_event(
+  virtual uint serialize_connection_event_v1(
       const struct mysql_event_rds_connection *event, char *buf,
       uint buf_len) = 0;
 
-  virtual uint serialize_query_event(const struct mysql_event_rds_query *event,
+  virtual uint serialize_query_event_v1(const struct mysql_event_rds_query *event,
+                                     char *buf, uint buf_len) = 0;
+
+  virtual uint serialize_connection_event_v3(
+      const struct mysql_event_rds_connection *event, char *buf,
+      uint buf_len) = 0;
+
+  virtual uint serialize_query_event_v3(const struct mysql_event_rds_query *event,
                                      char *buf, uint buf_len) = 0;
   virtual ~Serializer(){};
 };

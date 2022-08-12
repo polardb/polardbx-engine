@@ -114,6 +114,9 @@ class MYSQL_RDS_AUDIT_LOG {
   */
   enum enum_log_format { PLAIN, JSON };
 
+  /* PolorDB 8.0 supports MYSQL_V2, we don't */
+  enum enum_log_version {MYSQL_V1, MYSQL_V3};
+
   /*
     The strategy used when write to audit log file.
     ASYNCHRONOUS:    Log asynchronously. Wait for space in the output buffer.
@@ -188,6 +191,9 @@ class MYSQL_RDS_AUDIT_LOG {
     dynamically change when JSON format is added.
   */
   enum_log_format m_format;
+
+  /* The log version */
+  enum_log_version m_version;
 
   /* The log write strategy. Protected by LOCK_log. */
   enum_log_strategy m_strategy;
@@ -599,6 +605,7 @@ class MYSQL_RDS_AUDIT_LOG {
                       ulong log_strategy, ulong log_policy,
                       ulong log_conn_policy,
                       ulong log_stmt_policy,
+                      ulong log_version,
                       bool enable);
 
   /* Destructor */
@@ -628,6 +635,9 @@ class MYSQL_RDS_AUDIT_LOG {
     change from buffred write to unbuffered.
   */
   void set_log_strategy(enum_log_strategy strategy);
+
+  /* Change log version. */
+  void set_log_version(enum_log_version version);
 
   /* Change log policy. */
   void set_log_policy(enum_log_policy policy);

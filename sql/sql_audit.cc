@@ -60,8 +60,6 @@
 #include "sql_string.h"
 #include "thr_mutex.h"
 
-#include "ppi/ppi_transaction.h" // PPI_TRANSACTION_CALL
-
 /**
   @class Audit_error_handler
 
@@ -1023,6 +1021,10 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
   event.start_utime = thd->start_utime;
   event.cost_utime = (current_utime - thd->start_utime);
 
+  event.endpoint_ip.str = thd->variables.client_endpoint_ip;
+  event.endpoint_ip.length = thd->variables.client_endpoint_ip ?
+    strlen(thd->variables.client_endpoint_ip) : 0;
+
   if (subclass == MYSQL_AUDIT_RDS_CONNECTION_CONNECT) {
     if (event.error_code == 0) {
       event.message = { C_STRING_WITH_LEN("login success!") };
@@ -1081,12 +1083,15 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   event.sql_command = thd->lex->sql_command;
   event.sql_command_name = sql_statement_names[thd->lex->sql_command];
 
-  thd_get_audit_query(thd, &event.query,
-                      (const CHARSET_INFO **)&event.query_charset);
+  thd_get_audit_query(thd, &event.query);
 
   event.lock_utime = (thd->utime_after_lock - thd->start_utime);
   event.cost_utime = (current_utime - thd->start_utime);
   event.examined_rows = (ulonglong) thd->get_examined_row_count();
+
+  event.endpoint_ip.str = thd->variables.client_endpoint_ip;
+  event.endpoint_ip.length = thd->variables.client_endpoint_ip ?
+    strlen(thd->variables.client_endpoint_ip) : 0;
 
   /*
     This could be -1 under some circumstances, check comments for
@@ -1096,12 +1101,8 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   event.updated_rows = updated_rows < 0 ? 0 : updated_rows;
   event.sent_rows = (ulonglong) thd->get_sent_row_count();
 
-  PPI_transaction_stat ppi_trx_stat;
-  ppi_trx_stat.reset();
-  PPI_TRANSACTION_CALL(get_transaction_stat)(thd->ppi_thread, &ppi_trx_stat);
-
-  if (ppi_trx_stat.state == PPI_TRANSACTION_ACTIVE) {
-    event.trx_utime = my_micro_time() - ppi_trx_stat.start_time;
+  if (thd->audit_trx_ctx.state == AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
+    event.trx_utime = my_micro_time() - thd->audit_trx_ctx.start_time;
   } else {
     event.trx_utime = 0;
   }
@@ -1116,6 +1117,12 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   event.temp_user_table_size = 0;
   event.temp_sort_table_size = 0;
   event.temp_sort_file_size = 0;
+
+  event.server_lock_wait = ppi_stat->server_lock_time;
+  event.engine_lock_wait = ppi_stat->transaction_lock_time;
+  event.rw_spin_waits = ppi_stat->rw_spin_waits;
+  event.rw_spin_rounds = ppi_stat->rw_spin_rounds;
+  event.rw_os_waits = ppi_stat->rw_os_waits;
 
   Ignore_event_error_handler handler(thd, subclass_name);
 

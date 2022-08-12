@@ -20701,6 +20701,34 @@ static void test_ccl_max_waiting()
   rc= mysql_query(mysql, sql);
   myquery2(mysql, rc);
 }
+
+static void test_client_endpoint_ip()
+{
+  int rc;
+  MYSQL *lmysql;
+  DBUG_ENTER("test_client_endpoint_ip");
+  myheader("test_client_endpoint_ip");
+  lmysql= mysql_client_init(NULL);
+  DIE_UNLESS(lmysql);
+  /* put in an attr */
+  rc= mysql_options4(lmysql, MYSQL_OPT_CONNECT_ATTR_ADD,
+                     "_endpoint_ip", "42.42.42.42");
+  DIE_UNLESS(!rc);
+  if (!mysql_real_connect(lmysql, opt_host, opt_user, opt_password,
+                          opt_db ? opt_db : "test", opt_port,
+                          opt_unix_socket, 0))
+  {
+    mysql= lmysql;
+    myerror("mysql_real_connect failed");
+    mysql_close(lmysql);
+    exit(1);
+  }
+  rc= mysql_query(lmysql, "SELECT @@client_endpoint_ip;");
+  myquery(rc);
+  mysql_close(lmysql);
+  DBUG_VOID_RETURN;
+}
+
 static struct my_tests_st my_tests[] = {
     {"disable_query_logs", disable_query_logs},
     {"test_view_sp_list_fields", test_view_sp_list_fields},
@@ -20988,6 +21016,7 @@ static struct my_tests_st my_tests[] = {
     {"test_bug30032302", test_bug30032302},
     {"test_ccl", test_ccl},
     {"test_ccl_max_waiting", test_ccl_max_waiting},
+    {"test_client_endpoint_ip", test_client_endpoint_ip},
     {0, 0}};
 
 static struct my_tests_st *get_my_tests() { return my_tests; }

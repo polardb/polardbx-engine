@@ -687,6 +687,8 @@ struct mysql_event_rds_connection {
   /** Total execution time */
   unsigned long long cost_utime;
   MYSQL_LEX_CSTRING message;
+  /** client endpoint ip */
+  MYSQL_LEX_CSTRING endpoint_ip;
 };
 
 /**
@@ -745,6 +747,10 @@ struct mysql_event_rds_query {
   CHARSET_INFO *query_charset;
   /** Lock time (interval) */
   unsigned long long lock_utime;
+  /** server lock time */
+  unsigned long long server_lock_wait;
+  /** engine lock time */
+  unsigned long long engine_lock_wait;
   /** Total execution time, include lock time (interval) */
   unsigned long long cost_utime;
   /** Transaction time (interval) */
@@ -755,7 +761,7 @@ struct mysql_event_rds_query {
   unsigned long long updated_rows;
   /** Sent rows count */
   unsigned long long sent_rows;
-   /** Memory used by thread */
+  /** Memory used by thread */
   unsigned long long memory_used;
   /** Memory used by query */
   unsigned long long query_memory_used;
@@ -765,12 +771,20 @@ struct mysql_event_rds_query {
   unsigned long long physical_sync_reads;
   /** Physical async read count (InnoDB) */
   unsigned long long physical_async_reads;
+  /** rwlock spin and wait */
+  unsigned long long rw_spin_waits;
+  unsigned long long rw_spin_rounds;
+  unsigned long long rw_os_waits;
   /** Temporary tables size created by user */
   unsigned long long temp_user_table_size;
   /** Temporary table size within query. e.g using temporary in explain */
   unsigned long long temp_sort_table_size;
   /** Temporary file size within query. e.g using filesort in explain */
   unsigned long long temp_sort_file_size;
+  /** client endpoint ip */
+  MYSQL_LEX_CSTRING endpoint_ip;
+  /** InnoDB trx id*/
+  unsigned long long trx_id;
 };
 
 #endif

@@ -424,6 +424,8 @@ struct System_variables {
   ulonglong innodb_prepare_gcn;
   
   bool rotate_log_table;
+
+  char *client_endpoint_ip;
 };
 
 /**

@@ -793,6 +793,35 @@ static inline void my_micro_time_to_timeval(ulonglong micro_time,
 }
 
 /**
+  @class AUDIT_trx_ctx
+  used in AUDIT LOG plugin
+*/
+class AUDIT_trx_ctx {
+public:
+  typedef enum {
+    AUDIT_TRX_NONE,
+    AUDIT_TRX_ACTIVE,
+    AUDIT_TRX_IDLE,
+  } AUDIT_TRX_STATE;
+
+  AUDIT_TRX_STATE state;
+  unsigned long long start_time;
+
+public:
+  AUDIT_trx_ctx() {
+    state = AUDIT_TRX_IDLE;
+    start_time = 0;
+  }
+
+  void start_transaction() {
+    if (state != AUDIT_TRX_ACTIVE) {
+      state = AUDIT_TRX_ACTIVE;
+      start_time = my_micro_time();
+    }
+  }
+};
+
+/**
   @class THD
   For each client connection we create a separate thread with THD serving as
   a thread/connection descriptor
@@ -4178,6 +4207,8 @@ private:
 
   PPI_thread *ppi_thread;
   std::unique_ptr<PPI_stat> ppi_statement_stat;
+
+  AUDIT_trx_ctx audit_trx_ctx;
 
   /**
     Can secondary storage engines be used for query execution in

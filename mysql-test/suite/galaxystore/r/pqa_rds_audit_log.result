@@ -14,6 +14,7 @@ rds_audit_log_row_limit	#
 rds_audit_log_skip	#
 rds_audit_log_statement_policy	#
 rds_audit_log_strategy	#
+rds_audit_log_version	#
 show variables like '%rds_audit%';
 Variable_name	Value
 rds_audit_log_buffer_size	#
@@ -28,6 +29,7 @@ rds_audit_log_row_limit	#
 rds_audit_log_skip	#
 rds_audit_log_statement_policy	#
 rds_audit_log_strategy	#
+rds_audit_log_version	#
 set global rds_audit_log_enabled= on;
 set global rds_audit_log_row_limit = 3;
 ERROR HY000: Variable 'rds_audit_log_dir' is a read only variable

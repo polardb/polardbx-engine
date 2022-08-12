@@ -31,9 +31,13 @@
 /* Plain format serializer, this format is compatiable with RDS MySQL 5.6 */
 class JSON_serializer : public Serializer {
  public:
-  uint serialize_connection_event(
+  uint serialize_connection_event_v1(
       const struct mysql_event_rds_connection *event, char *buf, uint buf_len);
-  uint serialize_query_event(const struct mysql_event_rds_query *event,
+  uint serialize_query_event_v1(const struct mysql_event_rds_query *event,
+                             char *buf, uint buf_len);
+  uint serialize_connection_event_v3(
+      const struct mysql_event_rds_connection *event, char *buf, uint buf_len);
+  uint serialize_query_event_v3(const struct mysql_event_rds_query *event,
                              char *buf, uint buf_len);
 };
 #endif /* JSON_SERIALIZER_H */

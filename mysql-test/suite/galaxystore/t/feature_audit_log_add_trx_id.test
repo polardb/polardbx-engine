@@ -1,0 +1,89 @@
+# PS doesn't support multi-statements
+--disable_ps_protocol
+set global rds_audit_log_enabled = ON;
+set global rds_audit_log_version = 'MYSQL_V3';
+set global rds_audit_log_flush = on;
+set global local_infile = on;
+set global transaction_isolation = 'repeatable-read';
+let $rds_audit_file = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`;
+create table t1(id int primary key) engine = innodb;
+create table t2(id int primary key) engine = innodb;
+insert into t1 values(1);
+create table auditlog(
+  v1 varchar(32), v2 varchar(32), v3 varchar(32), v4 varchar(32), v5 varchar(32), 
+  v6 varchar(32), v7 varchar(32), v8 varchar(32), v9 varchar(32), v10 varchar(32),
+  v11 varchar(32), v12 varchar(32), v13 varchar(32), v14 varchar(32), v15 varchar(32), 
+  v16 varchar(32), v17 varchar(32), v18 varchar(32), v19 varchar(32), v20 varchar(32),
+  v21 varchar(32), v22 varchar(32), v23 varchar(32), v24 varchar(32), v25 varchar(32), 
+  v26 varchar(32), v27 varchar(32), v28 varchar(32), v29 varchar(32), v30 varchar(32),
+  v31 varchar(32), v32 varchar(32), v33 varchar(32), v34 varchar(32), v35 varchar(32), 
+  v36 varchar(32), v37 varchar(32), v38 varchar(32), v39 varchar(32), v40 varchar(32),
+  v41 varchar(32), v42 varchar(32), v43 varchar(32), v44 varchar(32), v45 varchar(32), 
+  v46 varchar(32), v47 varchar(32), v48 varchar(32), v49 varchar(32), v50 varchar(256)
+);
+create user xx1@'%';
+grant all on test to xx1@'%';
+grant PROCESS on *.* to xx1@'%';
+create user xx2@'%';
+grant all on test to xx2@'%';
+grant PROCESS on *.* to xx2@'%';
+flush privileges;
+connect(conn_xx1, localhost, xx1,,);
+connect(conn_xx2, localhost, xx2,,);
+connection default;
+set autocommit=0;
+select * from t1 where id<2;
+update t1 set id = id + 20;
+insert into t1 values(22);
+select * from t1 where id = 22;
+--sleep 1
+let $trx_id_1 = `select TRX_ID from INFORMATION_SCHEMA.INNODB_TRX  where TRX_MYSQL_THREAD_ID = CONNECTION_ID()`;
+commit;
+set autocommit=1;
+connection conn_xx2;
+start transaction;
+select * from t1 where id > 1 for update;
+insert into t1 values(2);
+--sleep 1
+let $trx_id_3 = `select TRX_ID from INFORMATION_SCHEMA.INNODB_TRX  where TRX_MYSQL_THREAD_ID = CONNECTION_ID()`;
+connection conn_xx1;
+start transaction;
+select * from t2 where id > 1 lock in share mode;
+insert into t2 values(2);
+--sleep 1
+let $trx_id_2 = `select TRX_ID from INFORMATION_SCHEMA.INNODB_TRX  where TRX_MYSQL_THREAD_ID = CONNECTION_ID()`;
+send insert into t1 values(10);
+connection conn_xx2;
+--error 1213
+insert into t2 values(10);
+rollback;
+connection conn_xx1;
+reap;
+commit;
+connection default;
+--sleep 3
+--disable_warnings
+--disable_query_log
+eval load data local infile '$rds_audit_file' into table auditlog FIELDS TERMINATED BY '\t' lines terminated by '\n';
+let $tx_1_cnt = `select count(*) from auditlog where v48 like '$trx_id_1'`;
+let $tx_2_cnt = `select count(*) from auditlog where v48 like '$trx_id_2'`;
+let $tx_3_cnt = `select count(*) from auditlog where v48 like '$trx_id_3'`;
+--enable_query_log
+--enable_warnings
+select count(*) from auditlog where v1 like '%MYSQL_V3%';
+--echo $tx_1_cnt
+--echo $tx_2_cnt
+--echo $tx_3_cnt
+drop table t1;
+drop table t2;
+drop table auditlog;
+drop user xx1@'%';
+drop user xx2@'%';
+set global rds_audit_log_enabled = default;
+set global rds_audit_log_event_buffer_size = default;
+set global local_infile = default;
+disconnect conn_xx1;
+disconnect conn_xx2;
+set global transaction_isolation = default;
+SET GLOBAL event_scheduler=default;
+set global rds_audit_log_version = default;

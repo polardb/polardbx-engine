@@ -1,0 +1,46 @@
+create user user1@'%' identified by '';
+grant usage on *.* to user1@'%';
+set global client_endpoint_ip = '10.10.10.10';
+set global rds_audit_log_enabled = on;
+set global rds_audit_log_version = 'MYSQL_V3';
+set global local_infile = on;
+let $rds_audit_file = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`;
+connect(con_root,localhost,root,,);
+connect(con_user1,localhost,user1,,);
+connection con_root;
+select @@session.client_endpoint_ip;
+connection con_user1;
+select @@session.client_endpoint_ip;
+--echo ## test connection attributes
+--exec $MYSQL_CLIENT_TEST -h127.0.0.1 -P$MASTER_MYPORT -uroot -c test_client_endpoint_ip | grep "SUCCESS"
+connection default;
+create table auditlog(
+c0 varchar(32), c1 varchar(32), c2 varchar(32), c3 varchar(32), c4 varchar(32), c5 varchar(32), 
+c6 varchar(32), c7 varchar(32), c8 varchar(32), c9 varchar(32), c10 varchar(32),
+c11 varchar(32), c12 varchar(32), c13 varchar(32), c14 varchar(32), c15 varchar(32), 
+c16 varchar(32), c17 varchar(32), c18 varchar(32), c19 varchar(32), c20 varchar(32),
+c21 varchar(32), c22 varchar(32), c23 varchar(32), c24 varchar(32), c25 varchar(32), 
+c26 varchar(32), c27 varchar(32), c28 varchar(32), c29 varchar(32), c30 varchar(32),
+c31 varchar(32), c32 varchar(32), c33 varchar(32), c34 varchar(32), c35 varchar(32), 
+c36 varchar(32), c37 varchar(32), c38 varchar(32), c39 varchar(32), c40 varchar(32),
+c41 varchar(32), c42 varchar(32), c43 varchar(32), c44 varchar(32), c45 varchar(32), 
+c46 varchar(32), c47 varchar(32), c48 varchar(32), c49 varchar(32)
+);
+# Make sure all audit logs have been flushed to disk
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+--disable_warnings
+--disable_query_log
+eval load data local infile '$rds_audit_file' into table auditlog;
+--enable_query_log
+--enable_warnings
+--echo # check setting global client_endpoint_ip works
+select count(*) > 0 from auditlog where c0 = 'MYSQL_V3' and c3 like '%user1%' and c46 like '%10.10.10.10%';
+--echo # check setting connection attributes works
+select count(*) > 0 from auditlog where c0 = 'MYSQL_V3' and c3 like '%root%' and c46 like '%42.42.42.42%' and c49 like '%select @@client_endpoint_ip%';
+drop table auditlog;
+drop user user1@'%';
+set global client_endpoint_ip = default;
+set global rds_audit_log_version = default;
+set global rds_audit_log_enabled = default;
+set global local_infile = default;

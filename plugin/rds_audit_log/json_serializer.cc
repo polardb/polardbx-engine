@@ -23,13 +23,25 @@
 #include "json_serializer.h"
 
 /* TODO implement JSON serializer */
-uint JSON_serializer::serialize_connection_event(
+uint JSON_serializer::serialize_connection_event_v1(
     const struct mysql_event_rds_connection *event MY_ATTRIBUTE((unused)),
     char *buf MY_ATTRIBUTE((unused)), uint buf_len MY_ATTRIBUTE((unused))) {
   return 0;
 }
 
-uint JSON_serializer::serialize_query_event(
+uint JSON_serializer::serialize_query_event_v1(
+    const struct mysql_event_rds_query *event MY_ATTRIBUTE((unused)),
+    char *buf MY_ATTRIBUTE((unused)), uint buf_len MY_ATTRIBUTE((unused))) {
+  return 0;
+}
+
+uint JSON_serializer::serialize_connection_event_v3(
+    const struct mysql_event_rds_connection *event MY_ATTRIBUTE((unused)),
+    char *buf MY_ATTRIBUTE((unused)), uint buf_len MY_ATTRIBUTE((unused))) {
+  return 0;
+}
+
+uint JSON_serializer::serialize_query_event_v3(
     const struct mysql_event_rds_query *event MY_ATTRIBUTE((unused)),
     char *buf MY_ATTRIBUTE((unused)), uint buf_len MY_ATTRIBUTE((unused))) {
   return 0;

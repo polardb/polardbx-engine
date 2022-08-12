@@ -586,6 +586,7 @@ struct mysql_event_rds_connection {
   unsigned long long start_utime;
   unsigned long long cost_utime;
   MYSQL_LEX_CSTRING message;
+  MYSQL_LEX_CSTRING endpoint_ip;
 };
 typedef enum {
   MYSQL_AUDIT_RDS_QUERY_RESULT = 1 << 0,
@@ -608,6 +609,8 @@ struct mysql_event_rds_query {
   MYSQL_LEX_CSTRING query;
   CHARSET_INFO *query_charset;
   unsigned long long lock_utime;
+  unsigned long long server_lock_wait;
+  unsigned long long engine_lock_wait;
   unsigned long long cost_utime;
   unsigned long long trx_utime;
   unsigned long long examined_rows;
@@ -618,7 +621,12 @@ struct mysql_event_rds_query {
   unsigned long long logical_reads;
   unsigned long long physical_sync_reads;
   unsigned long long physical_async_reads;
+  unsigned long long rw_spin_waits;
+  unsigned long long rw_spin_rounds;
+  unsigned long long rw_os_waits;
   unsigned long long temp_user_table_size;
   unsigned long long temp_sort_table_size;
   unsigned long long temp_sort_file_size;
+  MYSQL_LEX_CSTRING endpoint_ip;
+  unsigned long long trx_id;
 };

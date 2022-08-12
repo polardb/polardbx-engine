@@ -1,0 +1,70 @@
+set global rds_audit_log_enabled = ON;
+set global rds_audit_log_version = 'MYSQL_V3';
+set global rds_audit_log_flush = on;
+set global local_infile = on;
+set global transaction_isolation = 'repeatable-read';
+create table t1(id int primary key) engine = innodb;
+create table t2(id int primary key) engine = innodb;
+insert into t1 values(1);
+create table auditlog(
+v1 varchar(32), v2 varchar(32), v3 varchar(32), v4 varchar(32), v5 varchar(32), 
+v6 varchar(32), v7 varchar(32), v8 varchar(32), v9 varchar(32), v10 varchar(32),
+v11 varchar(32), v12 varchar(32), v13 varchar(32), v14 varchar(32), v15 varchar(32), 
+v16 varchar(32), v17 varchar(32), v18 varchar(32), v19 varchar(32), v20 varchar(32),
+v21 varchar(32), v22 varchar(32), v23 varchar(32), v24 varchar(32), v25 varchar(32), 
+v26 varchar(32), v27 varchar(32), v28 varchar(32), v29 varchar(32), v30 varchar(32),
+v31 varchar(32), v32 varchar(32), v33 varchar(32), v34 varchar(32), v35 varchar(32), 
+v36 varchar(32), v37 varchar(32), v38 varchar(32), v39 varchar(32), v40 varchar(32),
+v41 varchar(32), v42 varchar(32), v43 varchar(32), v44 varchar(32), v45 varchar(32), 
+v46 varchar(32), v47 varchar(32), v48 varchar(32), v49 varchar(32), v50 varchar(256)
+);
+create user xx1@'%';
+grant all on test to xx1@'%';
+grant PROCESS on *.* to xx1@'%';
+create user xx2@'%';
+grant all on test to xx2@'%';
+grant PROCESS on *.* to xx2@'%';
+flush privileges;
+set autocommit=0;
+select * from t1 where id<2;
+id
+1
+update t1 set id = id + 20;
+insert into t1 values(22);
+select * from t1 where id = 22;
+id
+22
+commit;
+set autocommit=1;
+start transaction;
+select * from t1 where id > 1 for update;
+id
+21
+22
+insert into t1 values(2);
+start transaction;
+select * from t2 where id > 1 lock in share mode;
+id
+insert into t2 values(2);
+insert into t1 values(10);
+insert into t2 values(10);
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+rollback;
+commit;
+select count(*) from auditlog where v1 like '%MYSQL_V3%';
+count(*)
+38
+5
+4
+4
+drop table t1;
+drop table t2;
+drop table auditlog;
+drop user xx1@'%';
+drop user xx2@'%';
+set global rds_audit_log_enabled = default;
+set global rds_audit_log_event_buffer_size = default;
+set global local_infile = default;
+set global transaction_isolation = default;
+SET GLOBAL event_scheduler=default;
+set global rds_audit_log_version = default;

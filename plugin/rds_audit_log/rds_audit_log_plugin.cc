@@ -109,6 +109,7 @@ static ulong rds_audit_log_event_buffer_size = 0;
 static ulong rds_audit_log_buffer_size = 0;
 static char *rds_audit_log_dir = NULL;
 static ulong rds_audit_log_format = 0;
+static ulong rds_audit_log_version = 0;
 static bool rds_audit_log_enabled = false;
 static ulong rds_audit_log_row_limit = 0;
 static ulong rds_audit_log_strategy = 0;
@@ -181,6 +182,33 @@ static MYSQL_SYSVAR_ENUM(format,
     "The format of audit log, currently only support PLAIN (compatible with "
     "MySQL_V1 in RDS MySQL 5.6), JSON will be supported soon.",
     NULL, NULL, MYSQL_RDS_AUDIT_LOG::PLAIN, &audit_log_format_typelib);
+
+/* PolorDB 8.0 supports MYSQL_V2, we don't */
+const char *log_version_names[] = {"MYSQL_V1", "MYSQL_V3", NullS};
+static TYPELIB audit_log_version_typelib = {array_elements(log_version_names) - 1,
+                                           "", log_version_names, NULL};
+
+static void audit_log_version_update(THD *thd MY_ATTRIBUTE((unused)),
+                                    SYS_VAR *var MY_ATTRIBUTE((unused)),
+                                    void *var_ptr, const void *save) {
+  ulong old_value = *static_cast<ulong *>(var_ptr);
+  ulong new_value = *static_cast<const ulong *>(save);
+
+  if (old_value == new_value) {
+    return;
+  }
+
+  *static_cast<ulong *>(var_ptr) = new_value;
+
+  rds_audit_log->set_log_version(
+      (MYSQL_RDS_AUDIT_LOG::enum_log_version)new_value);
+}
+
+static MYSQL_SYSVAR_ENUM(version,
+    rds_audit_log_version, PLUGIN_VAR_RQCMDARG,
+    "The version of audit log, currently support MYSQL_V1 and MYSQL_V3.",
+    NULL, audit_log_version_update,
+    MYSQL_RDS_AUDIT_LOG::MYSQL_V1, &audit_log_version_typelib);
 
 static void rds_audit_log_flush_update(THD *thd MY_ATTRIBUTE((unused)),
                                        SYS_VAR *var MY_ATTRIBUTE((unused)),
@@ -350,6 +378,7 @@ static SYS_VAR *audit_log_system_vars[] = {
     MYSQL_SYSVAR(flush),
     MYSQL_SYSVAR(enabled),
     MYSQL_SYSVAR(format),
+    MYSQL_SYSVAR(version),
     MYSQL_SYSVAR(strategy),
     MYSQL_SYSVAR(policy),
     MYSQL_SYSVAR(connection_policy),
@@ -687,7 +716,7 @@ static int audit_log_plugin_init(void *arg MY_ATTRIBUTE((unused))) {
     rds_audit_log_buffer_size, rds_audit_log_row_limit,
     rds_audit_log_format, rds_audit_log_strategy,
     rds_audit_log_policy, rds_audit_log_connection_policy,
-    rds_audit_log_statement_policy,
+    rds_audit_log_statement_policy, rds_audit_log_version,
     rds_audit_log_enabled);
 
   /* Failed to create flush thread */

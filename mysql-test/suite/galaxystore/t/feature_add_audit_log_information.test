@@ -4,6 +4,9 @@
 
 set global rds_audit_log_enabled = ON;
 set global rds_audit_log_flush = on;
+--disable_query_log
+set global rds_audit_log_version = 'MYSQL_V1';
+--enable_query_log
 set global local_infile = on;
 let $rds_audit_file = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`;
 create table t1(id int primary key) engine = innodb;
@@ -176,6 +179,7 @@ drop user xx5@'%';
 set global rds_audit_log_enabled = default;
 set global rds_audit_log_event_buffer_size = default;
 set global local_infile = default;
+set global rds_audit_log_version = default;
 disconnect conn_xx1;
 disconnect conn_xx2;
 disconnect conn_xx5;

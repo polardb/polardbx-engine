@@ -13,6 +13,7 @@ rds_audit_log_row_limit	#
 rds_audit_log_skip	#
 rds_audit_log_statement_policy	#
 rds_audit_log_strategy	#
+rds_audit_log_version	#
 show status like '%audit%';
 Variable_name	Value
 rds_audit_log_buffer_flushed_pos	#
