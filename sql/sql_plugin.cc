@@ -3108,6 +3108,8 @@ static void cleanup_variables(THD *thd, struct System_variables *vars) {
     plugin_var_memalloc_free(&thd->variables);
     /* Remove references to session_sysvar_res_mgr memory before freeing it. */
     thd->variables.track_sysvars_ptr = nullptr;
+    /* Remove references to client_endpoint_ip memory before freeing it. */
+    thd->variables.client_endpoint_ip = nullptr;
     thd->session_sysvar_res_mgr.deinit();
   }
   DBUG_ASSERT(vars->table_plugin == NULL);

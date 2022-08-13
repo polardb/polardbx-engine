@@ -806,11 +806,13 @@ public:
 
   AUDIT_TRX_STATE state;
   unsigned long long start_time;
+  unsigned long long trx_id;
 
 public:
   AUDIT_trx_ctx() {
     state = AUDIT_TRX_IDLE;
     start_time = 0;
+    trx_id = 0;
   }
 
   void start_transaction() {
@@ -818,6 +820,14 @@ public:
       state = AUDIT_TRX_ACTIVE;
       start_time = my_micro_time();
     }
+  }
+
+  void end_transaction() {
+    state = AUDIT_TRX_IDLE;
+  }
+
+  void set_trx_id(unsigned long long id) {
+    trx_id = id;
   }
 };
 
@@ -4240,6 +4250,11 @@ private:
 
   void set_rds_audit_event_buf(LEX_STRING *event_buf) {
     rds_audit_event_buf = event_buf;
+  }
+
+  void set_client_endpoint_ip(char* endpoint_ip, size_t len) {
+    session_sysvar_res_mgr.update(&variables.client_endpoint_ip,
+                                  endpoint_ip, len);
   }
 
  private:

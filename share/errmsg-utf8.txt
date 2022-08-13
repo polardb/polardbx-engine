@@ -19964,6 +19964,9 @@ ER_AUDIT_LOG_END_LOST_LOG
 ER_AUDIT_LOG_SWITCH_LOG_STRATEGY
   eng "Log strategy switched from %s to %s."
 
+ER_AUDIT_LOG_SWITCH_LOG_VERSION
+  eng "Log version switched from %s to %s."
+
 ER_AUDIT_LOG_SWITCH_LOG_POLICY
   eng "Log strategy switched from [%s] connection [%s] query [%s] to [%s] connection [%s] query [%s]."
 

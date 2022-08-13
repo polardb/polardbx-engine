@@ -808,6 +808,8 @@ bool Sql_cmd_xa_commit::process_internal_xa_commit(THD *thd,
 
       thd->m_transaction_psi = nullptr;
 #endif
+
+      thd->audit_trx_ctx.end_transaction();
     }
   } else {
     my_error(ER_XAER_RMFAIL, MYF(0), xid_state->state_name());

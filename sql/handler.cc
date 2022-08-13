@@ -1767,6 +1767,11 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock) {
     thd->m_transaction_psi = NULL;
   }
 #endif
+
+  if (is_real_trans) {
+    thd->audit_trx_ctx.end_transaction();
+  }
+
   DBUG_EXECUTE_IF("crash_commit_after",
                   if (!thd->is_operating_gtid_table_implicitly)
                       DBUG_SUICIDE(););
@@ -2061,6 +2066,10 @@ int ha_rollback_trans(THD *thd, bool all) {
   }
 #endif
 
+  if (all || !thd->in_active_multi_stmt_transaction()) {
+    thd->audit_trx_ctx.end_transaction();
+  }
+
   /* Always cleanup. Even if nht==0. There may be savepoints. */
   if (is_real_trans) {
     trn_ctx->cleanup();
@@ -2156,6 +2165,8 @@ int ha_commit_attachable(THD *thd) {
     thd->m_transaction_psi = NULL;
   }
 #endif
+
+  thd->audit_trx_ctx.end_transaction();
 
   /* Free resources and perform other cleanup even for 'empty' transactions. */
   trn_ctx->cleanup();

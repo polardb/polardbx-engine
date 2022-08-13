@@ -1109,6 +1109,17 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
 
   event.memory_used = 0;
   event.query_memory_used = 0;
+  event.trx_id = thd->audit_trx_ctx.trx_id;
+
+  /*
+    reset trx_id for a thd in PPS_transaction when a tx ends.
+    We have to reset trx_id after it had been recorded in the event,
+    otherwise trx_id would be not 0 for select SQL in audit log.
+  */
+  if (thd->audit_trx_ctx.trx_id != 0 && 
+    thd->audit_trx_ctx.state != AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
+    thd->audit_trx_ctx.set_trx_id(0);
+  }
 
   struct PPI_stat *ppi_stat = thd->ppi_statement_stat.get();
   event.logical_reads = ppi_stat->logical_reads;

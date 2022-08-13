@@ -153,4 +153,5 @@ drop user xx5@'%';
 set global rds_audit_log_enabled = default;
 set global rds_audit_log_event_buffer_size = default;
 set global local_infile = default;
+set global rds_audit_log_version = default;
 SET GLOBAL event_scheduler=default;

@@ -1869,7 +1869,7 @@ static bool find_mpvio_user(THD *thd, MPVIO_EXT *mpvio) {
   return 0;
 }
 
-static bool read_client_connect_attrs(char **ptr, size_t *max_bytes_available,
+static bool read_client_connect_attrs(THD *thd, char **ptr, size_t *max_bytes_available,
                                       MPVIO_EXT *mpvio MY_ATTRIBUTE((unused))) {
   size_t length, length_length;
   char *ptr_save;
@@ -1890,6 +1890,31 @@ static bool read_client_connect_attrs(char **ptr, size_t *max_bytes_available,
 
   /* impose an artificial length limit of 64k */
   if (length > 65535) return true;
+  
+  // parse endpoint
+  {
+    const uchar *attributes = (const uchar *)*ptr;
+    const uchar *save = attributes;
+
+    while ((size_t)(attributes - save) < length) {
+      size_t key_length = net_field_length((uchar**)&attributes);
+      const uchar *key = attributes;
+      
+      if ((size_t)(key - save + key_length) > length) break;
+      attributes += key_length;
+
+      size_t val_length = net_field_length((uchar **)&attributes);
+      const uchar *val = attributes;
+
+      if ((size_t)(val - save + val_length) > length) break;
+      attributes += val_length;
+
+      if (key_length == 12 && memcmp(key, "_endpoint_ip", key_length) == 0) {
+        thd->set_client_endpoint_ip((char*)val, val_length);
+        break;
+      }
+    }
+  }
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
   MYSQL_SERVER_AUTH_INFO *auth_info = &mpvio->auth_info;
@@ -2203,7 +2228,7 @@ static bool parse_com_change_user_packet(THD *thd, MPVIO_EXT *mpvio,
   size_t bytes_remaining_in_packet = end - ptr;
 
   if (protocol->has_client_capability(CLIENT_CONNECT_ATTRS) &&
-      read_client_connect_attrs(&ptr, &bytes_remaining_in_packet, mpvio))
+      read_client_connect_attrs(thd, &ptr, &bytes_remaining_in_packet, mpvio))
     return packet_error;
 
   DBUG_PRINT("info", ("client_plugin=%s, restart", client_plugin));
@@ -2686,7 +2711,7 @@ skip_to_ssl:
   }
 
   if (protocol->has_client_capability(CLIENT_CONNECT_ATTRS) &&
-      read_client_connect_attrs(&end, &bytes_remaining_in_packet, mpvio))
+      read_client_connect_attrs(thd, &end, &bytes_remaining_in_packet, mpvio))
     return packet_error;
 
   NET_SERVER *ext = static_cast<NET_SERVER *>(protocol->get_net()->extension);
