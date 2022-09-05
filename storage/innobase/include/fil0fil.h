@@ -958,6 +958,10 @@ constexpr page_type_t FIL_PAGE_TYPE_ZLOB_FRAG_ENTRY = 29;
 /** Used by i_s.cc to index into the text description. */
 constexpr page_type_t FIL_PAGE_TYPE_LAST = FIL_PAGE_TYPE_ZLOB_FRAG_ENTRY;
 
+/** Check whether the page type is sys */
+#define fil_page_type_is_sys(page_type) \
+  (page_type == FIL_PAGE_TYPE_SYS || page_type == FIL_PAGE_TYPE_TRX_SYS)
+
 /** Check whether the page type is index (Btree or Rtree or SDI) type */
 #define fil_page_type_is_index(page_type)                      \
   (page_type == FIL_PAGE_INDEX || page_type == FIL_PAGE_SDI || \

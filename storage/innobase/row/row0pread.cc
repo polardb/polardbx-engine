@@ -359,7 +359,8 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
 
       {
         if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
-          lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
+          lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr,
+                                      lizard::TXN_CONS_READ_SEES);
         }
       }
 

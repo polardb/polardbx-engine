@@ -1929,7 +1929,8 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
           lizard::GCN_NULL,
       };
 
-      lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
+      lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr,
+                                  lizard::TXN_ONLINE_DDL);
 
       if (!trx->vision.modifications_visible(&txn_rec, old_table->name)) {
         rec_t *old_vers;

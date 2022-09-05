@@ -22732,6 +22732,11 @@ static MYSQL_SYSVAR_BOOL(write_non_innodb_gtids,
                          "whether to write non-innodb gtids to executed_gtids",
                          NULL, NULL, false);
 
+static MYSQL_SYSVAR_BOOL(lizard_stat_enabled, lizard::stat_enabled,
+                         PLUGIN_VAR_OPCMDARG,
+                         "whether to enable lizard statistics", NULL, NULL,
+                         false);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -22970,6 +22975,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(snapshot_update_gcn),
     MYSQL_SYSVAR(equal_gcn_visible),
     MYSQL_SYSVAR(write_non_innodb_gtids),
+    MYSQL_SYSVAR(lizard_stat_enabled),
     NULL};
 
 mysql_declare_plugin(innobase){

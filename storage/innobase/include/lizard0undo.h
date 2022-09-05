@@ -525,7 +525,8 @@ inline void txn_lookup_t_set(txn_lookup_t *txn_lookup,
 */
 inline bool txn_undo_hdr_lookup(txn_rec_t *txn_rec,
                                 txn_lookup_t *txn_lookup,
-                                mtr_t *txn_mtr) {
+                                mtr_t *txn_mtr,
+                                txn_lookup_entry entry) {
   /* If txn_mtr != nullptr, it forces to hold txn header s-latch for
   a while. */
   if (!txn_lookup && !lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
@@ -533,6 +534,7 @@ inline bool txn_undo_hdr_lookup(txn_rec_t *txn_rec,
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
     return false;
   } else {
+    txn_lookup_stat(entry);
     return txn_undo_hdr_lookup_low(txn_rec, txn_lookup, txn_mtr);
   }
 }

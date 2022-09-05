@@ -77,6 +77,8 @@ void buf_flush_note_modification(
   }
 #endif /* UNIV_DEBUG */
 
+  lizard::page_write_req_stat(block);
+
   mutex_enter(&block->mutex);
 
   if (end_lsn != 0) {
