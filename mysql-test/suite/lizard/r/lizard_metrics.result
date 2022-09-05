@@ -1,0 +1,112 @@
+show global status where Variable_name in (
+"lizard_buffer_pool_write_req_undo",
+"lizard_buffer_pool_write_req_txn",
+"lizard_buffer_pool_write_req_index",
+"lizard_buffer_pool_write_req_sys",
+"lizard_buffer_pool_pages_read_undo",
+"lizard_buffer_pool_pages_read_txn",
+"lizard_buffer_pool_pages_read_index",
+"lizard_buffer_pool_pages_read_sys",
+"lizard_buffer_pool_pages_flushed_undo",
+"lizard_buffer_pool_pages_flushed_txn",
+"lizard_buffer_pool_pages_flushed_index",
+"lizard_buffer_pool_pages_flushed_sys",
+"lizard_buffer_pool_pages_evit_undo",
+"lizard_buffer_pool_pages_evit_txn",
+"lizard_buffer_pool_pages_evit_index",
+"lizard_buffer_pool_pages_evit_sys",
+"lizard_buffer_pool_txn_read_hit",
+"lizard_buffer_pool_txn_read_disk",
+"lizard_buffer_pool_txn_write_hit",
+"lizard_buffer_pool_txn_write_disk",
+"lizard_buffer_pool_txn_lookup_dd_index",
+"lizard_buffer_pool_txn_lookup_online_ddl",
+"lizard_buffer_pool_txn_lookup_cons_read_sees",
+"lizard_buffer_pool_txn_lookup_gcn_read_sees",
+"lizard_buffer_pool_txn_lookup_purge_sees",
+"lizard_buffer_pool_txn_lookup_modify_cleanout",
+"lizard_buffer_pool_txn_lookup_lock_convert",
+"lizard_buffer_pool_txn_lookup_pre_ver_asof",
+"lizard_buffer_pool_txn_lookup_pre_ver_normal",
+"lizard_buffer_pool_txn_lookup_undo_build_rec",
+"lizard_buffer_pool_lru_get_free_search",
+"lizard_buffer_pool_lru_get_free_loops",
+"lizard_buffer_pool_lru_get_free_waits",
+"lizard_buffer_pool_lru_search_scans",
+"lizard_buffer_pool_lru_search_scanned",
+"lizard_buffer_pool_lru_single_flush_scans",
+"lizard_buffer_pool_lru_single_flush_scanned",
+"lizard_buffer_pool_lru_batch_scans",
+"lizard_buffer_pool_lru_batch_scanned",
+"lizard_buffer_pool_lru_batch_evits",
+"lizard_buffer_pool_lru_batch_evited",
+"lizard_buffer_pool_flush_batch_scans",
+"lizard_buffer_pool_flush_batch_scanned",
+"lizard_buffer_pool_flush_batch_count",
+"lizard_buffer_pool_flush_batch_pages",
+"lizard_buffer_pool_flush_neighbor_count",
+"lizard_buffer_pool_flush_neighbor_pages",
+"lizard_buffer_pool_lru_flush_count",
+"lizard_buffer_pool_lru_flush_pages",
+"lizard_buffer_pool_flush_adapt_count",
+"lizard_buffer_pool_flush_adapt_pages",
+"lizard_buffer_pool_flush_sync_count",
+"lizard_buffer_pool_flush_sync_pages",
+"lizard_buffer_pool_flush_background_count",
+"lizard_buffer_pool_flush_background_pages");
+Variable_name	Value
+Lizard_buffer_pool_write_req_undo	0
+Lizard_buffer_pool_write_req_txn	0
+Lizard_buffer_pool_write_req_index	0
+Lizard_buffer_pool_write_req_sys	0
+Lizard_buffer_pool_pages_read_undo	0
+Lizard_buffer_pool_pages_read_txn	0
+Lizard_buffer_pool_pages_read_index	0
+Lizard_buffer_pool_pages_read_sys	0
+Lizard_buffer_pool_pages_flushed_undo	0
+Lizard_buffer_pool_pages_flushed_txn	0
+Lizard_buffer_pool_pages_flushed_index	0
+Lizard_buffer_pool_pages_flushed_sys	0
+Lizard_buffer_pool_pages_evit_undo	0
+Lizard_buffer_pool_pages_evit_txn	0
+Lizard_buffer_pool_pages_evit_index	0
+Lizard_buffer_pool_pages_evit_sys	0
+Lizard_buffer_pool_txn_read_hit	0
+Lizard_buffer_pool_txn_read_disk	0
+Lizard_buffer_pool_txn_write_hit	0
+Lizard_buffer_pool_txn_write_disk	0
+Lizard_buffer_pool_txn_lookup_dd_index	0
+Lizard_buffer_pool_txn_lookup_online_ddl	0
+Lizard_buffer_pool_txn_lookup_cons_read_sees	0
+Lizard_buffer_pool_txn_lookup_gcn_read_sees	0
+Lizard_buffer_pool_txn_lookup_purge_sees	0
+Lizard_buffer_pool_txn_lookup_modify_cleanout	0
+Lizard_buffer_pool_txn_lookup_lock_convert	0
+Lizard_buffer_pool_txn_lookup_pre_ver_asof	0
+Lizard_buffer_pool_txn_lookup_pre_ver_normal	0
+Lizard_buffer_pool_txn_lookup_undo_build_rec	0
+Lizard_buffer_pool_lru_get_free_search	0
+Lizard_buffer_pool_lru_get_free_loops	0
+Lizard_buffer_pool_lru_get_free_waits	0
+Lizard_buffer_pool_lru_search_scans	0
+Lizard_buffer_pool_lru_search_scanned	0
+Lizard_buffer_pool_lru_single_flush_scans	0
+Lizard_buffer_pool_lru_single_flush_scanned	0
+Lizard_buffer_pool_lru_batch_scans	0
+Lizard_buffer_pool_lru_batch_scanned	0
+Lizard_buffer_pool_lru_batch_evits	0
+Lizard_buffer_pool_lru_batch_evited	0
+Lizard_buffer_pool_flush_batch_scans	0
+Lizard_buffer_pool_flush_batch_scanned	0
+Lizard_buffer_pool_flush_batch_count	0
+Lizard_buffer_pool_flush_batch_pages	0
+Lizard_buffer_pool_flush_neighbor_count	0
+Lizard_buffer_pool_flush_neighbor_pages	0
+Lizard_buffer_pool_lru_flush_count	0
+Lizard_buffer_pool_lru_flush_pages	0
+Lizard_buffer_pool_flush_adapt_count	0
+Lizard_buffer_pool_flush_adapt_pages	0
+Lizard_buffer_pool_flush_sync_count	0
+Lizard_buffer_pool_flush_sync_pages	0
+Lizard_buffer_pool_flush_background_count	0
+Lizard_buffer_pool_flush_background_pages	0

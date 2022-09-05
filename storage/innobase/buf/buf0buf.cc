@@ -3605,6 +3605,8 @@ struct Buf_fetch {
   /** Hash table lock. */
   rw_lock_t *m_hash_lock{};
 
+  bool m_bp_hit{true}; // for txn page statistics
+
   friend T;
 };
 
@@ -3653,6 +3655,7 @@ dberr_t Buf_fetch_normal::get(buf_block_t *&block) noexcept {
     }
 
     /* Page not in buf_pool: needs to be read from file */
+    m_bp_hit = false;
     read_page();
   }
 
@@ -3727,6 +3730,7 @@ dberr_t Buf_fetch_other::get(buf_block_t *&block) noexcept {
     }
 
     /* Page not in buf_pool: needs to be read from file */
+    m_bp_hit = false;
     read_page();
   }
 
@@ -4368,6 +4372,8 @@ buf_block_t *Buf_fetch<T>::single_page() {
   ut_ad(!rw_lock_own(m_hash_lock, RW_LOCK_S));
 
   ut_a(!block->page.was_stale());
+
+  lizard::txn_undo_page_hit_stat(m_bp_hit, block, m_rw_latch);
 
   return (block);
 }
@@ -5205,6 +5211,8 @@ static void buf_page_monitor(
                           : ((buf_block_t *)bpage)->frame;
 
   const ulint page_type = fil_page_get_type(frame);
+
+  lizard::page_physical_io_stat(io_type, frame, page_type);
 
   bool is_leaf = false;
   bool is_ibuf = false;

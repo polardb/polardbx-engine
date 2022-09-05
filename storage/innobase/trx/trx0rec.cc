@@ -2458,12 +2458,14 @@ err_exit:
       missing_history = true;
     } else {
       /** precheck fail */
-      lizard::txn_undo_hdr_lookup(txn_rec, &txn_lookup, txn_mtr);
+      lizard::txn_undo_hdr_lookup(txn_rec, &txn_lookup, txn_mtr,
+                                  lizard::TXN_UNDO_BUILD_REC);
       missing_history = !lizard::txn_lookup_rollptr_is_valid(&txn_lookup);
     }
     DBUG_EXECUTE_IF("simulate_prev_image_purged_during_query", missing_history = true;);
   } else {
-    lizard::txn_undo_hdr_lookup(txn_rec, nullptr, nullptr);
+    lizard::txn_undo_hdr_lookup(txn_rec, nullptr, nullptr,
+                                lizard::TXN_UNDO_BUILD_REC);
     missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
   }
 
@@ -2633,7 +2635,8 @@ bool trx_undo_prev_version_build(
           lizard::GCN_NULL,
       };
 
-      lizard::txn_undo_hdr_lookup(&undo_txn_rec, nullptr, nullptr);
+      lizard::txn_undo_hdr_lookup(&undo_txn_rec, nullptr, nullptr,
+                                  lizard::TXN_UNDO_BUILD_REC);
 
       missing_extern = purge_sys->vision.modifications_visible(
           &undo_txn_rec, index->table->name);

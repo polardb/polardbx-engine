@@ -549,7 +549,8 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
   rec_txn.gcn = lizard::GCN_NULL;
 
   /** lookup the scn by UBA address */
-  cleanout = txn_undo_hdr_lookup(&rec_txn, nullptr, nullptr);
+  cleanout =
+      txn_undo_hdr_lookup(&rec_txn, nullptr, nullptr, TXN_MODIFY_CLEANOUT);
 
   if (cleanout) {
     ut_ad(mtr_memo_contains_flagged(mtr, block, MTR_MEMO_PAGE_X_FIX));
@@ -595,7 +596,7 @@ bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
   };
 
   if (!lizard_undo_ptr_is_active(txn_rec.undo_ptr) ||
-      lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr)) {
+      txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr, TXN_LOCK_CONVERT)) {
     return true;
   }
   return false;

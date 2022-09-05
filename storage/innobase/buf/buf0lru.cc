@@ -1838,6 +1838,8 @@ bool buf_LRU_free_page(buf_page_t *bpage, bool zip) {
   ut_ad(rw_lock_own(hash_lock, RW_LOCK_X));
   ut_ad(buf_page_can_relocate(bpage));
 
+  lizard::page_evit_stat(bpage);
+
   if (!buf_LRU_block_remove_hashed(bpage, zip, false)) {
     mutex_exit(&buf_pool->LRU_list_mutex);
 

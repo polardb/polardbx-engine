@@ -268,7 +268,8 @@ bool lock_clust_rec_cons_read_sees(
       lizard::row_get_rec_undo_ptr(rec, index, offsets),
       lizard::GCN_NULL,
   };
-  cleanout = lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr);
+  cleanout = lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr,
+                                         lizard::TXN_CONS_READ_SEES);
 
   if (cleanout) {
     lizard::row_cleanout_collect(trx_id, txn_rec, rec, index, offsets, pcur);

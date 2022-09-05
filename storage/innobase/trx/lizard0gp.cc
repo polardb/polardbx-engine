@@ -499,7 +499,7 @@ retry:
 
   cache_hit = lizard::trx_search_tcn(trx, pcur, &txn_rec, &txn_lookup);
   if (!cache_hit) {
-    txn_undo_hdr_lookup(&txn_rec, &txn_lookup, nullptr);
+    txn_undo_hdr_lookup(&txn_rec, &txn_lookup, nullptr, TXN_GCN_READ_SEES);
   }
 
   /** 1. Already committed; */

@@ -40,6 +40,24 @@ this program; if not, write to the Free Software Foundation, Inc.,
 class THD;
 struct SHOW_VAR;
 
+namespace lizard {
+
+enum txn_lookup_entry {
+  TXN_DD_INDEX_VISIBLE,
+  TXN_ONLINE_DDL,
+  TXN_CONS_READ_SEES,
+  TXN_GCN_READ_SEES,
+  TXN_PURGE_SEES,
+  TXN_MODIFY_CLEANOUT,
+  TXN_LOCK_CONVERT,
+  TXN_BUILD_PREV_VER_ASOF,
+  TXN_BUILD_PREV_VER_NORMAL,
+  TXN_UNDO_BUILD_REC,
+  TXN_ENTRY_COUNT
+};
+
+}
+
 struct lizard_var_t {
   /** txn undo rollback segment free list length */
   ulint txn_undo_log_free_list_len;
@@ -108,6 +126,88 @@ struct lizard_var_t {
   ulint global_tcn_cache_miss;
   ulint global_tcn_cache_evict;
 #endif
+
+  // page write/flush/load/evit of types
+  ulint innodb_buffer_pool_write_req_undo;
+  ulint innodb_buffer_pool_write_req_txn;
+  ulint innodb_buffer_pool_write_req_index;
+  ulint innodb_buffer_pool_write_req_sys;
+  ulint innodb_buffer_pool_flush_undo;
+  ulint innodb_buffer_pool_flush_txn;
+  ulint innodb_buffer_pool_flush_index;
+  ulint innodb_buffer_pool_flush_sys;
+  ulint innodb_buffer_pool_read_undo;
+  ulint innodb_buffer_pool_read_txn;
+  ulint innodb_buffer_pool_read_index;
+  ulint innodb_buffer_pool_read_sys;
+  ulint innodb_buffer_pool_evit_undo;
+  ulint innodb_buffer_pool_evit_txn;
+  ulint innodb_buffer_pool_evit_index;
+  ulint innodb_buffer_pool_evit_sys;
+
+  // txn undo page hit
+  ulint innodb_buffer_pool_txn_r_hit;
+  ulint innodb_buffer_pool_txn_r_disk;
+  ulint innodb_buffer_pool_txn_w_hit;
+  ulint innodb_buffer_pool_txn_w_disk;
+
+  // txn loopup entry
+  ulint innodb_buffer_pool_txn_lookup[lizard::TXN_ENTRY_COUNT];
+
+  // MONITOR_LRU_GET_FREE_SEARCH
+  ulint innodb_buffer_pool_lru_get_free_search;
+  // MONITOR_LRU_SEARCH_SCANNED_NUM_CALL
+  ulint innodb_buffer_pool_lru_search_scans;
+  // MONITOR_LRU_SEARCH_SCANNED
+  ulint innodb_buffer_pool_lru_search_scanned;
+  // MONITOR_LRU_SINGLE_FLUSH_SCANNED_NUM_CALL
+  ulint innodb_buffer_pool_lru_single_flush_scans;
+  // MONITOR_LRU_SINGLE_FLUSH_SCANNED
+  ulint innodb_buffer_pool_lru_single_flush_scanned;
+  // MONITOR_LRU_GET_FREE_LOOPS
+  ulint innodb_buffer_pool_lru_get_free_loops;
+  // MONITOR_LRU_GET_FREE_WAITS
+  ulint innodb_buffer_pool_lru_get_free_waits;
+
+  // MONITOR_LRU_BATCH_SCANNED_NUM_CALL
+  ulint innodb_buffer_pool_lru_batch_scans;
+  // MONITOR_LRU_BATCH_SCANNED
+  ulint innodb_buffer_pool_lru_batch_scanned;
+  // MONITOR_LRU_BATCH_EVICT_COUNT
+  ulint innodb_buffer_pool_lru_batch_evits;
+  // MONITOR_LRU_BATCH_EVICT_TOTAL_PAGE
+  ulint innodb_buffer_pool_lru_batch_evited;
+
+  // MONITOR_FLUSH_BATCH_SCANNED_NUM_CALL
+  ulint innodb_buffer_pool_flu_batch_scans;
+  // MONITOR_FLUSH_BATCH_SCANNED
+  ulint innodb_buffer_pool_flu_batch_scanned;
+  // MONITOR_FLUSH_BATCH_COUNT
+  ulint innodb_buffer_pool_flu_batch_count;
+  // MONITOR_FLUSH_BATCH_TOTAL_PAGE
+  ulint innodb_buffer_pool_flu_batch_pages;
+
+  // MONITOR_FLUSH_NEIGHBOR_COUNT
+  ulint innodb_buffer_pool_flush_neighbor_count;
+  // MONITOR_FLUSH_NEIGHBOR_TOTAL_PAGE
+  ulint innodb_buffer_pool_flush_neighbor_pages;
+
+  // MONITOR_LRU_BATCH_FLUSH_COUNT
+  ulint innodb_buffer_pool_lru_flush_count;
+  // MONITOR_FLUSH_SYNC_TOTAL_PAGE
+  ulint innodb_buffer_pool_lru_flush_pages;
+  // MONITOR_FLUSH_ADAPTIVE_COUNT
+  ulint innodb_buffer_pool_flush_adapt_count;
+  // MONITOR_FLUSH_ADAPTIVE_TOTAL_PAGE
+  ulint innodb_buffer_pool_flush_adapt_pages;
+  // MONITOR_FLUSH_SYNC_COUNT
+  ulint innodb_buffer_pool_flush_sync_count;
+  // MONITOR_FLUSH_SYNC_TOTAL_PAGE
+  ulint innodb_buffer_pool_flush_sync_pages;
+  // MONITOR_FLUSH_BACKGROUND_COUNT
+  ulint innodb_buffer_pool_flush_background_count;
+  // MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE
+  ulint innodb_buffer_pool_flush_background_pages;
 };
 
 struct lizard_stats_t {
@@ -177,13 +277,57 @@ struct lizard_stats_t {
   ulint_ctr_1_t global_tcn_cache_miss;
   ulint_ctr_1_t global_tcn_cache_evict;
 #endif
+
+  ulint_ctr_1_t txn_undo_page_read_hit;
+  ulint_ctr_1_t txn_undo_page_read_miss;
+  ulint_ctr_1_t txn_undo_page_write_hit;
+  ulint_ctr_1_t txn_undo_page_write_miss;
+
+  ulint_ctr_1_t buf_pool_flush_undo;
+  ulint_ctr_1_t buf_pool_flush_txn;
+  ulint_ctr_1_t buf_pool_flush_index;
+  ulint_ctr_1_t buf_pool_flush_sys;
+  ulint_ctr_1_t buf_pool_read_undo;
+  ulint_ctr_1_t buf_pool_read_txn;
+  ulint_ctr_1_t buf_pool_read_index;
+  ulint_ctr_1_t buf_pool_read_sys;
+
+  ulint_ctr_1_t buf_pool_evit_undo;
+  ulint_ctr_1_t buf_pool_evit_txn;
+  ulint_ctr_1_t buf_pool_evit_index;
+  ulint_ctr_1_t buf_pool_evit_sys;
+
+  ulint_ctr_1_t buf_pool_write_req_undo;
+  ulint_ctr_1_t buf_pool_write_req_txn;
+  ulint_ctr_1_t buf_pool_write_req_index;
+  ulint_ctr_1_t buf_pool_write_req_sys;
+
+  ulint_ctr_1_t txn_lookup[lizard::TXN_ENTRY_COUNT];
 };
 
 namespace lizard {
 
+extern bool stat_enabled;
+
 extern lizard_stats_t lizard_stats;
 
 int show_lizard_vars(THD *thd, SHOW_VAR *var, char *buff);
+
+/* Fetch txn undo page hit or miss statistics */
+void txn_undo_page_hit_stat(bool hit, const buf_block_t *block, ulint rw_latch);
+
+/* Physical io statistics for undo/index/sys pages */
+void page_physical_io_stat(enum buf_io_fix io_type, const byte *frame,
+                           ulint page_type);
+
+/* Evit statistics for undo/index/sys pages */
+void page_evit_stat(const buf_page_t *bpage);
+
+/* Page flush requests for undo/index/sys pages */
+void page_write_req_stat(const buf_block_t *block);
+
+/* Txn lookup statistics */
+void txn_lookup_stat(txn_lookup_entry entry);
 
 }  // namespace lizard
 
