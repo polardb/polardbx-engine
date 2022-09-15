@@ -66,6 +66,7 @@ bool trx_search_tcn(trx_t *trx, btr_pcur_t *pcur, txn_rec_t *txn_rec,
   if (tcn.trx_id == txn_rec->trx_id) {
     txn_rec->scn = tcn.scn;
     txn_rec->gcn = tcn.gcn;
+    lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
     if (txn_lookup) {
       txn_lookup->real_image = {tcn.scn, UTC_UNDO_LOST, tcn.gcn};
       txn_lookup->real_state = TXN_STATE_COMMITTED;
