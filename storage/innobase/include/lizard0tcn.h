@@ -152,10 +152,9 @@ extern Cache_tcn *global_tcn_cache;
 
 }  // namespace lizard
 
-#ifdef UNIV_DEBUG
-
 #define TCN_CACHE_AGGR(TYPE, WHAT)  \
   do {                              \
+    if (!lizard::stat_enabled) break;\
     if (TYPE == BLOCK_LEVEL)        \
       BLOCK_TCN_CACHE_##WHAT;       \
     else if (TYPE == SESSION_LEVEL) \
@@ -163,11 +162,5 @@ extern Cache_tcn *global_tcn_cache;
     else                            \
       GLOBAL_TCN_CACHE_##WHAT;      \
   } while (0)
-
-#else
-
-#define TCN_CACHE_AGGR(TYPE, WHAT)
-
-#endif
 
 #endif

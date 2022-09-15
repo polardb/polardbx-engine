@@ -109,7 +109,6 @@ struct lizard_var_t {
   /* Max purged gcn, snapshot gcn before that is too old to asof select. */
   ulint purged_gcn;
 
-#ifdef UNIV_DEBUG
   ulint block_tcn_cache_hit;
   ulint block_tcn_cache_miss;
   ulint block_tcn_cache_evict;
@@ -121,7 +120,6 @@ struct lizard_var_t {
   ulint global_tcn_cache_hit;
   ulint global_tcn_cache_miss;
   ulint global_tcn_cache_evict;
-#endif
 
   // page write/flush/load/evit of types
   ulint innodb_buffer_pool_write_req_undo;
@@ -260,7 +258,6 @@ struct lizard_stats_t {
 
   ulint_ctr_1_t cleanout_cursor_restore_failed;
 
-#ifdef UNIV_DEBUG
   ulint_ctr_1_t block_tcn_cache_hit;
   ulint_ctr_1_t block_tcn_cache_miss;
   ulint_ctr_1_t block_tcn_cache_evict;
@@ -272,7 +269,6 @@ struct lizard_stats_t {
   ulint_ctr_1_t global_tcn_cache_hit;
   ulint_ctr_1_t global_tcn_cache_miss;
   ulint_ctr_1_t global_tcn_cache_evict;
-#endif
 
   ulint_ctr_1_t txn_undo_page_read_hit;
   ulint_ctr_1_t txn_undo_page_read_miss;
@@ -327,8 +323,6 @@ void txn_lookup_stat(txn_lookup_entry entry);
 
 }  // namespace lizard
 
-#ifdef UNIV_DEBUG
-
 #define BLOCK_TCN_CACHE_HIT                         \
   do {                                              \
     lizard::lizard_stats.block_tcn_cache_hit.inc(); \
@@ -373,21 +367,6 @@ void txn_lookup_stat(txn_lookup_entry entry);
   do {                                                 \
     lizard::lizard_stats.global_tcn_cache_evict.inc(); \
   } while (0)
-#else
-
-#define BLOCK_TCN_CACHE_HIT
-#define BLOCK_TCN_CACHE_MISS
-#define BLOCK_TCN_CACHE_EVICT
-#define SESSION_TCN_CACHE_HIT
-#define SESSION_TCN_CACHE_MISS
-#define SESSION_TCN_CACHE_EVICT
-#define GLOBAL_TCN_CACHE_HIT
-#define GLOBAL_TCN_CACHE_MISS
-#define GLOBAL_TCN_CACHE_EVICT
-
-#endif
-
-
 
 #define LIZARD_MONITOR_INC_TXN_CACHED(NUMBER)                             \
   do {                                                                    \
