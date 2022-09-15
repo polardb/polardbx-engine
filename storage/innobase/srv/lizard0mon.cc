@@ -100,7 +100,6 @@ static void export_lizard_status(void) {
 
   lizard_vars.purged_gcn = lizard_sys_get_purged_gcn();
 
-#ifdef UNIV_DEBUG
   lizard_vars.block_tcn_cache_hit = lizard_stats.block_tcn_cache_hit;
   lizard_vars.block_tcn_cache_miss = lizard_stats.block_tcn_cache_miss;
   lizard_vars.block_tcn_cache_evict = lizard_stats.block_tcn_cache_evict;
@@ -112,7 +111,6 @@ static void export_lizard_status(void) {
   lizard_vars.global_tcn_cache_hit = lizard_stats.global_tcn_cache_hit;
   lizard_vars.global_tcn_cache_miss = lizard_stats.global_tcn_cache_miss;
   lizard_vars.global_tcn_cache_evict = lizard_stats.global_tcn_cache_evict;
-#endif
 
   // page write/flush/load/evit of types
   lizard_vars.innodb_buffer_pool_write_req_undo =
@@ -301,7 +299,6 @@ static SHOW_VAR lizard_status_variables[] = {
     {"purged_gcn", (char *)&lizard_vars.purged_gcn, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
-#ifdef UNIV_DEBUG
     {"block_tcn_cache_hit", (char *)&lizard_vars.block_tcn_cache_hit, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
@@ -328,7 +325,6 @@ static SHOW_VAR lizard_status_variables[] = {
 
     {"global_tcn_cache_evict", (char *)&lizard_vars.global_tcn_cache_evict,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
-#endif
 
     {"buffer_pool_write_req_undo",
      (char *)&lizard_vars.innodb_buffer_pool_write_req_undo, SHOW_LONG,
