@@ -130,8 +130,7 @@ namespace lizard {
 /** The max percent of txn undo page that can be reused */
 extern ulint txn_undo_page_reuse_max_percent;
 
-#define TXN_UNDO_PAGE_REUSE_MAX_PERCENT \
-  ((TRX_UNDO_PAGE_REUSE_LIMIT * 100) / UNIV_PAGE_SIZE)
+#define TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF 90
 
 /**------------------------------------------------------------------------*/
 /** Initial value of undo ptr  */
@@ -223,6 +222,14 @@ bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 bool txn_undo_log_has_purged(const trx_rseg_t *rseg, const page_size_t &page_size);
 
 #endif  // UNIV_DEBUG || LIZARD_DEBUG
+
+/**
+  Get txn undo state at trx finish.
+
+  @param[in]      free_limit       space left on txn undo page
+  @return  TRX_UNDO_TO_PURGE or TRX_UNDO_CACHED
+*/
+extern ulint decide_txn_undo_state_at_finish(ulint free_limit);
 
 /**
   Initial the NULL value on SCN and UTC when create undo log header.

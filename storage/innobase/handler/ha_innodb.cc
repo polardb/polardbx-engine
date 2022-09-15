@@ -23472,8 +23472,8 @@ static MYSQL_SYSVAR_ULONG(txn_undo_page_reuse_max_percent,
                           lizard::txn_undo_page_reuse_max_percent,
                           PLUGIN_VAR_OPCMDARG,
                           "The max percent of txn undo page that can be reused",
-                          NULL, NULL, TXN_UNDO_PAGE_REUSE_MAX_PERCENT, 0,
-                          TXN_UNDO_PAGE_REUSE_MAX_PERCENT, 0);
+                          NULL, NULL, TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF, 0,
+                          100, 0);
 
 static MYSQL_SYSVAR_BOOL(scn_history_task_enabled,
                          lizard::srv_scn_history_task_enabled,

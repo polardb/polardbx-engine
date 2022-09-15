@@ -1969,17 +1969,13 @@ page_t *trx_undo_set_state_at_finish(
 
   lizard_trx_undo_hdr_uba_validation(undo_page + undo->hdr_offset, mtr);
 
-  if (undo->size == 1 &&
-      (free_offset = mach_read_from_2(page_hdr + TRX_UNDO_PAGE_FREE)) <
-          TRX_UNDO_PAGE_REUSE_LIMIT) {
-    state = TRX_UNDO_CACHED;
+  free_offset = mach_read_from_2(page_hdr + TRX_UNDO_PAGE_FREE);
 
-    /** If txn undo, check another limit again. */
-    if ((undo->type == TRX_UNDO_TXN) &&
-        (free_offset >
-         lizard::txn_undo_page_reuse_max_percent * UNIV_PAGE_SIZE / 100)) {
-      state = TRX_UNDO_TO_PURGE;
-    }
+  if (undo->type == TRX_UNDO_TXN) {
+    ut_ad(undo->size == 1);
+    state = lizard::decide_txn_undo_state_at_finish(free_offset);
+  } else if (undo->size == 1 && free_offset < TRX_UNDO_PAGE_REUSE_LIMIT) {
+    state = TRX_UNDO_CACHED;
   } else if (undo->type == TRX_UNDO_INSERT) {
     state = TRX_UNDO_TO_FREE;
   } else {

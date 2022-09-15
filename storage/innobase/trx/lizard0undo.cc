@@ -109,7 +109,7 @@ mysql_pfs_key_t lizard_undo_retention_mutex_key;
 namespace lizard {
 
 /** The max percent of txn undo page that can be reused */
-ulint txn_undo_page_reuse_max_percent = TXN_UNDO_PAGE_REUSE_MAX_PERCENT;
+ulint txn_undo_page_reuse_max_percent = TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF;
 
 /**
   Encode UBA into undo_ptr that need to copy into record
@@ -336,6 +336,29 @@ no_txn:
 }
 
 #endif
+
+/**
+  Get txn undo state at trx finish.
+
+  @param[in]      free_limit       space left on txn undo page
+  @return  TRX_UNDO_TO_PURGE or TRX_UNDO_CACHED
+*/
+ulint decide_txn_undo_state_at_finish(ulint free_limit) {
+  // 275 undo record + 100 safty margin.
+  // why 100 ? In trx_undo_header_create:
+  // ut_a(free + TRX_UNDO_LOG_HDR_SIZE < UNIV_PAGE_SIZE - 100);
+  static const ulint min_reserve = TXN_UNDO_LOG_EXT_HDR_SIZE + 100;
+
+  ulint reuse_limit = txn_undo_page_reuse_max_percent * UNIV_PAGE_SIZE / 100;
+
+  if (free_limit >= reuse_limit) {
+    return TRX_UNDO_TO_PURGE;
+  } else if (free_limit + min_reserve >= UNIV_PAGE_SIZE) {
+    return TRX_UNDO_TO_PURGE;
+  } else {
+    return TRX_UNDO_CACHED;
+  }
+}
 
 /**
   Initial the NULL value on SCN and UTC when create undo log header.
