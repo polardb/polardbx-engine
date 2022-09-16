@@ -3655,7 +3655,6 @@ dberr_t Buf_fetch_normal::get(buf_block_t *&block) noexcept {
     }
 
     /* Page not in buf_pool: needs to be read from file */
-    m_bp_hit = false;
     read_page();
   }
 
@@ -3730,7 +3729,6 @@ dberr_t Buf_fetch_other::get(buf_block_t *&block) noexcept {
     }
 
     /* Page not in buf_pool: needs to be read from file */
-    m_bp_hit = false;
     read_page();
   }
 
@@ -4057,6 +4055,8 @@ void Buf_fetch<T>::read_page() {
       buf_read_ahead_random(m_page_id, m_page_size, ibuf_inside(m_mtr));
     }
     m_retries = 0;
+
+    m_bp_hit = false;
   } else if (m_retries < BUF_PAGE_READ_MAX_RETRIES) {
     ++m_retries;
 
