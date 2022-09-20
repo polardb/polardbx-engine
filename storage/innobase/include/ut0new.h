@@ -179,6 +179,7 @@ extern PSI_memory_key mem_key_dict_stats_n_diff_on_level;
 extern PSI_memory_key mem_key_redo_log_archive_queue_element;
 extern PSI_memory_key mem_key_other;
 extern PSI_memory_key mem_key_partitioning;
+extern PSI_memory_key mem_key_row_cleanout;
 extern PSI_memory_key mem_key_row_log_buf;
 extern PSI_memory_key mem_key_row_merge_sort;
 extern PSI_memory_key mem_key_std;

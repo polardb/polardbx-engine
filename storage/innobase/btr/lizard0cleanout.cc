@@ -323,6 +323,9 @@ byte *btr_cur_parse_lizard_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
 /** Whether disable the delayed cleanout when read */
 bool opt_cleanout_disable = false;
 
+/** Commit cleanout profiles */
+ulint commit_cleanout_max_rows = COMMIT_CLEANOUT_DEFAULT_ROWS;
+
 /** Lizard max scan record count once cleanout one page.*/
 ulint cleanout_max_scans_on_page = 0;
 
@@ -465,6 +468,32 @@ bool Cursor::store_position(btr_pcur_t *pcur) {
   m_withdraw_clock = buf_withdraw_clock;
 
   m_old_stored = true;
+  return true;
+}
+
+bool Cursor::store_position(dict_index_t *index, buf_block_t *block,
+                            rec_t *rec) {
+  ut_ad(index && block && rec);
+
+  m_index = index;
+  m_block = block;
+  m_old_rec = rec;
+  m_page_id.copy_from(m_block->page.id);
+
+#ifdef UNIV_DEBUG
+  auto page = page_align(m_old_rec);
+  ut_ad(!page_is_empty(page) && page_is_leaf(page));
+  ut_ad(!m_block->page.file_page_was_freed);
+  ut_ad(index->is_clustered());
+  ut_ad(!index->table->is_temporary());
+#endif
+
+  /* Function try to check if block is S/X latch. */
+  m_modify_clock = buf_block_get_modify_clock(m_block);
+  m_withdraw_clock = buf_withdraw_clock;
+
+  m_old_stored = true;
+
   return true;
 }
 

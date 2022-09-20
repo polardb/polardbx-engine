@@ -24,7 +24,10 @@
  Created 2020-08-27 by Jianwei.zhao
  *******************************************************/
 
+#include "trx0trx.h"
 #include "lizard0trx.h"
+#include "lizard0row.h"
+#include "lizard0cleanout.h"
 
 namespace lizard {
 
@@ -32,6 +35,33 @@ void copy_to(TrxIdHash &h, TrxIdSet &s) {
   for (TrxIdHash::const_iterator it = h.cbegin(); it != h.cend(); it++) {
     s.insert(TrxTrack(it->first, it->second));
   }
+}
+
+void alloc_cleanout_cursors(trx_t *trx) {
+  trx->cleanout_cursors = UT_NEW(Cleanout_cursors(), mem_key_row_cleanout);
+  ut_ad(trx->cleanout_cursors != nullptr);
+}
+
+void release_cleanout_cursors(trx_t *trx) {
+  UT_DELETE(trx->cleanout_cursors);
+  trx->cleanout_cursors = nullptr;
+}
+
+void cleanout_rows_at_commit(trx_t *trx) {
+  ut_ad(trx != nullptr);
+  ut_ad(trx->cleanout_cursors != nullptr);
+
+  if (trx->cleanout_cursors->cursor_count() == 0) {
+    return;
+  }
+
+  auto undo_ptr = trx->txn_desc.undo_ptr;
+  lizard_undo_ptr_set_commit(&undo_ptr);
+
+  txn_rec_t txn_rec{trx->id, trx->txn_desc.cmmt.scn, undo_ptr,
+                    trx->txn_desc.cmmt.gcn};
+
+  commit_cleanout_do(trx, txn_rec);
 }
 
 }  // namespace lizard

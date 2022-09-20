@@ -811,6 +811,10 @@ enum trx_rseg_type_t {
   TRX_RSEG_TYPE_NOREDO    /*!< non-redo rollback segment. */
 };
 
+namespace lizard {
+class Cleanout_cursors;
+}
+
 struct trx_t {
   enum isolation_level_t {
 
@@ -1269,6 +1273,9 @@ struct trx_t {
 
   /** Cache tcn information. */
   lizard::Cache_tcn *session_tcn;
+
+  /** Commit cleanout cursors */
+  lizard::Cleanout_cursors *cleanout_cursors;
 };
 #ifndef UNIV_HOTBACKUP
 

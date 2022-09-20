@@ -44,6 +44,12 @@ namespace lizard {
 
 extern void copy_to(TrxIdHash &h, TrxIdSet &s);
 
+/** Alloc & release cleanout cursors. */
+extern void alloc_cleanout_cursors(trx_t *trx);
+extern void release_cleanout_cursors(trx_t *trx);
+
+extern void cleanout_rows_at_commit(trx_t *trx);
+
 }  // namespace lizard
 
 #endif
