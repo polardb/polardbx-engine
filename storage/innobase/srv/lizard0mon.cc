@@ -96,6 +96,10 @@ static void export_lizard_status(void) {
   lizard_vars.cleanout_cursor_restore_failed =
       lizard_stats.cleanout_cursor_restore_failed;
 
+  lizard_vars.commit_cleanout_skip = lizard_stats.commit_cleanout_skip;
+  lizard_vars.commit_cleanout_collects = lizard_stats.commit_cleanout_collects;
+  lizard_vars.commit_cleanout_cleaned = lizard_stats.commit_cleanout_cleaned;
+
   lizard_vars.commit_gcn = lizard_sys_get_gcn();
 
   lizard_vars.purged_gcn = lizard_sys_get_purged_gcn();
@@ -289,6 +293,15 @@ static SHOW_VAR lizard_status_variables[] = {
     {"cleanout_cursor_restore_failed",
      (char *)&lizard_vars.cleanout_cursor_restore_failed, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+
+    {"commit_cleanout_skip", (char *)&lizard_vars.commit_cleanout_skip,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"commit_cleanout_collects", (char *)&lizard_vars.commit_cleanout_collects,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"commit_cleanout_cleaned", (char *)&lizard_vars.commit_cleanout_cleaned,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"undo_retention_stats", Undo_retention::status, SHOW_CHAR,
      SHOW_SCOPE_GLOBAL},

@@ -82,6 +82,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0gp.h"
 #include "lizard0xa.h"
 #include "lizard0tcn.h"
+#include "lizard0row.h"
 
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
@@ -311,6 +312,8 @@ struct TrxFactory {
     } else {
       trx->session_tcn = nullptr;
     }
+
+    lizard::alloc_cleanout_cursors(trx);
   }
 
   /** Release resources held by the transaction object.
@@ -376,6 +379,8 @@ struct TrxFactory {
       delete trx->session_tcn;
       trx->session_tcn = nullptr;
     }
+
+    lizard::release_cleanout_cursors(trx);
   }
 
   /** Enforce any invariants here, this is called before the transaction
@@ -2135,6 +2140,8 @@ written */
   /* Reset flag that SE persists GTID. */
   auto &gtid_persistor = clone_sys->get_gtid_persistor();
   gtid_persistor.set_persist_gtid(trx, false);
+
+  lizard::cleanout_rows_at_commit(trx);
 
   if (mtr != nullptr) {
     if (trx->rsegs.m_redo.insert_undo != nullptr) {

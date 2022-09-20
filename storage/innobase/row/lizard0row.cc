@@ -906,6 +906,68 @@ struct Cleanout {
   const Txn_commits *m_txns;
 };
 
+/** Commit page cleanout operation */
+struct CommitCleanout {
+  CommitCleanout(const txn_rec_t &txn_rec) : m_txn_rec(txn_rec) {}
+
+  ulint operator()(Cursor &cursor) {
+    ulint cleaned = 0;
+    mem_heap_t *heap = nullptr;
+
+    mtr_t mtr;
+
+    mtr.start();
+
+    if (cursor.restore_position(&mtr, UT_LOCATION_HERE)) {
+      ulint *offsets = nullptr;
+
+      auto rec = const_cast<rec_t *>(cursor.get_rec());
+      auto index = const_cast<dict_index_t *>(cursor.get_index());
+      auto block = const_cast<buf_block_t *>(cursor.get_block());
+
+      heap = mem_heap_create(256, UT_LOCATION_HERE);
+      ut_a(heap);
+
+      // Once the restore is successful, we can assume that that the
+      // physical location of this record has not changed.
+      ut_a(page_rec_is_user_rec(rec));
+
+      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+                                UT_LOCATION_HERE, &heap);
+      auto undo_ptr = row_get_rec_undo_ptr(rec, index, offsets);
+      auto trx_id = row_get_rec_trx_id(rec, index, offsets);
+
+      if (m_txn_rec.trx_id == trx_id) {
+        if (lizard_undo_ptr_is_active(undo_ptr)) {
+          lizard_undo_ptr_set_commit(&undo_ptr);
+          ut_a(m_txn_rec.undo_ptr == undo_ptr);
+
+          row_upd_rec_lizard_fields_in_cleanout(
+              rec, buf_block_get_page_zip(block), index, offsets, &m_txn_rec);
+
+          btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &m_txn_rec, &mtr);
+
+          cleaned = 1;
+        } else {
+          ut_a(m_txn_rec.undo_ptr == undo_ptr);
+          ut_a(m_txn_rec.scn == row_get_rec_scn_id(rec, index, offsets));
+        }
+      }
+    }
+
+    mtr.commit();
+
+    if (heap) {
+      mem_heap_free(heap);
+    }
+
+    return cleaned;
+  }
+
+  // All the committed txn information
+  const txn_rec_t &m_txn_rec;
+};
+
 /**
   Cleanout all the pages in one cursor
 
@@ -928,6 +990,20 @@ static ulint row_cleanout_pages(Cleanout_pages *pages) {
 static ulint row_cleanout_cursors(Cleanout_cursors *cursors) {
   Cleanout op(cursors->txns());
   return cursors->iterate_cursor<Cleanout>(op);
+}
+
+/**
+  Commit clean out rows.
+
+  @param[in]      cursors     rows collected
+  @param[in]      txn_rec     trx information
+
+  @retval         count       cleaned records count
+*/
+static ulint commit_cleanout_cursors(Cleanout_cursors *cursors,
+                                     const txn_rec_t &txn_rec) {
+  CommitCleanout op(txn_rec);
+  return cursors->iterate_cursor<CommitCleanout>(op);
 }
 
 /**
@@ -971,6 +1047,80 @@ ulint row_cleanout_after_read(row_prebuilt_t *prebuilt) {
 
   return cleaned;
 }
+
+/**
+  Collect rows updated in current transaction.
+
+  @param[in]        thr             current session
+  @param[in]        cursor          btr cursor
+  @param[in]        rec             current rec
+*/
+void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor, rec_t *rec) {
+  if (commit_cleanout_max_rows == 0) {
+    return;
+  }
+
+  // In dict_persist_to_dd_table_buffer, no thr allocated,
+  // Now we skip those background tasks.
+  if (thr == nullptr) {
+    return;
+  }
+
+  trx_t *trx = thr_get_trx(thr);
+  ut_a(trx);
+
+  // Skip purge trx, or temp table.
+  if (trx->id == 0) {
+    ut_ad(strlen(trx->op_info) == 0 || strcmp(trx->op_info, "purge trx") == 0);
+    return;
+  }
+
+  auto block = btr_cur_get_block(cursor);
+  auto page = buf_block_get_frame(block);
+  auto leaf = page_is_leaf(page);
+  auto index = cursor->index;
+
+  if (leaf && index->is_clustered() && !index->table->is_temporary() &&
+      !dict_index_is_ibuf(index)) {
+    ut_ad(rec != nullptr);
+    ut_ad(rec == btr_cur_get_rec(cursor) /* update */ ||
+          rec == page_rec_get_next(btr_cur_get_rec(cursor)) /* insert */);
+    ut_ad(page_rec_is_user_rec(rec));
+    ut_ad(trx->cleanout_cursors != nullptr);
+
+    if (trx->cleanout_cursors->cursor_count() < commit_cleanout_max_rows) {
+      Cursor cursor(block->get_page_id());
+      cursor.store_position(index, block, rec);
+      trx->cleanout_cursors->push_cursor(cursor);
+    } else if (stat_enabled) {
+      lizard_stats.commit_cleanout_skip.inc();
+    }
+  }
+}
+
+/**
+  Cleanout rows at transaction commit.
+
+  @param[in]        trx             current transation
+  @param[in]        txn_rec         trx info
+*/
+void commit_cleanout_do(trx_t *trx, const txn_rec_t &txn_rec) {
+  ut_ad(trx != nullptr);
+  ut_ad(trx->id == txn_rec.trx_id);
+  ut_ad(!lizard_undo_ptr_is_active(txn_rec.undo_ptr));
+  ut_ad(trx->cleanout_cursors->cursor_count() > 0);
+
+  ulint collects = trx->cleanout_cursors->cursor_count();
+  ulint cleaned = commit_cleanout_cursors(trx->cleanout_cursors, txn_rec);
+
+  trx->cleanout_cursors->init();
+
+  if (stat_enabled) {
+    lizard_stats.commit_cleanout_collects.add(collects);
+    lizard_stats.commit_cleanout_cleaned.add(cleaned);
+  }
+}
+
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/
   /* lizard field debug */

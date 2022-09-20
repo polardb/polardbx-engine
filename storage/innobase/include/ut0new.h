@@ -219,6 +219,7 @@ extern PSI_memory_key mem_key_fil_space_t;
 extern PSI_memory_key mem_key_redo_log_archive_queue_element;
 extern PSI_memory_key mem_key_other;
 extern PSI_memory_key mem_key_partitioning;
+extern PSI_memory_key mem_key_row_cleanout;
 extern PSI_memory_key mem_key_row_log_buf;
 extern PSI_memory_key mem_key_ddl;
 extern PSI_memory_key mem_key_std;

@@ -168,6 +168,11 @@ byte *btr_cur_parse_lizard_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
 /** Whether disable the delayed cleanout when read */
 extern bool opt_cleanout_disable;
 
+/** Commit cleanout profiles */
+#define COMMIT_CLEANOUT_MAX_NUM (ulint(-1))
+#define COMMIT_CLEANOUT_DEFAULT_ROWS 3
+extern ulint commit_cleanout_max_rows;
+
 /** Lizard max scan record count once cleanout one page.*/
 extern ulint cleanout_max_scans_on_page;
 /** Lizard max clean record count once cleanout one page.*/
@@ -303,6 +308,8 @@ class Cursor {
   Cursor &operator=(const Cursor &);
 
   bool store_position(btr_pcur_t *pcur);
+
+  bool store_position(dict_index_t *index, buf_block_t *block, rec_t *rec);
 
   bool restore_position(mtr_t *mtr, ut::Location location);
 

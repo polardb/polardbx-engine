@@ -107,6 +107,10 @@ struct lizard_var_t {
 
   ulint cleanout_cursor_restore_failed;
 
+  ulint commit_cleanout_skip;
+  ulint commit_cleanout_collects;
+  ulint commit_cleanout_cleaned;
+
   /* Commit gcn for next transition. */
   ulint commit_gcn;
 
@@ -261,6 +265,10 @@ struct lizard_stats_t {
   ulint_ctr_1_t cleanout_cursor_collect;
 
   ulint_ctr_1_t cleanout_cursor_restore_failed;
+
+  ulint_ctr_1_t commit_cleanout_skip;
+  ulint_ctr_1_t commit_cleanout_collects;
+  ulint_ctr_1_t commit_cleanout_cleaned;
 
   ulint_ctr_1_t block_tcn_cache_hit;
   ulint_ctr_1_t block_tcn_cache_miss;

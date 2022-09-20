@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 
 #include "mem0mem.h"
+#include "btr0cur.h"
 #include "rem0types.h"
 
 struct ins_node_t;
@@ -353,6 +354,24 @@ bool tcn_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
 */
 bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
                       const dict_index_t *index, const ulint *offsets);
+
+/**
+  Collect rows updated in current transaction.
+
+  @param[in]        thr             current session
+  @param[in]        cursor          btr cursor
+  @param[in]        rec             current rec
+*/
+extern void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor,
+                                    rec_t *rec);
+
+/**
+  Cleanout rows at transaction commit.
+
+  @param[in]        trx             current transation
+  @param[in]        txn_rec         trx info
+*/
+extern void commit_cleanout_do(trx_t *trx, const txn_rec_t &txn_rec);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/

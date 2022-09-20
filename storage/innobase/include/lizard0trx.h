@@ -37,6 +37,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "trx0types.h"
 
-namespace lizard {}  // namespace lizard
+namespace lizard {
+
+/** Alloc & release cleanout cursors. */
+extern void alloc_cleanout_cursors(trx_t *trx);
+extern void release_cleanout_cursors(trx_t *trx);
+
+extern void cleanout_rows_at_commit(trx_t *trx);
+
+}  // namespace lizard
 
 #endif
