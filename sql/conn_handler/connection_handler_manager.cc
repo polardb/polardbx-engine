@@ -71,14 +71,14 @@ static void scheduler_wait_lock_begin() {
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
                  (current_thd, THD_WAIT_TABLE_LOCK));
   // Invoke THD galaxy cb after global.
-  if (current_thd != nullptr)
+  if (likely(current_thd != nullptr))
     MYSQL_CALLBACK(current_thd->galaxy_parallel_monitor, thd_wait_begin,
                    (current_thd, THD_WAIT_TABLE_LOCK));
 }
 
 static void scheduler_wait_lock_end() {
   // Invoke THD galaxy cb before global.
-  if (current_thd != nullptr)
+  if (likely(current_thd != nullptr))
     MYSQL_CALLBACK(current_thd->galaxy_parallel_monitor, thd_wait_end,
                    (current_thd));
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
@@ -89,14 +89,14 @@ static void scheduler_wait_sync_begin() {
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
                  (current_thd, THD_WAIT_SYNC));
   // Invoke THD galaxy cb after global.
-  if (current_thd != nullptr)
+  if (likely(current_thd != nullptr))
     MYSQL_CALLBACK(current_thd->galaxy_parallel_monitor, thd_wait_begin,
                    (current_thd, THD_WAIT_SYNC));
 }
 
 static void scheduler_wait_sync_end() {
   // Invoke THD galaxy cb before global.
-  if (current_thd != nullptr)
+  if (likely(current_thd != nullptr))
     MYSQL_CALLBACK(current_thd->galaxy_parallel_monitor, thd_wait_end,
                    (current_thd));
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,

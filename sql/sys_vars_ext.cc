@@ -45,8 +45,11 @@
 #include "sql/sys_vars.h"
 #include "sql/ha_sequence.h"
 #include "sql/log_table.h"
+#include "sql/sys_vars_ext.h"
 
 static char *galaxyengine_version_ptr = NULL;
+int32 rpc_port = DEFAULT_RPC_PORT;
+bool new_rpc = false;
 
 static Sys_var_ulong Sys_ccl_wait_timeout(
     "ccl_wait_timeout", "Timeout in seconds to wait when concurrency control.",
@@ -356,5 +359,18 @@ static Sys_var_uint Sys_print_gtid_info_during_recovery(
     CMD_LINE(OPT_ARG), VALID_RANGE(0, UINT_MAX),
     DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_int32 Sys_rpc_port("rpc_port", "RPC port for PolarDB-X",
+                                 READ_ONLY GLOBAL_VAR(rpc_port),
+                                 CMD_LINE(OPT_ARG), VALID_RANGE(0, 65535),
+                                 DEFAULT(DEFAULT_RPC_PORT), BLOCK_SIZE(1),
+                                 NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+                                 ON_UPDATE(0));
+
+static Sys_var_bool Sys_new_rpc("new_rpc", "Use new open PolarDB-X RPC",
+                                READ_ONLY GLOBAL_VAR(new_rpc),
+                                CMD_LINE(OPT_ARG), DEFAULT(false),
+                                NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+                                ON_UPDATE(0));
 
 /* RDS DEFINED */

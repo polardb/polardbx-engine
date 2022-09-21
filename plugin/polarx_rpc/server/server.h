@@ -1,0 +1,56 @@
+//
+// Created by zzy on 2022/7/6.
+//
+
+#pragma once
+
+#include <chrono>
+#include <thread>
+
+#include "sql/sys_vars_ext.h"
+
+#include "../common_define.h"
+#include "../server/server_variables.h"
+#include "../polarx_rpc.h"
+
+#include "epoll.h"
+#include "listener.h"
+#include "server_variables.h"
+
+namespace polarx_rpc {
+
+class Cserver final {
+  NO_COPY_MOVE(Cserver);
+
+  /// thread of watch dog to prevent deadlock on thread pool schedule
+  static void watch_dog() {
+    while (true) {
+      size_t inst_cnt;
+      auto insts = CmtEpoll::get_instance(inst_cnt);
+      for (size_t i = 0; i < inst_cnt; ++i) {
+        auto &inst = *insts[i];
+        if (inst.worker_stall_since_last_check())
+          inst.force_scale_thread_pool();
+        if (enable_tasker) inst.balance_tasker();
+      }
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(epoll_group_thread_deadlock_check_interval));
+    }
+  }
+
+public:
+  Cserver() noexcept(false) {
+    auto port = rpc_port;
+    if (port > 0 && port < 65536 && new_rpc) {
+      /// init server and bind port
+      Clistener::start(static_cast<uint16_t>(port));
+      /// init watch dog
+      std::thread thread(&watch_dog);
+      thread.detach();
+    } else
+      my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+                            "PolarX RPC disabled.");
+  }
+};
+
+} // namespace polarx_rpc

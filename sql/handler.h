@@ -5134,7 +5134,7 @@ class handler {
   */
   int ha_extra(enum ha_extra_function operation);
 
- private:
+ public:
   /**
     Storage engine specific implementation of ha_extra()
 

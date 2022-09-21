@@ -1909,7 +1909,7 @@ class Set_kill_conn : public Do_THD_Impl {
       MYSQL_CALLBACK(Connection_handler_manager::event_functions,
                      post_kill_notification, (killing_thd));
       // And THD galaxy cb.
-      if (killing_thd != nullptr)
+      if (likely(killing_thd != nullptr))
         MYSQL_CALLBACK(killing_thd->galaxy_parallel_monitor,
                        post_kill_notification, (killing_thd));
     }

@@ -1,0 +1,254 @@
+#pragma once
+
+#include "sql/sql_class.h"
+
+#include "../coders/protocol_fwd.h"
+#include "../coders/command_delegate.h"
+
+#include "protocol.h"
+#include "meta.h"
+
+namespace rpc_executor {
+using KeyPartMap = ::key_part_map;
+using KeyRange = ::key_range;
+using KeyFlag = enum ha_rkey_function;
+
+class PlanNode;
+
+class Executor {
+public:
+  static Executor &instance() {
+    static Executor executor;
+    return executor;
+  }
+
+  int execute(const Polarx::ExecPlan::ExecPlan &plan_wrapper,
+              polarx_rpc::CcommandDelegate &resultset,
+              THD *thd);
+  int execute(const Polarx::ExecPlan::AnyPlan &plan,
+              const ParamsList &params,
+              polarx_rpc::CcommandDelegate &resultset,
+              THD *thd);
+
+private:
+  int build_and_execute(const Polarx::ExecPlan::AnyPlan &plan_msg,
+                        polarx_rpc::CcommandDelegate &resultset,
+                        THD *thd);
+
+  int execute_get(const Polarx::ExecPlan::GetPlan &get_plan,
+                  polarx_rpc::CcommandDelegate &resultset,
+                  THD *thd);
+  int execute_batch_get(const Polarx::ExecPlan::GetPlan &batch_get_plan,
+                        polarx_rpc::CcommandDelegate &resultset,
+                        THD *thd);
+  int execute_key_only_scan(
+                  const Polarx::ExecPlan::KeyOnlyRangeScan &key_only_scan_plan,
+      polarx_rpc::CcommandDelegate &resultset,
+                  THD *thd);
+  int execute_scan(const Polarx::ExecPlan::RangeScan &scan_plan,
+                   polarx_rpc::CcommandDelegate &resultset,
+                   THD *thd);
+  int execute_project(const Polarx::ExecPlan::TableProject &project,
+                      polarx_rpc::CcommandDelegate &resultset,
+                      THD *thd);
+};
+
+class PlanBuilder {
+public:
+  static PlanBuilder &instance() {
+    static PlanBuilder plan_builder;
+    return plan_builder;
+  }
+
+  int create_plan_tree(const Polarx::ExecPlan::AnyPlan &plan_msg,
+                       polarx_rpc::CcommandDelegate &resultset,
+                       InternalDataSet &dataset,
+                       THD *thd,
+                       std::unique_ptr<PlanNode> &plan);
+  int create_project_tree(const Polarx::ExecPlan::TableProject &project_msg,
+                          InternalDataSet &dataset,
+                          THD *thd,
+                          std::unique_ptr<PlanNode> &plan);
+  int create_project_tree(const Polarx::ExecPlan::Project &project_msg,
+                          InternalDataSet &dataset,
+                          THD *thd,
+                          std::unique_ptr<PlanNode> &plan);
+  int create_filter_tree(const Polarx::ExecPlan::Filter &filter_msg,
+                         InternalDataSet &dataset,
+                         THD *thd,
+                         std::unique_ptr<PlanNode> &plan);
+  int create_get_tree(const Polarx::ExecPlan::GetPlan &get_message,
+                      InternalDataSet &dataset,
+                      THD *thd,
+                      std::unique_ptr<PlanNode> &plan);
+  int create_scan_tree(const Polarx::ExecPlan::RangeScan &scan_message,
+                       InternalDataSet &dataset,
+                       THD *thd,
+                       std::unique_ptr<PlanNode> &plan);
+  int create_scan_tree(const Polarx::ExecPlan::TableScanPlan &scan_message,
+                       InternalDataSet &dataset,
+                       THD *thd,
+                       std::unique_ptr<PlanNode> &plan);
+
+  int create_aggr_tree(const Polarx::ExecPlan::Aggr &aggr_msg,
+                       InternalDataSet &dataset, THD *thd,
+                       std::unique_ptr<PlanNode> &plan);
+
+private:
+  int create(const Polarx::ExecPlan::AnyPlan &plan_message,
+             InternalDataSet &dataset,
+             THD *thd,
+             std::unique_ptr<PlanNode> &plan);
+};
+
+class PlanNode {
+public:
+  virtual ~PlanNode() {}
+  virtual int next(InternalDataSet &result) = 0;
+  virtual int finish(int ret) = 0;
+  std::unique_ptr<PlanNode> left_tree_;
+  std::unique_ptr<PlanNode> right_tree_;
+  std::unique_ptr<PlanNode> project_info_node_;
+};
+
+class ResponseNode : public PlanNode {
+public:
+  int init(polarx_rpc::CcommandDelegate &resultset,
+           InternalDataSet &dataset);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+private:
+  std::unique_ptr<Protocol> protocol_;
+};
+
+class ProjectNode : public PlanNode {
+public:
+  int init(const Polarx::ExecPlan::TableProject &project_message,
+           InternalDataSet &dataset);
+  int init(const Polarx::ExecPlan::Project &project_msg,
+           InternalDataSet &dataset);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+private:
+  ProjectInfo project_exprs_;
+};
+
+class AggrNode : public PlanNode {
+public:
+  int init(const Polarx::ExecPlan::Aggr &aggr_msg, InternalDataSet &dataset);
+  int init_aggr_expr(Polarx::ExecPlan::Aggr::AggrType type, ExprItem *item);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+
+  bool is_type_valid(Polarx::ExecPlan::Aggr::AggrType type);
+  int calculate(InternalDataSet &dataset);
+
+private:
+  Polarx::ExecPlan::Aggr::AggrType type_;
+
+  POS pos_;  // just for placeholder
+  std::string aggr_name_;
+  Item_sum *aggr_expr_;
+};
+
+class FilterNode : public PlanNode {
+public:
+  int init(const ::Polarx::ExecPlan::Filter &filter_msg,
+           InternalDataSet &dataset);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+private:
+  ExprItem* condition_expr_;
+};
+
+class GetNode : public PlanNode {
+public:
+  int init(const Polarx::ExecPlan::GetPlan &get_msg,
+           InternalDataSet &dataset,
+           THD *thd);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+private:
+  THD *thd_;
+  std::unique_ptr<char[]> table_name_ptr_;
+  std::unique_ptr<char[]> schema_name_ptr_;
+  ExecTable *table_;
+  ExecKeyMeta *key_meta_;
+  SearchKey search_key_;
+  int table_status_ = HA_ERR_INTERNAL_ERROR;
+  bool first_next_ = true;
+};
+
+class InlineScanNode {
+public:
+  int init(const Polarx::ExecPlan::RangeScan &scan_msg,
+           InternalDataSet &dataset,
+           THD *thd);
+  int init(const Polarx::ExecPlan::KeyOnlyRangeScan &scan_msg,
+           InternalDataSet &dataset,
+           THD *thd);
+  int init(const Polarx::ExecPlan::TableScanPlan &scan_msg,
+           InternalDataSet &dataset,
+           THD *thd);
+  int seek(InternalDataSet &dataset);
+  int next(InternalDataSet &dataset);
+
+  int index_first(InternalDataSet &dataset);
+  int index_next(InternalDataSet &dataset);
+  int finish(int ret);
+private:
+
+  int init(const Polarx::ExecPlan::TableInfo &table_info,
+           const char *index_name,
+           const RangeInfo &range_info,
+           InternalDataSet &dataset,
+           THD *thd);
+
+  THD *thd_;
+  std::unique_ptr<char[]> table_name_ptr_;
+  std::unique_ptr<char[]> schema_name_ptr_;
+  ExecTable *table_;
+  ExecKeyMeta *key_meta_;
+  RangeSearchKey range_key_;
+  int64_t flags_;
+  int table_status_ = HA_ERR_INTERNAL_ERROR;
+  bool key_only_ = false;
+};
+
+class ScanNode : public PlanNode {
+public:
+  int init(const Polarx::ExecPlan::RangeScan &scan_msg,
+           InternalDataSet &dataset,
+           THD *thd);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+private:
+  InlineScanNode inline_scan_node_;
+  bool first_next_;
+};
+
+class TableScanNode : public PlanNode {
+public:
+  int init(const Polarx::ExecPlan::TableScanPlan &table_scan_msg,
+          InternalDataSet &dataset,
+          THD *thd);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+private:
+  InlineScanNode inline_scan_node_;
+  bool first_next_;
+};
+
+class KeyScanNode : public PlanNode {
+public:
+  int init(const Polarx::ExecPlan::RangeScan &scan_msg,
+           InternalDataSet &dataset,
+           THD *thd);
+  virtual int next(InternalDataSet &dataset) override;
+  virtual int finish(int ret) override;
+private:
+  InlineScanNode inline_scan_node_;
+  bool first_next_;
+};
+
+} // namespace executor

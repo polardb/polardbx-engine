@@ -29,7 +29,7 @@
 /** Galaxy X-protocol */
 namespace gx {
 
-unsigned int Galaxy_system_variables::m_port = gx::defaults::G_PORT;
+int Galaxy_system_variables::m_port = gx::defaults::G_PORT;
 unsigned int Galaxy_system_variables::m_max_queued_messages;
 unsigned int Galaxy_system_variables::m_galaxy_worker_threads_per_tcp;
 unsigned int Galaxy_system_variables::m_galaxy_worker_threads_shrink_time;
@@ -38,11 +38,11 @@ bool Galaxy_system_variables::m_enable_galaxy_kill_log;
 unsigned int Galaxy_system_variables::m_socket_recv_buffer;
 unsigned int Galaxy_system_variables::m_socket_send_buffer;
 
-static MYSQL_SYSVAR_UINT(
+static MYSQL_SYSVAR_INT(
     port, Galaxy_system_variables::m_port,
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
     "Port on which Galaxy X-protocol is going to accept incoming connections.",
-    nullptr, nullptr, gx::defaults::G_PORT, 1,
+    nullptr, nullptr, gx::defaults::G_PORT, -1,
     std::numeric_limits<uint16_t>::max(), 0);
 
 static MYSQL_SYSVAR_UINT(
