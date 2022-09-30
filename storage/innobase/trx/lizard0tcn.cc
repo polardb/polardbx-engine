@@ -160,12 +160,19 @@ tcn_fill_result fill_txn_rec_and_txn_lookup(trx_t *trx, btr_pcur_t *pcur,
     return TCN_ALREADY_FILLED;
   }
 
-  /** 2. search valid value of tcn in cache */
+  return fill_txn_rec_and_txn_lookup_low(trx, pcur, txn_rec, txn_lookup, entry);
+}
+
+tcn_fill_result fill_txn_rec_and_txn_lookup_low(trx_t *trx, btr_pcur_t *pcur,
+                                                txn_rec_t *txn_rec,
+                                                txn_lookup_t *txn_lookup,
+                                                txn_lookup_entry entry) {
+  /** 1. search valid value of tcn in cache */
   if (trx_search_tcn(trx, pcur, txn_rec, txn_lookup)) {
     return TCN_FILLED_FROM_CACHE;
   }
 
-  /** 3. lookup scn/gcn from txn_undo */
+  /** 2. lookup scn/gcn from txn_undo */
   if (txn_undo_hdr_lookup(txn_rec, txn_lookup, nullptr, entry)) {
     return TCN_FILLED_FROM_UNDO;
   }

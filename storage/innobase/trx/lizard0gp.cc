@@ -496,7 +496,7 @@ retry:
       GCN_NULL,
   };
 
-  auto fill_ret = lizard::fill_txn_rec_and_txn_lookup(
+  auto fill_ret = fill_txn_rec_and_txn_lookup_low(
       trx, pcur, &txn_rec, &txn_lookup, TXN_GCN_READ_SEES);
 
   /** 1. Already committed; */

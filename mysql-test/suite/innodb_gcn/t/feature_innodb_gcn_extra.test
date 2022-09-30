@@ -1,0 +1,279 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+show variables like "transaction_isolation";
+
+
+connect(con_u1, 127.0.0.1, root,,);
+connect(con_u2, 127.0.0.1, root,,);
+connect(con_u3, 127.0.0.1, root,,);
+
+connection con_u1;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+connection con_u2;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+connection con_u3;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+--echo # gcn and dd table
+--disable_result_log
+set innodb_snapshot_seq = @base_seq +1500;
+select * from mysql.db limit 1;
+--enable_result_log
+
+create database dd_db;
+create table dd_db.t1 (a int, b int, primary key (a));
+set innodb_snapshot_seq = @base_seq +1600;
+select * from dd_db.t1;
+
+create table dd_db.t2 (a int, b int, primary key (a));
+set innodb_snapshot_seq = @base_seq +1500;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from dd_db.t2;
+
+create table dd_db.t3 (a int, b int, primary key (a));
+set innodb_snapshot_seq = @base_seq +1400;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+select * from dd_db.t3;
+
+drop database dd_db;
+
+
+--echo #
+--echo # Insert ... select & create .... select & update
+--echo # 
+create table t1 (a int, b int , primary key (a));
+create table t2 (a int, b int , primary key (a));
+
+--echo # scn and snapshot
+connection con_u1;
+begin;
+select * from t1;
+
+connection con_u2;
+insert into t1 values (10,0),(11,0);
+
+connection con_u1;
+select * from t1;
+
+insert into t2 select * from t1;
+create table t3 select * from t1;
+
+select * from t2;
+select * from t3;
+
+delete from t1;
+delete from t2;
+drop table t3;
+
+--echo # gcn and snapshot
+
+connection con_u1;
+xa begin 'x1';
+set innodb_snapshot_seq = @base_seq +2000;
+select * from t1;
+
+connection con_u2;
+xa begin 'x2';
+insert into t1 values (2101,0),(2102,0);
+xa end 'x2';
+xa prepare 'x2';
+set innodb_commit_seq = @base_seq +2100;
+xa commit 'x2';
+
+connection con_u1;
+select * from t1;
+
+insert into t2 select * from t1;
+select * from t2;
+xa end 'x1';
+xa commit 'x1' one phase;
+select * from t2;
+
+set innodb_snapshot_seq = @base_seq +2000;
+select * from t1;
+
+delete from t2;
+set innodb_snapshot_seq = @base_seq +2000;
+insert into t2 select * from t1;
+select * from t2;
+
+set innodb_snapshot_seq = @base_seq +2000;
+create table t3 select * from t1;
+select * from t3;
+
+drop table t1,t2,t3;
+
+
+--echo #
+--echo # update 
+--echo #
+create table u1 (a int , b int, primary key (a));
+
+--echo #scn
+insert into u1 values (30,0);
+connection con_u1;
+begin;
+select * from u1;
+
+connection con_u3;
+begin;
+select * from u1;
+
+connection con_u2;
+insert into u1 values (31,0);
+
+connection con_u1;
+select * from u1;
+update u1 set b=30;
+select * from u1;
+
+connection con_u3;
+select * from u1;
+rollback;
+select * from u1;
+
+connection con_u1;
+commit;
+select * from u1;
+delete from u1;
+
+--echo #gcn
+connection con_u1;
+set innodb_commit_seq = @base_seq +2900;
+insert into u1 values (2900, 0);
+
+xa begin 'x1';
+set innodb_snapshot_seq = @base_seq +3000;
+select * from u1;
+
+connection con_u3;
+xa begin 'x3';
+set innodb_snapshot_seq = @base_seq +3000;
+select * from u1;
+
+connection con_u2;
+set innodb_commit_seq = @base_seq +3100;
+insert into u1 values (3101, 0),(3102, 0);
+
+connection con_u1;
+select * from u1;
+update u1 set b = 3000;
+select * from u1;
+
+
+connection con_u3;
+select * from u1;
+xa end 'x3';
+xa commit 'x3' one phase;
+select * from u1;
+
+connection con_u1;
+xa end 'x1';
+xa commit 'x1' one phase;
+select * from u1;
+
+delete from u1;
+
+--echo # update with snapshot_gcn/commit_gcn
+set innodb_commit_seq = @base_seq +3200;
+insert into u1 values (3201, 0),(3202, 0);
+
+# expect use current gcn 3200
+set innodb_snapshot_seq = @base_seq +3300;
+update u1 set b = 3300 where a = 3201;
+
+# expect use input gcn 3400
+set innodb_commit_seq = @base_seq +3400;
+update u1 set b = 3400 where a = 3202;
+
+set innodb_snapshot_seq = @base_seq +3210;
+select * from u1;
+
+set innodb_snapshot_seq = @base_seq +3410;
+select * from u1;
+
+delete from u1;
+
+--echo #
+--echo # external xa commit
+--echo #
+
+connection con_u1;
+xa begin '4000';
+insert into u1 values (4000, 0);
+xa end '4000';
+xa prepare '4000';
+
+set innodb_commit_seq = @base_seq +4000;
+xa commit '4000';
+
+xa begin '4100';
+insert into u1 values (4100, 0);
+xa end '4100';
+xa prepare '4100';
+
+disconnect con_u1;
+connection con_u2;
+set innodb_commit_seq = @base_seq +4100;
+xa commit '4100';
+
+connection con_u3;
+set innodb_snapshot_seq = @base_seq +4050;
+select * from u1;
+
+set innodb_snapshot_seq = @base_seq +4150;
+select * from u1;
+
+delete from u1;
+connect(con_u1, 127.0.0.1, root,,);
+connection con_u1;
+--disable_query_log
+eval SET @base_seq = $global_base_seq;
+--enable_query_log
+
+--echo #
+--echo # as of gcn read record which has been cleaned out
+--echo #
+connection con_u1;
+set innodb_commit_seq = @base_seq + 5000;
+insert into u1 values(5000, 0);
+select * from u1 where a = 5000;
+
+set innodb_snapshot_seq = @base_seq + 5000;
+select * from u1 where a = 5000;
+
+delete from u1;
+
+--echo #
+--echo # /*+ SET_VAR(innodb_snapshot_seq= ... ) */ && count(*)
+--echo # base_seq = 1000000;
+--echo #
+connection con_u1;
+xa begin '1000000';
+insert into u1 values (1000000, 0);
+xa end '1000000';
+xa prepare '1000000';
+
+set innodb_commit_seq = 1000000;
+xa commit '1000000';
+
+set innodb_snapshot_seq = 999999;
+select * from u1;
+set innodb_snapshot_seq = 999999;
+select count(*) from u1;
+select /*+ SET_VAR(innodb_snapshot_seq= 999999) */ count(*) from u1;
+select /*+ SET_VAR(innodb_snapshot_seq= 999999) */ * from u1;
+
+delete from u1;
+drop table u1;
+
+disconnect con_u1;
+disconnect con_u2;
+disconnect con_u3;

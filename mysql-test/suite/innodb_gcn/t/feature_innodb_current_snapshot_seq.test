@@ -1,0 +1,177 @@
+#
+# init 
+#
+connect (conn1,localhost,root,,);
+connect (conn2,localhost,root,,);
+
+connection conn1;
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+connection conn2;
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+create database mydb;
+create table mydb.t1 (a int auto_increment, b int, primary key (a));
+
+connection conn1;
+use mydb;
+
+connection conn2;
+use mydb;
+
+set innodb_commit_seq = @base_seq +1000;
+insert into t1 (b) value (1000);
+
+set innodb_commit_seq = @base_seq +2000;
+insert into t1 (b) value (2000);
+
+#
+# innodb_current_snapshot_seq
+#
+
+set innodb_snapshot_seq = @base_seq +2000;
+select * from t1;
+
+# select will reset innodb_snapshot_seq;
+select * from t1;
+
+set innodb_current_snapshot_seq = ON;
+select * from t1;
+
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
+
+set innodb_snapshot_seq = @base_seq +1000;
+set innodb_current_snapshot_seq = ON;
+select * from t1;
+
+set innodb_current_snapshot_seq = ON;
+set innodb_snapshot_seq = @base_seq +1000;
+select * from t1;
+
+set innodb_snapshot_seq = @base_seq +1000;
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
+
+select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result; 
+
+#
+# innodb_current_snapshot_seq and insert
+#
+
+set innodb_current_snapshot_seq = ON;
+insert into t1 (b) value (3003);
+
+set innodb_commit_seq = @base_seq +3000;
+insert into t1 (b) value (3004);
+
+
+set innodb_snapshot_seq = @base_seq +3000;
+select * from t1;
+
+set innodb_current_snapshot_seq = ON;
+select * from t1;
+
+#
+# innodb_current_snapshot_seq and xa prepare
+#
+connection conn1;
+insert into t1 (b) value (5000);
+
+xa start '5000';
+update t1 set b = 5001 where a = 5;
+xa end '5000';
+xa prepare '5000';
+
+connection conn2;
+set innodb_global_query_wait_timeout=3;
+select * from t1 where a = 5;
+
+set innodb_snapshot_seq = @base_seq +5000;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where a = 5;
+
+set innodb_current_snapshot_seq=ON;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where a = 5;
+
+--error ER_LOCK_WAIT_TIMEOUT
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1 where a = 5;
+
+connection conn1;
+set innodb_commit_seq = @base_seq +5000;
+xa commit '5000';
+
+connection conn2;
+set innodb_snapshot_seq = @base_seq +5000;
+select * from t1 where a = 5;
+
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON) */ * from t1 where a = 5;
+
+select (@base_seq + 5000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result; 
+#
+# reset innodb_current_snapshot_seq
+# 1. use db will not reset innodb_current_snapshot_seq
+# 2. set will not reset innodb_current_snapshot_seq
+# 3. show variables will not reset innodb_current_snapshot_seq
+# 4. parse error will not reset innodb_current_snapshot_seq
+#
+connection conn1;
+insert into t1 (b) value (6000);
+
+xa start '6000';
+update t1 set b = 6001 where a = 6;
+xa end '6000';
+xa prepare '6000';
+
+
+connection conn2;
+set innodb_current_snapshot_seq=ON;
+use mydb;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where a = 6;
+
+set innodb_current_snapshot_seq=ON;
+set autocommit = 1;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where a = 6;
+
+set innodb_current_snapshot_seq=ON;
+show variables like "innodb_current_snapshot_seq";
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where a = 6;
+
+set innodb_current_snapshot_seq=ON;
+--error ER_PARSE_ERROR
+errorselect * from t1;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where a = 6;
+
+set innodb_current_snapshot_seq=ON;
+--error ER_WRONG_VALUE_FOR_VAR
+set innodb_current_snapshot_seq=2323;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where a = 6;
+
+connection conn1;
+xa commit '6000';
+
+connection conn2;
+set innodb_current_snapshot_seq=ON;
+select * from t1 where a = 6;
+
+
+#
+# read record which has been cleaned out
+#
+connection conn1;
+insert into t1 (b) value (7000);
+select * from t1 where a = 7;
+
+set innodb_current_snapshot_seq = ON;
+select * from t1 where a = 7;
+
+
+disconnect conn1;
+disconnect conn2;
+
+connection default;
+drop database mydb;

@@ -1,0 +1,130 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+create database mydb;
+create table mydb.t1 (a int auto_increment, b int, primary key (a));
+use mydb;
+use mydb;
+set innodb_commit_seq = @base_seq +1000;
+insert into t1 (b) value (1000);
+set innodb_commit_seq = @base_seq +2000;
+insert into t1 (b) value (2000);
+set innodb_snapshot_seq = @base_seq +2000;
+select * from t1;
+a	b
+1	1000
+select * from t1;
+a	b
+1	1000
+2	2000
+set innodb_current_snapshot_seq = ON;
+select * from t1;
+a	b
+1	1000
+2	2000
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
+a	b
+1	1000
+2	2000
+set innodb_snapshot_seq = @base_seq +1000;
+set innodb_current_snapshot_seq = ON;
+select * from t1;
+a	b
+set innodb_current_snapshot_seq = ON;
+set innodb_snapshot_seq = @base_seq +1000;
+select * from t1;
+a	b
+set innodb_snapshot_seq = @base_seq +1000;
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
+a	b
+select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result;
+result
+1
+set innodb_current_snapshot_seq = ON;
+insert into t1 (b) value (3003);
+set innodb_commit_seq = @base_seq +3000;
+insert into t1 (b) value (3004);
+set innodb_snapshot_seq = @base_seq +3000;
+select * from t1;
+a	b
+1	1000
+2	2000
+3	3003
+set innodb_current_snapshot_seq = ON;
+select * from t1;
+a	b
+1	1000
+2	2000
+3	3003
+4	3004
+insert into t1 (b) value (5000);
+xa start '5000';
+update t1 set b = 5001 where a = 5;
+xa end '5000';
+xa prepare '5000';
+set innodb_global_query_wait_timeout=3;
+select * from t1 where a = 5;
+a	b
+5	5000
+set innodb_snapshot_seq = @base_seq +5000;
+select * from t1 where a = 5;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set innodb_current_snapshot_seq=ON;
+select * from t1 where a = 5;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1 where a = 5;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set innodb_commit_seq = @base_seq +5000;
+xa commit '5000';
+set innodb_snapshot_seq = @base_seq +5000;
+select * from t1 where a = 5;
+a	b
+5	5000
+select /*+ SET_VAR(innodb_current_snapshot_seq=ON) */ * from t1 where a = 5;
+a	b
+5	5001
+select (@base_seq + 5000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result;
+result
+1
+insert into t1 (b) value (6000);
+xa start '6000';
+update t1 set b = 6001 where a = 6;
+xa end '6000';
+xa prepare '6000';
+set innodb_current_snapshot_seq=ON;
+use mydb;
+select * from t1 where a = 6;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set innodb_current_snapshot_seq=ON;
+set autocommit = 1;
+select * from t1 where a = 6;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set innodb_current_snapshot_seq=ON;
+show variables like "innodb_current_snapshot_seq";
+Variable_name	Value
+innodb_current_snapshot_seq	ON
+select * from t1 where a = 6;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set innodb_current_snapshot_seq=ON;
+errorselect * from t1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'errorselect * from t1' at line 1
+select * from t1 where a = 6;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set innodb_current_snapshot_seq=ON;
+set innodb_current_snapshot_seq=2323;
+ERROR 42000: Variable 'innodb_current_snapshot_seq' can't be set to the value of '2323'
+select * from t1 where a = 6;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+xa commit '6000';
+set innodb_current_snapshot_seq=ON;
+select * from t1 where a = 6;
+a	b
+6	6001
+insert into t1 (b) value (7000);
+select * from t1 where a = 7;
+a	b
+7	7000
+set innodb_current_snapshot_seq = ON;
+select * from t1 where a = 7;
+a	b
+7	7000
+drop database mydb;

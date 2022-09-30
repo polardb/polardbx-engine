@@ -258,7 +258,7 @@ static bool row_vers_find_matching(
         clust_rec, mtr, version, clust_index, clust_offsets, heap,
         &prev_version, nullptr,
         dict_index_has_virtual(sec_index) ? &clust_vrow : nullptr, 0, nullptr,
-        false /* Only lock_sec_rec_some_has_impl run into here, it's a
+        nullptr /* Only lock_sec_rec_some_has_impl run into here, it's a
                  current reading so can't be a as-of query */);
 
     /* The oldest visible clustered index version must not be
@@ -717,7 +717,7 @@ static void row_vers_build_cur_vrow_low(
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, nullptr, vrow, status,
                                 nullptr,
-                                false /* TODO: figure out it */);
+                                nullptr /* TODO: figure out it */);
 
     if (heap2) {
       mem_heap_free(heap2);
@@ -838,7 +838,7 @@ static bool row_vers_vc_matches_cluster(
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, nullptr, vrow, status,
                                 nullptr,
-                                false /* TODO: figured out it */ );
+                                nullptr /* TODO: figured out it */ );
 
     if (heap2) {
       mem_heap_free(heap2);
@@ -1159,7 +1159,7 @@ bool row_vers_old_has_index_entry(
     trx_undo_prev_version_build(
         rec, mtr, version, clust_index, clust_offsets, heap, &prev_version,
         nullptr, dict_index_has_virtual(index) ? &vrow : nullptr, 0, nullptr,
-        false /* Only purge sys, or rollback run into here */);
+        nullptr /* Only purge sys, or rollback run into here */);
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (!prev_version) {
@@ -1307,7 +1307,7 @@ dberr_t row_vers_build_for_consistent_read(
 
     bool purge_sees = trx_undo_prev_version_build(
         rec, mtr, version, index, *offsets, heap, &prev_version, nullptr, vrow,
-        0, lob_undo, vision->is_asof());
+        0, lob_undo, vision);
 
     if (vision->is_asof()) {
       err = (purge_sees) ? DB_SUCCESS : DB_SNAPSHOT_TOO_OLD;
@@ -1342,9 +1342,10 @@ dberr_t row_vers_build_for_consistent_read(
         lizard::GCN_NULL,
     };
 
+    txn_lookup_t txn_lookup;
     if (vision->is_asof_gcn())
-      lizard::fill_txn_rec(nullptr, nullptr, &txn_rec,
-                           lizard::TXN_BUILD_PREV_VER_ASOF);
+      lizard::fill_txn_rec_and_txn_lookup_low(
+          nullptr, nullptr, &txn_rec, &txn_lookup, lizard::TXN_BUILD_PREV_VER_ASOF);
     else
       lizard::fill_txn_rec(nullptr, nullptr, &txn_rec,
                            lizard::TXN_BUILD_PREV_VER_NORMAL);
@@ -1470,8 +1471,8 @@ void row_vers_build_for_semi_consistent_read(
     if (!trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap,
                                      &prev_version, in_heap, vrow, 0,
                                      nullptr,
-                                     false /* semi-consi can't be a
-                                              as-of query */)) {
+                                     nullptr /* semi-consi can't be a
+                                                as-of query */)) {
       mem_heap_free(heap);
       heap = heap2;
       heap2 = nullptr;

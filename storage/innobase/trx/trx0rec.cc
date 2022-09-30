@@ -2490,7 +2490,7 @@ bool trx_undo_prev_version_build(
     const dict_index_t *const index, ulint *offsets, mem_heap_t *heap,
     rec_t **old_vers, mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
     lob::undo_vers_t *lob_undo,
-    bool is_as_of) {
+    const lizard::Vision *vision) {
   DBUG_TRACE;
 
   trx_undo_rec_t *undo_rec = nullptr;
@@ -2513,6 +2513,8 @@ bool trx_undo_prev_version_build(
   txn_rec_t txn_rec;
 
   mtr_t txn_mtr;
+  bool is_as_of = vision ? vision->is_asof() : false;
+  bool is_as_of_gcn = vision ? vision->is_asof_gcn() : false;
 
   ut_ad(!rw_lock_own(&purge_sys->latch, RW_LOCK_S));
   ut_ad(mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_S_FIX) ||
@@ -2635,9 +2637,15 @@ bool trx_undo_prev_version_build(
           lizard::GCN_NULL,
       };
 
-      lizard::fill_txn_rec(nullptr, nullptr, &undo_txn_rec,
-                           lizard::TXN_UNDO_BUILD_REC);
-
+      if (is_as_of_gcn) {
+        txn_lookup_t txn_lookup;
+        lizard::fill_txn_rec_and_txn_lookup_low(nullptr, nullptr, &undo_txn_rec,
+                                                &txn_lookup,
+                                                lizard::TXN_UNDO_BUILD_REC);
+      } else {
+        lizard::fill_txn_rec(nullptr, nullptr, &undo_txn_rec,
+                             lizard::TXN_UNDO_BUILD_REC);
+      }
       missing_extern = purge_sys->vision.modifications_visible(
           &undo_txn_rec, index->table->name);
 
