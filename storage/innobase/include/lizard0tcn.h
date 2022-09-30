@@ -179,6 +179,10 @@ tcn_fill_result fill_txn_rec_and_txn_lookup(trx_t *trx, btr_pcur_t *pcur,
                                             txn_lookup_t *txn_lookup,
                                             txn_lookup_entry entry);
 
+tcn_fill_result fill_txn_rec_and_txn_lookup_low(trx_t *trx, btr_pcur_t *pcur,
+                                                txn_rec_t *txn_rec,
+                                                txn_lookup_t *txn_lookup,
+                                                txn_lookup_entry entry);
 }  // namespace lizard
 
 #define TCN_CACHE_AGGR(TYPE, WHAT)  \
