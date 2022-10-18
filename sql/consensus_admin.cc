@@ -44,8 +44,12 @@
 #include "sql/debug_sync.h"  // DEBUG_SYNC
 #include "sql/log.h"
 //#include "sql/binlog_ext.h"
+#include "replica_read_manager.h"
 
 using std::max;
+
+/* wait no commit index when exec event in xpaxos_channel */
+bool opt_disable_wait_commitindex = false;
 
 /* Helper function for SHOW BINLOG/RELAYLOG EVENTS */
 
@@ -574,7 +578,7 @@ int start_consensus_apply_threads()
 int check_exec_consensus_log_end_condition(Relay_log_info *rli,
                                            bool is_xpaxos_replication) {
   DBUG_ENTER("check_exec_consensus_log_end_condition");
-  if (is_xpaxos_replication) {
+  if (is_xpaxos_replication  && !opt_disable_wait_commitindex) {
     while (consensus_ptr->checkCommitIndex(consensus_log_manager.get_real_apply_index() - 1, consensus_log_manager.get_current_term()) <
             consensus_log_manager.get_real_apply_index())
     {
@@ -632,40 +636,49 @@ void update_consensus_apply_pos(Relay_log_info *rli,
   if (is_xpaxos_replication) {
     // update apply index
     /* for large trx, use the first one */
-    if (ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT)
-    {
-      Consensus_log_event * r_ev = (Consensus_log_event*)ev;
+    if (ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT) {
+      Consensus_log_event *r_ev = (Consensus_log_event *)ev;
       uint64 consensus_index = r_ev->get_index();
       uint64 consensus_term = r_ev->get_term();
-      if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX)
-      {
-	if (!consensus_log_manager.get_in_large_trx())
-	{
-	  consensus_log_manager.set_apply_index(consensus_index);
-	  consensus_log_manager.set_apply_term(consensus_term);
-	  consensus_log_manager.set_apply_ev_sequence(0);
-	  consensus_log_manager.set_in_large_trx(true);
-	}
-      }
-      else if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX_END)
-      {
-	consensus_log_manager.set_in_large_trx(false);
-      }
-      else
-      {
-	/* normal case */
-	consensus_log_manager.set_apply_index(consensus_index);
-	consensus_log_manager.set_apply_term(consensus_term);
-	consensus_log_manager.set_apply_ev_sequence(0);
+      uint64 consensus_index_end_pos =
+          r_ev->future_event_relay_log_pos + r_ev->get_length();
+
+      if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX) {
+        if (!consensus_log_manager.get_in_large_trx()) {
+          consensus_log_manager.set_apply_index(consensus_index);
+          consensus_log_manager.set_apply_term(consensus_term);
+          consensus_log_manager.set_apply_ev_sequence(0);
+          consensus_log_manager.set_in_large_trx(true);
+        }
+      } else if (r_ev->get_flag() &
+                 Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
+        consensus_log_manager.set_in_large_trx(false);
+      } else {
+        /* normal case */
+        consensus_log_manager.set_apply_index(consensus_index);
+        consensus_log_manager.set_apply_term(consensus_term);
+        consensus_log_manager.set_apply_ev_sequence(0);
       }
       consensus_log_manager.set_real_apply_index(consensus_index);
-      if (!rli->is_parallel_exec())
-	consensus_ptr->updateAppliedIndex(consensus_index);
+      consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
     }
 
     ev->consensus_index = consensus_log_manager.get_apply_index();
+	  ev->consensus_real_index = consensus_log_manager.get_real_apply_index();
+    ev->consensus_index_end_pos = consensus_log_manager.get_apply_index_end_pos();
     ev->consensus_sequence = consensus_log_manager.get_apply_ev_sequence();
     consensus_log_manager.incr_apply_ev_sequence();
+
+	  /**
+     * The Group of CONSENSUS_LOG which is applied may be truncated.
+     * It will add a CONSENSUS_EMPTY event instead of the truncated binlog.
+     * 
+     * The CONSENSUS_EMPTY event can be considered as end_group().
+     */
+    if (ev->get_type_code() == binary_log::CONSENSUS_EMPTY_EVENT) {
+      ev->consensus_index_end_pos = ev->future_event_relay_log_pos;
+    }
+
   }
 }
 
@@ -811,6 +824,8 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
     rli_appliedindex = rli->get_consensus_apply_index();
     rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex? 0: rli_appliedindex - opt_appliedindex_force_delay;
     consensus_ptr->updateAppliedIndex(rli_appliedindex);
+    replica_read_manager.update_lsn(rli_appliedindex);
+
     /*
      * Wait until new leader empty log is committed,
      * which means truncate log is finished and we have correct hotlog.

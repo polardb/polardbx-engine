@@ -345,6 +345,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
   sync_index = 0;
   apply_index = 1;
   real_apply_index = 1;
+  apply_index_end_pos = 0;
   apply_term = 1;
   apply_catchup = 0;
   current_term = 1;

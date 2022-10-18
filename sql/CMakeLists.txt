@@ -926,6 +926,7 @@ SET(BINLOG_SOURCE
   consensus_info.cc consensus_recovery_manager.cc
   consensus_log_index.cc appliedindex_checker.cc
   consensus_admin.cc
+  replica_read_manager.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
 
@@ -975,6 +976,7 @@ SET (SLAVE_SOURCE
   consensus_info.cc bl_consensus_log.cc
   consensus_prefetch_manager.cc consensus_fifo_cache_manager.cc
   consensus_recovery_manager.cc consensus_log_index.cc appliedindex_checker.cc
+  replica_read_manager.cc
   )
 ADD_LIBRARY(slave STATIC ${SLAVE_SOURCE})
 

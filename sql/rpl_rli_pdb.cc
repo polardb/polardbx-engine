@@ -72,6 +72,7 @@
 #include "sql/transaction_info.h"
 #include "thr_mutex.h"
 #include "sql/log_event_ext.h"
+#include "rpl_rli_ext.h"
 
 #ifndef DBUG_OFF
 ulong w_rr = 0;
@@ -2530,6 +2531,10 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
     DBUG_ASSERT(seen_begin || is_gtid_event(ev) || is_gcn_event(ev) ||
                 ev->get_type_code() == binary_log::QUERY_EVENT ||
                 is_mts_db_partitioned(rli) || worker->id == 0 || seen_gtid);
+
+    if (error == 0) {
+      mts_advance_consensus_apply_index(rli, ev);
+    }
 
     if (ev->ends_group() || (!seen_begin && !is_gtid_event(ev) && !is_gcn_event(ev) &&
                              (ev->get_type_code() == binary_log::QUERY_EVENT ||

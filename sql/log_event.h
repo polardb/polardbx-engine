@@ -697,6 +697,8 @@ class Log_event {
   ulonglong future_event_relay_log_pos;
 
   ulonglong consensus_index;
+  ulonglong consensus_real_index;
+  ulonglong consensus_index_end_pos;
   ulonglong consensus_sequence;
 
   /**

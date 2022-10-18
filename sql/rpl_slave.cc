@@ -153,12 +153,14 @@
 
 #include "consensus_log_manager.h"
 #include "sql/log_event_ext.h"
+#include "sql/replica_read_manager.h"
 
 #ifdef NORMANDY_CLUSTER
 #include "../cluster/consensus/consensus.h"
 #include "bl_consensus_log.h"
 #include "sql/consensus_admin.h"
 #endif
+# include "sql/rpl_rli_ext.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;
@@ -4468,8 +4470,14 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
         }
       }
     }
-  } else
+  } else {
     mysql_mutex_unlock(&rli->data_lock);
+    /** 
+     * update consensus apply index for
+     *  EVENT_SKIP_COUNT and EVENT_SKIP_IGNORE
+    */
+    update_consensus_apply_index(rli, ev);
+  }
 
   set_timespec_nsec(&rli->ts_exec[1], 0);
   rli->stats_exec_time += diff_timespec(&rli->ts_exec[1], &rli->ts_exec[0]);
@@ -4599,6 +4607,7 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
           if ((error = rli->mts_finalize_recovery())) {
             (void)Rpl_info_factory::reset_workers(rli);
           }
+          mts_init_consensus_apply_index(rli, rli->get_consensus_apply_index());
         }
         rli->mts_recovery_group_seen_begin = false;
         if (!error) error = rli->flush_info(true);
@@ -6386,7 +6395,7 @@ bool mts_checkpoint_routine(Relay_log_info *rli, bool force) {
     rli_appliedindex = rli->get_consensus_apply_index();
     rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex? 0 :
                         rli_appliedindex - opt_appliedindex_force_delay;
-    consensus_ptr->updateAppliedIndex(rli_appliedindex);
+    mts_force_consensus_apply_index(rli, rli_appliedindex);
   }
   rli->set_group_master_log_pos(rli->gaq->lwm.group_master_log_pos);
   rli->set_group_relay_log_pos(rli->gaq->lwm.group_relay_log_pos);
@@ -6567,6 +6576,12 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
 
   rli->gaq = new Slave_committed_queue(rli->checkpoint_group, n);
   if (!rli->gaq->inited) return 1;
+
+  if(opt_consensus_index_buf_enabled && rli->info_thd->xpaxos_replication_channel) {
+    rli->m_consensus_index_buf = new Index_link_buf(rli->checkpoint_group * 2);
+    if(!rli->m_consensus_index_buf)
+      return 1;
+  }
 
   // length of WQ is actually constant though can be made configurable
   rli->mts_slave_worker_queue_len_max = mts_slave_worker_queue_len_max;
@@ -6757,6 +6772,11 @@ end:
   destroy_hash_workers(rli);
   delete rli->gaq;
   rli->least_occupied_workers.clear();
+
+  if(rli->m_consensus_index_buf) {
+    delete rli->m_consensus_index_buf;
+    rli->m_consensus_index_buf = nullptr;
+  }
 
   // Destroy buffered events of the current group prior to exit.
   for (uint i = 0; i < rli->curr_group_da.size(); i++)
@@ -7124,6 +7144,8 @@ extern "C" void *handle_slave_sql(void *arg) {
       goto err;
     }
     mysql_mutex_unlock(&rli->data_lock);
+
+    mts_init_consensus_apply_index(rli, rli->get_consensus_apply_index());
 
     /* Read queries from the IO/THREAD until this thread is killed */
 

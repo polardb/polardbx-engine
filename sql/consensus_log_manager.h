@@ -95,6 +95,7 @@ public:
   uint64 get_current_index() { return current_index; }
   uint64 get_apply_index() { return apply_index; }
   uint64 get_real_apply_index() { return real_apply_index; }
+  uint64 get_apply_index_end_pos() { return apply_index_end_pos; }
   uint64 get_apply_term() { return apply_term; }
   uint64 get_apply_ev_sequence() { return apply_ev_seq; }
   uint64 get_stop_term() { return stop_term; }
@@ -123,6 +124,7 @@ public:
   void set_current_index(uint64 current_index_arg) { current_index = current_index_arg; }
   void set_apply_index(uint64 apply_index_arg) { apply_index = apply_index_arg; }
   void set_real_apply_index(uint64 real_apply_index_arg) { real_apply_index = real_apply_index_arg; }
+  void set_apply_index_end_pos(uint64 apply_index_end_pos_arg) { apply_index_end_pos = apply_index_end_pos_arg; }  
   void set_apply_term(uint64 apply_term_arg) { apply_term = apply_term_arg; }
   void set_apply_ev_sequence(uint64 apply_ev_seq_arg) { apply_ev_seq = apply_ev_seq_arg; }
   void set_apply_catchup(uint apply_catchup_arg) { apply_catchup = apply_catchup_arg; }
@@ -229,6 +231,7 @@ private:
   std::atomic<uint64>                       sync_index;             // used to tell last log entry
   std::atomic<uint64>                       apply_index;            // used to record sql thread coordinator apply index
   std::atomic<uint64>                       real_apply_index;       // for large trx
+  std::atomic<uint64>                       apply_index_end_pos;    // used to record sql thread coordinator apply index end pos   
   std::atomic<uint64>                       apply_term;             // used to record sql thread coordinator apply term
   std::atomic<uint64>                       stop_term;              // used to mark sql thread coordinator stop condition
   std::atomic<uint64>                       apply_ev_seq;           // used to record sql thread coordinator apply event sequence in one index

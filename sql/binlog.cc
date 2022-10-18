@@ -134,6 +134,7 @@
 #include "sql_partition.h"
 #include "thr_lock.h"
 #include "sql/binlog_ext.h"
+#include "replica_read_manager.h"
 
 bool opt_gcn_write_event = false;
 
@@ -8806,6 +8807,7 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     uint64 commitIndex = consensus_ptr->getCommitIndex();
     uint64 tmpi = opt_appliedindex_force_delay >= commitIndex? 0: commitIndex - opt_appliedindex_force_delay;
     consensus_ptr->updateAppliedIndex(tmpi);
+    replica_read_manager.update_lsn(tmpi);
   }
 
   if (thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->is_enabled())

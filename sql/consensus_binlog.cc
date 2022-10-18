@@ -38,6 +38,7 @@
 #include <string>
 
 #include "sql/log_event_ext.h"
+#include "replica_read_manager.h"
 
 static void correct_binlog_event_log_pos(char *buf, size_t buf_len, ulonglong offset)
 {
@@ -1491,8 +1492,10 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
     *rotate_var = true;
 
 #ifdef NORMANDY_CLUSTER
-  if (opt_cluster_log_type_instance)
+  if (opt_cluster_log_type_instance) {
     consensus_ptr->updateAppliedIndex(*index);
+    replica_read_manager.update_lsn(*index);
+  }
 #endif
 
 err:  
@@ -1604,8 +1607,10 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
     *rotate_var = true;
 
 #ifdef NORMANDY_CLUSTER
-  if (opt_cluster_log_type_instance)
+  if (opt_cluster_log_type_instance) {
     consensus_ptr->updateAppliedIndex(*max_index);
+    replica_read_manager.update_lsn(*max_index);
+  }
 #endif
 
 err:

@@ -18,6 +18,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <sstream>
 #include "appliedindex_checker.h"
+#include "sql/replica_read_manager.h"
 
 AppliedIndexChecker appliedindex_checker;
 
@@ -53,6 +54,7 @@ int AppliedIndexChecker::commit(uint64 index)
         {
           group_max = opt_appliedindex_force_delay >= group_max? 0: group_max - opt_appliedindex_force_delay;
           consensus_ptr->updateAppliedIndex(group_max);
+          replica_read_manager.update_lsn(group_max);
         }
       }
       break;

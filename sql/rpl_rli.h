@@ -71,6 +71,7 @@
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/rpl_applier_reader.h" // Rpl_applier_reader
+#include "replica_read_manager.h"
 
 class Commit_order_manager;
 class Master_info;
@@ -79,6 +80,7 @@ class Rpl_info_handler;
 class Slave_committed_queue;
 class Slave_worker;
 class String;
+class Index_link_buf;
 struct LEX_MASTER_INFO;
 struct db_worker_hash_entry;
 
@@ -1904,6 +1906,8 @@ class Relay_log_info : public Rpl_info {
  public:
   bool curr_group_seen_gcn;
   uint64 curr_group_gcn;
+
+  Index_link_buf *m_consensus_index_buf;
 };
 
 /**

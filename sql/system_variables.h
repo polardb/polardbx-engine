@@ -429,6 +429,9 @@ struct System_variables {
 
   /** Whether to get current snapshot gcn from innodb. */
   bool innodb_current_snapshot_gcn;
+
+  /* Replica consistent read */
+  ulonglong read_lsn;
 };
 
 /**
