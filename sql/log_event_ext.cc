@@ -58,6 +58,10 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
 	if (thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
     flags |= FLAG_COMMITTED_GCN;
     commit_gcn = thd->get_commit_gcn();
+
+    if (thd->get_internal_generated_gcn())
+      flags |= FLAG_INTERNAL_GENERATED_GCN;
+
   }
 
   DBUG_ASSERT(flags != 0);
@@ -91,11 +95,13 @@ bool Gcn_log_event::write(Basic_ostream *ostream) {
 void Gcn_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
   DBUG_ASSERT(flags != 0);
   IO_CACHE *const head = &print_event_info->head_cache;
+  bool internal_generated = flags & FLAG_INTERNAL_GENERATED_GCN;
 
   if (!print_event_info->short_form)
   {
     print_header(head, print_event_info, false);
-    my_b_printf(head, "\tGcn\n");
+    my_b_printf(head, "\tGcn\tInternal_generated=%s\n",
+                internal_generated ? "true" : "false");
   }
 
   if (flags & FLAG_COMMITTED_GCN) {

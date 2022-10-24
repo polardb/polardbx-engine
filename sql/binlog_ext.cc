@@ -50,12 +50,14 @@ Binlog_ext::Binlog_ext() {}
 bool Binlog_ext::assign_gcn_to_flush_group(THD *first_seen) {
   uint64_t gcn = MYSQL_GCN_NULL;
   bool error = false;
+  bool internal_generated_gcn = false;
 
   for (THD *head = first_seen; head; head = head->next_to_commit) {
     if (head->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
       gcn = head->variables.innodb_commit_gcn;
     } else {
       error = ha_acquire_gcn(&gcn);
+      internal_generated_gcn = true;
     }
 
 #ifndef DBUG_OFF
@@ -63,6 +65,7 @@ bool Binlog_ext::assign_gcn_to_flush_group(THD *first_seen) {
 #endif
 
     head->m_extra_desc.m_commit_gcn = gcn;
+    head->m_extra_desc.m_internal_generated_gcn = internal_generated_gcn;
   }
 
   return error;

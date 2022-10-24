@@ -4311,6 +4311,8 @@ private:
   ulonglong get_snapshot_gcn() { return m_extra_desc.m_snapshot_gcn; }
   ulonglong get_commit_gcn() { return m_extra_desc.m_commit_gcn; }
 
+  bool get_internal_generated_gcn() {return m_extra_desc.m_internal_generated_gcn; }
+
   /** For galaxy parallel thread pool. */
   THD_event_functions *galaxy_parallel_monitor = nullptr;
   void *galaxy_parallel_context = nullptr;
