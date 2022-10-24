@@ -739,7 +739,7 @@ bool Srv_session::module_deinit() {
 */
 bool Srv_session::is_valid(const Srv_session *session) {
   const THD *thd = session ? &session->thd : nullptr;
-  return thd ? (bool)server_session_list.find(thd) : false;
+  return thd ? (session->safe_session || (bool)server_session_list.find(thd)) : false;
 }
 
 /**
@@ -871,10 +871,12 @@ bool Srv_session::attach() {
   // This will install our new THD object as current_thd
   thd.store_globals();
 
-  Srv_session *old_session = server_session_list.find(old_thd);
+  if (old_thd) {
+    Srv_session *old_session = server_session_list.find(old_thd);
 
-  /* Really detach only if we are sure everything went fine */
-  if (old_session) old_session->set_detached();
+    /* Really detach only if we are sure everything went fine */
+    if (old_session) old_session->set_detached();
+  }
 
   thd_clear_errors(&thd);
 

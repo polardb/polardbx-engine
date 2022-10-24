@@ -305,35 +305,43 @@ static inline int64_t stable_ms() {
  * } thd_wait_type;
  */
 void Galaxy_session_pool_manager::wait_begin(THD *thd, int wait_type) {
-  auto recoverable_wait = false;
-  switch (wait_type) {
-    case THD_WAIT_DISKIO:
-    case THD_WAIT_BINLOG:
-    case THD_WAIT_GROUP_COMMIT:
-    case THD_WAIT_SYNC:
-      recoverable_wait = true;
-      break;
-    default:
-      break;
-  }
+  auto before =
+      thd->galaxy_parallel_enter.fetch_add(1, std::memory_order_acquire);
+  if (0 == before) {
+    auto recoverable_wait = false;
+    switch (wait_type) {
+      case THD_WAIT_DISKIO:
+      case THD_WAIT_BINLOG:
+      case THD_WAIT_GROUP_COMMIT:
+      case THD_WAIT_SYNC:
+        recoverable_wait = true;
+        break;
+      default:
+        break;
+    }
 
-  if (recoverable_wait)
-    thd->galaxy_parallel_record = false;
-  else {
-    thd->galaxy_parallel_record = true;
-    ++m_wait_count;
-    // Fast push last time.
-    if (m_wait_count.load(std::memory_order_acquire) >=
-        m_worker_count.load(std::memory_order_acquire) * 2 / 3)
-      m_last_multiple_wait_time.store(stable_ms(), std::memory_order_release);
-    // Do scale if needed.
-    // Always do scale check in lock to prevent concurrency problem with shrink.
-    scale_thread_pool();
+    if (recoverable_wait)
+      thd->galaxy_parallel_record = false;
+    else {
+      thd->galaxy_parallel_record = true;
+      ++m_wait_count;
+      // Fast push last time.
+      if (m_wait_count.load(std::memory_order_acquire) >=
+          m_worker_count.load(std::memory_order_acquire) * 2 / 3)
+        m_last_multiple_wait_time.store(stable_ms(), std::memory_order_release);
+      // Do scale if needed.
+      // Always do scale check in lock to prevent concurrency problem with
+      // shrink.
+      scale_thread_pool();
+    }
   }
 }
 
 void Galaxy_session_pool_manager::wait_end(THD *thd) {
-  if (thd->galaxy_parallel_record) {
+  auto before =
+      thd->galaxy_parallel_enter.fetch_sub(1, std::memory_order_release);
+  if (1 == before && thd->galaxy_parallel_record &&
+      thd->galaxy_parallel_record) {
     --m_wait_count;
     thd->galaxy_parallel_record = false;
   }

@@ -223,6 +223,11 @@ class Srv_session {
   inline THD *get_thd() { return &thd; }
 
   /**
+   * Mark or unmark session for polarx_rpc.
+   */
+  inline void set_safe(bool safe) { safe_session = safe; }
+
+  /**
     Returns the ID of a session.
 
     The value returned from THD::thread_id()
@@ -299,6 +304,7 @@ class Srv_session {
 
   srv_session_state state;
   enum_vio_type vio_type;
+  bool safe_session{false};
 
   class Session_backup_and_attach {
    public:

@@ -612,6 +612,7 @@ SET(SQL_SHARED_SOURCES
   tso/tso_proc.cc
   xa_handler.cc
   log_table.cc
+  xrpc/xrpc_proc.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

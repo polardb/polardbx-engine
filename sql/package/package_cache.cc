@@ -32,6 +32,7 @@
 #include "sql/trans_proc/returning.h"
 #include "sql/consensus/consensus_proc.h"
 #include "sql/tso/tso_proc.h"
+#include "sql/xrpc/xrpc_proc.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -197,6 +198,8 @@ void package_context_init() {
   register_package<Proc, Consensus_proc_force_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_drop_prefetch_channel>(CONSENSUS_PROC_SCHEMA);
 
+  /* xrpc.perf_hist() */
+  register_package<Proc, Proc_perf_hist>(XRPC_PROC_SCHEMA);
 }
 
 } /* namespace im */

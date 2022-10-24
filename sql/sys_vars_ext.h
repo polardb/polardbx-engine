@@ -39,4 +39,8 @@ extern "C" MYSQL_PLUGIN_IMPORT char innodb_version[SERVER_VERSION_LENGTH];
 
 extern void customize_server_version();
 
+static constexpr uint DEFAULT_RPC_PORT = 33660;
+extern int32 rpc_port;
+extern bool new_rpc;
+
 #endif /* SYS_VARS_EXT_H_INCLUDED */

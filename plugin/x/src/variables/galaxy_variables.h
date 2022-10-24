@@ -27,7 +27,7 @@ namespace gx {
 
 class Galaxy_system_variables {
  public:
-  static unsigned int m_port;
+  static int m_port;
   static unsigned int m_max_queued_messages;
   static unsigned int m_galaxy_worker_threads_per_tcp;
   static unsigned int m_galaxy_worker_threads_shrink_time;

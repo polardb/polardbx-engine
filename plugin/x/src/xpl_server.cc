@@ -30,6 +30,7 @@
 #include "my_thread_local.h"
 #include "mysql/plugin.h"
 #include "mysql/service_ssl_wrapper.h"
+#include "sql/sys_vars_ext.h"
 
 #include "plugin/x/generated/mysqlx_version.h"
 #include "plugin/x/ngs/include/ngs/interface/authentication_interface.h"
@@ -335,6 +336,14 @@ static bool parse_bind_address_value(const char *begin_address_value,
 }
 
 int Server::plugin_main(MYSQL_PLUGIN p) {
+  auto port = gx::Galaxy_system_variables::m_port;
+  if (rpc_port != DEFAULT_RPC_PORT)
+    port = rpc_port; // replace it if not default
+  if (port < 1 || port > 65535 || new_rpc) {
+    log_error(ER_XPLUGIN_STARTUP_FAILED, "Galaxy X disabled.");
+    return 0;
+  }
+
   plugin_handle = p;
 
   uint32 listen_backlog = 50 + Plugin_system_variables::max_connections / 5;
@@ -380,7 +389,7 @@ int Server::plugin_main(MYSQL_PLUGIN p) {
         Plugin_system_variables::port_open_timeout,
         Plugin_system_variables::socket, listen_backlog, events,
         std::ref(galaxy_listener_factory),
-        gx::Galaxy_system_variables::m_port));
+        port));
 
     instance_rwl.wlock();
 
