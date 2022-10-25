@@ -27,7 +27,7 @@ static int polarx_rpc_init(MYSQL_PLUGIN info) {
   } catch (std::exception &e) {
     my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
                           "Startup failed with error \"%s\"", e.what());
-    // unireg_abort(MYSQLD_ABORT_EXIT);
+    unireg_abort(MYSQLD_ABORT_EXIT);
     return 1;
   }
 

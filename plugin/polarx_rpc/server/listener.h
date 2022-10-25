@@ -154,12 +154,21 @@ private:
 
 public:
   static void start(uint16_t port) {
+    /// check port first
+    auto err = CmtEpoll::check_port(port);
+    if (err != 0) {
+      my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+                            "Failed to check port %u. %s", port,
+                            std::strerror(-err));
+      throw std::runtime_error("Failed to check port.");
+    }
+
     size_t inst_cnt;
     auto insts = CmtEpoll::get_instance(inst_cnt);
     for (size_t i = 0; i < inst_cnt; ++i) {
       std::unique_ptr<Clistener> listener(new Clistener(*insts[i]));
       /// only set reuse port on other inst
-      auto err = insts[i]->listen_port(port, listener.get(), i != 0);
+      err = insts[i]->listen_port(port, listener.get(), inst_cnt > 1);
       if (0 == err) {
         listener.release(); /// leak it to epoll
         my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,

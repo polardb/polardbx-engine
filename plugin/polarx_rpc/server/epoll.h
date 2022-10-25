@@ -785,6 +785,28 @@ public:
     return LIKELY(0 == iret) ? 0 : -errno;
   }
 
+  static inline int check_port(uint16_t port) {
+    auto fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (UNLIKELY(fd <= 0)) return -errno;
+    sockaddr_in address;
+    ::memset(&address, 0, sizeof(address));
+    if (::inet_pton(AF_INET, "127.0.0.1", &address.sin_addr.s_addr) != 1) {
+      auto err = errno;
+      ::close(fd);
+      return -err;
+    }
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    if (0 == ::connect(fd, reinterpret_cast<struct sockaddr *>(&address),
+                       sizeof(address))) {
+      ::close(fd);
+      return -EADDRINUSE;
+    }
+    auto err = errno;
+    ::close(fd);
+    return ECONNREFUSED == err ? 0 : -err;
+  }
+
   /// 0 if success else -errno
   inline int listen_port(uint16_t port, CepollCallback *cb,
                          bool reuse = false) const {

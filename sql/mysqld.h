@@ -731,6 +731,8 @@ extern std::atomic<query_id_t> atomic_global_query_id;
 int *get_remaining_argc();
 char ***get_remaining_argv();
 
+void unireg_abort(int exit_code);
+
 /* increment query_id and return it.  */
 inline MY_ATTRIBUTE((warn_unused_result)) query_id_t next_query_id() {
   return ++atomic_global_query_id;
