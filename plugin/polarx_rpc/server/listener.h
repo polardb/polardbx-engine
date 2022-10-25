@@ -159,7 +159,7 @@ public:
     for (size_t i = 0; i < inst_cnt; ++i) {
       std::unique_ptr<Clistener> listener(new Clistener(*insts[i]));
       /// only set reuse port on other inst
-      auto err = insts[i]->listen_port(port, listener.get(), inst_cnt != 0);
+      auto err = insts[i]->listen_port(port, listener.get(), i != 0);
       if (0 == err) {
         listener.release(); /// leak it to epoll
         my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
