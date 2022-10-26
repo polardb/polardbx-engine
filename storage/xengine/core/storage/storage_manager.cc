@@ -22,6 +22,7 @@
 #include "table/merging_iterator.h"
 #include "table/internal_iterator.h"
 #include "table/sstable_scan_iterator.h"
+#include "util/sync_point.h"
 
 /* clang-format off */
 namespace xengine
@@ -415,6 +416,9 @@ void StorageManager::release_meta_snapshot(const db::SnapshotImpl *meta_snapshot
 
 void StorageManager::async_recycle(void *args)
 {
+#ifndef NDEBUG
+  TEST_SYNC_POINT("StorageManager::TEST_inject_async_recycle_hang");
+#endif
   RecycleArgs *recycle_args = reinterpret_cast<RecycleArgs *>(args);
   recycle_args->storage_manager_->recycle();
   MOD_DELETE_OBJECT(RecycleArgs, recycle_args);

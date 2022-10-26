@@ -729,6 +729,7 @@ set(TESTS
         #db/corruption_test.cc
         #db/cuckoo_table_db_test.cc
         #db/db_basic_test.cc
+        db/bugfix_39705890_allocate_extent_failed_test.cc
         db/bugfix_25168148_test.cc
         db/db_block_cache_test.cc
         #db/db_bloom_filter_test.cc

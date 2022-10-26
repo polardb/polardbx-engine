@@ -79,6 +79,7 @@ class ExtentBasedTableBuilder : public TableBuilder {
   // REQUIRES: Either Finish() or Abandon() has been called.
   ~ExtentBasedTableBuilder();
 
+  int init();
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
@@ -87,7 +88,6 @@ class ExtentBasedTableBuilder : public TableBuilder {
                               const common::Slice& key,
                               const common::Slice& value,
                               const common::ImmutableCFOptions &ioption);
-  int plain_add(const common::Slice& key, const common::Slice& value);
   int set_in_cache_flag();
   bool SupportAddBlock() const override;
 
@@ -148,6 +148,7 @@ class ExtentBasedTableBuilder : public TableBuilder {
   ExtentBasedTableBuilder(const ExtentBasedTableBuilder&) = delete;
   void operator=(const ExtentBasedTableBuilder&) = delete;
 
+  int plain_add(const common::Slice& key, const common::Slice& value);
   // Compress and write block content to the file.
   // skip_data is for the cases where the data has already been written to the
   // destination, but use this function to append the block tailer.
@@ -195,6 +196,8 @@ class ExtentBasedTableBuilder : public TableBuilder {
                                      storage::ExtentMeta &extent_meta);
   int write_extent_meta(const storage::ExtentMeta &extent_meta, bool is_large_object_extent);
 
+ private:
+  bool is_inited_;
   struct Rep;
   Rep* rep_;
   int status_;

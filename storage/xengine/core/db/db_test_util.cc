@@ -660,11 +660,13 @@ bool DBTestBase::IsDirectIOSupported() {
   return s.ok();
 }
 
-Status DBTestBase::Flush(int cf) {
+Status DBTestBase::Flush(int cf, bool wait) {
+  FlushOptions flush_options;
+  flush_options.wait = wait;
   if (cf == 0) {
-    return db_->Flush(FlushOptions());
+    return db_->Flush(flush_options);
   } else {
-    return db_->Flush(FlushOptions(), get_column_family_handle(cf));
+    return db_->Flush(flush_options, get_column_family_handle(cf));
   }
 }
 
