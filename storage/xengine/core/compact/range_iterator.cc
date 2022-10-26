@@ -229,7 +229,10 @@ ExtSEIterator::ExtSEIterator(const Comparator *cmp,
       extent_index_(0),
       reuse_(false),
       at_next_(false),
-      delete_percent_(0) {}
+      delete_percent_(0),
+      reuse_meta_(),
+      meta_descriptor_arena_(memory::CharArena::DEFAULT_PAGE_SIZE, memory::ModId::kMetaDescriptor)
+      {}
 
 ExtSEIterator::~ExtSEIterator() { reset(); }
 
@@ -251,6 +254,7 @@ void ExtSEIterator::reset() {
   extent_list_.clear();
   startkey_.clear();
   endkey_.clear();
+  meta_descriptor_arena_.clear();
 //  schema_ = nullptr;
 }
 
@@ -435,7 +439,10 @@ int ExtSEIterator::check_reuse_meta(const Slice &last_key,
     //             [ at_next_ -> create_block_iter(cur_meta),output
     // not reuse ->[ not at_next_ -> no output, need open(next())
     //
-    MetaDescriptor cur_meta = meta.deep_copy(compaction_->get_allocator());
+    /**release the memory of last meta descriptor, the owner may been last meta descripor
+     * or reuse_meta_, it's safe to relase here.*/
+    meta_descriptor_arena_.clear();
+    MetaDescriptor cur_meta = meta.deep_copy(meta_descriptor_arena_);
     Slice next_startkey; // default size is 0
     bool has_next_startkey = false;
     if (kExtentLevel == iter_level_) {

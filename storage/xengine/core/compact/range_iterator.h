@@ -654,6 +654,7 @@ class ExtSEIterator : public SEIterator{
   ReaderRep cur_rep_;
   int64_t delete_percent_;
   MetaDescriptor reuse_meta_;
+  memory::ArenaAllocator meta_descriptor_arena_;
 };
 
 

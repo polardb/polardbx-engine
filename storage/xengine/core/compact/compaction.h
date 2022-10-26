@@ -540,10 +540,6 @@ class GeneralCompaction : public Compaction {
 
   int prefetch_extent(int64_t extent_id);
 
-  memory::ArenaAllocator &get_allocator() {
-    return arena_;
-  }
-
   int get_table_reader(const MetaDescriptor &extent,
                        table::TableReader *&reader);
   int get_extent_index_iterator(const MetaDescriptor &extent,

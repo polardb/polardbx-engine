@@ -113,5 +113,6 @@ DEFINE_MOD_TYPE(kCacheHashTable)
 DEFINE_MOD_TYPE(kDDLSort)
 DEFINE_MOD_TYPE(kParallelRead)
 DEFINE_MOD_TYPE(kShrinkJob)
+DEFINE_MOD_TYPE(kMetaDescriptor)
 DEFINE_MOD_TYPE(kMaxMod)
 #endif
