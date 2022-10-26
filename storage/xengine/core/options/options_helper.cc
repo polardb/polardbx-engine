@@ -166,6 +166,8 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.shrink_allocate_interval = mutable_db_options.shrink_allocate_interval;
   options.total_max_shrink_extent_count = mutable_db_options.total_max_shrink_extent_count;
   options.auto_shrink_schedule_interval = mutable_db_options.auto_shrink_schedule_interval;
+  options.max_shrink_extent_count = mutable_db_options.max_shrink_extent_count;
+  options.estimate_cost_depth = mutable_db_options.estimate_cost_depth;
 
   return options;
 }

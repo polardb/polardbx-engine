@@ -531,6 +531,20 @@ struct DataFileStatistics
       KV_(used_extent_count), KV_(free_extent_count));
 };
 
+struct EstimateCostStats {
+  int64_t subtable_id_;
+  int64_t cost_size_;
+  int64_t total_extent_cnt_;
+  int64_t total_open_extent_cnt_;
+  bool recalc_last_extent_;
+
+  EstimateCostStats();
+  ~EstimateCostStats();
+
+  void reset();
+  DECLARE_TO_STRING();
+};
+
 } //namespace xengine
 } //namespace xengine
 

@@ -2708,7 +2708,9 @@ void DBImpl::GetApproximateSizes(ColumnFamilyHandle* column_family,
     sizes[i] = 0;
     if (include_flags & DB::SizeApproximationFlags::INCLUDE_FILES) {
       sizes[i] += versions_->ApproximateSize(cfd, sv->current_meta_,
-                                             k1.Encode(), k2.Encode());
+                                             k1.Encode(), k2.Encode(),
+                                             0 /*start_level*/, 3 /*end_level*/,
+                                             mutable_db_options_.estimate_cost_depth);
     }
     if (include_flags & DB::SizeApproximationFlags::INCLUDE_MEMTABLES) {
       sizes[i] += sv->mem->ApproximateStats(k1.Encode(), k2.Encode()).size;

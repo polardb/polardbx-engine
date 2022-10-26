@@ -129,6 +129,7 @@ struct MutableDBOptions {
   uint64_t total_max_shrink_extent_count;
   uint64_t idle_tasks_schedule_time;
   uint64_t auto_shrink_schedule_interval;
+  uint64_t estimate_cost_depth;
 };
 
 }  // namespace common

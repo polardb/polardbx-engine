@@ -1323,14 +1323,14 @@ uint64_t VersionSet::ApproximateSize(ColumnFamilyData* cfd,
                            const db::Snapshot *sn,
                            const common::Slice& start,
                            const common::Slice& end, int start_level,
-                           int end_level) {
+                           int end_level,
+                           int64_t estimate_cost_depth) {
   // pre-condition
   assert(cfd->internal_comparator().Compare(start, end) <= 0);
-  end_level = end_level == -1 ? 3 : std::min(end_level, 3);
   assert(start_level <= end_level);
 
   return cfd->get_storage_manager()->approximate_size(cfd, start, end,
-                                            start_level, end_level, sn);
+                                            start_level, end_level, sn, estimate_cost_depth);
 }
 
 /*

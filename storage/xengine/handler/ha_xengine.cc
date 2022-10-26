@@ -631,6 +631,9 @@ static void xengine_set_auto_shrink_schedule_interval(THD *thd,
                                                       struct SYS_VAR *const var,
                                                       void *const var_ptr,
                                                       const void *const save);
+static void xengine_set_estimate_cost_depth(THD *thd, struct SYS_VAR *const var,
+                                            void *const var_ptr,
+                                            const void *const save);
 
 static void xengine_set_idle_tasks_schedule_time(
     THD *thd, struct SYS_VAR *const var, void *const var_ptr,
@@ -1256,6 +1259,13 @@ static MYSQL_SYSVAR_ULONG(auto_shrink_schedule_interval,
                           nullptr, xengine_set_auto_shrink_schedule_interval,
                           xengine_db_options.auto_shrink_schedule_interval,
                           /* min */ 0, /* max */ ULONG_MAX, 0);
+static MYSQL_SYSVAR_ULONG(estimate_cost_depth,
+                          xengine_db_options.estimate_cost_depth,
+                          PLUGIN_VAR_RQCMDARG,
+                          "DBOptions::estimate_cost_depth for XEngine", nullptr,
+                          xengine_set_estimate_cost_depth,
+                          xengine_db_options.estimate_cost_depth,
+                          /* min */ 0, /* max*/ ULONG_MAX, 0);
 static MYSQL_SYSVAR_ULONG(idle_tasks_schedule_time,
                           xengine_db_options.idle_tasks_schedule_time,
                           PLUGIN_VAR_RQCMDARG,
@@ -2250,6 +2260,7 @@ static struct SYS_VAR *xengine_system_variables[] = {
     MYSQL_SYSVAR(max_shrink_extent_count),
     MYSQL_SYSVAR(total_max_shrink_extent_count),
     MYSQL_SYSVAR(auto_shrink_schedule_interval),
+    MYSQL_SYSVAR(estimate_cost_depth),
 #if 0 // DEL-SYSVAR
     MYSQL_SYSVAR(max_log_file_size),
     MYSQL_SYSVAR(max_subcompactions),
@@ -13689,6 +13700,21 @@ static void xengine_set_auto_shrink_schedule_interval(THD *thd,
   xdb->SetDBOptions(
       {{"auto_shrink_schedule_interval",
         std::to_string(xengine_db_options.auto_shrink_schedule_interval)}});
+
+  XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
+}
+
+static void xengine_set_estimate_cost_depth(THD *thd, struct SYS_VAR *const var,
+                                            void *const var_ptr,
+                                            const void *const save) {
+  DBUG_ASSERT(save != nullptr);
+
+  XDB_MUTEX_LOCK_CHECK(xdb_sysvars_mutex);
+
+  xengine_db_options.estimate_cost_depth = *static_cast<const int *>(save);
+
+  xdb->SetDBOptions({{"estimate_cost_depth",
+                      std::to_string(xengine_db_options.estimate_cost_depth)}});
 
   XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
 }

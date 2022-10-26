@@ -241,7 +241,8 @@ DBOptions::DBOptions(const Options &options)
       max_shrink_extent_count(options.max_shrink_extent_count),
       total_max_shrink_extent_count(options.total_max_shrink_extent_count),
       table_cache_size(options.table_cache_size),
-      auto_shrink_schedule_interval(options.auto_shrink_schedule_interval)
+      auto_shrink_schedule_interval(options.auto_shrink_schedule_interval),
+      estimate_cost_depth(options.estimate_cost_depth)
 {
 }
 

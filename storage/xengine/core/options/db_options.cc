@@ -280,7 +280,8 @@ MutableDBOptions::MutableDBOptions()
       max_shrink_extent_count(512),
       total_max_shrink_extent_count(15 * 512),
       idle_tasks_schedule_time(60),
-      auto_shrink_schedule_interval(60 * 60)
+      auto_shrink_schedule_interval(60 * 60),
+      estimate_cost_depth(0)
   {
   }
 
@@ -318,9 +319,8 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
       max_shrink_extent_count(options.max_shrink_extent_count),
       total_max_shrink_extent_count(options.total_max_shrink_extent_count),
       idle_tasks_schedule_time(options.idle_tasks_schedule_time),
-      auto_shrink_schedule_interval(options.auto_shrink_schedule_interval)
-  {
-  }
+      auto_shrink_schedule_interval(options.auto_shrink_schedule_interval),
+      estimate_cost_depth(options.estimate_cost_depth) {}
 void MutableDBOptions::Dump() const {
   __XENGINE_LOG(INFO, "            Options.base_background_compactions: %d",
                    base_background_compactions);
@@ -390,6 +390,9 @@ void MutableDBOptions::Dump() const {
   __XENGINE_LOG(INFO,
                 "           Options.auto_shrink_schedule_interval: %d)",
                 auto_shrink_schedule_interval);
+  __XENGINE_LOG(INFO,
+                "                Options.estimate_cost_depth: %d)",
+                estimate_cost_depth);
 
 }
 
