@@ -417,20 +417,21 @@ int CompactionTasksPicker::pick_one_task_idle(TaskInfo &pick_task) {
     minor_task.priority_value_ = 1;
     minor_task.extents_size_ = l0_num_val_ + l1_num_val_;
     pick_task = minor_task;
-  } else if (l1_num_val_ > 0) {
+  } else if (l1_num_val_ > 0 && (2 == mcf_options_.bottommost_level)) {
     TaskInfo major_task;
     major_task.task_type_ = MAJOR_COMPACTION_TASK;
     major_task.priority_value_ = 1;
     major_task.extents_size_ = l1_num_val_ + l2_num_val_;
     pick_task = major_task;
     pick_task.l1_pick_pos_ = 0;
-  } else if (delete_extents_size_ > 0) {
+  } else if (delete_extents_size_ > 0 && (2 == mcf_options_.bottommost_level)) {
     TaskInfo delete_task;
     delete_task.task_type_ = DELETE_MAJOR_SELF_TASK;
     delete_task.priority_value_ = 1;
     delete_task.extents_size_ = delete_extents_size_;
     pick_task = delete_task;
-  } else if (l2_usage_percent_ < 90 && l2_num_val_ > 128) {
+  } else if (l2_usage_percent_ < 90 && l2_num_val_ > 128
+      && (2 == mcf_options_.bottommost_level)) {
     TaskInfo major_self_task;
     major_self_task.task_type_ = MAJOR_SELF_COMPACTION_TASK;
     major_self_task.priority_value_ = 1;
