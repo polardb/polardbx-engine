@@ -7662,15 +7662,18 @@ int ha_xengine::read_row_from_secondary_key(uchar *const buf,
   uint pk_size;
 
   if (m_keyread_only && m_lock_rows == XDB_LOCK_NONE && !has_hidden_pk(table)) {
-    /* Get the key columns and primary key value */
-    const xengine::common::Slice &rkey = m_scan_it->key();
-    pk_size =
-        kd.get_primary_key_tuple(table, *m_pk_descr, &rkey, m_pk_packed_tuple);
-    const xengine::common::Slice &value = m_scan_it->value();
-    if (pk_size == XDB_INVALID_KEY_LEN ||
-        kd.unpack_record(table, buf, &rkey, &value,
-                         m_verify_row_debug_checksums)) {
-      rc = HA_ERR_INTERNAL_ERROR;
+    rc = find_icp_matching_index_rec(move_forward, buf);
+    if (!rc) {
+      /* Get the key columns and primary key value */
+      const xengine::common::Slice &rkey = m_scan_it->key();
+      pk_size =
+          kd.get_primary_key_tuple(table, *m_pk_descr, &rkey, m_pk_packed_tuple);
+      const xengine::common::Slice &value = m_scan_it->value();
+      if (pk_size == XDB_INVALID_KEY_LEN ||
+          kd.unpack_record(table, buf, &rkey, &value,
+                           m_verify_row_debug_checksums)) {
+        rc = HA_ERR_INTERNAL_ERROR;
+      }
     }
   } else {
     if (kd.m_is_reverse_cf)
@@ -10612,6 +10615,14 @@ int ha_xengine::index_init(uint idx, bool sorted) {
   tx->acquire_snapshot(m_lock_rows == XDB_LOCK_NONE);
 
   active_index = idx;
+
+  // check if xengine support read data from index
+  if (m_keyread_only) {
+    const Xdb_key_def &kd = *m_key_descr_arr[idx];
+    if (!kd.get_support_icp_flag()) {
+      m_keyread_only = false;
+    }
+  }
 
   DBUG_RETURN(HA_EXIT_SUCCESS);
 }
