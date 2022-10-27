@@ -6475,6 +6475,9 @@ class handler {
     ha_share = arg_ha_share;
     return false;
   }
+
+  virtual Handler_share **get_ha_share_ref() { return ha_share; }
+
   int get_lock_type() const { return m_lock_type; }
 
   /**

@@ -1019,6 +1019,8 @@ public:
 
   virtual double read_time(uint, uint, ha_rows rows) override;
 
+  handler *clone(const char *name, MEM_ROOT *mem_root) override;
+
   int open(const char *const name, int mode, uint test_if_locked,
            const dd::Table *table_def) override
       MY_ATTRIBUTE((__warn_unused_result__));

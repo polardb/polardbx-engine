@@ -1,0 +1,47 @@
+--disable_warnings
+drop table if exists tt;
+create table tt(id int primary key, c1 int, c2 char(2), c3 varchar(10)) charset utf8;
+--enable_warnings
+
+insert into tt values(1,1,'中国','中国');
+select * from tt;
+alter table tt modify column c2 char(2) charset utf8mb4;
+select * from tt;
+
+--disable_warnings
+drop table if exists tt_varchar;
+create table tt_varchar(id int primary key, c1 int, c2 varchar(2), c3 varchar(10)) charset utf8;
+--enable_warnings
+
+insert into tt_varchar values(1,1,'中国','中国');
+select * from tt_varchar;
+alter table tt_varchar modify column c2 varchar(2) charset utf8mb4;
+select * from tt_varchar;
+
+--disable_warnings
+drop table if exists tt_text;
+create table tt_text(id int primary key, c1 int, c2 text, c3 varchar(10)) charset utf8;
+--enable_warnings
+
+insert into tt_text values(1,1,'中国','中国');
+select * from tt_text;
+alter table tt_text modify column c2 text charset utf8mb4;
+select * from tt_text;
+
+--disable_warnings
+drop table if exists tt_enum;
+create table tt_enum(id int primary key, c1 int, c2 enum('RED','GREEN','YELLOW'), c3 varchar(10)) charset utf8;
+--enable_warnings
+
+insert into tt_enum values(1,1,'GREEN','中国');
+select * from tt_enum;
+alter table tt_enum modify column c2 enum('RED','GREEN','YELLOW')  charset utf8mb4;
+select * from tt_enum;
+
+#cleanp
+drop table tt;
+drop table tt_varchar;
+drop table tt_text;
+drop table tt_enum;
+
+--source suite/xengine/include/check_xengine_log_error.inc

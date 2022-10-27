@@ -13880,6 +13880,57 @@ double ha_xengine::read_time(uint index, uint ranges, ha_rows rows) {
   DBUG_RETURN((rows / 20.0) + 1);
 }
 
+/* copy from handler::clone, and acquire table_def which store instant-added
+ * columns information */
+handler *ha_xengine::clone(const char *name,   /*!< in: table name */
+                           MEM_ROOT *mem_root) /*!< in: memory context */
+{
+  DBUG_TRACE;
+
+  handler *new_handler = get_new_handler(
+      table->s, (table->s->m_part_info != nullptr), mem_root, ht);
+
+  THD *thd = ha_thd();
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  const dd::Table *table_def = nullptr;
+
+  if (!new_handler) return nullptr;
+  if (new_handler->set_ha_share_ref(this->get_ha_share_ref())) goto err;
+
+  /*
+    Allocate handler->ref here because otherwise ha_open will allocate it
+    on this->table->mem_root and we will not be able to reclaim that memory
+    when the clone handler object is destroyed.
+  */
+  if (!(new_handler->ref =
+            (uchar *)mem_root->Alloc(ALIGN_SIZE(ref_length) * 2)))
+    goto err;
+
+  if (thd->dd_client()->acquire(table->s->db.str, table->s->table_name.str,
+                                &table_def)) {
+    goto err;
+  }
+
+  if (!table_def) {
+    set_my_errno(ENOENT);
+    goto err;
+  }
+
+  /*
+    TODO: Implement a more efficient way to have more than one index open for
+    the same table instance. The ha_open call is not cachable for clone.
+  */
+  if (new_handler->ha_open(table, name, table->db_stat,
+                           HA_OPEN_IGNORE_IF_LOCKED, table_def))
+    goto err;
+
+  return new_handler;
+
+err:
+  destroy(new_handler);
+  return nullptr;
+}
+
 ParallelScanCtx::ParallelScanCtx(ha_xengine* h)
     : pk_packed_tuple(nullptr), sk_packed_tuple(nullptr), pack_buffer(), ha(h),
       table_name(h->table->s->table_name.str), db_name(h->table->s->db.str),

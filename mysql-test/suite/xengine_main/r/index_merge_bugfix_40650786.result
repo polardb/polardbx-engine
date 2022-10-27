@@ -1,0 +1,35 @@
+drop table if exists t0;
+create table t0 (
+key1 int not null,
+key2 int not null,
+key3 int not null,
+key4 int not null,
+key5 int not null,
+key6 int not null,
+key7 int not null,
+key8 int not null,
+INDEX i1(key1),
+INDEX i2(key2),
+INDEX i3(key3),
+INDEX i4(key4),
+INDEX i5(key5),
+INDEX i6(key6),
+INDEX i7(key7),
+INDEX i8(key8)
+)ENGINE=XENGINE;
+insert into t0 values (1,1,1,1,1,1,1,1023),(2,2,2,2,2,2,2,1022);
+insert into t0 values (1,1,1,1,1,1,1,1023),(2,2,2,2,2,2,2,1022);
+insert into t0 select key1+2, key2+2, key3+2, key4+2, key5+2, key6+2, key7+2, key8-2 from t0;
+insert into t0 select key1+4, key2+4, key3+4, key4+4, key5+4, key6+4, key7+4, key8-4 from t0;
+insert into t0 select key1+8, key2+8, key3+8, key4+8, key5+8, key6+8, key7+8, key8-8 from t0;
+insert into t0 select key1+16, key2+16, key3+16, key4+16, key5+16, key6+16, key7+16, key8-16 from t0;
+insert into t0 select key1+32, key2+32, key3+32, key4+32, key5+32, key6+32, key7+32, key8-32 from t0;
+insert into t0 select key1+64, key2+64, key3+64, key4+64, key5+64, key6+64, key7+64, key8-64 from t0;
+insert into t0 select key1+128, key2+128, key3+128, key4+128, key5+128, key6+128, key7+128, key8-128 from t0;
+insert into t0 select key1+256, key2+256, key3+256, key4+256, key5+256, key6+256, key7+256, key8-256 from t0;
+insert into t0 select key1+512, key2+512, key3+512, key4+512, key5+512, key6+512, key7+512, key8-512 from t0;
+alter table t0 add filler1 char(200), add filler2 char(200), add filler3 char(200);
+select max(a.key1 + b.key1 + a.key2 + b.key2 + a.key3 + b.key3 + a.key4 + b.key4 + a.key5 + b.key5) from t0 as a, t0 as b where (a.key1 = 1 and a.key2 = 1 and a.key3 = 1 and a.key4=1 and a.key5=1 and a.key6=1 and a.key7 = 1 or a.key8=1) and (b.key1 = 1 and b.key2 = 1 and b.key3 = 1 and b.key4=1 and b.key5=1 and b.key6=1 and b.key7 = 1 or b.key8=1);
+max(a.key1 + b.key1 + a.key2 + b.key2 + a.key3 + b.key3 + a.key4 + b.key4 + a.key5 + b.key5)
+10230
+drop table t0;
