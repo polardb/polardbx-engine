@@ -981,14 +981,13 @@ static MYSQL_THDVAR_BOOL(
     "Take and hold locks on rows that are scanned but not updated", nullptr,
     nullptr, FALSE);
 
-#if 0 // DEL-SYSVAR
 static MYSQL_THDVAR_ULONG(bulk_load_size, PLUGIN_VAR_RQCMDARG,
                           "Max #records in a batch for bulk-load mode", nullptr,
                           nullptr,
                           /*default*/ XDB_DEFAULT_BULK_LOAD_SIZE,
                           /*min*/ 1,
                           /*max*/ XDB_MAX_BULK_LOAD_SIZE, 0);
-
+#if 0  // DEL-SYSVAR
 static MYSQL_THDVAR_ULONGLONG(
     merge_buf_size, PLUGIN_VAR_RQCMDARG,
     "Size to allocate for merge sort buffers written out to disk "
@@ -2226,7 +2225,6 @@ static struct SYS_VAR *xengine_system_variables[] = {
     MYSQL_SYSVAR(blind_delete_primary_key),
     MYSQL_SYSVAR(read_free_rpl_tables),
     MYSQL_SYSVAR(rpl_skip_tx_api),
-    MYSQL_SYSVAR(bulk_load_size),
     MYSQL_SYSVAR(merge_buf_size),
     MYSQL_SYSVAR(enable_bulk_load_api),
     MYSQL_SYSVAR(tmpdir),
@@ -2246,6 +2244,7 @@ static struct SYS_VAR *xengine_system_variables[] = {
     MYSQL_SYSVAR(max_total_wal_size),
     // MYSQL_SYSVAR(use_fsync),
     MYSQL_SYSVAR(wal_dir),
+    MYSQL_SYSVAR(bulk_load_size),
 #if 0 // DEL-SYSVAR
     MYSQL_SYSVAR(persistent_cache_path),
     MYSQL_SYSVAR(persistent_cache_size),
@@ -2750,6 +2749,8 @@ void Xdb_transaction::walk_tx_list(Xdb_tx_list_walker *walker) {
   }
 
   bool Xdb_transaction::commit() {
+    reset_writebatch_iterator();
+
     if (get_write_count() == 0) {
       rollback();
       return false;
@@ -3050,6 +3051,8 @@ public:
     m_write_count = 0;
     m_lock_count = 0;
     m_ddl_transaction = false;
+    reset_writebatch_iterator();
+
     if (m_xengine_tx) {
       release_snapshot();
       /* This will also release all of the locks: */
@@ -9201,6 +9204,16 @@ int ha_xengine::index_next_with_direction(uchar *const buf, bool move_forward) {
   if (active_index == pk_index(table, m_tbl_def.get())) {
     rc = rnd_next_with_direction(buf, move_forward);
   } else {
+    // check if writebatch iterator is still OK
+    Xdb_transaction *const tx = get_tx_from_thd(table->in_use);
+    if (tx && (!tx->is_writebatch_valid())) {
+      util::BaseDeltaIterator *p_scan;
+      p_scan = dynamic_cast<util::BaseDeltaIterator *>(m_scan_it);
+      if (p_scan) {
+        p_scan->InvalidDelta();
+      }
+    }
+
     if (m_skip_scan_it_next_call) {
       m_skip_scan_it_next_call = false;
     } else {
@@ -9517,9 +9530,13 @@ bool ha_xengine::commit_in_the_middle() {
 bool ha_xengine::do_bulk_commit(Xdb_transaction *const tx) {
   DBUG_ASSERT(tx != nullptr);
 
-  if (commit_in_the_middle()) {
-    bool ret = tx->get_write_count() >= XDB_DEFAULT_BULK_LOAD_SIZE /*THDVAR(table->in_use, bulk_load_size)*/ &&
-           tx->flush_batch();
+  bool ret = false;
+
+  if (commit_in_the_middle() &&
+      tx->get_write_count() >= THDVAR(table->in_use, bulk_load_size)) {
+    ret = tx->flush_batch();
+
+    tx->invalid_writebatch_iterator();
 
     DBUG_EXECUTE_IF("ddl_log_crash_after_commit_in_the_middle", DBUG_SUICIDE(););
     return ret;
@@ -10314,24 +10331,8 @@ int ha_xengine::update_write_row(const uchar *const old_data,
     DBUG_RETURN(rc);
   }
 
-  bool write_batch_iter_invalid_flag = false;
-  if (commit_in_the_middle() &&
-      (row_info.tx)->get_write_count() >= XDB_DEFAULT_BULK_LOAD_SIZE /*THDVAR(table->in_use, bulk_load_size)*/)
-  {
-    write_batch_iter_invalid_flag = true;
-  }
-
   if (do_bulk_commit(row_info.tx)) {
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
-  }
-
-  if (write_batch_iter_invalid_flag && m_scan_it)
-  {
-    util::BaseDeltaIterator* p_scan;
-    p_scan = dynamic_cast<util::BaseDeltaIterator*>(m_scan_it);
-    if (p_scan) {
-      p_scan->InvalidDelta();
-    }
   }
 
   DBUG_RETURN(HA_EXIT_SUCCESS);
@@ -10389,6 +10390,8 @@ void ha_xengine::setup_scan_iterator(const Xdb_key_def &kd,
     const bool fill_cache = true; // !THDVAR(ha_thd(), skip_fill_cache);
     m_scan_it = tx->get_iterator(kd.get_cf(), skip_bloom, fill_cache);
     m_scan_it_skips_bloom = skip_bloom;
+    // reset writebatch iterator valid for new statement
+    tx->reset_writebatch_iterator();
   }
 
   if (nullptr != end_key) {
@@ -10502,6 +10505,16 @@ int ha_xengine::rnd_next_with_direction(uchar *const buf, bool move_forward) {
       In this case, we should return EOF.
     */
     DBUG_RETURN(HA_ERR_END_OF_FILE);
+  }
+
+  // check if writebatch iterator is still OK
+  Xdb_transaction *const tx = get_tx_from_thd(table->in_use);
+  if (tx && (!tx->is_writebatch_valid())) {
+    util::BaseDeltaIterator *p_scan;
+    p_scan = dynamic_cast<util::BaseDeltaIterator *>(m_scan_it);
+    if (p_scan) {
+      p_scan->InvalidDelta();
+    }
   }
 
   for (;;) {
@@ -10733,24 +10746,8 @@ int ha_xengine::delete_row(const uchar *const buf) {
     }
   }
 
-  bool write_batch_iter_invalid_flag = false;
-  if (commit_in_the_middle() &&
-      tx->get_write_count() >=
-          XDB_DEFAULT_BULK_LOAD_SIZE /*THDVAR(table->in_use, bulk_load_size)*/) {
-    write_batch_iter_invalid_flag = true;
-  }
-
   if (do_bulk_commit(tx)) {
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
-  }
-
-  if (write_batch_iter_invalid_flag == true && m_scan_it)
-  {
-    util::BaseDeltaIterator* p_scan;
-    p_scan = dynamic_cast<util::BaseDeltaIterator*>(m_scan_it);
-    if (p_scan) {
-      p_scan->InvalidDelta();
-    }
   }
 
   //stats.rows_deleted++;
