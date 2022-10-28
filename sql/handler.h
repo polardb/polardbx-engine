@@ -6476,7 +6476,9 @@ class handler {
     return false;
   }
 
+#ifdef WITH_XENGINE_STORAGE_ENGINE
   virtual Handler_share **get_ha_share_ref() { return ha_share; }
+#endif
 
   int get_lock_type() const { return m_lock_type; }
 
