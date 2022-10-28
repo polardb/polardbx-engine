@@ -22,7 +22,9 @@
 #include "table/merging_iterator.h"
 #include "table/internal_iterator.h"
 #include "table/sstable_scan_iterator.h"
+#include "util/sync_point.h"
 
+/* clang-format off */
 namespace xengine
 {
 using namespace common;
@@ -283,7 +285,8 @@ int StorageManager::get_extent_layer_iterator(
 int64_t StorageManager::approximate_size(const db::ColumnFamilyData *cfd,
                                          const Slice &start, const Slice &end,
                                          int start_level, int end_level,
-                                         const db::Snapshot *sn)
+                                         const db::Snapshot *sn,
+                                         int64_t estimate_cost_depth)
 {
   int ret = Status::kOk;
   int64_t result_size = 0;
@@ -291,7 +294,12 @@ int64_t StorageManager::approximate_size(const db::ColumnFamilyData *cfd,
   ExtentLayerVersion *extent_layer_version = nullptr;
   ExtentLayer *extent_layer = nullptr;
   table::InternalIterator *layer_iterator = nullptr;
+  EstimateCostStats cost_stats;
 
+#ifndef NDEBUG
+  XENGINE_LOG(INFO, "begin to approximate size", "subtable_id", cfd->GetID(),
+      K(start_level), K(end_level), K(estimate_cost_depth));
+#endif
   if (!is_inited_) {
     ret = Status::kNotInit;
     XENGINE_LOG(WARN, "StorageManager should been inited first", K(ret));
@@ -309,13 +317,17 @@ int64_t StorageManager::approximate_size(const db::ColumnFamilyData *cfd,
           if (FAILED(create_extent_layer_iterator(&arena, sn, layer_position, layer_iterator))) {
             XENGINE_LOG(WARN, "fail to create extent layer iterator", K(ret), K(layer_position));
           } else {
-            result_size += one_layer_approximate_size(cfd, start, end, level, layer_iterator);
+            result_size += one_layer_approximate_size(cfd, start, end, level, layer_iterator, estimate_cost_depth, cost_stats);
             layer_iterator->~InternalIterator();
           }
         }
       }
     }
   }
+#ifndef NDEBUG
+  XENGINE_LOG(INFO, "end to approximate size", "subtable_id", cfd->GetID(),
+      K(start_level), K(end_level), K(estimate_cost_depth), K(cost_stats));
+#endif 
 
   return result_size;
 }
@@ -404,6 +416,9 @@ void StorageManager::release_meta_snapshot(const db::SnapshotImpl *meta_snapshot
 
 void StorageManager::async_recycle(void *args)
 {
+#ifndef NDEBUG
+  TEST_SYNC_POINT("StorageManager::TEST_inject_async_recycle_hang");
+#endif
   RecycleArgs *recycle_args = reinterpret_cast<RecycleArgs *>(args);
   recycle_args->storage_manager_->recycle();
   MOD_DELETE_OBJECT(RecycleArgs, recycle_args);
@@ -1179,66 +1194,148 @@ int StorageManager::create_extent_layer_iterator(util::Arena *arena,
   return ret;
 }
 
-int64_t StorageManager::one_layer_approximate_size(const db::ColumnFamilyData *cfd,
-                                                   const Slice &start, const Slice &end,
-                                                   int level, table::InternalIterator *iter) {
+int64_t StorageManager::one_layer_approximate_size(
+    const db::ColumnFamilyData *cfd, const Slice &start, const Slice &end,
+    int level, table::InternalIterator *iter, int64_t estimate_cost_depth,
+    EstimateCostStats &cost_stats) {
   int ret = Status::kOk;
-  int64_t result = 0;
-  table::TableReader *table_reader_ptr = nullptr;
-  int64_t start_off = 0;
-  int64_t end_off = 0;
-  bool first_extent = true;
-  ExtentMeta *extent_meta = nullptr;
-  Slice key_slice;
+  /**variables for calculate cost size*/
+  int64_t start_off = 0;              // extent's start offset in [start, end]
+  int64_t end_off = MAX_EXTENT_SIZE;  // extent's end offset in [start, end]
+  int64_t cost_size = 0;              // total cost size
+  int64_t include_extent_count = 0;   // extent count in [start, end]
+  int64_t last_extent_cost_size = 0;  // cost size of last extent in [start,
+                                      // end]
+  ExtentId last_extent_id;            // last extent in [start, end]
+  bool recalc_last_extent = true;     // recalculate last extent's cost size
+  bool reach_end = false;             // reach to range end
 
+  /**variables for read extent*/
   ReadOptions read_options;
-  std::unique_ptr<table::InternalIterator, ptr_destruct_delete<InternalIterator>> table_iter;
+  Slice extent_meta_slice;                     // current extent meta buffer
+  ExtentMeta *extent_meta = nullptr;           // current extent meta
+  table::TableReader *table_reader = nullptr;  // current extent's TableReader
+  std::unique_ptr<table::InternalIterator,
+                  ptr_destruct_delete<InternalIterator>>
+      table_iter;  // current extent's Iterator
+
+  /**estimate calculate logical:
+   * first extent must been opened to calculate start_off, middle extents not
+   * opened and cost_size is supposed to MAX_EXTENT_SIZE(2M), and if end less
+   * than last extent's largest_key, last extent will been opened to calculate
+   * end_off. However, if end is larger than largest_key in current layer, last
+   * extent's cost_size is not exactly, such as [start, end] is [min, max], and
+   * last extent will not been opened ,because it's largest_key less than max,
+   * but last extent may only has one record, and it's cost size is 10Byte not
+   * MAX_EXTENT_SIZE.
+   *
+   * estimate end condition:
+   * 1. found error during estimate, and ret is not Status::kOk.
+   * 2. reach to current layer end, iter->Valid() is false.
+   * 3. reach to estimate_cost_depth limit.*/
+  // seek to first extent in current layer
   iter->Seek(start);
-  first_extent = true;
-  while (Status::kOk == ret && iter->Valid()) {
+  while (SUCCED(ret) && iter->Valid() && !reach_end) {
     start_off = 0;
     end_off = MAX_EXTENT_SIZE;
-    key_slice = iter->key();
-    if (nullptr == (extent_meta = reinterpret_cast<ExtentMeta *>(const_cast<char *>(key_slice.data())))) {
+    extent_meta_slice = iter->key();
+    if (IS_NULL(extent_meta = reinterpret_cast<ExtentMeta *>(
+                    const_cast<char *>(extent_meta_slice.data())))) {
       ret = Status::kErrorUnexpected;
       XENGINE_LOG(WARN, "unexpected error, extent meta must not nullptr", K(ret));
-    } else if (first_extent) { // caculate the begin
+    } else if (0 == include_extent_count) {
+      /**first extent should calculate start_off*/
       db::FileDescriptor fd(extent_meta->extent_id_.id(), column_family_id_, MAX_EXTENT_SIZE);
-      table_iter.reset(cfd->table_cache()->NewIterator(read_options,
-                                                       env_options_,
-                                                       cfd->internal_comparator(),
-                                   fd, nullptr, &table_reader_ptr));
-      if (table_reader_ptr != nullptr) {
-        start_off = table_reader_ptr->ApproximateOffsetOf(start);
+      table_iter.reset(cfd->table_cache()->NewIterator(
+          read_options, env_options_, cfd->internal_comparator(), fd, nullptr,
+          &table_reader));
+      if (IS_NULL(table_reader)) {
+        ret = Status::kErrorUnexpected;
+        XENGINE_LOG(WARN, "unexpected error, TableReader should not nullptr",
+                    K(ret), K(*extent_meta));
+      } else {
+        start_off = table_reader->ApproximateOffsetOf(start);
+        ++cost_stats.total_open_extent_cnt_;
       }
     }
-    if (Status::kOk == ret) {
-      // Maybe extent is not full, we need caculate end.
-      //if (internalkey_comparator_->Compare(end, extent_meta->largest_key_.Encode()) < 0) {
-        if (!first_extent) { // caculate the end
-          db::FileDescriptor fd(extent_meta->extent_id_.id(), column_family_id_, MAX_EXTENT_SIZE);
-          table_iter.reset(cfd->table_cache()->NewIterator(read_options,
-                                                           env_options_,
-                                                           cfd->internal_comparator(),
-                                                           fd, nullptr, &table_reader_ptr));
-          if (table_reader_ptr != nullptr) {
-            end_off = table_reader_ptr->ApproximateOffsetOf(end);
-          }
+
+    if (SUCCED(ret)) {
+      if (internalkey_comparator_->Compare(
+              end, extent_meta->largest_key_.Encode()) < 0) {
+        /**reach to range end.*/
+        reach_end = true;
+        /**end is smaller than current layer largest_key, no need recalculate
+         * last extent*/
+        recalc_last_extent = false;
+        /**part of current extent will been read, so need calculate end_off
+         * if this is first extent(include_extent_count == 0), TableReader has
+         * been created. if not the fisrt extent, TableReader need create here*/
+        if (0 == include_extent_count) {
+          end_off = table_reader->ApproximateOffsetOf(end);
         } else {
-          end_off = table_reader_ptr->ApproximateOffsetOf(end);
+          db::FileDescriptor fd(extent_meta->extent_id_.id(), column_family_id_, MAX_EXTENT_SIZE);
+          table_iter.reset(cfd->table_cache()->NewIterator(
+              read_options, env_options_, cfd->internal_comparator(), fd,
+              nullptr, &table_reader));
+          if (IS_NULL(table_reader)) {
+            ret = Status::kErrorUnexpected;
+            XENGINE_LOG(WARN,
+                        "unexpected error, TableReader shoule not nullptr",
+                        K(ret), K(*extent_meta));
+          } else {
+            end_off = table_reader->ApproximateOffsetOf(end);
+            ++cost_stats.total_open_extent_cnt_;
+          }
         }
-        assert(end_off >= start_off);
-        result += end_off - start_off;
-        break; // need return here
-      //}
+      }
     }
-    assert(end_off >= start_off);
-    result += end_off - start_off;
-    first_extent = false;
-    iter->Next();
+
+    if (SUCCED(ret)) {
+      assert(end_off >= start_off);
+      ++include_extent_count;
+      last_extent_id = extent_meta->extent_id_;
+      last_extent_cost_size = end_off - start_off;
+      cost_size += last_extent_cost_size;
+      iter->Next();
+    }
+
+    if (estimate_cost_depth && include_extent_count >= estimate_cost_depth) {
+      break;
+    }
   }
 
-  return result;
+  if (include_extent_count > 0 && recalc_last_extent) {
+    cost_stats.recalc_last_extent_ = true;
+    if (1 == include_extent_count) {
+      if (IS_NULL(table_reader)) {
+        ret = Status::kErrorUnexpected;
+        XENGINE_LOG(WARN, "unexpected error, TableReader must not nullptr",
+                    K(ret), K(*extent_meta));
+      } else {
+        // TableReader has been created on upper stream
+        end_off = table_reader->ApproximateOffsetOf(end);
+        assert(cost_size >= (end_off - start_off));
+        cost_size += (end_off - start_off) - last_extent_cost_size;
+      }
+    } else {
+      // last extent has not been openen, need create it's TableReader
+      start_off = 0;
+      end_off = MAX_EXTENT_SIZE;
+      db::FileDescriptor fd(last_extent_id.id(), column_family_id_,
+                            MAX_EXTENT_SIZE);
+      table_iter.reset(cfd->table_cache()->NewIterator(
+          read_options, env_options_, cfd->internal_comparator(), fd, nullptr,
+          &table_reader));
+      end_off = table_reader->ApproximateOffsetOf(end);
+      assert(last_extent_cost_size >= (end_off - start_off));
+      cost_size += (end_off - start_off) - last_extent_cost_size;
+      ++cost_stats.total_open_extent_cnt_;
+    }
+  }
+  cost_stats.cost_size_ += cost_size;
+  cost_stats.total_extent_cnt_ += include_extent_count;
+
+  return cost_size;
 }
 
 int StorageManager::update_current_meta_snapshot(ExtentLayerVersion **new_extent_layer_versions)
@@ -1727,3 +1824,5 @@ int StorageManager::deserialize_extent_layer(const char *buf, int64_t buf_len, i
 
 } //namespace storage
 } //namespace xengine
+
+/* clang-format on */

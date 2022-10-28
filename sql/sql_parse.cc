@@ -1934,6 +1934,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
 
 #ifdef WITH_XENGINE_STORAGE_ENGINE
         QUERY_TRACE_END(); // end SERVER_OPERATION trace
+        if (thd) {
+          QUERY_TRACE_FINISH(thd->query().str, thd->query().length);
+        }
 #endif
 
         log_slow_statement(thd, query_start_status_ptr);
@@ -2296,6 +2299,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
 done:
 #ifdef WITH_XENGINE_STORAGE_ENGINE
   QUERY_TRACE_END(); // end SERVER_OPERATION trace
+  if (thd) {
+    QUERY_TRACE_FINISH(thd->query().str, thd->query().length);
+  }
 #endif
   assert(thd->open_tables == nullptr ||
          (thd->locked_tables_mode == LTM_LOCK_TABLES));

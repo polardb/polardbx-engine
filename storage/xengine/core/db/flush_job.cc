@@ -90,7 +90,7 @@ BaseFlush::BaseFlush(ColumnFamilyData* cfd,
       output_file_directory_(output_file_directory),
       env_options_(env_options),
       arena_(arena),
-      tmp_arena_(CharArena::DEFAULT_PAGE_SIZE, memory::ModId::kFlush),
+      tmp_arena_(CharArena::DEFAULT_PAGE_SIZE, 0, memory::ModId::kFlush),
       pick_memtable_called_(false),
       min_hold_wal_file_id_(0)
 //      recovery_point_()

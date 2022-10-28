@@ -56,7 +56,7 @@ namespace {
 #define DECLARE_TRACE(trace_point) #trace_point,
 #define DECLARE_COUNTER(trace_point)
 static const char *TRACE_POINT_NAME[] = {
-  #include "trace_point.h"
+#include "trace_point.h"
 };
 
 #undef DECLARE_TRACE
@@ -65,7 +65,7 @@ static const char *TRACE_POINT_NAME[] = {
 #define DECLARE_TRACE(trace_point)
 #define DECLARE_COUNTER(trace_point) #trace_point,
 static const char *COUNT_POINT_NAME[] = {
-  #include "trace_point.h"
+#include "trace_point.h"
 };
 #undef DECLARE_TRACE
 #undef DECLARE_COUNTER
@@ -79,9 +79,9 @@ static inline TimeType get_time() {
 #if defined(__x86_64__) || defined(__amd64__)
   uint64_t hi = 0;
   uint64_t lo = 0;
-  __asm volatile ("rdtsc" : "=a" (lo), "=d" (hi));
+  __asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
   return (hi << 32) | lo;
-#elif defined(__aarch64__) 
+#elif defined(__aarch64__)
   // System timer of ARMv8 runs at a different frequency than the CPU's.
   // The frequency is fixed, typically in the range 1-50MHz.  It can be
   // read at CNTFRQ special register.  We assume the OS has set up
@@ -93,39 +93,47 @@ static inline TimeType get_time() {
 }
 
 static constexpr int64_t const_strlen(const char *str) {
-  return *str == 0 ? 0 : 1 + const_strlen(str+1);
+  return *str == 0 ? 0 : 1 + const_strlen(str + 1);
 }
-static int64_t get_trace_output_length();
+static int64_t get_max_trace_name_length();
+static int64_t get_max_count_name_length();
 
 static constexpr char INFO_PREFIX[] = ": 0x";
 static constexpr char INFO_SUFFIX[] = ", ";
 static constexpr int64_t INFO_PREFIX_SIZE = const_strlen(INFO_PREFIX);
 static constexpr int64_t INFO_SUFFIX_SIZE = const_strlen(INFO_SUFFIX);
-static constexpr char DEFAULT_INFO[] = ": 0x1234567890987654, 0x1234567890987654\n";
+static constexpr char DEFAULT_INFO[] =
+    ": 0x1234567890987654, 0x1234567890987654\n";
 static constexpr char COUNTER_INFO[] = ": 0x1234567890987654\n";
 static constexpr int64_t INFO_CONTENT_SIZE = const_strlen(DEFAULT_INFO);
 static constexpr int64_t COUNTER_CONTENT_SIZE = const_strlen(COUNTER_INFO);
 static int64_t TRACE_NAME_LENGTH[MAX_TRACE_POINT];
 static int64_t COUNT_NAME_LENGTH[MAX_COUNT_POINT];
-static const int64_t TRACE_OUTPUT_LENGTH = get_trace_output_length();
+static const int64_t MAX_TRACE_NAME_LENGTH = get_max_trace_name_length();
+static const int64_t MAX_COUNT_NAME_LENGTH = get_max_count_name_length();
 static const int64_t TRACE_MAX_ZERO_BATCH = 100;
 
-
 // return the buffer size for QueryPerfContext::to_string.
-static int64_t get_trace_output_length() {
-  int64_t sum = 0;
+static int64_t get_max_trace_name_length() {
   int64_t len = 0;
+  int64_t max_len = 0;
   for (int64_t i = 0; i < MAX_TRACE_POINT; ++i) {
     len = strlen(TRACE_POINT_NAME[i]);
     TRACE_NAME_LENGTH[i] = len;
-    sum += (len + INFO_CONTENT_SIZE + INFO_SUFFIX_SIZE);
+    max_len = std::max(max_len, len);
   }
+  return max_len;
+}
+
+static int64_t get_max_count_name_length() {
+  int64_t len = 0;
+  int64_t max_len = 0;
   for (int64_t i = 0; i < MAX_COUNT_POINT; ++i) {
     len = strlen(COUNT_POINT_NAME[i]);
     COUNT_NAME_LENGTH[i] = len;
-    sum += (len + COUNTER_CONTENT_SIZE + INFO_SUFFIX_SIZE);
+    max_len = std::max(max_len, len);
   }
-  return sum;
+  return max_len;
 }
 }  // anonymous namespace
 
@@ -136,27 +144,25 @@ pthread_key_t QueryPerfContext::query_trace_tls_key_;
 bool QueryPerfContext::opt_enable_count_ = false;
 bool QueryPerfContext::opt_print_stats_ = false;
 bool QueryPerfContext::opt_trace_sum_ = false;
-bool QueryPerfContext::opt_print_slow_ = true;
+bool QueryPerfContext::opt_print_slow_ = false;
+double QueryPerfContext::opt_threshold_time_ = 100.0;
 
 class StatisticsManager {
-private:
+ private:
   // Holds data maintained by each thread for implementing tickers.
   struct ThreadCountInfo {
     std::atomic_uint_fast64_t value_;
     // During teardown, value will be summed into *merged_sum.
     std::atomic_uint_fast64_t *merged_sum_;
 
-    ThreadCountInfo(uint_fast64_t value,
-                    std::atomic_uint_fast64_t* merged_sum)
-        : value_(value),
-          merged_sum_(merged_sum) {}
+    ThreadCountInfo(uint_fast64_t value, std::atomic_uint_fast64_t *merged_sum)
+        : value_(value), merged_sum_(merged_sum) {}
   };
 
   // Holds global data for implementing tickers.
   struct CountInfo {
     CountInfo()
-        : thread_value_(&CountInfo::release_thread_resource),
-          merged_sum_(0) {}
+        : thread_value_(&CountInfo::release_thread_resource), merged_sum_(0) {}
     // Holds thread-specific pointer to ThreadTickerInfo
     mutable util::ThreadLocalPtr thread_value_;
     // Sum of thread-specific values for tickers that have been reset due to
@@ -168,9 +174,10 @@ private:
     // This function is registered in ThreadLocalPtr and will be called when
     // the thread exits. Merge the value to a global counter and
     // release the CountInfo object here.
-    static void release_thread_resource(void* ptr) {
-      auto info_ptr = static_cast<ThreadCountInfo*>(ptr);
-      *info_ptr->merged_sum_ += info_ptr->value_.load(std::memory_order_relaxed);
+    static void release_thread_resource(void *ptr) {
+      auto info_ptr = static_cast<ThreadCountInfo *>(ptr);
+      *info_ptr->merged_sum_ +=
+          info_ptr->value_.load(std::memory_order_relaxed);
       delete info_ptr;
     }
   };
@@ -192,7 +199,6 @@ private:
         merged_time_sum_ = merged_time_sum;
         merged_count_sum_ = merged_count_sum;
       }
-
     }
 
     ThreadTraceInfo(std::atomic_uint_fast64_t *merged_time_sum,
@@ -208,8 +214,7 @@ private:
 
   // Holds global data for implementing tickers.
   struct TraceInfo {
-    TraceInfo()
-        : thread_value_(&TraceInfo::release_thread_resource) {}
+    TraceInfo() : thread_value_(&TraceInfo::release_thread_resource) {}
     // Holds thread-specific pointer to ThreadTickerInfo
     mutable util::ThreadLocalPtr thread_value_;
 
@@ -219,8 +224,8 @@ private:
     // This function is registered in ThreadLocalPtr and will be called when
     // the thread exits. Merge the value to a global counter and
     // release the CountInfo object here.
-    static void release_thread_resource(void* ptr) {
-      auto info_ptr = static_cast<ThreadTraceInfo*>(ptr);
+    static void release_thread_resource(void *ptr) {
+      auto info_ptr = static_cast<ThreadTraceInfo *>(ptr);
       for (int i = 0; i < MAX_TRACE_POINT; ++i) {
         info_ptr->merged_time_sum_[i] += info_ptr->time_value_[i];
         info_ptr->merged_count_sum_[i] += info_ptr->count_value_[i];
@@ -229,8 +234,7 @@ private:
     }
   };
 
-
-public:
+ public:
   StatisticsManager() {}
 
   int init() {
@@ -244,11 +248,11 @@ public:
   TraceInfo real_time_trace_info_;
 
   ThreadCountInfo *get_thread_count_info(int64_t point) {
-    auto info_ptr = static_cast<ThreadCountInfo*>(
-          real_time_counter_[point].thread_value_.Get());
+    auto info_ptr = static_cast<ThreadCountInfo *>(
+        real_time_counter_[point].thread_value_.Get());
     if (UNLIKELY(nullptr == info_ptr)) {
-      info_ptr = new (std::nothrow) ThreadCountInfo(0 /* value */,
-                                     &real_time_counter_[point].merged_sum_);
+      info_ptr = new (std::nothrow) ThreadCountInfo(
+          0 /* value */, &real_time_counter_[point].merged_sum_);
       real_time_counter_[point].thread_value_.Reset(info_ptr);
     }
     return info_ptr;
@@ -256,23 +260,24 @@ public:
 
   CountType get_counter_info(int64_t point) const {
     int64_t thread_local_sum = 0;
-    real_time_counter_[point].thread_value_.Fold([](void* curr_ptr, void* res) {
-          auto* sum_ptr = static_cast<int64_t*>(res);
-          *sum_ptr += static_cast<std::atomic_uint_fast64_t*>(curr_ptr)->load(
+    real_time_counter_[point].thread_value_.Fold(
+        [](void *curr_ptr, void *res) {
+          auto *sum_ptr = static_cast<int64_t *>(res);
+          *sum_ptr += static_cast<std::atomic_uint_fast64_t *>(curr_ptr)->load(
               std::memory_order_relaxed);
         },
         &thread_local_sum);
-    return thread_local_sum +
-          real_time_counter_[point].merged_sum_.load(std::memory_order_relaxed);
+    return thread_local_sum + real_time_counter_[point].merged_sum_.load(
+                                  std::memory_order_relaxed);
   }
 
   ThreadTraceInfo *get_thread_trace_info() {
-    auto info_ptr = static_cast<ThreadTraceInfo*>(
-          real_time_trace_info_.thread_value_.Get());
+    auto info_ptr = static_cast<ThreadTraceInfo *>(
+        real_time_trace_info_.thread_value_.Get());
     if (UNLIKELY(nullptr == info_ptr)) {
-      info_ptr = new (std::nothrow) ThreadTraceInfo(
-                                     real_time_trace_info_.merged_time_sum_,
-                                     real_time_trace_info_.merged_count_sum_);
+      info_ptr = new (std::nothrow)
+          ThreadTraceInfo(real_time_trace_info_.merged_time_sum_,
+                          real_time_trace_info_.merged_count_sum_);
       real_time_trace_info_.thread_value_.Reset(info_ptr);
     }
     return info_ptr;
@@ -284,14 +289,16 @@ public:
       time[i] += real_time_trace_info_.merged_time_sum_[i];
       count[i] += real_time_trace_info_.merged_count_sum_[i];
     }
-    real_time_trace_info_.thread_value_.Fold([](void* curr_ptr, void* res) {
-          auto *sum_ptr = static_cast<std::pair<TimeType *, CountType *>*>(res);
-          auto *curr_trace_info = static_cast<ThreadTraceInfo*>(curr_ptr);
+    real_time_trace_info_.thread_value_.Fold(
+        [](void *curr_ptr, void *res) {
+          auto *sum_ptr =
+              static_cast<std::pair<TimeType *, CountType *> *>(res);
+          auto *curr_trace_info = static_cast<ThreadTraceInfo *>(curr_ptr);
           for (int i = 0; i < MAX_TRACE_POINT; ++i) {
-            sum_ptr->first[i] += curr_trace_info->time_value_[i].load(
-                 std::memory_order_relaxed);
+            sum_ptr->first[i] +=
+                curr_trace_info->time_value_[i].load(std::memory_order_relaxed);
             sum_ptr->second[i] += curr_trace_info->count_value_[i].load(
-                 std::memory_order_relaxed);
+                std::memory_order_relaxed);
           }
         },
         &sum);
@@ -302,20 +309,23 @@ public:
       real_time_trace_info_.merged_time_sum_[i] = 0;
       real_time_trace_info_.merged_count_sum_[i] = 0;
     }
-    real_time_trace_info_.thread_value_.Fold([](void* curr_ptr, void* res) {
-          auto *curr_trace_info = static_cast<ThreadTraceInfo*>(curr_ptr);
+    real_time_trace_info_.thread_value_.Fold(
+        [](void *curr_ptr, void *res) {
+          auto *curr_trace_info = static_cast<ThreadTraceInfo *>(curr_ptr);
           for (int i = 0; i < MAX_TRACE_POINT; ++i) {
             curr_trace_info->time_value_[i].store(0, std::memory_order_relaxed);
-            curr_trace_info->count_value_[i].store(0, std::memory_order_relaxed);
+            curr_trace_info->count_value_[i].store(0,
+                                                   std::memory_order_relaxed);
           }
         },
         nullptr);
 
-    for (int i = 0 ; i < MAX_COUNT_POINT; ++i) {
+    for (int i = 0; i < MAX_COUNT_POINT; ++i) {
       real_time_counter_[i].merged_sum_ = 0;
-      real_time_counter_[i].thread_value_.Fold([](void* curr_ptr, void* res) {
-            static_cast<std::atomic_uint_fast64_t*>(curr_ptr)->store(0,
-                std::memory_order_relaxed);
+      real_time_counter_[i].thread_value_.Fold(
+          [](void *curr_ptr, void *res) {
+            static_cast<std::atomic_uint_fast64_t *>(curr_ptr)->store(
+                0, std::memory_order_relaxed);
           },
           nullptr);
     }
@@ -337,35 +347,33 @@ public:
     int64_t trace_type = static_cast<int64_t>(point);
     ThreadTraceInfo *info_to_add = get_thread_trace_info();
     if (nullptr == info_to_add) {
-      XENGINE_LOG(ERROR, "get_thread_trace_info return nullptr",
-                  K(trace_type), K(time), K(count));
+      XENGINE_LOG(ERROR, "get_thread_trace_info return nullptr", K(trace_type),
+                  K(time), K(count));
     } else {
       info_to_add->time_value_[trace_type].fetch_add(time);
       info_to_add->count_value_[trace_type].fetch_add(count);
     }
   }
-
 };
 
 QueryPerfContext::QueryPerfContext() {}
 
-int QueryPerfContext::init() {
-  int ret = Status::kOk;
-  char *buf = new (std::nothrow) char[TRACE_OUTPUT_LENGTH];
-  if (nullptr == buf) {
-    ret = Status::kMemoryLimit;
-  } else {
-    contents_.reset(buf);
-  }
-  return ret;
+int QueryPerfContext::init() { return Status::kOk; }
+
+static const int64_t kNanoSec_Sec = 1000000000L;
+static int64_t GetNaNos() {
+  timespec tv;
+  clock_gettime(CLOCK_REALTIME, &tv);
+  return static_cast<int64_t>(tv.tv_sec) * kNanoSec_Sec + tv.tv_nsec;
 }
 
 void QueryPerfContext::reset() {
   last_time_point_ = get_time();
-  memset(stats_, 0,  MAX_TRACE_POINT * sizeof(stats_[0]));
+  memset(stats_, 0, MAX_TRACE_POINT * sizeof(stats_[0]));
   memset(counters_, 0, MAX_COUNT_POINT * sizeof(counters_[0]));
   trace_stack_.clear();
   time_stack_.clear();
+  begin_nanos_ = GetNaNos();
 }
 
 void QueryPerfContext::trace(TracePoint point) {
@@ -410,61 +418,78 @@ void QueryPerfContext::end_trace() {
 }
 
 void QueryPerfContext::count(CountPoint point, CountType delta) {
-  counters_[static_cast<int64_t>(point)] += delta;
+  counters_[static_cast<int64_t>(point)].count_ += delta;
   statistics_->add_counter(point, delta);
 }
 
 // Dump QUERY TRACE string to the internal buffer contents_.
-void QueryPerfContext::to_string(const char *&res, int64_t &size) {
-  dump_to_buffer(contents_.get(), size);
-  res = contents_.get();
-}
+void QueryPerfContext::to_string(int64_t total_time, const char *&res,
+                                 int64_t &size) {
+  static const int32_t COLUMN_SEP = 4;
+  static const int32_t TRACE_NAME_LEN = MAX_TRACE_NAME_LENGTH + COLUMN_SEP;
+  static const int32_t COUNT_NAME_LEN = MAX_COUNT_NAME_LENGTH + COLUMN_SEP;
+  static const int32_t COST_LEN = 20 /* UINT64_MAX visual size */ + COLUMN_SEP;
+  static const int32_t PERCENTAGE_LEN =
+      9 /* percentage numer with scale = 6 */ + COLUMN_SEP;
+  static const int32_t COUNT_LEN = 20 /* UINT64_MAX visual size */;
+  static const int32_t TRACE_ROW_LEN =
+      TRACE_NAME_LEN + COST_LEN + PERCENTAGE_LEN + COUNT_LEN + 2;
+  static const int32_t COUNT_ROW_LEN = COUNT_NAME_LEN + COUNT_LEN + 2;
 
-void QueryPerfContext::dump_sql_log_info_writer_buffer(char *res,
-                                                       int64_t &pos) {
-  dump_to_buffer(res, pos);
-}
+  char trace_row_buffer[TRACE_ROW_LEN];
+  char count_row_buffer[COUNT_ROW_LEN];
 
-// Dump QUERY TRACE string to the customer buffer.
-void QueryPerfContext::dump_to_buffer(char *res, int64_t &pos) {
-  static_assert((sizeof(TRACE_POINT_NAME) / sizeof(TRACE_POINT_NAME[0])) ==
-                MAX_TRACE_POINT,
-                "TRACE_POINT_NAME should be the same size as TracePoint");
-  bool has_output = false;
-  for(int64_t i = 0; i < MAX_TRACE_POINT; ++i) {
-    if (0 == stats_[i].cost_) {
-      continue;
-    }
-    memcpy(res + pos, TRACE_POINT_NAME[i], TRACE_NAME_LENGTH[i]);
-    pos += TRACE_NAME_LENGTH[i];
-    memcpy(res + pos, INFO_PREFIX, INFO_PREFIX_SIZE);
-    pos += INFO_PREFIX_SIZE;
-    print_int64_to_buffer(res, pos, stats_[i].cost_);
-    memcpy(res + pos, INFO_PREFIX, INFO_PREFIX_SIZE);
-    pos += INFO_PREFIX_SIZE;
-    print_int64_to_buffer(res, pos, stats_[i].count_);
-    memcpy(res + pos, INFO_SUFFIX, INFO_SUFFIX_SIZE);
-    pos += INFO_SUFFIX_SIZE;
+  contents_.clear();
+  TimeType total_cost = 0;
+  for (int64_t i = 0; i < MAX_TRACE_POINT; ++i) {
+    stats_[i].point_id_ = i;
+    total_cost += stats_[i].cost_;
   }
+  std::sort(stats_, stats_ + MAX_TRACE_POINT,
+            [](const TraceStats &a, const TraceStats &b) {
+              return a.cost_ > b.cost_;
+            });
   for (int64_t i = 0; i < MAX_COUNT_POINT; ++i) {
-    if (0 == counters_[i]) {
+    counters_[i].point_id_ = i;
+  }
+  std::sort(counters_, counters_ + MAX_COUNT_POINT,
+            [](const CountStats &a, const CountStats &b) {
+              return a.count_ > b.count_;
+            });
+  double tick_ratio = (double)total_time / (double)total_cost;
+  contents_.append("TOTAL_TIME: ");
+  contents_.append(std::to_string(total_time));
+  contents_.append(", TOTAL_TICKS: ");
+  contents_.append(std::to_string(total_cost));
+  contents_.append("\n");
+  contents_.append(
+      "TRACE LIST                   TIME                    PERCENTAGE   "
+      "TOTAL_COUNT\n");
+  for (int64_t i = 0; i < MAX_TRACE_POINT; ++i) {
+    if (stats_[i].cost_ == 0) {
       continue;
     }
-    memcpy(res + pos, COUNT_POINT_NAME[i], COUNT_NAME_LENGTH[i]);
-    pos += COUNT_NAME_LENGTH[i];
-    memcpy(res + pos, INFO_PREFIX, INFO_PREFIX_SIZE);
-    pos += INFO_PREFIX_SIZE;
-    print_int64_to_buffer(res, pos, counters_[i]);
-    memcpy(res + pos, INFO_SUFFIX, INFO_SUFFIX_SIZE);
-    pos += INFO_SUFFIX_SIZE;
+    int64_t trace_time = static_cast<int64_t>(stats_[i].cost_ * tick_ratio);
+    snprintf(trace_row_buffer, TRACE_ROW_LEN, "%-*s%-*ld%-*lf%-*ld\n",
+             TRACE_NAME_LEN, TRACE_POINT_NAME[stats_[i].point_id_], COST_LEN,
+             trace_time, PERCENTAGE_LEN,
+             (double)stats_[i].cost_ * 100.0 / (double)total_cost, COUNT_LEN,
+             stats_[i].count_);
+    contents_.append(trace_row_buffer, TRACE_ROW_LEN - 1);
   }
-  if (pos == 0) {
-    // if no data, output string is "\n\0"
-    // so add 1 for \n
-    pos += 1;
+
+  contents_.append("COUNTER LIST                                 COUNT\n");
+  for (int64_t i = 0; i < MAX_COUNT_POINT; ++i) {
+    if (counters_[i].count_ == 0) {
+      continue;
+    }
+    snprintf(count_row_buffer, COUNT_ROW_LEN, "%-*s%-*ld\n", COUNT_NAME_LEN,
+             COUNT_POINT_NAME[counters_[i].point_id_], COUNT_LEN,
+             counters_[i].count_);
+    contents_.append(count_row_buffer);
   }
-  res[pos - 1] = '\n';
-  res[pos] = 0;
+  res = contents_.data();
+  size = contents_.size();
 }
 
 TimeType QueryPerfContext::current(util::Env *env) const {
@@ -476,7 +501,7 @@ CountType QueryPerfContext::get_count(TracePoint point) const {
 }
 
 CountType QueryPerfContext::get_count(CountPoint point) const {
-  return counters_[static_cast<int64_t>(point)];
+  return counters_[static_cast<int64_t>(point)].count_;
 }
 
 TimeType QueryPerfContext::get_costs(TracePoint point) const {
@@ -487,20 +512,19 @@ CountType QueryPerfContext::get_global_count(CountPoint point) const {
   return statistics_->get_counter_info(static_cast<int64_t>(point));
 }
 
-void QueryPerfContext::get_global_trace_info(TimeType *time, CountType *count) const {
+void QueryPerfContext::get_global_trace_info(TimeType *time,
+                                             CountType *count) const {
   statistics_->get_trace_info(time, count);
 }
 
-void QueryPerfContext::clear_stats() {
-  statistics_->clear();
-}
+void QueryPerfContext::clear_stats() { statistics_->clear(); }
 
 void QueryPerfContext::print_int64_to_buffer(char *buffer, int64_t &pos,
                                              int64_t value) {
   static const char alpha[] = "0123456789ABCDEF";
   int32_t shift_size = 56;
   while (shift_size >= 0) {
-    buffer[pos++] = alpha[(value >> (shift_size+4)) & 0xf];
+    buffer[pos++] = alpha[(value >> (shift_size + 4)) & 0xf];
     buffer[pos++] = alpha[(value >> shift_size) & 0xf];
     shift_size -= 8;
   }
@@ -508,7 +532,7 @@ void QueryPerfContext::print_int64_to_buffer(char *buffer, int64_t &pos,
 
 QueryPerfContext *QueryPerfContext::new_query_context() {
   static pthread_once_t key_once = PTHREAD_ONCE_INIT;
-  (void) pthread_once(&key_once, make_key);
+  (void)pthread_once(&key_once, make_key);
 
   QueryPerfContext *ctx = new (std::nothrow) QueryPerfContext();
   int s = Status::kOk;
@@ -520,21 +544,6 @@ QueryPerfContext *QueryPerfContext::new_query_context() {
     ctx = nullptr;
     XENGINE_LOG(ERROR, "QueryPerfContext::init failed", K(s));
   } else {
-    char *str_buf = ctx->contents_.get();
-    int64_t pos = 0;
-    for(int64_t i = 0; i < MAX_TRACE_POINT; ++i) {
-      memcpy(str_buf + pos, TRACE_POINT_NAME[i], TRACE_NAME_LENGTH[i]);
-      pos += TRACE_NAME_LENGTH[i];
-      memcpy(str_buf + pos, DEFAULT_INFO, INFO_CONTENT_SIZE);
-      pos += INFO_CONTENT_SIZE;
-    }
-    for (int64_t i = 0; i < MAX_COUNT_POINT; ++i) {
-      memcpy(str_buf + pos, COUNT_POINT_NAME[i], COUNT_NAME_LENGTH[i]);
-      pos += COUNT_NAME_LENGTH[i];
-      memcpy(str_buf + pos, COUNTER_INFO, COUNTER_CONTENT_SIZE);
-      pos += COUNTER_CONTENT_SIZE;
-    }
-
     if (UNLIKELY(nullptr == statistics_)) {
       static std::mutex stats_mutex;
       std::lock_guard<std::mutex> guard(stats_mutex);
@@ -551,18 +560,19 @@ QueryPerfContext *QueryPerfContext::new_query_context() {
     }
     shutdown_.store(false);
   }
-  (void) pthread_setspecific(query_trace_tls_key_, ctx);
+  (void)pthread_setspecific(query_trace_tls_key_, ctx);
   return ctx;
 }
 
-void QueryPerfContext::finish(const char *query,
-                              uint64_t query_length) {
-  if (nullptr != query && query_length > 0 && opt_print_slow_) {
-    __XENGINE_LOG(WARN, "slow query: %*.*s\n",
-                  query_length, query_length, query);
+void QueryPerfContext::finish(const char *query, uint64_t query_length) {
+  int64_t total_time = (double)(GetNaNos() - begin_nanos_);
+  if (nullptr != query && query_length > 0 && opt_print_slow_ &&
+      (double)total_time > opt_threshold_time_ * (double)kNanoSec_Sec) {
+    __XENGINE_LOG(WARN, "slow query: %*.*s\n", query_length, query_length,
+                  query);
     const char *stats_data = nullptr;
     int64_t stats_size = 0;
-    to_string(stats_data, stats_size);
+    to_string(total_time, stats_data, stats_size);
     __XENGINE_LOG(WARN, "%*.*s\n", stats_size, stats_size, stats_data);
   }
 }
@@ -571,18 +581,18 @@ struct LogStatsParam {
   Env *env_;
   QueryPerfContext *ctx_;
   const std::string *path_;
-  cache::Cache* block_cache_;
-  cache::RowCache* row_cache_;
+  cache::Cache *block_cache_;
+  cache::RowCache *row_cache_;
 };
 
 #ifdef ROCKSDB_JEMALLOC
 typedef struct {
-  char* cur;
-  char* end;
+  char *cur;
+  char *end;
 } MallocStatus;
 
-static void GetJemallocStatus(void* mstat_arg, const char* status) {
-  MallocStatus* mstat = reinterpret_cast<MallocStatus*>(mstat_arg);
+static void GetJemallocStatus(void *mstat_arg, const char *status) {
+  MallocStatus *mstat = reinterpret_cast<MallocStatus *>(mstat_arg);
   size_t status_len = status ? strlen(status) : 0;
   size_t buf_size = (size_t)(mstat->end - mstat->cur);
   if (!status_len || status_len > buf_size) {
@@ -594,7 +604,7 @@ static void GetJemallocStatus(void* mstat_arg, const char* status) {
 }
 #endif  // ROCKSDB_JEMALLOC
 
-static void DumpMallocStats(std::string* stats) {
+static void DumpMallocStats(std::string *stats) {
 #ifdef ROCKSDB_JEMALLOC
   MallocStatus mstat;
   const unsigned int kMallocStatusLen = 1000000;
@@ -620,11 +630,14 @@ void QueryPerfContext::schedule_log_stats(void *param) {
     stats.clear();
     DumpMallocStats(&stats);
     if (!stats.empty()) {
-      __XENGINE_LOG(INFO, "\n------- Malloc STATS -------\n"
-                          "%s\n",stats.c_str());
+      __XENGINE_LOG(INFO,
+                    "\n------- Malloc STATS -------\n"
+                    "%s\n",
+                    stats.c_str());
     }
     // cache info
-    LRUCache* block_cache = static_cast<LRUCache *>(log_stats_param->block_cache_);
+    LRUCache *block_cache =
+        static_cast<LRUCache *>(log_stats_param->block_cache_);
     if (nullptr != block_cache) {
       __XENGINE_LOG(INFO, "BLOCK CACHE INFO START");
       block_cache->print_cache_info();
@@ -636,9 +649,10 @@ void QueryPerfContext::schedule_log_stats(void *param) {
 
   stats.clear();
   AllocMgr::get_instance()->print_memory_usage(stats);
-  __XENGINE_LOG(INFO,  "\n------- MOD MEMORY INFO -------"
-                       "%s\n------- MOD MEMORY END -------\n",
-                       stats.c_str());
+  __XENGINE_LOG(INFO,
+                "\n------- MOD MEMORY INFO -------"
+                "%s\n------- MOD MEMORY END -------\n",
+                stats.c_str());
   if (nullptr != log_stats_param->row_cache_) {
     stats.clear();
     log_stats_param->row_cache_->print_stats(stats);
@@ -650,10 +664,9 @@ void QueryPerfContext::schedule_log_stats(void *param) {
   running_count_.fetch_sub(1);
 }
 
-void QueryPerfContext::async_log_stats(util::Env *env,
-                                       const std::string &path,
-                                       Cache* block_cache,
-                                       RowCache* row_cache) {
+void QueryPerfContext::async_log_stats(util::Env *env, const std::string &path,
+                                       Cache *block_cache,
+                                       RowCache *row_cache) {
   QueryPerfContext *ctx = get_tls_query_perf_context();
   auto log_stats_param = new (std::nothrow) LogStatsParam();
   if (nullptr == log_stats_param) {
@@ -668,16 +681,12 @@ void QueryPerfContext::async_log_stats(util::Env *env,
   }
 }
 
-int64_t QueryPerfContext::get_max_buffer_size() {
-  return TRACE_OUTPUT_LENGTH;
-}
-
 void QueryPerfContext::make_key() {
   (void)pthread_key_create(&query_trace_tls_key_, &delete_context);
 }
 
 void QueryPerfContext::delete_context(void *ctx) {
-  auto perf_ctx = static_cast<QueryPerfContext*>(ctx);
+  auto perf_ctx = static_cast<QueryPerfContext *>(ctx);
   tls_query_perf_context = nullptr;
   pthread_setspecific(query_trace_tls_key_, nullptr);
   delete perf_ctx;
@@ -691,27 +700,19 @@ void QueryPerfContext::shutdown() {
 }
 
 class A {
-public:
-  ~A() {
-    QueryPerfContext::delete_context(tls_query_perf_context);
-  }
+ public:
+  ~A() { QueryPerfContext::delete_context(tls_query_perf_context); }
 } a;
 
 TraceGuard::TraceGuard(TracePoint point) : point_(point) {
   query_trace_begin(point_);
 }
 
-TraceGuard::~TraceGuard() {
-  query_trace_end();
-}
+TraceGuard::~TraceGuard() { query_trace_end(); }
 
-const char **get_trace_point_name() {
-  return TRACE_POINT_NAME;
-}
+const char **get_trace_point_name() { return TRACE_POINT_NAME; }
 
-const char **get_count_point_name() {
-  return COUNT_POINT_NAME;
-}
+const char **get_count_point_name() { return COUNT_POINT_NAME; }
 
 TimeType get_trace_unit(int64_t eval_milli_sec) {
   TimeType time1 = get_time();

@@ -253,8 +253,10 @@ class VersionSet {
   uint64_t ApproximateSize(ColumnFamilyData* cfd, 
                            const db::Snapshot *sn,
                            const common::Slice& start,
-                           const common::Slice& end, int start_level = 0,
-                           int end_level = -1);
+                           const common::Slice& end,
+                           int start_level,
+                           int end_level,
+                           int64_t estimate_cost_depth);
 
   // Return the size of the current manifest file
   uint64_t manifest_file_size() const { return manifest_file_size_; }

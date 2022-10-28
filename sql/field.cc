@@ -6437,6 +6437,16 @@ size_t Field_string::make_sort_key(uchar *to, size_t length) const {
           field_charset, pointer_cast<const char *>(ptr),
           pointer_cast<const char *>(ptr) + field_length, char_length()));
 
+  /*
+  // for parallel build index for xengine table, need use thd for worker thread
+  THD *thd = current_thd;
+  if (nullptr == current_thd && table->in_use) {
+    thd = table->in_use;
+  }
+
+  if (field_charset->pad_attribute == NO_PAD &&
+      !(thd->variables.sql_mode & MODE_PAD_CHAR_TO_FULL_LENGTH)) {
+  */
   if (field_charset->pad_attribute == NO_PAD &&
       !(table->in_use->variables.sql_mode & MODE_PAD_CHAR_TO_FULL_LENGTH)) {
     /*

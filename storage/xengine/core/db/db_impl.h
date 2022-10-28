@@ -1212,6 +1212,16 @@ protected:
   ColumnFamilyData* GetColumnFamilyDataByName(const std::string& cf_name);
 
   int master_schedule_compaction(const CompactionScheduleType type);
+  /**check if can schedule backgroud job(like flush, compaction, dump, gc, shrink) in
+  some common case:
+  case 1: opened_successfully_ is false, DBImpl open failed.
+  case 2: bg_work_paused_ greater than 0, stop schedule background job initiative through
+  xengine_pause_background_work or internal logical.
+  case 3: shutdown is true, receive shutdown command.
+  case 4: bg_error_ is not Status::kOk, some background job has failed.
+  @return false if satisfy any upper case, and can't schedule background job.
+  @Note need protect by db_mutex_*/
+  bool can_schedule_bg_work_common();
   void MaybeScheduleFlushOrCompaction();
   int maybe_schedule_dump();
   int maybe_schedule_gc();

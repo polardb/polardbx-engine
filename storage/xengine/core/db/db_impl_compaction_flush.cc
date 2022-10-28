@@ -965,12 +965,8 @@ void DBImpl::schedule_background_recycle() {
 int DBImpl::maybe_schedule_dump() {
   int ret = Status::kOk;
   mutex_.AssertHeld();
-  if (!opened_successfully_) {
-    // Compaction may introduce data race to DB open
-  } else if (bg_work_paused_ > 0) {
-    // we paused the background work
-  } else if (shutting_down_.load(std::memory_order_acquire)) {
-    // DB is being deleted; no more background compactions
+  if (!can_schedule_bg_work_common()) {
+    // cant't schedule background job now
   } else {
     while (unscheduled_dumps_ > 0
         && bg_dump_scheduled_ < mutable_db_options_.max_background_dumps) {
@@ -1000,11 +996,15 @@ int DBImpl::schedule_shrink()
 
   {
     InstrumentedMutexLock guard(&mutex_);
-    auto_shrink_enabled = mutable_db_options_.auto_shrink_enabled;
-    total_max_shrink_extent_count = mutable_db_options_.total_max_shrink_extent_count;
-    shrink_condition.max_free_extent_percent_ = mutable_db_options_.max_free_extent_percent;
-    shrink_condition.shrink_allocate_interval_ = mutable_db_options_.shrink_allocate_interval;
-    shrink_condition.max_shrink_extent_count_ = mutable_db_options_.max_shrink_extent_count;
+    if (!can_schedule_bg_work_common()) {
+      // can't schedule background job now
+    } else {
+      auto_shrink_enabled = mutable_db_options_.auto_shrink_enabled;
+      total_max_shrink_extent_count = mutable_db_options_.total_max_shrink_extent_count;
+      shrink_condition.max_free_extent_percent_ = mutable_db_options_.max_free_extent_percent;
+      shrink_condition.shrink_allocate_interval_ = mutable_db_options_.shrink_allocate_interval;
+      shrink_condition.max_shrink_extent_count_ = mutable_db_options_.max_shrink_extent_count;
+    }
   }
 
   if (auto_shrink_enabled) {
@@ -1068,12 +1068,8 @@ int DBImpl::maybe_schedule_gc()
 {
   mutex_.AssertHeld();
   int ret = Status::kOk;
-  if (!opened_successfully_) {
-    // gc may introduce data race to DB open
-  } else if (bg_work_paused_ > 0) {
-    // we paused the background work
-  } else if (shutting_down_.load(std::memory_order_acquire)) {
-    // DB is being deleted; no more background gc
+  if (!can_schedule_bg_work_common()) {
+    // can't scheudle backgroud job now
   } else {
     if (unscheduled_gc_ > 0 && 0 == bg_gc_scheduled_) {
       //only one gc job running at most
@@ -1085,17 +1081,34 @@ int DBImpl::maybe_schedule_gc()
   return ret;
 }
 
+/**check if can schedule backgroud job(like flush, compaction, dump, gc, shrink) in
+some common case:
+case 1: opened_successfully_ is false, DBImpl open failed.
+case 2: bg_work_paused_ greater than 0, stop schedule background job initiative through
+xengine_pause_background_work or internal logical.
+case 3: shutdown is true, receive shutdown command.
+case 4: bg_error_ is not Status::kOk, some background job has failed.
+data, so ro not execute these backgound job.
+@return false if satisfy any upper case, and can't schedule background job.
+@Note need protect by db_mutex_*/
+bool DBImpl::can_schedule_bg_work_common()
+{
+  mutex_.AssertHeld();
+  bool bret = true;
+
+  if (!opened_successfully_ || bg_work_paused_ > 0
+      || shutting_down_.load(std::memory_order_acquire)
+      || !bg_error_.ok()) {
+    bret = false;
+  }
+
+  return bret;
+}
+
 void DBImpl::MaybeScheduleFlushOrCompaction() {
   mutex_.AssertHeld();
-  if (!opened_successfully_) {
-    // Compaction may introduce data race to DB open
-    return;
-  }
-  if (bg_work_paused_ > 0) {
-    // we paused the background work
-    return;
-  } else if (shutting_down_.load(std::memory_order_acquire)) {
-    // DB is being deleted; no more background compactions
+  if (!can_schedule_bg_work_common()) {
+    // can't schedule background job now
     return;
   }
 
@@ -2444,9 +2457,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       if (nullptr != cf_job
           && nullptr != cf_job->cfd_
           && (nullptr == cf_job->job_ || cf_job->job_->all_task_completed())) {
-        int ret = Status::kOk;
+        int ret = status.code();
         // install result only for Minor and Intra compaction
-        if (nullptr != cf_job->job_ && status.ok() && is_batch_install_task(cf_job->job_->get_task_type())) {
+        if (SUCCED(ret) && nullptr != cf_job->job_ && is_batch_install_task(cf_job->job_->get_task_type())) {
           int64_t dummy_log_seq = 0;
           AutoThreadOperationStageUpdater stage_updater(ThreadStatus::STAGE_COMPACTION_INSTALL);
           mutex_.Unlock();
@@ -2467,7 +2480,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
             XENGINE_LOG(ERROR, "install compaction result failed", K(ret));
           }
         }
-        if (status.ok()) { // update info
+        if (SUCCED(ret)) { // update info
           if(FAILED(cfd->set_compaction_check_info(&mutex_))) {
             XENGINE_LOG(WARN, "failed to set compaction check info", K(ret));
           }

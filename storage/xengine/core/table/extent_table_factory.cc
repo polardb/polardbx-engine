@@ -80,17 +80,28 @@ TableBuilder* ExtentBasedTableFactory::NewTableBuilder(
 TableBuilder* ExtentBasedTableFactory::NewTableBuilderExt(
     const TableBuilderOptions& table_builder_options, uint32_t column_family_id,
     MiniTables* mtables) const {
-  auto table_builder = new ExtentBasedTableBuilder(
-      table_builder_options.ioptions, table_options_,
-      table_builder_options.internal_comparator,
-      table_builder_options.int_tbl_prop_collector_factories, column_family_id,
-      mtables, table_builder_options.compression_type,
-      table_builder_options.compression_opts,
-      table_builder_options.compression_dict,
-      table_builder_options.skip_filters,
-      table_builder_options.column_family_name,
-      table_builder_options.output_position_,
-      table_builder_options.is_flush);
+  int ret = Status::kOk;
+  ExtentBasedTableBuilder *tmp_table_builder = nullptr;
+  ExtentBasedTableBuilder *table_builder = nullptr;
+
+  if (IS_NULL(tmp_table_builder = new ExtentBasedTableBuilder(
+          table_builder_options.ioptions, table_options_,
+          table_builder_options.internal_comparator,
+          table_builder_options.int_tbl_prop_collector_factories, column_family_id,
+          mtables, table_builder_options.compression_type,
+          table_builder_options.compression_opts,
+          table_builder_options.compression_dict,
+          table_builder_options.skip_filters,
+          table_builder_options.column_family_name,
+          table_builder_options.output_position_,
+          table_builder_options.is_flush))) {
+    ret = Status::kMemoryLimit;
+    XENGINE_LOG(WARN, "fail to allocate memory for ExtentBasedTableBuilder", K(ret));
+  } else if (FAILED(tmp_table_builder->init())) {
+    XENGINE_LOG(WARN, "fail to init table builder", K(ret));
+  } else {
+    table_builder = tmp_table_builder;
+  }
 
   return table_builder;
 }

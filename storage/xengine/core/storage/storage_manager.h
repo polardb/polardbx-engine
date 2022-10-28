@@ -160,7 +160,8 @@ public:
                            const common::Slice &end,
                            int32_t start_level,
                            int32_t end_level,
-                           const db::Snapshot *sn);
+                           const db::Snapshot *sn,
+                           int64_t estimate_cost_depth);
   ExtentMeta *get_extent_meta(const ExtentId &extent_id);
 	void print_raw_meta();
   const db::SnapshotImpl *acquire_meta_snapshot();
@@ -231,7 +232,9 @@ private:
                                      const common::Slice &start,
                                      const common::Slice &end,
                                      int32_t level,
-                                     table::InternalIterator *iter);
+                                     table::InternalIterator *iter,
+                                     int64_t estimate_cost_depth,
+                                     EstimateCostStats &cost_stats);
   int update_current_meta_snapshot(ExtentLayerVersion **new_extent_layer_versions);
   const db::SnapshotImpl *acquire_meta_snapshot_unsafe();
   void release_meta_snapshot_unsafe(const db::SnapshotImpl *meta_snapshot);

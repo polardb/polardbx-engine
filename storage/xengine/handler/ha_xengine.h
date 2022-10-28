@@ -1019,6 +1019,8 @@ public:
 
   virtual double read_time(uint, uint, ha_rows rows) override;
 
+  handler *clone(const char *name, MEM_ROOT *mem_root) override;
+
   int open(const char *const name, int mode, uint test_if_locked,
            const dd::Table *table_def) override
       MY_ATTRIBUTE((__warn_unused_result__));
@@ -1782,6 +1784,8 @@ protected:
 
   bool m_backup_running = false;
 
+  bool m_writebatch_iter_valid_flag = true;
+
   // This should be used only when updating binlog information.
   virtual xengine::db::WriteBatchBase *get_write_batch() = 0;
   virtual bool commit_no_binlog() = 0;
@@ -1836,6 +1840,17 @@ public:
   int get_timeout_sec() const { return m_timeout_sec; }
 
   ulonglong get_lock_count() const { return m_lock_count; }
+
+  /* if commit-in-middle happened, all data in writebatch has been committed,
+   * and WBWI(WriteBatchWithIterator is invalid), we should not access it
+   * anymore */
+  void invalid_writebatch_iterator() { m_writebatch_iter_valid_flag = false; }
+
+  /* if transaction commit/rollback from sever layer, valid writebatch iterator
+   * agagin. */
+  void reset_writebatch_iterator() { m_writebatch_iter_valid_flag = true; }
+
+  bool is_writebatch_valid() { return m_writebatch_iter_valid_flag; }
 
   virtual void set_sync(bool sync) = 0;
 

@@ -1,0 +1,88 @@
+DROP TABLE IF EXISTS test_commit_middle;
+CREATE TABLE test_commit_middle (id INT AUTO_INCREMENT PRIMARY KEY, c1 INT, index idx(c1)) ENGINE=xengine;
+CREATE PROCEDURE fill_table(cnt int)
+begin
+declare i int default 0;
+repeat insert into test_commit_middle(c1) values(i);
+set i=i+1;
+until i > cnt
+end repeat;
+end$$
+call fill_table(5000);
+begin;
+insert into test_commit_middle values(10001,10001),(10002,10002),(10003,10003);
+delete from test_commit_middle where id>0;
+commit;
+select * from test_commit_middle;
+id	c1
+10001	10001
+10002	10002
+10003	10003
+CREATE TABLE t1 (id1 bigint(20),id2 bigint(20),id3 bigint(20),PRIMARY KEY (id1, id2, id3)) ENGINE=xengine;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+CREATE TABLE t2 (id1 bigint(20),id2 bigint(20),PRIMARY KEY (id1, id2)) ENGINE=xengine;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+DELETE t2, t1 FROM t2 LEFT JOIN t1 ON t2.id2 = t1.id2 AND t2.id1 = t1.id1 WHERE t2.id1 = 0;
+select count(*) from t1;
+count(*)
+0
+select count(*) from t2;
+count(*)
+0
+CREATE TABLE test_commit_middle_2 (id INT AUTO_INCREMENT PRIMARY KEY, c1 INT, index idx(c1)) ENGINE=xengine;
+CREATE PROCEDURE fill_table_2(cnt int)
+begin
+declare i int default 0;
+repeat insert into test_commit_middle_2(c1) values(i);
+set i=i+1;
+until i > cnt
+end repeat;
+end$$
+call fill_table_2(10001);
+begin;
+insert into test_commit_middle_2(c1) select c1 from test_commit_middle_2;
+select count(*) from test_commit_middle_2;
+count(*)
+20004
+insert into test_commit_middle_2 values(90000,1);
+delete from test_commit_middle_2 where id > 0;
+select * from test_commit_middle_2 where id = 90000;
+id	c1
+90000	1
+commit;
+begin;
+delete from test_commit_middle_2 where id > 0;
+select * from test_commit_middle_2 where id = 90000;
+id	c1
+commit;
+truncate table test_commit_middle_2;
+CREATE TABLE test_commit_middle_3 (id INT AUTO_INCREMENT PRIMARY KEY, c1 INT, index idx(c1)) ENGINE=xengine;
+call fill_table_2(10001);
+begin;
+insert into test_commit_middle_3 select * from test_commit_middle_2;
+select count(*) from test_commit_middle_3;
+count(*)
+10002
+insert into test_commit_middle_3 values(90000,1);
+delete from test_commit_middle_3 where id > 0;
+select * from test_commit_middle_3 where id = 90000;
+id	c1
+90000	1
+commit;
+begin;
+delete from test_commit_middle_3 where id > 0;
+select * from test_commit_middle_3 where id = 90000;
+id	c1
+commit;
+DROP TABLE test_commit_middle;
+DROP TABLE test_commit_middle_2;
+DROP TABLE test_commit_middle_3;
+DROP PROCEDURE fill_table;
+DROP PROCEDURE fill_table_2;
+drop table t1;
+drop table t2;

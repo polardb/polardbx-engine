@@ -518,6 +518,8 @@ static void xengine_set_query_trace_sum(
     const void *value);
 static void xengine_set_query_trace_print_slow(
     THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save);
+static void xengine_set_query_trace_threshold_time(
+    THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save);
 static void xengine_set_mutex_backtrace_threshold_ns(
     THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save);
 static void xengine_set_block_cache_size(
@@ -631,6 +633,9 @@ static void xengine_set_auto_shrink_schedule_interval(THD *thd,
                                                       struct SYS_VAR *const var,
                                                       void *const var_ptr,
                                                       const void *const save);
+static void xengine_set_estimate_cost_depth(THD *thd, struct SYS_VAR *const var,
+                                            void *const var_ptr,
+                                            const void *const save);
 
 static void xengine_set_idle_tasks_schedule_time(
     THD *thd, struct SYS_VAR *const var, void *const var_ptr,
@@ -718,7 +723,8 @@ bool xengine_enable_bulk_load_api = false;
 int xengine_inplace_populate_indexes = 0;
 
 static uint64_t xengine_query_trace_sum = 0;
-static bool xengine_query_trace_print_slow = 1;
+static double xengine_query_trace_threshold_time = 100.0;
+static bool xengine_query_trace_print_slow = false;
 
 bool xengine_enable_print_ddl_log = true;
 
@@ -978,14 +984,13 @@ static MYSQL_THDVAR_BOOL(
     "Take and hold locks on rows that are scanned but not updated", nullptr,
     nullptr, FALSE);
 
-#if 0 // DEL-SYSVAR
 static MYSQL_THDVAR_ULONG(bulk_load_size, PLUGIN_VAR_RQCMDARG,
                           "Max #records in a batch for bulk-load mode", nullptr,
                           nullptr,
                           /*default*/ XDB_DEFAULT_BULK_LOAD_SIZE,
                           /*min*/ 1,
                           /*max*/ XDB_MAX_BULK_LOAD_SIZE, 0);
-
+#if 0  // DEL-SYSVAR
 static MYSQL_THDVAR_ULONGLONG(
     merge_buf_size, PLUGIN_VAR_RQCMDARG,
     "Size to allocate for merge sort buffers written out to disk "
@@ -1126,7 +1131,7 @@ static MYSQL_SYSVAR_ULONG(mutex_backtrace_threshold_ns,
                           xengine_db_options.mutex_backtrace_threshold_ns,
                           PLUGIN_VAR_RQCMDARG,
                           "DBOptions::mutex_backtrace_threshold_ns for XEngine", nullptr,
-                          xengine_set_mutex_backtrace_threshold_ns, 100000000UL,
+                          xengine_set_mutex_backtrace_threshold_ns, 1000000000UL,
                           /* min */ 0L, /* max */ LONG_MAX, 0);
 
 #if 0 // DEL-SYSVAR
@@ -1256,6 +1261,13 @@ static MYSQL_SYSVAR_ULONG(auto_shrink_schedule_interval,
                           nullptr, xengine_set_auto_shrink_schedule_interval,
                           xengine_db_options.auto_shrink_schedule_interval,
                           /* min */ 0, /* max */ ULONG_MAX, 0);
+static MYSQL_SYSVAR_ULONG(estimate_cost_depth,
+                          xengine_db_options.estimate_cost_depth,
+                          PLUGIN_VAR_RQCMDARG,
+                          "DBOptions::estimate_cost_depth for XEngine", nullptr,
+                          xengine_set_estimate_cost_depth,
+                          xengine_db_options.estimate_cost_depth,
+                          /* min */ 0, /* max*/ ULONG_MAX, 0);
 static MYSQL_SYSVAR_ULONG(idle_tasks_schedule_time,
                           xengine_db_options.idle_tasks_schedule_time,
                           PLUGIN_VAR_RQCMDARG,
@@ -2138,12 +2150,13 @@ static MYSQL_SYSVAR_ENUM(query_trace_sum, xengine_query_trace_sum,
                          PLUGIN_VAR_RQCMDARG, "if record query detail in IS table for XEngine",
                          nullptr, xengine_set_query_trace_sum,
                          0 /* OFF */ , &query_trace_sum_ops_typelib);
-static MYSQL_SYSVAR_BOOL(
-    query_trace_print_slow, xengine_query_trace_print_slow,
-    PLUGIN_VAR_RQCMDARG,
-    "if print slow query detail in error log for XEngine", nullptr,
-    xengine_set_query_trace_print_slow, 1 /* default ON */);
-
+static MYSQL_SYSVAR_BOOL(query_trace_print_slow, xengine_query_trace_print_slow,
+                         PLUGIN_VAR_RQCMDARG,
+                         "if print slow query detail in error log for XEngine", nullptr,
+                         xengine_set_query_trace_print_slow, 0 /* default OFF */);
+static MYSQL_SYSVAR_DOUBLE(query_trace_threshold_time, xengine_query_trace_threshold_time,
+                           PLUGIN_VAR_RQCMDARG, "If a query use more than this, a trace log will be printed to error log",
+                           NULL, xengine_set_query_trace_threshold_time, 100.0, 0.0, LONG_TIMEOUT, 0.0);
 
 static MYSQL_SYSVAR_UINT(disable_online_ddl, xengine_disable_online_ddl,
                          PLUGIN_VAR_RQCMDARG,
@@ -2216,7 +2229,6 @@ static struct SYS_VAR *xengine_system_variables[] = {
     MYSQL_SYSVAR(blind_delete_primary_key),
     MYSQL_SYSVAR(read_free_rpl_tables),
     MYSQL_SYSVAR(rpl_skip_tx_api),
-    MYSQL_SYSVAR(bulk_load_size),
     MYSQL_SYSVAR(merge_buf_size),
     MYSQL_SYSVAR(enable_bulk_load_api),
     MYSQL_SYSVAR(tmpdir),
@@ -2236,6 +2248,7 @@ static struct SYS_VAR *xengine_system_variables[] = {
     MYSQL_SYSVAR(max_total_wal_size),
     // MYSQL_SYSVAR(use_fsync),
     MYSQL_SYSVAR(wal_dir),
+    MYSQL_SYSVAR(bulk_load_size),
 #if 0 // DEL-SYSVAR
     MYSQL_SYSVAR(persistent_cache_path),
     MYSQL_SYSVAR(persistent_cache_size),
@@ -2250,6 +2263,7 @@ static struct SYS_VAR *xengine_system_variables[] = {
     MYSQL_SYSVAR(max_shrink_extent_count),
     MYSQL_SYSVAR(total_max_shrink_extent_count),
     MYSQL_SYSVAR(auto_shrink_schedule_interval),
+    MYSQL_SYSVAR(estimate_cost_depth),
 #if 0 // DEL-SYSVAR
     MYSQL_SYSVAR(max_log_file_size),
     MYSQL_SYSVAR(max_subcompactions),
@@ -2739,6 +2753,8 @@ void Xdb_transaction::walk_tx_list(Xdb_tx_list_walker *walker) {
   }
 
   bool Xdb_transaction::commit() {
+    reset_writebatch_iterator();
+
     if (get_write_count() == 0) {
       rollback();
       return false;
@@ -3039,6 +3055,8 @@ public:
     m_write_count = 0;
     m_lock_count = 0;
     m_ddl_transaction = false;
+    reset_writebatch_iterator();
+
     if (m_xengine_tx) {
       release_snapshot();
       /* This will also release all of the locks: */
@@ -4477,6 +4495,8 @@ static int xengine_start_tx_and_assign_read_view(
   //  mysql_bin_log_unlock_commits(binlog_file, binlog_pos, gtid_executed,
   //                               gtid_executed_length);
 
+  xengine::monitor::QueryPerfContext::opt_print_slow_ = xengine_query_trace_print_slow;
+  xengine::monitor::QueryPerfContext::opt_threshold_time_ = xengine_query_trace_threshold_time;
   return HA_EXIT_SUCCESS;
 }
 
@@ -7648,15 +7668,18 @@ int ha_xengine::read_row_from_secondary_key(uchar *const buf,
   uint pk_size;
 
   if (m_keyread_only && m_lock_rows == XDB_LOCK_NONE && !has_hidden_pk(table)) {
-    /* Get the key columns and primary key value */
-    const xengine::common::Slice &rkey = m_scan_it->key();
-    pk_size =
-        kd.get_primary_key_tuple(table, *m_pk_descr, &rkey, m_pk_packed_tuple);
-    const xengine::common::Slice &value = m_scan_it->value();
-    if (pk_size == XDB_INVALID_KEY_LEN ||
-        kd.unpack_record(table, buf, &rkey, &value,
-                         m_verify_row_debug_checksums)) {
-      rc = HA_ERR_INTERNAL_ERROR;
+    rc = find_icp_matching_index_rec(move_forward, buf);
+    if (!rc) {
+      /* Get the key columns and primary key value */
+      const xengine::common::Slice &rkey = m_scan_it->key();
+      pk_size =
+          kd.get_primary_key_tuple(table, *m_pk_descr, &rkey, m_pk_packed_tuple);
+      const xengine::common::Slice &value = m_scan_it->value();
+      if (pk_size == XDB_INVALID_KEY_LEN ||
+          kd.unpack_record(table, buf, &rkey, &value,
+                           m_verify_row_debug_checksums)) {
+        rc = HA_ERR_INTERNAL_ERROR;
+      }
     }
   } else {
     if (kd.m_is_reverse_cf)
@@ -9190,6 +9213,16 @@ int ha_xengine::index_next_with_direction(uchar *const buf, bool move_forward) {
   if (active_index == pk_index(table, m_tbl_def.get())) {
     rc = rnd_next_with_direction(buf, move_forward);
   } else {
+    // check if writebatch iterator is still OK
+    Xdb_transaction *const tx = get_tx_from_thd(table->in_use);
+    if (tx && (!tx->is_writebatch_valid())) {
+      util::BaseDeltaIterator *p_scan;
+      p_scan = dynamic_cast<util::BaseDeltaIterator *>(m_scan_it);
+      if (p_scan) {
+        p_scan->InvalidDelta();
+      }
+    }
+
     if (m_skip_scan_it_next_call) {
       m_skip_scan_it_next_call = false;
     } else {
@@ -9506,9 +9539,13 @@ bool ha_xengine::commit_in_the_middle() {
 bool ha_xengine::do_bulk_commit(Xdb_transaction *const tx) {
   DBUG_ASSERT(tx != nullptr);
 
-  if (commit_in_the_middle()) {
-    bool ret = tx->get_write_count() >= XDB_DEFAULT_BULK_LOAD_SIZE /*THDVAR(table->in_use, bulk_load_size)*/ &&
-           tx->flush_batch();
+  bool ret = false;
+
+  if (commit_in_the_middle() &&
+      tx->get_write_count() >= THDVAR(table->in_use, bulk_load_size)) {
+    ret = tx->flush_batch();
+
+    tx->invalid_writebatch_iterator();
 
     DBUG_EXECUTE_IF("ddl_log_crash_after_commit_in_the_middle", DBUG_SUICIDE(););
     return ret;
@@ -10303,24 +10340,8 @@ int ha_xengine::update_write_row(const uchar *const old_data,
     DBUG_RETURN(rc);
   }
 
-  bool write_batch_iter_invalid_flag = false;
-  if (commit_in_the_middle() &&
-      (row_info.tx)->get_write_count() >= XDB_DEFAULT_BULK_LOAD_SIZE /*THDVAR(table->in_use, bulk_load_size)*/)
-  {
-    write_batch_iter_invalid_flag = true;
-  }
-
   if (do_bulk_commit(row_info.tx)) {
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
-  }
-
-  if (write_batch_iter_invalid_flag && m_scan_it)
-  {
-    util::BaseDeltaIterator* p_scan;
-    p_scan = dynamic_cast<util::BaseDeltaIterator*>(m_scan_it);
-    if (p_scan) {
-      p_scan->InvalidDelta();
-    }
   }
 
   DBUG_RETURN(HA_EXIT_SUCCESS);
@@ -10378,6 +10399,8 @@ void ha_xengine::setup_scan_iterator(const Xdb_key_def &kd,
     const bool fill_cache = true; // !THDVAR(ha_thd(), skip_fill_cache);
     m_scan_it = tx->get_iterator(kd.get_cf(), skip_bloom, fill_cache);
     m_scan_it_skips_bloom = skip_bloom;
+    // reset writebatch iterator valid for new statement
+    tx->reset_writebatch_iterator();
   }
 
   if (nullptr != end_key) {
@@ -10493,6 +10516,16 @@ int ha_xengine::rnd_next_with_direction(uchar *const buf, bool move_forward) {
     DBUG_RETURN(HA_ERR_END_OF_FILE);
   }
 
+  // check if writebatch iterator is still OK
+  Xdb_transaction *const tx = get_tx_from_thd(table->in_use);
+  if (tx && (!tx->is_writebatch_valid())) {
+    util::BaseDeltaIterator *p_scan;
+    p_scan = dynamic_cast<util::BaseDeltaIterator *>(m_scan_it);
+    if (p_scan) {
+      p_scan->InvalidDelta();
+    }
+  }
+
   for (;;) {
     if (m_skip_scan_it_next_call) {
       m_skip_scan_it_next_call = false;
@@ -10588,6 +10621,14 @@ int ha_xengine::index_init(uint idx, bool sorted) {
   tx->acquire_snapshot(m_lock_rows == XDB_LOCK_NONE);
 
   active_index = idx;
+
+  // check if xengine support read data from index
+  if (m_keyread_only) {
+    const Xdb_key_def &kd = *m_key_descr_arr[idx];
+    if (!kd.get_support_icp_flag()) {
+      m_keyread_only = false;
+    }
+  }
 
   DBUG_RETURN(HA_EXIT_SUCCESS);
 }
@@ -10722,24 +10763,8 @@ int ha_xengine::delete_row(const uchar *const buf) {
     }
   }
 
-  bool write_batch_iter_invalid_flag = false;
-  if (commit_in_the_middle() &&
-      tx->get_write_count() >=
-          XDB_DEFAULT_BULK_LOAD_SIZE /*THDVAR(table->in_use, bulk_load_size)*/) {
-    write_batch_iter_invalid_flag = true;
-  }
-
   if (do_bulk_commit(tx)) {
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
-  }
-
-  if (write_batch_iter_invalid_flag == true && m_scan_it)
-  {
-    util::BaseDeltaIterator* p_scan;
-    p_scan = dynamic_cast<util::BaseDeltaIterator*>(m_scan_it);
-    if (p_scan) {
-      p_scan->InvalidDelta();
-    }
   }
 
   //stats.rows_deleted++;
@@ -13127,6 +13152,18 @@ static void xengine_set_query_trace_print_slow(
   XDB_MUTEX_LOCK_CHECK(xdb_sysvars_mutex);
   xengine_query_trace_print_slow = print_slow;
   xengine::monitor::QueryPerfContext::opt_print_slow_ = print_slow;
+  XENGINE_LOG(INFO, "SET xengie_query_trace_print_slow", K(print_slow));
+  XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
+}
+
+static void xengine_set_query_trace_threshold_time(
+    THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save) {
+  DBUG_ASSERT(save != nullptr);
+  const double threshold_time = *static_cast<const double*>(save);
+  XDB_MUTEX_LOCK_CHECK(xdb_sysvars_mutex);
+  xengine_query_trace_threshold_time = threshold_time;
+  xengine::monitor::QueryPerfContext::opt_threshold_time_ = threshold_time;
+  XENGINE_LOG(INFO, "SET xengine_query_trace_threshold_time", K(threshold_time));
   XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
 }
 
@@ -13693,6 +13730,21 @@ static void xengine_set_auto_shrink_schedule_interval(THD *thd,
   XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
 }
 
+static void xengine_set_estimate_cost_depth(THD *thd, struct SYS_VAR *const var,
+                                            void *const var_ptr,
+                                            const void *const save) {
+  DBUG_ASSERT(save != nullptr);
+
+  XDB_MUTEX_LOCK_CHECK(xdb_sysvars_mutex);
+
+  xengine_db_options.estimate_cost_depth = *static_cast<const int *>(save);
+
+  xdb->SetDBOptions({{"estimate_cost_depth",
+                      std::to_string(xengine_db_options.estimate_cost_depth)}});
+
+  XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
+}
+
 static void xengine_set_idle_tasks_schedule_time(
     THD *thd, struct SYS_VAR *const var, void *const var_ptr,
     const void *const save) {
@@ -13855,6 +13907,57 @@ double ha_xengine::read_time(uint index, uint ranges, ha_rows rows) {
   }
 
   DBUG_RETURN((rows / 20.0) + 1);
+}
+
+/* copy from handler::clone, and acquire table_def which store instant-added
+ * columns information */
+handler *ha_xengine::clone(const char *name,   /*!< in: table name */
+                           MEM_ROOT *mem_root) /*!< in: memory context */
+{
+  DBUG_TRACE;
+
+  handler *new_handler = get_new_handler(
+      table->s, (table->s->m_part_info != nullptr), mem_root, ht);
+
+  THD *thd = ha_thd();
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  const dd::Table *table_def = nullptr;
+
+  if (!new_handler) return nullptr;
+  if (new_handler->set_ha_share_ref(this->get_ha_share_ref())) goto err;
+
+  /*
+    Allocate handler->ref here because otherwise ha_open will allocate it
+    on this->table->mem_root and we will not be able to reclaim that memory
+    when the clone handler object is destroyed.
+  */
+  if (!(new_handler->ref =
+            (uchar *)mem_root->Alloc(ALIGN_SIZE(ref_length) * 2)))
+    goto err;
+
+  if (thd->dd_client()->acquire(table->s->db.str, table->s->table_name.str,
+                                &table_def)) {
+    goto err;
+  }
+
+  if (!table_def) {
+    set_my_errno(ENOENT);
+    goto err;
+  }
+
+  /*
+    TODO: Implement a more efficient way to have more than one index open for
+    the same table instance. The ha_open call is not cachable for clone.
+  */
+  if (new_handler->ha_open(table, name, table->db_stat,
+                           HA_OPEN_IGNORE_IF_LOCKED, table_def))
+    goto err;
+
+  return new_handler;
+
+err:
+  destroy(new_handler);
+  return nullptr;
 }
 
 ParallelScanCtx::ParallelScanCtx(ha_xengine* h)
