@@ -99,7 +99,7 @@ TEST_F(PerfContextTest, EmptyOutputTest) {
   ctx->reset();
   const char *data = nullptr;
   int64_t size = 0;
-  ctx->to_string(data, size);
+  ctx->to_string(0 /*total_time*/, data, size);
   ASSERT_EQ(size, 1);
   ASSERT_EQ(strcmp(data, "\n"), 0);
   delete ctx;
@@ -111,7 +111,7 @@ TEST_F(PerfContextTest, FullOutputTest) {
   memset((char*)ctx + 8, 0xBE, MAX_TRACE_POINT * 16 + MAX_COUNT_POINT * 8);
   const char *data = nullptr;
   int64_t size = 0;
-  ctx->to_string(data, size);
+  ctx->to_string(0 /*total_time*/, data, size);
   ASSERT_EQ(sizeof(FULL_TRACE_STRING)-1, size);
   ASSERT_EQ(0, strcmp(data, FULL_TRACE_STRING));
   delete ctx;
@@ -128,7 +128,7 @@ TEST_F(PerfContextTest, QueryPerfContextTest) {
   }
   const char *data = nullptr;
   int64_t size = 0;
-  get_tls_query_perf_context()->to_string(data, size);
+  get_tls_query_perf_context()->to_string(0 /*total_time*/,data, size);
   fprintf(stderr, "ctx str:\n%s\n", data);
   delete ctx;
 }
@@ -151,7 +151,7 @@ TEST_F(PerfContextTest, ThreadPerfContextTest) {
       }
       const char *data = nullptr;
       int64_t size = 0;
-      get_tls_query_perf_context()->to_string(data, size);
+      get_tls_query_perf_context()->to_string(0 /*total_time*/,data, size);
       fprintf(stderr, "ctx str:\n%s\n", data);
     })));
   }
@@ -191,7 +191,7 @@ TEST_F(PerfContextTest, ScopeContextTest) {
       }
       const char *data = nullptr;
       int64_t size = 0;
-      get_tls_query_perf_context()->to_string(data, size);
+      get_tls_query_perf_context()->to_string(0 /*total_time*/, data, size);
       fprintf(stderr, "ctx str:\n%s\n", data);
     })));
   }
@@ -227,7 +227,7 @@ TEST_F(PerfContextTest, ScopeContextTest2) {
   }
   const char *data = nullptr;
   int64_t size = 0;
-  get_tls_query_perf_context()->to_string(data, size);
+  get_tls_query_perf_context()->to_string(0 /*total_time*/, data, size);
   fprintf(stderr, "ctx str:\n%s\n", data);
 }
 
@@ -262,7 +262,7 @@ TEST_F(PerfContextTest, CountShardTest) {
       }
       const char *data = nullptr;
       int64_t size = 0;
-      get_tls_query_perf_context()->to_string(data, size);
+      get_tls_query_perf_context()->to_string(0 /*total time*/, data, size);
       fprintf(stderr, "ctx str:\n%s\n", data);
     })));
   }
@@ -278,7 +278,7 @@ TEST_F(PerfContextTest, TraceGuardTest) {
   }
   const char *data = nullptr;
   int64_t size = 0;
-  get_tls_query_perf_context()->to_string(data, size);
+  get_tls_query_perf_context()->to_string(0 /*total_time*/, data, size);
   fprintf(stderr, "ctx str:\n%s\n", data);
 }
 
@@ -301,7 +301,7 @@ TEST_F(PerfContextTest, GetPerfTest) {
   EXPECT_EQ(value, get_value);
   const char *data = nullptr;
   int64_t size = 0;
-  get_tls_query_perf_context()->to_string(data, size);
+  get_tls_query_perf_context()->to_string(0 /*total_time*/, data, size);
   fprintf(stderr, "ctx str:\n%s\n", data);
   MOD_DELETE_OBJECT(DB, db);
 }
@@ -343,7 +343,7 @@ TEST_F(PerfContextTest, ScanPerfTest) {
   for (iter->SeekToFirst(); iter->Valid(); iter->Next(), ++i);
   const char *data = nullptr;
   int64_t size = 0;
-  get_tls_query_perf_context()->to_string(data, size);
+  get_tls_query_perf_context()->to_string(0 /*total_time*/, data, size);
   fprintf(stderr, "ctx str:\n%s\n", data);
 }
 

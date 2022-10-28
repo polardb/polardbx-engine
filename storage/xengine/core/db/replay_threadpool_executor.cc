@@ -212,6 +212,7 @@ void ReplayThreadPoolExecutor<Deleter>::set_error() {
   util::MutexLock lock_guard(&replay_mutex_);
   has_error_.store(true);
   replay_cv_.SignalAll();
+  abort();
 }
 
 template<typename Deleter>

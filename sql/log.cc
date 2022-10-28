@@ -1640,10 +1640,6 @@ void log_slow_do(THD *thd, struct System_status_var *query_start_status) {
   else
     query_logger.slow_log_write(thd, thd->query().str, thd->query().length,
                                 query_start_status);
-
-#ifdef WITH_XENGINE_STORAGE_ENGINE
-  QUERY_TRACE_FINISH(thd->query().str, thd->query().length);
-#endif
 }
 
 /**

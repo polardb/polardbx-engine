@@ -518,6 +518,8 @@ static void xengine_set_query_trace_sum(
     const void *value);
 static void xengine_set_query_trace_print_slow(
     THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save);
+static void xengine_set_query_trace_threshold_time(
+    THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save);
 static void xengine_set_mutex_backtrace_threshold_ns(
     THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save);
 static void xengine_set_block_cache_size(
@@ -721,7 +723,8 @@ bool xengine_enable_bulk_load_api = false;
 int xengine_inplace_populate_indexes = 0;
 
 static uint64_t xengine_query_trace_sum = 0;
-static bool xengine_query_trace_print_slow = 1;
+static double xengine_query_trace_threshold_time = 100.0;
+static bool xengine_query_trace_print_slow = false;
 
 bool xengine_enable_print_ddl_log = true;
 
@@ -1128,7 +1131,7 @@ static MYSQL_SYSVAR_ULONG(mutex_backtrace_threshold_ns,
                           xengine_db_options.mutex_backtrace_threshold_ns,
                           PLUGIN_VAR_RQCMDARG,
                           "DBOptions::mutex_backtrace_threshold_ns for XEngine", nullptr,
-                          xengine_set_mutex_backtrace_threshold_ns, 100000000UL,
+                          xengine_set_mutex_backtrace_threshold_ns, 1000000000UL,
                           /* min */ 0L, /* max */ LONG_MAX, 0);
 
 #if 0 // DEL-SYSVAR
@@ -2147,12 +2150,13 @@ static MYSQL_SYSVAR_ENUM(query_trace_sum, xengine_query_trace_sum,
                          PLUGIN_VAR_RQCMDARG, "if record query detail in IS table for XEngine",
                          nullptr, xengine_set_query_trace_sum,
                          0 /* OFF */ , &query_trace_sum_ops_typelib);
-static MYSQL_SYSVAR_BOOL(
-    query_trace_print_slow, xengine_query_trace_print_slow,
-    PLUGIN_VAR_RQCMDARG,
-    "if print slow query detail in error log for XEngine", nullptr,
-    xengine_set_query_trace_print_slow, 1 /* default ON */);
-
+static MYSQL_SYSVAR_BOOL(query_trace_print_slow, xengine_query_trace_print_slow,
+                         PLUGIN_VAR_RQCMDARG,
+                         "if print slow query detail in error log for XEngine", nullptr,
+                         xengine_set_query_trace_print_slow, 0 /* default OFF */);
+static MYSQL_SYSVAR_DOUBLE(query_trace_threshold_time, xengine_query_trace_threshold_time,
+                           PLUGIN_VAR_RQCMDARG, "If a query use more than this, a trace log will be printed to error log",
+                           NULL, xengine_set_query_trace_threshold_time, 100.0, 0.0, LONG_TIMEOUT, 0.0);
 
 static MYSQL_SYSVAR_UINT(disable_online_ddl, xengine_disable_online_ddl,
                          PLUGIN_VAR_RQCMDARG,
@@ -4491,6 +4495,8 @@ static int xengine_start_tx_and_assign_read_view(
   //  mysql_bin_log_unlock_commits(binlog_file, binlog_pos, gtid_executed,
   //                               gtid_executed_length);
 
+  xengine::monitor::QueryPerfContext::opt_print_slow_ = xengine_query_trace_print_slow;
+  xengine::monitor::QueryPerfContext::opt_threshold_time_ = xengine_query_trace_threshold_time;
   return HA_EXIT_SUCCESS;
 }
 
@@ -13146,6 +13152,18 @@ static void xengine_set_query_trace_print_slow(
   XDB_MUTEX_LOCK_CHECK(xdb_sysvars_mutex);
   xengine_query_trace_print_slow = print_slow;
   xengine::monitor::QueryPerfContext::opt_print_slow_ = print_slow;
+  XENGINE_LOG(INFO, "SET xengie_query_trace_print_slow", K(print_slow));
+  XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
+}
+
+static void xengine_set_query_trace_threshold_time(
+    THD *thd, struct SYS_VAR *var, void *var_ptr, const void *save) {
+  DBUG_ASSERT(save != nullptr);
+  const double threshold_time = *static_cast<const double*>(save);
+  XDB_MUTEX_LOCK_CHECK(xdb_sysvars_mutex);
+  xengine_query_trace_threshold_time = threshold_time;
+  xengine::monitor::QueryPerfContext::opt_threshold_time_ = threshold_time;
+  XENGINE_LOG(INFO, "SET xengine_query_trace_threshold_time", K(threshold_time));
   XDB_MUTEX_UNLOCK_CHECK(xdb_sysvars_mutex);
 }
 
