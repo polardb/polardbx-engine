@@ -56,12 +56,16 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
   uchar *ptr_buffer = buffer;
 
 	if (thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
-    flags |= FLAG_COMMITTED_GCN;
+    flags |= FLAG_HAVE_COMMITTED_GCN;
     commit_gcn = thd->get_commit_gcn();
+  }
 
-    if (thd->get_internal_generated_gcn())
-      flags |= FLAG_INTERNAL_GENERATED_GCN;
+  if (thd != nullptr && thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
+    flags |= FLAG_HAVE_COMMITTED_SEQ;
+  }
 
+  if (thd != nullptr && thd->variables.innodb_snapshot_gcn != MYSQL_GCN_NULL) {
+    flags |= FLAG_HAVE_SNAPSHOT_SEQ;
   }
 
   DBUG_ASSERT(flags != 0);
@@ -69,7 +73,7 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
   *ptr_buffer = flags;
   ptr_buffer += FLAGS_LENGTH;
 
-  if (flags & FLAG_COMMITTED_GCN) {
+  if (flags & FLAG_HAVE_COMMITTED_GCN) {
     int8store(ptr_buffer, commit_gcn);
     ptr_buffer += COMMITTED_GCN_LENGTH;
   }
@@ -95,16 +99,16 @@ bool Gcn_log_event::write(Basic_ostream *ostream) {
 void Gcn_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
   DBUG_ASSERT(flags != 0);
   IO_CACHE *const head = &print_event_info->head_cache;
-  bool internal_generated = flags & FLAG_INTERNAL_GENERATED_GCN;
 
   if (!print_event_info->short_form)
   {
     print_header(head, print_event_info, false);
-    my_b_printf(head, "\tGcn\tInternal_generated=%s\n",
-                internal_generated ? "true" : "false");
+    my_b_printf(head, "\tGcn\thave_snapshot_seq=%s\thave_commit_seq=%s\n",
+                (flags & FLAG_HAVE_SNAPSHOT_SEQ) ? "true" : "false", 
+                (flags & FLAG_HAVE_COMMITTED_SEQ) ? "true" : "false");
   }
 
-  if (flags & FLAG_COMMITTED_GCN) {
+  if (flags & FLAG_HAVE_COMMITTED_GCN) {
     my_b_printf(head, "SET @@session.innodb_commit_seq=%llu%s\n",
                 (ulonglong)commit_gcn, print_event_info->delimiter);
   }
@@ -117,7 +121,7 @@ int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
   DBUG_TRACE;
   DBUG_ASSERT(rli->info_thd == thd);
 
-  if (flags & FLAG_COMMITTED_GCN) {
+  if (flags & FLAG_HAVE_COMMITTED_GCN) {
     thd->variables.innodb_commit_gcn = commit_gcn;
   }
 

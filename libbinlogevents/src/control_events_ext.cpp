@@ -26,7 +26,7 @@
 #include "event_reader_macros.h"
 
 // this line is the same as in xa.h
-static const unsigned long long MYSQL_GCN_NULL = __UINT64_MAX__;
+// static const unsigned long long MYSQL_GCN_NULL = __UINT64_MAX__;
 
 namespace binary_log {
 
@@ -50,7 +50,7 @@ Gcn_event::Gcn_event(const char *buf, const Format_description_event *fde)
 
   DBUG_ASSERT(flags != 0);
 
-  if (flags & FLAG_COMMITTED_GCN) {
+  if (flags & FLAG_HAVE_COMMITTED_GCN) {
     READER_TRY_SET(commit_gcn, read_and_letoh<uint64_t>);
   }
 
