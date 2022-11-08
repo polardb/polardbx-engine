@@ -251,8 +251,7 @@ err_t CsessionBase::execute_server_command(enum_server_command cmd,
                                            const COM_DATA &cmd_data,
                                            CcommandDelegate &delegate) {
   delegate.reset();
-  if (command_service_run_command(mysql_session_, cmd, &cmd_data,
-                                  &my_charset_utf8mb4_general_ci,
+  if (command_service_run_command(mysql_session_, cmd, &cmd_data, nullptr,
                                   CcommandDelegate::callbacks(),
                                   delegate.representation(), &delegate) != 0) {
     /// if no error spec
