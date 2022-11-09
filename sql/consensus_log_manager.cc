@@ -648,11 +648,12 @@ int ConsensusLogManager::init_service() {
 
       wait_commit_index_in_recovery();
 
-      if(ha_commit_xids_by_recover_map(this))
-        return -1;
-      get_recovery_manager()->clear_all_map();
-
       if (!opt_cluster_log_type_instance) {
+        if (ha_commit_xids_by_recover_map(this)) {
+          return -1;
+        }
+        get_recovery_manager()->clear_all_map();
+
 	    /*
 	      use the last binlog/relay log to modify the gtids
 	      read from gtid_executed table after truncate log
