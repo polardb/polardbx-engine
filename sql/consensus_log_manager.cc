@@ -660,6 +660,8 @@ int ConsensusLogManager::init_service() {
 	    */
 	    gtid_init_after_consensus_setup();
 	    start_consensus_apply_threads();
+      } else {
+        DBUG_ASSERT(get_recovery_manager()->get_commit_index_map().empty());
       }
     } // end of opt_consensus_force_recovery
   } else {
