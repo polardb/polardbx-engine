@@ -30,6 +30,9 @@
 
 namespace binary_log {
 
+Gcn_event::Gcn_event()
+    : Binary_log_event(GCN_LOG_EVENT), flags(0), commit_gcn(MYSQL_GCN_NULL) {}
+
 Gcn_event::Gcn_event(const char *buf, const Format_description_event *fde)
     : Binary_log_event(&buf, fde),
       flags(0),
@@ -48,7 +51,7 @@ Gcn_event::Gcn_event(const char *buf, const Format_description_event *fde)
 
   READER_TRY_SET(flags, read_and_letoh<uint8_t>);
 
-  DBUG_ASSERT(flags != 0);
+  //DBUG_ASSERT(flags != 0);
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {
     READER_TRY_SET(commit_gcn, read_and_letoh<uint64_t>);

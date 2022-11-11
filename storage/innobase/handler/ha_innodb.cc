@@ -5497,6 +5497,10 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
     if (trx_is_started(trx)) {
       ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
       trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn;
+      if (trx->txn_desc.cmmt.gcn == lizard::GCN_NULL) {
+        trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn =
+            lizard::lizard_sys_acquire_gcn();
+      }
     }
 
     innobase_commit_low(trx);

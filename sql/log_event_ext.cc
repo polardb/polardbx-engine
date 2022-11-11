@@ -68,7 +68,7 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
     flags |= FLAG_HAVE_SNAPSHOT_SEQ;
   }
 
-  DBUG_ASSERT(flags != 0);
+  //DBUG_ASSERT(flags != 0);
 
   *ptr_buffer = flags;
   ptr_buffer += FLAGS_LENGTH;

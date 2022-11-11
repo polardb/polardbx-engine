@@ -54,13 +54,14 @@ bool Binlog_ext::assign_gcn_to_flush_group(THD *first_seen) {
   for (THD *head = first_seen; head; head = head->next_to_commit) {
     if (head->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
       gcn = head->variables.innodb_commit_gcn;
-    } else {
+    } else if (get_xa_opt(head) != XA_ONE_PHASE) {
       error = ha_acquire_gcn(&gcn);
+      DBUG_ASSERT(error || gcn != MYSQL_GCN_NULL);
+    } else {
+      gcn = MYSQL_GCN_NULL;
+      DBUG_ASSERT(head->get_transaction()->m_flags.real_commit);
+      DBUG_ASSERT(!head->get_transaction()->m_flags.commit_low);
     }
-
-#ifndef DBUG_OFF
-    if (!error) DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
-#endif
 
     head->m_extra_desc.m_commit_gcn = gcn;
   }

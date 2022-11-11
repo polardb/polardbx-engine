@@ -108,11 +108,7 @@ public:
   /**
     Constructor.
   */
-  explicit Gcn_event():
-  Binary_log_event(GCN_LOG_EVENT),
-  flags(0),
-  commit_gcn(MYSQL_GCN_NULL)
-  {}
+  explicit Gcn_event();
 
 #ifndef HAVE_MYSYS
   // TODO(WL#7684): Implement the method print_event_info and print_long_info
