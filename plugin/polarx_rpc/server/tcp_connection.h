@@ -547,7 +547,7 @@ private:
                 type = hdr->type;
                 extra_data = hdr->length;
               }
-#if defined(__arm__) || defined(__aarch64__)
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
               sid = __builtin_bswap64(sid);
               extra_data = __builtin_bswap32(extra_data);
 #endif
