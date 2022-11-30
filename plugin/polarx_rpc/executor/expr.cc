@@ -6,6 +6,8 @@
 
 #ifdef MYSQL8
 #  include "sql/current_thd.h"
+#else
+#define MYSQL_SERVER
 #endif
 #include "sql/sql_class.h"
 #include "sql/my_decimal.h"

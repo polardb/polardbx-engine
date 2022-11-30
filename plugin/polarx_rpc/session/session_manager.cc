@@ -5,10 +5,16 @@
 #include <cstring>
 #include <memory>
 
-#include "sql/mysqld.h"
-#include "sql/sql_class.h"
+#include "../global_defines.h"
+#ifdef MYSQL8
 #include "sql/sql_lex.h"
 #include "sql/timestamp_service.h"
+#else
+#define MYSQL_SERVER
+#include "global_timestamp_service.h"
+#endif
+#include "sql/mysqld.h"
+#include "sql/sql_class.h"
 
 #include "../coders/buffering_command_delegate.h"
 #include "../coders/custom_command_delegates.h"
@@ -19,7 +25,6 @@
 #include "../server/tcp_connection.h"
 #include "../sql_query/sql_statement_builder.h"
 #include "../utility/time.h"
-#include "../global_defines.h"
 
 #include "session_manager.h"
 
@@ -186,6 +191,8 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
   }
 }
 
+#ifdef MYSQL8
+
 #define SYS_GTS_DB      "mysql"
 #define SYS_GTS_TABLE   "gts_base"
 
@@ -248,8 +255,10 @@ err_t CsessionManager::get_tso_mysql80(CtcpConnection &tcp, uint64_t &ts, int32_
   return err;
 }
 
+#endif
+
 void CsessionManager::execute_locally(CtcpConnection &tcp, const uint64_t &sid,
-                                     msg_t &&msg) {
+                                      msg_t &&msg) {
   /// reset sid first
   tcp.msg_enc().reset_sid(sid);
 

@@ -18,7 +18,7 @@
  */
 syntax = "proto2";
 
-option optimize_for = LITE_RUNTIME;
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
 // Messages of the MySQL Package
 package Polarx.Sql;

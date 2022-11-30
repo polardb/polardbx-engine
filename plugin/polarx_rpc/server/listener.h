@@ -10,8 +10,13 @@
 #include <stdexcept>
 #include <string>
 
-#include "sql/mysqld.h"
+#include "../global_defines.h"
+#ifdef MYSQL8
 #include "sql/hostname_cache.h"  // ip_to_hostname
+#else
+#include "sql/hostname.h"
+#endif
+#include "sql/mysqld.h"
 
 #include "../common_define.h"
 #include "../polarx_rpc.h"
@@ -105,6 +110,10 @@ private:
           continue;
         }
 
+        /// once ready and connected, watch dog should work normally
+        if (!plugin_info.inited.load(std::memory_order_acquire))
+          plugin_info.inited.store(true, std::memory_order_release);
+
         /// new connection
         std::unique_ptr<CtcpConnection> tcp(new CtcpConnection(
             epoll_, g_tcp_id_generator.fetch_add(1, std::memory_order_relaxed),
@@ -139,7 +148,6 @@ private:
         my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
                               "Fatal error when accept. %s",
                               std::strerror(err));
-        // unireg_abort(MYSQLD_ABORT_EXIT);
         throw std::runtime_error("Bad accept state.");
       }
       if (++retry >= 10) {
@@ -155,28 +163,37 @@ private:
 public:
   static void start(uint16_t port) {
     /// check port first
-    auto err = CmtEpoll::check_port(port);
-    if (err != 0) {
+    auto check_times = 0;
+    int ierr;
+    do {
+      ierr = CmtEpoll::check_port(port);
+      if (0 == ierr)
+        break; /// good
+      else
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    } while (++check_times < 3);
+    if (ierr != 0) {
       my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
                             "Failed to check port %u. %s", port,
-                            std::strerror(-err));
+                            std::strerror(-ierr));
       throw std::runtime_error("Failed to check port.");
     }
 
+    /// bind port
     size_t inst_cnt;
     auto insts = CmtEpoll::get_instance(inst_cnt);
     for (size_t i = 0; i < inst_cnt; ++i) {
       std::unique_ptr<Clistener> listener(new Clistener(*insts[i]));
       /// only set reuse port on other inst
-      err = insts[i]->listen_port(port, listener.get(), inst_cnt > 1);
-      if (0 == err) {
+      ierr = insts[i]->listen_port(port, listener.get(), inst_cnt > 1);
+      if (0 == ierr) {
         listener.release(); /// leak it to epoll
         my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
                               "Listen on port %u.", port);
       } else {
         my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
                               "Failed to listen on port %u. %s", port,
-                              std::strerror(-err));
+                              std::strerror(-ierr));
         throw std::runtime_error("Failed to listen.");
       }
     }

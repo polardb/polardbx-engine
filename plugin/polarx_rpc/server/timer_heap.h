@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "plugin/polarx_rpc/common_define.h"
+#include "../common_define.h"
 
 namespace polarx_rpc {
 

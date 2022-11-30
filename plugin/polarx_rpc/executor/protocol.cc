@@ -1,8 +1,10 @@
 
+#include "../global_defines.h"
+#ifndef MYSQL8
+#define MYSQL_SERVER
+#endif
 #include "sql/protocol.h"
 #include "sql/sql_class.h"
-
-#include "../global_defines.h"
 
 #include "protocol.h"
 #include "log.h"
@@ -19,8 +21,13 @@ int Protocol::write_metadata(InternalDataSet &dataset) {
     ret = 1;
     log_exec_error("write metadata failed");
   } else {
+#ifdef MYSQL8
     auto &table_name_lex = table->s->table_name;
     auto &schema_name_lex = table->s->db;
+#else
+    MYSQL_LEX_STRING &table_name_lex = table->s->table_name;
+    MYSQL_LEX_STRING &schema_name_lex = table->s->db;
+#endif
     std::string table_name(table_name_lex.str, table_name_lex.length);
     std::string schema_name(schema_name_lex.str, schema_name_lex.length);
 

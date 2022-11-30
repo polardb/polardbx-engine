@@ -1910,7 +1910,7 @@ class Set_kill_conn : public Do_THD_Impl {
                      post_kill_notification, (killing_thd));
       // And THD galaxy cb.
       if (likely(killing_thd != nullptr))
-        MYSQL_CALLBACK(killing_thd->galaxy_parallel_monitor,
+        MYSQL_CALLBACK(killing_thd->polarx_rpc_monitor,
                        post_kill_notification, (killing_thd));
     }
 

@@ -23,7 +23,7 @@
  */
 syntax = "proto2";
 
-option optimize_for = LITE_RUNTIME;
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
 // Expression syntax
 //

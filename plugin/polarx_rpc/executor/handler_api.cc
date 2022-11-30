@@ -1,4 +1,8 @@
 
+#include "../global_defines.h"
+#ifndef MYSQL8
+#define MYSQL_SERVER
+#endif
 #include "sql/mysqld.h"
 #include "sql/binlog.h"
 #include "sql/handler.h"
@@ -8,8 +12,6 @@
 #include "sql/sql_class.h"
 #include "sql/sql_base.h"
 #include "sql/sql_lex.h"
-
-#include "../global_defines.h"
 
 #include "handler_api.h"
 #include "log.h"
@@ -147,8 +149,13 @@ int handler_open_table(THD *thd,
     Open_table_context table_ctx(thd, 0);
     thr_lock_type lock_mode  = (lock_type <= HDL_READ) ? TL_READ : TL_WRITE;
 
+#ifdef MYSQL8
     tables = TABLE_LIST(db_name, strlen(db_name), table_name,
+                        strlen(table_name), table_name, lock_mode);
+#else
+    tables.init_one_table(db_name, strlen(db_name), table_name,
                           strlen(table_name), table_name, lock_mode);
+#endif
 
     /* For flush, we need to request exclusive mdl lock. */
     if (lock_type == HDL_FLUSH) {
@@ -169,6 +176,7 @@ int handler_open_table(THD *thd,
                      "ret: %d,name: %s.%s, lock_type: %d",
                      ret, db_name, table_name, lock_type);
     } else {
+#ifdef MYSQL8
       // set the snapshot seq if needed
       if (thd->variables.innodb_snapshot_gcn != MYSQL_GCN_NULL)
         tables.table->snapshot.set_gcn(thd->variables.innodb_snapshot_gcn);
@@ -177,7 +185,7 @@ int handler_open_table(THD *thd,
         if (!ha_acquire_gcn(&gcn)) ++gcn;
         tables.table->snapshot.set_gcn(gcn);
       }
-
+#endif
       // In any other case this function fails,
       // new_exec_table will be released by unique_ptr
       exec_table = new_exec_table.release();
@@ -187,9 +195,11 @@ int handler_open_table(THD *thd,
   return ret;
 }
 
+#ifdef MYSQL8
 long long thd_test_options(const MYSQL_THD thd, long long test_options) {
   return thd->variables.option_bits & test_options;
 }
+#endif
 
 int handler_close_table(THD *thd,
                         ExecTable *&exec_table,

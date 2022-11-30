@@ -1,4 +1,8 @@
 
+#include "../global_defines.h"
+#ifndef MYSQL8
+#define MYSQL_SERVER
+#endif
 #include "sql/key.h"
 #include "sql/field.h"
 

@@ -10,6 +10,11 @@
 #include <sys/types.h>
 #include <vector>
 
+#include "../global_defines.h"
+#ifndef MYSQL8
+#include "my_global.h"
+#endif
+
 #include "command_delegate.h"
 
 namespace polarx_rpc {

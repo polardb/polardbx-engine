@@ -9,12 +9,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <map>
 #include <unordered_map>
 
 #include "../common_define.h"
+#include "../global_defines.h"
 #include "../polarx_rpc.h"
 #include "../server/epoll_group_ctx.h"
 #include "../utility/atomicex.h"
@@ -64,7 +65,9 @@ public:
 
   void execute(CtcpConnection &tcp, const uint64_t &sid, msg_t &&msg,
                std::map<uint64_t, bool> &notify_set);
+#ifdef MYSQL8
   err_t get_tso_mysql80(CtcpConnection &tcp, uint64_t &ts, int32_t batch_count);
+#endif
   void execute_locally(CtcpConnection &tcp, const uint64_t &sid, msg_t &&msg);
 
   static err_t sql_stmt_execute_locally(CtcpConnection &tcp,

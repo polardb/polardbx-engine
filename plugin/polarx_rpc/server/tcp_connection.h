@@ -15,6 +15,9 @@
 
 #include <poll.h> /// for poll wait
 
+#include "m_ctype.h"
+#include "sql/mysqld.h"
+
 #include "../coders/polarx_encoder.h"
 #include "../coders/protocol_fwd.h"
 #include "../common_define.h"
@@ -145,7 +148,7 @@ private:
           if (UNLIKELY(err != 0)) {
             tcp_err(-err, "failed to unregister epoll");
             /// abort? may cause dangling pointer and may segment fault
-            // unireg_abort(MYSQLD_ABORT_EXIT);
+            unireg_abort(MYSQLD_ABORT_EXIT);
           }
           /// successfully removed and do reclaim
           registered_ = false;
@@ -315,8 +318,12 @@ private:
       msg.reset(new Polarx::ExecPlan::GetTSO());
       break;
 
-    default:
+    default: {
+      char extra[0x100];
+      ::snprintf(extra, sizeof(extra), "type: %u, len: %zu", type, length);
+      tcp_warn(0, "failed to parsing message", extra);
       return {};
+    }
     }
 
     // feed the data to the command (up to the specified boundary)
@@ -554,6 +561,15 @@ private:
 
               /// check extra data size
               if (extra_data > max_pkt) {
+                /// send fatal message before shutdown
+                msg_enc().reset_sid(sid);
+                msg_enc().encode_error(Polarx::Error::FATAL,
+                                       ER_NET_PACKET_TOO_LARGE,
+                                       "Got a packet bigger than "
+                                       "'polarx_rpc_max_allowed_packet' bytes",
+                                       "S1000");
+                encoder().flush(*this);
+                /// shutdown
                 fin("max allowed packet size exceeded");
                 /// fatal error and drop all data
                 buf_pos_ = start_pos = 0;

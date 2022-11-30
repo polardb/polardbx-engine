@@ -25,7 +25,7 @@
 // tell protobuf 3.0 to use protobuf 2.x rules
 syntax = "proto2";
 
-option optimize_for = LITE_RUNTIME;
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
 package Polarx;
 option java_package = "com.mysql.cj.x.protobuf";

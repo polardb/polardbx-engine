@@ -2,6 +2,10 @@
 // Created by zzy on 2022/8/31.
 //
 
+#include "../global_defines.h"
+#ifndef MYSQL8
+#define MYSQL_SERVER
+#endif
 #include "mysql/service_command.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
@@ -171,7 +175,11 @@ void CsessionBase::switch_to_sys_user() {
   scontext->set_host_or_ip_ptr();
 
   scontext->set_master_access(0x1FFFFFFF);
+#ifdef MYSQL8
   scontext->cache_current_db_access(0);
+#else
+  scontext->set_db_access(0);
+#endif
 
   scontext->assign_priv_user(username_.data(),
                              static_cast<int>(username_.length()));
@@ -257,7 +265,11 @@ err_t CsessionBase::execute_server_command(enum_server_command cmd,
     /// if no error spec
     if (!delegate.get_error()) {
       /// check killed
+#ifdef MYSQL8
       auto killed = get_thd()->killed.load(std::memory_order_acquire);
+#else
+      auto killed = get_thd()->killed;
+#endif
       if (THD::KILL_CONNECTION == killed)
         return err_t(ER_QUERY_INTERRUPTED, "Query execution was interrupted",
                      "70100", err_t::FATAL);
@@ -289,9 +301,15 @@ err_t CsessionBase::execute_sql(const char *sql, size_t sql_len,
 err_t CsessionBase::detach() {
   if (nullptr == mysql_session_ || srv_session_detach(mysql_session_) != 0)
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Internal error when detaching");
-  /// Note: we should force clear thd, or stale thd may cause bad memory access
+    /// Note: we should force clear thd, or stale thd may cause bad memory
+    /// access
+#ifdef MYSQL8
   current_thd = nullptr;
   THR_MALLOC = nullptr;
+#else
+  my_thread_set_THR_THD(nullptr);
+  my_thread_set_THR_MALLOC(nullptr);
+#endif
   return err_t::Success();
 }
 
@@ -334,7 +352,12 @@ void CsessionBase::remote_cancel() {
 }
 
 bool CsessionBase::is_api_ready() {
-  return 0 != srv_session_server_is_available() && !connection_events_loop_aborted();
+#ifdef MYSQL8
+  return 0 != srv_session_server_is_available() &&
+         !connection_events_loop_aborted();
+#else
+  return 0 != srv_session_server_is_available() && !::abort_loop;
+#endif
 }
 
 } // namespace polarx_rpc

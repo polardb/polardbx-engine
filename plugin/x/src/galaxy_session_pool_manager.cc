@@ -24,20 +24,20 @@ namespace xpl {
  */
 
 static void thd_wait_begin(THD *thd, int wait_type) {
-  assert(thd->galaxy_parallel_context != nullptr);
-  reinterpret_cast<Galaxy_session_pool_manager *>(thd->galaxy_parallel_context)
+  assert(thd->polarx_rpc_context != nullptr);
+  reinterpret_cast<Galaxy_session_pool_manager *>(thd->polarx_rpc_context)
       ->wait_begin(thd, wait_type);
 }
 
 static void thd_wait_end(THD *thd) {
-  assert(thd->galaxy_parallel_context != nullptr);
-  reinterpret_cast<Galaxy_session_pool_manager *>(thd->galaxy_parallel_context)
+  assert(thd->polarx_rpc_context != nullptr);
+  reinterpret_cast<Galaxy_session_pool_manager *>(thd->polarx_rpc_context)
       ->wait_end(thd);
 }
 
 static void post_kill_notification(THD *thd) {
-  assert(thd->galaxy_parallel_context != nullptr);
-  reinterpret_cast<Galaxy_session_pool_manager *>(thd->galaxy_parallel_context)
+  assert(thd->polarx_rpc_context != nullptr);
+  reinterpret_cast<Galaxy_session_pool_manager *>(thd->polarx_rpc_context)
       ->post_kill(thd);
 }
 
@@ -84,12 +84,12 @@ class Auto_detacher final {
       : m_context(context), m_run(false) {
     auto thd = m_context.data_context().get_thd();
     if (thd != nullptr)
-      thd->register_galaxy_parallel_monitor(&galaxy_monitor, &mgr);
+      thd->register_polarx_rpc_monitor(&galaxy_monitor, &mgr);
   }
 
   ~Auto_detacher() {
     auto thd = m_context.data_context().get_thd();
-    if (thd != nullptr) thd->clear_galaxy_parallel_monitor();
+    if (thd != nullptr) thd->clear_polarx_rpc_monitor();
     if (m_run) m_context.detach();
   }
 
@@ -305,8 +305,7 @@ static inline int64_t stable_ms() {
  * } thd_wait_type;
  */
 void Galaxy_session_pool_manager::wait_begin(THD *thd, int wait_type) {
-  auto before =
-      thd->galaxy_parallel_enter.fetch_add(1, std::memory_order_acquire);
+  auto before = thd->polarx_rpc_enter.fetch_add(1, std::memory_order_acquire);
   if (0 == before) {
     auto recoverable_wait = false;
     switch (wait_type) {
@@ -321,9 +320,9 @@ void Galaxy_session_pool_manager::wait_begin(THD *thd, int wait_type) {
     }
 
     if (recoverable_wait)
-      thd->galaxy_parallel_record = false;
+      thd->polarx_rpc_record = false;
     else {
-      thd->galaxy_parallel_record = true;
+      thd->polarx_rpc_record = true;
       ++m_wait_count;
       // Fast push last time.
       if (m_wait_count.load(std::memory_order_acquire) >=
@@ -339,11 +338,11 @@ void Galaxy_session_pool_manager::wait_begin(THD *thd, int wait_type) {
 
 void Galaxy_session_pool_manager::wait_end(THD *thd) {
   auto before =
-      thd->galaxy_parallel_enter.fetch_sub(1, std::memory_order_release);
-  if (1 == before && thd->galaxy_parallel_record &&
-      thd->galaxy_parallel_record) {
+      thd->polarx_rpc_enter.fetch_sub(1, std::memory_order_release);
+  if (1 == before && thd->polarx_rpc_record &&
+      thd->polarx_rpc_record) {
     --m_wait_count;
-    thd->galaxy_parallel_record = false;
+    thd->polarx_rpc_record = false;
   }
 }
 

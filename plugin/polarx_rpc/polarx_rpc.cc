@@ -11,10 +11,19 @@
 #include "server/server.h"
 #include "server/server_variables.h"
 
+#include "global_defines.h"
+
 polarx_rpc_info_t plugin_info;
 
 static int polarx_rpc_init(MYSQL_PLUGIN info) {
   plugin_info.plugin_info = info;
+
+  /// database init?
+  if (opt_initialize) {
+    my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                          "PolarX RPC disabled by database initialization.");
+    return 0;
+  }
 
   /// show log
   my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
@@ -39,7 +48,13 @@ static int polarx_rpc_deinit(void *arg MY_ATTRIBUTE((unused))) {
   return 0;
 }
 
+#ifdef MYSQL8
 static struct SHOW_VAR polarx_rpc_status_variables[] = {
+#else
+static struct st_mysql_show_var polarx_rpc_status_variables[] = {
+#endif
+    {POLARX_RPC_PLUGIN_NAME "_inited", (char *)&plugin_info.inited, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 mysql_declare_plugin(polarx_rpc){
@@ -50,7 +65,9 @@ mysql_declare_plugin(polarx_rpc){
     "RPC framework for PolarDB-X",
     PLUGIN_LICENSE_PROPRIETARY,
     polarx_rpc_init,
+#ifdef MYSQL8
     nullptr,
+#endif
     polarx_rpc_deinit,
     0x0100,
     polarx_rpc_status_variables,

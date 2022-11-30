@@ -18,15 +18,15 @@
 #include <google/protobuf/wire_format_lite.h>
 #include <google/protobuf/wire_format_lite_inl.h>
 
-#include "polarx.pb.h"
-#include "polarx_connection.pb.h"
-#include "polarx_datatypes.pb.h"
-#include "polarx_exec_plan.pb.h"
-#include "polarx_expect.pb.h"
-#include "polarx_notice.pb.h"
-#include "polarx_resultset.pb.h"
-#include "polarx_session.pb.h"
-#include "polarx_sql.pb.h"
+#include "protobuf_lite/polarx.pb.h"
+#include "protobuf_lite/polarx_connection.pb.h"
+#include "protobuf_lite/polarx_datatypes.pb.h"
+#include "protobuf_lite/polarx_exec_plan.pb.h"
+#include "protobuf_lite/polarx_expect.pb.h"
+#include "protobuf_lite/polarx_notice.pb.h"
+#include "protobuf_lite/polarx_resultset.pb.h"
+#include "protobuf_lite/polarx_session.pb.h"
+#include "protobuf_lite/polarx_sql.pb.h"
 
 #ifdef WIN32
 #pragma warning(pop)

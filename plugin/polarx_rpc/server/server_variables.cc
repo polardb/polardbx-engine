@@ -8,6 +8,7 @@
 #include "mysql/plugin.h"
 
 #include "server_variables.h"
+#include "../global_defines.h"
 
 class THD;
 
@@ -18,7 +19,13 @@ static constexpr my_bool auto_cpu_affinity = true;
 static constexpr my_bool force_all_cores = false;
 /// auto calculate by core numbers
 static constexpr uint32_t epoll_groups = 0;
+#ifdef MYSQL8
+/// for open source
 static constexpr uint32_t min_auto_epoll_groups = 32;
+#else
+/// for aliyun
+static constexpr uint32_t min_auto_epoll_groups = 16;
+#endif
 /// only works when 0 == epoll_groups, better performance if set to 0 with auto
 /// bind core
 static constexpr uint32_t epoll_extra_groups = 0;
@@ -84,7 +91,7 @@ static constexpr uint32_t epoll_group_tasker_multiply = 3;
 /// default 2
 static constexpr uint32_t epoll_group_tasker_extend_step = 2;
 static constexpr my_bool enable_epoll_in_tasker = true;
-}  // namespace defaults
+} // namespace defaults
 
 my_bool auto_cpu_affinity = defaults::auto_cpu_affinity;
 my_bool force_all_cores = defaults::force_all_cores;
@@ -331,18 +338,17 @@ static MYSQL_SYSVAR_UINT(
 static MYSQL_SYSVAR_BOOL(enable_tasker, ::polarx_rpc::enable_tasker,
                          PLUGIN_VAR_OPCMDARG, "Enable balance tasker(RW)",
                          nullptr, update_func_b, defaults::enable_tasker);
-static MYSQL_SYSVAR_UINT(
-    epoll_group_tasker_multiply,
-    ::polarx_rpc::epoll_group_tasker_multiply,
-    PLUGIN_VAR_OPCMDARG, "Workload factor of one thread to n queued tasks(RW)",
-    nullptr, update_func_u32,
-    defaults::epoll_group_tasker_multiply, 1, 50, 0);
-static MYSQL_SYSVAR_UINT(
-    epoll_group_tasker_extend_step,
-    ::polarx_rpc::epoll_group_tasker_extend_step,
-    PLUGIN_VAR_OPCMDARG, "Tasker threads extend step(RW)",
-    nullptr, update_func_u32,
-    defaults::epoll_group_tasker_extend_step, 1, 50, 0);
+static MYSQL_SYSVAR_UINT(epoll_group_tasker_multiply,
+                         ::polarx_rpc::epoll_group_tasker_multiply,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Workload factor of one thread to n queued tasks(RW)",
+                         nullptr, update_func_u32,
+                         defaults::epoll_group_tasker_multiply, 1, 50, 0);
+static MYSQL_SYSVAR_UINT(epoll_group_tasker_extend_step,
+                         ::polarx_rpc::epoll_group_tasker_extend_step,
+                         PLUGIN_VAR_OPCMDARG, "Tasker threads extend step(RW)",
+                         nullptr, update_func_u32,
+                         defaults::epoll_group_tasker_extend_step, 1, 50, 0);
 static MYSQL_SYSVAR_BOOL(enable_epoll_in_tasker,
                          ::polarx_rpc::enable_epoll_in_tasker,
                          PLUGIN_VAR_OPCMDARG, "Enable tasker to do epoll(RW)",
@@ -389,4 +395,4 @@ struct SYS_VAR *polarx_rpc_system_variables[] = {
     MYSQL_SYSVAR(epoll_group_tasker_extend_step),
     MYSQL_SYSVAR(enable_epoll_in_tasker),
     nullptr};
-}  // namespace polarx_rpc
+} // namespace polarx_rpc

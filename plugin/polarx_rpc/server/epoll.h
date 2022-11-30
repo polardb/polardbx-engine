@@ -502,21 +502,11 @@ private:
   }
 
   explicit CmtEpoll(uint32_t group_id, size_t work_queue_depth)
-      : group_id_(group_id),
-        work_queue_(work_queue_depth),
-        wait_cnt_(0),
-        loop_cnt_(0),
-        last_cleanup_(0),
-        with_affinity_(true),
-        base_thread_count_(0),
-        stall_count_(0),
-        worker_count_(0),
-        tasker_count_(0),
-        last_scale_time_(0),
-        last_tasker_time_(0),
-        session_count_(0),
-        last_head_(0),
-        last_loop_(0) {
+      : group_id_(group_id), work_queue_(work_queue_depth), wait_cnt_(0),
+        loop_cnt_(0), last_cleanup_(0), with_affinity_(true),
+        base_thread_count_(0), stall_count_(0), worker_count_(0),
+        tasker_count_(0), last_scale_time_(0), last_tasker_time_(0),
+        session_count_(0), last_head_(0), last_loop_(0) {
     /// clear cpu set
     CPU_ZERO(&cpus_);
 
@@ -573,8 +563,9 @@ private:
       if (affinity < 0)
         with_affinity_ = false;
       else if (!CPU_ISSET(affinity, &cpus_)) {
-        CPU_SET(affinity, &cpus_);  /// add to group set
-        if (thread_id != 0) oss << ',';
+        CPU_SET(affinity, &cpus_); /// add to group set
+        if (thread_id != 0)
+          oss << ',';
         oss << affinity;
       }
     }
@@ -638,7 +629,9 @@ public:
           }
           groups = cores / threads + (0 == cores % threads ? 0 : 1);
           if (groups < min_auto_epoll_groups)
-            groups = min_auto_epoll_groups;
+            groups = (min_auto_epoll_groups / groups +
+                      (0 == min_auto_epoll_groups % groups ? 0 : 1)) *
+                     groups;
           base_groups = groups;
           /// dealing extra group
           auto extra = epoll_extra_groups;
@@ -787,7 +780,8 @@ public:
 
   static inline int check_port(uint16_t port) {
     auto fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (UNLIKELY(fd <= 0)) return -errno;
+    if (UNLIKELY(fd <= 0))
+      return -errno;
     sockaddr_in address;
     ::memset(&address, 0, sizeof(address));
     if (::inet_pton(AF_INET, "127.0.0.1", &address.sin_addr.s_addr) != 1) {
@@ -927,7 +921,7 @@ public:
             tasker_count_.load(std::memory_order_acquire),
             session_count_.load(std::memory_order_acquire),
             global_thread_count().load(std::memory_order_acquire));
-      return;  /// ignore if worker more than session
+      return; /// ignore if worker more than session
     }
 
     /// force scale one thread
@@ -951,9 +945,7 @@ public:
     return session_count_;
   }
 
-  inline std::atomic<int> &session_count() {
-    return session_count_;
-  }
+  inline std::atomic<int> &session_count() { return session_count_; }
 
   inline void balance_tasker() {
     auto pending = work_queue_.length();
@@ -973,7 +965,7 @@ public:
 
       if (pending * 2 <= work_queue_.capacity() &&
           pending <= multiply * (workers + taskers))
-        return;  /// still under thresh
+        return; /// still under thresh
 
       /// need balance
       std::lock_guard<std::mutex> lck(scale_lock_);
@@ -988,7 +980,8 @@ public:
       if (workers + taskers < sessions &&
           workers + taskers < static_cast<int>(pending)) {
         auto extend = (pending - workers - taskers) / multiply;
-        if (0 == extend) extend = 1;
+        if (0 == extend)
+          extend = 1;
         if (extend > epoll_group_tasker_extend_step)
           extend = epoll_group_tasker_extend_step;
 
@@ -1054,7 +1047,7 @@ public:
             tasker_count_.load(std::memory_order_acquire),
             session_count_.load(std::memory_order_acquire),
             global_thread_count().load(std::memory_order_acquire));
-      return;  /// ignore if worker more than session
+      return; /// ignore if worker more than session
     }
 
     auto scaled = false;
@@ -1062,8 +1055,8 @@ public:
       /// need extra thread to handle new request
       ++worker_count_;
       ++global_thread_count();
-      std::thread thread(&CmtEpoll::loop, this, group_id_, 999, false, -1,
-                         true, true);
+      std::thread thread(&CmtEpoll::loop, this, group_id_, 999, false, -1, true,
+                         true);
       thread.detach();
       scaled = true;
     } else if (workers < prefer_thread_count) {
@@ -1103,7 +1096,8 @@ public:
       if (enable_thread_pool_log)
         my_plugin_log_message(
             &plugin_info.plugin_info, MY_WARNING_LEVEL,
-            "MtEpoll %u thread pool shrink to worker %d tasker %d. Total thread %d.",
+            "MtEpoll %u thread pool shrink to worker %d tasker %d. Total "
+            "thread %d.",
             group_id_, worker_count_.load(std::memory_order_acquire),
             tasker_count_.load(std::memory_order_acquire),
             global_thread_count().load(std::memory_order_acquire));
@@ -1143,7 +1137,8 @@ public:
         if (enable_thread_pool_log) {
           my_plugin_log_message(
               &plugin_info.plugin_info, MY_WARNING_LEVEL,
-              "MtEpoll %u thread pool shrink to worker %d tasker %d. Total threads %d.",
+              "MtEpoll %u thread pool shrink to worker %d tasker %d. Total "
+              "threads %d.",
               group_id_, worker_count_.load(std::memory_order_acquire),
               tasker_count_.load(std::memory_order_acquire),
               global_thread_count().load(std::memory_order_acquire));

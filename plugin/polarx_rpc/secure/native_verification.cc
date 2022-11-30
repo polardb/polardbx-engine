@@ -22,7 +22,12 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  */
 
+#include "../global_defines.h"
+#ifdef MYSQL8
 #include "my_inttypes.h"
+#else
+#include "my_global.h"
+#endif
 #include "mysql_com.h"
 #include "password.h"
 

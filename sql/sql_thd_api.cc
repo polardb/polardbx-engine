@@ -626,7 +626,7 @@ void thd_wait_begin(MYSQL_THD thd, int wait_type) {
                  (thd, wait_type));
   // Invoke THD galaxy cb after global.
   if (likely(thd != nullptr))
-    MYSQL_CALLBACK(thd->galaxy_parallel_monitor, thd_wait_begin,
+    MYSQL_CALLBACK(thd->polarx_rpc_monitor, thd_wait_begin,
                    (thd, wait_type));
 }
 
@@ -639,7 +639,7 @@ void thd_wait_begin(MYSQL_THD thd, int wait_type) {
 void thd_wait_end(MYSQL_THD thd) {
   // Invoke THD galaxy cb before global.
   if (likely(thd != nullptr))
-    MYSQL_CALLBACK(thd->galaxy_parallel_monitor, thd_wait_end, (thd));
+    MYSQL_CALLBACK(thd->polarx_rpc_monitor, thd_wait_end, (thd));
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
                  (thd));
 }

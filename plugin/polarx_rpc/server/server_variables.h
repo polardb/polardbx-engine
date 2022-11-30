@@ -7,13 +7,22 @@
 #include <cstdint>
 #include <atomic>
 
+#include "../global_defines.h"
+
+#ifdef MYSQL8
 #include "mysql/plugin.h"
+#else
+#include "my_global.h"
+#define SYS_VAR st_mysql_sys_var
+#endif
 
 struct st_mysql_sys_var;
 
 namespace polarx_rpc {
 
+#ifdef MYSQL8
 typedef bool my_bool;
+#endif
 
 extern my_bool auto_cpu_affinity;
 extern my_bool force_all_cores;

@@ -4318,23 +4318,22 @@ private:
   ulonglong get_snapshot_gcn() { return m_extra_desc.m_snapshot_gcn; }
   ulonglong get_commit_gcn() { return m_extra_desc.m_commit_gcn; }
 
-  /** For galaxy parallel thread pool. */
-  THD_event_functions *galaxy_parallel_monitor = nullptr;
-  void *galaxy_parallel_context = nullptr;
-  bool galaxy_parallel_record = false;
-  std::atomic<intptr_t> galaxy_parallel_enter{0};
-  inline void register_galaxy_parallel_monitor(THD_event_functions *cb,
-                                               void *ctx) {
-    galaxy_parallel_monitor = cb;
-    galaxy_parallel_context = ctx;
-    galaxy_parallel_record = false;
-    galaxy_parallel_enter = 0;
+  /** For polarx rpc/galaxy parallel thread pool. */
+  THD_event_functions *polarx_rpc_monitor = nullptr;
+  void *polarx_rpc_context = nullptr;
+  bool polarx_rpc_record = false;
+  std::atomic<intptr_t> polarx_rpc_enter{0};
+  inline void register_polarx_rpc_monitor(THD_event_functions *cb, void *ctx) {
+    polarx_rpc_monitor = cb;
+    polarx_rpc_context = ctx;
+    polarx_rpc_record = false;
+    polarx_rpc_enter = 0;
   }
-  inline void clear_galaxy_parallel_monitor() {
-    galaxy_parallel_monitor = nullptr;
-    galaxy_parallel_context = nullptr;
-    galaxy_parallel_record = false;
-    galaxy_parallel_enter = 0;
+  inline void clear_polarx_rpc_monitor() {
+    polarx_rpc_monitor = nullptr;
+    polarx_rpc_context = nullptr;
+    polarx_rpc_record = false;
+    polarx_rpc_enter = 0;
   }
 };
 

@@ -1,6 +1,9 @@
 
-#include "sql/sql_class.h"
 #include "../global_defines.h"
+#ifndef MYSQL8
+#define MYSQL_SERVER
+#endif
+#include "sql/sql_class.h"
 
 #include "executor.h"
 #include "meta.h"

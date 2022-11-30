@@ -5,6 +5,10 @@
 #include <atomic>
 #include <mutex>
 
+#include "../global_defines.h"
+#ifndef MYSQL8
+#define MYSQL_SERVER
+#endif
 #include "mysql/service_command.h"
 #include "sql/conn_handler/connection_handler_manager.h"
 #include "sql/sql_class.h"
@@ -19,7 +23,6 @@
 #include "../server/server_variables.h"
 #include "../server/tcp_connection.h"
 #include "../sql_query/sql_statement_builder.h"
-#include "../global_defines.h"
 
 #include "session.h"
 #include "session_manager.h"
@@ -41,19 +44,19 @@ Csession::~Csession() {
  */
 
 static void thd_wait_begin(THD *thd, int wait_type) {
-  assert(thd->galaxy_parallel_context != nullptr);
-  reinterpret_cast<Csession *>(thd->galaxy_parallel_context)
+  assert(thd->polarx_rpc_context != nullptr);
+  reinterpret_cast<Csession *>(thd->polarx_rpc_context)
       ->wait_begin(thd, wait_type);
 }
 
 static void thd_wait_end(THD *thd) {
-  assert(thd->galaxy_parallel_context != nullptr);
-  reinterpret_cast<Csession *>(thd->galaxy_parallel_context)->wait_end(thd);
+  assert(thd->polarx_rpc_context != nullptr);
+  reinterpret_cast<Csession *>(thd->polarx_rpc_context)->wait_end(thd);
 }
 
 static void post_kill_notification(THD *thd) {
-  assert(thd->galaxy_parallel_context != nullptr);
-  reinterpret_cast<Csession *>(thd->galaxy_parallel_context)->post_kill(thd);
+  assert(thd->polarx_rpc_context != nullptr);
+  reinterpret_cast<Csession *>(thd->polarx_rpc_context)->post_kill(thd);
 }
 
 static THD_event_functions polarx_rpc_monitor = {thd_wait_begin, thd_wait_end,
@@ -76,25 +79,24 @@ static THD_event_functions polarx_rpc_monitor = {thd_wait_begin, thd_wait_end,
  * } thd_wait_type;
  */
 void Csession::wait_begin(THD *thd, int wait_type) {
-  auto before =
-      thd->galaxy_parallel_enter.fetch_add(1, std::memory_order_acquire);
+  auto before = thd->polarx_rpc_enter.fetch_add(1, std::memory_order_acquire);
   if (0 == before) {
     auto recoverable_wait = false;
     switch (wait_type) {
-      case THD_WAIT_DISKIO:
-      case THD_WAIT_BINLOG:
-      case THD_WAIT_GROUP_COMMIT:
-      case THD_WAIT_SYNC:
-        recoverable_wait = true;
-        break;
-      default:
-        break;
+    case THD_WAIT_DISKIO:
+    case THD_WAIT_BINLOG:
+    case THD_WAIT_GROUP_COMMIT:
+    case THD_WAIT_SYNC:
+      recoverable_wait = true;
+      break;
+    default:
+      break;
     }
 
     if (recoverable_wait)
-      thd->galaxy_parallel_record = false;
+      thd->polarx_rpc_record = false;
     else {
-      thd->galaxy_parallel_record = true;
+      thd->polarx_rpc_record = true;
       epoll_.add_stall_count();
       /// scale if needed
       epoll_.try_scale_thread_pool(wait_type);
@@ -103,11 +105,10 @@ void Csession::wait_begin(THD *thd, int wait_type) {
 }
 
 void Csession::wait_end(THD *thd) {
-  auto before =
-      thd->galaxy_parallel_enter.fetch_sub(1, std::memory_order_release);
-  if (1 == before && thd->galaxy_parallel_record) {
+  auto before = thd->polarx_rpc_enter.fetch_sub(1, std::memory_order_release);
+  if (1 == before && thd->polarx_rpc_record) {
     epoll_.sub_stall_count();
-    thd->galaxy_parallel_record = false;
+    thd->polarx_rpc_record = false;
   }
 }
 
@@ -130,13 +131,13 @@ public:
   explicit CautoDetacher(Csession &session) : session_(session), run_(false) {
     auto thd = session_.get_thd();
     if (LIKELY(thd != nullptr))
-      thd->register_galaxy_parallel_monitor(&polarx_rpc_monitor, &session_);
+      thd->register_polarx_rpc_monitor(&polarx_rpc_monitor, &session_);
   }
 
   ~CautoDetacher() {
     auto thd = session_.get_thd();
     if (thd != nullptr)
-      thd->clear_galaxy_parallel_monitor();
+      thd->clear_polarx_rpc_monitor();
     if (run_)
       session_.detach();
   }
@@ -401,8 +402,7 @@ err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
   CstmtCommandDelegate delegate(
       *this, encoder_, [this]() { return flush(); }, msg.compact_metadata());
   delegate.set_flow_control(&flow_control_); /// enable flow control
-  auto iret = rpc_executor::Executor::instance().execute(
-      msg, delegate, thd);
+  auto iret = rpc_executor::Executor::instance().execute(msg, delegate, thd);
   if (iret != 0)
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Executor error");
   return err_t::Success();

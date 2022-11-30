@@ -20,7 +20,7 @@
 // tell protobuf 3.0 to use protobuf 2.x rules
 syntax = "proto2";
 
-option optimize_for = LITE_RUNTIME;
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
 // Notices
 //

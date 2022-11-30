@@ -5,6 +5,10 @@
 #include <vector>
 #include <list>
 
+#include "../global_defines.h"
+#ifndef MYSQL8
+#define MYSQL_SERVER
+#endif
 #include "sql/table.h"
 #include "sql/field.h"
 #include "sql/item.h"
@@ -14,7 +18,6 @@
 #include "sql/item_sum.h"
 
 #include "../coders/protocol_fwd.h"
-#include "../global_defines.h"
 
 #include "error.h"
 #include "parse.h"
