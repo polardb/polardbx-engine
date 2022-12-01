@@ -44,8 +44,8 @@ Check default value of srid and options
 Table	Create Table
 spatial1	CREATE TABLE `spatial1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_gj_r_9BDE81F857CBD7E27CAED548ED36F57CE4307F0B` geometry GENERATED ALWAYS AS (st_geomfromgeojson(json_extract(`doc`,_utf8mb4'$.first'),1,4326)) STORED NOT NULL /*!80003 SRID 4326 */,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_gj_r_9BDE81F857CBD7E27CAED548ED36F57CE4307F0B` geometry GENERATED ALWAYS AS (st_geomfromgeojson(json_extract(`doc`,_utf8mb3'$.first'),1,4326)) STORED NOT NULL /*!80003 SRID 4326 */,
   PRIMARY KEY (`_id`),
   SPATIAL KEY `one` (`$ix_gj_r_9BDE81F857CBD7E27CAED548ED36F57CE4307F0B`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci

@@ -24,6 +24,9 @@ class Cserver;
 }
 
 struct polarx_rpc_info_t final {
+  st_mysql_daemon daemon{MYSQL_DAEMON_INTERFACE_VERSION};
+
+  /// server
   MYSQL_PLUGIN plugin_info = nullptr;
   std::unique_ptr<polarx_rpc::Cserver> server;
 

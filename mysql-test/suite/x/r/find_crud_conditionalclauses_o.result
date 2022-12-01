@@ -70,7 +70,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "actor"
   schema: "minisakila"
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 180
   flags: 16
@@ -85,7 +85,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "actor"
   schema: "minisakila"
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 180
   flags: 16

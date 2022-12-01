@@ -31,6 +31,7 @@
 #include "mysql/plugin.h"
 #include "mysql/service_ssl_wrapper.h"
 #include "sql/sys_vars_ext.h"
+#include "sql/mysqld.h"
 
 #include "plugin/x/generated/mysqlx_version.h"
 #include "plugin/x/ngs/include/ngs/interface/authentication_interface.h"
@@ -337,10 +338,16 @@ static bool parse_bind_address_value(const char *begin_address_value,
 
 int Server::plugin_main(MYSQL_PLUGIN p) {
   auto port = gx::Galaxy_system_variables::m_port;
-  if (rpc_port != DEFAULT_RPC_PORT)
+  if (rpc_port != DEFAULT_RPC_PORT && !gx::Galaxy_system_variables::m_mtr)
     port = rpc_port; // replace it if not default
-  if (port < 1 || port > 65535 || new_rpc) {
+  if (port < 1 || port > 65535 ||
+      (new_rpc && !gx::Galaxy_system_variables::m_mtr)) {
     log_error(ER_XPLUGIN_STARTUP_FAILED, "Galaxy X disabled.");
+    return 0;
+  }
+  if (opt_initialize) {
+    log_warning(ER_XPLUGIN_STARTUP_FAILED,
+                "Galaxy X Protocol disabled when mysql initialize.");
     return 0;
   }
 

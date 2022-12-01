@@ -29,6 +29,7 @@
 /** Galaxy X-protocol */
 namespace gx {
 
+bool Galaxy_system_variables::m_mtr = false;
 int Galaxy_system_variables::m_port = gx::defaults::G_PORT;
 unsigned int Galaxy_system_variables::m_max_queued_messages;
 unsigned int Galaxy_system_variables::m_galaxy_worker_threads_per_tcp;
@@ -37,6 +38,12 @@ bool Galaxy_system_variables::m_enable_galaxy_session_pool_log;
 bool Galaxy_system_variables::m_enable_galaxy_kill_log;
 unsigned int Galaxy_system_variables::m_socket_recv_buffer;
 unsigned int Galaxy_system_variables::m_socket_send_buffer;
+
+static MYSQL_SYSVAR_BOOL(
+    mtr, Galaxy_system_variables::m_mtr,
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+    "Enable galaxy x protocol for mtr mode.",
+    nullptr, &Galaxy_system_variables::update_func<bool>, false);
 
 static MYSQL_SYSVAR_INT(
     port, Galaxy_system_variables::m_port,
@@ -97,6 +104,7 @@ static MYSQL_SYSVAR_UINT(socket_send_buffer,
                          256 * 1024, 0, 1024 * 1024, 0);
 
 struct SYS_VAR *Galaxy_system_variables::m_system_variables[] = {
+    MYSQL_SYSVAR(mtr),
     MYSQL_SYSVAR(port),
     MYSQL_SYSVAR(max_queued_messages),
     MYSQL_SYSVAR(galaxy_worker_threads_per_tcp),

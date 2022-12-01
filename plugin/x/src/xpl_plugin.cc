@@ -277,7 +277,7 @@ static MYSQL_SYSVAR_INT(max_connections,
                         "Maximum number of concurrent X protocol connections. "
                         "Actual number of connections is also affected by the "
                         "general max_connections.",
-                        NULL, NULL, 2000, 1,
+                        NULL, NULL, 100, 1,
                         std::numeric_limits<unsigned short>::max(), 0);
 
 static MYSQL_SYSVAR_UINT(

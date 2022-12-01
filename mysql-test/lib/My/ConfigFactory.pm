@@ -110,6 +110,11 @@ sub fix_x_port {
   return $self->{ARGS}->{mysqlxbaseport}++;
 }
 
+sub fix_rpc_port {
+  my ($self, $config, $group_name, $group) = @_;
+  return $self->{ARGS}->{polarx_rpc_baseport}++;
+}
+
 sub fix_host {
   my ($self) = @_;
   # Get next host from HOSTS array
@@ -272,6 +277,10 @@ my @mysqld_rules = (
   { 'general_log_file'                             => \&fix_log },
   { 'loose-mysqlx-port'                            => \&fix_x_port },
   { 'galaxyx-port'                                 => \&fix_x_port },
+  # force enable galaxy x protocol when new rpc enabled
+  { 'galaxyx-mtr'                                  => "on" },
+  { 'rpc-port'                                     => \&fix_rpc_port },
+  { 'new-rpc'                                      => "on" },
   { 'loose-mysqlx-socket'                          => \&fix_x_socket },
   { 'loose-mysqlx-ssl'                             => \&fix_ssl_disabled },
   { 'loose-mysqlx-ssl-ca'                          => "" },

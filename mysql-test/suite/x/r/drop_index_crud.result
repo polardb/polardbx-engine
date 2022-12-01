@@ -113,8 +113,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_it_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyint(4) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_it_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyint(4) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_it_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -238,8 +238,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_it_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyint(3) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_it_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyint(3) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_it_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -363,8 +363,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_it2_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyint(2) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_it2_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyint(2) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_it2_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -488,8 +488,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_is_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` smallint(6) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_is_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` smallint(6) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_is_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -613,8 +613,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_is_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` smallint(5) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_is_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` smallint(5) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_is_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -738,8 +738,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_is4_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` smallint(4) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_is4_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` smallint(4) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_is4_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -873,8 +873,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_im_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` mediumint(9) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_im_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` mediumint(9) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_im_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -998,8 +998,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_im_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` mediumint(8) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_im_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` mediumint(8) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_im_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -1123,8 +1123,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_im7_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` mediumint(7) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_im7_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` mediumint(7) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_im7_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -1258,8 +1258,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_i_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` int(11) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_i_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` int(11) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_i_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -1383,8 +1383,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_i_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` int(10) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_i_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` int(10) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_i_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -1508,8 +1508,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_i6_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` int(6) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_i6_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` int(6) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_i6_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -1643,8 +1643,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_ib_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(20) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_ib_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(20) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_ib_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -1768,8 +1768,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_ib_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(20) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_ib_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(20) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_ib_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -1893,8 +1893,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_ib13_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(13) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_ib13_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(13) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_ib13_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2028,8 +2028,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_ib22_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(22) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_ib22_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` bigint(22) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_ib22_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2153,8 +2153,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_fr_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` double GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_fr_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` double GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_fr_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2278,8 +2278,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_fr_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` double unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_fr_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` double unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_fr_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2403,8 +2403,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_f_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` float GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_f_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` float GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_f_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2528,8 +2528,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_f_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` float unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_f_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` float unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_f_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2653,8 +2653,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_fd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` double GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_fd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` double GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_fd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2778,8 +2778,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_fd_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` double unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_fd_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` double unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_fd_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -2903,8 +2903,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_fd7_4_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` double(7,4) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_fd7_4_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` double(7,4) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_fd7_4_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3038,8 +3038,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_xd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,0) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_xd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,0) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_xd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3163,8 +3163,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_xd10_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,0) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_xd10_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,0) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_xd10_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3298,8 +3298,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_xd8_2_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(8,2) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_xd8_2_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(8,2) unsigned GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_xd8_2_ur_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3433,8 +3433,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_xn_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,0) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_xn_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,0) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_xn_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3558,8 +3558,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_xn10_2_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,2) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_xn10_2_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(10,2) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_xn10_2_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3693,8 +3693,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_xn5_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(5,0) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.col')) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_xn5_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` decimal(5,0) GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.col')) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_xn5_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3828,8 +3828,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_d_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` date GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_d_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` date GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_d_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -3953,8 +3953,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_dt_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` time GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_dt_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` time GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_dt_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -4078,8 +4078,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_dt2_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` time(2) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_dt2_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` time(2) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_dt2_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -4213,8 +4213,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_ds_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` timestamp GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_ds_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` timestamp GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_ds_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -4338,8 +4338,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_ds6_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` timestamp(6) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_ds6_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` timestamp(6) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_ds6_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -4473,8 +4473,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_dd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` datetime GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_dd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` datetime GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_dd_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -4598,8 +4598,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_dd6_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` datetime(6) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_dd6_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` datetime(6) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_dd6_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -4723,8 +4723,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_dy_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` year(4) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_dy_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` year(4) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_dy_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -4851,7 +4851,7 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
   PRIMARY KEY (`_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 0 rows affected
@@ -4988,8 +4988,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_c25_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` char(25) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_c25_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` char(25) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_c25_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -5122,8 +5122,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_t_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` bit(1) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_t_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` bit(1) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_t_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -5247,8 +5247,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_bt50_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyblob GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_bt50_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` tinyblob GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_bt50_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`(50))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -5382,8 +5382,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `$ix_t30_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` text GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$.col'))) VIRTUAL NOT NULL,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `$ix_t30_r_193639E0029FB71DA5916BDF64B75D481FD4CF70` text GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$.col'))) VIRTUAL NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `ix` (`$ix_t30_r_193639E0029FB71DA5916BDF64B75D481FD4CF70`(30))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -6052,8 +6052,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `SUBJECT` text GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.subject')) STORED,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `SUBJECT` text GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.subject')) STORED,
   `book` text,
   PRIMARY KEY (`_id`),
   KEY `fulltext_idx_1` (`SUBJECT`(100)),
@@ -6108,8 +6108,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `SUBJECT` text GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.subject')) STORED,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `SUBJECT` text GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.subject')) STORED,
   `book` text,
   KEY `fulltext_idx_1` (`SUBJECT`(100)),
   KEY `fulltext_idx_2` (`SUBJECT`(100)),
@@ -6225,8 +6225,8 @@ RUN SHOW CREATE TABLE xplugintest.table1
 Table	Create Table
 table1	CREATE TABLE `table1` (
   `doc` json DEFAULT NULL,
-  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb4'$._id'))) STORED NOT NULL,
-  `SUBJECT` text GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb4'$.subject')) STORED,
+  `_id` varbinary(32) GENERATED ALWAYS AS (json_unquote(json_extract(`doc`,_utf8mb3'$._id'))) STORED NOT NULL,
+  `SUBJECT` text GENERATED ALWAYS AS (json_extract(`doc`,_utf8mb3'$.subject')) STORED,
   `book` text
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 0 rows affected

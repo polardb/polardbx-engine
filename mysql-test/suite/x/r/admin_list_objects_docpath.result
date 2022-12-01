@@ -5,349 +5,349 @@ command ok
 Member: $
 =========
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$\'))
 0 rows affected
 
 Member: $.path
 ==============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path\'))
 0 rows affected
 
 Member: $.path.to.member
 ========================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path.to.member\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path.to.member\'))
 0 rows affected
 
 Member: $.p1ath
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.p1ath\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.p1ath\'))
 0 rows affected
 
 Member: $.path1
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path1\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path1\'))
 0 rows affected
 
 Member: $.$
 ===========
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.$\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.$\'))
 0 rows affected
 
 Member: $.$$
 ============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.$$\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.$$\'))
 0 rows affected
 
 Member: $.$$$
 =============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.$$$\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.$$$\'))
 0 rows affected
 
 Member: $.$.path
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.$.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.$.path\'))
 0 rows affected
 
 Member: $.path.$
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path.$\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path.$\'))
 0 rows affected
 
 Member: $.$path
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.$path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.$path\'))
 0 rows affected
 
 Member: $.pa$th
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.pa$th\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.pa$th\'))
 0 rows affected
 
 Member: $.path$
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path$\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path$\'))
 0 rows affected
 
 Member: $.$pa$th$
 =================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.$pa$th$\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.$pa$th$\'))
 0 rows affected
 
 Member: $._
 ===========
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$._\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$._\'))
 0 rows affected
 
 Member: $.__
 ============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.__\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.__\'))
 0 rows affected
 
 Member: $.___
 =============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.___\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.___\'))
 0 rows affected
 
 Member: $._.path
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$._.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$._.path\'))
 0 rows affected
 
 Member: $.path._
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path._\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path._\'))
 0 rows affected
 
 Member: $._path
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$._path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$._path\'))
 0 rows affected
 
 Member: $.pa_th
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.pa_th\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.pa_th\'))
 0 rows affected
 
 Member: $.path_
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path_\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path_\'))
 0 rows affected
 
 Member: $._pa_th_
 =================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$._pa_th_\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$._pa_th_\'))
 0 rows affected
 
 Member: $.*
 ===========
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.*\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.*\'))
 0 rows affected
 
 Member: $.*.path
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.*.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.*.path\'))
 0 rows affected
 
 Member: $.path.*
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path.*\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path.*\'))
 0 rows affected
 
 Member: $.path[1]
 =================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path[1]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path[1]\'))
 0 rows affected
 
 Member: $.path[123]
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path[123]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path[123]\'))
 0 rows affected
 
 Member: $.path[1].path[2]
 =========================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path[1].path[2]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path[1].path[2]\'))
 0 rows affected
 
 Member: $.path[1].path
 ======================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path[1].path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path[1].path\'))
 0 rows affected
 
 Member: $.path[1].*
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path[1].*\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path[1].*\'))
 0 rows affected
 
 Member: $.*.path[1]
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.*.path[1]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.*.path[1]\'))
 0 rows affected
 
 Member: $.path[*]
 =================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path[*]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path[*]\'))
 0 rows affected
 
 Member: $[1]
 ============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$[1]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$[1]\'))
 0 rows affected
 
 Member: $[1][2]
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$[1][2]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$[1][2]\'))
 0 rows affected
 
 Member: $[1].path[2]
 ====================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$[1].path[2]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$[1].path[2]\'))
 0 rows affected
 
 Member: $[1][2].path
 ====================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$[1][2].path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$[1][2].path\'))
 0 rows affected
 
 Member: $.path[1][2]
 ====================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path[1][2]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path[1][2]\'))
 0 rows affected
 
 Member: $.\"pa th\"
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."pa th"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."pa th"\'))
 0 rows affected
 
 Member: $.\"pa\tth\"
 ====================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."pa	th"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."pa	th"\'))
 0 rows affected
 
 Member: $.\"\"\"
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."""\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."""\'))
 0 rows affected
 
 Member: $.\"\"path\"
 ====================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.""path"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.""path"\'))
 0 rows affected
 
 Member: $.\"path\"\"
 ====================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."path""\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."path""\'))
 0 rows affected
 
 Member: $.\"#\"
 ===============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."#"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."#"\'))
 0 rows affected
 
 Member: $.\"path#\"
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."path#"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."path#"\'))
 0 rows affected
 
 Member: $.\"#path\"
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."#path"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."#path"\'))
 0 rows affected
 
 Member: $.\"#\"[1]
 ==================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."#"[1]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."#"[1]\'))
 0 rows affected
 
 Member: $.\"\"
 ==============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.""\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.""\'))
 0 rows affected
 
 Member: $**.path
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$**.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$**.path\'))
 0 rows affected
 
 Member: $**[1]
 ==============
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$**[1]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$**[1]\'))
 0 rows affected
 
 Member: $.path**.path
 =====================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path**.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path**.path\'))
 0 rows affected
 
 Member: $.path**[1]
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.path**[1]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.path**[1]\'))
 0 rows affected
 
 Member: $[1]**.path
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$[1]**.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$[1]**.path\'))
 0 rows affected
 
 Member: $[1]**[1]
 =================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$[1]**[1]\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$[1]**[1]\'))
 0 rows affected
 
 Member: $.***.path
 ==================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$.***.path\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$.***.path\'))
 0 rows affected
 
 Member: $.\"**\"
 ================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."**"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."**"\'))
 0 rows affected
 
 Member: $.\"***\"
 =================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."***"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."***"\'))
 0 rows affected
 
 Member: $.\"pa.th\"
 ===================
 GENERATION_EXPRESSION
-json_unquote(json_extract(`doc`,_utf8mb4\'$."pa.th"\'))
+json_unquote(json_extract(`doc`,_utf8mb3\'$."pa.th"\'))
 0 rows affected
 
 Member: $.

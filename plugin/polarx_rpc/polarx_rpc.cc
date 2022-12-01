@@ -59,7 +59,7 @@ static struct st_mysql_show_var polarx_rpc_status_variables[] = {
 
 mysql_declare_plugin(polarx_rpc){
     MYSQL_DAEMON_PLUGIN,
-    &plugin_info,
+    &plugin_info.daemon,
     POLARX_RPC_PLUGIN_NAME,
     "Alibaba Cloud PolarDB-X",
     "RPC framework for PolarDB-X",

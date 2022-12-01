@@ -132,6 +132,7 @@ my $opt_max_save_core      = env_or_val(MTR_MAX_SAVE_CORE => 5);
 my $opt_max_save_datadir   = env_or_val(MTR_MAX_SAVE_DATADIR => 20);
 my $opt_max_test_fail      = env_or_val(MTR_MAX_TEST_FAIL => 1000);
 my $opt_mysqlx_baseport    = $ENV{'MYSQLXPLUGIN_PORT'} || "auto";
+my $opt_polarx_rpc_baseport= $ENV{'POLARX_RPC_PORT'} || "auto";
 my $opt_port_base          = $ENV{'MTR_PORT_BASE'} || "auto";
 my $opt_reorder            = 1;
 my $opt_retry              = 3;
@@ -159,6 +160,7 @@ my $exe_ndbmtd;
 my $initial_bootstrap_cmd;
 my $mysql_base_version;
 my $mysqlx_baseport;
+my $polarx_rpc_baseport;
 my $path_config_file;       # The generated config file, var/my.cnf
 my $path_vardir_trace;      # Unix formatted opt_vardir for trace files
 my $test_fail;
@@ -578,8 +580,9 @@ sub main {
   mtr_report("Using parallel: $opt_parallel");
 
   my $is_option_mysqlx_port_set = $opt_mysqlx_baseport ne "auto";
+  my $is_option_polarx_rpc_port_set = $opt_polarx_rpc_baseport ne "auto";
   if ($opt_parallel > 1) {
-    if ($opt_start_exit || $opt_stress || $is_option_mysqlx_port_set) {
+    if ($opt_start_exit || $opt_stress || $is_option_mysqlx_port_set || $is_option_polarx_rpc_port_set) {
       mtr_warning("Parallel cannot be used neither with --start-and-exit nor",
                   "--stress nor --mysqlx_port.\nSetting parallel value to 1.");
       $opt_parallel = 1;
@@ -1455,6 +1458,7 @@ sub command_line_setup {
     # Specify ports
     'build-thread|mtr-build-thread=i' => \$opt_build_thread,
     'mysqlx-port=i'                   => \$opt_mysqlx_baseport,
+    'rpc-port=i'                      => \$opt_polarx_rpc_baseport,
     'port-base|mtr-port-base=i'       => \$opt_port_base,
 
     # Test case authoring
@@ -2188,15 +2192,27 @@ sub set_build_thread_ports($) {
   $baseport = $build_thread * 10 + 10000;
 
   if (lc($opt_mysqlx_baseport) eq "auto") {
+    # we need at least 2 port for mysqlx and galaxyx
     if ($ports_per_thread > 10) {
-      # Reserving last 10 ports in the current port range for X plugin.
-      $mysqlx_baseport = $baseport + $ports_per_thread - 10;
+      # Reserving last 9 ports in the current port range for X plugin.
+      $mysqlx_baseport = $baseport + $ports_per_thread - 9;
     } else {
-      # Reserving the last port in the range for X plugin
-      $mysqlx_baseport = $baseport + 9;
+      # Reserving the last 2 port in the range for X plugin
+      $mysqlx_baseport = $baseport + 8;
     }
   } else {
     $mysqlx_baseport = $opt_mysqlx_baseport;
+  }
+
+  if (lc($opt_polarx_rpc_baseport) eq "auto") {
+    # use the one before mysqlx_baseport for polarx rpc
+    if ($ports_per_thread > 10) {
+      $polarx_rpc_baseport = $baseport + $ports_per_thread - 10;
+    } else {
+      $polarx_rpc_baseport = $baseport + 7;
+    }
+  } else {
+    $polarx_rpc_baseport = $opt_polarx_rpc_baseport;
   }
 
   if ($secondary_engine_support) {
@@ -2567,6 +2583,27 @@ sub galaxyxtest_arguments() {
   return mtr_args2str($exe, @$args);
 }
 
+sub polarx_rpc_test_arguments() {
+  my $exe;
+  # polarx_rpc_test executable may _not_ exist
+  $exe = mtr_exe_maybe_exists("$path_client_bindir/polarx_rpc_test");
+  return "" unless $exe;
+
+  my $args;
+  mtr_init_args(\$args);
+
+  if ($opt_valgrind_clients) {
+    valgrind_client_arguments($args, \$exe);
+  }
+
+  if ($opt_debug) {
+    mtr_add_arg($args, "--debug=$debug_d:t:i:A,%s/log/%s.trace",
+                $path_vardir_trace, "polarx_rpc_test");
+  }
+
+  mtr_add_arg($args, "--port=%d", $polarx_rpc_baseport);
+  return mtr_args2str($exe, @$args);
+}
 
 sub mysqlxtest_arguments() {
   my $exe;
@@ -2865,6 +2902,7 @@ sub environment_setup {
   $ENV{'MYSQLADMIN'}          = native_path($exe_mysqladmin);
   $ENV{'MYSQLXTEST'}          = mysqlxtest_arguments();
   $ENV{'GALAXYXTEST'}         = galaxyxtest_arguments();
+  $ENV{'POLARX_RPC_TEST'}     = polarx_rpc_test_arguments();
   $ENV{'PATH_CONFIG_FILE'}    = $path_config_file;
 
   $ENV{'MYSQLBACKUP'} = mysqlbackup_arguments()
@@ -4633,6 +4671,7 @@ sub run_testcase ($) {
                            baseport            => $baseport,
                            extra_template_path => $tinfo->{extra_template_path},
                            mysqlxbaseport      => $mysqlx_baseport,
+                           polarx_rpc_baseport => $polarx_rpc_baseport,
                            password            => '',
                            template_path       => $tinfo->{template_path},
                            testdir             => $glob_mysql_test_dir,

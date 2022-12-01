@@ -58,7 +58,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 46
+  collation: 33
   fractional_digits: 31
   length: 16777216
   content_type: 2
@@ -127,7 +127,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 46
+  collation: 33
   fractional_digits: 31
   length: 16777216
   content_type: 2
@@ -200,7 +200,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 46
+  collation: 33
   fractional_digits: 31
   length: 16777216
   content_type: 2
@@ -257,7 +257,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 46
+  collation: 33
   fractional_digits: 31
   length: 16777216
   content_type: 2

@@ -75,6 +75,7 @@ if ($inst_monitor) {
   --let $MYSQL_PLUGIN_DIR = `SELECT @@plugin_dir`
 
   --let $GALAXYX_PORT= `SELECT @@galaxyx_port`
+  --let $POLARX_RPC_PORT= `SELECT @@rpc_port`
 
   --let $page_size= `select @@innodb_page_size`
   --let $error_verbosity = `select @@log_error_verbosity`
@@ -103,7 +104,7 @@ if ($inst_monitor) {
   --source include/wait_until_disconnected.inc
 
   # 3. Run mysqld_safe script
-  --exec sh $MYSQLD_SAFE --defaults-file=$MYSQLTEST_VARDIR/my.cnf --server-id=$SERVER_ID --log-error=$MYSQLTEST_VARDIR/log/mysqld.$SERVER_ID.err --log-error-verbosity=$error_verbosity --basedir=$MYSQL_BASEDIR --ledir=$mysqld_path --mysqld=$mysqld_bin --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --mysqlx_socket=$MYSQLX_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --mysqlx_port=$MYSQLX_PORT --galaxyx_port=$GALAXYX_PORT --plugin_dir=$MYSQL_PLUGIN_DIR --timezone=SYSTEM --log-output=file --secure-file-priv="" --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --innodb-page-size=$page_size < /dev/null > /dev/null 2>&1 &
+  --exec sh $MYSQLD_SAFE --defaults-file=$MYSQLTEST_VARDIR/my.cnf --server-id=$SERVER_ID --log-error=$MYSQLTEST_VARDIR/log/mysqld.$SERVER_ID.err --log-error-verbosity=$error_verbosity --basedir=$MYSQL_BASEDIR --ledir=$mysqld_path --mysqld=$mysqld_bin --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --mysqlx_socket=$MYSQLX_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --mysqlx_port=$MYSQLX_PORT --galaxyx_port=$GALAXYX_PORT --rpc_port=$POLARX_RPC_PORT --plugin_dir=$MYSQL_PLUGIN_DIR --timezone=SYSTEM --log-output=file --secure-file-priv="" --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --innodb-page-size=$page_size < /dev/null > /dev/null 2>&1 &
   --enable_reconnect
   --source include/wait_until_connected_again.inc
   --disable_reconnect

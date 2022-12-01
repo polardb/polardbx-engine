@@ -22,9 +22,9 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
-  length: 2440012
+  length: 1830009
   flags: 16
   original_type: MYSQL_TYPE_VARCHAR
 }

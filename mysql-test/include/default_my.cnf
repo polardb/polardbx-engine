@@ -20,3 +20,4 @@ MASTER_X_MYPORT=         @mysqld.1.loose-mysqlx-port
 MASTER_X_MYSOCK=         @mysqld.1.loose-mysqlx-socket
 
 MASTER_G_MYPORT=         @mysqld.1.galaxyx-port
+MASTER_RPC_MYPORT=       @mysqld.1.rpc-port

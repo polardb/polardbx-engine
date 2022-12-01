@@ -39,7 +39,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -54,7 +54,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -293,9 +293,9 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 0
-  length: 4096
+  length: 3072
   original_type: MYSQL_TYPE_LONG_BLOB
 }
 
@@ -401,9 +401,9 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 0
-  length: 4096
+  length: 3072
   original_type: MYSQL_TYPE_LONG_BLOB
 }
 
@@ -518,7 +518,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 16
   original_type: MYSQL_TYPE_VARCHAR
@@ -678,7 +678,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -693,7 +693,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -724,7 +724,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -739,7 +739,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -770,7 +770,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -785,7 +785,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -872,7 +872,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 21
   flags: 16
@@ -901,7 +901,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 1536
   flags: 16
@@ -984,7 +984,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "t1"
   schema: "test"
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 0
   length: 30
   original_type: MYSQL_TYPE_VARCHAR
@@ -1025,7 +1025,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_status"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -1040,7 +1040,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_status"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -1071,7 +1071,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "t1"
   schema: "test"
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 0
   length: 30
   original_type: MYSQL_TYPE_VARCHAR
@@ -3002,7 +3002,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -3017,7 +3017,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -6690,7 +6690,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "t1"
   schema: "test"
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 12
   flags: 1
@@ -6731,7 +6731,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "t1"
   schema: "test"
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 12
   flags: 1
@@ -6860,7 +6860,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "t1"
   schema: "test"
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 12
   flags: 1
@@ -6961,7 +6961,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 21
   flags: 16
@@ -6990,7 +6990,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 1536
   flags: 16
@@ -7023,7 +7023,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 21
   flags: 16
@@ -7052,7 +7052,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 1536
   flags: 16
@@ -7156,7 +7156,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 21
   flags: 16
@@ -7185,7 +7185,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: ""
   schema: ""
   catalog: "def"
-  collation: 45
+  collation: 33
   fractional_digits: 31
   length: 1536
   flags: 16
@@ -7433,7 +7433,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -7448,7 +7448,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -7475,7 +7475,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -7490,7 +7490,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -7521,7 +7521,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -7536,7 +7536,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR
@@ -7567,7 +7567,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 256
   flags: 16
@@ -7582,7 +7582,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "session_variables"
   schema: ""
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 4096
   original_type: MYSQL_TYPE_VARCHAR

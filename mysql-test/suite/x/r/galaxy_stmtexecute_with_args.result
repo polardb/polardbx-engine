@@ -156,7 +156,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "scalar_types"
   schema: "xtest"
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 1020
   original_type: MYSQL_TYPE_VARCHAR

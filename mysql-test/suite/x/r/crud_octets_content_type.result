@@ -33,11 +33,11 @@ send Mysqlx.Crud.Find {
   }
 }
 
-st_astext(ST_GEOMETRYFROMWKB('\0\0\0\0\0\0\0\0\0\??\0\0\0\0\0\0\??'))
+st_astext(ST_GEOMETRYFROMWKB('\0\0\0\0\0\0\0\0\0\ð?\0\0\0\0\0\0\ð?'))
 POINT(1 1)
 command ok
 Warnings generated:
-WARNING | 1300 | Invalid utf8mb4 character string: 'F03F00'
+WARNING | 1300 | Invalid utf8 character string: 'F03F00'
 send Mysqlx.Crud.Find {
   collection {
     name: "xtable"

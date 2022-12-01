@@ -1,0 +1,149 @@
+
+## Test polarx rpc template
+
+--let $TEMP_FILE = polarx_rpc_template
+
+--source include/polarx_rpc_preamble.inc
+--source include/polarx_rpc_create_user.inc
+## Test starts here
+--write_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+
+## do sth with sql in auto commit session
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+create schema xtest;
+use xtest;
+create table mytable (pk int primary key auto_increment, data varchar(100));
+-->endsql
+
+
+## do sth with polarx_rpc msg
+
+## switch Session ID to 1
+-->switchsid 1
+
+## first start new session
+Polarx.Session.NewSession {
+}
+## expect Polarx.Ok
+-->recvok
+
+Polarx.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'one\')"
+  schema_name: "xtest"
+}
+## expect Polarx.Sql.StmtExecuteOk
+-->recvresult
+
+Polarx.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'two\')"
+}
+## expect Polarx.Sql.StmtExecuteOk
+-->recvresult
+
+Polarx.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'three\')"
+}
+## expect Polarx.Sql.StmtExecuteOk
+-->recvresult
+
+## switch to another session and lock the record
+-->switchsid 2
+
+Polarx.Session.NewSession {
+}
+## expect Polarx.Ok
+-->recvok
+
+Polarx.Sql.StmtExecute {
+  stmt: "begin"
+  schema_name: "xtest"
+  token: 10000
+}
+## expect Polarx.Sql.StmtExecuteOk
+-->recvresult
+
+Polarx.Sql.StmtExecute {
+  stmt: "select data from mytable where pk=1 for update"
+  token: 10000
+}
+## expect Polarx.Sql.StmtExecuteOk
+-->recvresult
+
+## Now data is locked, switch back to session 1 and read.
+-->switchsid 1
+
+## Test pipeline and cancel, enqueue blocking query first.
+Polarx.Sql.StmtExecute {
+  stmt: "select data from mytable where pk=1 for update"
+  token: 10000
+}
+
+## Then enqueue normal query.
+Polarx.Sql.StmtExecute {
+  stmt: "select * from mytable"
+  token: 10000
+}
+
+## sleep to make sure lock wait happens
+-->sleep 0.1
+
+## Do cancel on first request.
+Polarx.Session.KillSession {
+  type: QUERY
+  x_session_id: 1
+}
+
+## expect Notice warning Query execution was interrupted(5.7 will get this)
+-->recvtype Polarx.Notice.Frame
+## expect Notice warning Got error 168 from storage engine(5.7 will get this)
+-->recvtype Polarx.Notice.Frame
+-->recverror ER_QUERY_INTERRUPTED
+
+## But next request will continue.
+
+-->recvtype Polarx.Resultset.ColumnMetaData
+-->recvtype Polarx.Resultset.ColumnMetaData
+-->recvtype Polarx.Resultset.Row
+-->recvtype Polarx.Resultset.Row
+-->recvtype Polarx.Resultset.Row
+-->recvtype Polarx.Resultset.FetchDone
+-->recvtype Polarx.Notice.Frame
+-->recvtype Polarx.Sql.StmtExecuteOk
+
+## close session.
+Polarx.Session.Close {
+}
+## expect Polarx.Ok
+-->recvok
+
+## Close session 2.
+-->switchsid 2
+
+Polarx.Sql.StmtExecute {
+  stmt: "rollback"
+  token: 10000
+}
+## expect Polarx.Sql.StmtExecuteOk
+-->recvresult
+
+Polarx.Session.Close {
+}
+## expect Polarx.Ok
+-->recvok
+
+
+## switch back to auto commit session and cleanup
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+-->endsql
+
+EOF
+
+--exec $POLARX_RPC_TEST -upolarx_root --password='' --file=$MYSQL_TMP_DIR/$TEMP_FILE.tmp 2>&1
+
+## Cleanup
+--remove_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+--source include/polarx_rpc_drop_user.inc

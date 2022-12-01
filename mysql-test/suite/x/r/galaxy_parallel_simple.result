@@ -81,7 +81,7 @@ Mysqlx.Resultset.ColumnMetaData {
   original_table: "mytable"
   schema: "xtest"
   catalog: "def"
-  collation: 255
+  collation: 33
   fractional_digits: 0
   length: 400
   original_type: MYSQL_TYPE_VARCHAR
