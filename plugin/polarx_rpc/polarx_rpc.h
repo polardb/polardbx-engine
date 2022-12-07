@@ -30,3 +30,5 @@ extern polarx_rpc_info_t plugin_info;
 #else
 #  define DBG_LOG(_x_)
 #endif
+
+#define POLARX_RPC_PKT_DBG 0
