@@ -333,10 +333,12 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
 #endif
 
   /// token reset
+  auto flow_control_enabled = false;
   if (msg.has_token()) {
-    if (msg.token() > 0 || msg.token() == -1)
+    if (msg.token() > 0) {
       flow_control_.flow_reset(msg.token());
-    else
+      flow_control_enabled = true;
+    } else
       return err_t(ER_POLARX_RPC_ERROR_MSG, "Invalid Token");
   }
 
@@ -354,7 +356,8 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
 
   CstmtCommandDelegate delegate(
       *this, encoder_, [this]() { return flush(); }, msg.compact_metadata());
-  delegate.set_flow_control(&flow_control_); /// enable flow control
+  if (flow_control_enabled)
+    delegate.set_flow_control(&flow_control_); /// enable flow control
   // sql_print_information("sid %lu run %s", sid_, qb_.get().c_str());
   const auto err = execute_sql(qb_.get().data(), qb_.get().length(), delegate);
   // sql_print_information("sid %lu run %s done err %d sqlerr %d", sid_,
@@ -392,16 +395,19 @@ err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
 #endif
 
   /// token reset
+  auto flow_control_enabled = false;
   if (msg.has_token()) {
-    if (msg.token() > 0 || msg.token() == -1)
+    if (msg.token() > 0 || msg.token() == -1) {
       flow_control_.flow_reset(msg.token());
-    else
+      flow_control_enabled = true;
+    } else
       return err_t(ER_POLARX_RPC_ERROR_MSG, "Invalid Token");
   }
 
   CstmtCommandDelegate delegate(
       *this, encoder_, [this]() { return flush(); }, msg.compact_metadata());
-  delegate.set_flow_control(&flow_control_); /// enable flow control
+  if (flow_control_enabled)
+    delegate.set_flow_control(&flow_control_); /// enable flow control
   auto iret = rpc_executor::Executor::instance().execute(msg, delegate, thd);
   if (iret != 0)
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Executor error");

@@ -169,13 +169,13 @@ struct Row {
 };
 
 struct TokenDone {
-  static constexpr uint32_t server_id = 100;
+  static constexpr uint32_t server_id = 19;
 
   static constexpr uint32_t token_left = 1;
 };
 
 struct ResultTSO {
-  static constexpr uint32_t server_id = 101;
+  static constexpr uint32_t server_id = 20;
 
   static constexpr uint32_t error_no = 1;
   static constexpr uint32_t ts = 2;
