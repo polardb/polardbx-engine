@@ -3,5 +3,7 @@ GalaxyEngine is a MySQL branch originated from Alibaba Group. It is based on the
 
 GalaxyEngine has been an open source project since October 2021. It is being actively developed by engineers from Alibaba Group, Everyone is welcomed to get involved.
 
-For further information on GalaxyEngine or additional documentation, visit
-<<GalaxyEngine Open Source Overview>> [URL]
+For further information on GalaxyEngine or additional documentation, visit:  [GalaxyEngine Overview](https://github.com/ApsaraDB/galaxyengine/wiki/1-GalaxyEngine-Overview)
+<br>
+For futher infromation about x-engine, please ref:
+[X-Engine Storage Engine](https://github.com/ApsaraDB/galaxyengine/wiki/2-X-Engine-Overview)

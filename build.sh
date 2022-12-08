@@ -275,6 +275,8 @@ cmake ..                               \
     -DWITH_ASAN=$asan                  \
     -DWITH_TSAN=$tsan                  \
     -DWITH_BOOST="../extra/boost/boost_1_70_0.tar.gz" \
+    -DDOWNLOAD_BOOST=1 \
+    -DWITH_BOOST=extra/boost \
     -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
     -DWITHOUT_IS_UT=1
 
