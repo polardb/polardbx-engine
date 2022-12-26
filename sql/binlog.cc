@@ -8760,12 +8760,14 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     mysql_mutex_unlock(&LOCK_slave_trans_dep_tracker);
   }
 
-  /* whether consensus layer allow to commit */
-  if (thd->get_transaction()->m_flags.commit_low || thd->consensus_error != THD::CSS_NONE)
+  if (!opt_binlog_order_commits || thd->get_transaction()->m_flags.commit_low ||
+      thd->consensus_error != THD::CSS_NONE) {
+    /* Wait until the logs are received by more than half of the nodes */
     MYSQL_BIN_LOG::consensus_before_commit(thd);
+  }
 
-    DBUG_EXECUTE_IF("crash_before_large_trx_commit_late", {
-      /* after waitCommitIndexUpdate */
+  DBUG_EXECUTE_IF("crash_before_large_trx_commit_late", {
+    /* after waitCommitIndexUpdate */
     DBUG_SUICIDE();
   });
 
