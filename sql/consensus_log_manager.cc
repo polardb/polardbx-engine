@@ -658,7 +658,7 @@ int ConsensusLogManager::init_service() {
 	      use the last binlog/relay log to modify the gtids
 	      read from gtid_executed table after truncate log
 	    */
-	    gtid_init_after_consensus_setup();
+	    //gtid_init_after_consensus_setup();
 	    start_consensus_apply_threads();
       } else {
         DBUG_ASSERT(get_recovery_manager()->get_commit_index_map().empty());
