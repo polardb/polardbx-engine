@@ -1356,6 +1356,28 @@ static trx_undo_t *trx_undo_mem_init(
 
   offset = mach_read_from_2(seg_header + TRX_UNDO_LAST_LOG);
 
+  if (offset == 0) {
+    /** must be txn recycled */
+    ut_a(state == TRX_UNDO_CACHED);
+    ut_a(type == TRX_UNDO_TXN);
+
+    xid.reset();
+
+    undo = trx_undo_mem_create(rseg, id, type, 0, &xid, page_no, offset);
+    undo->empty = true;
+    undo->state = state;
+    undo->size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST);
+    ut_a(undo->size == 1);
+
+    UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
+
+    MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
+    LIZARD_MONITOR_INC_TXN_CACHED(1);
+
+    lizard_info(ER_LIZARD) << "Found a recycled txn undo log segment";
+    return undo;
+  }
+
   undo_header = undo_page + offset;
 
   trx_id = mach_read_from_8(undo_header + TRX_UNDO_TRX_ID);

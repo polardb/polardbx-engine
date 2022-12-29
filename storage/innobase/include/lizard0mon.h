@@ -210,6 +210,9 @@ struct lizard_var_t {
   ulint innodb_buffer_pool_flush_background_count;
   // MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE
   ulint innodb_buffer_pool_flush_background_pages;
+
+  /** txn undo log segment put into rseg cached list */
+  ulint txn_undo_log_recycle;
 };
 
 struct lizard_stats_t {
@@ -303,6 +306,8 @@ struct lizard_stats_t {
   ulint_ctr_1_t buf_pool_write_req_sys;
 
   ulint_ctr_1_t txn_lookup[lizard::TXN_ENTRY_COUNT];
+
+  ulint_ctr_1_t txn_undo_log_recycle;
 };
 
 namespace lizard {

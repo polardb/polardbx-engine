@@ -512,7 +512,7 @@ loop:
     /** Lizard: Put txn undo log segment to free list after purge */
     if (lizard::fsp_is_txn_tablespace_by_id(rseg->space_id)) {
       ut_ad(!is_temp);
-      lizard::txn_purge_segment_to_free_list(rseg, hdr_addr);
+      lizard::txn_recycle_segment(rseg, hdr_addr);
     } else {
       /* calls the trx_purge_remove_log_hdr()
       inside trx_purge_free_segment(). */

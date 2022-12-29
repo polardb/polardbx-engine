@@ -23599,6 +23599,12 @@ static MYSQL_SYSVAR_BOOL(cleanout_write_redo,
                          "whether to write redo log when cleanout",
                          NULL, NULL, FALSE);
 
+static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
+                          lizard::srv_txn_cached_list_keep_size,
+                          PLUGIN_VAR_OPCMDARG,
+                          "max list size of txn_cached_list", NULL, NULL, 0, 0,
+                          512, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23848,6 +23854,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),
+    MYSQL_SYSVAR(txn_cached_list_keep_size),
     nullptr};
 
 mysql_declare_plugin(innobase){

@@ -221,6 +221,8 @@ static void export_lizard_status(void) {
       MONITOR_VALUE(MONITOR_FLUSH_BACKGROUND_COUNT);
   lizard_vars.innodb_buffer_pool_flush_background_pages =
       MONITOR_VALUE(MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE);
+
+  lizard_vars.txn_undo_log_recycle = lizard_stats.txn_undo_log_recycle;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -499,6 +501,9 @@ static SHOW_VAR lizard_status_variables[] = {
     {"buffer_pool_flush_background_pages",
      (char *)&lizard_vars.innodb_buffer_pool_flush_background_pages, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+
+    {"txn_undo_log_recycle", (char *)&lizard_vars.txn_undo_log_recycle,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

@@ -138,6 +138,9 @@ namespace lizard {
 /** The max percent of txn undo page that can be reused */
 extern ulint txn_undo_page_reuse_max_percent;
 
+/** Max list size of txn_undo_cached of a rsegment. */
+extern ulint srv_txn_cached_list_keep_size;
+
 #define TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF 90
 #define TXN_UNDO_PAGE_REUSE_LIMIT (9 * UNIV_PAGE_SIZE / 10)
 
@@ -525,12 +528,30 @@ lsn_t txn_prepare_low(
     mtr_t *mtr);
 
 /**
+  Recycle txn undo log segment
+  @param[in]        rseg        rollback segment
+  @param[in]        hdr_addr    txn log hdr address
+*/
+void txn_recycle_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr);
+
+/**
+  Put the txn undo log segment into cached list after purge all.
+  @param[in]        rseg        rollback segment
+  @param[in]        hdr_addr    txn log hdr address
+  @retval	    true	Not available slot
+  @retval	    false	Success
+*/
+bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
+                                      mtr_t *mtr);
+
+/**
   Put the txn undo log segment into free list after purge all.
 
   @param[in]        rseg        rollback segment
   @param[in]        hdr_addr    txn log hdr address
 */
-void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr);
+void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
+                                    mtr_t *mtr);
 
 /**
   Try to lookup the real scn of given records.
