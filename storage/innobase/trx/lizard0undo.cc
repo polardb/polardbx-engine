@@ -1795,14 +1795,134 @@ bool txn_undo_free_list_validate(trx_rsegf_t *rseg_hdr, page_t *undo_page,
   return true;
 }
 
+ulint srv_txn_cached_list_keep_size = 0;
+
+/**
+  Put the txn undo log segment into free list after purge all.
+  Reinit undo log segment into cached_list or put into free list;
+  @param[in]        rseg        rollback segment
+  @param[in]        rseg        rollback segment
+  @param[in]        hdr_addr    txn log hdr address
+  @param[in]        hdr_addr    txn log hdr address
+*/
+void txn_recycle_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
+  mtr_t mtr;
+
+  mtr_start(&mtr);
+  mutex_enter(&rseg->mutex);
+
+  if (srv_txn_cached_list_keep_size > 0 &&
+      rseg->txn_undo_cached.count < srv_txn_cached_list_keep_size) {
+    auto ret = txn_purge_segment_to_cached_list(rseg, hdr_addr, &mtr);
+    if (ret) {
+      goto add_to_free_list;
+    }
+  } else {
+  add_to_free_list:
+    txn_purge_segment_to_free_list(rseg, hdr_addr, &mtr);
+  }
+
+  mutex_exit(&rseg->mutex);
+  mtr_commit(&mtr);
+}
+
+/**
+  Reinit undo log segment into cached_list;
+  @param[in]        rseg        rollback segment
+  @param[in]        hdr_addr    txn log hdr address
+  @retval	    true	Not available slot
+  @retval	    false	Success
+*/
+bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
+                                      mtr_t *mtr) {
+  trx_rsegf_t *rseg_hdr;
+  trx_ulogf_t *log_hdr;
+  trx_usegf_t *seg_hdr;
+  trx_upagef_t *page_hdr;
+  page_t *undo_page;
+  ulint seg_size;
+  ulint hist_size;
+  ulint slot_no = ULINT_UNDEFINED;
+  page_no_t undo_page_no;
+
+  ut_ad(mutex_own(&rseg->mutex));
+  /** Only transaction rollback segment have free list */
+  ut_ad(fsp_is_txn_tablespace_by_id(rseg->space_id));
+
+  rseg_hdr = trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
+  slot_no = trx_rsegf_undo_find_free(rseg_hdr, mtr);
+  if (slot_no == ULINT_UNDEFINED) {
+    lizard_warn(ER_LIZARD)
+        << "Can't find a free slot for txn undo log when recycle, put back "
+           "free list instead, maybe decrease "
+           "innodb_txn_cached_list_keep_size.";
+    return true;
+  }
+
+  undo_page_no = hdr_addr.page;
+  undo_page = trx_undo_page_get(page_id_t(rseg->space_id, undo_page_no),
+                                rseg->page_size, mtr);
+  seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
+  log_hdr = undo_page + hdr_addr.boffset;
+  page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
+
+  /** The page list always has only its self page */
+  seg_size = flst_get_len(seg_hdr + TRX_UNDO_PAGE_LIST);
+  ut_a(seg_size == 1);
+
+  /** Remove the undo log segment from history list */
+  trx_purge_remove_log_hdr(rseg_hdr, log_hdr, mtr);
+  hist_size =
+      mtr_read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr);
+  ut_ad(hist_size >= seg_size);
+  mlog_write_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, hist_size - seg_size,
+                   MLOG_4BYTES, mtr);
+
+  /** Curr_size didn't include the free list undo log segment */
+  ut_ad(rseg->curr_size >= seg_size);
+  rseg->curr_size -= seg_size;
+
+  /** Reinit undo log segment header page. */
+  trx_undo_page_init(undo_page, TRX_UNDO_TXN, mtr);
+  mlog_write_ulint(page_hdr + TRX_UNDO_PAGE_FREE,
+                   TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE, MLOG_2BYTES, mtr);
+  mlog_write_ulint(seg_hdr + TRX_UNDO_LAST_LOG, 0, MLOG_2BYTES, mtr);
+  flst_init(seg_hdr + TRX_UNDO_PAGE_LIST, mtr);
+  flst_add_last(seg_hdr + TRX_UNDO_PAGE_LIST, page_hdr + TRX_UNDO_PAGE_NODE,
+                mtr);
+  ut_ad(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
+        TRX_UNDO_TXN);
+  /** Set state = CACHED and the undo log slot */
+  mlog_write_ulint(seg_hdr + TRX_UNDO_STATE, TRX_UNDO_CACHED, MLOG_2BYTES, mtr);
+  trx_rsegf_set_nth_undo(rseg_hdr, slot_no, undo_page_no, mtr);
+  rseg->curr_size++;
+
+  /** Create memory object undo. */
+  XID xid;
+  xid.reset();
+
+  trx_undo_t *undo = trx_undo_mem_create(rseg, slot_no, TRX_UNDO_TXN, 0, &xid,
+                                         hdr_addr.page, 0);
+  undo->state = TRX_UNDO_CACHED;
+  undo->empty = TRUE;
+
+  UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
+
+  MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
+  LIZARD_MONITOR_INC_TXN_CACHED(1);
+  lizard_stats.txn_undo_log_recycle.inc();
+
+  return false;
+}
+
 /**
   Put the txn undo log segment into free list after purge all.
 
   @param[in]        rseg        rollback segment
   @param[in]        hdr_addr    txn log hdr address
 */
-void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
-  mtr_t mtr;
+void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
+                                    mtr_t *mtr) {
   trx_rsegf_t *rseg_hdr;
   trx_ulogf_t *log_hdr;
   trx_usegf_t *seg_hdr;
@@ -1811,14 +1931,13 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
   ulint hist_size;
   ulint free_size;
 
-  mtr_start(&mtr);
+  ut_ad(mutex_own(&rseg->mutex));
 
-  mutex_enter(&rseg->mutex);
   rseg_hdr =
-      trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, &mtr);
+      trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
 
   undo_page = trx_undo_page_get(page_id_t(rseg->space_id, hdr_addr.page),
-                                rseg->page_size, &mtr);
+                                rseg->page_size, mtr);
 
   seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
   log_hdr = undo_page + hdr_addr.boffset;
@@ -1828,15 +1947,15 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
   ut_a(seg_size == 1);
 
   /** Remove the undo log segment from history list */
-  trx_purge_remove_log_hdr(rseg_hdr, log_hdr, &mtr);
+  trx_purge_remove_log_hdr(rseg_hdr, log_hdr, mtr);
 
   hist_size =
-      mtr_read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, &mtr);
+      mtr_read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr);
 
   ut_ad(hist_size >= seg_size);
 
   mlog_write_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, hist_size - seg_size,
-                   MLOG_4BYTES, &mtr);
+                   MLOG_4BYTES, mtr);
 
   ut_ad(rseg->curr_size >= seg_size);
 
@@ -1845,21 +1964,17 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
 
   /** Add the undo log segment from history list */
   free_size =
-      mtr_read_ulint(rseg_hdr + TXN_RSEG_FREE_LIST_SIZE, MLOG_4BYTES, &mtr);
+      mtr_read_ulint(rseg_hdr + TXN_RSEG_FREE_LIST_SIZE, MLOG_4BYTES, mtr);
 
   mlog_write_ulint(rseg_hdr + TXN_RSEG_FREE_LIST_SIZE, free_size + seg_size,
-                   MLOG_4BYTES, &mtr);
+                   MLOG_4BYTES, mtr);
 
   flst_add_first(rseg_hdr + TXN_RSEG_FREE_LIST,
-                undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, &mtr);
+                undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
   os_atomic_increment_ulint(&gcs->txn_undo_log_free_list_len, 1);
 
-  lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, &mtr);
-
-  mutex_exit(&(rseg->mutex));
-
-  mtr_commit(&mtr);
+  lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr);
 
   lizard_stats.txn_undo_log_free_list_put.inc();
 }

@@ -22809,6 +22809,12 @@ static MYSQL_SYSVAR_BOOL(btree_sampling, btr_sample_enabled,
                          PLUGIN_VAR_OPCMDARG, "enable btree sampling", NULL,
                          NULL, TRUE);
 
+static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
+                          lizard::srv_txn_cached_list_keep_size,
+                          PLUGIN_VAR_OPCMDARG,
+                          "max list size of txn_cached_list", NULL, NULL, 0, 0,
+                          512, 0);
+
 static MYSQL_SYSVAR_BOOL(freeze_db_if_no_cn_heartbeat_enable,
                          lizard::xa::srv_no_heartbeat_freeze,
                          PLUGIN_VAR_OPCMDARG,
@@ -23064,6 +23070,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(sample_advise_pages),
     MYSQL_SYSVAR(btree_sampling),
+    MYSQL_SYSVAR(txn_cached_list_keep_size),
     MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_enable),
     MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_timeout_sec),
     NULL};
