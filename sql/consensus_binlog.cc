@@ -5,10 +5,10 @@
    This program is also distributed with certain software (including
    but not limited to OpenSSL) that is licensed under separate terms,
    as designated in a particular file or component or in included license
-   documentation.  The authors of MySQL/Apsara GalaxyEngine hereby grant you an
+   documentation.  The authors of MySQL/PolarDB-X Engine hereby grant you an
    additional permission to link the program and your derivative works with the
    separately licensed software that they have included with
-   MySQL/Apsara GalaxyEngine.
+   MySQL/PolarDB-X Engine.
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -1303,7 +1303,7 @@ static void store_gtid_for_xpaxos(const char *buf, Relay_log_info *rli) {
 
 static void revise_one_event(uchar *event_ptr, size_t event_len, size_t log_pos)
 {
-  /* GalaxyEngine: fix timestamp for non-leader local event */
+  /* PolarDB-X Engine: fix timestamp for non-leader local event */
   if (consensus_log_manager.get_status() != Consensus_Log_System_Status::BINLOG_WORKING)
   {
     uint32 tt = uint4korr(event_ptr);
@@ -1321,10 +1321,10 @@ static void revise_one_event(uchar *event_ptr, size_t event_len, size_t log_pos)
     }
   }
 
-  /* GalaxyEngine: reset each binlog event's log_pos (end_log_pos) to the correct value */
+  /* PolarDB-X Engine: reset each binlog event's log_pos (end_log_pos) to the correct value */
   int4store(event_ptr + LOG_POS_OFFSET, log_pos);
 
-  /* GalaxyEngine: recalculate the checksum if necessary */
+  /* PolarDB-X Engine: recalculate the checksum if necessary */
   if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
   {
     ha_checksum crc= checksum_crc32(0L, NULL, 0);
@@ -2049,7 +2049,7 @@ void binlog_commit_pos_watcher(bool *is_running)
         break;
       }
       case binary_log::CONSENSUS_LOG_EVENT:
-        // GalaxyEngine makes sure the corresponding logEntry exists if index is commitIndex
+        // PolarDB-X Engine makes sure the corresponding logEntry exists if index is commitIndex
         consensus_log_ev = (Consensus_log_event*)ev;
         if (commitIndex <= consensus_log_ev->get_index())
         {
@@ -2249,7 +2249,7 @@ bool MYSQL_BIN_LOG::open_exist_binlog(const char *log_name,
     {
 #ifdef NORMANDY_CLUSTER
       /*
-      GalaxyEngine do not send fd event to Follower, so just use binlog_checksum_options.
+      PolarDB-X Engine do not send fd event to Follower, so just use binlog_checksum_options.
       The binlog_checksum_options of Leader and Follower must be set to a same value.
       */
       relay_log_checksum_alg= static_cast<enum_binlog_checksum_alg>

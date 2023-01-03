@@ -3454,7 +3454,7 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
        condition1: compare the log positions and
        condition2: compare the file names (to handle rotation case)
     */
-    /* GalaxyEngine does not maintain master log info currently. */
+    /* PolarDB-X Engine does not maintain master log info currently. */
     if (!mi->rli->info_thd->xpaxos_replication_channel &&
         (mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()) &&
         (!strcmp(mi->get_master_log_name(),

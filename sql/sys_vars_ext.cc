@@ -5,10 +5,10 @@
    This program is also distributed with certain software (including
    but not limited to OpenSSL) that is licensed under separate terms,
    as designated in a particular file or component or in included license
-   documentation.  The authors of MySQL/Apsara GalaxyEngine hereby grant you an
+   documentation.  The authors of MySQL/PolarDB-X Engine hereby grant you an
    additional permission to link the program and your derivative works with the
    separately licensed software that they have included with
-   MySQL/Apsara GalaxyEngine.
+   MySQL/PolarDB-X Engine.
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -48,7 +48,7 @@
 #include "sql/sys_vars_ext.h"
 #include "sql/replica_read_manager.h"
 
-static char *galaxyengine_version_ptr = NULL;
+static char *polardbx_engine_version_ptr = NULL;
 int32 rpc_port = DEFAULT_RPC_PORT;
 bool new_rpc = false;
 
@@ -310,9 +310,9 @@ static Sys_var_bool Sys_gcn_write_event(
     CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(0), ON_UPDATE(0));
 
-static Sys_var_charptr Sys_galaxyengine_version(
-    "galaxyengine_version", "Version of the GalaxyEngine",
-    READ_ONLY GLOBAL_VAR(galaxyengine_version_ptr), NO_CMD_LINE, IN_SYSTEM_CHARSET,
+static Sys_var_charptr Sys_polardbx_engine_version(
+    "polardbx_engine_version", "Version of the PolarDB-X Engine",
+    READ_ONLY GLOBAL_VAR(polardbx_engine_version_ptr), NO_CMD_LINE, IN_SYSTEM_CHARSET,
     DEFAULT(GALAXYENGINE_VERSION));
 
 static Sys_var_bool Sys_rotate_log_table(

@@ -83,7 +83,7 @@ class CommitDepRecoveryManager {
     CommitDepRecoveryManager():inRecovery(false), lastLogIndex(0), lastNonCommitDepIndex(0) {};
     void clear() { inRecovery = false; lastLogIndex = 0; lastNonCommitDepIndex = 0; }
     void setLastNonCommitDepIndex(uint64_t index) {
-      /* In GalaxyEngine, set directly is also ok, no need to cas */
+      /* In PolarDB-X Engine, set directly is also ok, no need to cas */
       for (;;)
       {
         uint64_t old= lastNonCommitDepIndex.load();

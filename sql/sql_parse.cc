@@ -2126,7 +2126,7 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
     case COM_BINLOG_DUMP_GTID:
       if (opt_cluster_log_type_instance) {
         my_message(ER_NOT_SUPPORTED_YET,
-        "GalaxyEngine logger do not support COM_BINLOG_DUMP_GTID command", MYF(0));
+        "PolarDB-X Engine logger do not support COM_BINLOG_DUMP_GTID command", MYF(0));
         break;
       }
       // TODO: access of protocol_classic should be removed
@@ -3287,7 +3287,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
 
     case SQLCOM_PURGE: {
 #ifndef NORMANDY_TEST
-      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "GalaxyEngine use 'call dbms_consensus.purge_log(number)'");
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "PolarDB-X Engine use 'call dbms_consensus.purge_log(number)'");
       goto error;
 #else
       Security_context *sctx = thd->security_context();
@@ -3304,7 +3304,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
     }
     case SQLCOM_PURGE_BEFORE: {
 #ifndef NORMANDY_TEST
-      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "GalaxyEngine use 'call dbms_consensus.purge_log(number)'");
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "PolarDB-X Engine use 'call dbms_consensus.purge_log(number)'");
       goto error;
 #else
       Item *it;

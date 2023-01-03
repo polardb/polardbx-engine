@@ -326,7 +326,7 @@ static void *handle_bootstrap(void *arg) {
     thd->variables.transaction_read_only = false;
     thd->tx_read_only = false;
 
-    /* GalaxyEngine do not support execute SQL with binlog during bootstrap */
+    /* PolarDB-X Engine do not support execute SQL with binlog during bootstrap */
     thd->variables.opt_force_revise = true;
     thd->variables.sql_log_bin= false;
     thd->variables.option_bits &= ~OPTION_BIN_LOG;

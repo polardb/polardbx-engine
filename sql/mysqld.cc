@@ -6879,7 +6879,7 @@ int mysqld_main(int argc, char **argv)
     LogErr(INFORMATION_LEVEL, ER_WARN_NO_SERVERID_SPECIFIED);
 
   /*
-    For GalaxyEngine:
+    For PolarDB-X Engine:
     bin_log must be set to ON
   */
   if (!opt_initialize && consensus_log_manager.option_invalid(opt_bin_log)) {
@@ -9068,7 +9068,7 @@ static void print_server_version(void) {
   set_server_version();
 
   print_explicit_version(server_version);
-  print_galaxyengine_version();
+  print_polardbx_engine_version();
 }
 
 /** Compares two options' names, treats - and _ the same */

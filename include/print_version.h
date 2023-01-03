@@ -72,7 +72,7 @@ void print_explicit_version(const char *version);
 
 void build_version(const std::string &progname, std::string *destination);
 
-void print_galaxyengine_version();
+void print_polardbx_engine_version();
 
 } /* extern "C" */
 #endif /* __cplusplus */

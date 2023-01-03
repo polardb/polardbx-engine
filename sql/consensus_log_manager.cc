@@ -5,10 +5,10 @@
    This program is also distributed with certain software (including
    but not limited to OpenSSL) that is licensed under separate terms,
    as designated in a particular file or component or in included license
-   documentation.  The authors of MySQL/Apsara GalaxyEngine hereby grant you an
+   documentation.  The authors of MySQL/PolarDB-X Engine hereby grant you an
    additional permission to link the program and your derivative works with the
    separately licensed software that they have included with
-   MySQL/Apsara GalaxyEngine.
+   MySQL/PolarDB-X Engine.
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -424,7 +424,7 @@ int ConsensusLogManager::init_consensus_info() {
       // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
       if (!opt_cluster_info) {
         sql_print_error(
-            "GalaxyEngine cluster_info must be set when the server is running "
+            "PolarDB-X Engine cluster_info must be set when the server is running "
             "with --initialize(-insecure) ");
         return -1;
       }
@@ -530,7 +530,7 @@ int ConsensusLogManager::init_service() {
       // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
       if (!opt_cluster_info) {
         sql_print_error(
-            "GalaxyEngine cluster_info must be set when the server is running "
+            "PolarDB-X Engine cluster_info must be set when the server is running "
             "with --initialize(-insecure) ");
         return -1;
       }
@@ -670,7 +670,7 @@ int ConsensusLogManager::init_service() {
     // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
     if (!opt_cluster_info) {
       sql_print_error(
-          "GalaxyEngine cluster_info must be set when the server is running "
+          "PolarDB-X Engine cluster_info must be set when the server is running "
           "with --initialize(-insecure) ");
       return -1;
     }
@@ -1660,7 +1660,7 @@ bool ConsensusLogManager::is_state_machine_ready()
 
 bool ConsensusLogManager::option_invalid(bool log_bin) {
   if (!log_bin) {
-    sql_print_error("GalaxyEngine log_bin must be set to ON");
+    sql_print_error("PolarDB-X Engine log_bin must be set to ON");
     return true;
   }
 

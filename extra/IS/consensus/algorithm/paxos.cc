@@ -1198,7 +1198,7 @@ void Paxos::commitDepResetLog(commitDepArgType* arg)
     tmpEntry.set_index(0);
     tmpEntry.set_checksum(0);
     /* do not use writeLog, lastSyncedIndex is larger than logindex  */
-    /* no lock protection: GalaxyEngine log module ensure that you cannot append a log if you are a follower */
+    /* no lock protection: PolarDB-X Engine log module ensure that you cannot append a log if you are a follower */
     uint64_t reti = localServer->appendLog(tmpEntry);
     /* avoid dead loop */
     if (reti == 0)
@@ -1253,7 +1253,7 @@ uint64_t Paxos::replicateLog_(LogEntry &entry, const bool needLock)
 
   easy_info_log("Server %d : replicateLog write start logTerm(%ld)\n", localServer_->serverId, term);
 
-  /* Traditional Path: write checksum before wirteLog, which is different from GalaxyEngine */
+  /* Traditional Path: write checksum before wirteLog, which is different from PolarDB-X Engine */
   /* if checksum not 0, use the checksum from outside (for ut now) */
   if (checksumCb_ && checksum_mode_ && entry.checksum() == 0)
   {
@@ -2823,7 +2823,7 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server, LogFil
       }
 
       /*
-       *  Restriction from GalaxyEngine, possible info values:
+       *  Restriction from PolarDB-X Engine, possible info values:
        *  1. FLAG_GU1 = 0x01, needGroup
        *  2. FLAG_GU2 = 0x02, needGroup
        *  3. FLAG_LARGE_TRX = 0x04, do not care
