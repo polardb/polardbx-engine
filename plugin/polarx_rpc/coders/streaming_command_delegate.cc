@@ -7,6 +7,7 @@
 #endif
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
+#include "sql/item.h"
 
 #include <memory>
 
@@ -590,6 +591,7 @@ void CstreamingCommandDelegate::handle_ok(uint32_t server_status,
     if (chunk_result_ && !chunk_enc_.chunk_empty())
       chunk_enc_.send_chunk();
 
+#ifndef MYSQL8
     if (feedback_) {
       auto thd = current_thd;
       Polarx::Resultset::FetchDone msg;
@@ -602,6 +604,7 @@ void CstreamingCommandDelegate::handle_ok(uint32_t server_status,
       msg_enc().encode_protobuf_message<protocol::tags::FetchDone::server_id>(
           msg);
     } else
+#endif
       msg_enc().encode_fetch_done();
     trigger_on_message(Polarx::ServerMessages::RESULTSET_FETCH_DONE);
   }

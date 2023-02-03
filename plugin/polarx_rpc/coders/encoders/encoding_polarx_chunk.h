@@ -10,6 +10,8 @@
 #include <cstring>
 #include <string>
 
+#include "my_time.h"
+
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 #include "../../common_define.h"
@@ -450,7 +452,7 @@ public:
   void field_datetime(const MYSQL_TIME *value) {
     auto &block = m_chunk.blocks[m_num_fields];
     assert(k_block_size - block->written() >= kMaxVarintBytes);
-    block->coder->WriteVarint64(TIME_to_longlong_datetime_packed(value));
+    block->coder->WriteVarint64(TIME_to_longlong_datetime_packed(*value));
     if (block->written() + kMaxVarintBytes > k_block_size)
       m_chunk.is_full = true;
     ++m_num_fields;
@@ -459,7 +461,7 @@ public:
   void field_time(const MYSQL_TIME *value) {
     auto &block = m_chunk.blocks[m_num_fields];
     assert(k_block_size - block->written() >= kMaxVarintBytes);
-    block->coder->WriteVarint64(TIME_to_longlong_time_packed(value));
+    block->coder->WriteVarint64(TIME_to_longlong_time_packed(*value));
     if (block->written() + kMaxVarintBytes > k_block_size)
       m_chunk.is_full = true;
     ++m_num_fields;
@@ -468,7 +470,7 @@ public:
   void field_date(const MYSQL_TIME *value) {
     auto &block = m_chunk.blocks[m_num_fields];
     assert(k_block_size - block->written() >= kMaxVarintBytes);
-    block->coder->WriteVarint64(TIME_to_longlong_date_packed(value));
+    block->coder->WriteVarint64(TIME_to_longlong_date_packed(*value));
     if (block->written() + kMaxVarintBytes > k_block_size)
       m_chunk.is_full = true;
     ++m_num_fields;
