@@ -158,6 +158,40 @@ bool buffer_to_set(const std::string &buffer,
   return true;
 }
 
+bool buffer_to_list(const std::string &buffer,
+                   std::list<std::string> *out_result) {
+  pb::io::CodedInputStream input_stream(
+      reinterpret_cast<const pb::uint8 *>(&buffer[0]),
+      static_cast<int>(buffer.length()));
+  if (out_result) out_result->clear();
+
+  pb::uint64 len;
+  std::string elem;
+  bool has_next = true;
+  bool empty = true;
+  while (true) {
+    has_next = input_stream.ReadVarint64(&len);
+    if (has_next && len > 0) {
+      bool ok = input_stream.ReadString(&elem, static_cast<int>(len));
+      if (!ok) {
+        if (empty && (0x01 == len)) {
+          /*special case for empty set*/
+          break;
+        } else {
+          if (out_result) out_result->clear();
+          return false;
+        }
+      }
+      if (out_result) out_result->push_back(elem);
+    } else {
+      break;
+    }
+    empty = false;
+  }
+
+  return true;
+}
+
 bool buffer_to_string_set(const std::string &buffer, std::string *out_result) {
   pb::io::CodedInputStream input_stream(
       reinterpret_cast<const pb::uint8 *>(&buffer[0]),

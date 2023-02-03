@@ -147,10 +147,13 @@ public:
   void abort_xmessage(const Position &position) {
     auto page = position.m_page->m_next_page;
 
-    m_buffer->remove_page_list(page);
+    m_buffer->remove_page_list(page); /// may null but can deal it
 
+    /// restore encoder ptr and buffer ptr
     m_page = position.m_page;
     m_page->m_current_data = position.m_position;
+    m_page->m_next_page = nullptr; /// Important: unlink to prevent double free
+    m_buffer->m_current = m_page;
   }
 
   template <uint32_t id, uint32_t delimiter_length = 1>

@@ -13,6 +13,10 @@
 #else
 extern int32 rpc_port;
 extern bool new_rpc;
+extern bool rpc_use_legacy_port;
+extern bool xcluster_standalone;
+
+#include "plugin/x/src/xpl_system_variables.h"
 #endif
 
 #include "../common_define.h"

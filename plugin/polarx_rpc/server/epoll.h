@@ -78,8 +78,11 @@ public:
 
   virtual void set_fd(int fd) = 0;
 
-  /// for reclaim
-  virtual void fd_registered() {}
+  /// for reclaim in epoll callback
+  virtual void fd_pre_register() {}
+
+  /// for rollback register if add epoll fail
+  virtual bool fd_rollback_register() { return true; }
 
   /// notify for adding reference
   virtual void pre_events() {}
@@ -275,6 +278,8 @@ private:
 
   void loop(uint32_t group_id, uint32_t thread_id, bool base_thread,
             int affinity, bool epoll_wait, bool is_worker) {
+    plugin_info.threads.fetch_add(1, std::memory_order_release);
+
     if (affinity >= 0) {
       auto thread = pthread_self();
       cpu_set_t cpu;
@@ -499,6 +504,8 @@ private:
       }
     }
     Csession::deinit_thread_for_session();
+
+    plugin_info.threads.fetch_sub(1, std::memory_order_release);
   }
 
   explicit CmtEpoll(uint32_t group_id, size_t work_queue_depth)
@@ -748,12 +755,16 @@ public:
     event.data.ptr = cb;
     event.events = events;
     cb->set_fd(fd);
+    cb->fd_pre_register(); /// pre register before epoll add
     DBG_LOG(("polarx_rpc epoll add fd %d", fd));
     iret = ::epoll_ctl(epfd_, EPOLL_CTL_ADD, fd, &event);
     DBG_LOG(("polarx_rpc epoll add fd %d done ret %d", fd, iret));
-    if (UNLIKELY(iret != 0))
+    if (UNLIKELY(iret != 0)) {
+      auto bret = cb->fd_rollback_register();
+      if (!bret)
+        delete cb;
       return -errno;
-    cb->fd_registered();
+    }
     return 0;
   }
 

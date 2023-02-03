@@ -35,7 +35,10 @@ public:
     return msg_enc_;
   }
 
-  inline void reset() { enc_buf_.reset(); }
+  inline void reset() {
+    /// clear all data and keep one page in enc_buf_ and msg_enc_
+    msg_enc_.buffer_reset();
+  }
 
   bool flush(CtcpConnection &tcp);
 };

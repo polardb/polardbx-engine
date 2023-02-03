@@ -24,6 +24,7 @@ CsessionBase::~CsessionBase() {
     srv_session_close(mysql_session_);
     mysql_session_ = nullptr;
   }
+  plugin_info.total_sessions.fetch_sub(1, std::memory_order_release);
 }
 
 err_t CsessionBase::init(uint16_t port) {
@@ -79,6 +80,16 @@ err_t CsessionBase::switch_to_user(const char *username, const char *hostname,
     return err_t::Error(ER_ACCESS_DENIED_ERROR,
                         "Unable to switch context to user %s", username);
   return err_t::Success();
+}
+
+void CsessionBase::set_show_hostname(const char *hostname) {
+  show_hostname_ = hostname ? hostname : "";
+  auto thd = get_thd();
+  if (thd != nullptr) {
+    auto sec = thd->security_context();
+    if (sec != nullptr)
+      sec->set_host_or_ip_ptr(show_hostname_.c_str(), show_hostname_.length());
+  }
 }
 
 err_t CsessionBase::reset() {
@@ -197,27 +208,23 @@ err_t CsessionBase::authenticate(const char *user, const char *host,
   if (error)
     return err_t::SQLError_access_denied();
 
-  auto authenticated_user_name = get_authenticated_user_name();
-  auto authenticated_user_host = get_authenticated_user_host();
+  if (!is_acl_disabled()) {
+    auto authenticated_user_name = get_authenticated_user_name();
+    auto authenticated_user_host = get_authenticated_user_host();
 
-  /// force switch to fake sys user
-  switch_to_sys_user();
-  /*
-  error = switch_to_user("mysql.session", "localhost", nullptr, nullptr);
-  if (error)
-    return error;
+    /// force switch to fake sys user
+    switch_to_sys_user();
 
-  if (!is_acl_disabled())
-  */
-  {
-    error = account_verification.authenticate_account(
-        authenticated_user_name, authenticated_user_host, passwd);
-    if (error)
-      return error;
+    if (!is_acl_disabled()) {
+      error = account_verification.authenticate_account(
+          authenticated_user_name, authenticated_user_host, passwd);
+      if (error)
+        return error;
+    }
+
+    /// switch to user
+    error = switch_to_user(user, host, ip, db);
   }
-
-  /// switch to user
-  error = switch_to_user(user, host, ip, db);
 
   /// check db
   if (!error) {

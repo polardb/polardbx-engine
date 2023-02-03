@@ -160,6 +160,7 @@ struct ColumnMetaData {
   static constexpr uint32_t length = 11;
   static constexpr uint32_t flags = 12;
   static constexpr uint32_t content_type = 13;
+  static constexpr uint32_t original_flags = 14;
 };
 
 struct Row {
@@ -179,6 +180,23 @@ struct ResultTSO {
 
   static constexpr uint32_t error_no = 1;
   static constexpr uint32_t ts = 2;
+};
+
+struct Chunk {
+  static constexpr uint32_t server_id = 21;
+
+  static constexpr uint32_t row_count = 1;
+  static constexpr uint32_t columns = 2;
+};
+
+struct Column {
+  static constexpr uint32_t null_bitmap = 1;
+  static constexpr uint32_t fixed_size_column = 2;
+  static constexpr uint32_t variable_size_column = 3;
+};
+
+struct ColumnData {
+  static constexpr uint32_t value = 1;
 };
 
 } // namespace tags

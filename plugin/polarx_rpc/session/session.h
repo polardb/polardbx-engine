@@ -75,8 +75,6 @@ public:
   void wait_end(THD *thd);
   void post_kill(THD *thd);
 
-  inline CpolarxEncoder &encoder() { return encoder_; }
-
   inline void shutdown() {
     shutdown_.store(true, std::memory_order_release);
     remote_kill();

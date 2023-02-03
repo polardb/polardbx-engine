@@ -45,7 +45,10 @@ public:
     assert(k_page_size == local_pool->get_page_size());
     m_front = m_current = m_local_pool->alloc_page();
   }
-  ~Encoding_buffer() { remove_page_list(m_front); }
+  ~Encoding_buffer() {
+    remove_page_list(m_front);
+    m_front = m_current = nullptr;
+  }
 
   Page *get_next_page() {
     auto page = m_local_pool->alloc_page();
@@ -96,18 +99,11 @@ public:
     return true;
   }
 
-  void reset() {
-    remove_page_list(m_front->m_next_page);
-    m_front->m_next_page = nullptr;
-    m_front->m_current_data = m_front->m_begin_data;
-    m_current = m_front;
-  }
-
   Page *m_front;
   Page *m_current;
 
 private:
-  Encoding_pool *m_local_pool;
+  Encoding_pool *const m_local_pool;
 };
 
 } // namespace protocol

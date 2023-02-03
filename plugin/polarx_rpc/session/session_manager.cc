@@ -72,8 +72,7 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
       if (LIKELY(
               session->push_message(std::forward<msg_t>(msg), need_notify))) {
         if (need_notify) {
-          auto in_trx =
-              session->get_thd()->in_active_multi_stmt_transaction();
+          auto in_trx = session->get_thd()->in_active_multi_stmt_transaction();
           notify_set.emplace(std::make_pair(sid, in_trx));
         }
         /// although moved, type in msg still valid
@@ -193,10 +192,11 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
 
 #ifdef MYSQL8
 
-#define SYS_GTS_DB      "mysql"
-#define SYS_GTS_TABLE   "gts_base"
+#define SYS_GTS_DB "mysql"
+#define SYS_GTS_TABLE "gts_base"
 
-err_t CsessionManager::get_tso_mysql80(CtcpConnection &tcp, uint64_t &ts, int32_t batch_count) {
+err_t CsessionManager::get_tso_mysql80(CtcpConnection &tcp, uint64_t &ts,
+                                       int32_t batch_count) {
   /// take one session from pool
   std::unique_ptr<reusable_session_t> s;
   tcp.epoll().get_extra_ctx().reusable_sessions.pop(s);
@@ -326,6 +326,14 @@ err_t CsessionManager::sql_stmt_execute_locally(
   if (UNLIKELY(err))
     return err;
 
+  /// check options(exec locally not support cache/flow ctl/chunk/feedback)
+  /// token is ignored
+  if (!msg.has_stmt() || (msg.has_chunk_result() && msg.chunk_result()) ||
+      (msg.has_feed_back() && msg.feed_back()))
+    return err_t(ER_POLARX_RPC_ERROR_MSG,
+                 "Exec locally not support cache/chunk/feedback and token will "
+                 "be ignored.");
+
   /// switch db
   if (msg.has_schema_name()) {
     const auto &db_name = msg.schema_name();
@@ -380,13 +388,14 @@ err_t CsessionManager::new_session(CtcpConnection &tcp, const uint64_t &sid,
   auto err = session->init(port_);
   if (UNLIKELY(err))
     return err;
+  err = session->switch_to_user(user_.c_str(), host_.c_str(), nullptr, nullptr);
+  if (UNLIKELY(err))
+    return err;
   /// concat host with epoll group id
   char buf[0x100];
   ::snprintf(buf, sizeof(buf), "xG%02u_%s", tcp.epoll().group_id(),
              host_.c_str());
-  err = session->switch_to_user(user_.c_str(), buf, nullptr, nullptr);
-  if (UNLIKELY(err))
-    return err;
+  session->set_show_hostname(buf);
   /// finish init
   {
     CautoSpinRWLock lck(session_lock_, true, session_poll_rwlock_spin_cnt);

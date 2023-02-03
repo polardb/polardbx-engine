@@ -46,8 +46,6 @@ extern uint32_t tcp_fixed_dealing_buf;
 extern uint32_t mcs_spin_cnt;
 extern uint32_t session_poll_rwlock_spin_cnt;
 
-extern my_bool skip_name_resolve;
-
 extern uint32_t net_write_timeout;
 
 extern my_bool galaxy_protocol;
@@ -76,6 +74,10 @@ extern my_bool enable_tasker;
 extern uint32_t epoll_group_tasker_multiply;
 extern uint32_t epoll_group_tasker_extend_step;
 extern my_bool enable_epoll_in_tasker;
+
+extern uint32_t request_cache_number;
+extern uint32_t request_cache_instances;
+extern uint32_t request_cache_max_length;
 
 /**
  * Global Variables

@@ -12,7 +12,7 @@
 
 #include "../global_defines.h"
 #ifdef MYSQL8
-#include "sql/hostname_cache.h"  // ip_to_hostname
+#include "sql/hostname_cache.h" // ip_to_hostname
 #else
 #include "sql/hostname.h"
 #endif
@@ -58,7 +58,7 @@ private:
     host.resize(ip.size()); /// remove tail
 
     // turn IP to hostname for auth uses
-    if (!skip_name_resolve) {
+    if (!opt_skip_name_resolve) {
       char *hostname = nullptr;
       uint connect_errors;
       int rc = ip_to_hostname(reinterpret_cast<sockaddr_storage *>(
@@ -127,7 +127,7 @@ private:
           auto bret = tcp->events(EPOLLIN, 0, 1);
           assert(bret); /// still keep the reference, so never fail
         } else {
-          tcp->fin(); /// close socket
+          tcp->fin("failed to add to epoll"); /// close socket
           my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
                                 "Failed to accept. %s", std::strerror(-err));
         }

@@ -8,6 +8,7 @@
 
 #include "../session/flow_control.h"
 
+#include "encoders/encoding_polarx_chunk.h"
 #include "encoders/encoding_polarx_row.h"
 #include "encoders/encoding_pool.h"
 #include "polarx_encoder.h"
@@ -28,6 +29,11 @@ protected:
   const bool compact_metadata_;
 
   protocol::PolarX_Row_encoder row_enc_;
+  protocol::PolarX_Chunk_encoder chunk_enc_;
+
+  /// result set flags
+  bool chunk_result_ = false;
+  bool feedback_ = false;
 
   /// status flags
   bool sent_result_ = false;
@@ -40,6 +46,9 @@ protected:
 
   /// flow control
   CflowControl *flow_control_ = nullptr;
+
+  /// buf for convert error charset
+  char err_msg_buf_[MYSQL_ERRMSG_SIZE]{};
 
   inline protocol::PolarX_Message_encoder &msg_enc() {
     return encoder_.message_encoder();
@@ -107,6 +116,11 @@ public:
   inline void set_flow_control(CflowControl *flow_control) {
     flow_control_ = flow_control;
   }
+
+  // fixme: force disable chunk
+  inline void set_chunk_result(bool chunk) { chunk_result_ = false; }
+
+  inline void set_feedback(bool feedback) { feedback_ = feedback; }
 };
 
 } // namespace polarx_rpc

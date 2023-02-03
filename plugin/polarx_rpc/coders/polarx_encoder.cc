@@ -23,7 +23,7 @@ bool CpolarxEncoder::flush(CtcpConnection &tcp) {
     }
   }
   /// reset buffer any way
-  enc_buf_.reset();
+  reset();
   return write_success;
 }
 

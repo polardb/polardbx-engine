@@ -24,6 +24,7 @@
 #include "../server/tcp_connection.h"
 #include "../sql_query/sql_statement_builder.h"
 
+#include "request_cache.h"
 #include "session.h"
 #include "session_manager.h"
 
@@ -32,10 +33,7 @@ namespace polarx_rpc {
 std::atomic<int> g_session_count(0);
 
 Csession::~Csession() {
-  if (mysql_session_ != nullptr) {
-    srv_session_close(mysql_session_);
-    mysql_session_ = nullptr;
-  }
+  /// mysql_session_ free in ~CsessionBase
   g_session_count.fetch_sub(1, std::memory_order_release);
 }
 
@@ -269,7 +267,10 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
       err = last_error_;
     else {
       run = true;
-      last_error_ = err = sql_stmt_execute(m);
+      err = sql_stmt_execute(m);
+      /// note: cache miss is not an error
+      if (err.error != ER_POLARX_RPC_CACHE_MISS)
+        last_error_ = err;
     }
   } break;
 
@@ -281,7 +282,10 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
       err = last_error_;
     else {
       run = true;
-      last_error_ = err = sql_plan_execute(m);
+      err = sql_plan_execute(m);
+      /// note: cache miss is not an error
+      if (err.error != ER_POLARX_RPC_CACHE_MISS)
+        last_error_ = err;
     }
   } break;
 
@@ -298,6 +302,33 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
 }
 
 err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
+  ///
+  /// dealing cache
+  ///
+  /// just for life cycle control, never touch it
+  std::shared_ptr<std::string> stmt;
+  /// use this to get real stmt
+  const std::string *stmt_ptr = nullptr;
+  if (msg.has_stmt() && msg.has_stmt_digest()) {
+    /// copy, move and put into LRU
+    auto digest(msg.stmt_digest());
+    if (msg.stmt().size() <= request_cache_max_length) {
+      /// only cache which less than max length
+      stmt = std::make_shared<std::string>(msg.stmt());
+      plugin_info.cache->set_sql(std::move(digest), std::move(stmt));
+    }
+    stmt_ptr = &msg.stmt(); /// use original in msg
+  } else if (msg.has_stmt_digest()) {
+    stmt = plugin_info.cache->get_sql(msg.stmt_digest());
+    if (!stmt)
+      /// not found?
+      return err_t(ER_POLARX_RPC_CACHE_MISS, "do not exist query!");
+    stmt_ptr = stmt.get();
+  } else if (msg.has_stmt())
+    stmt_ptr = &msg.stmt();
+  else
+    return err_t(ER_POLARX_RPC_ERROR_MSG, "Neither stmt nor digest exist.");
+
   /// switch db
   if (msg.has_schema_name()) {
     const auto &db_name = msg.schema_name();
@@ -347,9 +378,9 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
   Sql_statement_builder builder(&qb_);
   try {
     if (msg.has_hint())
-      builder.build(msg.stmt(), msg.args(), msg.hint());
+      builder.build(*stmt_ptr, msg.args(), msg.hint());
     else
-      builder.build(msg.stmt(), msg.args());
+      builder.build(*stmt_ptr, msg.args());
   } catch (const err_t &e) {
     return e;
   }
@@ -358,6 +389,12 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
       *this, encoder_, [this]() { return flush(); }, msg.compact_metadata());
   if (flow_control_enabled)
     delegate.set_flow_control(&flow_control_); /// enable flow control
+  /// chunk?
+  if (msg.has_chunk_result())
+    delegate.set_chunk_result(msg.chunk_result());
+  /// feedback?
+  if (msg.has_feed_back())
+    delegate.set_feedback(msg.feed_back());
   // sql_print_information("sid %lu run %s", sid_, qb_.get().c_str());
   const auto err = execute_sql(qb_.get().data(), qb_.get().length(), delegate);
   // sql_print_information("sid %lu run %s done err %d sqlerr %d", sid_,
@@ -371,6 +408,31 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
 }
 
 err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
+  ///
+  /// dealing cache
+  ///
+  /// just for life cycle control, never touch it
+  std::shared_ptr<Polarx::ExecPlan::AnyPlan> plan;
+  /// use this to get real plan
+  const Polarx::ExecPlan::AnyPlan *plan_ptr = nullptr;
+  if (msg.has_plan() && msg.has_plan_digest()) {
+    /// copy, move and put into LRU
+    auto digest(msg.plan_digest());
+    // TODO check plan store size?
+    plan = std::make_shared<Polarx::ExecPlan::AnyPlan>(msg.plan());
+    plugin_info.cache->set_plan(std::move(digest), std::move(plan));
+    plan_ptr = &msg.plan(); /// use original in msg
+  } else if (msg.has_plan_digest()) {
+    plan = plugin_info.cache->get_plan(msg.plan_digest());
+    if (!plan)
+      /// not found?
+      return err_t(ER_POLARX_RPC_CACHE_MISS, "do not exist plan!");
+    plan_ptr = plan.get();
+  } else if (msg.has_plan())
+    plan_ptr = &msg.plan();
+  else
+    return err_t(ER_POLARX_RPC_ERROR_MSG, "Neither stmt nor digest exist.");
+
   auto thd = get_thd();
 #ifdef MYSQL8
   /// lizard specific GCN timestamp
@@ -408,7 +470,14 @@ err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
       *this, encoder_, [this]() { return flush(); }, msg.compact_metadata());
   if (flow_control_enabled)
     delegate.set_flow_control(&flow_control_); /// enable flow control
-  auto iret = rpc_executor::Executor::instance().execute(msg, delegate, thd);
+  /// chunk?
+  if (msg.has_chunk_result())
+    delegate.set_chunk_result(msg.chunk_result());
+  /// feedback?
+  if (msg.has_feed_back())
+    delegate.set_feedback(msg.feed_back());
+  auto iret = rpc_executor::Executor::instance().execute(
+      *plan_ptr, msg.parameters(), delegate, thd);
   if (iret != 0)
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Executor error");
   return err_t::Success();

@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <memory>
 #include <set>
+#include <list>
 #include <string>
 
 #include "xdatetime.h"
@@ -51,6 +52,8 @@ bool buffer_to_double(const std::string &buffer, double *out_result);
 bool buffer_to_time(const std::string &buffer, Time *out_time);
 bool buffer_to_decimal(const std::string &buffer, Decimal *out_result);
 bool buffer_to_set(const std::string &buffer, Row_set *out_result);
+bool buffer_to_list(const std::string &buffer,
+                    std::list<std::string> *out_result);
 bool buffer_to_datetime(const std::string &buffer, DateTime *out_result,
                         const bool has_time);
 bool buffer_to_string_set(const std::string &buffer, std::string *out_result);
@@ -82,6 +85,7 @@ enum class Column_type {
   This structure is a compact version of "Mysqlx::Resultset::ColumnMetaData".
 */
 struct Column_metadata {
+  uint32_t original_type;
   Column_type type;
   std::string name;
   std::string original_name;
@@ -95,6 +99,7 @@ struct Column_metadata {
   uint32_t fractional_digits;
   uint32_t length;
   uint32_t flags;
+  uint32_t original_flags;
   uint32_t content_type;
 };
 
@@ -373,6 +378,8 @@ class XRow {
   */
   virtual bool get_set(const int32_t field_index,
                        String_set *out_data) const = 0;
+  virtual bool get_set(const int32_t field_index,
+                       std::list<std::string> *out_data) const = 0;
 
   /**
     Get field data as boolean value.

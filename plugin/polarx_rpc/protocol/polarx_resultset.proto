@@ -530,6 +530,8 @@ message ColumnMetaData {
   optional uint32 flags = 12;
 
   optional uint32 content_type = 13;
+
+  optional uint32 original_flags = 14;
 }
 
 //   Row in a Resultset

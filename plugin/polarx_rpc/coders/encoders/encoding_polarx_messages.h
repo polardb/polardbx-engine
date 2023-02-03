@@ -82,10 +82,11 @@ public:
                                const uint64_t *collation,
                                const uint32_t *decimals, const uint32_t *length,
                                const uint32_t *flags,
-                               const uint32_t *content_type) {
+                               const uint32_t *content_type,
+                               const uint32_t *org_flags) {
     using Tags = tags::ColumnMetaData;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<Tags::server_id, 100>();
     Base_type::template encode_field_enum<Tags::type>(type);
@@ -98,6 +99,8 @@ public:
     Base_type::template encode_optional_field_var_uint32<Tags::flags>(flags);
     Base_type::template encode_optional_field_var_uint32<Tags::content_type>(
         content_type);
+    Base_type::template encode_optional_field_var_uint32<Tags::original_flags>(
+        org_flags);
     Base_type::end_xmessage(xmsg_start);
   }
 
@@ -107,10 +110,11 @@ public:
                             const uint8_t type, const uint8_t org_type,
                             const uint64_t *collation, const uint32_t *decimals,
                             const uint32_t *length, const uint32_t *flags,
-                            const uint32_t *content_type) {
+                            const uint32_t *content_type,
+                            const uint32_t *org_flags) {
     using Tags = tags::ColumnMetaData;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<Tags::server_id, 100>();
     Base_type::template encode_field_enum<Tags::type>(type);
@@ -123,7 +127,10 @@ public:
     Base_type::template encode_optional_field_var_uint32<Tags::flags>(flags);
     Base_type::template encode_optional_field_var_uint32<Tags::content_type>(
         content_type);
+    Base_type::template encode_optional_field_var_uint32<Tags::original_flags>(
+        org_flags);
 
+    /// following will check buffer size
     Base_type::template encode_field_string<Tags::name>(col_name);
     Base_type::template encode_field_string<Tags::original_name>(org_col_name);
     Base_type::template encode_field_string<Tags::table>(table_name);
@@ -139,7 +146,7 @@ public:
     using StateTags = tags::SessionStateChanged;
     using ScalarTags = tags::Scalar;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<FrameTags::server_id, 145>();
 
@@ -167,7 +174,7 @@ public:
     using StateTags = tags::SessionStateChanged;
     using ScalarTags = tags::Scalar;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<FrameTags::server_id, 145>();
     Base_type::template encode_field_const_var_uint<FrameTags::type,
@@ -190,7 +197,7 @@ public:
     using FrameTags = tags::Frame;
     using StateTags = tags::SessionStateChanged;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<FrameTags::server_id, 85>();
     Base_type::template encode_field_const_var_uint<FrameTags::type,
@@ -208,7 +215,7 @@ public:
     using StateTags = tags::SessionStateChanged;
     using ScalarTags = tags::Scalar;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<FrameTags::server_id, 145>();
     Base_type::template encode_field_const_var_uint<FrameTags::type,
@@ -234,7 +241,7 @@ public:
     using ScalarTags = tags::Scalar;
     using StringTags = tags::String;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<FrameTags::server_id, 145>();
     Base_type::template encode_field_const_var_uint<FrameTags::type,
@@ -259,7 +266,7 @@ public:
                      const std::string &data) {
     using FrameTags = tags::Frame;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<FrameTags::server_id, 40>();
     Base_type::template encode_field_var_uint32<FrameTags::type>(type);
@@ -271,7 +278,7 @@ public:
   void encode_global_notice(const uint32_t type, const std::string &data) {
     using FrameTags = tags::Frame;
 
-    // The buffer size is verified by UT in xmessage_buffer.cc
+    /// The buffer size should large enough.
     auto xmsg_start =
         Base_type::template begin_xmessage<FrameTags::server_id, 25>();
     Base_type::template encode_field_var_uint32<FrameTags::type>(type);

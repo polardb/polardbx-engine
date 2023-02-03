@@ -42,9 +42,12 @@ class Primitives_encoder {
       primitives::base::Varint_length_value<length, value>;
 
  public:
-  explicit Primitives_encoder(Encoding_buffer *buffer) {
-    m_buffer = buffer;
+  explicit Primitives_encoder(Encoding_buffer *buffer) : m_buffer(buffer) {
     m_page = m_buffer->m_current;
+  }
+
+  virtual ~Primitives_encoder() {
+    m_page = nullptr;
   }
 
   template <uint64_t value>
@@ -148,18 +151,13 @@ class Primitives_encoder {
     }
   }
 
-  void buffer_set(Encoding_buffer *buffer) {
-    m_buffer = buffer;
-    m_page = m_buffer->m_current;
-  }
-
   void buffer_reset() {
     m_buffer->remove_page_list(m_buffer->m_front->m_next_page);
     m_buffer->m_front->reset();
     m_page = m_buffer->m_current = m_buffer->m_front;
   }
 
-  Encoding_buffer *m_buffer;
+  Encoding_buffer *const m_buffer;
   Page *m_page;
 };
 

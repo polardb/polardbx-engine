@@ -14,6 +14,7 @@
 #include "../common_define.h"
 #include "../secure/authentication_interface.h"
 #include "../utility/error.h"
+#include "../polarx_rpc.h"
 
 #include "flow_control.h"
 
@@ -38,6 +39,8 @@ protected:
   std::string address_;
   std::string db_;
 
+  std::string show_hostname_;
+
   /// flow control
   CflowControl flow_control_;
 
@@ -50,6 +53,7 @@ protected:
 public:
   explicit CsessionBase(uint64_t sid)
       : sid_(sid), killed_(false), mysql_session_(nullptr), last_sql_errno_(0) {
+    plugin_info.total_sessions.fetch_add(1, std::memory_order_release);
   }
 
   virtual ~CsessionBase();
@@ -64,6 +68,8 @@ public:
 
   err_t switch_to_user(const char *username, const char *hostname,
                        const char *address, const char *db);
+
+  void set_show_hostname(const char *hostname);
 
   err_t reset();
 

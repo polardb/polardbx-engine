@@ -248,6 +248,16 @@ bool XRow_impl::get_set(const int32_t field_index,
   return row_decoder::buffer_to_set(field, out_data);
 }
 
+bool XRow_impl::get_set(const int32_t field_index,
+             std::list<std::string> *out_data) const {
+  if (m_metadata->empty()) return false;
+  if (Column_type::SET != (*m_metadata)[field_index].type) return false;
+
+  const std::string &field = m_row->field(field_index);
+
+  return row_decoder::buffer_to_list(field, out_data);
+}
+
 bool XRow_impl::get_bit(const int32_t field_index, bool *out_data) const {
   if (m_metadata->empty()) return false;
   if (Column_type::BIT != (*m_metadata)[field_index].type) return false;

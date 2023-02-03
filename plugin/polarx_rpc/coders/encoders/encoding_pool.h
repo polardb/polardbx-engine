@@ -32,17 +32,15 @@ namespace protocol {
 
 class Page {
 public:
-  template <int size> explicit Page(uint8_t (&data_arr)[size]) {
-    m_begin_data = m_current_data = reinterpret_cast<uint8_t *>(&data_arr);
-    m_end_data = m_begin_data + size;
-  }
+  Page(const uint32_t size, char *data_ptr)
+      : m_begin_data(reinterpret_cast<uint8_t *>(data_ptr)),
+        m_end_data(m_begin_data + size),
+        m_current_data(reinterpret_cast<uint8_t *>(data_ptr)) {}
 
-  Page(const uint32_t size, char *data_ptr) {
-    m_begin_data = m_current_data = reinterpret_cast<uint8_t *>(data_ptr);
-    m_end_data = m_begin_data + size;
+  ~Page() {
+    m_current_data = nullptr;
+    m_next_page = nullptr;
   }
-
-  virtual ~Page() = default;
 
   void reset() {
     m_current_data = m_begin_data;
@@ -57,12 +55,10 @@ public:
 
   uint32_t get_used_bytes() const { return m_current_data - m_begin_data; }
   uint32_t get_free_bytes() const { return m_end_data - m_current_data; }
-  uint8_t *get_free_ptr() const { return m_current_data; }
 
-  uint8_t *m_begin_data;
+  uint8_t *const m_begin_data;
+  uint8_t *const m_end_data;
   uint8_t *m_current_data;
-  uint8_t *m_end_data;
-  uint32_t m_references = 0;
 
   Page *m_next_page = nullptr;
 };
@@ -82,6 +78,7 @@ public:
       delete[] reinterpret_cast<char *>(page);
     }
     assert(0 == m_pages);
+    m_empty_pages = nullptr;
   }
 
   Page *alloc_page() {
@@ -115,9 +112,9 @@ public:
   uint32_t get_page_size() const { return m_page_size; }
 
 private:
+  const uint32_t m_local_cache = 0;
+  const uint32_t m_page_size = 0;
   Page *m_empty_pages = nullptr;
-  uint32_t m_local_cache = 0;
-  uint32_t m_page_size = 0;
   uint32_t m_pages = 0;
 };
 

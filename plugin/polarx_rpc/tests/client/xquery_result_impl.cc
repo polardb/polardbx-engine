@@ -40,6 +40,7 @@ static xcl::Column_metadata unwrap_column_metadata(
     const Polarx::Resultset::ColumnMetaData *column_data) {
   xcl::Column_metadata column;
 
+  column.original_type = column_data->original_type();
   switch (column_data->type()) {
     case Polarx::Resultset::ColumnMetaData::SINT:
       column.type = xcl::Column_type::SINT;
@@ -103,6 +104,7 @@ static xcl::Column_metadata unwrap_column_metadata(
   column.length = column_data->length();
 
   column.flags = column_data->flags();
+  column.original_flags = column_data->original_flags();
   column.has_content_type = column_data->has_content_type();
   column.content_type = column_data->content_type();
 

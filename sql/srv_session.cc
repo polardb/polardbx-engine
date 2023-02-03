@@ -756,7 +756,7 @@ Srv_session::Srv_session(srv_session_error_cb err_cb, void *err_cb_ctx)
                      (void *)&err_protocol_ctx),
       state(SRV_SESSION_CREATED),
       vio_type(NO_VIO_TYPE) {
-  thd.mark_as_srv_session();
+  // thd.mark_as_srv_session();
 }
 
 /**

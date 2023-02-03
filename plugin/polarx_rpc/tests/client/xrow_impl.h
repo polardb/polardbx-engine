@@ -67,6 +67,8 @@ class XRow_impl : public XRow {
                     DateTime *out_data) const override;
   bool get_set(const int32_t field_index,
                std::set<std::string> *out_data) const override;
+  bool get_set(const int32_t field_index,
+               std::list<std::string> *out_data) const override;
   bool get_bit(const int32_t field_index, bool *out_data) const override;
   bool get_bit(const int32_t field_index, uint64_t *out_data) const override;
 
