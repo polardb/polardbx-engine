@@ -290,60 +290,44 @@ template <> struct Fixint_length<1> {
 
 template <> struct Fixint_length<4> {
   template <uint32_t value> static void encode(uint8_t *&out) { // NOLINT
-#if defined(__x86_64__) || defined(_M_X64)
-    *reinterpret_cast<uint32_t *>(out) = value;
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    *reinterpret_cast<uint32_t *>(out) = __builtin_bswap32(value);
     out += 4;
 #else
-    *(out++) = static_cast<uint8_t>(value);
-    *(out++) = static_cast<uint8_t>(value >> 8);
-    *(out++) = static_cast<uint8_t>(value >> 16);
-    *(out++) = static_cast<uint8_t>(value >> 24);
+    *reinterpret_cast<uint32_t *>(out) = value;
+    out += 4;
 #endif
   }
 
   static void encode_value(uint8_t *&out, const uint32_t value) { // NOLINT
-#if defined(__x86_64__) || defined(_M_X64)
-    *reinterpret_cast<uint32_t *>(out) = value;
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    *reinterpret_cast<uint32_t *>(out) = __builtin_bswap32(value);
     out += 4;
 #else
-    *(out++) = static_cast<uint8_t>(value);
-    *(out++) = static_cast<uint8_t>(value >> 8);
-    *(out++) = static_cast<uint8_t>(value >> 16);
-    *(out++) = static_cast<uint8_t>(value >> 24);
+    *reinterpret_cast<uint32_t *>(out) = value;
+    out += 4;
 #endif
   }
 };
 
 template <> struct Fixint_length<8> {
   template <uint64_t value> static void encode(uint8_t *&out) { // NOLINT
-#if defined(__x86_64__) || defined(_M_X64)
-    *reinterpret_cast<uint64_t *>(out) = value;
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    *reinterpret_cast<uint64_t *>(out) = __builtin_bswap64(value);
     out += 8;
 #else
-    *(out++) = static_cast<uint8_t>(value);
-    *(out++) = static_cast<uint8_t>(value >> 8);
-    *(out++) = static_cast<uint8_t>(value >> 16);
-    *(out++) = static_cast<uint8_t>(value >> 24);
-    *(out++) = static_cast<uint8_t>(value >> 32);
-    *(out++) = static_cast<uint8_t>(value >> 40);
-    *(out++) = static_cast<uint8_t>(value >> 48);
-    *(out++) = static_cast<uint8_t>(value >> 56);
+    *reinterpret_cast<uint64_t *>(out) = value;
+    out += 8;
 #endif
   }
 
   static void encode_value(uint8_t *&out, const uint64_t value) { // NOLINT
-#if defined(__x86_64__) || defined(_M_X64)
-    *reinterpret_cast<uint64_t *>(out) = value;
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    *reinterpret_cast<uint64_t *>(out) = __builtin_bswap64(value);
     out += 8;
 #else
-    *(out++) = static_cast<uint8_t>(value);
-    *(out++) = static_cast<uint8_t>(value >> 8);
-    *(out++) = static_cast<uint8_t>(value >> 16);
-    *(out++) = static_cast<uint8_t>(value >> 24);
-    *(out++) = static_cast<uint8_t>(value >> 32);
-    *(out++) = static_cast<uint8_t>(value >> 40);
-    *(out++) = static_cast<uint8_t>(value >> 48);
-    *(out++) = static_cast<uint8_t>(value >> 56);
+    *reinterpret_cast<uint64_t *>(out) = value;
+    out += 8;
 #endif
   }
 };

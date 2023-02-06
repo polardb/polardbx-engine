@@ -117,8 +117,7 @@ public:
     flow_control_ = flow_control;
   }
 
-  // fixme: force disable chunk
-  inline void set_chunk_result(bool chunk) { chunk_result_ = false; }
+  inline void set_chunk_result(bool chunk) { chunk_result_ = chunk; }
 
   inline void set_feedback(bool feedback) { feedback_ = feedback; }
 };

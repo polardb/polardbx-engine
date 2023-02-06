@@ -260,8 +260,9 @@ public:
                      static_cast<google::protobuf::uint32>(encoded_length)) +
                  encoded_length);
 
+      m_encoder
+          ->template ensure_buffer_size<kMaxVarintBytes + kMaxVarint32Bytes>();
       m_encoder->template encode_field_delimited_header<tags::Chunk::columns>();
-      m_encoder->template ensure_buffer_size<kMaxVarint32Bytes>();
       m_encoder->encode_var_uint32(column_encoded_length);
       add_to_block(i, bitmap_length < max_bitmap_len);
       reset_block(i);
