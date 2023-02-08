@@ -182,6 +182,12 @@ class ha_innobase : public handler {
 
   int rnd_pos(uchar *buf, uchar *pos) override;
 
+  int sample_init() override;
+
+  int sample_end() override;
+
+  int sample_next(uchar *buf) override;
+
   int ft_init() override;
 
   void ft_end();

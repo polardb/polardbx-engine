@@ -2599,11 +2599,13 @@ void JOIN::adjust_access_methods() {
          from)
        2) Covering indexes are available
        3) This isn't a derived table/materialized view
+       4) Not sample hint (FIXME: index sampling can be supported)
       */
       if (!tab->table()->no_keyread &&                    //  1
           !tab->table()->covering_keys.is_clear_all() &&  //  2
-          !tl->uses_materialization())                    //  3
-      {
+          !tl->uses_materialization() &&                  //  3
+          !(thd->lex && thd->lex->opt_hints_global &&     //  4
+            thd->lex->opt_hints_global->sample_hint)) {
         /*
         It has turned out that the change commented out below, while speeding
         things up for disk-bound loads, slows them down for cases when the data

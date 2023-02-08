@@ -56,6 +56,7 @@
 #include "sql/composite_iterators.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
+#include "sql/derror.h"
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Ignore_error_handler
 #include "sql/filesort.h"       // filesort_free_buffers
@@ -74,6 +75,7 @@
 #include "sql/opt_explain.h"
 #include "sql/opt_explain_format.h"
 #include "sql/opt_hints.h"  // hint_key_state()
+#include "sql/opt_hints_ext.h"
 #include "sql/opt_range.h"  // QUICK_SELECT_I
 #include "sql/opt_trace.h"
 #include "sql/query_options.h"
@@ -563,6 +565,15 @@ bool Sql_cmd_select::prepare_inner(THD *thd) {
   }
   if (unit->prepare_limit(thd, parameters))
     return true; /* purecov: inspected */
+
+  // Recheck the semantics of sampling scan
+  if (lex->opt_hints_global && lex->opt_hints_global->sample_hint &&
+      check_sample_semantic(lex)) {
+    lex->opt_hints_global->sample_hint = nullptr;
+    push_warning(thd, Sql_condition::SL_WARNING,
+                 ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR,
+                 ER_THD(thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR));
+  }
 
   if (unit->is_simple()) {
     SELECT_LEX *const select = unit->first_select();

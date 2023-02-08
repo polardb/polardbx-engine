@@ -1611,6 +1611,34 @@ int ha_innopart::index_end() {
   return ha_innobase::index_end();
 }
 
+int ha_innopart::sample_init() {
+  if (m_sampling_method != enum_sampling_method::USER) {
+    return ha_innobase::sample_init();
+  }
+
+  auto ret = rnd_init(true);
+  if (ret == 0) {
+    m_prebuilt->sample->enable();
+  }
+  return ret;
+}
+
+int ha_innopart::sample_end() {
+  if (m_sampling_method != enum_sampling_method::USER) {
+    return ha_innobase::sample_end();
+  }
+
+  m_prebuilt->sample->reset();
+  return rnd_end();
+}
+
+int ha_innopart::sample_next(uchar *buf) {
+  if (m_sampling_method != enum_sampling_method::USER) {
+    return ha_innobase::sample_next(buf);
+  }
+  return rnd_next(buf);
+}
+
 /* Partitioning support functions. */
 
 /** Setup the ordered record buffer and the priority queue.

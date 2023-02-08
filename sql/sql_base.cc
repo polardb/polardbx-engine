@@ -3198,6 +3198,15 @@ retry_share : {
       return true;
     }
 
+    /* Sample scan not allowed for view */
+    if (thd->lex && thd->lex->opt_hints_global &&
+        thd->lex->opt_hints_global->sample_hint) {
+      thd->lex->opt_hints_global->sample_hint = nullptr;
+      push_warning(thd, Sql_condition::SL_WARNING,
+                   ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR,
+                   ER_THD(thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR));
+    }
+
     bool view_open_result = true;
     /*
       If parent_l of the table_list is non null then a merge table

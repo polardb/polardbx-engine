@@ -1631,6 +1631,8 @@ int Partition_helper::ph_rnd_next(uchar *buf) {
     m_part_spec.start_part = part_id;
     DBUG_PRINT("info", ("rnd_init on partition %d", part_id));
     if ((result = rnd_init_in_part(part_id, true))) break;
+
+    m_handler->on_switch_partition();
   }
 
 end:

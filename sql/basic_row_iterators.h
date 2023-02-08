@@ -78,6 +78,36 @@ class TableScanIterator final : public TableRowIterator {
   ha_rows *const m_examined_rows;
 };
 
+/**
+  Sample scan a table from beginning to end.
+
+  This is the most basic access method of a table using ha_sample_init,
+  ha_sample_next and ha_sample_end. No indexes are used.
+ */
+class TableSampleIterator final : public TableRowIterator {
+ public:
+  // Accepts nullptr for qep_tab; qep_tab is used only for setting up record
+  // buffers.
+  //
+  // The pushed condition can be nullptr.
+  //
+  // "examined_rows", if not nullptr, is incremented for each successful Read().
+  TableSampleIterator(THD *thd, TABLE *table, QEP_TAB *qep_tab,
+                    ha_rows *examined_rows, double sample_pct);
+  ~TableSampleIterator() override;
+
+  bool Init() override;
+  int Read() override;
+
+  std::vector<std::string> DebugString() const override;
+
+ private:
+  uchar *const m_record;
+  QEP_TAB *const m_qep_tab;
+  ha_rows *const m_examined_rows;
+  double m_sample_pct;
+};
+
 /** Perform a full index scan along an index. */
 template <bool Reverse>
 class IndexScanIterator final : public TableRowIterator {

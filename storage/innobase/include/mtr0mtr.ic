@@ -89,6 +89,27 @@ void mtr_t::release_s_latch_at_savepoint(ulint savepoint, rw_lock_t *lock) {
 #endif /* !UNIV_HOTBACKUP */
 }
 
+void mtr_t::release_sx_latch_at_savepoint(ulint savepoint, rw_lock_t *lock) {
+#ifndef UNIV_HOTBACKUP
+  ut_ad(is_active());
+  ut_ad(m_impl.m_magic_n == MTR_MAGIC_N);
+
+  ut_ad(m_impl.m_memo.size() > savepoint);
+
+  mtr_memo_slot_t *slot = m_impl.m_memo.at<mtr_memo_slot_t *>(savepoint);
+
+  ut_ad(slot->object == lock);
+  ut_ad(slot->type == MTR_MEMO_SX_LOCK);
+
+  rw_lock_sx_unlock(lock);
+
+  slot->object = NULL;
+#else  /* !UNIV_HOTBACKUP */
+  UT_NOT_USED(savepoint);
+  UT_NOT_USED(lock);
+#endif /* !UNIV_HOTBACKUP */
+}
+
 #ifndef UNIV_HOTBACKUP
 /**
 SX-latches the not yet latched block after a savepoint. */

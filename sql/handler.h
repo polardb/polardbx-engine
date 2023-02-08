@@ -711,7 +711,7 @@ enum enum_binlog_command {
   LOGCOM_DROP_DB,
 };
 
-enum class enum_sampling_method { SYSTEM };
+enum class enum_sampling_method { SYSTEM, USER };
 
 /* Bits in used_fields */
 #define HA_CREATE_USED_AUTO (1L << 0)
@@ -4176,6 +4176,7 @@ class handler {
 
   std::mt19937 m_random_number_engine;
   double m_sampling_percentage;
+  enum_sampling_method m_sampling_method;
 
  private:
   /** Internal state of the batch instrumentation. */
@@ -4388,6 +4389,7 @@ class handler {
   int ha_reset();
   /* this is necessary in many places, e.g. in HANDLER command */
   int ha_index_or_rnd_end() {
+    if (inited == SAMPLING) return ha_sample_end();
     return inited == INDEX ? ha_index_end() : inited == RND ? ha_rnd_end() : 0;
   }
   /**
@@ -4793,6 +4795,11 @@ class handler {
   */
 
   virtual bool is_fatal_error(int error);
+
+  /**
+    On switching partition for a partition table.
+  */
+  virtual void on_switch_partition() {}
 
  protected:
   virtual int multi_range_read_next(char **range_info);
@@ -6205,10 +6212,6 @@ class handler {
     return false;
   }
 
-  virtual int sample_init();
-  virtual int sample_next(uchar *buf);
-  virtual int sample_end();
-
   /**
    * Prepares secondary engine for loading a table.
    *
@@ -6259,6 +6262,10 @@ class handler {
   }
 
  protected:
+  virtual int sample_init();
+  virtual int sample_next(uchar *buf);
+  virtual int sample_end();
+
   virtual int index_read(uchar *buf MY_ATTRIBUTE((unused)),
                          const uchar *key MY_ATTRIBUTE((unused)),
                          uint key_len MY_ATTRIBUTE((unused)),

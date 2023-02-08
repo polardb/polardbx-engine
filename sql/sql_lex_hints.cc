@@ -117,6 +117,9 @@ void Hint_scanner::add_hint_token_digest() {
     case HINT_ARG_NUMBER:
       add_digest(NUM);
       break;
+    case HINT_ARG_FLOAT:
+      add_digest(FLOAT_NUM);
+      break;
     case HINT_ARG_IDENT:
       add_digest((peek_class() == HINT_CHR_AT) ? TOK_IDENT_AT : IDENT);
       break;
@@ -167,6 +170,7 @@ void Hint_scanner::add_hint_token_digest() {
           case RESOURCE_GROUP_HINT:
           case SKIP_SCAN_HINT:
           case NO_SKIP_SCAN_HINT:
+          case SAMPLE_PERCENTAGE_HINT:
           case HASH_JOIN_HINT:
           case NO_HASH_JOIN_HINT:
           case CCL_QUEUE_FIELD_HINT:

@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sys/types.h>
 
 #include "btr0pcur.h"
+#include "btr0sample.h"
 #include "data0data.h"
 #include "data0type.h"
 #include "db0err.h"
@@ -664,6 +665,8 @@ struct row_prebuilt_t {
                           in updates or deletes */
   btr_pcur_t *pcur;       /*!< persistent cursor used in selects
                           and updates */
+  btr_pcur_t *parent;     /*!< persistent cursor used in sampling */
+  btr_sample_t *sample;   /*!< samping information */
   btr_pcur_t *clust_pcur; /*!< persistent cursor used in
                           some selects and updates */
   que_fork_t *sel_graph;  /*!< dummy query graph used in

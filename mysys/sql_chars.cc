@@ -60,6 +60,7 @@ static void hint_lex_init_maps(CHARSET_INFO *cs,
   hint_map[(uchar)'/'] = HINT_CHR_SLASH;
   hint_map[(uchar)'\n'] = HINT_CHR_NL;
   hint_map[(uchar)'\''] = HINT_CHR_QUOTE;
+  hint_map[(uchar)'.'] = HINT_CHR_DOT;
 }
 
 bool init_state_maps(CHARSET_INFO *cs) {

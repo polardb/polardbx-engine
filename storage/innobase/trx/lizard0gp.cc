@@ -521,9 +521,7 @@ retry:
         /** 2.2. Already commit, judge it again */
       case TRX_STATE_COMMITTED_IN_MEMORY:
         ut_ad(looped == false);
-#ifdef UNIV_DEBUG
-        looped = true;
-#endif
+        ut_d(looped = true);
         goto retry;
 
         /** 2.3. Blocking trx is prepared, and its commit has been blocked */

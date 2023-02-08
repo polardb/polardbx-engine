@@ -214,6 +214,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0xa.h"
 #include "lizard0tcn.h"
 #include "clone0repl.h"
+#include "btr0sample.h"
 
 #ifndef UNIV_HOTBACKUP
 /** Stop printing warnings, if the count exceeds this threshold. */
@@ -10430,6 +10431,35 @@ int ha_innobase::rnd_pos(
   }
 
   return error;
+}
+
+int ha_innobase::sample_init() {
+  if (m_sampling_method != enum_sampling_method::USER) {
+    return handler::sample_init();
+  }
+
+  auto ret = rnd_init(true);
+  if (ret == 0) {
+    m_prebuilt->sample->enable();
+  }
+  return ret;
+}
+
+int ha_innobase::sample_end() {
+  if (m_sampling_method != enum_sampling_method::USER) {
+    return handler::sample_end();
+  }
+
+  m_prebuilt->sample->reset();
+  return rnd_end();
+}
+
+int ha_innobase::sample_next(uchar *buf) {
+  if (m_sampling_method != enum_sampling_method::USER) {
+    return handler::sample_next(buf);
+  }
+
+  return rnd_next(buf);
 }
 
 /** Initialize FT index scan
@@ -22753,6 +22783,11 @@ static MYSQL_SYSVAR_BOOL(cleanout_write_redo,
                          "whether to write redo log when cleanout",
                          NULL, NULL, FALSE);
 
+static MYSQL_SYSVAR_ULONG(sample_advise_pages, sample_advise_pages,
+                          PLUGIN_VAR_OPCMDARG,
+                          "advise number of leaves that sampling by block",
+                          NULL, NULL, 100, 0, UINT_MAX32, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -22994,6 +23029,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(write_non_innodb_gtids),
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),
+    MYSQL_SYSVAR(sample_advise_pages),
     NULL};
 
 mysql_declare_plugin(innobase){

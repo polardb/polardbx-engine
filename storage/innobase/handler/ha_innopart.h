@@ -981,6 +981,12 @@ class ha_innopart : public ha_innobase,
 
   int rnd_end() override { return (Partition_helper::ph_rnd_end()); }
 
+  int sample_init() override;
+
+  int sample_end() override;
+
+  int sample_next(uchar *buf) override;
+
   int external_lock(THD *thd, int lock_type) override;
 
   THR_LOCK_DATA **store_lock(THD *thd, THR_LOCK_DATA **to,
@@ -1127,6 +1133,10 @@ class ha_innopart : public ha_innobase,
                          enum ha_rkey_function find_flag) override {
     return (Partition_helper::ph_index_read_idx_map(buf, index, key,
                                                     keypart_map, find_flag));
+  }
+
+  virtual void on_switch_partition() override {
+    m_prebuilt->sample->on_switch_part();
   }
   /** @} */
 

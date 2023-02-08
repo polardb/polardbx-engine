@@ -21,6 +21,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/opt_hints.h"
+#include "sql/opt_hints_ext.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +39,7 @@
 #include "sql/mysqld.h"  // table_alias_charset
 #include "sql/nested_join.h"
 #include "sql/parse_tree_hints.h"
+#include "sql/parse_tree_hints_ext.h"
 #include "sql/set_var.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_const.h"
@@ -196,6 +198,8 @@ void Opt_hints_global::print_irregular_hints(const THD *thd, String *str) {
   if (sys_var_hint) sys_var_hint->print(thd, str);
 
   if (ccl_queue_hint) ccl_queue_hint->print(thd, str);
+
+  if (sample_hint) sample_hint->print(thd, str);
 }
 
 Opt_hints_qb::Opt_hints_qb(Opt_hints *opt_hints_arg, MEM_ROOT *mem_root_arg,
@@ -817,3 +821,5 @@ bool idx_merge_hint_state(const TABLE *table, bool *use_cheapest_index_merge) {
 
   return force_index_merge;
 }
+
+#include "opt_hints_ext.cc"

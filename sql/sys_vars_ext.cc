@@ -335,7 +335,7 @@ static Sys_var_bool Sys_innodb_current_snapshot_gcn(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 extern ulong opt_recovery_apply_binlog;
-static const char *recovery_apply_binlog_type_names[] = {"OFF", "ON", "SAME_AS_GTID"};
+static const char *recovery_apply_binlog_type_names[] = {"OFF", "ON", "SAME_AS_GTID", 0};
 static Sys_var_enum Sys_recovery_apply_binlog(
     "recovery_apply_binlog",
     "Applying binlog to generate the lost data at server startup. 0: OFF, 1: ON, 2:SAME_AS_GTID",

@@ -43,6 +43,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "btr0btr.h"
 #include "btr0cur.h"
+#include "btr0sample.h"
 #include "btr0sea.h"
 #include "buf0lru.h"
 #include "dict0boot.h"
@@ -3511,6 +3512,7 @@ static ibool sel_restore_position_for_mysql(
                           restoration */
     btr_pcur_t *pcur,     /*!< in: cursor whose position
                           has been stored */
+    row_prebuilt_t *prebuilt, /*< in: for sampling */
     ibool moves_up,       /*!< in: TRUE if the cursor moves up
                           in the index */
     mtr_t *mtr)           /*!< in: mtr; CAUTION: may commit
@@ -3518,7 +3520,12 @@ static ibool sel_restore_position_for_mysql(
 {
   ibool success;
 
-  success = btr_pcur_restore_position(latch_mode, pcur, mtr);
+  ut_ad(!prebuilt || prebuilt->pcur == pcur);
+
+  if (prebuilt && prebuilt->sample->enabled)
+    success = btr_sample_pcur_restore(prebuilt->sample, mtr);
+  else
+    success = btr_pcur_restore_position(latch_mode, pcur, mtr);
 
   *same_user_rec = success;
 
@@ -4537,6 +4544,9 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
 
   ut_ad(!pcur->m_cleanout_pages || pcur->m_cleanout_pages->is_empty());
 
+  ut_ad(!prebuilt->sample->enabled || index == index->table->first_index());
+  ut_ad(!prebuilt->sample->enabled || match_mode == 0);
+
   /* We don't support FTS queries from the HANDLER interfaces, because
   we implemented FTS as reversed inverted index with auxiliary tables.
   So anything related to traditional index query would not apply to
@@ -4922,7 +4932,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     }
 
     ibool need_to_process = sel_restore_position_for_mysql(
-        &same_user_rec, BTR_SEARCH_LEAF, pcur, moves_up, &mtr);
+        &same_user_rec, BTR_SEARCH_LEAF, pcur, prebuilt, moves_up, &mtr);
 
     if (UNIV_UNLIKELY(need_to_process)) {
       if (UNIV_UNLIKELY(prebuilt->row_read_type ==
@@ -4997,6 +5007,9 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
           goto lock_wait_or_error;
       }
     }
+  } else if (prebuilt->sample->enabled) {
+    ut_ad(mode == PAGE_CUR_G);
+    btr_sample_pcur_open(prebuilt->sample, index, &mtr);
   } else if (mode == PAGE_CUR_G || mode == PAGE_CUR_L) {
     btr_pcur_open_at_index_side(mode == PAGE_CUR_G, index, BTR_SEARCH_LEAF,
                                 pcur, false, 0, &mtr);
@@ -5925,7 +5938,7 @@ next_rec:
 
     if (!spatial_search &&
         sel_restore_position_for_mysql(&same_user_rec, BTR_SEARCH_LEAF, pcur,
-                                       moves_up, &mtr)) {
+                                       prebuilt, moves_up, &mtr)) {
       goto rec_loop;
     }
   }
@@ -5936,6 +5949,8 @@ next_rec:
     if (spatial_search) {
       move = rtr_pcur_move_to_next(search_tuple, mode, prebuilt->select_mode,
                                    pcur, 0, &mtr);
+    } else if (prebuilt->sample->enabled) {
+      move = btr_sample_pcur_next(prebuilt->sample, &mtr);
     } else {
       move = btr_pcur_move_to_next(pcur, &mtr);
     }
@@ -6004,7 +6019,7 @@ lock_table_wait:
 
     if (!dict_index_is_spatial(index)) {
       sel_restore_position_for_mysql(&same_user_rec, BTR_SEARCH_LEAF, pcur,
-                                     moves_up, &mtr);
+                                     prebuilt, moves_up, &mtr);
     }
 
     if (!same_user_rec && trx->allow_semi_consistent()) {

@@ -30,6 +30,7 @@
 #include "sql/derror.h"
 #include "sql/parse_tree_helpers.h"  // check_resource_group_name_len
 #include "sql/parse_tree_hints.h"
+#include "sql/parse_tree_hints_ext.h"
 #include "sql/parser_yystype.h"
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
@@ -95,10 +96,12 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 %token NO_SKIP_SCAN_HINT
 %token HASH_JOIN_HINT
 %token NO_HASH_JOIN_HINT
+%token SAMPLE_PERCENTAGE_HINT
 
 /* Other tokens */
 
 %token HINT_ARG_NUMBER
+%token HINT_ARG_FLOAT
 %token HINT_ARG_IDENT
 %token HINT_ARG_QB_NAME
 %token HINT_ARG_TEXT
@@ -129,6 +132,7 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
   set_var_hint
   resource_group_hint
   ccl_queue_hint
+  sample_percentage_hint
 
 %type <hint_list> hint_list
 
@@ -150,6 +154,7 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 %type <lexer.hint_string>
   HINT_ARG_IDENT
   HINT_ARG_NUMBER
+  HINT_ARG_FLOAT
   HINT_ARG_QB_NAME
   HINT_ARG_TEXT
   HINT_IDENT_OR_NUMBER_WITH_SCALE
@@ -204,6 +209,7 @@ hint:
         | set_var_hint
         | resource_group_hint
         | ccl_queue_hint
+        | sample_percentage_hint
         ;
 
 ccl_queue_hint:
@@ -218,6 +224,21 @@ ccl_queue_hint:
             $$= NEW_PTN im::PT_hint_ccl_queue(
                   im::Ccl_hint_type::CCL_HINT_QUEUE_VALUE, $3);
             if ($$ == NULL) YYABORT;
+          }
+        ;
+
+sample_percentage_hint:
+          SAMPLE_PERCENTAGE_HINT '(' HINT_ARG_FLOAT ')'
+          {
+            $$= NEW_PTN PT_hint_sample_percentage($3);
+            if ($$ == NULL)
+              YYABORT; // OOM
+          }
+        | SAMPLE_PERCENTAGE_HINT '(' HINT_ARG_NUMBER ')'
+          {
+            $$= NEW_PTN PT_hint_sample_percentage($3);
+            if ($$ == NULL)
+              YYABORT; // OOM
           }
         ;
 

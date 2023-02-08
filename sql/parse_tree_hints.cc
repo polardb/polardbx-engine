@@ -534,3 +534,5 @@ bool PT_hint_resource_group::contextualize(Parse_context *pc) {
       ->m_switch_resource_group_str[m_resource_group_name.length] = '\0';
   return false;
 }
+
+#include "parse_tree_hints_ext.cc"

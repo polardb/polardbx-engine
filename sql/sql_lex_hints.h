@@ -321,18 +321,31 @@ class Hint_scanner {
   }
 
   int scan_number_or_ident() {
+    bool is_float = false;
+    bool digit_found = false;
+
     for (;;) {
       switch (peek_class()) {
         case HINT_CHR_DIGIT:
+          digit_found = true;
           skip_byte();
           continue;
+        case HINT_CHR_DOT:
+          if (digit_found && !is_float) {
+            is_float = true;
+            skip_byte();
+            continue;
+          }
         case HINT_CHR_IDENT:
           return scan_scale_or_ident();
         case HINT_CHR_MB:
           return scan_ident();
         case HINT_CHR_EOF:
         default:
-          return HINT_ARG_NUMBER;
+          if (is_float)
+            return HINT_ARG_FLOAT;
+          else
+            return HINT_ARG_NUMBER;
       }
     }
   }

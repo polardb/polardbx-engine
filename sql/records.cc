@@ -51,6 +51,7 @@
 #include "sql/sql_tmp_table.h"
 #include "sql/table.h"
 #include "sql/timing_iterator.h"
+#include "sql/opt_hints_ext.h"
 
 using std::string;
 using std::vector;
@@ -258,6 +259,16 @@ unique_ptr_destroy_only<RowIterator> create_table_iterator(
         down_cast<FollowTailIterator *>(iterator.get());
     return iterator;
   } else {
+    if (thd->lex && thd->lex->opt_hints_global &&
+        thd->lex->opt_hints_global->sample_hint) {
+      DBUG_PRINT("info", ("using TableSampleIterator"));
+      DBUG_ASSERT(qep_tab->table_ref->select_lex == thd->lex->select_lex);
+
+      return NewIterator<TableSampleIterator>(
+          thd, table, qep_tab, examined_rows,
+          thd->lex->opt_hints_global->sample_hint->sample_pct());
+    }
+
     DBUG_PRINT("info", ("using TableScanIterator"));
     if (using_table_scan != nullptr) {
       *using_table_scan = true;
@@ -437,6 +448,70 @@ int TableScanIterator::Read() {
 vector<string> TableScanIterator::DebugString() const {
   DBUG_ASSERT(table()->file->pushed_idx_cond == nullptr);
   return {string("Table scan on ") + table()->alias +
+          table()->file->explain_extra()};
+}
+
+TableSampleIterator::TableSampleIterator(THD *thd, TABLE *table,
+                                         QEP_TAB *qep_tab,
+                                         ha_rows *examined_rows,
+                                         double sample_pct)
+    : TableRowIterator(thd, table),
+      m_record(table->record[0]),
+      m_qep_tab(qep_tab),
+      m_examined_rows(examined_rows),
+      m_sample_pct(sample_pct) {}
+
+TableSampleIterator::~TableSampleIterator() {
+  if (table()->file != nullptr) {
+    table()->file->ha_sample_end();
+  }
+}
+
+bool TableSampleIterator::Init() {
+  /*
+    Only attempt to allocate a record buffer the first time the handler is
+    initialized.
+  */
+  const bool first_init = !table()->file->inited;
+
+  std::random_device rd;
+  std::uniform_int_distribution<int> dist;
+  int sampling_seed = dist(rd);
+
+  DBUG_EXECUTE_IF("force_sampling", {
+    sampling_seed = 1;
+    m_sample_pct = 50.0;
+  });
+
+  int error = table()->file->ha_sample_init(m_sample_pct, sampling_seed,
+                                            enum_sampling_method::USER);
+  if (error) {
+    PrintError(error);
+    return true;
+  }
+
+  if (first_init && set_record_buffer(m_qep_tab))
+    return true; /* purecov: inspected */
+
+  return false;
+}
+
+int TableSampleIterator::Read() {
+  int tmp;
+  while ((tmp = table()->file->ha_sample_next(m_record))) {
+    return HandleError(tmp);
+  }
+
+  if (m_examined_rows != nullptr) {
+    ++*m_examined_rows;
+  }
+
+  return 0;
+}
+
+vector<string> TableSampleIterator::DebugString() const {
+  DBUG_ASSERT(table()->file->pushed_idx_cond == nullptr);
+  return {string("Table sampling scan on ") + table()->alias +
           table()->file->explain_extra()};
 }
 

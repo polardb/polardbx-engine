@@ -840,6 +840,7 @@ Max size Secondary index: 16 * 8 bytes + PK = 256 bytes. */
    + (mysql_row_len < 256 ? mysql_row_len : 0) +                            \
    DTUPLE_EST_ALLOC(table->get_n_cols() + dict_table_get_n_v_cols(table)) + \
    sizeof(que_fork_t) + sizeof(que_thr_t) + sizeof(*prebuilt->pcur) +       \
+   sizeof(*prebuilt->parent) + sizeof(*prebuilt->sample) +                   \
    sizeof(*prebuilt->clust_pcur))
 
   /* Calculate size of key buffer used to store search key in
@@ -898,6 +899,8 @@ Max size Secondary index: 16 * 8 bytes + PK = 256 bytes. */
 
   prebuilt->pcur = static_cast<btr_pcur_t *>(
       mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
+  prebuilt->parent = static_cast<btr_pcur_t *>(
+      mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
   prebuilt->clust_pcur = static_cast<btr_pcur_t *>(
       mem_heap_zalloc(prebuilt->heap, sizeof(btr_pcur_t)));
 
@@ -922,7 +925,12 @@ Max size Secondary index: 16 * 8 bytes + PK = 256 bytes. */
   new (prebuilt->clust_pcur->m_cleanout_cursors) lizard::Cleanout_cursors();
 
   btr_pcur_reset(prebuilt->pcur);
+  btr_pcur_reset(prebuilt->parent);
   btr_pcur_reset(prebuilt->clust_pcur);
+
+  prebuilt->sample = static_cast<btr_sample_t *>(
+      mem_heap_zalloc(prebuilt->heap, sizeof(btr_sample_t)));
+  prebuilt->sample->init(prebuilt);
 
   prebuilt->select_lock_type = LOCK_NONE;
   prebuilt->select_mode = SELECT_ORDINARY;
@@ -987,6 +995,7 @@ void row_prebuilt_free(
   ut_a(!prebuilt->is_reading_range());
 
   btr_pcur_reset(prebuilt->pcur);
+  btr_pcur_reset(prebuilt->parent);
   btr_pcur_reset(prebuilt->clust_pcur);
 
   prebuilt->pcur->m_cleanout_pages->~Cleanout_pages();
