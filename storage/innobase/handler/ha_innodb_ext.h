@@ -19,4 +19,9 @@
 
 #include "handler.h"
 
+struct trx_t;
+
 extern void innobase_init_ext(handlerton *innobase_hton);
+extern bool xa_compare_xid_between_thd_and_trx(const THD *thd,
+                                               const trx_t *trx);
+

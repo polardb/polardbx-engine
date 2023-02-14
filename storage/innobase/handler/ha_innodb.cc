@@ -19601,6 +19601,9 @@ static int innobase_xa_prepare(handlerton *hton, /*!< in: InnoDB handlerton */
 
   if (prepare_trx ||
       (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))) {
+
+    ut_a(xa_compare_xid_between_thd_and_trx(thd, trx));
+
     /* We were instructed to prepare the whole transaction, or
     this is an SQL statement end and autocommit is on */
 
