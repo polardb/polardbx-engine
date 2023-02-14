@@ -98,4 +98,13 @@ extern bool thd_get_transaction_group(THD *thd);
 
 #endif  // defined UNIV_DEBUG || defined LIZARD_DEBUG
 
+/**
+  Hash the XID to an integer.
+
+  @params[in] xid
+
+  @retval hash value.
+*/
+std::size_t hash_xid(const XID *xid);
+
 #endif

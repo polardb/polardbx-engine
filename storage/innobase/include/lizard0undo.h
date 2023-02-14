@@ -453,6 +453,16 @@ void trx_assign_txn_rseg(trx_t *trx);
   @return           DB_SUCCESS  Success
 */
 dberr_t trx_always_assign_txn_undo(trx_t *trx);
+
+/**
+  If during an external XA, check whether the mapping relationship between XID
+  and rollback segment is as expected.
+
+  @param[in]        trx         current transaction
+
+  @return           true        if success
+*/
+bool txn_check_xid_rseg_mapping(const trx_t *trx);
 /*-----------------------------------------------------------------------------*/
 /**
   Init the txn description as NULL initial value.

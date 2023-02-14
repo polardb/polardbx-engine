@@ -201,6 +201,8 @@ static void trx_init(trx_t *trx) {
 
   trx->rsegs.m_txn.rseg = nullptr;
 
+  trx->rsegs.m_txn.xid.reset();
+
   trx->read_only = false;
 
   trx->auto_commit = false;
@@ -2402,6 +2404,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
     trx_undo_insert_cleanup(&trx->rsegs.m_redo, false);
   }
 
+  /** TODO: Fix the compile warning. <20-06-23, zanye.zjy> */
   memset(&trx->rsegs, 0x0, sizeof(trx->rsegs));
   trx->undo_no = 0;
   trx->undo_rseg_space = 0;

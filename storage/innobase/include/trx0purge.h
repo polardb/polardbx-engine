@@ -547,6 +547,29 @@ struct Tablespace {
     return (rseg);
   }
 
+  /**
+    Check if the txn rseg is the expected one.
+
+    @params[in]   slot            The slot of rseg in the tablespace.
+    @params[in]   expected_rseg   Expected rollback segment
+
+    @retval       true if the rseg in the **slot** is matched with the
+                  expect_rseg.
+  */
+  bool compare_rseg(ulint slot, const trx_rseg_t *expect_rseg) {
+    bool match = false;
+    m_rsegs->s_lock();
+
+    ut_ad(is_txn());
+    ut_ad(m_rsegs->is_active());
+
+    trx_rseg_t *rseg = m_rsegs->at(slot);
+    match = (rseg == expect_rseg);
+
+    m_rsegs->s_unlock();
+    return match;
+  }
+
   /** Return whether the undo tablespace is inactive due to
   implicit selection by the purge thread.
   @return true if marked for truncation by the purge thread */

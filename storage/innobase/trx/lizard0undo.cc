@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql_plugin_var.h"
 #include "sql_error.h"
+#include "sql_class.h"
 
 #include "lizard0scn.h"
 #include "lizard0sys.h"
@@ -692,13 +693,147 @@ static trx_rseg_t *get_next_txn_rseg() {
 }
 
 /**
+  Map(Hash) XID to {txn_space_slot, rseg_slot}.
+
+  NOTES: If truncate TXN, this mapping relationship will be destroyed.
+         Fortunately, truncate of TXN tablespace is not supported for
+         now.
+
+  @retval     {txn_space_slot, rseg_slot}
+*/
+static txn_space_rseg_slot_t get_txn_space_and_rseg_slot_by_xid(const XID *xid) {
+  ut_ad(undo::spaces->own_latch());
+
+  size_t current = hash_xid(xid);
+
+  size_t n_rollback_segments = srv_rollback_segments;
+  /** Lizard : didn't support variable of rollback segment count */
+  ut_a(FSP_MAX_ROLLBACK_SEGMENTS == srv_rollback_segments);
+
+  size_t target_undo_tablespaces = FSP_IMPLICIT_TXN_TABLESPACES;
+  /** Notes: didn't need undo::spaces->s_lock() */
+  ut_ad(txn_spaces.size() == FSP_IMPLICIT_TXN_TABLESPACES);
+
+  size_t window = current % (target_undo_tablespaces * n_rollback_segments);
+  size_t space_slot = window % target_undo_tablespaces;
+  size_t rseg_slot = window / target_undo_tablespaces;
+
+  return {space_slot, rseg_slot};
+}
+
+/**
+  Get a TXN rseg by XID.
+
+  @retval     rollback segment
+*/
+static trx_rseg_t *get_txn_rseg_by_xid(const XID *xid) {
+  txn_space_rseg_slot_t txn_slot;
+
+  /* The number of undo tablespaces cannot be changed while
+  we have this s_lock. */
+  undo::spaces->s_lock();
+
+  txn_slot = get_txn_space_and_rseg_slot_by_xid(xid);
+
+  undo::Tablespace *undo_space;
+  trx_rseg_t *rseg = nullptr;
+
+  undo_space = txn_spaces.at(txn_slot.space_slot);
+  ut_ad(undo_space->is_active());
+  ut_ad(undo_space->is_txn());
+
+  /** NOTES: Truncate of txn is not supported, so always active for now. */
+  rseg = undo_space->get_active(txn_slot.rseg_slot);
+  ut_a(rseg);
+
+  undo::spaces->s_unlock();
+
+  ut_ad(rseg->trx_ref_count > 0);
+
+  return (rseg);
+}
+
+/**
+  Check if the txn rseg is the expected one.
+
+  @params[in]   xid             The XID of the transaction.
+  @params[in]   expected_rseg   Expected rollback segment
+
+  @retval       true if the the rseg mapped by the XID is matched with the
+                expect_rseg.
+*/
+static bool is_txn_rseg_exepected(const XID *xid,
+                                  const trx_rseg_t *expect_rseg) {
+  txn_space_rseg_slot_t txn_slot;
+  bool match;
+
+  ut_ad(expect_rseg != nullptr);
+
+  /* The number of undo tablespaces cannot be changed while
+  we have this s_lock. */
+  undo::spaces->s_lock();
+
+  txn_slot = get_txn_space_and_rseg_slot_by_xid(xid);
+
+  undo::Tablespace *undo_space;
+
+  undo_space = txn_spaces.at(txn_slot.space_slot);
+  ut_ad(undo_space->is_active());
+  ut_ad(undo_space->is_txn());
+
+  match = undo_space->compare_rseg(txn_slot.rseg_slot, expect_rseg);
+
+  undo::spaces->s_unlock();
+
+  ut_ad(expect_rseg->trx_ref_count > 0);
+
+  return match;
+}
+
+/**
+  If during an external XA, check whether the mapping relationship between XID
+  and rollback segment is as expected.
+
+  @param[in]        trx         current transaction
+
+  @return           true        if success
+*/
+bool txn_check_xid_rseg_mapping(const trx_t *trx) {
+  const txn_undo_ptr_t *undo_ptr = &trx->rsegs.m_txn;
+
+  ut_ad(trx_is_txn_rseg_updated(trx));
+  ut_ad(mutex_own(&undo_ptr->rseg->mutex));
+
+  if (!undo_ptr->xid.is_null()) {
+    ut_a(undo_ptr->xid.eq(trx->xid));
+    ut_a(is_txn_rseg_exepected(&undo_ptr->xid, undo_ptr->rseg));
+  }
+
+  return true;
+}
+
+/**
   Always assign transaction rollback segment for trx
   @param[in]      trx
 */
 void trx_assign_txn_rseg(trx_t *trx) {
   ut_ad(trx->rsegs.m_txn.rseg == nullptr);
 
-  trx->rsegs.m_txn.rseg = srv_read_only_mode ? nullptr : get_next_txn_rseg();
+  XID &xid = trx->rsegs.m_txn.xid;
+  ut_a(xid.is_null());
+
+  if (!trx->internal && trx->mysql_thd &&
+      trx->mysql_thd->get_transaction()->xid_state()->check_in_xa(false)) {
+    thd_get_xid(trx->mysql_thd, (MYSQL_XID *)(&xid));
+  }
+
+  if (srv_read_only_mode) {
+    trx->rsegs.m_txn.rseg = nullptr;
+  } else if (xid.is_null()) {
+    trx->rsegs.m_txn.rseg = get_next_txn_rseg();
+  } else {
+    trx->rsegs.m_txn.rseg = get_txn_rseg_by_xid(&xid);
+  }
 }
 
 /**
@@ -1369,6 +1504,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
   rseg->trx_ref_count++;
   trx->rsegs.m_txn.rseg = rseg;
   trx->rsegs.m_txn.txn_undo = undo;
+  trx->rsegs.m_txn.xid = undo->xid;
 
   undo_addr.state = false;
   undo_addr.space_id = undo->space;

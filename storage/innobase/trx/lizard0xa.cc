@@ -110,3 +110,26 @@ void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
 
   trx_sys_mutex_exit();
 }
+
+/** The following function, which is really good to hash different fields, is
+copyed from boost::hash_combine. */
+template <class T>
+static inline void hash_combine(std::size_t &s, const T &v) {
+  std::hash<T> h;
+  s ^= h(v) + 0x9e3779b9 + (s << 6) + (s >> 2);
+}
+
+std::size_t hash_xid(const XID *xid) {
+  std::size_t res = 0;
+  auto formatID = xid->get_format_id();
+  const char *data = xid->get_data();
+  std::string gtrid(data, xid->get_gtrid_length());
+  std::string bqual(data + xid->get_gtrid_length(), xid->get_bqual_length());
+
+  hash_combine(res, formatID);
+  hash_combine(res, gtrid);
+  hash_combine(res, bqual);
+
+  return res;
+}
+
