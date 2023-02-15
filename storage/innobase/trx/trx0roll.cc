@@ -1014,6 +1014,9 @@ static que_thr_t *trx_rollback_start(trx_t *trx, ib_id_t roll_limit,
 /** Finishes a transaction rollback. */
 static void trx_rollback_finish(trx_t *trx) /*!< in: transaction */
 {
+  ut_a(trx->is_rollback == false);
+  trx->is_rollback = true;
+
   trx_commit(trx);
 
   trx->mod_tables.clear();

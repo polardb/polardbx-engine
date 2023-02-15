@@ -1273,6 +1273,9 @@ struct trx_t {
 
   /** Commit cleanout cursors */
   lizard::Cleanout_cursors *cleanout_cursors;
+
+  /** Lizard-3.0: true if the finished state is rollback */
+  bool is_rollback;
 };
 #ifndef UNIV_HOTBACKUP
 
