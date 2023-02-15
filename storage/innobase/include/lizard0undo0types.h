@@ -219,6 +219,7 @@ struct txn_index_t {
 
 /** The struct of transaction undo for UBA */
 struct txn_undo_ptr_t {
+  // XID will be actively and explicitly initialized
   txn_undo_ptr_t() : rseg(nullptr), txn_undo(nullptr), xid() {}
   /** Rollback segment in txn space */
   trx_rseg_t *rseg;
@@ -285,8 +286,12 @@ struct txn_undo_hdr_t {
   /** txn undo header state: TXN_UNDO_LOG_ACTIVE, TXN_UNDO_LOG_COMMITED,
   or TXN_UNDO_LOG_PURGED */
   ulint state;
+  /** flags of the TXN. For example: 0x01 means rollback. */
+  ulint flags;
   /** A flag determining how to explain the txn extension */
   ulint ext_flag;
+  /** Returns true if the transaction was eventually rolled back. */
+  bool is_rollback() const;
 };
 
 struct txn_lookup_t {

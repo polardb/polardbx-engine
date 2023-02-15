@@ -104,12 +104,14 @@ struct SYS_VAR;
 #define TXN_UNDO_PREV_GCN (TXN_UNDO_PREV_UTC + 8)
 /* Undo log state */
 #define TXN_UNDO_LOG_STATE (TXN_UNDO_PREV_GCN + 8)
+/* Transaction finished state: commit, rollback */
+#define TXN_UNDO_LOG_FLAGS (TXN_UNDO_LOG_STATE + 2)
 /* Flag how to use reserved space */
-#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_STATE + 2)
+#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_FLAGS + 2)
 /* Unused space */
 #define TXN_UNDO_LOG_EXT_RESERVED (TXN_UNDO_LOG_EXT_FLAG + 1)
 /* Unused space size */
-#define TXN_UNDO_LOG_EXT_RESERVED_LEN 34
+#define TXN_UNDO_LOG_EXT_RESERVED_LEN 32
 /* txn undo log header size */
 #define TXN_UNDO_LOG_EXT_HDR_SIZE \
   (TXN_UNDO_LOG_EXT_RESERVED + TXN_UNDO_LOG_EXT_RESERVED_LEN)
@@ -127,6 +129,9 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
 #define TXN_UNDO_LOG_ACTIVE   1
 #define TXN_UNDO_LOG_COMMITED 2
 #define TXN_UNDO_LOG_PURGED   3
+
+/* Finish state of the transaction. */
+#define TXN_UNDO_LOG_FLAGS_ROLLBACK 0x01
 
 namespace lizard {
 
@@ -658,6 +663,19 @@ bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
 
 /** Add the rseg into the purge queue heap */
 void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem);
+
+/** Set TXN_UNDO_LOG_FLAGS on txn undo log header.
+@param[in, out] log_hdr txn undo log header
+@param[in]      flags   flags
+@param[in, out] mtr     mini transaction */
+inline void txn_undo_set_flags(trx_ulogf_t *log_hdr, ulint flags, mtr_t *mtr) {
+  ulint new_flags;
+  ulint old_flags;
+  old_flags = mtr_read_ulint(log_hdr + TXN_UNDO_LOG_FLAGS, MLOG_2BYTES, mtr);
+  new_flags = old_flags | flags;
+
+  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_FLAGS, new_flags, MLOG_2BYTES, mtr);
+}
 
 /** Set txn undo log state.
 @param[in,out]  log_hdr undo log header

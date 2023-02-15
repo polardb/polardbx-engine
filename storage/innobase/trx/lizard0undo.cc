@@ -108,6 +108,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 mysql_pfs_key_t lizard_undo_retention_mutex_key;
 #endif
 
+/* txn_undo_hdr_t related */
+/*-----------------------------------------------------------------------------*/
+bool txn_undo_hdr_t::is_rollback() const {
+  return flags & TXN_UNDO_LOG_FLAGS_ROLLBACK;
+}
+
 namespace lizard {
 
 /** The max percent of txn undo page that can be reused */
@@ -520,6 +526,9 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
   txn_undo_set_state_at_init(log_hdr, mtr);
 
   /* Write the txn undo extension flag */
+  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_FLAGS, 0, MLOG_2BYTES, mtr);
+
+  /* Write the txn undo extension flag */
   mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, 0, MLOG_1BYTE, mtr);
 
   ut_a(undo->flag == 0);
@@ -643,6 +652,12 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
 
   txn_undo_hdr->state = mtr_read_ulint(undo_header + TXN_UNDO_LOG_STATE,
                                        MLOG_2BYTES, mtr);
+
+  txn_undo_hdr->flags =
+      mtr_read_ulint(undo_header + TXN_UNDO_LOG_FLAGS, MLOG_2BYTES, mtr);
+  if (txn_undo_hdr->state == TXN_UNDO_LOG_ACTIVE) {
+    ut_a(!txn_undo_hdr->is_rollback());
+  }
 
   txn_undo_hdr->ext_flag =
       mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
@@ -2091,6 +2106,7 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
           TXN_MAGIC_N,
           {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED},
           TXN_UNDO_LOG_PURGED,
+          0,
           0,
       };
       txn_rec->scn = SCN_UNDO_CORRUPTED;
