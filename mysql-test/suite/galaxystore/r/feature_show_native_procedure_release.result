@@ -7,21 +7,35 @@ dbms_ccl	flush_ccl_queue	ADMIN_PROC	NULL
 dbms_ccl	flush_ccl_rule	ADMIN_PROC	NULL
 dbms_ccl	show_ccl_queue	ADMIN_PROC	NULL
 dbms_ccl	show_ccl_rule	ADMIN_PROC	NULL
-dbms_jemalloc	profile	ADMIN_PROC	NULL
-dbms_keyring	current_key_id	ADMIN_PROC	NULL
-dbms_keyring	generate_key	ADMIN_PROC	NULL
+dbms_consensus	add_follower	ADMIN_PROC	VARCHAR
+dbms_consensus	add_learner	ADMIN_PROC	VARCHAR
+dbms_consensus	change_leader	ADMIN_PROC	VARCHAR
+dbms_consensus	configure_follower	ADMIN_PROC	VARCHAR, LONGLONG, LONGLONG
+dbms_consensus	configure_learner	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG
+dbms_consensus	downgrade_follower	ADMIN_PROC	VARCHAR
+dbms_consensus	drop_learner	ADMIN_PROC	VARCHAR
+dbms_consensus	drop_prefetch_channel	ADMIN_PROC	LONGLONG
+dbms_consensus	fix_cluster_id	ADMIN_PROC	LONGLONG
+dbms_consensus	fix_matchindex	ADMIN_PROC	VARCHAR, LONGLONG
+dbms_consensus	force_purge_log	ADMIN_PROC	LONGLONG
+dbms_consensus	force_single_mode	ADMIN_PROC	NULL
+dbms_consensus	local_purge_log	ADMIN_PROC	LONGLONG
+dbms_consensus	purge_log	ADMIN_PROC	LONGLONG
+dbms_consensus	refresh_learner_meta	ADMIN_PROC	NULL
+dbms_consensus	show_cluster_global	ADMIN_PROC	NULL
+dbms_consensus	show_cluster_local	ADMIN_PROC	NULL
+dbms_consensus	show_logs	ADMIN_PROC	NULL
+dbms_consensus	upgrade_learner	ADMIN_PROC	VARCHAR
 dbms_outln	add_index_outline	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG, VARCHAR, VARCHAR, VARCHAR, VARCHAR
 dbms_outln	add_optimizer_outline	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG, VARCHAR, VARCHAR
 dbms_outln	del_outline	ADMIN_PROC	LONGLONG
 dbms_outln	flush_outline	ADMIN_PROC	NULL
 dbms_outln	preview_outline	ADMIN_PROC	VARCHAR, VARCHAR
 dbms_outln	show_outline	ADMIN_PROC	NULL
-dbms_proxy	add_proxy_protocol_networks	ADMIN_PROC	VARCHAR
-dbms_proxy	clear_proxy_protocol_networks	ADMIN_PROC	NULL
-dbms_proxy	push_transaction_information	ADMIN_PROC	VARCHAR, LONGLONG
-dbms_proxy	set_current_connection	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG, LONGLONG, LONGLONG
-dbms_proxy	show_actual_processlist	ADMIN_PROC	NULL
-dbms_proxy	show_proxy_protocol_networks	ADMIN_PROC	NULL
 dbms_recycle	purge_table	ADMIN_PROC	VARCHAR
+dbms_recycle	restore_table	ADMIN_PROC	VARCHAR, VARCHAR, VARCHAR / VARCHAR
 dbms_recycle	show_tables	ADMIN_PROC	NULL
 dbms_trans	returning	TRANS_PROC	VARCHAR, VARCHAR
+dbms_trans	rollback_to_implicit_savepoint	TRANS_PROC	NULL
+dbms_tso	get_timestamp	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG
+xrpc	perf_hist	ADMIN_PROC	VARCHAR

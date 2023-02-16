@@ -1,6 +1,4 @@
 --source include/have_nodebug.inc
-<<<<<<< HEAD
-=======
 
 ## skip asan
 --let $_outfile= $MYSQLTEST_VARDIR/tmp/is_asan.tmp
@@ -15,5 +13,4 @@ if (`SELECT @is_asan = 1`)
    --skip skip under asan
 }
 
->>>>>>> 03b9585d72e... fix mtr test of feature_show_native_procedure_release
 call dbms_admin.show_native_procedure();
