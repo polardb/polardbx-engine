@@ -2476,6 +2476,7 @@ void dd_import_instant_add_columns(const dict_table_t *table,
 
     fn(DATA_SCN_ID, "DB_SCN_ID");
     fn(DATA_UNDO_PTR, "DB_UNDO_PTR");
+    fn(DATA_GCN_ID, "DB_GCN_ID");
   }
 
   ut_d(validate_dropped_col_metadata(dd_table, table));
@@ -3592,6 +3593,7 @@ static inline void fill_dict_columns(const Table *dd_table, const TABLE *m_form,
     /** Read physical pos for lizard columns */
     fn(DATA_SCN_ID, "DB_SCN_ID");
     fn(DATA_UNDO_PTR, "DB_UNDO_PTR");
+    fn(DATA_GCN_ID, "DB_GCN_ID");
   }
 
   /* If table has INSTANT DROP columns, add them now. */

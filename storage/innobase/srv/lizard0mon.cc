@@ -108,10 +108,6 @@ static void export_lizard_status(void) {
   lizard_vars.block_tcn_cache_miss = lizard_stats.block_tcn_cache_miss;
   lizard_vars.block_tcn_cache_evict = lizard_stats.block_tcn_cache_evict;
 
-  lizard_vars.session_tcn_cache_hit = lizard_stats.session_tcn_cache_hit;
-  lizard_vars.session_tcn_cache_miss = lizard_stats.session_tcn_cache_miss;
-  lizard_vars.session_tcn_cache_evict = lizard_stats.session_tcn_cache_evict;
-
   lizard_vars.global_tcn_cache_hit = lizard_stats.global_tcn_cache_hit;
   lizard_vars.global_tcn_cache_miss = lizard_stats.global_tcn_cache_miss;
   lizard_vars.global_tcn_cache_evict = lizard_stats.global_tcn_cache_evict;
@@ -319,15 +315,6 @@ static SHOW_VAR lizard_status_variables[] = {
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"block_tcn_cache_evict", (char *)&lizard_vars.block_tcn_cache_evict,
-     SHOW_LONG, SHOW_SCOPE_GLOBAL},
-
-    {"session_tcn_cache_hit", (char *)&lizard_vars.session_tcn_cache_hit,
-     SHOW_LONG, SHOW_SCOPE_GLOBAL},
-
-    {"session_tcn_cache_miss", (char *)&lizard_vars.session_tcn_cache_miss,
-     SHOW_LONG, SHOW_SCOPE_GLOBAL},
-
-    {"session_tcn_cache_evict", (char *)&lizard_vars.session_tcn_cache_evict,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"global_tcn_cache_hit", (char *)&lizard_vars.global_tcn_cache_hit,

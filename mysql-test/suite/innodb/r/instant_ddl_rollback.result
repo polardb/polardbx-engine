@@ -7,7 +7,7 @@
 CREATE TABLE t1(id INT PRIMARY KEY, c1 VARCHAR(4000), c2 VARCHAR(4000), c3 VARCHAR(1000)) ROW_FORMAT=REDUNDANT;;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	9	0	0
+test/t1	10	0	0
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -25,7 +25,7 @@ id	LEFT(c1 , 10)	LEFT(c2, 10)	c3
 ALTER TABLE t1 ADD COLUMN c4 VARCHAR(500) NOT NULL DEFAULT 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', ALGORITHM=INSTANT;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	10	0	1
+test/t1	11	0	1
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -65,7 +65,7 @@ id	LEFT(c1 , 10)	LEFT(c2, 10)	c3	LEFT(c4, 10)
 ALTER TABLE t1 DROP COLUMN c3, ALGORITHM=INSTANT;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	9	0	2
+test/t1	10	0	2
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -112,7 +112,7 @@ DROP TABLE t1;
 CREATE TABLE t1(id INT PRIMARY KEY, c1 VARCHAR(4000), c2 VARCHAR(4000), c3 VARCHAR(1000)) ROW_FORMAT=DYNAMIC;;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	9	0	0
+test/t1	10	0	0
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -130,7 +130,7 @@ id	LEFT(c1 , 10)	LEFT(c2, 10)	c3
 ALTER TABLE t1 ADD COLUMN c4 VARCHAR(500) NOT NULL DEFAULT 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', ALGORITHM=INSTANT;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	10	0	1
+test/t1	11	0	1
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -170,7 +170,7 @@ id	LEFT(c1 , 10)	LEFT(c2, 10)	c3	LEFT(c4, 10)
 ALTER TABLE t1 DROP COLUMN c3, ALGORITHM=INSTANT;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	9	0	2
+test/t1	10	0	2
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -217,7 +217,7 @@ DROP TABLE t1;
 CREATE TABLE t1(id INT PRIMARY KEY, c1 VARCHAR(4000), c2 VARCHAR(4000), c3 VARCHAR(1000)) ROW_FORMAT=COMPACT;;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	9	0	0
+test/t1	10	0	0
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -235,7 +235,7 @@ id	LEFT(c1 , 10)	LEFT(c2, 10)	c3
 ALTER TABLE t1 ADD COLUMN c4 VARCHAR(500) NOT NULL DEFAULT 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', ALGORITHM=INSTANT;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	10	0	1
+test/t1	11	0	1
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0
@@ -275,7 +275,7 @@ id	LEFT(c1 , 10)	LEFT(c2, 10)	c3	LEFT(c4, 10)
 ALTER TABLE t1 DROP COLUMN c3, ALGORITHM=INSTANT;
 # Metadata from INFORMATION_SCHEMA.TABLES
 NAME	N_COLS	INSTANT_COLS	TOTAL_ROW_VERSIONS
-test/t1	9	0	2
+test/t1	10	0	2
 # Metadata from INFORMATION_SCHEMA.COLUMNS
 NAME	POS	MTYPE	PRTYPE	HAS_DEFAULT
 id	0	6	1283	0

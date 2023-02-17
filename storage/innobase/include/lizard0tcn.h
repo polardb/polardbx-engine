@@ -43,14 +43,8 @@ struct trx_t;
 struct btr_pcur_t;
 struct dict_index_t;
 
-enum tcn_cache_level { BLOCK_LEVEL = 0, SESSION_LEVEL, GLOBAL_LEVEL };
+enum tcn_cache_level { NONE_LEVEL = 0, GLOBAL_LEVEL, BLOCK_LEVEL };
 enum tcn_block_cache_type { BLOCK_LRU = 0, BLOCK_RANDOM };
-enum tcn_fill_result {
-  TCN_ALREADY_FILLED = 0,
-  TCN_FILLED_FROM_CACHE,
-  TCN_FILLED_FROM_UNDO,
-  TCN_NOT_FILLED
-};
 
 namespace lizard {
 
@@ -145,55 +139,28 @@ template bool iv_hash_insert(iv_hash_t<tcn_node_t, LRU_TCN_SIZE> *hash,
 template bool iv_hash_insert(iv_hash_t<tcn_node_t, SESSION_TCN_SIZE> *hash,
                              tcn_node_t *elem);
 
-bool trx_search_tcn(trx_t *trx, btr_pcur_t *pcur, txn_rec_t *txn_rec,
+bool trx_search_tcn(txn_rec_t *txn_rec, btr_pcur_t *pcur,
                     txn_lookup_t *txn_lookup);
 
-void trx_cache_tcn(trx_t *trx, trx_id_t trx_id, txn_rec_t &txn_rec,
-                   const rec_t *rec, const dict_index_t *index,
-                   const ulint *offsets, btr_pcur_t *pcur);
+void trx_cache_tcn(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
+                   const dict_index_t *index, const ulint *offsets,
+                   btr_pcur_t *pcur);
 
 void trx_cache_tcn(trx_t *trx);
 
 extern Cache_tcn *global_tcn_cache;
 
-
-
-/**
-  Filling txn_rec/txn_lookup as follows:
-  1. if txn_rec has been filled, skip doing it 
-  2. search scn/gcn from tcn cache.
-  3. find scn/gcn from txn_undo  
-
-
-  @param[in]       trx      input trx for cache  
-  @param[in]       pcur     input cusor for cache
-  @param[in/out]   txn_rec  txn_rec obj for filling   
-
-  @retval  enum tcn_fill_result
-*/
-tcn_fill_result fill_txn_rec(trx_t *trx, btr_pcur_t *pcur, txn_rec_t *txn_rec,
-                             txn_lookup_entry entry);
-
-tcn_fill_result fill_txn_rec_and_txn_lookup(trx_t *trx, btr_pcur_t *pcur,
-                                            txn_rec_t *txn_rec,
-                                            txn_lookup_t *txn_lookup,
-                                            txn_lookup_entry entry);
-
-tcn_fill_result fill_txn_rec_and_txn_lookup_low(trx_t *trx, btr_pcur_t *pcur,
-                                                txn_rec_t *txn_rec,
-                                                txn_lookup_t *txn_lookup,
-                                                txn_lookup_entry entry);
 }  // namespace lizard
 
-#define TCN_CACHE_AGGR(TYPE, WHAT)  \
-  do {                              \
-    if (!lizard::stat_enabled) break;\
-    if (TYPE == BLOCK_LEVEL)        \
-      BLOCK_TCN_CACHE_##WHAT;       \
-    else if (TYPE == SESSION_LEVEL) \
-      SESSION_TCN_CACHE_##WHAT;     \
-    else                            \
-      GLOBAL_TCN_CACHE_##WHAT;      \
+#define TCN_CACHE_AGGR(TYPE, WHAT)    \
+  do {                                \
+    if (!lizard::stat_enabled) break; \
+    if (TYPE == NONE_LEVEL) {         \
+    } else if (TYPE == BLOCK_LEVEL) { \
+      BLOCK_TCN_CACHE_##WHAT;         \
+    } else {                          \
+      GLOBAL_TCN_CACHE_##WHAT;        \
+    }                                 \
   } while (0)
 
 #endif

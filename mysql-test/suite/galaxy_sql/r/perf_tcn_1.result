@@ -13,12 +13,9 @@ count(*)
 100
 show global status like '%tcn_cache%';
 Variable_name	Value
-Lizard_block_tcn_cache_hit	50
-Lizard_block_tcn_cache_miss	150
-Lizard_block_tcn_cache_evict	150
-Lizard_session_tcn_cache_hit	0
-Lizard_session_tcn_cache_miss	0
-Lizard_session_tcn_cache_evict	0
+Lizard_block_tcn_cache_hit	0
+Lizard_block_tcn_cache_miss	0
+Lizard_block_tcn_cache_evict	0
 Lizard_global_tcn_cache_hit	0
 Lizard_global_tcn_cache_miss	0
 Lizard_global_tcn_cache_evict	0
@@ -30,12 +27,9 @@ count(*)
 100
 show global status like '%tcn_cache%';
 Variable_name	Value
-Lizard_block_tcn_cache_hit	150
-Lizard_block_tcn_cache_miss	250
-Lizard_block_tcn_cache_evict	250
-Lizard_session_tcn_cache_hit	0
-Lizard_session_tcn_cache_miss	0
-Lizard_session_tcn_cache_evict	0
+Lizard_block_tcn_cache_hit	0
+Lizard_block_tcn_cache_miss	0
+Lizard_block_tcn_cache_evict	0
 Lizard_global_tcn_cache_hit	0
 Lizard_global_tcn_cache_miss	0
 Lizard_global_tcn_cache_evict	0

@@ -45,10 +45,15 @@ constexpr size_t DATA_UNDO_PTR = 4;
 /** lizard UBA occupy 7 bytes */
 constexpr size_t DATA_UNDO_PTR_LEN = 8;
 
-/* The sum of SCN and UBA length */
-constexpr size_t DATA_LIZARD_TOTAL_LEN = DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN;
+/** gcn id, firth system column */
+constexpr size_t DATA_GCN_ID = 5;
+constexpr size_t DATA_GCN_ID_LEN = 8;
 
-#define DATA_N_LIZARD_COLS 2 /** number of lizard system column */
+/* The sum of SCN, UBA and GCN length */
+constexpr size_t DATA_LIZARD_TOTAL_LEN =
+    DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN + DATA_GCN_ID_LEN;
+
+#define DATA_N_LIZARD_COLS 3 /** number of lizard system column */
 
 /** number of lizard system column for
 intrinsic tempooary table. Intrinsic table didn't support

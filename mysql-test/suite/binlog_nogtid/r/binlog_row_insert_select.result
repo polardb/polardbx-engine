@@ -25,3 +25,6 @@ ERROR 23000: Duplicate entry '1' for key 't2.a'
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 drop table t1;
+drop table if exists t2;
+Warnings:
+Note	1051	Unknown table 'test.t2'

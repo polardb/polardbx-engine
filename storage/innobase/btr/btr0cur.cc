@@ -3168,11 +3168,11 @@ void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
   ut_ad(flags < 256);
   ut_ad(page_is_comp(page) == dict_table_is_comp(index->table));
 
-  const bool opened =
-      mlog_open_and_write_index(mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
-                                1 + DATA_ROLL_PTR_LEN + 14 + 2 +
-                                    MLOG_BUF_MARGIN + DATA_UNDO_PTR_LEN + 14,
-                                log_ptr);
+  const bool opened = mlog_open_and_write_index(
+      mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
+      1 + DATA_ROLL_PTR_LEN + 14 + 2 + MLOG_BUF_MARGIN + DATA_UNDO_PTR_LEN +
+          DATA_GCN_ID_LEN + 14,
+      log_ptr);
 
   if (!opened) {
     /* Logging in mtr is switched off during crash recovery */
@@ -3212,6 +3212,10 @@ void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
     /* Undo Ptr */
     lizard::trx_write_undo_ptr(log_ptr, (undo_ptr_t)0);
     log_ptr += DATA_UNDO_PTR_LEN;
+
+    /* GCN ID */
+    lizard::trx_write_gcn(log_ptr, (gcn_t)0);
+    log_ptr += DATA_GCN_ID_LEN;
   }
 
   mach_write_to_2(log_ptr, page_offset(rec));
@@ -3242,6 +3246,7 @@ byte *btr_cur_parse_update_in_place(
   ulint txn_pos;
   scn_t scn;
   undo_ptr_t undo_ptr;
+  gcn_t gcn;
 
   if (end_ptr < ptr + 1) {
     return (nullptr);
@@ -3256,7 +3261,8 @@ byte *btr_cur_parse_update_in_place(
     return (nullptr);
   }
 
-  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn, &undo_ptr);
+  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn,
+                                          &undo_ptr, &gcn);
 
   if (ptr == NULL) {
     return (NULL);
@@ -3293,7 +3299,7 @@ byte *btr_cur_parse_update_in_place(
                                        roll_ptr);
 
     lizard::row_upd_rec_lizard_fields_in_recovery(rec, page_zip, index, txn_pos,
-                                                  offsets, scn, undo_ptr);
+                                                  offsets, scn, undo_ptr, gcn);
   }
 
   row_upd_rec_in_place(rec, index, offsets, update, page_zip);
@@ -3479,6 +3485,7 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     txn_rec.trx_id = trx->id;
     txn_rec.scn = trx->txn_desc.cmmt.scn;
     txn_rec.undo_ptr = trx->txn_desc.undo_ptr;
+    txn_rec.gcn = trx->txn_desc.cmmt.gcn;
   } else {
     /** We found a case: update innodb_dynamic_metadata, flags will be
     set as BTR_KEEP_SYS_FLAG | ... , and trx is NULL. flags will also
@@ -3487,6 +3494,7 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     txn_rec.trx_id = trx_id;
     txn_rec.scn = 0;
     txn_rec.undo_ptr = 0;
+    txn_rec.gcn = 0;
   }
 
   btr_cur_update_in_place_log(flags, rec, index, update, trx_id, roll_ptr,
@@ -4319,6 +4327,7 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
   ulint txn_pos;
   scn_t scn;
   undo_ptr_t undo_ptr;
+  gcn_t gcn;
 
   ut_ad(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
@@ -4337,7 +4346,8 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
     return (nullptr);
   }
 
-  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn, &undo_ptr);
+  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn,
+                                          &undo_ptr, &gcn);
 
   if (ptr == NULL) {
     return (NULL);
@@ -4377,7 +4387,7 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
           rec, page_zip, index, txn_pos,
           rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
                           UT_LOCATION_HERE, &heap),
-          scn, undo_ptr);
+          scn, undo_ptr, gcn);
 
       /** TODO: Check it */
       if (UNIV_LIKELY_NULL(heap)) {
@@ -4466,6 +4476,7 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   txn_rec.trx_id = trx->id;
   txn_rec.scn = trx->txn_desc.cmmt.scn;
   txn_rec.undo_ptr = trx->txn_desc.undo_ptr;
+  txn_rec.gcn = trx->txn_desc.cmmt.gcn;
 
   /* This function must not be invoked during rollback
   (of a TRX_STATE_PREPARE transaction or otherwise). */

@@ -47,22 +47,24 @@ SELECT * FROM t1 WHERE id = 1 FOR UPDATE
 
 *** (1) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (1) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) TRANSACTION:
@@ -74,22 +76,24 @@ SELECT * FROM t1 WHERE id = 4 FOR UPDATE
 
 *** (2) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) TRANSACTION:
@@ -101,22 +105,24 @@ SELECT * FROM t1 WHERE id = 3 FOR UPDATE
 
 *** (3) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) TRANSACTION:
@@ -128,22 +134,24 @@ SELECT * FROM t1 WHERE id = 2 FOR UPDATE
 
 *** (4) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 *** WE ROLL BACK TRANSACTION (2)
 ------------
@@ -205,22 +213,24 @@ SELECT * FROM t1 WHERE id = 1 FOR UPDATE
 
 *** (1) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (1) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) TRANSACTION:
@@ -232,22 +242,24 @@ SELECT * FROM t1 WHERE id = 4 FOR UPDATE
 
 *** (2) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 2 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (2) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) TRANSACTION:
@@ -259,22 +271,24 @@ SELECT * FROM t1 WHERE id = 3 FOR UPDATE
 
 *** (3) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 5 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (3) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) TRANSACTION:
@@ -286,22 +300,24 @@ SELECT * FROM t1 WHERE id = 2 FOR UPDATE
 
 *** (4) HOLDS THE LOCK(S):
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
-Record lock, heap no 4 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 
 *** (4) WAITING FOR THIS LOCK TO BE GRANTED:
 RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
-Record lock, heap no 3 PHYSICAL RECORD: n_fields 5; compact format; info bits 0
+Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
  2: len 7; hex %HEXADECIMAL%; asc %ASC%;;
  3: len 8; hex %HEXADECIMAL%; asc %ASC%;;
  4: len 8; hex %HEXADECIMAL%; asc %ASC%;;
+ 5: len 8; hex %HEXADECIMAL%; asc %ASC%;;
 
 *** WE ROLL BACK TRANSACTION (1)
 ------------

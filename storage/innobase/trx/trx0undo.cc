@@ -1672,7 +1672,7 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
     /** Follow the XA will be txn extension information  */
     lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
 
-  /** Lizard: add UBA into undo log header */
+    /** Lizard: add UBA into undo log header */
     undo_addr_t undo_addr = {rseg->space_id, page_no, offset, true};
 
     /** Current undo log hdr is UBA */

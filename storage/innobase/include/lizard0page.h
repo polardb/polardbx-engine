@@ -58,7 +58,8 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
                                      const ulint *offsets,
                                      ulint scn_col,
                                      const scn_t scn,
-                                     const undo_ptr_t undo_ptr);
+                                     const undo_ptr_t undo_ptr,
+				     const gcn_t gcn);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**

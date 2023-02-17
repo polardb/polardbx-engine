@@ -375,6 +375,20 @@ void trx_write_undo_ptr(byte *ptr, const txn_desc_t *txn_desc);
 void trx_write_undo_ptr(byte *ptr, undo_ptr_t undo_ptr);
 
 /**
+  Write the gcn into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void trx_write_gcn(byte *ptr, const txn_desc_t *txn_desc);
+
+/**
+  Write the gcn into the buffer
+  @param[in/out]    ptr     buffer
+  @param[in]        scn     scn id
+*/
+void trx_write_gcn(byte *ptr, gcn_t gcn);
+
+/**
   Read the scn
   @param[in]        ptr       buffer
 
@@ -389,6 +403,14 @@ scn_id_t trx_read_scn(const byte *ptr);
   @return           undo_ptr_t undo_ptr
 */
 undo_ptr_t trx_read_undo_ptr(const byte *ptr);
+
+/**
+  Read the gcn
+  @param[in]        ptr       buffer
+
+  @return           gcn_t  scn
+*/
+gcn_t trx_read_gcn(const byte *ptr);
 
 /**
   Decode the undo_ptr into UBA
@@ -541,32 +563,78 @@ inline void txn_lookup_t_set(txn_lookup_t *txn_lookup,
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
 }
 
+inline bool txn_rec_lock_state_by_lookup(txn_rec_t *txn_rec,
+                                         txn_lookup_t *txn_lookup, mtr_t *mtr) {
+  ut_ad(txn_lookup && mtr);
+  return txn_undo_hdr_lookup_low(txn_rec, txn_lookup, mtr);
+}
+
 /**
-  Try to lookup the real scn of given records.
+  Decide the real trx state.
+    1) Search tcn cache
+    2) Lookup txn undo
 
-  @param[in/out]  txn_rec       txn info of the records.
-  @param[out]     txn_lookup    txn lookup info, nullptr if don't care.
-  @param[in]      txn_mtr       Non-nullptr if use external mtr, the caller is
-                                responsible for committing mtr;
-                                If passing nullptr, it will use a temporary mtr.
+  Return the cleanout flag to decide yourself.
 
-  @return         bool       true if the record should be cleaned out.
+  @param[in/out]	txn record
+  @param[in/out]	cleanout is needed?
+
+  @retval	true		active
+                false		committed
 */
-inline bool txn_undo_hdr_lookup(txn_rec_t *txn_rec,
-                                txn_lookup_t *txn_lookup,
-                                mtr_t *txn_mtr,
-                                txn_lookup_entry entry) {
-  /* If txn_mtr != nullptr, it forces to hold txn header s-latch for
-  a while. */
-  if (!txn_lookup && !lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
-    /** scn must allocated */
+inline bool txn_rec_real_state_by_misc(txn_rec_t *txn_rec,
+                                       bool *cleanout = nullptr) {
+  bool active = false;
+  bool cache_hit = false;
+  /** If record is not active, the trx must be committed. */
+  if (!lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
+    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
+      /** The record has been cleaned out already. */
+    if (cleanout) *cleanout = false;
+
     return false;
+  }
+
+  /** Pcur is nullptr, didn't support block level tcn cache. */
+  cache_hit = trx_search_tcn(txn_rec, nullptr, nullptr);
+  if (cache_hit) {
+    ut_ad(!lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
+    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
+    if (cleanout) *cleanout = true;
+    return false;
+  }
+
+  /** Record is still active, lookup txn hdr to confirm it. */
+  active = txn_undo_hdr_lookup_low(txn_rec, nullptr, nullptr);
+  if (active) {
+    return active;
   } else {
-    txn_lookup_stat(entry);
-    return txn_undo_hdr_lookup_low(txn_rec, txn_lookup, txn_mtr);
+    /** cleanout when trx real state has committed. */
+    if (cleanout) *cleanout = true;
+    return false;
   }
 }
+
+/**
+  Decide the real trx state when read current record.
+    1) Search tcn cache
+    2) Lookup txn undo
+
+  and try to collect cursor to cache txn and cleanout record.
+
+
+  @param[in/out]	txn record
+  @param[in/out]	cleanout is needed?
+
+  @retval	true		active
+                false		committed
+*/
+extern bool txn_rec_cleanout_state_by_misc(txn_rec_t *txn_rec, btr_pcur_t *pcur,
+                                           const rec_t *rec,
+                                           const dict_index_t *index,
+                                           const ulint *offsets);
 
 inline bool txn_lookup_rollptr_is_valid(const txn_lookup_t *txn_lookup) {
   return (txn_lookup->real_state < txn_state_t::TXN_STATE_PURGED);

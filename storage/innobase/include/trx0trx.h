@@ -1183,9 +1183,6 @@ struct trx_t {
   /** Descripe XA attributes from server */
   XAD xad;
 
-  /** Cache tcn information. */
-  lizard::Cache_tcn *session_tcn;
-
   /** XA specification interpreted from TC log when recovery. */
   binlog::Binlog_xa_specification *xa_spec;
 

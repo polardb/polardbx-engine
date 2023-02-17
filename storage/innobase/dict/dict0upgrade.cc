@@ -669,6 +669,7 @@ static void dd_upgrade_process_index(Index dd_index, dict_index_t *index,
   p.set(dd_index_key_strings[DD_INDEX_TRX_ID], 0);
   p.set(dd_index_key_strings[DD_INDEX_UBA], lizard::UNDO_PTR_INDEX_UPGRADE);
   p.set(dd_index_key_strings[DD_INDEX_SCN], lizard::SCN_INDEX_UPGRADE);
+  p.set(dd_index_key_strings[DD_INDEX_GCN], lizard::GCN_INDEX_UPGRADE);
 
   if (has_auto_inc) {
     ut_ad(auto_inc_index_name != nullptr);

@@ -60,9 +60,6 @@ constexpr scn_t SCN_MAX = std::numeric_limits<scn_t>::max() - 1;
 scenarios */
 /**------------------------------------------------------------------------*/
 
-/** SCN special for index upgraded from old version. */
-constexpr scn_t SCN_INDEX_UPGRADE = 5;
-
 /** Initialized prev scn number in txn header. See the case:
 1. If txn undos are unexpectedly removed
 2. the mysql run with cleanout_safe_mode again
@@ -82,6 +79,9 @@ constexpr scn_t SCN_TEMP_TAB_REC = 3;
 
 /** SCN special for index */
 constexpr scn_t SCN_DICT_REC = 4;
+
+/** SCN special for index upgraded from old version. */
+constexpr scn_t SCN_INDEX_UPGRADE = 5;
 
 /** MAX reserved scn NUMBER  */
 constexpr scn_t SCN_RESERVERD_MAX = 1024;
@@ -134,6 +134,12 @@ constexpr gcn_t GCN_UNDO_LOST = 2;
 
 /** GCN special for temporary table record */
 constexpr gcn_t GCN_TEMP_TAB_REC = 3;
+
+/** GCN special for index */
+constexpr gcn_t GCN_DICT_REC = 4;
+
+/** SCN special for index upgraded from old version. */
+constexpr scn_t GCN_INDEX_UPGRADE = 5;
 
 /** The initial global commit number value after initialize db */
 constexpr gcn_t GCN_INITIAL = 1024;

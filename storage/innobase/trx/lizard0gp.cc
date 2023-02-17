@@ -466,7 +466,7 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
                                  dict_index_t *index, const ulint *offsets,
                                  btr_pcur_t *pcur, lizard::Vision *vision,
                                  dberr_t *error) {
-  txn_lookup_t txn_lookup;
+  bool active;
 #ifdef UNIV_DEBUG
   bool looped = false;
 #endif
@@ -493,25 +493,14 @@ retry:
       trx_id,
       row_get_rec_scn_id(rec, index, offsets),
       row_get_rec_undo_ptr(rec, index, offsets),
-      GCN_NULL,
+      row_get_rec_gcn(rec, index, offsets),
   };
 
-  auto fill_ret = fill_txn_rec_and_txn_lookup_low(
-      trx, pcur, &txn_rec, &txn_lookup, TXN_GCN_READ_SEES);
-
+  active = txn_rec_cleanout_state_by_misc(&txn_rec, pcur, rec, index, offsets);
   /** 1. Already committed; */
-  if (txn_lookup.real_state >= TXN_STATE_COMMITTED) {
-    ut_a(txn_lookup.real_state != TXN_STATE_UNDO_CORRUPTED);
-    assert_commit_scn_allocated(txn_lookup.real_image);
+  if (!active) {
     ut_a(txn_rec.gcn != GCN_NULL);
-
-    /**
-     * It was cache missing if txn_rec is filled with undo log,
-     * put txn_rec into cache.
-    */
-    if (fill_ret == TCN_FILLED_FROM_UNDO) {
-      lizard::trx_cache_tcn(trx, trx_id, txn_rec, rec, index, offsets, pcur);
-    }
+    ut_a(txn_rec.scn != SCN_NULL);
 
     return (vision->modifications_visible(&txn_rec, index->table->name));
   } else {
@@ -519,7 +508,6 @@ retry:
       Here, maybe active or prepared, prepared state has to wait for a
       while until commit. */
     ut_ad(looped == false);
-    ut_ad(txn_lookup.real_state == TXN_STATE_ACTIVE);
     ut_ad(txn_rec.gcn == GCN_NULL);
 
     /** Find the prepared trx to wait, others should judge visible directly */

@@ -66,6 +66,9 @@ struct btr_pcur_t;
 
   Both durable and temporary table will add two new columns expect of
   intrinsic temproary table.
+
+
+  Revision: Add gcn into record.
 */
 namespace lizard {
 
@@ -130,9 +133,9 @@ void row_upd_rec_write_lizard_fields(byte *ptr,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-void row_upd_rec_write_scn_and_undo_ptr(byte *ptr,
-                                        const scn_t scn,
-                                        const undo_ptr_t undo_ptr);
+void row_upd_rec_write_scn_and_undo_ptr(byte *ptr, const scn_t scn,
+                                        const undo_ptr_t undo_ptr,
+                                        const gcn_t gcn);
 
 /**
   Modify the scn and undo_ptr of record.
@@ -173,6 +176,18 @@ scn_id_t row_get_rec_scn_id(const rec_t *rec, const dict_index_t *index,
 */
 undo_ptr_t row_get_rec_undo_ptr(const rec_t *rec, const dict_index_t *index,
                                 const ulint *offsets);
+
+/**
+  Read the gcn id from record
+
+  @param[in]      rec         record
+  @param[in]      index       dict_index_t, must be cluster index
+  @param[in]      offsets     rec_get_offsets(rec, index)
+
+  @retval         gcn id
+*/
+gcn_t row_get_rec_gcn(const rec_t *rec, const dict_index_t *index,
+                      const ulint *offsets);
 /**
   Read the undo ptr state from record
 
@@ -261,8 +276,8 @@ byte* row_upd_write_lizard_vals_to_log(const dict_index_t *index,
   @return log data end or NULL
 */
 byte *row_upd_parse_lizard_vals(const byte *ptr, const byte *end_ptr,
-                                ulint *pos, scn_t *scn,
-                                undo_ptr_t *undo_ptr);
+                                ulint *pos, scn_t *scn, undo_ptr_t *undo_ptr,
+                                gcn_t *gcn);
 
 /**
   Updates the scn and undo_ptr field in a clustered index record when
@@ -291,13 +306,12 @@ void row_upd_rec_lizard_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-void row_upd_rec_lizard_fields_in_recovery(rec_t *rec,
-                                           page_zip_des_t *page_zip,
-                                           const dict_index_t *index,
-                                           ulint pos,
+void row_upd_rec_lizard_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
+                                           const dict_index_t *index, ulint pos,
                                            const ulint *offsets,
                                            const scn_t scn,
-                                           const undo_ptr_t undo_ptr);
+                                           const undo_ptr_t undo_ptr,
+                                           const gcn_t gcn);
 
 /**
   After search row complete, do the cleanout.

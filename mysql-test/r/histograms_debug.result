@@ -107,7 +107,7 @@ SELECT schema_name, table_name, column_name,
 JSON_REMOVE(histogram, '$."last-updated"')
 FROM information_schema.COLUMN_STATISTICS;
 SCHEMA_NAME	TABLE_NAME	COLUMN_NAME	JSON_REMOVE(histogram, '$."last-updated"')
-test	t1	col1	{"buckets": [[0.0683289487551236, 0.3618034183623301, 0.25, 18], [0.37861309049521863, 0.6665039003514721, 0.5, 18], [0.6680055769793741, 0.800034596398505, 0.75, 18], [0.8120951073356859, 0.9869397673634251, 1.0, 18]], "data-type": "double", "null-values": 0.0, "collation-id": 8, "sampling-rate": 0.5, "histogram-type": "equi-height", "number-of-buckets-specified": 4}
+test	t1	col1	{"buckets": [[0.0044230306562250766, 0.254321003569589, 0.25, 41], [0.254564837789689, 0.5373212290344026, 0.5, 41], [0.5873414348693019, 0.7645125098195975, 0.75, 41], [0.7747330169889453, 0.9897249396794708, 1.0, 41]], "data-type": "double", "null-values": 0.0, "collation-id": 8, "sampling-rate": 0.5, "histogram-type": "equi-height", "number-of-buckets-specified": 4}
 SET DEBUG='-d,histogram_force_sampling';
 DROP TABLE t1;
 #

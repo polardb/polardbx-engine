@@ -34,10 +34,10 @@ WHERE	t.table_id = i.table_id
 AND	t.name LIKE 'test%'
 	ORDER BY t.name, i.name;
 table_name	n_cols	table_flags	index_name	root_page	type	n_fields	merge_threshold
-test/t1	7	0	PRIMARY	4	3	6	50
-test/t2	7	1	PRIMARY	4	3	6	50
-test/t3	7	37	PRIMARY	4	3	6	50
-test/t4	7	33	PRIMARY	4	3	6	50
+test/t1	8	0	PRIMARY	4	3	7	50
+test/t2	8	1	PRIMARY	4	3	7	50
+test/t3	8	37	PRIMARY	4	3	7	50
+test/t4	8	33	PRIMARY	4	3	7	50
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -67,7 +67,7 @@ DROP TABLE t1, t2, t3, t4;
 SET SESSION innodb_strict_mode = ON;
 CREATE TABLE t1 (
 c01 char(200), c02 char(200), c03 char(200), c04 char(200), c05 char(200),
-c06 char(200), c07 char(200), c08 char(200), c09 char(200), c10 char(103)
+c06 char(200), c07 char(200), c08 char(200), c09 char(200), c10 char(95)
 ) charset latin1 ROW_FORMAT=redundant;
 DROP TABLE t1;
 CREATE TABLE t1 (

@@ -1098,23 +1098,24 @@ dberr_t FTS::Inserter::write_node(const Insert *ins_ctx,
 
   {
     /* The third and fourth fields(TRX_ID, ROLL_PTR) are filled already.*/
-    /* Lizard: The fifth and sixth fileds(SCN_ID, UNDO_PTR) are filled already.*/
-    /* The fifth field is last_doc_id */
-    auto field = dtuple_get_nth_field(tuple, 6);
+    /** Lizard: The fifth and sixth fileds(SCN_ID, UNDO_PTR, GCN) are filled
+    already.*/
+    /* The eighth field is last_doc_id */
+    auto field = dtuple_get_nth_field(tuple, 7);
     fts_write_doc_id((byte *)&last_doc_id, node->last_doc_id);
     dfield_set_data(field, &last_doc_id, sizeof(last_doc_id));
   }
 
   {
-    /* The sixth field is doc_count */
-    auto field = dtuple_get_nth_field(tuple, 7);
+    /* The ninth field is doc_count */
+    auto field = dtuple_get_nth_field(tuple, 8);
     mach_write_to_4((byte *)&doc_count, (uint32_t)node->doc_count);
     dfield_set_data(field, &doc_count, sizeof(doc_count));
   }
 
   {
-    /* The seventh field is ilist */
-    auto field = dtuple_get_nth_field(tuple, 8);
+    /* The tenth field is ilist */
+    auto field = dtuple_get_nth_field(tuple, 9);
     dfield_set_data(field, node->ilist, node->ilist_size);
   }
 
@@ -1382,6 +1383,7 @@ dberr_t FTS::Inserter::insert(Builder *builder,
 
   byte trx_scn_buf[DATA_SCN_ID_LEN];
   byte undo_ptr_buf[DATA_UNDO_PTR_LEN];
+  byte trx_gcn_buf[DATA_GCN_ID_LEN];
 
   /* Lizard: Set SCN column and UNDO_PTR column */
   {
@@ -1395,6 +1397,13 @@ dberr_t FTS::Inserter::insert(Builder *builder,
     lizard::trx_write_undo_ptr(undo_ptr_buf, &trx->txn_desc);
     auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 5);
     dfield_set_data(field, &undo_ptr_buf, DATA_UNDO_PTR_LEN);
+  }
+
+  /* Lizard: Set the real value */
+  {
+    lizard::trx_write_gcn(trx_gcn_buf, &trx->txn_desc);
+    auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 6);
+    dfield_set_data(field, &trx_gcn_buf, DATA_GCN_ID_LEN);
   }
 
   ut_d(ins_ctx.m_handler_id = handler->m_id);

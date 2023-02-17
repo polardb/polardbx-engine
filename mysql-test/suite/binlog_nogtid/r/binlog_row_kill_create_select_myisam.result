@@ -13,3 +13,12 @@ ERROR 70100: Query execution was interrupted
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 DROP TABLE t1;
+DROP TABLE IF EXISTS t2;
+Warnings:
+Note	1051	Unknown table 'test.t2'
+DROP TABLE IF EXISTS t3;
+Warnings:
+Note	1051	Unknown table 'test.t3'
+DROP TABLE IF EXISTS t4;
+Warnings:
+Note	1051	Unknown table 'test.t4'

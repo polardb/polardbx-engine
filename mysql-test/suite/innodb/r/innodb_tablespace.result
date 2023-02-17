@@ -99,11 +99,11 @@ t1	CREATE TABLE `t1` (
 # Show that the new system tables have this table in them correctly
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1	test/t1	97	7	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1	test/t1	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -124,10 +124,10 @@ test/t1	TABLESPACE	InnoDB	NORMAL	test/t1	MYSQL_TMP_DIR/alt_dir/test/t1.ibd
 DROP TABLE t1;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -157,11 +157,11 @@ t1	CREATE TABLE `t1` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci DATA DIRECTORY='MYSQL_TMP_DIR/alt_dir/'
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1	test/t1	97	7	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1	test/t1	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -189,11 +189,11 @@ a	b
 3	Truncate the table, then insert
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1	test/t1	97	7	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1	test/t1	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -225,11 +225,11 @@ a	b
 4	Rename the table, then insert
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t2	test/t2	97	7	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t2	test/t2	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -257,12 +257,12 @@ a	b
 5	CREATE TABLE LIKE
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t2	test/t2	97	7	Dynamic	0	Single
-test/t3	test/t3	33	7	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t2	test/t2	97	8	Dynamic	0	Single
+test/t3	test/t3	33	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -287,10 +287,10 @@ t3.ibd
 DROP TABLE t2, t3;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -485,13 +485,13 @@ emp	CREATE TABLE `emp` (
  PARTITION west VALUES IN (70,80,100) DATA DIRECTORY = 'MYSQL_TMP_DIR/alt_dir_west/' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/emp#p#east	test/emp#p#east	97	9	Dynamic	0	Single
-test/emp#p#north	test/emp#p#north	97	9	Dynamic	0	Single
-test/emp#p#west	test/emp#p#west	97	9	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/emp#p#east	test/emp#p#east	97	10	Dynamic	0	Single
+test/emp#p#north	test/emp#p#north	97	10	Dynamic	0	Single
+test/emp#p#west	test/emp#p#west	97	10	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -539,12 +539,12 @@ emp	CREATE TABLE `emp` (
  PARTITION north VALUES IN (40,50,60) DATA DIRECTORY = 'MYSQL_TMP_DIR/alt_dir_north' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/emp#p#east	test/emp#p#east	97	9	Dynamic	0	Single
-test/emp#p#north	test/emp#p#north	97	9	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/emp#p#east	test/emp#p#east	97	10	Dynamic	0	Single
+test/emp#p#north	test/emp#p#north	97	10	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -591,13 +591,13 @@ emp	CREATE TABLE `emp` (
  PARTITION west VALUES IN (70,80,100) DATA DIRECTORY = 'MYSQL_TMP_DIR/alt_dir_west' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/emp#p#east	test/emp#p#east	97	9	Dynamic	0	Single
-test/emp#p#north	test/emp#p#north	97	9	Dynamic	0	Single
-test/emp#p#west	test/emp#p#west	97	9	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/emp#p#east	test/emp#p#east	97	10	Dynamic	0	Single
+test/emp#p#north	test/emp#p#north	97	10	Dynamic	0	Single
+test/emp#p#west	test/emp#p#west	97	10	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -647,13 +647,13 @@ emp	CREATE TABLE `emp` (
  PARTITION west VALUES IN (70,80,100) DATA DIRECTORY = 'MYSQL_TMP_DIR/alt_dir_west' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	6	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/emp#p#east	test/emp#p#east	97	9	Dynamic	0	Single
-test/emp#p#north	test/emp#p#north	97	9	Dynamic	0	Single
-test/emp#p#west	test/emp#p#west	97	9	Dynamic	0	Single
+mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/emp#p#east	test/emp#p#east	97	10	Dynamic	0	Single
+test/emp#p#north	test/emp#p#north	97	10	Dynamic	0	Single
+test/emp#p#west	test/emp#p#west	97	10	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd

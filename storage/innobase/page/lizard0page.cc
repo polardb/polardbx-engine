@@ -53,12 +53,10 @@ namespace lizard {
   @param[in]      undo_ptr    undo_ptr
 */
 void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
-                                     const dict_index_t *index,
-                                     byte *rec,
-                                     const ulint *offsets,
-                                     ulint scn_col,
-                                     const scn_t scn,
-                                     const undo_ptr_t undo_ptr) {
+                                     const dict_index_t *index, byte *rec,
+                                     const ulint *offsets, ulint scn_col,
+                                     const scn_t scn, const undo_ptr_t undo_ptr,
+                                     const gcn_t gcn) {
   byte *field;
   byte *storage;
 #ifdef UNIV_DEBUG
@@ -92,11 +90,15 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
         rec_get_nth_field(index, rec, offsets, scn_col + 1, &len));
   ut_ad(len == DATA_UNDO_PTR_LEN);
 
+  ut_ad(field + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN ==
+        rec_get_nth_field(index, rec, offsets, scn_col + 2, &len));
+  ut_ad(len == DATA_GCN_ID_LEN);
+
 #if defined UNIV_DEBUG || defined UNIV_ZIP_DEBUG
   ut_a(!memcmp(storage, field, DATA_LIZARD_TOTAL_LEN));
 #endif /* UNIV_DEBUG || UNIV_ZIP_DEBUG */
 
-  row_upd_rec_write_scn_and_undo_ptr(field, scn, undo_ptr);
+  row_upd_rec_write_scn_and_undo_ptr(field, scn, undo_ptr, gcn);
 
   /** Copy to compressed page */
   memcpy(storage, field, DATA_LIZARD_TOTAL_LEN);
@@ -105,8 +107,7 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
   UNIV_MEM_ASSERT_RW(rec - rec_offs_extra_size(offsets),
                      rec_offs_extra_size(offsets));
   UNIV_MEM_ASSERT_RW(page_zip->data, page_zip_get_size(page_zip));
- }
-
+}
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**

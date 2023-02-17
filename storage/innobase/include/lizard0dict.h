@@ -97,7 +97,8 @@ extern bool is_txn_space_by_name(const char *name);
 inline bool is_lizard_column(const char *col_name) {
   ut_ad(col_name != nullptr);
   return (strncmp(col_name, "DB_SCN_ID", 9) == 0 ||
-          strncmp(col_name, "DB_UNDO_PTR", 11) == 0);
+          strncmp(col_name, "DB_UNDO_PTR", 11) == 0 ||
+          strncmp(col_name, "DB_GCN_ID", 9) == 0);
 }
 
 /**

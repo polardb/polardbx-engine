@@ -238,10 +238,10 @@ void btr_cur_upd_lizard_fields_clust_rec_log(const rec_t *rec,
   ut_ad(index->is_clustered());
   ut_ad(mtr);
 
-  if (!mlog_open_and_write_index(
-          mtr, rec, index,
-          MLOG_REC_CLUST_LIZARD_UPDATE,
-          1 + 1 + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN + 14 + 2, log_ptr)) {
+  if (!mlog_open_and_write_index(mtr, rec, index, MLOG_REC_CLUST_LIZARD_UPDATE,
+                                 1 + 1 + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN +
+                                     DATA_GCN_ID_LEN + 14 + 2,
+                                 log_ptr)) {
     return;
   }
 
@@ -270,12 +270,13 @@ byte *btr_cur_parse_lizard_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
   ulint pos;
   scn_t scn;
   undo_ptr_t undo_ptr;
+  gcn_t gcn;
   ulint rec_offset;
   rec_t *rec;
 
   ut_ad(!page || !!page_is_comp(page) == dict_table_is_comp(index->table));
 
-  ptr = row_upd_parse_lizard_vals(ptr, end_ptr, &pos, &scn, &undo_ptr);
+  ptr = row_upd_parse_lizard_vals(ptr, end_ptr, &pos, &scn, &undo_ptr, &gcn);
 
   if (ptr == nullptr) {
     return nullptr;
@@ -313,7 +314,7 @@ byte *btr_cur_parse_lizard_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
     }
 
     row_upd_rec_lizard_fields_in_recovery(rec, page_zip, index, pos, offsets,
-                                          scn, undo_ptr);
+                                          scn, undo_ptr, gcn);
 
     if (UNIV_LIKELY_NULL(heap)) mem_heap_free(heap);
   }

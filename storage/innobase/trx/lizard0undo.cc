@@ -46,6 +46,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0mon.h"
 #include "lizard0cleanout.h"
 #include "lizard0mysql.h"
+#include "lizard0row.h"
 
 /**
   SCN generation strategy:
@@ -1619,6 +1620,27 @@ void trx_write_undo_ptr(byte *ptr, undo_ptr_t undo_ptr) {
 }
 
 /**
+  Write the gcn into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void trx_write_gcn(byte *ptr, const txn_desc_t *txn_desc) {
+  ut_ad(ptr && txn_desc);
+  assert_undo_ptr_allocated(txn_desc->undo_ptr);
+  trx_write_gcn(ptr, txn_desc->cmmt.gcn);
+}
+
+/**
+  Write the gcn into the buffer
+  @param[in/out]    ptr     buffer
+  @param[in]        scn     scn id
+*/
+void trx_write_gcn(byte *ptr, gcn_t gcn) {
+  ut_ad(ptr);
+  mach_write_to_8(ptr, gcn);
+}
+
+/**
   Read the scn
   @param[in]        ptr       buffer
 
@@ -1636,6 +1658,17 @@ scn_id_t trx_read_scn(const byte *ptr) {
   @return           undo_ptr_t undo_ptr
 */
 undo_ptr_t trx_read_undo_ptr(const byte *ptr) {
+  ut_ad(ptr);
+  return mach_read_from_8(ptr);
+}
+
+/**
+  Read the gcn
+  @param[in]        ptr       buffer
+
+  @return           scn_id_t  scn
+*/
+gcn_t trx_read_gcn(const byte *ptr) {
   ut_ad(ptr);
   return mach_read_from_8(ptr);
 }
@@ -1688,11 +1721,10 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
   @param[in/out]  txn_rec       txn info of the records.
   @param[out]     txn_lookup    txn lookup result, nullptr if don't care.
 
-  @return         bool          true if the record should be cleaned out.
+  @return         bool          whether corresponding trx is active.
 */
-static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec,
-                                      txn_lookup_t *txn_lookup,
-                                      mtr_t *txn_mtr) {
+static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
+                                     txn_lookup_t *txn_lookup, mtr_t *txn_mtr) {
   undo_addr_t undo_addr;
   page_t *undo_page;
   ulint fil_type;
@@ -1705,7 +1737,6 @@ static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec,
   trx_ulogf_t *undo_hdr;
   txn_undo_hdr_t txn_undo_hdr;
   ulint hdr_flag;
-  bool rec_active;
   bool have_mtr = false;
   mtr_t temp_mtr;
   mtr_t *mtr;
@@ -1724,8 +1755,6 @@ static bool txn_undo_hdr_lookup_loose(txn_rec_t *txn_rec,
   const page_id_t page_id(undo_addr.space_id, undo_addr.page_no);
 
   if (!have_mtr) mtr_start(mtr);
-
-  rec_active = (undo_addr.state == UNDO_ADDR_T_ACTIVE);
 
   /** Undo tablespace always univ_page_size */
   undo_page = trx_undo_page_get_s_latched(page_id, univ_page_size, mtr);
@@ -1840,7 +1869,7 @@ still_active:
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_ACTIVE);
   if (!have_mtr) mtr_commit(mtr);
-  return false;
+  return true; 
 
 already_commit:
   assert_commit_scn_allocated(txn_undo_hdr.image);
@@ -1850,7 +1879,7 @@ already_commit:
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_COMMITTED);
   if (!have_mtr) mtr_commit(mtr);
-  return rec_active;
+  return false;
 
 undo_purged:
   assert_commit_scn_allocated(txn_undo_hdr.image);
@@ -1860,7 +1889,7 @@ undo_purged:
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_PURGED);
   if (!have_mtr) mtr_commit(mtr);
-  return rec_active;
+  return false;
 
 undo_reuse:
   assert_commit_scn_allocated(txn_undo_hdr.prev_image);
@@ -1870,7 +1899,7 @@ undo_reuse:
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.prev_image,
                    txn_state_t::TXN_STATE_REUSE);
   if (!have_mtr) mtr_commit(mtr);
-  return rec_active;
+  return false;
 
 undo_corrupted:
   /** Can't never be lost if cleanout_safe_mode isn't taken into
@@ -1883,7 +1912,7 @@ undo_corrupted:
                    {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED},
                    txn_state_t::TXN_STATE_UNDO_CORRUPTED);
   if (!have_mtr) mtr_commit(mtr);
-  return rec_active;
+  return false;
 }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
@@ -1900,7 +1929,7 @@ static bool txn_undo_hdr_lookup_strict(txn_rec_t *txn_rec) {
   @param[in/out]  txn_rec       txn info of the records.
   @param[out]     txn_lookup    txn lookup result, nullptr if don't care
 
-  @return         bool          true if the record should be cleaned out.
+  @return         bool          whether corresponding trx is active.
 */
 bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
                              txn_lookup_t *txn_lookup,
@@ -1935,11 +1964,11 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
       txn_lookup_t_set(txn_lookup, txn_undo_hdr,
                        {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED},
                        txn_state_t::TXN_STATE_UNDO_CORRUPTED);
-      return (undo_addr.state == UNDO_ADDR_T_ACTIVE);
+      return false;
     }
   }
 
-  ret = txn_undo_hdr_lookup_loose(txn_rec, txn_lookup, txn_mtr);
+  ret = txn_undo_hdr_lookup_func(txn_rec, txn_lookup, txn_mtr);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
   /*
@@ -2239,5 +2268,63 @@ Guard_xa_specification::Guard_xa_specification(trx_t *trx,
 }
 
 Guard_xa_specification::~Guard_xa_specification() { m_trx->xa_spec = nullptr; }
+
+/**
+  Decide the real trx state when read current record.
+  1) Search tcn cache
+  2) Lookup txn undo
+
+  And try to collect cursor to cache txn and cleanout record.
+
+
+  @param[in/out]	txn record
+
+  @retval	true		active
+                false		committed
+*/
+bool txn_rec_cleanout_state_by_misc(txn_rec_t *txn_rec, btr_pcur_t *pcur,
+                                    const rec_t *rec, const dict_index_t *index,
+                                    const ulint *offsets) {
+  bool active = false;
+  bool cache_hit = false;
+
+  /** If record is not active, return false directly. */
+  if (!lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
+    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
+    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
+    return false;
+  }
+
+  /** Search tcn cache */
+  cache_hit = trx_search_tcn(txn_rec, pcur, nullptr);
+  if (cache_hit) {
+    ut_ad(!lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
+    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
+
+    /** Collect record to cleanout later. */
+    row_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
+
+    return false;
+  }
+
+  ut_ad(cache_hit == false);
+
+  active = txn_undo_hdr_lookup_low(txn_rec, nullptr, nullptr);
+  if (active) {
+    return active;
+  } else {
+    ut_ad(!lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
+    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
+
+    /** Collect record to cleanout later.*/
+    row_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
+    /** Cache txn info into tcn. */
+    trx_cache_tcn(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
+
+    return false;
+  }
+}
 
 }  // namespace lizard

@@ -12031,6 +12031,7 @@ void innodb_base_col_setup_for_stored(const dict_table_t *table,
 
         fn(DATA_SCN_ID, "DB_SCN_ID");
         fn(DATA_UNDO_PTR, "DB_UNDO_PTR");
+        fn(DATA_GCN_ID, "DB_GCN_ID");
 
         /* Add INSTANT DROP columns metadata */
         IF_DEBUG(uint32_t row_version = 0;)
@@ -15274,6 +15275,7 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
     Here we give it a fake number. */
     p.set(dd_index_key_strings[DD_INDEX_UBA], lizard::UNDO_PTR_DICT_REC);
     p.set(dd_index_key_strings[DD_INDEX_SCN], lizard::SCN_DICT_REC);
+    p.set(dd_index_key_strings[DD_INDEX_GCN], lizard::GCN_DICT_REC);
   }
 
   assert(n_indexes - n_indexes_old == data.n_indexes);
@@ -23548,10 +23550,11 @@ static MYSQL_SYSVAR_ULONG(undo_space_reserved_size,
                           lizard::Undo_retention::on_update,
                           0, 0, UINT_MAX32, 0);
 
-static const char *innodb_tcn_cache_level_names[] = {"block",   /* BLOCK_LEVEL */
-                                               "session", /* SESSION LEVEL */
-                                               "global",  /* GLOBAL LEVEL */
-                                               NullS};
+static const char *innodb_tcn_cache_level_names[] = {
+    "none",   /* Disable */
+    "global", /* GLOBAL_LEVEL */
+    "block",  /* BLOCK_LEVEL */
+    NullS};
 
 static TYPELIB innodb_tcn_cache_level_typelib = {
     array_elements(innodb_tcn_cache_level_names) - 1, "innodb_tcn_cache_level_typelib",
@@ -23560,7 +23563,7 @@ static TYPELIB innodb_tcn_cache_level_typelib = {
 static MYSQL_SYSVAR_ENUM(tcn_cache_level, lizard::innodb_tcn_cache_level,
                          PLUGIN_VAR_OPCMDARG,
                          "transaction commit number cache level.", NULL, NULL,
-                         BLOCK_LEVEL, &innodb_tcn_cache_level_typelib);
+                         GLOBAL_LEVEL, &innodb_tcn_cache_level_typelib);
 
 static const char *innodb_tcn_block_cache_type_names[] = {"lru",    /* lru */
                                                           "random", /* random */
