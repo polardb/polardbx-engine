@@ -19,6 +19,7 @@ catalogs=
   col6=table_id=7
   col7=table_id=7
   col8=table_id=7
+  col9=table_id=7
   data=autoinc=0
   version=0
   def=
@@ -67,14 +68,16 @@ catalogs=
             lbl=TABLESPACE
             pos=5
   id=7
-  idx0=id=9
+  idx0=gcn=4
+  id=9
        root=12
 scn=4
        space_id=4294967294
        table_id=7
        trx_id=0
 uba=9223372036854841340
-  idx1=id=10
+  idx1=gcn=4
+  id=10
        root=13
 scn=4
        space_id=4294967294
@@ -85,6 +88,7 @@ uba=9223372036854841340
 character_sets=
   col0=table_id=8
   col1=table_id=8
+  col10=table_id=8
   col2=table_id=8
   col3=table_id=8
   col4=table_id=8
@@ -150,21 +154,24 @@ character_sets=
             lbl=TABLESPACE
             pos=5
   id=8
-  idx0=id=11
+  idx0=gcn=4
+  id=11
        root=14
 scn=4
        space_id=4294967294
        table_id=8
        trx_id=0
 uba=9223372036854841340
-  idx1=id=12
+  idx1=gcn=4
+  id=12
        root=15
 scn=4
        space_id=4294967294
        table_id=8
        trx_id=0
 uba=9223372036854841340
-  idx2=id=13
+  idx2=gcn=4
+  id=13
        root=16
 scn=4
        space_id=4294967294
@@ -176,6 +183,7 @@ check_constraints=
   col0=table_id=9
   col1=table_id=9
   col10=table_id=9
+  col11=table_id=9
   col2=table_id=9
   col3=table_id=9
   col4=table_id=9
@@ -247,21 +255,24 @@ check_constraints=
             lbl=TABLESPACE
             pos=5
   id=9
-  idx0=id=14
+  idx0=gcn=4
+  id=14
        root=17
 scn=4
        space_id=4294967294
        table_id=9
        trx_id=0
 uba=9223372036854841340
-  idx1=id=15
+  idx1=gcn=4
+  id=15
        root=18
 scn=4
        space_id=4294967294
        table_id=9
        trx_id=0
 uba=9223372036854841340
-  idx2=id=16
+  idx2=gcn=4
+  id=16
        root=19
 scn=4
        space_id=4294967294
@@ -273,6 +284,7 @@ uba=9223372036854841340
   col0=table_id=10
   col1=table_id=10
   col10=table_id=10
+  col11=table_id=10
   col2=table_id=10
   col3=table_id=10
   col4=table_id=10
@@ -341,21 +353,24 @@ uba=9223372036854841340
             lbl=TABLESPACE
             pos=5
   id=10
-  idx0=id=17
+  idx0=gcn=4
+  id=17
        root=20
 scn=4
        space_id=4294967294
        table_id=10
        trx_id=0
 uba=9223372036854841340
-  idx1=id=18
+  idx1=gcn=4
+  id=18
        root=21
 scn=4
        space_id=4294967294
        table_id=10
        trx_id=0
 uba=9223372036854841340
-  idx2=id=19
+  idx2=gcn=4
+  id=19
        root=22
 scn=4
        space_id=4294967294
@@ -368,6 +383,7 @@ uba=9223372036854841340
   col1=table_id=11
   col10=table_id=11
   col11=table_id=11
+  col12=table_id=11
   col2=table_id=11
   col3=table_id=11
   col4=table_id=11
@@ -439,21 +455,24 @@ uba=9223372036854841340
             lbl=TABLESPACE
             pos=5
   id=11
-  idx0=id=20
+  idx0=gcn=4
+  id=20
        root=23
 scn=4
        space_id=4294967294
        table_id=11
        trx_id=0
 uba=9223372036854841340
-  idx1=id=21
+  idx1=gcn=4
+  id=21
        root=24
 scn=4
        space_id=4294967294
        table_id=11
        trx_id=0
 uba=9223372036854841340
-  idx2=id=22
+  idx2=gcn=4
+  id=22
        root=25
 scn=4
        space_id=4294967294
@@ -469,6 +488,7 @@ uba=9223372036854841340
   col4=table_id=12
   col5=table_id=12
   col6=table_id=12
+  col7=table_id=12
   data=
   def=
     fields=
@@ -510,7 +530,8 @@ uba=9223372036854841340
             lbl=TABLESPACE
             pos=5
   id=12
-  idx0=id=23
+  idx0=gcn=4
+  id=23
        root=26
 scn=4
        space_id=4294967294
@@ -547,6 +568,7 @@ uba=9223372036854841340
   col31=table_id=13
   col32=table_id=13
   col33=table_id=13
+  col34=table_id=13
   col4=table_id=13
   col5=table_id=13
   col6=table_id=13
@@ -711,35 +733,40 @@ uba=9223372036854841340
             lbl=TABLESPACE
             pos=5
   id=13
-  idx0=id=24
+  idx0=gcn=4
+  id=24
        root=27
 scn=4
        space_id=4294967294
        table_id=13
        trx_id=0
 uba=9223372036854841340
-  idx1=id=25
+  idx1=gcn=4
+  id=25
        root=28
 scn=4
        space_id=4294967294
        table_id=13
        trx_id=0
 uba=9223372036854841340
-  idx2=id=26
+  idx2=gcn=4
+  id=26
        root=29
 scn=4
        space_id=4294967294
        table_id=13
        trx_id=0
 uba=9223372036854841340
-  idx3=id=27
+  idx3=gcn=4
+  id=27
        root=30
 scn=4
        space_id=4294967294
        table_id=13
        trx_id=0
 uba=9223372036854841340
-  idx4=id=28
+  idx4=gcn=4
+  id=28
        root=31
 scn=4
        space_id=4294967294
@@ -769,6 +796,7 @@ events=
   col25=table_id=14
   col26=table_id=14
   col27=table_id=14
+  col28=table_id=14
   col3=table_id=14
   col4=table_id=14
   col5=table_id=14
@@ -902,35 +930,40 @@ events=
             lbl=TABLESPACE
             pos=5
   id=14
-  idx0=id=29
+  idx0=gcn=4
+  id=29
        root=32
 scn=4
        space_id=4294967294
        table_id=14
        trx_id=0
 uba=9223372036854841340
-  idx1=id=30
+  idx1=gcn=4
+  id=30
        root=33
 scn=4
        space_id=4294967294
        table_id=14
        trx_id=0
 uba=9223372036854841340
-  idx2=id=31
+  idx2=gcn=4
+  id=31
        root=34
 scn=4
        space_id=4294967294
        table_id=14
        trx_id=0
 uba=9223372036854841340
-  idx3=id=32
+  idx3=gcn=4
+  id=32
        root=35
 scn=4
        space_id=4294967294
        table_id=14
        trx_id=0
 uba=9223372036854841340
-  idx4=id=33
+  idx4=gcn=4
+  id=33
        root=36
 scn=4
        space_id=4294967294
@@ -947,6 +980,7 @@ foreign_key_column_usage=
   col5=table_id=15
   col6=table_id=15
   col7=table_id=15
+  col8=table_id=15
   data=
   def=
     fields=
@@ -1000,21 +1034,24 @@ foreign_key_column_usage=
             lbl=TABLESPACE
             pos=5
   id=15
-  idx0=id=34
+  idx0=gcn=4
+  id=34
        root=37
 scn=4
        space_id=4294967294
        table_id=15
        trx_id=0
 uba=9223372036854841340
-  idx1=id=35
+  idx1=gcn=4
+  id=35
        root=38
 scn=4
        space_id=4294967294
        table_id=15
        trx_id=0
 uba=9223372036854841340
-  idx2=id=36
+  idx2=gcn=4
+  id=36
        root=39
 scn=4
        space_id=4294967294
@@ -1031,6 +1068,7 @@ uba=9223372036854841340
   col13=table_id=16
   col14=table_id=16
   col15=table_id=16
+  col16=table_id=16
   col2=table_id=16
   col3=table_id=16
   col4=table_id=16
@@ -1125,28 +1163,32 @@ uba=9223372036854841340
             lbl=TABLESPACE
             pos=5
   id=16
-  idx0=id=37
+  idx0=gcn=4
+  id=37
        root=40
 scn=4
        space_id=4294967294
        table_id=16
        trx_id=0
 uba=9223372036854841340
-  idx1=id=38
+  idx1=gcn=4
+  id=38
        root=41
 scn=4
        space_id=4294967294
        table_id=16
        trx_id=0
 uba=9223372036854841340
-  idx2=id=39
+  idx2=gcn=4
+  id=39
        root=42
 scn=4
        space_id=4294967294
        table_id=16
        trx_id=0
 uba=9223372036854841340
-  idx3=id=40
+  idx3=gcn=4
+  id=40
        root=43
 scn=4
        space_id=4294967294
@@ -1157,6 +1199,7 @@ uba=9223372036854841340
 index_column_usage=
   col0=table_id=17
   col1=table_id=17
+  col10=table_id=17
   col2=table_id=17
   col3=table_id=17
   col4=table_id=17
@@ -1224,21 +1267,24 @@ index_column_usage=
             lbl=TABLESPACE
             pos=5
   id=17
-  idx0=id=41
+  idx0=gcn=4
+  id=41
        root=44
 scn=4
        space_id=4294967294
        table_id=17
        trx_id=0
 uba=9223372036854841340
-  idx1=id=42
+  idx1=gcn=4
+  id=42
        root=45
 scn=4
        space_id=4294967294
        table_id=17
        trx_id=0
 uba=9223372036854841340
-  idx2=id=43
+  idx2=gcn=4
+  id=43
        root=47
 scn=4
        space_id=4294967294
@@ -1256,6 +1302,7 @@ index_partitions=
   col6=table_id=18
   col7=table_id=18
   col8=table_id=18
+  col9=table_id=18
   data=
   def=
     fields=
@@ -1315,21 +1362,24 @@ index_partitions=
             lbl=TABLESPACE
             pos=5
   id=18
-  idx0=id=44
+  idx0=gcn=4
+  id=44
        root=48
 scn=4
        space_id=4294967294
        table_id=18
        trx_id=0
 uba=9223372036854841340
-  idx1=id=45
+  idx1=gcn=4
+  id=45
        root=49
 scn=4
        space_id=4294967294
        table_id=18
        trx_id=0
 uba=9223372036854841340
-  idx2=id=46
+  idx2=gcn=4
+  id=46
        root=50
 scn=4
        space_id=4294967294
@@ -1340,6 +1390,7 @@ uba=9223372036854841340
 index_stats=
   col0=table_id=19
   col1=table_id=19
+  col10=table_id=19
   col2=table_id=19
   col3=table_id=19
   col4=table_id=19
@@ -1395,7 +1446,8 @@ index_stats=
             lbl=TABLESPACE
             pos=5
   id=19
-  idx0=id=47
+  idx0=gcn=4
+  id=47
        root=51
 scn=4
        space_id=4294967294
@@ -1415,6 +1467,7 @@ uba=9223372036854841340
   col16=table_id=20
   col17=table_id=20
   col18=table_id=20
+  col19=table_id=20
   col2=table_id=20
   col3=table_id=20
   col4=table_id=20
@@ -1522,21 +1575,24 @@ uba=9223372036854841340
             lbl=TABLESPACE
             pos=5
   id=20
-  idx0=id=48
+  idx0=gcn=4
+  id=48
        root=52
 scn=4
        space_id=4294967294
        table_id=20
        trx_id=0
 uba=9223372036854841340
-  idx1=id=49
+  idx1=gcn=4
+  id=49
        root=53
 scn=4
        space_id=4294967294
        table_id=20
        trx_id=0
 uba=9223372036854841340
-  idx2=id=50
+  idx2=gcn=4
+  id=50
        root=54
 scn=4
        space_id=4294967294
@@ -1550,6 +1606,7 @@ innodb_ddl_log=
   col10=table_id=5
   col11=table_id=5
   col12=table_id=5
+  col13=table_id=5
   col2=table_id=5
   col3=table_id=5
   col4=table_id=5
@@ -1618,14 +1675,16 @@ innodb_ddl_log=
             lbl=TABLESPACE
             pos=5
   id=5
-  idx0=id=5
+  idx0=gcn=4
+  id=5
        root=8
 scn=4
        space_id=4294967294
        table_id=5
        trx_id=0
 uba=9223372036854841340
-  idx1=id=6
+  idx1=gcn=4
+  id=6
        root=9
 scn=4
        space_id=4294967294
@@ -1641,6 +1700,7 @@ innodb_dynamic_metadata=
   col4=table_id=2
   col5=table_id=2
   col6=table_id=2
+  col7=table_id=2
   data=
   def=
     fields=
@@ -1679,7 +1739,8 @@ innodb_dynamic_metadata=
             lbl=TABLESPACE
             pos=5
   id=2
-  idx0=id=2
+  idx0=gcn=4
+  id=2
        root=5
 scn=4
        space_id=4294967294
@@ -1695,6 +1756,7 @@ innodb_flashback_snapshot=
   col4=table_id=6
   col5=table_id=6
   col6=table_id=6
+  col7=table_id=6
   data=
   def=
     fields=
@@ -1736,14 +1798,16 @@ innodb_flashback_snapshot=
             lbl=TABLESPACE
             pos=5
   id=6
-  idx0=id=7
+  idx0=gcn=4
+  id=7
        root=10
 scn=4
        space_id=4294967294
        table_id=6
        trx_id=0
 uba=9223372036854841340
-  idx1=id=8
+  idx1=gcn=4
+  id=8
        root=11
 scn=4
        space_id=4294967294
@@ -1756,6 +1820,7 @@ innodb_index_stats=
   col1=table_id=4
   col10=table_id=4
   col11=table_id=4
+  col12=table_id=4
   col2=table_id=4
   col3=table_id=4
   col4=table_id=4
@@ -1817,7 +1882,8 @@ innodb_index_stats=
             lbl=TABLESPACE
             pos=5
   id=4
-  idx0=id=4
+  idx0=gcn=4
+  id=4
        root=7
 scn=4
        space_id=4294967294
@@ -1828,6 +1894,7 @@ uba=9223372036854841340
 innodb_table_stats=
   col0=table_id=3
   col1=table_id=3
+  col10=table_id=3
   col2=table_id=3
   col3=table_id=3
   col4=table_id=3
@@ -1885,7 +1952,8 @@ innodb_table_stats=
             lbl=TABLESPACE
             pos=5
   id=3
-  idx0=id=3
+  idx0=gcn=4
+  id=3
        root=6
 scn=4
        space_id=4294967294
@@ -1901,6 +1969,7 @@ parameter_type_elements=
   col4=table_id=21
   col5=table_id=21
   col6=table_id=21
+  col7=table_id=21
   data=
   def=
     fields=
@@ -1942,7 +2011,8 @@ parameter_type_elements=
             lbl=TABLESPACE
             pos=5
   id=21
-  idx0=id=51
+  idx0=gcn=4
+  id=51
        root=55
 scn=4
        space_id=4294967294
@@ -1962,6 +2032,7 @@ parameters=
   col16=table_id=22
   col17=table_id=22
   col18=table_id=22
+  col19=table_id=22
   col2=table_id=22
   col3=table_id=22
   col4=table_id=22
@@ -2074,21 +2145,24 @@ parameters=
             lbl=TABLESPACE
             pos=5
   id=22
-  idx0=id=52
+  idx0=gcn=4
+  id=52
        root=56
 scn=4
        space_id=4294967294
        table_id=22
        trx_id=0
 uba=9223372036854841340
-  idx1=id=53
+  idx1=gcn=4
+  id=53
        root=57
 scn=4
        space_id=4294967294
        table_id=22
        trx_id=0
 uba=9223372036854841340
-  idx2=id=54
+  idx2=gcn=4
+  id=54
        root=58
 scn=4
        space_id=4294967294
@@ -2100,6 +2174,7 @@ resource_groups=
   col0=table_id=23
   col1=table_id=23
   col10=table_id=23
+  col11=table_id=23
   col2=table_id=23
   col3=table_id=23
   col4=table_id=23
@@ -2162,14 +2237,16 @@ resource_groups=
             lbl=TABLESPACE
             pos=5
   id=23
-  idx0=id=55
+  idx0=gcn=4
+  id=55
        root=59
 scn=4
        space_id=4294967294
        table_id=23
        trx_id=0
 uba=9223372036854841340
-  idx1=id=56
+  idx1=gcn=4
+  id=56
        root=60
 scn=4
        space_id=4294967294
@@ -2205,6 +2282,7 @@ routines=
   col30=table_id=24
   col31=table_id=24
   col32=table_id=24
+  col33=table_id=24
   col4=table_id=24
   col5=table_id=24
   col6=table_id=24
@@ -2377,42 +2455,48 @@ routines=
             lbl=TABLESPACE
             pos=5
   id=24
-  idx0=id=57
+  idx0=gcn=4
+  id=57
        root=61
 scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
 uba=9223372036854841340
-  idx1=id=58
+  idx1=gcn=4
+  id=58
        root=62
 scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
 uba=9223372036854841340
-  idx2=id=59
+  idx2=gcn=4
+  id=59
        root=63
 scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
 uba=9223372036854841340
-  idx3=id=60
+  idx3=gcn=4
+  id=60
        root=64
 scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
 uba=9223372036854841340
-  idx4=id=61
+  idx4=gcn=4
+  id=61
        root=65
 scn=4
        space_id=4294967294
        table_id=24
        trx_id=0
 uba=9223372036854841340
-  idx5=id=62
+  idx5=gcn=4
+  id=62
        root=66
 scn=4
        space_id=4294967294
@@ -2426,6 +2510,7 @@ schemata=
   col10=table_id=25
   col11=table_id=25
   col12=table_id=25
+  col13=table_id=25
   col2=table_id=25
   col3=table_id=25
   col4=table_id=25
@@ -2503,21 +2588,24 @@ schemata=
             lbl=TABLESPACE
             pos=5
   id=25
-  idx0=id=63
+  idx0=gcn=4
+  id=63
        root=67
 scn=4
        space_id=4294967294
        table_id=25
        trx_id=0
 uba=9223372036854841340
-  idx1=id=64
+  idx1=gcn=4
+  id=64
        root=68
 scn=4
        space_id=4294967294
        table_id=25
        trx_id=0
 uba=9223372036854841340
-  idx2=id=65
+  idx2=gcn=4
+  id=65
        root=69
 scn=4
        space_id=4294967294
@@ -2532,6 +2620,7 @@ st_spatial_reference_systems=
   col11=table_id=26
   col12=table_id=26
   col13=table_id=26
+  col14=table_id=26
   col2=table_id=26
   col3=table_id=26
   col4=table_id=26
@@ -2614,21 +2703,24 @@ COLLATE utf8_general_ci
             lbl=TABLESPACE
             pos=5
   id=26
-  idx0=id=66
+  idx0=gcn=4
+  id=66
        root=70
 scn=4
        space_id=4294967294
        table_id=26
        trx_id=0
 uba=9223372036854841340
-  idx1=id=67
+  idx1=gcn=4
+  id=67
        root=71
 scn=4
        space_id=4294967294
        table_id=26
        trx_id=0
 uba=9223372036854841340
-  idx2=id=68
+  idx2=gcn=4
+  id=68
        root=72
 scn=4
        space_id=4294967294
@@ -2646,6 +2738,7 @@ table_partition_values=
   col6=table_id=27
   col7=table_id=27
   col8=table_id=27
+  col9=table_id=27
   data=
   def=
     fields=
@@ -2693,7 +2786,8 @@ table_partition_values=
             lbl=TABLESPACE
             pos=5
   id=27
-  idx0=id=69
+  idx0=gcn=4
+  id=69
        root=73
 scn=4
        space_id=4294967294
@@ -2710,6 +2804,7 @@ table_partitions=
   col13=table_id=28
   col14=table_id=28
   col15=table_id=28
+  col16=table_id=28
   col2=table_id=28
   col3=table_id=28
   col4=table_id=28
@@ -2811,49 +2906,56 @@ table_partitions=
             lbl=TABLESPACE
             pos=5
   id=28
-  idx0=id=70
+  idx0=gcn=4
+  id=70
        root=74
 scn=4
        space_id=4294967294
        table_id=28
        trx_id=0
 uba=9223372036854841340
-  idx1=id=71
+  idx1=gcn=4
+  id=71
        root=75
 scn=4
        space_id=4294967294
        table_id=28
        trx_id=0
 uba=9223372036854841340
-  idx2=id=72
+  idx2=gcn=4
+  id=72
        root=76
 scn=4
        space_id=4294967294
        table_id=28
        trx_id=0
 uba=9223372036854841340
-  idx3=id=73
+  idx3=gcn=4
+  id=73
        root=77
 scn=4
        space_id=4294967294
        table_id=28
        trx_id=0
 uba=9223372036854841340
-  idx4=id=74
+  idx4=gcn=4
+  id=74
        root=78
 scn=4
        space_id=4294967294
        table_id=28
        trx_id=0
 uba=9223372036854841340
-  idx5=id=75
+  idx5=gcn=4
+  id=75
        root=79
 scn=4
        space_id=4294967294
        table_id=28
        trx_id=0
 uba=9223372036854841340
-  idx6=id=76
+  idx6=gcn=4
+  id=76
        root=80
 scn=4
        space_id=4294967294
@@ -2871,6 +2973,7 @@ table_stats=
   col14=table_id=29
   col15=table_id=29
   col16=table_id=29
+  col17=table_id=29
   col2=table_id=29
   col3=table_id=29
   col4=table_id=29
@@ -2947,7 +3050,8 @@ table_stats=
             lbl=TABLESPACE
             pos=5
   id=29
-  idx0=id=77
+  idx0=gcn=4
+  id=77
        root=81
 scn=4
        space_id=4294967294
@@ -2989,6 +3093,7 @@ tables=
   col36=table_id=30
   col37=table_id=30
   col38=table_id=30
+  col39=table_id=30
   col4=table_id=30
   col5=table_id=30
   col6=table_id=30
@@ -3179,63 +3284,72 @@ tables=
             lbl=TABLESPACE
             pos=5
   id=30
-  idx0=id=78
+  idx0=gcn=4
+  id=78
        root=82
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx1=id=79
+  idx1=gcn=4
+  id=79
        root=83
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx2=id=80
+  idx2=gcn=4
+  id=80
        root=84
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx3=id=81
+  idx3=gcn=4
+  id=81
        root=85
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx4=id=82
+  idx4=gcn=4
+  id=82
        root=86
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx5=id=83
+  idx5=gcn=4
+  id=83
        root=87
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx6=id=84
+  idx6=gcn=4
+  id=84
        root=88
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx7=id=85
+  idx7=gcn=4
+  id=85
        root=90
 scn=4
        space_id=4294967294
        table_id=30
        trx_id=0
 uba=9223372036854841340
-  idx8=id=86
+  idx8=gcn=4
+  id=86
        root=91
 scn=4
        space_id=4294967294
@@ -3252,6 +3366,7 @@ tablespace_files=
   col5=table_id=31
   col6=table_id=31
   col7=table_id=31
+  col8=table_id=31
   data=
   def=
     fields=
@@ -3299,14 +3414,16 @@ tablespace_files=
             lbl=TABLESPACE
             pos=5
   id=31
-  idx0=id=87
+  idx0=gcn=4
+  id=87
        root=92
 scn=4
        space_id=4294967294
        table_id=31
        trx_id=0
 uba=9223372036854841340
-  idx1=id=88
+  idx1=gcn=4
+  id=88
        root=93
 scn=4
        space_id=4294967294
@@ -3317,6 +3434,7 @@ uba=9223372036854841340
 tablespaces=
   col0=table_id=32
   col1=table_id=32
+  col10=table_id=32
   col2=table_id=32
   col3=table_id=32
   col4=table_id=32
@@ -3376,14 +3494,16 @@ tablespaces=
             lbl=TABLESPACE
             pos=5
   id=32
-  idx0=id=89
+  idx0=gcn=4
+  id=89
        root=94
 scn=4
        space_id=4294967294
        table_id=32
        trx_id=0
 uba=9223372036854841340
-  idx1=id=90
+  idx1=gcn=4
+  id=90
        root=95
 scn=4
        space_id=4294967294
@@ -3406,6 +3526,7 @@ triggers=
   col19=table_id=33
   col2=table_id=33
   col20=table_id=33
+  col21=table_id=33
   col3=table_id=33
   col4=table_id=33
   col5=table_id=33
@@ -3524,42 +3645,48 @@ triggers=
             lbl=TABLESPACE
             pos=5
   id=33
-  idx0=id=91
+  idx0=gcn=4
+  id=91
        root=96
 scn=4
        space_id=4294967294
        table_id=33
        trx_id=0
 uba=9223372036854841340
-  idx1=id=92
+  idx1=gcn=4
+  id=92
        root=97
 scn=4
        space_id=4294967294
        table_id=33
        trx_id=0
 uba=9223372036854841340
-  idx2=id=93
+  idx2=gcn=4
+  id=93
        root=98
 scn=4
        space_id=4294967294
        table_id=33
        trx_id=0
 uba=9223372036854841340
-  idx3=id=94
+  idx3=gcn=4
+  id=94
        root=99
 scn=4
        space_id=4294967294
        table_id=33
        trx_id=0
 uba=9223372036854841340
-  idx4=id=95
+  idx4=gcn=4
+  id=95
        root=100
 scn=4
        space_id=4294967294
        table_id=33
        trx_id=0
 uba=9223372036854841340
-  idx5=id=96
+  idx5=gcn=4
+  id=96
        root=101
 scn=4
        space_id=4294967294
@@ -3576,6 +3703,7 @@ view_routine_usage=
   col5=table_id=34
   col6=table_id=34
   col7=table_id=34
+  col8=table_id=34
   data=
   def=
     fields=
@@ -3623,14 +3751,16 @@ view_routine_usage=
             lbl=TABLESPACE
             pos=5
   id=34
-  idx0=id=97
+  idx0=gcn=4
+  id=97
        root=102
 scn=4
        space_id=4294967294
        table_id=34
        trx_id=0
 uba=9223372036854841340
-  idx1=id=98
+  idx1=gcn=4
+  id=98
        root=103
 scn=4
        space_id=4294967294
@@ -3647,6 +3777,7 @@ view_table_usage=
   col5=table_id=35
   col6=table_id=35
   col7=table_id=35
+  col8=table_id=35
   data=
   def=
     fields=
@@ -3694,14 +3825,16 @@ view_table_usage=
             lbl=TABLESPACE
             pos=5
   id=35
-  idx0=id=99
+  idx0=gcn=4
+  id=99
        root=104
 scn=4
        space_id=4294967294
        table_id=35
        trx_id=0
 uba=9223372036854841340
-  idx1=id=100
+  idx1=gcn=4
+  id=100
        root=105
 scn=4
        space_id=4294967294

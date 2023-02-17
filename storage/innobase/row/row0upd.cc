@@ -887,6 +887,11 @@ upd_t *row_upd_build_difference_binary(dict_index_t *index,
       if (i == trx_id_pos + 3 && !index->table->is_intrinsic()) {
         continue;
       }
+
+      /* DB_GCN_ID */
+      if (i == trx_id_pos + 4 && !index->table->is_intrinsic()) {
+        continue;
+      }
     }
 
     if (!dfield_is_ext(dfield) != !rec_offs_nth_extern(offsets, i) ||

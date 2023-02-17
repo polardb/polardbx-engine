@@ -907,9 +907,9 @@ if ($have_debug)
 # Lizard: handle_commit has been added because we have to modify data dictionary for tow
 # added columns.
 alter table t3 rename t4;
-call p_verify_status_increment(22, 4, 3, 0);
+call p_verify_status_increment(23, 4, 3, 0);
 rename table t4 to t3;
-call p_verify_status_increment(26, 4, 5, 0);
+call p_verify_status_increment(27, 4, 5, 0);
 truncate table t3;
 
 if (!$have_debug)

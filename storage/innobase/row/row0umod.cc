@@ -1254,6 +1254,7 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
   node->txn_rec.trx_id = trx_id;
   node->txn_rec.scn = txn_info.scn;
   node->txn_rec.undo_ptr = txn_info.undo_ptr;
+  node->txn_rec.gcn = txn_info.gcn;
   node->cmpl_info = cmpl_info;
 
   if (!row_undo_search_clust_to_pcur(node)) {

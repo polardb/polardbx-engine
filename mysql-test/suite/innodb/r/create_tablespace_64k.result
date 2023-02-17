@@ -148,11 +148,11 @@ mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATA
 s_64k	TABLESPACE	InnoDB	NORMAL	s_64k	MYSQLD_DATADIR/s_64k.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t_com_in_64k	s_64k	129	7	Compact	0	General
-test/t_dyn_in_64k	s_64k	161	7	Dynamic	0	General
-test/t_red_in_64k	s_64k	128	7	Redundant	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t_com_in_64k	s_64k	129	8	Compact	0	General
+test/t_dyn_in_64k	s_64k	161	8	Dynamic	0	General
+test/t_red_in_64k	s_64k	128	8	Redundant	0	General
 # Directory of MYSQLD_DATADIR/
 lizard.ibd
 mysql.ibd

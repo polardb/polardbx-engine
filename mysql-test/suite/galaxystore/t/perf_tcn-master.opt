@@ -1,2 +1,2 @@
---innodb_tcn_cache_level=session
+--innodb_tcn_cache_level=none
 --innodb_tcn_block_cache_type=lru

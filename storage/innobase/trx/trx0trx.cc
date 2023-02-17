@@ -308,12 +308,6 @@ struct TrxFactory {
 
     lock_trx_alloc_locks(trx);
 
-    if (lizard::innodb_tcn_cache_level == SESSION_LEVEL) {
-      trx->session_tcn = new lizard::Session_tcn();
-    } else {
-      trx->session_tcn = nullptr;
-    }
-
     lizard::alloc_cleanout_cursors(trx);
   }
 
@@ -377,11 +371,6 @@ struct TrxFactory {
     trx->xad.~XAD();
 
     trx->vision.~Vision();
-
-    if (trx->session_tcn != nullptr) {
-      delete trx->session_tcn;
-      trx->session_tcn = nullptr;
-    }
 
     lizard::release_cleanout_cursors(trx);
   }

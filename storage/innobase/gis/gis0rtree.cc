@@ -249,6 +249,10 @@ static bool rtr_update_mbr_field_in_place(
   lizard::trx_write_undo_ptr(log_ptr, (undo_ptr_t)0);
   log_ptr += DATA_UNDO_PTR_LEN;
 
+  /* GCN */
+  lizard::trx_write_gcn(log_ptr, (gcn_t)0);
+  log_ptr += DATA_GCN_ID_LEN;
+
   /* Offset */
   mach_write_to_2(log_ptr, page_offset(rec));
   log_ptr += 2;

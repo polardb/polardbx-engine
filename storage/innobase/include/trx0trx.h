@@ -1271,9 +1271,6 @@ struct trx_t {
   /** Descripe XA attributes from server */
   XAD xad;
 
-  /** Cache tcn information. */
-  lizard::Cache_tcn *session_tcn;
-
   /** Commit cleanout cursors */
   lizard::Cleanout_cursors *cleanout_cursors;
 };

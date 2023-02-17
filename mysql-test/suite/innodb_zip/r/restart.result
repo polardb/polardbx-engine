@@ -256,22 +256,22 @@ count(*)
 #
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-move_test/t1_restart	move_test/t1_restart	0	10	Redundant	0	Single
-move_test/t2_restart	move_test/t2_restart	1	10	Compact	0	Single
-move_test/t3_restart	move_test/t3_restart	37	10	Compressed	2048	Single
-move_test/t4_restart	move_test/t4_restart	33	10	Dynamic	0	Single
-move_test/t5_restart	move_test/t5_restart	97	10	Dynamic	0	Single
-move_test/t6_restart#p#p0	move_test/t6_restart#p#p0	101	10	Compressed	2048	Single
-move_test/t6_restart#p#p1	move_test/t6_restart#p#p1	101	10	Compressed	2048	Single
-move_test/t6_restart#p#p2	move_test/t6_restart#p#p2	101	10	Compressed	2048	Single
-move_test/t7_restart#p#p0#sp#s0	move_test/t7_restart#p#p0#sp#s0	97	10	Dynamic	0	Single
-move_test/t7_restart#p#p0#sp#s1	move_test/t7_restart#p#p0#sp#s1	97	10	Dynamic	0	Single
-move_test/t7_restart#p#p1#sp#s2	move_test/t7_restart#p#p1#sp#s2	97	10	Dynamic	0	Single
-move_test/t7_restart#p#p1#sp#s3	move_test/t7_restart#p#p1#sp#s3	97	10	Dynamic	0	Single
-move_test/t8_restart	s1_restart	129	10	Compact	0	General
-move_test/t9_restart	s1_restart	161	10	Dynamic	0	General
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+move_test/t1_restart	move_test/t1_restart	0	11	Redundant	0	Single
+move_test/t2_restart	move_test/t2_restart	1	11	Compact	0	Single
+move_test/t3_restart	move_test/t3_restart	37	11	Compressed	2048	Single
+move_test/t4_restart	move_test/t4_restart	33	11	Dynamic	0	Single
+move_test/t5_restart	move_test/t5_restart	97	11	Dynamic	0	Single
+move_test/t6_restart#p#p0	move_test/t6_restart#p#p0	101	11	Compressed	2048	Single
+move_test/t6_restart#p#p1	move_test/t6_restart#p#p1	101	11	Compressed	2048	Single
+move_test/t6_restart#p#p2	move_test/t6_restart#p#p2	101	11	Compressed	2048	Single
+move_test/t7_restart#p#p0#sp#s0	move_test/t7_restart#p#p0#sp#s0	97	11	Dynamic	0	Single
+move_test/t7_restart#p#p0#sp#s1	move_test/t7_restart#p#p0#sp#s1	97	11	Dynamic	0	Single
+move_test/t7_restart#p#p1#sp#s2	move_test/t7_restart#p#p1#sp#s2	97	11	Dynamic	0	Single
+move_test/t7_restart#p#p1#sp#s3	move_test/t7_restart#p#p1#sp#s3	97	11	Dynamic	0	Single
+move_test/t8_restart	s1_restart	129	11	Compact	0	General
+move_test/t9_restart	s1_restart	161	11	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 move_test/t1_restart	Single	DEFAULT	0	Compact or Redundant	MYSQLD_DATADIR/move_test/t1_restart.ibd
@@ -474,22 +474,22 @@ count(*)
 #
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-move_test/t1_restart	move_test/t1_restart	0	10	Redundant	0	Single
-move_test/t2_restart	move_test/t2_restart	1	10	Compact	0	Single
-move_test/t3_restart	move_test/t3_restart	37	10	Compressed	2048	Single
-move_test/t4_restart	move_test/t4_restart	33	10	Dynamic	0	Single
-move_test/t5_restart	move_test/t5_restart	97	10	Dynamic	0	Single
-move_test/t6_restart#p#p0	move_test/t6_restart#p#p0	101	10	Compressed	2048	Single
-move_test/t6_restart#p#p1	move_test/t6_restart#p#p1	101	10	Compressed	2048	Single
-move_test/t6_restart#p#p2	move_test/t6_restart#p#p2	101	10	Compressed	2048	Single
-move_test/t7_restart#p#p0#sp#s0	move_test/t7_restart#p#p0#sp#s0	97	10	Dynamic	0	Single
-move_test/t7_restart#p#p0#sp#s1	move_test/t7_restart#p#p0#sp#s1	97	10	Dynamic	0	Single
-move_test/t7_restart#p#p1#sp#s2	move_test/t7_restart#p#p1#sp#s2	97	10	Dynamic	0	Single
-move_test/t7_restart#p#p1#sp#s3	move_test/t7_restart#p#p1#sp#s3	97	10	Dynamic	0	Single
-move_test/t8_restart	s1_restart	129	10	Compact	0	General
-move_test/t9_restart	s1_restart	161	10	Dynamic	0	General
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+move_test/t1_restart	move_test/t1_restart	0	11	Redundant	0	Single
+move_test/t2_restart	move_test/t2_restart	1	11	Compact	0	Single
+move_test/t3_restart	move_test/t3_restart	37	11	Compressed	2048	Single
+move_test/t4_restart	move_test/t4_restart	33	11	Dynamic	0	Single
+move_test/t5_restart	move_test/t5_restart	97	11	Dynamic	0	Single
+move_test/t6_restart#p#p0	move_test/t6_restart#p#p0	101	11	Compressed	2048	Single
+move_test/t6_restart#p#p1	move_test/t6_restart#p#p1	101	11	Compressed	2048	Single
+move_test/t6_restart#p#p2	move_test/t6_restart#p#p2	101	11	Compressed	2048	Single
+move_test/t7_restart#p#p0#sp#s0	move_test/t7_restart#p#p0#sp#s0	97	11	Dynamic	0	Single
+move_test/t7_restart#p#p0#sp#s1	move_test/t7_restart#p#p0#sp#s1	97	11	Dynamic	0	Single
+move_test/t7_restart#p#p1#sp#s2	move_test/t7_restart#p#p1#sp#s2	97	11	Dynamic	0	Single
+move_test/t7_restart#p#p1#sp#s3	move_test/t7_restart#p#p1#sp#s3	97	11	Dynamic	0	Single
+move_test/t8_restart	s1_restart	129	11	Compact	0	General
+move_test/t9_restart	s1_restart	161	11	Dynamic	0	General
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 move_test/t1_restart	Single	DEFAULT	0	Compact or Redundant	MYSQLD_DATADIR/move_test/t1_restart.ibd
@@ -1217,17 +1217,17 @@ SUBPARTITION BY HASH (`c1`)
 #
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-move_test/t4_restart	move_test/t4_restart	33	10	Dynamic	0	Single
-move_test/t55_restart	move_test/t55_restart	97	10	Dynamic	0	Single
-move_test/t66_restart#p#p0	move_test/t66_restart#p#p0	101	10	Compressed	2048	Single
-move_test/t66_restart#p#p1	move_test/t66_restart#p#p1	101	10	Compressed	2048	Single
-move_test/t66_restart#p#p2	move_test/t66_restart#p#p2	101	10	Compressed	2048	Single
-move_test/t77_restart#p#p0#sp#s0	move_test/t77_restart#p#p0#sp#s0	97	10	Dynamic	0	Single
-move_test/t77_restart#p#p0#sp#s1	move_test/t77_restart#p#p0#sp#s1	97	10	Dynamic	0	Single
-move_test/t77_restart#p#p1#sp#s2	move_test/t77_restart#p#p1#sp#s2	97	10	Dynamic	0	Single
-move_test/t77_restart#p#p1#sp#s3	move_test/t77_restart#p#p1#sp#s3	97	10	Dynamic	0	Single
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+move_test/t4_restart	move_test/t4_restart	33	11	Dynamic	0	Single
+move_test/t55_restart	move_test/t55_restart	97	11	Dynamic	0	Single
+move_test/t66_restart#p#p0	move_test/t66_restart#p#p0	101	11	Compressed	2048	Single
+move_test/t66_restart#p#p1	move_test/t66_restart#p#p1	101	11	Compressed	2048	Single
+move_test/t66_restart#p#p2	move_test/t66_restart#p#p2	101	11	Compressed	2048	Single
+move_test/t77_restart#p#p0#sp#s0	move_test/t77_restart#p#p0#sp#s0	97	11	Dynamic	0	Single
+move_test/t77_restart#p#p0#sp#s1	move_test/t77_restart#p#p0#sp#s1	97	11	Dynamic	0	Single
+move_test/t77_restart#p#p1#sp#s2	move_test/t77_restart#p#p1#sp#s2	97	11	Dynamic	0	Single
+move_test/t77_restart#p#p1#sp#s3	move_test/t77_restart#p#p1#sp#s3	97	11	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 move_test/t4_restart	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/move_test/t4_restart.ibd

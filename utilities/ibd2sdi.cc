@@ -125,15 +125,18 @@ static const uint32_t REC_OFF_DATA_ROLL_PTR =
 
 /** 8-byte scn-id (25). */
 static const uint32_t REC_OFF_DATA_SCN_ID =
-    REC_OFF_DATA_ROLL_PTR + DATA_SCN_ID_LEN;
+    REC_OFF_DATA_ROLL_PTR + DATA_ROLL_PTR_LEN;
 
 /** 7-byte undo_ptr (33) */
 static const uint32_t REC_OFF_DATA_UNDO_PTR =
-    REC_OFF_DATA_SCN_ID + DATA_UNDO_PTR_LEN;
+    REC_OFF_DATA_SCN_ID + DATA_SCN_ID_LEN;
+
+static const uint32_t REC_OFF_DATA_GCN_ID =
+    REC_OFF_DATA_UNDO_PTR + DATA_UNDO_PTR_LEN;
 
 /** 4-byte un-compressed len (40) */
 static const uint32_t REC_OFF_DATA_UNCOMP_LEN =
-    REC_OFF_DATA_UNDO_PTR + DATA_ROLL_PTR_LEN;
+    REC_OFF_DATA_GCN_ID + DATA_GCN_ID_LEN;
 
 /** 4-byte compressed len (44) */
 static const uint32_t REC_OFF_DATA_COMP_LEN =
@@ -152,9 +155,10 @@ static const uint32_t SDI_REC_SIZE = 1                     /* rec_len */
                                      + REC_DATA_TYPE_LEN   /* type field size */
                                      + REC_DATA_ID_LEN     /* id field len */
                                      + DATA_ROLL_PTR_LEN   /* roll ptr len */
-                                     + DATA_TRX_ID_LEN /* TRX_ID len */
-                                     + DATA_SCN_ID_LEN /*SCN_ID len */
-                                     + DATA_UNDO_PTR_LEN /* UNDO_PTR len */;
+                                     + DATA_TRX_ID_LEN     /* TRX_ID len */
+                                     + DATA_SCN_ID_LEN     /*SCN_ID len */
+                                     + DATA_UNDO_PTR_LEN   /* UNDO_PTR len */
+                                     + DATA_GCN_ID_LEN;
 
 /** If page 0 is corrupted, the maximum number of pages to scan to
 determine page size. */

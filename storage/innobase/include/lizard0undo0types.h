@@ -92,6 +92,9 @@ struct undo_addr_t {
   scn_t scn;
   /* Active or Commit state */
   bool state;
+
+  /** Commit gcn number */
+  gcn_t gcn;
 };
 
 typedef struct undo_addr_t undo_addr_t;
@@ -172,6 +175,7 @@ struct txn_rec_t {
     visible judgement, and it can be retrieved by txn undo header, so defined
     gcn as txn record attribute.
   */
+  /** Revision: Persist gcn into record */
   gcn_t gcn;
 };
 
@@ -179,12 +183,15 @@ struct txn_rec_t {
   Lizard transaction attributes in undo log record
    1) scn
    2) undo_ptr
+   3) gcn
 */
 struct txn_info_t {
   /** scn number */
   scn_id_t scn;
   /** undo log header address */
   undo_ptr_t undo_ptr;
+  /** gcn number */
+  gcn_t gcn;
 };
 
 /**

@@ -7,6 +7,7 @@ Variable_name	Value
 Lizard_commit_gcn	1024
 Lizard_snapshot_gcn	1024
 Lizard_purged_gcn	1024
+Lizard_buffer_pool_txn_lookup_gcn_read_sees	0
 create database mydb;
 use mydb;
 create table t1 (a int, b int, primary key(a));

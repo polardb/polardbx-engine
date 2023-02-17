@@ -156,7 +156,7 @@ EXPLAIN SELECT a, b, c, d FROM t WHERE a IN (1, 2, 3, 4, 5) AND b IN (1, 2, 3) A
                 "range_analysis": {
                   "table_scan": {
                     "rows": 2500,
-                    "cost": 254.85
+                    "cost": 255.35
                   },
                   "potential_range_indexes": [
                     {
@@ -264,7 +264,7 @@ EXPLAIN SELECT a, b, c, d FROM t WHERE a IN (1, 2, 3, 4, 5) AND b IN (1, 2, 3) A
                         "using_mrr": false,
                         "index_only": true,
                         "rows": 750,
-                        "cost": 79.106,
+                        "cost": 79.151,
                         "chosen": true
                       },
                       {
@@ -453,7 +453,7 @@ EXPLAIN SELECT b, c, d FROM t WHERE a = 5 AND c > 4 AND d < 3	{
                 "range_analysis": {
                   "table_scan": {
                     "rows": 2500,
-                    "cost": 254.85
+                    "cost": 255.35
                   },
                   "potential_range_indexes": [
                     {
@@ -534,7 +534,7 @@ EXPLAIN SELECT b, c, d FROM t WHERE a = 5 AND c > 4 AND d < 3	{
                         "using_mrr": false,
                         "index_only": true,
                         "rows": 250,
-                        "cost": 25.375,
+                        "cost": 25.39,
                         "chosen": false,
                         "cause": "cost"
                       },
@@ -735,7 +735,7 @@ EXPLAIN SELECT b, c, d FROM t WHERE a = 5 AND d < 3	{
                 "range_analysis": {
                   "table_scan": {
                     "rows": 2500,
-                    "cost": 254.85
+                    "cost": 255.35
                   },
                   "potential_range_indexes": [
                     {
@@ -817,7 +817,7 @@ EXPLAIN SELECT b, c, d FROM t WHERE a = 5 AND d < 3	{
                         "using_mrr": false,
                         "index_only": true,
                         "rows": 250,
-                        "cost": 25.375,
+                        "cost": 25.39,
                         "chosen": true
                       },
                       {
@@ -841,7 +841,7 @@ EXPLAIN SELECT b, c, d FROM t WHERE a = 5 AND d < 3	{
                       ]
                     },
                     "rows_for_plan": 250,
-                    "cost_for_plan": 25.375,
+                    "cost_for_plan": 25.39,
                     "chosen": true
                   }
                 }
@@ -993,7 +993,7 @@ EXPLAIN SELECT b FROM t WHERE d < 2	{
                 "range_analysis": {
                   "table_scan": {
                     "rows": 2500,
-                    "cost": 254.85
+                    "cost": 255.35
                   },
                   "potential_range_indexes": [
                     {

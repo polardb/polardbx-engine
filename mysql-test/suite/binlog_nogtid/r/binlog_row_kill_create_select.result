@@ -13,6 +13,15 @@ ERROR 70100: Query execution was interrupted
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 DROP TABLE t1;
+DROP TABLE IF EXISTS t2;
+Warnings:
+Note	1051	Unknown table 'test.t2'
+DROP TABLE IF EXISTS t3;
+Warnings:
+Note	1051	Unknown table 'test.t3'
+DROP TABLE IF EXISTS t4;
+Warnings:
+Note	1051	Unknown table 'test.t4'
 CREATE TABLE t1 (c1 INT) ENGINE = MyISAM;
 INSERT INTO t1 VALUES (1);
 INSERT INTO t1 VALUES (2);
@@ -28,3 +37,12 @@ ERROR 70100: Query execution was interrupted
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 DROP TABLE t1;
+DROP TABLE IF EXISTS t2;
+Warnings:
+Warning	1017	Can't find file: 't2' (errno: 2 - No such file or directory)
+DROP TABLE IF EXISTS t3;
+Warnings:
+Warning	1017	Can't find file: 't3' (errno: 2 - No such file or directory)
+DROP TABLE IF EXISTS t4;
+Warnings:
+Warning	1017	Can't find file: 't4' (errno: 2 - No such file or directory)

@@ -47,12 +47,12 @@ SUBPARTITION BY HASH (`store_id`)
   SUBPARTITION sw3 DATA DIRECTORY = 'MYSQL_TMP_DIR/alt_dir_southwest/' ENGINE = InnoDB)) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/emp#p#northeast#sp#ne0	test/emp#p#northeast#sp#ne0	97	9	Dynamic	0	Single
-test/emp#p#northeast#sp#ne1	test/emp#p#northeast#sp#ne1	97	9	Dynamic	0	Single
-test/emp#p#southwest#sp#sw2	test/emp#p#southwest#sp#sw2	97	9	Dynamic	0	Single
-test/emp#p#southwest#sp#sw3	test/emp#p#southwest#sp#sw3	97	9	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/emp#p#northeast#sp#ne0	test/emp#p#northeast#sp#ne0	97	10	Dynamic	0	Single
+test/emp#p#northeast#sp#ne1	test/emp#p#northeast#sp#ne1	97	10	Dynamic	0	Single
+test/emp#p#southwest#sp#sw2	test/emp#p#southwest#sp#sw2	97	10	Dynamic	0	Single
+test/emp#p#southwest#sp#sw3	test/emp#p#southwest#sp#sw3	97	10	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -127,16 +127,16 @@ SUBPARTITION BY HASH (`store_id`)
   SUBPARTITION s1 DATA DIRECTORY = 'MYSQL_TMP_DIR/alt_dir_south' ENGINE = InnoDB)) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/emp#p#east#sp#e0	test/emp#p#east#sp#e0	97	9	Dynamic	0	Single
-test/emp#p#east#sp#e1	test/emp#p#east#sp#e1	97	9	Dynamic	0	Single
-test/emp#p#north#sp#n0	test/emp#p#north#sp#n0	97	9	Dynamic	0	Single
-test/emp#p#north#sp#n1	test/emp#p#north#sp#n1	97	9	Dynamic	0	Single
-test/emp#p#south#sp#s0	test/emp#p#south#sp#s0	97	9	Dynamic	0	Single
-test/emp#p#south#sp#s1	test/emp#p#south#sp#s1	97	9	Dynamic	0	Single
-test/emp#p#west#sp#w0	test/emp#p#west#sp#w0	97	9	Dynamic	0	Single
-test/emp#p#west#sp#w1	test/emp#p#west#sp#w1	97	9	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/emp#p#east#sp#e0	test/emp#p#east#sp#e0	97	10	Dynamic	0	Single
+test/emp#p#east#sp#e1	test/emp#p#east#sp#e1	97	10	Dynamic	0	Single
+test/emp#p#north#sp#n0	test/emp#p#north#sp#n0	97	10	Dynamic	0	Single
+test/emp#p#north#sp#n1	test/emp#p#north#sp#n1	97	10	Dynamic	0	Single
+test/emp#p#south#sp#s0	test/emp#p#south#sp#s0	97	10	Dynamic	0	Single
+test/emp#p#south#sp#s1	test/emp#p#south#sp#s1	97	10	Dynamic	0	Single
+test/emp#p#west#sp#w0	test/emp#p#west#sp#w0	97	10	Dynamic	0	Single
+test/emp#p#west#sp#w1	test/emp#p#west#sp#w1	97	10	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd

@@ -32,5 +32,6 @@ create table t2(unique(a)) select a from t1;
 let $VERSION=`select version()`;
 source include/show_binlog_events.inc;
 drop table t1;
+drop table if exists t2;
 
 # End of 4.1 tests

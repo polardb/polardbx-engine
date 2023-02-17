@@ -763,8 +763,8 @@ static int page_zip_compress_clust_ext(
 
       c_stream->next_in += PAGE_ZIP_TRX_FIELDS_SIZE;
 
-      /* Skip also roll_ptr, scn_id and undo_ptr */
-      i += 3;
+      /* Skip also roll_ptr, scn_id and undo_ptr, gcn_id */
+      i += 4;
     } else if (rec_offs_nth_extern(offsets, i)) {
       src = rec_get_nth_field(rec, offsets, i, &len);
       ut_ad(len >= BTR_EXTERN_FIELD_REF_SIZE);
@@ -912,8 +912,8 @@ static int page_zip_compress_clust(
 
       c_stream->next_in += PAGE_ZIP_TRX_FIELDS_SIZE;
 
-      /* Skip also roll_ptr, scn_id and undo_ptr */
-      ut_ad(trx_id_col + 3 < rec_offs_n_fields(offsets));
+      /* Skip also roll_ptr, scn_id and undo_ptr, gcn */
+      ut_ad(trx_id_col + 4 < rec_offs_n_fields(offsets));
     }
 
     /* Compress the last bytes of the record. */
@@ -1641,7 +1641,7 @@ static byte *page_zip_write_rec_ext(
       /* Store trx_id, roll_ptr, scn_id and undo_ptr. */
       memcpy(storage - PAGE_ZIP_TRX_FIELDS_SIZE * (heap_no - 1),
              src, PAGE_ZIP_TRX_FIELDS_SIZE);
-      i += 3; /* skip also roll_ptr, scn_id and undo_ptr */
+      i += 4; /* skip also roll_ptr, scn_id and undo_ptr, gcn */
     } else if (rec_offs_nth_extern(offsets, i)) {
       src = rec_get_nth_field(rec, offsets, i, &len);
 

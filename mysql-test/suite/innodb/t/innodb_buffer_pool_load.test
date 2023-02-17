@@ -51,9 +51,9 @@ while ($i)
 
 # Accept 83 for 64k page size, 163 for 32k page size, 329 for 16k page size,
 # 329 (337 for index_free_pct) for 16k page size,
-# 357 also for 16k page size, but with SCN and undo_ptr columns
+# 365 also for 16k page size, but with SCN and undo_ptr columns
 # 662 for 8k page size & 1392 for 4k page size
---replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 337 {check_valid} 357 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
+--replace_result 83 {checked_valid} 163 {checked_valid} 329 {checked_valid} 337 {check_valid} 365 {checked_valid} 662 {checked_valid} 1392 {checked_valid}
 --eval $check_cnt
 
 --source include/shutdown_mysqld.inc

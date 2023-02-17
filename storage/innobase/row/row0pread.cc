@@ -350,6 +350,10 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
         rec_off += DATA_SCN_ID_LEN;
 
         txn_rec.undo_ptr = lizard::trx_read_undo_ptr(rec + rec_off);
+	rec_off += DATA_UNDO_PTR_LEN;
+
+	txn_rec.gcn = lizard::trx_read_gcn(rec + rec_off);
+
       } else {
         rec_trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
 
@@ -357,12 +361,12 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
         txn_rec.scn = lizard::row_get_rec_scn_id(rec, m_config.m_index, offsets);
         txn_rec.undo_ptr =
           lizard::row_get_rec_undo_ptr(rec, m_config.m_index, offsets);
+	txn_rec.gcn = lizard::row_get_rec_gcn(rec, m_config.m_index, offsets);
       }
 
       {
         if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
-          lizard::txn_undo_hdr_lookup(&txn_rec, nullptr, nullptr,
-                                      lizard::TXN_CONS_READ_SEES);
+          lizard::txn_rec_real_state_by_misc(&txn_rec);
         }
       }
 

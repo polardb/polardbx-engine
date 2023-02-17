@@ -50,7 +50,10 @@ INSERT INTO rplvars (varname, varvalue)
         VARIABLE_NAME LIKE '%semi_sync%' OR
         VARIABLE_NAME LIKE '%slave%') AND
        (VARIABLE_NAME NOT IN ('innodb_api_enable_binlog',
-        'innodb_master_thread_disabled_debug'))
+        'innodb_master_thread_disabled_debug',
+        'print_gtid_info_during_recovery',
+        'recovery_apply_binlog') AND
+        (VARIABLE_NAME NOT LIKE 'xengine_%'))
        ORDER BY VARIABLE_NAME;
 --enable_warnings
 --let $countvars= `SELECT COUNT(*) FROM rplvars;`
@@ -58,7 +61,7 @@ INSERT INTO rplvars (varname, varvalue)
 # If this count differs, it means a variable has been added or removed.
 # In that case, this testcase needs to be updated accordingly.
 --echo
---let $expected=83
+--let $expected=88
 --let $assert_text= 'Expect $expected variables in the table.'
 --let $assert_cond= [SELECT COUNT(*) as count FROM rplvars, count, 1] = $expected
 --source include/assert.inc
@@ -81,7 +84,7 @@ while ( $varid <= $countvars )
 }
 
 --echo
---let $expected=65
+--let $expected=70
 --let $assert_text= 'Expect $expected persisted variables in persisted_variables table.'
 --let $assert_cond= [SELECT COUNT(*) as count FROM performance_schema.persisted_variables, count, 1] = $expected
 --source include/assert.inc

@@ -1926,10 +1926,10 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
           row_get_rec_trx_id(rec, clust_index, offsets),
           lizard::row_get_rec_scn_id(rec, clust_index, offsets),
           lizard::row_get_rec_undo_ptr(rec, clust_index, offsets),
-          lizard::GCN_NULL,
+          lizard::row_get_rec_gcn(rec, clust_index, offsets),
       };
 
-      lizard::fill_txn_rec(trx, &pcur, &txn_rec, lizard::TXN_ONLINE_DDL);
+      lizard::txn_rec_real_state_by_misc(&txn_rec);
 
       if (!trx->vision.modifications_visible(&txn_rec, old_table->name)) {
         rec_t *old_vers;

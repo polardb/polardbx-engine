@@ -1081,7 +1081,7 @@ AND THREAD_ID IN (SELECT thread_id from test.thread_to_monitor);
 VARIABLE_NAME	VARIABLE_VALUE
 Handler_read_first	5
 Handler_read_next	7
-Handler_write	25
+Handler_write	27
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (

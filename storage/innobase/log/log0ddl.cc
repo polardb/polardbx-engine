@@ -360,6 +360,7 @@ void DDL_Log_Table::create_tuple(const DDL_Record &record) {
   byte *buf;
   byte *undo_buf;
   byte *scn_buf;
+  byte *gcn_buf;
 
   m_tuple = dtuple_create(m_heap, m_table->get_n_cols());
   dict_table_copy_types(m_tuple, m_table);
@@ -394,6 +395,13 @@ void DDL_Log_Table::create_tuple(const DDL_Record &record) {
   col = m_table->get_sys_col(DATA_UNDO_PTR);
   dfield = dtuple_get_nth_field(m_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, undo_buf, DATA_UNDO_PTR_LEN);
+
+  /** Fill GCN */
+  gcn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_GCN_ID_LEN));
+  lizard::trx_write_gcn(gcn_buf, lizard::TXN_DESC_LD.cmmt.gcn);
+  col = m_table->get_sys_col(DATA_GCN_ID);
+  dfield = dtuple_get_nth_field(m_tuple, dict_col_get_no(col));
+  dfield_set_data(dfield, gcn_buf, DATA_GCN_ID_LEN);
 
   const ulint rec_id = record.get_id();
 
@@ -543,7 +551,7 @@ void DDL_Log_Table::convert_to_ddl_record(bool is_clustered, rec_t *rec,
       ulint len;
 
       if (i == DATA_ROLL_PTR || i == DATA_TRX_ID || i == DATA_SCN_ID ||
-          i == DATA_UNDO_PTR) {
+          i == DATA_UNDO_PTR || i == DATA_GCN_ID) {
         continue;
       }
 
