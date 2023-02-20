@@ -1,0 +1,3 @@
+--log-bin=binlog
+--innodb_undo_retention=9000
+--binlog_format='row'

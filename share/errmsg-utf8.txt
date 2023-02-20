@@ -9372,6 +9372,9 @@ ER_IC_NOT_ALLOWED_IN_AUTOCOMMIT
 ER_IC_NOT_MATCH_TARGET
   eng "Inventory conditional hints didn't match with result"
 
+ER_XA_PROC_WRONG_XID
+  eng "Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed %d bytes, and bqual cannot exceed %d bytes."
+
 #
 #  End of RDS error message.
 #

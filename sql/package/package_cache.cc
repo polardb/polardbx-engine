@@ -40,6 +40,8 @@
 
 #include "sql/package/show_native_procedure.h"
 
+#include "sql/xa/xa_proc.h"
+
 namespace im {
 
 /* All package memory usage aggregation point */
@@ -200,6 +202,8 @@ void package_context_init() {
 
   /* xrpc.perf_hist() */
   register_package<Proc, Proc_perf_hist>(XRPC_PROC_SCHEMA);
+
+  register_package<Proc, Xa_proc_find_by_xid>(XA_PROC_SCHEMA);
 }
 
 } /* namespace im */

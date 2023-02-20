@@ -615,6 +615,7 @@ SET(SQL_SHARED_SOURCES
   xrpc/xrpc_proc.cc
   inventory/inventory_hint_parse.cc
   inventory/inventory_hint.cc
+  xa/xa_proc.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 
