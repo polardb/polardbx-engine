@@ -34,6 +34,8 @@
 #include "sql/package/proc_dummy.h"
 #endif
 
+#include "sql/xa/xa_proc.h"
+
 namespace im {
 
 /* All package memory usage aggregation point */
@@ -118,6 +120,7 @@ void package_context_init() {
   register_package<Proc, Proc_dummy_2>(PROC_DUMMY_SCHEMA);
 #endif
 
+  register_package<Proc, Xa_proc_find_by_xid>(XA_PROC_SCHEMA);
 }
 
 } /* namespace im */

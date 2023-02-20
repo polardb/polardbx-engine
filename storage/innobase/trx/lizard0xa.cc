@@ -32,6 +32,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0xa.h"
 #include "lizard0read0types.h"
+#include "lizard0xa0iface.h"
+#include "lizard0undo.h"
 #include "m_ctype.h"
 #include "mysql/plugin.h"
 #include "sql/xa.h"
@@ -132,4 +134,46 @@ std::size_t hash_xid(const XID *xid) {
 
   return res;
 }
+
+namespace lizard {
+namespace xa {
+
+const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK"};
+
+bool get_transaction_info_by_xid(const XID *xid, Transaction_info *info) {
+  trx_rseg_t *rseg;
+  txn_undo_hdr_t txn_hdr;
+  bool found;
+
+  rseg = get_txn_rseg_by_xid(xid);
+
+  ut_ad(rseg);
+
+  found = txn_rseg_find_trx_info_by_xid(rseg, xid, &txn_hdr);
+
+  if (found) {
+    switch (txn_hdr.state) {
+      case TXN_UNDO_LOG_COMMITED:
+      case TXN_UNDO_LOG_PURGED:
+        info->state = txn_hdr.is_rollback() ? TRANS_STATE_ROLLBACK
+                                            : TRANS_STATE_COMMITTED;
+        break;
+      case TXN_UNDO_LOG_ACTIVE:
+        /** Can't be active. */
+        /** fall through */
+      default:
+        ut_error;
+    }
+    info->gcn = txn_hdr.image.gcn;
+  }
+
+  return found;
+}
+
+const char *transaction_state_to_str(const enum Transaction_state state) {
+  return Transaction_state_str[state];
+}
+
+}  // namespace xa
+}  // namespace lizard
 

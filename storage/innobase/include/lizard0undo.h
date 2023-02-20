@@ -867,6 +867,25 @@ class Guard_xa_specification {
   XA_specification *m_xa_spec;
 };
 
+/**
+  Get a TXN rseg by XID.
+
+  @retval     rollback segment
+*/
+trx_rseg_t *get_txn_rseg_by_xid(const XID *xid);
+
+/**
+  Find transactions in the finalized state by XID.
+
+  @param[in]  rseg         The rollseg where the transaction is being looked up.
+  @param[in]  xid          XID
+  @param[out] txn_undo_hdr Corresponding txn undo header
+
+  @retval     true if the corresponding transaction is found, false otherwise.
+*/
+bool txn_rseg_find_trx_info_by_xid(trx_rseg_t *rseg, const XID *xid,
+                                   txn_undo_hdr_t *txn_undo_hdr);
+
 }  // namespace lizard
 
 /** Delcare the functions which were defined in other cc files.*/
@@ -882,9 +901,6 @@ extern trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg,
     trx_undo_t::Gtid_storage gtid_storage, trx_undo_t **undo, mtr_t *mtr);
 
 void trx_resurrect_update_in_prepared_state(trx_t *trx, const trx_undo_t *undo);
-
-void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr, trx_ulogf_t *log_hdr,
-                              mtr_t *mtr);
 
 trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
                                 trx_id_t trx_id, const XID *xid,

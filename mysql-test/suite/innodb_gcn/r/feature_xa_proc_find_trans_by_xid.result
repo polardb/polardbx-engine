@@ -1,0 +1,94 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+create table t1 (id int);
+###############################
+# case 1
+###############################
+xa start '1';
+insert into t1 values (1);
+xa end '1';
+set innodb_commit_seq = 1124;
+xa prepare '1';
+xa commit '1';
+xid: '1', '', 1
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 2
+###############################
+xa start '2';
+insert into t1 values (1);
+xa end '2';
+commit_seq: 1224
+set innodb_commit_seq = 1224;
+select @@innodb_commit_seq;
+@@innodb_commit_seq
+1224
+xa prepare '2';
+xa rollback '2';
+xid: '2', '', 1
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 3
+###############################
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+xa start '3';
+insert into t1 values (1);
+xa end '3';
+set innodb_commit_seq = 1324;
+xa prepare '3';
+xid: '3','',1
+set innodb_commit_seq = 1324;
+xa commit '3';
+xid: '3', '', 1
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 4
+###############################
+xa start '4';
+xa end '4';
+set innodb_commit_seq = 1424;
+xa prepare '4';
+xa commit '4';
+xid: '4','',1
+###############################
+# case 5
+###############################
+xa start '5';
+call dbms_xa.find_by_xid('5','',1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  ACTIVE state
+insert into t1 values (1);
+call dbms_xa.find_by_xid('5','',1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  ACTIVE state
+xa end '5';
+call dbms_xa.find_by_xid('5','',1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  IDLE state
+commit_seq: 1524
+set innodb_commit_seq = 1524;
+select @@innodb_commit_seq;
+@@innodb_commit_seq
+1524
+xa prepare '5';
+call dbms_xa.find_by_xid('5','',1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+xa commit '5';
+###############################
+# case 6
+###############################
+call dbms_xa.find_by_xid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '', 1);
+ERROR HY000: Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed 64 bytes, and bqual cannot exceed 64 bytes.
+call dbms_xa.find_by_xid('1', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1);
+ERROR HY000: Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed 64 bytes, and bqual cannot exceed 64 bytes.
+###############################
+# case 7
+###############################
+xa start 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+insert into t1 values (1);
+xa end 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+set innodb_commit_seq = 1724;
+xa prepare 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+xa commit 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+xid: 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004', 1
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+drop table t1;

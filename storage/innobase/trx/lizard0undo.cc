@@ -49,6 +49,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0mysql.h"
 #include "lizard0row.h"
 
+void trx_undo_read_xid(
+    trx_ulogf_t *log_hdr, /*!< in: undo log header */
+    XID *xid);            /*!< out: X/Open XA Transaction Identification */
+
 /**
   SCN generation strategy:
 
@@ -741,7 +745,7 @@ static txn_space_rseg_slot_t get_txn_space_and_rseg_slot_by_xid(const XID *xid) 
 
   @retval     rollback segment
 */
-static trx_rseg_t *get_txn_rseg_by_xid(const XID *xid) {
+trx_rseg_t *get_txn_rseg_by_xid(const XID *xid) {
   txn_space_rseg_slot_t txn_slot;
 
   /* The number of undo tablespaces cannot be changed while
@@ -825,6 +829,109 @@ bool txn_check_xid_rseg_mapping(const trx_t *trx) {
   }
 
   return true;
+}
+
+struct Find_transaction_info_by_xid {
+  Find_transaction_info_by_xid(const XID *_xid)
+      : xid(_xid), found(false), txn_hdr() {}
+
+  bool operator()(const page_t *undo_page, const trx_ulogf_t *log_hdr,
+                  mtr_t *mtr) {
+    XID read_xid;
+
+    trx_undo_read_xid(const_cast<trx_ulogf_t *>(log_hdr), &read_xid);
+
+    ut_ad(xid != nullptr);
+    ut_ad(!found);
+
+    if (read_xid.eq(xid)) {
+      found = true;
+      trx_undo_hdr_read_txn(undo_page, log_hdr, mtr, &txn_hdr);
+    }
+
+    return found;
+  }
+
+  const XID *xid;
+  bool found;
+  txn_undo_hdr_t txn_hdr;
+};
+
+template <typename Functor>
+static void txn_rseg_iterate_history_list(trx_rseg_t *rseg, Functor &func) {
+  trx_rsegf_t *rseg_header;
+  trx_ulogf_t *txn_header;
+
+  page_t *undo_page;
+
+  fil_addr_t node_addr;
+  fil_addr_t hdr_addr;
+
+  mtr_t mtr;
+
+  mtr.start();
+
+  mutex_enter(&(rseg->mutex));
+
+  /** 1. Get the first node of the history list. */
+
+  rseg_header =
+      trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, &mtr);
+
+  node_addr = flst_get_first(rseg_header + TRX_RSEG_HISTORY, &mtr);
+
+  mtr.commit();
+
+  /** 2. Iterate the history list. */
+  while (node_addr.page != FIL_NULL) {
+    mtr.start();
+
+    /** 2.1 get the undo page. */
+    undo_page = trx_undo_page_get_s_latched(
+        page_id_t(rseg->space_id, node_addr.page), rseg->page_size, &mtr);
+
+    /** 2.2 get the txn header real offset on the page. */
+    hdr_addr = trx_purge_get_log_from_hist(node_addr);
+    txn_header = undo_page + hdr_addr.boffset;
+
+    /** 2.3 do something by using the txn header on **func** */
+    if (func(undo_page, txn_header, &mtr)) {
+      mtr.commit();
+      break;
+    }
+
+    /** 2.4 get the next node's address. */
+    node_addr = flst_get_next_addr(undo_page + node_addr.boffset, &mtr);
+
+    mtr.commit();
+  }
+
+  mutex_exit(&(rseg->mutex));
+}
+
+/**
+  Find transactions in the finalized state by XID.
+
+  @param[in]  rseg         The rollseg where the transaction is being looked up.
+  @param[in]  xid          XID
+  @param[out] txn_undo_hdr Corresponding txn undo header
+
+  @retval     true if the corresponding transaction is found, false otherwise.
+*/
+bool txn_rseg_find_trx_info_by_xid(trx_rseg_t *rseg, const XID *xid,
+                                   txn_undo_hdr_t *txn_undo_hdr) {
+  Find_transaction_info_by_xid finder(xid);
+
+  ut_a(!xid->is_null());
+
+  txn_rseg_iterate_history_list<Find_transaction_info_by_xid>(rseg, finder);
+
+  if (finder.found) {
+    *txn_undo_hdr = finder.txn_hdr;
+    return true;
+  }
+
+  return false;
 }
 
 /**

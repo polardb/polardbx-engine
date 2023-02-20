@@ -790,7 +790,7 @@ void trx_undo_gtid_write(trx_t *trx, trx_ulogf_t *undo_header, trx_undo_t *undo,
 }
 
 /** Read X/Open XA Transaction Identification (XID) from undo log header */
-static void trx_undo_read_xid(
+void trx_undo_read_xid(
     trx_ulogf_t *log_hdr, /*!< in: undo log header */
     XID *xid)             /*!< out: X/Open XA Transaction Identification */
 {

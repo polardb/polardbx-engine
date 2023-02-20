@@ -9998,6 +9998,12 @@ ER_AS_OF_TABLE_DEF_CHANGED
 ER_SNAPSHOT_TOO_OLD
   eng "Snapshot too old"
 
+ER_XA_PROC_WRONG_XID
+  eng "Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed %d bytes, and bqual cannot exceed %d bytes."
+
+#
+#  End of RDS error message.
+#
 
 ################################################################################
 # DO NOT add messages for the error-log to this file;

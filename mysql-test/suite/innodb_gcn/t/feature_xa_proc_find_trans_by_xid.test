@@ -1,0 +1,130 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+create table t1 (id int);
+
+--echo ###############################
+--echo # case 1
+--echo ###############################
+--let $commit_gcn = `select @base_seq + 100`
+xa start '1';
+insert into t1 values (1);
+xa end '1';
+--eval set innodb_commit_seq = $commit_gcn
+xa prepare '1';
+xa commit '1';
+
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $xid= '1', '', 1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 2
+--echo ###############################
+xa start '2';
+--let $commit_gcn = `select @base_seq + 200`
+insert into t1 values (1);
+xa end '2';
+--echo commit_seq: $commit_gcn
+--eval set innodb_commit_seq = $commit_gcn
+select @@innodb_commit_seq;
+xa prepare '2';
+xa rollback '2';
+
+--let $expect_gcn=
+--let $expect_state= ROLLBACK
+--let $xid= '2', '', 1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 3
+--echo ###############################
+connect (conn1,localhost,root,,);
+connection conn1;
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+connection default;
+--let $commit_gcn = `select @base_seq + 300`
+xa start '3';
+insert into t1 values (1);
+xa end '3';
+--eval set innodb_commit_seq = $commit_gcn
+xa prepare '3';
+
+connection conn1;
+--let $expect_none=1
+--let $xid='3','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+connection default;
+--eval set innodb_commit_seq = $commit_gcn
+xa commit '3';
+
+connection conn1;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $xid= '3', '', 1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+connection default;
+
+--echo ###############################
+--echo # case 4
+--echo ###############################
+xa start '4';
+--let $commit_gcn = `select @base_seq + 400`
+xa end '4';
+--eval set innodb_commit_seq = $commit_gcn
+xa prepare '4';
+xa commit '4';
+
+--let $expect_none=1
+--let $xid='4','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 5
+--echo ###############################
+xa start '5';
+--let $commit_gcn = `select @base_seq + 500`
+--error ER_XAER_RMFAIL
+call dbms_xa.find_by_xid('5','',1);
+insert into t1 values (1);
+--error ER_XAER_RMFAIL
+call dbms_xa.find_by_xid('5','',1);
+xa end '5';
+--error ER_XAER_RMFAIL
+call dbms_xa.find_by_xid('5','',1);
+--echo commit_seq: $commit_gcn
+--eval set innodb_commit_seq = $commit_gcn
+select @@innodb_commit_seq;
+xa prepare '5';
+--error ER_XAER_RMFAIL
+call dbms_xa.find_by_xid('5','',1);
+xa commit '5';
+
+--echo ###############################
+--echo # case 6
+--echo ###############################
+--error ER_XA_PROC_WRONG_XID
+call dbms_xa.find_by_xid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '', 1);
+
+--error ER_XA_PROC_WRONG_XID
+call dbms_xa.find_by_xid('1', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1);
+
+--echo ###############################
+--echo # case 7
+--echo ###############################
+--let $commit_gcn = `select @base_seq + 700`
+xa start 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+insert into t1 values (1);
+xa end 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+--eval set innodb_commit_seq = $commit_gcn
+xa prepare 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+xa commit 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $xid= 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004', 1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+drop table t1;
