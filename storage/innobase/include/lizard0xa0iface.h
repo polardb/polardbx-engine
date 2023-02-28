@@ -40,6 +40,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 namespace lizard {
 namespace xa {
 
+/** Transaction slot address. */
+typedef uint64_t TSA;
+
 enum Transaction_state {
   TRANS_STATE_COMMITTED = 0,
   TRANS_STATE_ROLLBACK = 1,
@@ -64,6 +67,27 @@ bool get_transaction_info_by_gtrid(const char *gtrid, unsigned len,
 
 /** trans state to message string. */
 const char *transaction_state_to_str(const enum Transaction_state state);
+
+/**
+  1. start trx in innodb
+  2. register innodb as a participants
+
+  return true if error.
+*/
+bool start_and_register_rw_trx_for_xa(THD *thd);
+
+/**
+  Alloc transaction slot in innodb
+
+  return true if error
+*/
+bool trx_slot_assign_for_xa(THD *thd, TSA *tsa);
+
+/**
+  Write XID info to the transaction slot.
+  Only used for commit-one-phase on the slave.
+*/
+void trx_slot_write_xid_for_one_phase_xa(THD *thd);
 
 }  // namespace xa
 }  // namespace lizard

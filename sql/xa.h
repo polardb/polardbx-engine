@@ -108,7 +108,8 @@ class Sql_cmd_xa_end : public Sql_cmd {
 
 class Sql_cmd_xa_prepare : public Sql_cmd {
  public:
-  explicit Sql_cmd_xa_prepare(xid_t *xid_arg) : m_xid(xid_arg) {}
+  explicit Sql_cmd_xa_prepare(xid_t *xid_arg)
+      : m_xid(xid_arg), m_delay_ok(false) {}
 
   virtual enum_sql_command sql_command_code() const {
     return SQLCOM_XA_PREPARE;
@@ -116,10 +117,16 @@ class Sql_cmd_xa_prepare : public Sql_cmd {
 
   virtual bool execute(THD *thd);
 
+  /** Lizard: Delay my_ok because we want to send result set. */
+  void set_delay_ok() { m_delay_ok = true; }
+
  private:
   bool trans_xa_prepare(THD *thd);
 
   xid_t *m_xid;
+
+  /** Lizard: True if we want to delay OK. */
+  bool m_delay_ok;
 };
 
 /**

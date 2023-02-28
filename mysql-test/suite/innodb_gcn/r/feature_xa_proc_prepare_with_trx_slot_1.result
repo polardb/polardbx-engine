@@ -1,0 +1,48 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+create table t1 (id int);
+###############################
+# Case 1: restart with only txn undo
+###############################
+xa start '1';
+select * from t1 for update;
+id
+xa end '1';
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+UUID	UBA
+#	#
+# Kill and restart
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+xa commit '1';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# Case 2
+###############################
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  NON-EXISTING state
+xa start '1';
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  ACTIVE state
+insert into t1 values (1);
+xa end '1';
+xa prepare '1';
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+xa commit '1';
+###############################
+# Case 3
+###############################
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  NON-EXISTING state
+xa start '1';
+select * from t1;
+id
+1
+xa end '1';
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+ERROR HY000: This command is not allowed to be executed. Mightbe this XA transaction is a read-only transaction.
+xa prepare '1';
+xa commit '1';
+drop table t1;

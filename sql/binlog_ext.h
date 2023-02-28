@@ -233,4 +233,17 @@ class Binlog_recovery {
   char m_apply_log_name[FN_REFLEN] = {0};
 };
 
+namespace lizard {
+namespace xa {
+/**
+  Like binlog_start_trans_and_stmt. The difference is:
+
+  binlog_start_trans_and_stmt is not sure whether to open a statement or a
+  transaction, while binlog_start_trans is to open a transaction
+  deterministically.
+*/
+int binlog_start_trans(THD *thd);
+}
+}  // namespace lizard
+
 #endif

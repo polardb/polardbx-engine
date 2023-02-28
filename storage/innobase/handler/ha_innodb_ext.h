@@ -25,3 +25,6 @@ extern void innobase_init_ext(handlerton *innobase_hton);
 extern bool xa_compare_xid_between_thd_and_trx(const THD *thd,
                                                const trx_t *trx);
 
+/** Like innobase_register_trx. But it only register as TRANS level (no STMT
+LEVEL). */
+void innobase_register_trx_only_trans(handlerton *hton, THD *thd, trx_t *trx);

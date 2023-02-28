@@ -27,6 +27,7 @@
 #include "trx0rec.h"
 #include "trx0undo.h"
 #include "trx0rseg.h"
+#include "trx0trx.h"
 #include "page0types.h"
 
 #include "sql_plugin_var.h"
@@ -45,6 +46,14 @@
 void trx_undo_read_xid(
     trx_ulogf_t *log_hdr, /*!< in: undo log header */
     XID *xid);            /*!< out: X/Open XA Transaction Identification */
+
+#ifndef UNIV_HOTBACKUP
+/** Write X/Open XA Transaction Identification (XID) to undo log header */
+void trx_undo_write_xid(
+    trx_ulogf_t *log_hdr, /*!< in: undo log header */
+    const XID *xid,       /*!< in: X/Open XA Transaction Identification */
+    mtr_t *mtr);          /*!< in: mtr */
+#endif
 
 /**
   SCN generation strategy:
@@ -1624,8 +1633,16 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
      But if crashed just after allocated txn undo, here maybe possible.
   */
   if (trx->rsegs.m_redo.rseg == nullptr) {
-    lizard_ut_ad(undo->state == TRX_UNDO_ACTIVE);
-    trx->state = TRX_STATE_ACTIVE;
+    lizard_ut_ad(undo->state == TRX_UNDO_ACTIVE ||
+                 undo->state == TRX_UNDO_PREPARED);
+    ut_ad(trx_state_eq(trx, TRX_STATE_NOT_STARTED));
+
+    if (undo->state == TRX_UNDO_ACTIVE) {
+      trx->state = TRX_STATE_ACTIVE;
+    } else {
+      ++trx_sys->n_prepared_trx;
+      trx->state = TRX_STATE_PREPARED;
+    }
 
     /* A running transaction always has the number field inited to
     TRX_ID_MAX */
@@ -2465,6 +2482,27 @@ bool txn_rec_cleanout_state_by_misc(txn_rec_t *txn_rec, btr_pcur_t *pcur,
 
     return false;
   }
+}
+
+void txn_undo_write_xid(const XID *xid, trx_undo_t *undo) {
+  trx_usegf_t *seg_hdr;
+  trx_ulogf_t *undo_header;
+  page_t *undo_page;
+  mtr_t mtr;
+  ulint offset;
+
+  mtr_start(&mtr);
+  undo_page = trx_undo_page_get(page_id_t(undo->space, undo->hdr_page_no),
+                                undo->page_size, &mtr);
+  seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
+
+  offset = mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG);
+  undo_header = undo_page + offset;
+
+  ut_ad(!xid->is_null());
+  trx_undo_write_xid(undo_header, xid, &mtr);
+
+  mtr_commit(&mtr);
 }
 
 }  // namespace lizard

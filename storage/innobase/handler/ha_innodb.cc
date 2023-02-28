@@ -2840,6 +2840,19 @@ void innobase_register_trx(handlerton *hton, /* in: Innobase handlerton */
   trx_register_for_2pc(trx);
 }
 
+/** Like innobase_register_trx. But it only register as TRANS level (no STMT
+LEVEL). */
+void innobase_register_trx_only_trans(handlerton *hton, THD *thd, trx_t *trx) {
+  const ulonglong trx_id = static_cast<ulonglong>(trx_get_id_for_print(trx));
+
+  if (!trx_is_registered_for_2pc(trx) &&
+      thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
+    trans_register_ha(thd, TRUE, innodb_hton, &trx_id);
+  }
+
+  trx_register_for_2pc(trx);
+}
+
 /** Quote a standard SQL identifier like tablespace, index or column name.
 @param[in]	file	output stream
 @param[in]	trx	InnoDB transaction, or NULL
@@ -5489,12 +5502,11 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
 
     assert_trx_scn_initial(trx);
     /*
-      The value of thd->m_extra_desc.m_commit_gcn is GCN_NULL 
+      The value of thd->m_extra_desc.m_commit_gcn is GCN_NULL
     if server do not need to write binlog.
-    
-      It will store gcn value into  thd->m_extra_desc.m_commit_gcn 
-    where writing gcn log event. 
 
+      It will store gcn value into  thd->m_extra_desc.m_commit_gcn
+    where writing gcn log event.
        Some function trx is not start and will not enter trx_commit_for_mysql(trx).
      It will not reset trx->txn_desc.cmmt.gcn after innobase_commit and It need not
      set trx->txn_desc.cmmt.gcn. (log_and_commit_acl_ddl)

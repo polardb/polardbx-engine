@@ -204,6 +204,9 @@ void package_context_init() {
   register_package<Proc, Proc_perf_hist>(XRPC_PROC_SCHEMA);
 
   register_package<Proc, Xa_proc_find_by_gtrid>(XA_PROC_SCHEMA);
+
+  /* dbms_xa.prepare_with_trx_slot */
+  register_package<Proc, Xa_proc_prepare_with_trx_slot>(XA_PROC_SCHEMA);
 }
 
 } /* namespace im */

@@ -50,4 +50,16 @@ class XID_context {
   bool m_do_binlog_rotate = {false};
 };
 
-#endif  // XA_EXT_INCUDED
+namespace lizard {
+namespace xa {
+/**
+  1. start trx in innodb
+  2. register innodb as a participants
+  3. alloc transaction slot in innodb
+  4. register binlog as another participants if need
+*/
+bool replay_trx_slot_alloc_on_slave(THD *thd);
+}
+}  // namespace lizard
+
+#endif // XA_EXT_INCUDED

@@ -78,6 +78,9 @@
 #include "sql/binlog_ext.h"
 
 #include "consensus_recovery_manager.h"
+
+#include "sql/xa_ext.h"
+
 const char *XID_STATE::xa_state_names[] = {"NON-EXISTING", "ACTIVE", "IDLE",
                                            "PREPARED", "ROLLBACK ONLY"};
 
@@ -1211,6 +1214,13 @@ bool Sql_cmd_xa_end::trans_xa_end(THD *thd) {
   else if (!xid_state->has_same_xid(m_xid))
     my_error(ER_XAER_NOTA, MYF(0));
   else if (!xid_state->xa_trans_rolled_back()) {
+    /** Before applying XA end on the slave, trx slot should be also allocated
+    if not. */
+    if (lizard::xa::replay_trx_slot_alloc_on_slave(thd)) {
+      DBUG_ASSERT(thd->is_error());
+      goto exit_func;
+    }
+
     xid_state->set_state(XID_STATE::XA_IDLE);
     MYSQL_SET_TRANSACTION_XA_STATE(thd->m_transaction_psi,
                                    (int)xid_state->get_state());
@@ -1219,6 +1229,7 @@ bool Sql_cmd_xa_end::trans_xa_end(THD *thd) {
                                    (int)xid_state->get_state());
   }
 
+exit_func:
   return thd->is_error() || !xid_state->has_state(XID_STATE::XA_IDLE);
 }
 
@@ -1304,7 +1315,13 @@ bool Sql_cmd_xa_prepare::execute(THD *thd) {
   if (!st) {
     if (!thd->rpl_unflag_detached_engine_ha_data() ||
         !(st = applier_reset_xa_trans(thd)))
-      my_ok(thd);
+    {
+      /** Delay set OK status because some other result sets are also returned
+      when calling dbms_xa proc. */
+      if (!m_delay_ok) {
+        my_ok(thd);
+      }
+    }
   }
 
   return st;
@@ -1828,3 +1845,5 @@ bool reattach_native_trx(THD *thd, plugin_ref plugin, void *) {
   }
   return false;
 }
+
+#include "xa_ext.cc"

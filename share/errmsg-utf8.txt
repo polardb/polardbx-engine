@@ -9375,6 +9375,21 @@ ER_IC_NOT_MATCH_TARGET
 ER_XA_PROC_WRONG_GTRID
   eng "Wrong GTRID for dbms_xa. Please check the format of the GTRID. For example, gtrid cannot exceed %d bytes."
 
+ER_XA_PROC_WRONG_XID
+  eng "Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed %d bytes, and bqual cannot exceed %d bytes."
+
+ER_XA_PROC_BLANK_XA_TRX
+  eng "This command is not allowed to be executed. Mightbe this XA transaction is a read-only transaction."
+
+ER_XA_PROC_START_BINLOG_WRONG
+  eng "Cannot register binlog handlerton. Maybe it's because it can't allocate more memory, or can't generate binlog event."
+
+ER_XA_PROC_REPLAY_TRX_SLOT_ALLOC_ERROR
+  eng "Failed to replay allocating the transaction slot on the slave."
+
+ER_XA_PROC_REPLAY_REGISTER_BINLOG_ERROR
+  eng "Failed to register binlog when allocating transaction slot on the slave."
+
 #
 #  End of RDS error message.
 #

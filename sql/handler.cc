@@ -1905,8 +1905,8 @@ int ha_commit_low(THD *thd, bool all, bool run_after_commit) {
           gcn = thd->variables.innodb_commit_gcn;
         } else {
 #ifndef DBUG_OFF
-          error = 
-#endif          
+          error =
+#endif
           ha_acquire_gcn(&gcn);
         }
 

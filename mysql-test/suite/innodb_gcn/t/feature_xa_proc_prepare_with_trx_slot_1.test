@@ -1,0 +1,61 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+create table t1 (id int);
+
+--echo ###############################
+--echo # Case 1: restart with only txn undo
+--echo ###############################
+--let $commit_gcn = `select @base_seq + 9980`
+connect (con1,localhost,root);
+xa start '1';
+select * from t1 for update;
+xa end '1';
+--replace_column 1 # 2 #
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+
+connection default;
+--source include/kill_and_restart_mysqld.inc
+disconnect con1;
+
+xa recover;
+
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+xa commit '1';
+
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $gtrid= '1'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+--echo ###############################
+--echo # Case 2
+--echo ###############################
+--error ER_XAER_RMFAIL
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+
+xa start '1';
+--error ER_XAER_RMFAIL
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+insert into t1 values (1);
+xa end '1';
+xa prepare '1';
+--error ER_XAER_RMFAIL
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+xa commit '1';
+
+--echo ###############################
+--echo # Case 3
+--echo ###############################
+--error ER_XAER_RMFAIL
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+
+xa start '1';
+select * from t1;
+xa end '1';
+--error ER_XA_PROC_BLANK_XA_TRX
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+xa prepare '1';
+xa commit '1';
+
+drop table t1;
