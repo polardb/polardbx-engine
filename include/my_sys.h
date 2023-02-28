@@ -88,6 +88,10 @@ struct PSI_thread_bootstrap;
 struct PSI_transaction_bootstrap;
 struct MEM_ROOT;
 
+#ifndef UNUSED
+#define UNUSED(x) ((void)(x))
+#endif
+
 #define MY_INIT(name)   \
   {                     \
     my_progname = name; \

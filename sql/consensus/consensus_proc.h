@@ -63,24 +63,15 @@ class Consensus_proc_type {
   virtual Consensus_proc_type_enum consensus_field_type_enum() const = 0;
 
   // output
-  virtual uint64_t get_uint64_t(Item *item) const {
-    assert(0);
-    return 0;
-  }
-  virtual std::string get_string(Item *item) const {
-    assert(0);
-    return "";
-  }
-  virtual bool get_bool(Item *item) const {
-    assert(0);
-    return false;
-  }
+  virtual uint64_t get_uint64_t(Item *item) const { UNUSED(item); assert(0); return 0; }
+  virtual std::string get_string(Item *item) const { UNUSED(item); assert(0); return ""; }
+  virtual bool get_bool(Item *item) const { UNUSED(item); assert(0); return false; }
 
  protected:
   Consensus_proc_type() = default;
 };
 
-class Consensus_proc_type_ip_port : Consensus_proc_type {
+class Consensus_proc_type_ip_port : public Consensus_proc_type {
  public:
   static const Consensus_proc_type *instance() {
     static Consensus_proc_type_ip_port instance;
@@ -110,6 +101,7 @@ class Consensus_proc_type_node : public Consensus_proc_type {
     return Consensus_proc_type_enum::NODE;
   }
   uint64_t get_uint64_t(Item *item) const override;
+  std::string get_string(Item *item) const override;
 };
 
 class Consensus_proc_type_uint : public Consensus_proc_type {

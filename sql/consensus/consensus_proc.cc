@@ -862,6 +862,18 @@ uint64_t Consensus_proc_type_node::get_uint64_t(Item *item) const {
   return ret;
 }
 
+std::string Consensus_proc_type_node::get_string(Item *item) const {
+  std::string ret;
+  if (item->data_type() == MYSQL_TYPE_LONGLONG) {
+    ret = consensus_ptr->getConfig()->getServer(item->val_int())->strAddr;
+  } else if (item->data_type() == MYSQL_TYPE_VARCHAR) {
+    ret = std::string(item->val_str(nullptr)->ptr());
+  } else {
+    assert(0);
+  }
+  return ret;
+}
+
 bool Consensus_proc_type_uint::check(Item *item) const {
   if (item->data_type() != MYSQL_TYPE_LONGLONG || item->val_int() < 0) {
     return true;
