@@ -586,7 +586,7 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
 
 #ifndef UNIV_HOTBACKUP
 /** Write X/Open XA Transaction Identification (XID) to undo log header */
-static void trx_undo_write_xid(
+void trx_undo_write_xid(
     trx_ulogf_t *log_hdr, /*!< in: undo log header */
     const XID *xid,       /*!< in: X/Open XA Transaction Identification */
     mtr_t *mtr)           /*!< in: mtr */

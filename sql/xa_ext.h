@@ -19,22 +19,19 @@
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+#ifndef XA_EXT_INCUDED
+#define XA_EXT_INCUDED
 
-#include "handler.h"
-#include "mysql/plugin.h"
-
-struct trx_t;
-
-extern bool xa_compare_xid_between_thd_and_trx(const THD *thd,
-                                               const trx_t *trx);
-
-/** Like innobase_register_trx. But it only register as TRANS level (no STMT
-LEVEL). */
-void innobase_register_trx_only_trans(handlerton *hton, THD *thd, trx_t *trx);
-
+namespace lizard {
+namespace xa {
 /**
-  Initialize innobase extension.
-
-  param[in]  innobase_hton  handlerton of innobase.
+  1. start trx in innodb
+  2. register innodb as a participants
+  3. alloc transaction slot in innodb
+  4. register binlog as another participants if need
 */
-void innobase_init_ext(handlerton *innobase_hton);
+bool replay_trx_slot_alloc_on_slave(THD *thd);
+}
+}  // namespace lizard
+
+#endif // XA_EXT_INCUDED

@@ -64,9 +64,15 @@ class Sql_cmd_xa_prepare : public Sql_cmd {
    */
   bool execute(THD *thd) override;
 
+  /** Lizard: Delay my_ok because we want to send result set. */
+  void set_delay_ok() { m_delay_ok = true; }
+
  private:
   /** The XID associated with the underlying XA transaction. */
   xid_t *m_xid;
+
+  /** Lizard: True if we want to delay OK. */
+  bool m_delay_ok;
 
   /**
     Puts an XA transaction in the PREPARED state.

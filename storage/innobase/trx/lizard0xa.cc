@@ -38,6 +38,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/plugin.h"
 #include "sql/xa.h"
 #include "trx0sys.h"
+#include "ha_innodb.h"
+#include "lizard0ha_innodb.h"
+#include "sql/sql_class.h"
+#include "sql/mysqld.h" // innodb_hton
 
 #include "sql/sql_class.h"
 
@@ -186,6 +190,84 @@ bool get_transaction_info_by_gtrid(const char *gtrid, unsigned len,
 
 const char *transaction_state_to_str(const enum Transaction_state state) {
   return Transaction_state_str[state];
+}
+
+bool start_and_register_rw_trx_for_xa(THD *thd) {
+  trx_t *trx = check_trx_exists(thd);
+
+  /** check_trx_exists will create trx if no trx. */
+  ut_ad(trx);
+
+  trx_start_if_not_started(trx, true, UT_LOCATION_HERE);
+
+  innobase_register_trx_only_trans(innodb_hton, thd, trx);
+
+  thd->get_ha_data(innodb_hton->slot)->ha_info[1].set_trx_read_write();
+
+  return false;
+}
+
+bool trx_slot_assign_for_xa(THD *thd, TSA *tsa) {
+  bool error = false;
+
+  trx_t *trx = check_trx_exists(thd);
+
+  /** check_trx_exists will create trx if no trx. */
+  ut_ad(trx);
+
+  mutex_enter(&trx->undo_mutex);
+
+  /** The trx must have been started as rw mode. */
+  if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) ||
+      trx->id == 0 || trx->read_only || !trx_is_txn_rseg_assigned(trx)) {
+    error = true;
+    goto exit_func;
+  }
+
+  ut_ad(trx_is_txn_rseg_assigned(trx));
+
+  /** If the TXN has been assigned, then just return. */
+  if (trx_is_txn_rseg_updated(trx)) {
+    if (tsa) {
+      *tsa = static_cast<TSA>(trx->txn_desc.undo_ptr);
+    }
+    goto exit_func;
+  }
+
+  /** Force to assign a TXN. */
+  if (lizard::trx_always_assign_txn_undo(trx) != DB_SUCCESS) {
+    error = true;
+    goto exit_func;
+  }
+  if (tsa) {
+    *tsa = static_cast<TSA>(trx->txn_desc.undo_ptr);
+  }
+
+exit_func:
+  mutex_exit(&trx->undo_mutex);
+
+  return error;
+}
+
+void trx_slot_write_xid_for_one_phase_xa(THD *thd) {
+  const XID *xid = thd->get_transaction()->xid_state()->get_xid();
+  trx_t *trx = check_trx_exists(thd);
+
+  ut_ad(trx_is_registered_for_2pc(trx));
+
+  ut_ad(trx_is_started(trx));
+
+  ut_ad(trx->id != 0 && !trx->read_only);
+
+  ut_ad(trx_is_txn_rseg_assigned(trx));
+
+  ut_ad(trx_is_txn_rseg_updated(trx));
+
+  mutex_enter(&trx->rsegs.m_txn.rseg->mutex);
+
+  txn_undo_write_xid(xid, trx->rsegs.m_txn.txn_undo);
+
+  mutex_exit(&trx->rsegs.m_txn.rseg->mutex);
 }
 
 }  // namespace xa

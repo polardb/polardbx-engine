@@ -126,6 +126,9 @@ void package_context_init() {
 
   /* dbms_xa.find_by_gtrid($gtrid) */
   register_package<Proc, Xa_proc_find_by_gtrid>(XA_PROC_SCHEMA);
+
+  /* dbms_xa.prepare_with_trx_slot */
+  register_package<Proc, Xa_proc_prepare_with_trx_slot>(XA_PROC_SCHEMA);
 }
 
 } /* namespace im */

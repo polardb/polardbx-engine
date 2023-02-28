@@ -21,8 +21,18 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "storage/innobase/include/lizard0xa0iface.h"
+
+#include "sql/xa/sql_xa_prepare.h"
 #include "sql/protocol.h"
-#include "sql/xa/xa_proc.h"
+#include "sql/mysqld.h"
+
+#include "sql/xa/xa_proc.h" // server_uuid_ptr...
+
+namespace lizard {
+namespace xa {
+int binlog_start_trans(THD *thd);
+}
+}  // namespace lizard
 
 namespace im {
 /* All concurrency control system memory usage */
@@ -64,6 +74,50 @@ bool get_gtrid(const mem_root_deque<Item *> *list, char *gtrid, unsigned &length
     return true;
   }
   memcpy(gtrid, res->ptr(), length);
+
+  return false;
+}
+
+/**
+  Parse the XID from the parameter list
+
+  @param[in]  list  parameter list
+  @param[out] xid   XID
+
+  @retval     true if parsing error.
+*/
+bool get_xid(const mem_root_deque<Item *> *list, XID *xid) {
+  char buff[256];
+  char gtrid[MAXGTRIDSIZE];
+  char bqual[MAXBQUALSIZE];
+  size_t gtrid_length;
+  size_t bqual_length;
+  size_t formatID;
+
+  String str(buff, sizeof(buff), system_charset_info);
+  String *res;
+
+  /* gtrid */
+  res = (*list)[0]->val_str(&str);
+  gtrid_length = res->length();
+  if (gtrid_length > MAXGTRIDSIZE) {
+    return true;
+  }
+  memcpy(gtrid, res->ptr(), gtrid_length);
+
+  /* bqual */
+  res = (*list)[1]->val_str(&str);
+  bqual_length = res->length();
+  if (bqual_length > MAXBQUALSIZE) {
+    return true;
+  }
+  memcpy(bqual, res->ptr(), bqual_length);
+
+  /* formatID */
+  formatID = (*list)[2]->val_int();
+
+  /** Set XID. */
+  xid->set(formatID, gtrid, gtrid_length, bqual, bqual_length);
 
   return false;
 }
@@ -113,4 +167,110 @@ void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
   DBUG_VOID_RETURN;
 }
 
+Proc *Xa_proc_prepare_with_trx_slot::instance() {
+  static Proc *proc = new Xa_proc_prepare_with_trx_slot(key_memory_xa_proc);
+  return proc;
+}
+
+Sql_cmd *Xa_proc_prepare_with_trx_slot::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+class Xa_active_pretender {
+ public:
+  Xa_active_pretender(THD *thd) {
+    m_xid_state = thd->get_transaction()->xid_state();
+
+    assert(m_xid_state->has_state(XID_STATE::XA_IDLE));
+
+    m_xid_state->set_state(XID_STATE::XA_ACTIVE);
+  }
+
+  ~Xa_active_pretender() {
+    assert(m_xid_state->has_state(XID_STATE::XA_ACTIVE));
+    m_xid_state->set_state(XID_STATE::XA_IDLE);
+  }
+
+ private:
+  XID_STATE *m_xid_state;
+};
+
+bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
+  DBUG_ENTER("Sql_cmd_xa_proc_prepare_with_trx_slot");
+
+  XID xid;
+  XID_STATE *xid_state = thd->get_transaction()->xid_state();
+
+  /** 1. parsed XID from parameters list. */
+  if (get_xid(m_list, &xid)) {
+    my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
+    DBUG_RETURN(true);
+  }
+
+  /** 2. Check whether it is an xa transaction that has completed "XA END" */
+  if (!xid_state->has_state(XID_STATE::XA_IDLE)) {
+    my_error(ER_XAER_RMFAIL, MYF(0), xid_state->state_name());
+    DBUG_RETURN(true);
+  } else if (!xid_state->has_same_xid(&xid)) {
+    my_error(ER_XAER_NOTA, MYF(0));
+    DBUG_RETURN(true);
+  }
+
+  {
+    /**
+      Lizard: In the past, the binlog can only be registered in the XA ACTIVE
+      state. But now the registration is completed in the IDLE state.
+
+      So the pretender is introduced to pretend the XA is still in ACTIVE
+      status.
+    */
+    Xa_active_pretender pretender(thd);
+
+    /** 3. Try to assign a transaction slot. */
+    if (lizard::xa::trx_slot_assign_for_xa(thd, &m_tsa)) {
+      my_error(ER_XA_PROC_BLANK_XA_TRX, MYF(0));
+      DBUG_RETURN(true);
+    }
+
+    /** 4. Register binlog handlerton. */
+    if (lizard::xa::binlog_start_trans(thd)) {
+      my_error(ER_XA_PROC_START_BINLOG_WRONG, MYF(0));
+      DBUG_RETURN(true);
+    }
+  }
+
+  /** 5. Do xa prepare. */
+  Sql_cmd_xa_prepare *executor = new (thd->mem_root) Sql_cmd_xa_prepare(&xid);
+  executor->set_delay_ok();
+  if (executor->execute(thd)) {
+    DBUG_RETURN(true);
+  }
+
+  DBUG_RETURN(false);
+}
+
+void Sql_cmd_xa_proc_prepare_with_trx_slot::send_result(THD *thd, bool error) {
+  DBUG_ENTER("Sql_cmd_xa_proc_prepare_with_trx_slot::send_result");
+  Protocol *protocol;
+
+  if (error) {
+    assert(thd->is_error());
+    DBUG_VOID_RETURN;
+  }
+
+  protocol = thd->get_protocol();
+
+  if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
+
+  protocol->start_row();
+  assert(strlen(server_uuid_ptr) <= 256);
+  protocol->store_string(server_uuid_ptr, strlen(server_uuid_ptr),
+                         system_charset_info);
+  protocol->store((ulonglong)m_tsa);
+  if (protocol->end_row()) DBUG_VOID_RETURN;
+
+  my_eof(thd);
+  DBUG_VOID_RETURN;
+}
 }

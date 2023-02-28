@@ -3143,6 +3143,19 @@ void innobase_register_trx(handlerton *hton, /* in: Innobase handlerton */
   trx_register_for_2pc(trx);
 }
 
+/** Like innobase_register_trx. But it only register as TRANS level (no STMT
+LEVEL). */
+void innobase_register_trx_only_trans(handlerton *hton, THD *thd, trx_t *trx) {
+  const ulonglong trx_id = static_cast<ulonglong>(trx_get_id_for_print(trx));
+
+  if (!trx_is_registered_for_2pc(trx) &&
+      thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
+    trans_register_ha(thd, TRUE, innodb_hton, &trx_id);
+  }
+
+  trx_register_for_2pc(trx);
+}
+
 /** Quote a standard SQL identifier like tablespace, index or column name.
 @param[in]      file    output stream
 @param[in]      trx     InnoDB transaction, or NULL

@@ -1,0 +1,261 @@
+flush local logs;
+set global innodb_purge_rseg_truncate_frequency = 1;
+set global innodb_undo_retention = 0;
+set global innodb_undo_retention = 9000;
+flush local logs;
+set global innodb_purge_rseg_truncate_frequency = 1;
+set global innodb_undo_retention = 0;
+set global innodb_undo_retention = 9000;
+flush local logs;
+set global innodb_purge_rseg_truncate_frequency = 1;
+set global innodb_undo_retention = 0;
+set global innodb_undo_retention = 9000;
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+create table t1 (id int);
+###############################
+# case 1
+###############################
+xa start '1';
+select * from t1 for update;
+id
+xa end '1';
+call dbms_xa.prepare_with_trx_slot('1', '', 1);
+UUID	UBA
+#	#
+xa commit '1';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 2
+###############################
+xa start '2';
+delete from t1;
+xa end '2';
+call dbms_xa.prepare_with_trx_slot('2', '', 1);
+UUID	UBA
+#	#
+xa commit '2';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 3
+###############################
+xa start '3';
+update t1 set id = 1;
+xa end '3';
+call dbms_xa.prepare_with_trx_slot('3', '', 1);
+UUID	UBA
+#	#
+xa commit '3';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 4
+###############################
+xa start '4';
+insert into t1 values (1);
+xa end '4';
+call dbms_xa.prepare_with_trx_slot('4', '', 1);
+UUID	UBA
+#	#
+xa commit '4';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 5
+###############################
+xa start '5';
+update t1 set id = id + 1;
+xa end '5';
+call dbms_xa.prepare_with_trx_slot('5', '', 1);
+UUID	UBA
+#	#
+xa commit '5';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 6
+###############################
+xa start '6', 'b1';
+insert into t1 values (1);
+xa end '6', 'b1';
+xa start '6', 'b2';
+insert into t1 values (1);
+xa end '6', 'b2';
+call dbms_xa.prepare_with_trx_slot('6', 'b1', 1);
+UUID	UBA
+#	#
+xa prepare '6', 'b2';
+xa commit '6', 'b1';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+xa commit '6', 'b2';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 7
+###############################
+xa start '7';
+insert into t1 values (1);
+xa end '7';
+xa prepare '7';
+xa commit '7';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+xa start '7';
+insert into t1 values (1);
+xa end '7';
+xa prepare '7';
+xa commit '7';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+xa start '7';
+insert into t1 values (1);
+xa end '7';
+xa prepare '7';
+xa commit '7';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+xa start '7';
+insert into t1 values (1);
+xa end '7';
+xa commit '7' one phase;
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Leader
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 8
+###############################
+drop table t1;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;

@@ -898,16 +898,24 @@ trx_rseg_t *get_txn_rseg_by_gtrid(const char *gtrid, unsigned len);
 /**
   Find transactions in the finalized state by GTRID.
 
-  @param[in]  rseg         The rollseg where the transaction is being looked up.
+  @params[in] rseg         The rollseg where the transaction is being looked up.
   @params[in] gtrid        gtird
   @params[in] len          length
-  @param[out] txn_undo_hdr Corresponding txn undo header
+  @params[out] txn_undo_hdr Corresponding txn undo header
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
 bool txn_rseg_find_trx_info_by_gtrid(trx_rseg_t *rseg, const char *gtrid,
                                      unsigned len,
                                      txn_undo_hdr_t *txn_undo_hdr);
+
+/**
+  Only write XID on the TXN.
+
+  @params[in]     XID         xid info
+  @params[in/out] undo        TXN undo
+*/
+void txn_undo_write_xid(const XID *xid, trx_undo_t *undo);
 
 }  // namespace lizard
 

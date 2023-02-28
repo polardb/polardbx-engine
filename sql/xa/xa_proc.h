@@ -24,6 +24,7 @@
 #define SQL_XA_PROC_XA_INCLUDED
 
 #include "sql/package/proc.h"
+#include "storage/innobase/include/lizard0xa0iface.h"
 
 /**
   XA procedures (dbms_xa package)
@@ -144,6 +145,100 @@ class Xa_proc_find_by_gtrid : public Xa_proc_base {
   /* Proc name */
   virtual const std::string str() const override {
     return std::string("find_by_gtrid");
+  }
+};
+
+/**
+  2) dbms_xa.prepare_with_trx_slot(gtrid, bqual, formatID)
+    a) force assign a trx slot for the XA trx
+    b) xa prepare
+    c) return {uuid, UBA}
+*/
+class Sql_cmd_xa_proc_prepare_with_trx_slot : public Sql_cmd_xa_proc_base {
+ public:
+  explicit Sql_cmd_xa_proc_prepare_with_trx_slot(THD *thd,
+                                                 mem_root_deque<Item *> *list,
+                                                 const Proc *proc)
+      : Sql_cmd_xa_proc_base(thd, list, proc) {}
+
+  /**
+    Implementation of Proc execution body.
+
+    @param[in]    THD           Thread context
+
+    @retval       true          Failure
+    @retval       false         Success
+  */
+  virtual bool pc_execute(THD *thd) override;
+
+  /* Override default send_result */
+  virtual void send_result(THD *thd, bool error) override;
+
+ private:
+  lizard::xa::TSA m_tsa;
+};
+
+class Xa_proc_prepare_with_trx_slot : public Xa_proc_base {
+  using Sql_cmd_type = Sql_cmd_xa_proc_prepare_with_trx_slot;
+
+  enum enum_parameter {
+    XA_PARAM_GTRID = 0,
+    XA_PARAM_BQUAL,
+    XA_PARAM_FORMATID,
+    XA_PARAM_LAST
+  };
+
+  enum_field_types get_field_type(enum_parameter param) {
+    switch (param) {
+      case XA_PARAM_GTRID:
+      case XA_PARAM_BQUAL:
+        return MYSQL_TYPE_VARCHAR;
+      case XA_PARAM_FORMATID:
+        return MYSQL_TYPE_LONGLONG;
+      case XA_PARAM_LAST:
+        assert(0);
+    }
+    return MYSQL_TYPE_LONGLONG;
+  }
+
+  enum enum_column { COLUMN_UUID = 0, COLUMN_UBA = 1, COLUMN_LAST = 2 };
+
+ public:
+  explicit Xa_proc_prepare_with_trx_slot(PSI_memory_key key)
+      : Xa_proc_base(key) {
+    /* 1. Init parameters */
+    for (size_t i = XA_PARAM_GTRID; i < XA_PARAM_LAST; i++) {
+      m_parameters.assign_at(
+          i, get_field_type(static_cast<enum enum_parameter>(i)));
+    }
+
+    /* 2. Result set protocol packet */
+    m_result_type = Result_type::RESULT_SET;
+
+    Column_element elements[COLUMN_LAST] = {
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("UUID"), 256},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("UBA"), 0},
+    };
+
+    for (size_t i = 0; i < COLUMN_LAST; i++) {
+      m_columns.assign_at(i, elements[i]);
+    }
+  }
+
+  /* Singleton instance for prepare_with_trx_slot */
+  static Proc *instance();
+
+  /**
+    Evoke the sql_cmd object for find_by_gtrid() proc.
+  */
+  virtual Sql_cmd *evoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
+
+  virtual ~Xa_proc_prepare_with_trx_slot() {}
+
+  /* Proc name */
+  virtual const std::string str() const override {
+    return std::string("prepare_with_trx_slot");
   }
 };
 

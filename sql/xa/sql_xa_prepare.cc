@@ -91,7 +91,8 @@ bool detach_native_trx_one_ht(THD *thd, handlerton *hton);
 void reset_xa_connection(THD *thd);
 }  // namespace
 
-Sql_cmd_xa_prepare::Sql_cmd_xa_prepare(xid_t *xid_arg) : m_xid(xid_arg) {}
+Sql_cmd_xa_prepare::Sql_cmd_xa_prepare(xid_t *xid_arg)
+    : m_xid(xid_arg), m_delay_ok(false) {}
 
 enum_sql_command Sql_cmd_xa_prepare::sql_command_code() const {
   return SQLCOM_XA_PREPARE;
@@ -103,7 +104,13 @@ bool Sql_cmd_xa_prepare::execute(THD *thd) {
   if (!st) {
     if (!thd->is_engine_ha_data_detached() ||
         !(st = applier_reset_xa_trans(thd)))
-      my_ok(thd);
+    {
+      /** Delay set OK status because some other result sets are also returned
+      when calling dbms_xa proc. */
+      if (!m_delay_ok) {
+        my_ok(thd);
+      }
+    }
   }
 
   return st;

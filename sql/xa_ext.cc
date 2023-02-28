@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2018, Alibaba and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Alibaba and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -20,21 +20,27 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "handler.h"
-#include "mysql/plugin.h"
+#include "storage/innobase/include/lizard0xa0iface.h"
 
-struct trx_t;
+#include "sql/binlog_ext.h"
 
-extern bool xa_compare_xid_between_thd_and_trx(const THD *thd,
-                                               const trx_t *trx);
+namespace lizard {
+namespace xa {
+bool replay_trx_slot_alloc_on_slave(THD *thd) {
+  if (thd->slave_thread) {
+    if (lizard::xa::start_and_register_rw_trx_for_xa(thd) ||
+        lizard::xa::trx_slot_assign_for_xa(thd, nullptr)) {
+      /** TODO: fix it <01-03-23, zanye.zjy> */
+      my_error(ER_XA_PROC_REPLAY_TRX_SLOT_ALLOC_ERROR, MYF(0));
+      return true;
+    } else if ((thd->variables.option_bits & OPTION_BIN_LOG) &&
+               lizard::xa::binlog_start_trans(thd)) {
+      my_error(ER_XA_PROC_REPLAY_REGISTER_BINLOG_ERROR, MYF(0));
+      return true;
+    }
+  }
 
-/** Like innobase_register_trx. But it only register as TRANS level (no STMT
-LEVEL). */
-void innobase_register_trx_only_trans(handlerton *hton, THD *thd, trx_t *trx);
-
-/**
-  Initialize innobase extension.
-
-  param[in]  innobase_hton  handlerton of innobase.
-*/
-void innobase_init_ext(handlerton *innobase_hton);
+  return false;
+}
+}  // namespace xa
+}  // namespace lizard

@@ -19,22 +19,28 @@
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+#ifndef BINLOG_EXT_INCLUDED
+#define BINLOG_EXT_INCLUDED
 
-#include "handler.h"
-#include "mysql/plugin.h"
+#include <my_systime.h>
+#include <atomic>
+#include <vector>
+#include "libbinlogevents/include/control_events.h"
+#include "map_helpers.h"
+#include "my_inttypes.h"
+#include "sql/xa.h"
 
-struct trx_t;
-
-extern bool xa_compare_xid_between_thd_and_trx(const THD *thd,
-                                               const trx_t *trx);
-
-/** Like innobase_register_trx. But it only register as TRANS level (no STMT
-LEVEL). */
-void innobase_register_trx_only_trans(handlerton *hton, THD *thd, trx_t *trx);
-
+namespace lizard {
+namespace xa {
 /**
-  Initialize innobase extension.
+  Like binlog_start_trans_and_stmt. The difference is:
 
-  param[in]  innobase_hton  handlerton of innobase.
+  binlog_start_trans_and_stmt is not sure whether to open a statement or a
+  transaction, while binlog_start_trans is to open a transaction
+  deterministically.
 */
-void innobase_init_ext(handlerton *innobase_hton);
+int binlog_start_trans(THD *thd);
+}
+}  // namespace lizard
+
+#endif
