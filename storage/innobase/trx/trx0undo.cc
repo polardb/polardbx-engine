@@ -2067,7 +2067,7 @@ page_t *trx_undo_set_state_at_prepare(trx_t *trx, trx_undo_t *undo,
   mlog_write_ulint(undo_header + TRX_UNDO_FLAGS, undo->flag, MLOG_1BYTE, mtr);
 
   if (lizard::fsp_is_txn_tablespace_by_id(undo->space)) {
-    ut_a(lizard::txn_check_xid_rseg_mapping(trx));
+    ut_a(lizard::txn_check_gtrid_rseg_mapping(trx));
   }
 
   trx_undo_write_xid(undo_header, &undo->xid, mtr);

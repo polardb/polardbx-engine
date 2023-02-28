@@ -51,14 +51,16 @@ struct Transaction_info {
 };
 
 /**
-  Find transactions in the finalized state by XID.
+  Find transactions in the finalized state by GTRID.
 
-  @param[in]  xid          XID
-  @param[out] txn_undo_hdr Corresponding txn undo header
+  @params[in] in_gtrid          gtird
+  @params[in] in_len            length
+  @param[out] Transaction_info  Corresponding transaction info
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool get_transaction_info_by_xid(const XID *xid, Transaction_info *info);
+bool get_transaction_info_by_gtrid(const char *gtrid, unsigned len,
+                                   Transaction_info *info);
 
 /** trans state to message string. */
 const char *transaction_state_to_str(const enum Transaction_state state);

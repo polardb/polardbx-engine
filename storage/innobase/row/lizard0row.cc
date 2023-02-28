@@ -771,7 +771,7 @@ bool tcn_collect(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
   // ut_ad(index == pcur->get_page_cur()->index);
   ut_ad(rec == pcur->get_rec());
 
-  page_no_t page_no = page_get_page_no(pcur->get_page());
+  ut_d(page_no_t page_no = page_get_page_no(pcur->get_page()));
   ut_ad(page_no == page_get_page_no(page_align(rec)));
 
   Cursor cursor(true, pcur->get_block()->get_page_id());

@@ -180,7 +180,9 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
       break;
   }
 
+#ifdef UNIV_DEBUG
 simulate_error:
+#endif
 
   ut_ad(fbq_scn != SCN_NULL || fbq_gcn != GCN_NULL);
 

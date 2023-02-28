@@ -463,14 +463,14 @@ void trx_assign_txn_rseg(trx_t *trx);
 dberr_t trx_always_assign_txn_undo(trx_t *trx);
 
 /**
-  If during an external XA, check whether the mapping relationship between XID
+  If during an external XA, check whether the mapping relationship between gtrid
   and rollback segment is as expected.
 
   @param[in]        trx         current transaction
 
   @return           true        if success
 */
-bool txn_check_xid_rseg_mapping(const trx_t *trx);
+bool txn_check_gtrid_rseg_mapping(const trx_t *trx);
 /*-----------------------------------------------------------------------------*/
 /**
   Init the txn description as NULL initial value.
@@ -889,23 +889,25 @@ class Guard_xa_specification {
 };
 
 /**
-  Get a TXN rseg by XID.
+  Get a TXN rseg by GTRID.
 
   @retval     rollback segment
 */
-trx_rseg_t *get_txn_rseg_by_xid(const XID *xid);
+trx_rseg_t *get_txn_rseg_by_gtrid(const char *gtrid, unsigned len);
 
 /**
-  Find transactions in the finalized state by XID.
+  Find transactions in the finalized state by GTRID.
 
   @param[in]  rseg         The rollseg where the transaction is being looked up.
-  @param[in]  xid          XID
+  @params[in] gtrid        gtird
+  @params[in] len          length
   @param[out] txn_undo_hdr Corresponding txn undo header
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool txn_rseg_find_trx_info_by_xid(trx_rseg_t *rseg, const XID *xid,
-                                   txn_undo_hdr_t *txn_undo_hdr);
+bool txn_rseg_find_trx_info_by_gtrid(trx_rseg_t *rseg, const char *gtrid,
+                                     unsigned len,
+                                     txn_undo_hdr_t *txn_undo_hdr);
 
 }  // namespace lizard
 

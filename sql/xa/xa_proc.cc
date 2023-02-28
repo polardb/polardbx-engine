@@ -31,74 +31,57 @@ PSI_memory_key key_memory_xa_proc;
 /* The uniform schema name for xa */
 const LEX_CSTRING XA_PROC_SCHEMA = {C_STRING_WITH_LEN("dbms_xa")};
 
-/* Singleton instance for find_by_xid */
-Proc *Xa_proc_find_by_xid::instance() {
-  static Proc *proc = new Xa_proc_find_by_xid(key_memory_xa_proc);
+/* Singleton instance for find_by_gtrid */
+Proc *Xa_proc_find_by_gtrid::instance() {
+  static Proc *proc = new Xa_proc_find_by_gtrid(key_memory_xa_proc);
   return proc;
 }
 
-Sql_cmd *Xa_proc_find_by_xid::evoke_cmd(THD *thd,
-                                        mem_root_deque<Item *> *list) const {
+Sql_cmd *Xa_proc_find_by_gtrid::evoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
 /**
-  Parse the XID from the parameter list
+  Parse the GTRID from the parameter list
 
-  @param[in]  list  parameter list
-  @param[out] xid   XID
+  @param[in]  list    parameter list
+  @param[out] gtrid   GTRID
+  @param[out] length  length of gtrid
 
   @retval     true if parsing error.
 */
-bool get_xid(const mem_root_deque<Item *> *list, XID *xid) {
-  char buff[256];
-  char gtrid[MAXGTRIDSIZE];
-  char bqual[MAXBQUALSIZE];
-  size_t gtrid_length;
-  size_t bqual_length;
-  size_t formatID;
-
+bool get_gtrid(const mem_root_deque<Item *> *list, char *gtrid, unsigned &length) {
+  char buff[128];
 
   String str(buff, sizeof(buff), system_charset_info);
   String *res;
 
   /* gtrid */
   res = (*list)[0]->val_str(&str);
-  gtrid_length = res->length();
-  if (gtrid_length > MAXGTRIDSIZE) {
+  length = res->length();
+  if (length > MAXGTRIDSIZE) {
     return true;
   }
-  memcpy(gtrid, res->ptr(), gtrid_length);
-
-  /* bqual */
-  res = (*list)[1]->val_str(&str);
-  bqual_length = res->length();
-  if (bqual_length > MAXBQUALSIZE) {
-    return true;
-  }
-  memcpy(bqual, res->ptr(), bqual_length);
-
-  /* formatID */
-  formatID = (*list)[2]->val_int();
-
-  /** Set XID. */
-  xid->set(formatID, gtrid, gtrid_length, bqual, bqual_length);
+  memcpy(gtrid, res->ptr(), length);
 
   return false;
 }
 
-bool Sql_cmd_xa_proc_find_by_xid::pc_execute(THD *) {
-  DBUG_ENTER("Sql_cmd_xa_proc_find_by_xid::pc_execute");
+bool Sql_cmd_xa_proc_find_by_gtrid::pc_execute(THD *) {
+  DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::pc_execute");
   DBUG_RETURN(false);
 }
 
-void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
-  DBUG_ENTER("Sql_cmd_xa_proc_find_by_xid::send_result");
+void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
+  DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::send_result");
 
   Protocol *protocol;
   XID xid;
   lizard::xa::Transaction_info info;
   bool found;
+  char gtrid[MAXGTRIDSIZE];
+  unsigned gtrid_length;
 
   protocol = thd->get_protocol();
 
@@ -107,14 +90,14 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
     DBUG_VOID_RETURN;
   }
 
-  if (get_xid(m_list, &xid)) {
-    my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
+  if (get_gtrid(m_list, gtrid, gtrid_length)) {
+    my_error(ER_XA_PROC_WRONG_GTRID, MYF(0), MAXGTRIDSIZE);
     DBUG_VOID_RETURN;
   }
 
   if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
 
-  found = lizard::xa::get_transaction_info_by_xid(&xid, &info);
+  found = lizard::xa::get_transaction_info_by_gtrid(gtrid, gtrid_length, &info);
 
   if (found) {
     protocol->start_row();

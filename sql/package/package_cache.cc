@@ -121,9 +121,11 @@ void package_context_init() {
   register_package<Proc, Proc_dummy_2>(PROC_DUMMY_SCHEMA);
 #endif
 
-  register_package<Proc, Xa_proc_find_by_xid>(XA_PROC_SCHEMA);
   /* dbms_tso.get_timestamp() */
   register_package<Proc, Proc_get_timestamp>(TSO_PROC_SCHEMA);
+
+  /* dbms_xa.find_by_gtrid($gtrid) */
+  register_package<Proc, Xa_proc_find_by_gtrid>(XA_PROC_SCHEMA);
 }
 
 } /* namespace im */

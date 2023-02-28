@@ -10028,8 +10028,8 @@ ER_SEQUENCE_BATCH_SIZE_INVALID
 ER_SEQUENCE_SKIP_ERROR
    eng "Nextval skipped to is not valid in sequence '%-.192s.%-.192s'"
 
-ER_XA_PROC_WRONG_XID
-  eng "Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed %d bytes, and bqual cannot exceed %d bytes."
+ER_XA_PROC_WRONG_GTRID
+  eng "Wrong GTRID for dbms_xa. Please check the format of the GTRID. For example, gtrid cannot exceed %d bytes."
 
 #
 #  End of RDS error message.

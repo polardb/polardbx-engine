@@ -1,11 +1,11 @@
 # ==== Purpose ====
-# Check that the result of the query from dbms_xa.find_by_xid() is as expected.
+# Check that the result of the query from dbms_xa.find_by_gtrid() is as expected.
 
 # ==== Usage ====
 # --let $expect_gcn=10000
 # --let $expect_state=COMMIT
-# --let $xid='1', '', 1
-# --source suite/rds/include/xa_proc_find_by_xid_verify.inc
+# --let $gtrid='1'
+# --source suite/rds/include/xa_proc_find_by_gtrid_verify.inc
 
 # Parameters
 # $expect_none
@@ -14,11 +14,10 @@
 #   If set, gcn is checked to see if it is as expected.
 # $expect_state
 #   if set, state(commit/rollback) is checked to see if it is as expected.
-# $xid
-#   Transaction XID.
+# $gtrid
+#   gtrid in XID.
 
---echo xid: $xid
---let $actual_gcn= query_get_value("call dbms_xa.find_by_xid($xid)", GCN, 1)
+--let $actual_gcn= query_get_value("call dbms_xa.find_by_gtrid($gtrid)", GCN, 1)
 if ($actual_gcn == 'No such row') {
   if (!$expect_none) {
     --die Cannot find the transaction.
@@ -37,7 +36,7 @@ if ($actual_gcn != 'No such row') {
   }
 
   if ($expect_state) {
-    --let $actual_state = query_get_value("call dbms_xa.find_by_xid($xid)", State, 1)
+    --let $actual_state = query_get_value("call dbms_xa.find_by_gtrid($gtrid)", State, 1)
     --let $assert_text=expect_state == actual_state
     --let $assert_cond="$expect_state" = "$actual_state"
     --source include/assert.inc
@@ -48,5 +47,5 @@ if ($actual_gcn != 'No such row') {
 --let $actual_state=
 --let $expect_gcn=
 --let $expect_state=
---let $xid=
+--let $gtrid=
 --let $expect_none=

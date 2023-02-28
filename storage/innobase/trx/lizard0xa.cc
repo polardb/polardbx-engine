@@ -117,43 +117,53 @@ void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
   trx_sys_mutex_exit();
 }
 
-/** The following function, which is really good to hash different fields, is
-copyed from boost::hash_combine. */
-template <class T>
-static inline void hash_combine(std::size_t &s, const T &v) {
-  std::hash<T> h;
-  s ^= h(v) + 0x9e3779b9 + (s << 6) + (s >> 2);
+namespace lizard {
+namespace xa {
+/** This one is based on splitmix64, which seems to be based on the blog article
+Better Bit Mixing (mix 13) */
+uint64_t hash_u64(uint64_t x) {
+  x = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+  x = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
+  x = x ^ (x >> 31);
+  return x;
 }
 
-std::size_t hash_xid(const XID *xid) {
-  std::size_t res = 0;
-  auto formatID = xid->get_format_id();
-  const char *data = xid->get_data();
-  std::string gtrid(data, xid->get_gtrid_length());
-  std::string bqual(data + xid->get_gtrid_length(), xid->get_bqual_length());
+/** The following function, which is really good to hash different fields, is
+copyed from boost::hash_combine. */
+static inline void hash_combine(uint64_t &s, const uint64_t &v) {
+  s ^= hash_u64(v) + 0x9e3779b9 + (s << 6) + (s >> 2);
+}
 
-  hash_combine(res, formatID);
-  hash_combine(res, gtrid);
-  hash_combine(res, bqual);
+uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len) {
+  uint64_t res = 0;
+  char gtrid[MAXGTRIDSIZE];
+  const char *gtrid_ptr;
+  const char *end = gtrid + MAXGTRIDSIZE;
+
+  memset(gtrid, 0, sizeof(gtrid));
+  memcpy(gtrid, in_gtrid, in_len);
+
+  for (gtrid_ptr = gtrid; gtrid_ptr < end; gtrid_ptr += sizeof(uint64_t)) {
+    ut_ad(gtrid_ptr + sizeof(uint64_t) <= end);
+    hash_combine(res, *(uint64_t *)gtrid_ptr);
+  }
 
   return res;
 }
 
-namespace lizard {
-namespace xa {
-
 const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK"};
 
-bool get_transaction_info_by_xid(const XID *xid, Transaction_info *info) {
+bool get_transaction_info_by_gtrid(const char *gtrid, unsigned len,
+                                   Transaction_info *info) {
   trx_rseg_t *rseg;
   txn_undo_hdr_t txn_hdr;
   bool found;
 
-  rseg = get_txn_rseg_by_xid(xid);
+  rseg = get_txn_rseg_by_gtrid(gtrid, len);
 
   ut_ad(rseg);
 
-  found = txn_rseg_find_trx_info_by_xid(rseg, xid, &txn_hdr);
+  found = txn_rseg_find_trx_info_by_gtrid(rseg, gtrid, len, &txn_hdr);
 
   if (found) {
     switch (txn_hdr.state) {

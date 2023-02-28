@@ -98,13 +98,18 @@ extern bool thd_get_transaction_group(THD *thd);
 
 #endif  // defined UNIV_DEBUG || defined LIZARD_DEBUG
 
+namespace lizard {
+namespace xa {
 /**
-  Hash the XID to an integer.
+  Hash the GTRID to an integer.
 
-  @params[in] xid
+  @params[in] in_gtrid gtird
+  @params[in] in_len   length
 
   @retval hash value.
 */
-std::size_t hash_xid(const XID *xid);
+uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len);
+}  // namespace xa
+}  // namespace lizard
 
 #endif
