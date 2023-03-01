@@ -10434,7 +10434,7 @@ int ha_innobase::rnd_pos(
 }
 
 int ha_innobase::sample_init() {
-  if (m_sampling_method != enum_sampling_method::USER) {
+  if (m_sampling_method != enum_sampling_method::USER || !btr_sample_enabled) {
     return handler::sample_init();
   }
 
@@ -10446,7 +10446,9 @@ int ha_innobase::sample_init() {
 }
 
 int ha_innobase::sample_end() {
-  if (m_sampling_method != enum_sampling_method::USER) {
+  if (!m_prebuilt->sample->enabled) {
+    ut_ad(m_sampling_method != enum_sampling_method::USER ||
+          !btr_sample_enabled);
     return handler::sample_end();
   }
 
@@ -10455,7 +10457,9 @@ int ha_innobase::sample_end() {
 }
 
 int ha_innobase::sample_next(uchar *buf) {
-  if (m_sampling_method != enum_sampling_method::USER) {
+  if (!m_prebuilt->sample->enabled) {
+    ut_ad(m_sampling_method != enum_sampling_method::USER ||
+          !btr_sample_enabled);
     return handler::sample_next(buf);
   }
 
@@ -22788,6 +22792,10 @@ static MYSQL_SYSVAR_ULONG(sample_advise_pages, sample_advise_pages,
                           "advise number of leaves that sampling by block",
                           NULL, NULL, 100, 0, UINT_MAX32, 0);
 
+static MYSQL_SYSVAR_BOOL(btree_sampling, btr_sample_enabled,
+                         PLUGIN_VAR_OPCMDARG, "enable btree sampling", NULL,
+                         NULL, TRUE);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23030,6 +23038,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(sample_advise_pages),
+    MYSQL_SYSVAR(btree_sampling),
     NULL};
 
 mysql_declare_plugin(innobase){

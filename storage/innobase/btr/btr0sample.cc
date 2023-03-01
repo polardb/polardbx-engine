@@ -24,6 +24,7 @@
 #include "ha_innodb.h"
 #include "row0mysql.h"
 
+bool btr_sample_enabled = true;
 ulint sample_advise_pages = 100;
 
 void btr_sample_t::init(row_prebuilt_t *row_prebuilt) {
@@ -48,8 +49,9 @@ void btr_sample_t::open_curor(dict_index_t *index, mtr_t *mtr) {
   auto &pcur = prebuilt->pcur;
   auto &parent = prebuilt->parent;
   auto cursor = pcur->get_btr_cur();
-  bool position_at_left = true;
+  bool skip_all_records_by_sampling = false;
   ulint height = ULINT_UNDEFINED;
+  Page_fetch fetch_mode = Page_fetch::NORMAL;
   ulint savepoint;
   page_cur_t *page_cursor;
   mem_heap_t *heap = nullptr;
@@ -63,13 +65,13 @@ void btr_sample_t::open_curor(dict_index_t *index, mtr_t *mtr) {
   ut_ad(parent->m_cleanout_cursors == nullptr &&
         parent->m_cleanout_pages == nullptr);
 
-  /* Initialize leaf and parent pcurors */
   parent->m_latch_mode = pcur->m_latch_mode = BTR_SEARCH_LEAF;
   parent->m_search_mode = pcur->m_search_mode = PAGE_CUR_G;
   parent->m_pos_state = pcur->m_pos_state = BTR_PCUR_IS_POSITIONED;
   parent->m_old_stored = pcur->m_old_stored = false;
   parent->m_trx_if_known = pcur->m_trx_if_known = nullptr;
 
+  parent->m_btr_cur.m_fetch_mode = pcur->m_btr_cur.m_fetch_mode = fetch_mode;
   parent->m_btr_cur.index = pcur->m_btr_cur.index = index;
 
   /* Store the position of the tree latch we push to mtr so that we
@@ -87,11 +89,15 @@ void btr_sample_t::open_curor(dict_index_t *index, mtr_t *mtr) {
   const page_size_t &page_size = dict_table_page_size(index->table);
 
   for (;;) {
-    ut_ad(cursor->m_fetch_mode == Page_fetch::NORMAL);
-    auto fetch_mode = (height == 0) ? Page_fetch::SCAN : Page_fetch::NORMAL;
+    if (height == 0) {
+      /* Sampling is large scan, for leaves do not flood the buffer pool */
+      fetch_mode = Page_fetch::SCAN;
+    }
 
-    auto block = buf_page_get_gen(page_id, page_size, RW_NO_LATCH, NULL,
+    auto block = buf_page_get_gen(page_id, page_size, RW_S_LATCH, nullptr,
                                   fetch_mode, __FILE__, __LINE__, mtr);
+
+    buf_block_dbg_add_level(block, SYNC_TREE_NODE);
 
     auto page = buf_block_get_frame(block);
 
@@ -110,21 +116,18 @@ void btr_sample_t::open_curor(dict_index_t *index, mtr_t *mtr) {
     ut_ad(scan_mode != NO_SAMPLE);
 
     if (height == 0) {
-      /* Leaf nodes always be s-latched */
-      btr_cur_latch_leaves(block, page_id, page_size, BTR_SEARCH_LEAF, cursor,
-                           mtr);
-      /* Release index SX lock */
       mtr->release_sx_latch_at_savepoint(savepoint, dict_index_get_lock(index));
     }
 
-    if (position_at_left) {
+    if (UNIV_UNLIKELY(skip_all_records_by_sampling)) {
+      /* Position at the supremum of the rightmost leaf,
+      row_search_mvcc returns empty set to the server layer subsequently */
+
+      ut_a(height == 0 && scan_mode == SAMPLE_BY_BLOCK);
+      page_cur_set_after_last(block, page_cursor);
+    } else {
       page_cur_set_before_first(block, page_cursor);
       page_cur_move_to_next(page_cursor);
-    } else {
-      /* Only if all leaf blocks are skipped by sampling */
-      ut_a(scan_mode == SAMPLE_BY_BLOCK);
-      ut_a(height == 0);
-      page_cur_set_after_last(block, page_cursor);
     }
 
     if (height == 0) {
@@ -133,29 +136,30 @@ void btr_sample_t::open_curor(dict_index_t *index, mtr_t *mtr) {
 
     ut_a(!page_is_empty(buf_block_get_frame(block)));
 
-    if (scan_mode == SAMPLE_BY_BLOCK && height == 1) {
-      /* S-latch the branch block for btr_pcur_t::store_position */
-      btr_cur_latch_leaves(block, page_id, page_size, BTR_SEARCH_LEAF, cursor,
-                           mtr);
-      buf_block_dbg_add_level(block, SYNC_TREE_NODE);
-
-      /* Begin from the left most branch, get a leaf with sampling pct */
+    if (height == 1 && scan_mode == SAMPLE_BY_BLOCK) {
+      /* Now we reached at the leftmost branch on the penultimate level.
+      Starting from the current position, find the first leaf node that
+      meets the sampling percentage, and store the corresponding nodeptr
+      to the parent pcur */
 
       auto node_rec = page_cur_get_rec(page_cursor);
       page_cur_position(node_rec, block, parent->get_page_cur());
       parent->get_page_cur()->index = index;
 
-      position_at_left = get_one_leaf_with_sampling(page_cursor, mtr);
-
-      /* Release S-latch */
-      btr_leaf_page_release(parent->get_block(), BTR_SEARCH_LEAF, mtr);
+      if (!search_next_sampled_leaf(page_cursor, mtr)) {
+        skip_all_records_by_sampling = true;
+      }
     }
+
+    /* Release s-latch as soon as possible */
+    btr_leaf_page_release(parent->get_block(), BTR_SEARCH_LEAF, mtr);
 
     /* Child page id */
     auto node_ptr = page_cur_get_rec(page_cursor);
     offsets = rec_get_offsets(node_ptr, index, offsets, ULINT_UNDEFINED, &heap);
     page_id.set_page_no(btr_node_ptr_get_child_page_no(node_ptr, offsets));
 
+    /* Go to the next level */
     height--;
   }
 
@@ -164,8 +168,8 @@ void btr_sample_t::open_curor(dict_index_t *index, mtr_t *mtr) {
   }
 }
 
-bool btr_sample_t::get_one_leaf_with_sampling(page_cur_t *page_cursor,
-                                              mtr_t *mtr) {
+bool btr_sample_t::search_next_sampled_leaf(page_cur_t *page_cursor,
+                                            mtr_t *mtr) {
   bool found = false;
   auto &parent = prebuilt->parent;
 
@@ -188,6 +192,8 @@ bool btr_sample_t::get_one_leaf_with_sampling(page_cur_t *page_cursor,
   page_cursor->rec = parent_cursor->rec;
 
   if (!found) {
+    /* If no leaf selected with sampling percentage then position to the
+    rightmost leaf, because some scenarios need to return a valid leaf node */
     ut_a(parent->is_after_last_on_page());
     page_cur_move_to_prev(page_cursor);
   }
@@ -210,15 +216,14 @@ void btr_sample_t::decide_scan_mode(buf_block_t *root, ulint tree_height) {
 }
 
 bool btr_sample_t::restore_position(mtr_t *mtr) {
-  ut_ad(scan_mode != NO_SAMPLE);
-
-  if (scan_mode == SAMPLE_BY_BLOCK) {
-    return restore_leaf_pcur(mtr);
+  if (scan_mode == SAMPLE_BY_REC) {
+    auto &pcur = prebuilt->pcur;
+    ut_ad(pcur->m_latch_mode == BTR_SEARCH_LEAF);
+    return btr_pcur_restore_position(pcur->m_latch_mode, pcur, mtr);
   }
 
-  auto &pcur = prebuilt->pcur;
-  ut_ad(pcur->m_latch_mode == BTR_SEARCH_LEAF);
-  return btr_pcur_restore_position(pcur->m_latch_mode, pcur, mtr);
+  ut_ad(scan_mode == SAMPLE_BY_BLOCK);
+  return restore_leaf_pcur(mtr);
 }
 
 bool btr_sample_t::restore_leaf_pcur(mtr_t *mtr) {
@@ -227,7 +232,7 @@ bool btr_sample_t::restore_leaf_pcur(mtr_t *mtr) {
     return succ;
   }
 
-  return restore_leaf_pessimistic(mtr);
+  return restore_leaf_pessimistic(mtr, false);
 }
 
 bool btr_sample_t::restore_pcur_optimistic(btr_pcur_t *pcur, bool is_leaf,
@@ -294,15 +299,30 @@ bool btr_sample_t::restore_pcur_optimistic(btr_pcur_t *pcur, bool is_leaf,
   return false;
 }
 
-bool btr_sample_t::restore_leaf_pessimistic(mtr_t *mtr) {
+/**
+  restore_leaf_pessimistic is invoked in two scenarios:
+
+  1) Leaf pcur optimistic restore failed, and pessimistic restore is needed.
+     In this situation hint_sampling is false.
+     But we still need sampling leaf pages if the pcur is positioned exactly
+     at the last record of the current leaf page.
+
+  2) Leaf pcur move_to_next_rec failed bacause of parent pcur optimistic
+     restore failure, so we use this routine to reposition parent and leaf pcur
+     according to the current leaf record.
+     In this situation hint_sampling is true.
+*/
+bool btr_sample_t::restore_leaf_pessimistic(mtr_t *mtr, bool hint_sampling) {
   page_cur_mode_t mode;
   auto &pcur = prebuilt->pcur;
   auto index = pcur->index();
+  bool need_sampling = hint_sampling;
 
-  auto heap = mem_heap_create(256);
+  ut_ad(pcur->is_positioned());
+  ut_ad(pcur->m_old_rec != nullptr);
+  ut_ad(pcur->m_old_n_fields > 0);
 
-  auto tuple = dict_index_build_data_tuple(index, pcur->m_old_rec,
-                                           pcur->m_old_n_fields, heap);
+  ut_a(!hint_sampling || pcur->m_rel_pos == BTR_PCUR_AFTER);
 
   switch (pcur->m_rel_pos) {
     case BTR_PCUR_ON:
@@ -310,6 +330,7 @@ bool btr_sample_t::restore_leaf_pessimistic(mtr_t *mtr) {
       break;
     case BTR_PCUR_AFTER:
       mode = PAGE_CUR_G;
+      need_sampling = true;
       break;
     case BTR_PCUR_BEFORE:
       mode = PAGE_CUR_L;
@@ -318,7 +339,12 @@ bool btr_sample_t::restore_leaf_pessimistic(mtr_t *mtr) {
       ut_error;
   }
 
-  search_to_leaf(tuple, mode, mtr);
+  auto heap = mem_heap_create(256);
+
+  auto tuple = dict_index_build_data_tuple(index, pcur->m_old_rec,
+                                           pcur->m_old_n_fields, heap);
+
+  search_to_leaf(tuple, mode, need_sampling, mtr);
 
   ut_ad(pcur->m_rel_pos == BTR_PCUR_ON || pcur->m_rel_pos == BTR_PCUR_BEFORE ||
         pcur->m_rel_pos == BTR_PCUR_AFTER);
@@ -353,15 +379,14 @@ bool btr_sample_t::restore_leaf_pessimistic(mtr_t *mtr) {
 }
 
 void btr_sample_t::search_to_leaf(const dtuple_t *tuple, page_cur_mode_t mode,
-                                  mtr_t *mtr) {
+                                  bool need_sampling, mtr_t *mtr) {
   auto &parent = prebuilt->parent;
   btr_cur_t *cursor = prebuilt->pcur->get_btr_cur();
   dict_index_t *index = cursor->index;
-  bool do_sampling = (mode == PAGE_CUR_G);
-  bool position_at_left = true;
+  bool skip_all_other_records_by_sampling = false;
   page_t *page = NULL;
   buf_block_t *block;
-  Page_fetch fetch_mode;
+  Page_fetch fetch_mode = Page_fetch::NORMAL;
   ulint height = ULINT_UNDEFINED;
   ulint up_match = 0;
   ulint up_bytes = 0;
@@ -371,7 +396,6 @@ void btr_sample_t::search_to_leaf(const dtuple_t *tuple, page_cur_mode_t mode,
   ulint rw_latch;
   page_cur_mode_t page_mode;
   page_cur_t *page_cursor;
-  ulint upper_rw_latch;
   buf_block_t *tree_blocks[BTR_MAX_LEVELS];
   ulint tree_savepoints[BTR_MAX_LEVELS];
   ulint n_blocks = 0;
@@ -385,6 +409,7 @@ void btr_sample_t::search_to_leaf(const dtuple_t *tuple, page_cur_mode_t mode,
   ut_ad(dict_index_check_search_tuple(index, tuple));
   ut_ad(prebuilt->pcur->m_latch_mode == BTR_SEARCH_LEAF);
   ut_ad(cursor->m_fetch_mode == Page_fetch::NORMAL);
+  ut_ad(!need_sampling || mode == PAGE_CUR_G);
 
   UNIV_MEM_INVALID(&cursor->up_match, sizeof cursor->up_match);
   UNIV_MEM_INVALID(&cursor->up_bytes, sizeof cursor->up_bytes);
@@ -403,16 +428,12 @@ void btr_sample_t::search_to_leaf(const dtuple_t *tuple, page_cur_mode_t mode,
   know how to release it when we have latched leaf node(s) */
   savepoint = mtr_set_savepoint(mtr);
 
-  if (do_sampling) {
+  if (need_sampling) {
+    /* Traverse branches from left to right, SX-lock to block SMO */
     mtr_sx_lock(dict_index_get_lock(index), mtr);
-  } else if (!srv_read_only_mode) {
-    mtr_s_lock(dict_index_get_lock(index), mtr);
-  }
-
-  if (do_sampling || srv_read_only_mode) {
-    upper_rw_latch = RW_NO_LATCH;
   } else {
-    upper_rw_latch = RW_S_LATCH;
+    /* Search the tree from root to leaf regularly, S-lock is enough */
+    mtr_s_lock(dict_index_get_lock(index), mtr);
   }
 
   page_cursor = btr_cur_get_page_cur(cursor);
@@ -440,14 +461,19 @@ void btr_sample_t::search_to_leaf(const dtuple_t *tuple, page_cur_mode_t mode,
   }
 
 search_loop:
-  ut_ad(cursor->m_fetch_mode == Page_fetch::NORMAL);
-  fetch_mode = (height == 0) ? Page_fetch::SCAN : Page_fetch::NORMAL;
-  rw_latch = (height != 0) ? upper_rw_latch : (ulint)RW_NO_LATCH;
+  if (height == 0) {
+    /* Sampling is large scan, for leaves do not flood the buffer pool */
+    fetch_mode = Page_fetch::SCAN;
+  }
+
+  rw_latch = (height != 0) ? (ulint)RW_S_LATCH : (ulint)RW_NO_LATCH;
 
   ut_ad(n_blocks < BTR_MAX_LEVELS);
   tree_savepoints[n_blocks] = mtr_set_savepoint(mtr);
+
   block = buf_page_get_gen(page_id, page_size, rw_latch, nullptr, fetch_mode,
                            __FILE__, __LINE__, mtr);
+
   tree_blocks[n_blocks] = block;
 
   page = buf_block_get_frame(block);
@@ -475,65 +501,61 @@ search_loop:
                            mtr);
     }
 
-    if (do_sampling) {
+    if (need_sampling) {
       /* Release index SX lock */
       mtr->release_sx_latch_at_savepoint(savepoint, dict_index_get_lock(index));
-    } else if (!srv_read_only_mode) {
+    } else {
+      /* Release index S lock */
+      mtr->release_s_latch_at_savepoint(savepoint, dict_index_get_lock(index));
       /* Release the upper level blocks */
       for (n_releases = 0; n_releases < n_blocks; n_releases++) {
         mtr_release_block_at_savepoint(mtr, tree_savepoints[n_releases],
                                        tree_blocks[n_releases]);
       }
-      /* Release index S lock */
-      mtr->release_s_latch_at_savepoint(savepoint, dict_index_get_lock(index));
     }
 
     page_mode = mode;
   }
 
-  if (height > 0 || (!do_sampling && !btr_search_enabled)) {
+  if (height == 0 && need_sampling) {
+    up_bytes = low_bytes = low_match = up_match = 0;
+
+    if (UNIV_UNLIKELY(skip_all_other_records_by_sampling)) {
+      /* Marks that it is already to end of the index */
+      page_cur_set_after_last(block, page_cursor);
+    } else {
+      page_cur_set_before_first(block, page_cursor);
+      page_cur_move_to_next(page_cursor);
+    }
+  } else {
     /* Search for complete index fields. */
     up_bytes = low_bytes = 0;
     page_cur_search_with_match(block, index, tuple, page_mode, &up_match,
                                &low_match, page_cursor, nullptr);
-  } else if (do_sampling) {
-    up_bytes = low_bytes = low_match = up_match = 0;
-    if (position_at_left) {
-      page_cur_set_before_first(block, page_cursor);
-      page_cur_move_to_next(page_cursor);
-    } else {
-      /* All leaf blocks are skipped by sampling */
-      page_cur_set_after_last(block, page_cursor);
-    }
-  } else {
-    ut_ad(btr_search_enabled);
-    /* The adaptive hash index is only used when searching
-    for leaf pages (height==0). */
-    page_cur_search_with_match_bytes(block, index, tuple, page_mode, &up_match,
-                                     &up_bytes, &low_match, &low_bytes,
-                                     page_cursor);
   }
 
   ut_ad(height == btr_page_get_level(page_cur_get_page(page_cursor), mtr));
 
-  if (height == 1 && do_sampling) {
-    /* S-latch the branch block for btr_pcur_t::store_position */
-    btr_cur_latch_leaves(block, page_id, page_size, BTR_SEARCH_LEAF, cursor,
-                         mtr);
-    buf_block_dbg_add_level(block, SYNC_TREE_NODE);
-
-    /* Begin from the left most branch, get a leaf with sampling pct */
+  if (height == 1 && need_sampling) {
+    /* Now we reached at the stored nodeptr on the penultimate level.
+    Starting from the current position, find the next leaf node that
+    meets the sampling percentage, and store the corresponding nodeptr
+    to the parent pcur */
 
     auto node_rec = page_cur_get_rec(page_cursor);
     page_cur_position(node_rec, block, parent->get_page_cur());
 
-    position_at_left = get_one_leaf_with_sampling(page_cursor, mtr);
-
-    /* Release S-latch */
-    btr_leaf_page_release(parent->get_block(), BTR_SEARCH_LEAF, mtr);
+    if (!search_next_sampled_leaf(page_cursor, mtr)) {
+      skip_all_other_records_by_sampling = true;
+    }
   }
 
   if (height > 0) {
+    if (need_sampling) {
+      /* Release parent s-latch as soon as possible if hold index SX lock */
+      btr_leaf_page_release(parent->get_block(), BTR_SEARCH_LEAF, mtr);
+    }
+
     n_blocks++;
 
     height--;
@@ -545,9 +567,10 @@ search_loop:
 
     offsets = rec_get_offsets(node_ptr, index, offsets, ULINT_UNDEFINED, &heap);
 
-    /* Go to the child node */
+    /* The child node */
     page_id.reset(space, btr_node_ptr_get_child_page_no(node_ptr, offsets));
 
+    /* Go to the next level */
     goto search_loop;
   }
 
@@ -566,16 +589,15 @@ search_loop:
 }
 
 bool btr_sample_t::move_to_next(mtr_t *mtr) {
-  ut_ad(scan_mode != NO_SAMPLE);
-
-  if (scan_mode == SAMPLE_BY_BLOCK) {
-    return move_to_next_via_blk(mtr);
-  } else {
-    return move_to_next_via_rec(mtr);
+  if (scan_mode == SAMPLE_BY_REC) {
+    return sample_to_next_via_rec(mtr);
   }
+
+  ut_ad(scan_mode == SAMPLE_BY_BLOCK);
+  return sample_to_next_via_blk(mtr);
 }
 
-bool btr_sample_t::move_to_next_via_rec(mtr_t *mtr) {
+bool btr_sample_t::sample_to_next_via_rec(mtr_t *mtr) {
   auto move = btr_pcur_move_to_next(prebuilt->pcur, mtr);
   while (move && skip()) {
     move = btr_pcur_move_to_next(prebuilt->pcur, mtr);
@@ -583,7 +605,7 @@ bool btr_sample_t::move_to_next_via_rec(mtr_t *mtr) {
   return move;
 }
 
-bool btr_sample_t::move_to_next_via_blk(mtr_t *mtr) {
+bool btr_sample_t::sample_to_next_via_blk(mtr_t *mtr) {
   auto &pcur = prebuilt->pcur;
 
   ut_ad(pcur->m_pos_state == BTR_PCUR_IS_POSITIONED);
@@ -600,12 +622,28 @@ bool btr_sample_t::move_to_next_via_blk(mtr_t *mtr) {
     return false;
   }
 
+  /* Here all the records on this leaf page have been scanned,
+  next we will search the next leaf page according to sampling pct. */
+
+  pcur->store_position(mtr); /* Used in pessimistic searching */
   btr_leaf_page_release(pcur->get_block(), pcur->m_latch_mode, mtr);
 
-  return move_to_next_page(mtr);
+  /* Firstly trying to optimistic search by parent pcur */
+  bool rec_sampled = false;
+
+  if (sample_to_next_leaf_by_parent_pcur(mtr, rec_sampled)) {
+    ut_ad(!rec_sampled || pcur->is_on_user_rec());
+    pcur->m_old_stored = !rec_sampled;
+    return rec_sampled;
+  }
+
+  /* If optimistic failed, search to the leaf page with the record on pcur,
+  then do block-level sampling on its parent. */
+
+  return sample_to_next_leaf_by_leaf_pcur(mtr);
 }
 
-bool btr_sample_t::move_to_next_page(mtr_t *mtr) {
+bool btr_sample_t::sample_to_next_leaf_by_parent_pcur(mtr_t *mtr, bool &found) {
   auto &parent = prebuilt->parent;
   auto index = parent->index();
 
@@ -619,7 +657,7 @@ bool btr_sample_t::move_to_next_page(mtr_t *mtr) {
     }
 
     page_cur_t page_cursor;
-    auto found = get_one_leaf_with_sampling(&page_cursor, mtr);
+    found = search_next_sampled_leaf(&page_cursor, mtr);
 
     get_leaf_node_by_nodeptr(page_cur_get_rec(&page_cursor), found, mtr);
 
@@ -627,12 +665,11 @@ bool btr_sample_t::move_to_next_page(mtr_t *mtr) {
 
     mtr->release_sx_latch_at_savepoint(savepoint, dict_index_get_lock(index));
 
-    return found;
+    return true;
   }
 
   mtr->release_sx_latch_at_savepoint(savepoint, dict_index_get_lock(index));
-
-  return restore_leaf_pessimistic(mtr);
+  return false;
 }
 
 void btr_sample_t::get_leaf_node_by_nodeptr(rec_t *node_ptr,
@@ -664,6 +701,21 @@ void btr_sample_t::get_leaf_node_by_nodeptr(rec_t *node_ptr,
   if (heap) {
     mem_heap_free(heap);
   }
+}
+
+bool btr_sample_t::sample_to_next_leaf_by_leaf_pcur(mtr_t *mtr) {
+  auto &pcur = prebuilt->pcur;
+
+  restore_leaf_pessimistic(mtr, true);
+
+  ut_ad(pcur->is_positioned());
+
+  if (pcur->is_on_user_rec()) {
+    pcur->m_old_stored = false;
+    return true;
+  }
+
+  return false;
 }
 
 bool btr_sample_t::skip() const {

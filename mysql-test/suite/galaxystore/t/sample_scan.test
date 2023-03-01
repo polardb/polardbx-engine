@@ -94,6 +94,9 @@ select /*+ sample_percentage(100.0) */ sum(id) from t;
 # sampling by block: open cursor at right, ie. skipping all leaves
 select /*+ sample_percentage(0.0001) */ sum(id) from t;
 
+# sampling by block: all optimistic
+select /*+ sample_percentage(20.0) */ sum(id) from t;
+
 # sampling by block: test restore_leaf_pessimistic
 SET SESSION debug = "+d,force_leaf_pcur_restore_fail";
 select /*+ sample_percentage(20.0) */ sum(id) from t;
@@ -101,7 +104,7 @@ SET SESSION debug = "-d,force_leaf_pcur_restore_fail";
 
 # sampling by block: test move_to_next_page
 SET SESSION debug = "+d,force_branch_pcur_restore_fail";
-select /*+ sample_percentage(100.0) */ sum(id) from t;
+select /*+ sample_percentage(20.0) */ sum(id) from t;
 SET SESSION debug = "-d,force_branch_pcur_restore_fail";
 
 # partition table

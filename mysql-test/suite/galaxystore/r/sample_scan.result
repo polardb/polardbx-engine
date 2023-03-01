@@ -106,15 +106,18 @@ sum(id)
 select /*+ sample_percentage(0.0001) */ sum(id) from t;
 sum(id)
 NULL
+select /*+ sample_percentage(20.0) */ sum(id) from t;
+sum(id)
+59082
 SET SESSION debug = "+d,force_leaf_pcur_restore_fail";
 select /*+ sample_percentage(20.0) */ sum(id) from t;
 sum(id)
 59082
 SET SESSION debug = "-d,force_leaf_pcur_restore_fail";
 SET SESSION debug = "+d,force_branch_pcur_restore_fail";
-select /*+ sample_percentage(100.0) */ sum(id) from t;
+select /*+ sample_percentage(20.0) */ sum(id) from t;
 sum(id)
-55224
+59082
 SET SESSION debug = "-d,force_branch_pcur_restore_fail";
 insert into part values(1,1,'1'),(2,2,'2'),(1001,1,'1'),(1002,2,'2');
 insert into part values(10,1,'1'),(20,2,'2'),(2001,1,'1'),(2002,2,'2');
