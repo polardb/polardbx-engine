@@ -50,8 +50,10 @@ Polarx.Resultset.ColumnMetaData {
   original_table: "mytable"
   schema: "xtest"
   catalog: "def"
+  collation: 63
   length: 11
   flags: 304
+  original_flags: 16899
 }
 
 Polarx.Resultset.ColumnMetaData {
@@ -64,7 +66,8 @@ Polarx.Resultset.ColumnMetaData {
   schema: "xtest"
   catalog: "def"
   collation: 33
-  length: 400
+  length: 300
+  original_flags: 0
 }
 
 Polarx.Resultset.Row {
