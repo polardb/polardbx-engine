@@ -3,6 +3,7 @@
 //
 
 #include <cassert>
+#include <mutex>
 
 #include "m_ctype.h"
 #include "sql/mysqld.h"
@@ -18,7 +19,12 @@
 polarx_rpc_info_t plugin_info;
 
 static int polarx_rpc_init(MYSQL_PLUGIN info) {
-  plugin_info.plugin_info = info;
+  {
+    std::lock_guard<std::mutex> lck(plugin_info.mutex);
+    plugin_info.plugin_info = info;
+  }
+
+  /// plugin_info.plugin_info always valid in this function
 
   /// database init?
   if (opt_initialize) {
@@ -48,6 +54,10 @@ static int polarx_rpc_init(MYSQL_PLUGIN info) {
 }
 
 static int polarx_rpc_deinit(void *arg MY_ATTRIBUTE((unused))) {
+  {
+    std::lock_guard<std::mutex> lck(plugin_info.mutex);
+    plugin_info.plugin_info = nullptr;
+  }
   plugin_info.server.reset(); /// uninitialize
   /// cache never free
   return 0;

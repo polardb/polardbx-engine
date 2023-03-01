@@ -64,16 +64,25 @@ class Cserver final {
 
 public:
   Cserver() noexcept(false) {
+#ifdef MYSQL8
     auto port = rpc_port;
     if (port > 0 && port < 65536 && new_rpc) {
+#else
+    auto port = rpc_use_legacy_port ? polarxpl::Plugin_system_variables::xport
+                                    : rpc_port;
+    if (port > 0 && port < 65536 && new_rpc && !xcluster_standalone) {
+#endif
       /// init server and bind port
       Clistener::start(static_cast<uint16_t>(port));
       /// init watch dog
       std::thread thread(&watch_dog);
       thread.detach();
-    } else
-      my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
-                            "PolarX RPC disabled.");
+    } else {
+      std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+      if (plugin_info.plugin_info != nullptr)
+        my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+                              "PolarX RPC disabled.");
+    }
   }
 };
 

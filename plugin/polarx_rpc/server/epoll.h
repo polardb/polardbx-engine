@@ -280,7 +280,7 @@ private:
             int affinity, bool epoll_wait, bool is_worker) {
     plugin_info.threads.fetch_add(1, std::memory_order_release);
 
-    if (affinity >= 0) {
+    if (affinity >= 0 && !multi_affinity_in_group) {
       auto thread = pthread_self();
       cpu_set_t cpu;
       CPU_ZERO(&cpu);
@@ -290,35 +290,46 @@ private:
         CPU_ZERO(&cpu);
         CPU_SET(affinity, &cpu);
         iret = pthread_setaffinity_np(thread, sizeof(cpu), &cpu);
-        if (0 == iret)
-          my_plugin_log_message(
-              &plugin_info.plugin_info, MY_WARNING_LEVEL,
-              "MtEpoll start worker thread %u:%u(%u,%u) bind to core %d.",
-              group_id, thread_id, base_thread, epoll_wait, affinity);
-        else
-          my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                                "MtEpoll start worker thread %u:%u(%u,%u) bind "
-                                "to core %d failed. %s",
-                                group_id, thread_id, base_thread, epoll_wait,
-                                affinity, std::strerror(errno));
+        {
+          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+          if (plugin_info.plugin_info != nullptr) {
+            if (0 == iret)
+              my_plugin_log_message(
+                  &plugin_info.plugin_info, MY_WARNING_LEVEL,
+                  "MtEpoll start worker thread %u:%u(%u,%u) bind to core %d.",
+                  group_id, thread_id, base_thread, epoll_wait, affinity);
+            else
+              my_plugin_log_message(
+                  &plugin_info.plugin_info, MY_WARNING_LEVEL,
+                  "MtEpoll start worker thread %u:%u(%u,%u) bind "
+                  "to core %d failed. %s",
+                  group_id, thread_id, base_thread, epoll_wait, affinity,
+                  std::strerror(errno));
+          }
+        }
       }
-    } else if (!base_thread && with_affinity_) {
-      /// auto bind for dynamic thread
+    } else if ((!base_thread || multi_affinity_in_group) && with_affinity_) {
+      /// auto bind for dynamic thread or multi bind base thread
       auto thread = pthread_self();
       auto iret = pthread_setaffinity_np(thread, sizeof(cpus_), &cpus_);
-      if (0 == iret)
-        my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                              "MtEpoll start dynamic worker thread "
-                              "%u:%u(%u,%u) bind to cores %s.",
-                              group_id, thread_id, base_thread, epoll_wait,
-                              cores_str_.c_str());
-      else
-        my_plugin_log_message(
-            &plugin_info.plugin_info, MY_WARNING_LEVEL,
-            "MtEpoll start dynamic worker thread %u:%u(%u,%u) bind "
-            "to cores %s failed. %s",
-            group_id, thread_id, base_thread, epoll_wait, cores_str_.c_str(),
-            std::strerror(errno));
+      {
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr) {
+          if (0 == iret)
+            my_plugin_log_message(
+                &plugin_info.plugin_info, MY_WARNING_LEVEL,
+                "MtEpoll start%s worker thread %u:%u(%u,%u) bind to cores %s.",
+                base_thread ? "" : " dynamic", group_id, thread_id, base_thread,
+                epoll_wait, cores_str_.c_str());
+          else
+            my_plugin_log_message(
+                &plugin_info.plugin_info, MY_WARNING_LEVEL,
+                "MtEpoll start%s worker thread %u:%u(%u,%u) bind "
+                "to cores %s failed. %s",
+                base_thread ? "" : " dynamic", group_id, thread_id, base_thread,
+                epoll_wait, cores_str_.c_str(), std::strerror(errno));
+        }
+      }
     }
 
     std::vector<task_t> timer_tasks;
@@ -554,18 +565,13 @@ private:
     base_thread_count_ = worker_count_ = static_cast<int>(threads);
     global_thread_count() += static_cast<int>(threads);
 
+    /// build group affinities first
     std::ostringstream oss;
     oss << '[';
     for (uint32_t thread_id = 0; thread_id < threads; ++thread_id) {
       auto affinity = base_idx + thread_id < affinities.size()
                           ? affinities[base_idx + thread_id].processor
                           : -1;
-      auto is_epoll_wait =
-          0 == thread_id % epoll_wait_gap && --epoll_wait_threads >= 0;
-      /// all thread is base thread when init
-      std::thread thread(&CmtEpoll::loop, this, group_id, thread_id, true,
-                         affinity, is_epoll_wait, true);
-      thread.detach();
       /// record affinities
       if (affinity < 0)
         with_affinity_ = false;
@@ -579,6 +585,20 @@ private:
     if (with_affinity_) {
       oss << ']';
       cores_str_ = oss.str();
+    }
+
+    /// now cores_str_, with_affinity_ and cpus_ are valid
+    /// create threads
+    for (uint32_t thread_id = 0; thread_id < threads; ++thread_id) {
+      auto affinity = base_idx + thread_id < affinities.size()
+                          ? affinities[base_idx + thread_id].processor
+                          : -1;
+      auto is_epoll_wait =
+          0 == thread_id % epoll_wait_gap && --epoll_wait_threads >= 0;
+      /// all thread is base thread when init
+      std::thread thread(&CmtEpoll::loop, this, group_id, thread_id, true,
+                         affinity, is_epoll_wait, true);
+      thread.detach();
     }
   }
 
@@ -669,10 +689,14 @@ public:
                   affinities.emplace_back(it->second);
               }
             }
+            /// sort before duplicate
+            /// result: 2314 -> 1234
+            std::sort(affinities.begin(), affinities.end());
             /// if affinities not enough for base groups, just duplicate it
             if (base_groups * threads > affinities.size()) {
               auto duplicates = base_groups * threads / affinities.size();
               if (duplicates > 1) {
+                /// result: 1234 -> 12341234
                 std::vector<CcpuInfo::cpu_info_t> final_affinities;
                 final_affinities.reserve(duplicates * affinities.size());
                 for (size_t i = 0; i < duplicates; ++i) {
@@ -682,7 +706,6 @@ public:
                 affinities = final_affinities;
               }
             }
-            std::sort(affinities.begin(), affinities.end());
           }
         }
 
@@ -722,10 +745,15 @@ public:
               epoll_wait_threads_per_group, epoll_wait_threads_gap);
         }
 
-        my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                              "MtEpoll start with %u groups with each group %u "
-                              "threads. With %u thread bind to fixed CPU core",
-                              groups, threads, affinities.size());
+        {
+          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+          if (plugin_info.plugin_info != nullptr)
+            my_plugin_log_message(
+                &plugin_info.plugin_info, MY_WARNING_LEVEL,
+                "MtEpoll start with %u groups with each group %u "
+                "threads. With %u thread bind to fixed CPU core",
+                groups, threads, affinities.size());
+        }
 
         inst_cnt = groups;
         inst = tmp;
@@ -923,15 +951,18 @@ public:
 
     if (worker_count_.load(std::memory_order_acquire) >=
         session_count_.load(std::memory_order_acquire) + base_thread_count_) {
-      if (enable_thread_pool_log)
-        my_plugin_log_message(
-            &plugin_info.plugin_info, MY_WARNING_LEVEL,
-            "MtEpoll %u thread pool force scale over limit, worker %d tasker "
-            "%d, session %d. Total threads %d.",
-            group_id_, worker_count_.load(std::memory_order_acquire),
-            tasker_count_.load(std::memory_order_acquire),
-            session_count_.load(std::memory_order_acquire),
-            global_thread_count().load(std::memory_order_acquire));
+      if (enable_thread_pool_log) {
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(
+              &plugin_info.plugin_info, MY_WARNING_LEVEL,
+              "MtEpoll %u thread pool force scale over limit, worker %d tasker "
+              "%d, session %d. Total threads %d.",
+              group_id_, worker_count_.load(std::memory_order_acquire),
+              tasker_count_.load(std::memory_order_acquire),
+              session_count_.load(std::memory_order_acquire),
+              global_thread_count().load(std::memory_order_acquire));
+      }
       return; /// ignore if worker more than session
     }
 
@@ -942,14 +973,17 @@ public:
                        true);
     thread.detach();
 
-    if (enable_thread_pool_log)
-      my_plugin_log_message(
-          &plugin_info.plugin_info, MY_WARNING_LEVEL,
-          "MtEpoll %u thread pool force scale to worker %d tasker %d. Total "
-          "threads %d.",
-          group_id_, worker_count_.load(std::memory_order_acquire),
-          tasker_count_.load(std::memory_order_acquire),
-          global_thread_count().load(std::memory_order_acquire));
+    if (enable_thread_pool_log) {
+      std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+      if (plugin_info.plugin_info != nullptr)
+        my_plugin_log_message(
+            &plugin_info.plugin_info, MY_WARNING_LEVEL,
+            "MtEpoll %u thread pool force scale to worker %d tasker %d. Total "
+            "threads %d.",
+            group_id_, worker_count_.load(std::memory_order_acquire),
+            tasker_count_.load(std::memory_order_acquire),
+            global_thread_count().load(std::memory_order_acquire));
+    }
   }
 
   inline const std::atomic<int> &session_count() const {
@@ -1004,14 +1038,17 @@ public:
           thread.detach();
         }
 
-        if (enable_thread_pool_log)
-          my_plugin_log_message(
-              &plugin_info.plugin_info, MY_WARNING_LEVEL,
-              "MtEpoll %u thread pool tasker scale to %d, worker %d. Total "
-              "threads %d.",
-              group_id_, tasker_count_.load(std::memory_order_acquire),
-              worker_count_.load(std::memory_order_acquire),
-              global_thread_count().load(std::memory_order_acquire));
+        if (enable_thread_pool_log) {
+          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+          if (plugin_info.plugin_info != nullptr)
+            my_plugin_log_message(
+                &plugin_info.plugin_info, MY_WARNING_LEVEL,
+                "MtEpoll %u thread pool tasker scale to %d, worker %d. Total "
+                "threads %d.",
+                group_id_, tasker_count_.load(std::memory_order_acquire),
+                worker_count_.load(std::memory_order_acquire),
+                global_thread_count().load(std::memory_order_acquire));
+        }
       }
     }
   }
@@ -1049,15 +1086,18 @@ public:
 
     if (workers >=
         session_count_.load(std::memory_order_acquire) + base_thread_count_) {
-      if (enable_thread_pool_log)
-        my_plugin_log_message(
-            &plugin_info.plugin_info, MY_WARNING_LEVEL,
-            "MtEpoll %u thread pool scale over limit, worker %d tasker %d, "
-            "session %d. Total threads %d.",
-            group_id_, worker_count_.load(std::memory_order_acquire),
-            tasker_count_.load(std::memory_order_acquire),
-            session_count_.load(std::memory_order_acquire),
-            global_thread_count().load(std::memory_order_acquire));
+      if (enable_thread_pool_log) {
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(
+              &plugin_info.plugin_info, MY_WARNING_LEVEL,
+              "MtEpoll %u thread pool scale over limit, worker %d tasker %d, "
+              "session %d. Total threads %d.",
+              group_id_, worker_count_.load(std::memory_order_acquire),
+              tasker_count_.load(std::memory_order_acquire),
+              session_count_.load(std::memory_order_acquire),
+              global_thread_count().load(std::memory_order_acquire));
+      }
       return; /// ignore if worker more than session
     }
 
@@ -1082,14 +1122,17 @@ public:
       scaled = true;
     }
 
-    if (scaled && enable_thread_pool_log)
-      my_plugin_log_message(
-          &plugin_info.plugin_info, MY_WARNING_LEVEL,
-          "MtEpoll %u thread pool scale to worker %d tasker %d. Total threads "
-          "%d. wait_type %d",
-          group_id_, worker_count_.load(std::memory_order_acquire),
-          tasker_count_.load(std::memory_order_acquire),
-          global_thread_count().load(std::memory_order_acquire), wait_type);
+    if (scaled && enable_thread_pool_log) {
+      std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+      if (plugin_info.plugin_info != nullptr)
+        my_plugin_log_message(
+            &plugin_info.plugin_info, MY_WARNING_LEVEL,
+            "MtEpoll %u thread pool scale to worker %d tasker %d. Total "
+            "threads %d. wait_type %d",
+            group_id_, worker_count_.load(std::memory_order_acquire),
+            tasker_count_.load(std::memory_order_acquire),
+            global_thread_count().load(std::memory_order_acquire), wait_type);
+    }
   }
 
   inline bool shrink_thread_pool(bool is_worker) {
@@ -1104,14 +1147,17 @@ public:
       --tasker_count_;
       --global_thread_count();
 
-      if (enable_thread_pool_log)
-        my_plugin_log_message(
-            &plugin_info.plugin_info, MY_WARNING_LEVEL,
-            "MtEpoll %u thread pool shrink to worker %d tasker %d. Total "
-            "thread %d.",
-            group_id_, worker_count_.load(std::memory_order_acquire),
-            tasker_count_.load(std::memory_order_acquire),
-            global_thread_count().load(std::memory_order_acquire));
+      if (enable_thread_pool_log) {
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(
+              &plugin_info.plugin_info, MY_WARNING_LEVEL,
+              "MtEpoll %u thread pool shrink to worker %d tasker %d. Total "
+              "thread %d.",
+              group_id_, worker_count_.load(std::memory_order_acquire),
+              tasker_count_.load(std::memory_order_acquire),
+              global_thread_count().load(std::memory_order_acquire));
+      }
       return true;
     }
 
@@ -1146,13 +1192,15 @@ public:
         bret = true;
 
         if (enable_thread_pool_log) {
-          my_plugin_log_message(
-              &plugin_info.plugin_info, MY_WARNING_LEVEL,
-              "MtEpoll %u thread pool shrink to worker %d tasker %d. Total "
-              "threads %d.",
-              group_id_, worker_count_.load(std::memory_order_acquire),
-              tasker_count_.load(std::memory_order_acquire),
-              global_thread_count().load(std::memory_order_acquire));
+          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+          if (plugin_info.plugin_info != nullptr)
+            my_plugin_log_message(
+                &plugin_info.plugin_info, MY_WARNING_LEVEL,
+                "MtEpoll %u thread pool shrink to worker %d tasker %d. Total "
+                "threads %d.",
+                group_id_, worker_count_.load(std::memory_order_acquire),
+                tasker_count_.load(std::memory_order_acquire),
+                global_thread_count().load(std::memory_order_acquire));
         }
       }
     }

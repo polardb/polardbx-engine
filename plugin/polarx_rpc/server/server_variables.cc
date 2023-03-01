@@ -16,6 +16,8 @@ namespace polarx_rpc {
 
 namespace defaults {
 static constexpr my_bool auto_cpu_affinity = true;
+/// allow bind to multi core in group, set to true in aliyun
+static constexpr my_bool multi_affinity_in_group = false;
 static constexpr my_bool force_all_cores = false;
 /// auto calculate by core numbers
 static constexpr uint32_t epoll_groups = 0;
@@ -97,6 +99,7 @@ static constexpr uint32_t request_cache_max_length = 1024 * 1024;
 } // namespace defaults
 
 my_bool auto_cpu_affinity = defaults::auto_cpu_affinity;
+my_bool multi_affinity_in_group = defaults::multi_affinity_in_group;
 my_bool force_all_cores = defaults::force_all_cores;
 uint32_t epoll_groups = defaults::epoll_groups;
 uint32_t min_auto_epoll_groups = defaults::min_auto_epoll_groups;
@@ -179,6 +182,11 @@ static MYSQL_SYSVAR_BOOL(auto_cpu_affinity, ::polarx_rpc::auto_cpu_affinity,
                          PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
                          "Enable auto thread CPU affinity(RO)", nullptr,
                          nullptr, defaults::auto_cpu_affinity);
+static MYSQL_SYSVAR_BOOL(multi_affinity_in_group,
+                         ::polarx_rpc::multi_affinity_in_group,
+                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+                         "Enable base thread bind to all cores in group(RO)",
+                         nullptr, nullptr, defaults::multi_affinity_in_group);
 static MYSQL_SYSVAR_BOOL(force_all_cores, ::polarx_rpc::force_all_cores,
                          PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
                          "Enable thread CPU affinity to all CPU cores(RO)",
@@ -375,6 +383,7 @@ static MYSQL_SYSVAR_BOOL(enable_epoll_in_tasker,
 
 struct SYS_VAR *polarx_rpc_system_variables[] = {
     MYSQL_SYSVAR(auto_cpu_affinity),
+    MYSQL_SYSVAR(multi_affinity_in_group),
     MYSQL_SYSVAR(force_all_cores),
     MYSQL_SYSVAR(epoll_groups),
     MYSQL_SYSVAR(min_auto_epoll_groups),

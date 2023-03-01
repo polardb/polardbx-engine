@@ -115,13 +115,15 @@ private:
 
   inline void tcp_log(plugin_log_level level, int err,
                       const char *what = nullptr, const char *extra = nullptr) {
-    my_plugin_log_message(
-        &plugin_info.plugin_info, level, "TCP[%lu] %s:%u(%d,%s), %s%s%s%s%s",
-        tcp_id_, host_.c_str(), port_, fd_, registered_ ? "reg" : "unreg",
-        nullptr == what ? "" : what,
-        what != nullptr && extra != nullptr ? "; " : "",
-        nullptr == extra ? "" : extra, err <= 0 ? "" : ". ",
-        err <= 0 ? "" : std::strerror(err));
+    std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+    if (plugin_info.plugin_info != nullptr)
+      my_plugin_log_message(
+          &plugin_info.plugin_info, level, "TCP[%lu] %s:%u(%d,%s), %s%s%s%s%s",
+          tcp_id_, host_.c_str(), port_, fd_, registered_ ? "reg" : "unreg",
+          nullptr == what ? "" : what,
+          what != nullptr && extra != nullptr ? "; " : "",
+          nullptr == extra ? "" : extra, err <= 0 ? "" : ". ",
+          err <= 0 ? "" : std::strerror(err));
   }
 
   inline void tcp_info(int err, const char *what = nullptr,

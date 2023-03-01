@@ -66,9 +66,11 @@ private:
                               host.data(), &hostname, &connect_errors);
 
       if (rc == RC_BLOCKED_HOST) {
-        my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                              "Resolve name blocked %s:%u.", host.c_str(),
-                              port);
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                "Resolve name blocked %s:%u.", host.c_str(),
+                                port);
         return false;
       }
       if (hostname) {
@@ -128,8 +130,13 @@ private:
           assert(bret); /// still keep the reference, so never fail
         } else {
           tcp->fin("failed to add to epoll"); /// close socket
-          my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                                "Failed to accept. %s", std::strerror(-err));
+          {
+            std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+            if (plugin_info.plugin_info != nullptr)
+              my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                    "Failed to accept. %s",
+                                    std::strerror(-err));
+          }
         }
         auto after = tcp->sub_reference();
         if (after > 0) {
@@ -145,15 +152,21 @@ private:
         break; /// The socket is marked nonblocking and no connections are
                /// present to be accepted.
       else if (err != EINTR) {
-        my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
-                              "Fatal error when accept. %s",
-                              std::strerror(err));
+        {
+          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+          if (plugin_info.plugin_info != nullptr)
+            my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+                                  "Fatal error when accept. %s",
+                                  std::strerror(err));
+        }
         throw std::runtime_error("Bad accept state.");
       }
       if (++retry >= 10) {
-        my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                              "Failed to accept with EINTR after retry %d.",
-                              retry);
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                "Failed to accept with EINTR after retry %d.",
+                                retry);
         break;
       }
     }
@@ -173,9 +186,13 @@ public:
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     } while (++check_times < 3);
     if (ierr != 0) {
-      my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
-                            "Failed to check port %u. %s", port,
-                            std::strerror(-ierr));
+      {
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+                                "Failed to check port %u. %s", port,
+                                std::strerror(-ierr));
+      }
       throw std::runtime_error("Failed to check port.");
     }
 
@@ -188,12 +205,20 @@ public:
       ierr = insts[i]->listen_port(port, listener.get(), inst_cnt > 1);
       if (0 == ierr) {
         listener.release(); /// leak it to epoll
-        my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                              "Listen on port %u.", port);
+        {
+          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+          if (plugin_info.plugin_info != nullptr)
+            my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                  "Listen on port %u.", port);
+        }
       } else {
-        my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
-                              "Failed to listen on port %u. %s", port,
-                              std::strerror(-ierr));
+        {
+          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+          if (plugin_info.plugin_info != nullptr)
+            my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+                                  "Failed to listen on port %u. %s", port,
+                                  std::strerror(-ierr));
+        }
         throw std::runtime_error("Failed to listen.");
       }
     }

@@ -7,7 +7,11 @@
 #endif
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
+
+#include "../global_defines.h"
+#ifdef MYSQL8
 #include "sql/item.h"
+#endif
 
 #include <memory>
 

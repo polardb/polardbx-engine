@@ -10,7 +10,10 @@
 #include <cstring>
 #include <string>
 
+#include "../../global_defines.h"
+#ifdef MYSQL8
 #include "my_time.h"
+#endif
 
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
@@ -453,7 +456,11 @@ public:
   void field_datetime(const MYSQL_TIME *value) {
     auto &block = m_chunk.blocks[m_num_fields];
     assert(k_block_size - block->written() >= kMaxVarintBytes);
+#ifdef MYSQL8
     block->coder->WriteVarint64(TIME_to_longlong_datetime_packed(*value));
+#else
+    block->coder->WriteVarint64(TIME_to_longlong_datetime_packed(value));
+#endif
     if (block->written() + kMaxVarintBytes > k_block_size)
       m_chunk.is_full = true;
     ++m_num_fields;
@@ -462,7 +469,11 @@ public:
   void field_time(const MYSQL_TIME *value) {
     auto &block = m_chunk.blocks[m_num_fields];
     assert(k_block_size - block->written() >= kMaxVarintBytes);
+#ifdef MYSQL8
     block->coder->WriteVarint64(TIME_to_longlong_time_packed(*value));
+#else
+    block->coder->WriteVarint64(TIME_to_longlong_time_packed(value));
+#endif
     if (block->written() + kMaxVarintBytes > k_block_size)
       m_chunk.is_full = true;
     ++m_num_fields;
@@ -471,7 +482,11 @@ public:
   void field_date(const MYSQL_TIME *value) {
     auto &block = m_chunk.blocks[m_num_fields];
     assert(k_block_size - block->written() >= kMaxVarintBytes);
+#ifdef MYSQL8
     block->coder->WriteVarint64(TIME_to_longlong_date_packed(*value));
+#else
+    block->coder->WriteVarint64(TIME_to_longlong_date_packed(value));
+#endif
     if (block->written() + kMaxVarintBytes > k_block_size)
       m_chunk.is_full = true;
     ++m_num_fields;

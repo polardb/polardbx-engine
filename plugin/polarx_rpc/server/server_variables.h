@@ -25,6 +25,7 @@ typedef bool my_bool;
 #endif
 
 extern my_bool auto_cpu_affinity;
+extern my_bool multi_affinity_in_group;
 extern my_bool force_all_cores;
 extern uint32_t epoll_groups;
 extern uint32_t min_auto_epoll_groups;

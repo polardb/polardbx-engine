@@ -322,8 +322,10 @@ err_t CsessionBase::detach() {
 
 void CsessionBase::remote_kill() {
   if (enable_kill_log) {
-    my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                          "Session %p sid %lu killing.", this, sid_);
+    std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+    if (plugin_info.plugin_info != nullptr)
+      my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                            "Session %p sid %lu killing.", this, sid_);
   }
 
   /// store exit flag first
@@ -344,8 +346,10 @@ void CsessionBase::remote_kill() {
 
 void CsessionBase::remote_cancel() {
   if (enable_kill_log) {
-    my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
-                          "Session %p sid %lu canceling.", this, sid_);
+    std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+    if (plugin_info.plugin_info != nullptr)
+      my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                            "Session %p sid %lu canceling.", this, sid_);
   }
 
   auto thd = get_thd();
