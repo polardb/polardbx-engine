@@ -2494,6 +2494,9 @@ bool Prepared_statement::prepare(const char *query_str, size_t query_length) {
   thd->m_digest = &digest;
 
   enable_digest_if_any_plugin_needs_it(thd, &parser_state);
+
+  im::enable_digest_by_outline(&parser_state);
+
   if (is_audit_plugin_class_active(thd, MYSQL_AUDIT_GENERAL_CLASS))
     parser_state.m_input.m_compute_digest = true;
 
