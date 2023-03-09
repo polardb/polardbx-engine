@@ -129,6 +129,9 @@ void package_context_init() {
 
   /* dbms_xa.prepare_with_trx_slot */
   register_package<Proc, Xa_proc_prepare_with_trx_slot>(XA_PROC_SCHEMA);
+
+  /* dbms_xa.send_heartbeat() */
+  register_package<Proc, Xa_proc_send_heartbeat>(XA_PROC_SCHEMA);
 }
 
 } /* namespace im */

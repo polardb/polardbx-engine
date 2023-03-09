@@ -184,6 +184,7 @@
 #endif /* WITH_LOCK_ORDER */
 
 #include "ppi/ppi_statement.h"
+#include "sql/xa_ext.h"
 
 namespace resourcegroups {
 class Resource_group;
@@ -3369,6 +3370,10 @@ int mysql_execute_command(THD *thd, bool first_level) {
   */
 
   lizard::simulate_snapshot_clause(thd, all_tables);
+
+  if (im::cn_heartbeat_timeout_freeze_updating(lex)) {
+    goto error;
+  }
 
   switch (lex->sql_command) {
     case SQLCOM_PREPARE: {

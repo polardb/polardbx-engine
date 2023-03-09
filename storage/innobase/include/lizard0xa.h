@@ -39,10 +39,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "trx0xa.h"
 #include "lizard0xa0types.h"
+#include "lizard0ut.h"
 
 namespace lizard {
 class Vision;
 }
+
+struct SYS_VAR;
 
 /**
   The description of XA transaction within trx_t
@@ -109,6 +112,27 @@ namespace xa {
   @retval hash value.
 */
 uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len);
+
+/** Freeze purge sys and update operations if no heartbeat is received for a
+long time */
+extern bool srv_no_heartbeat_freeze;
+
+/** No heartbeat timeout. */
+extern ulint srv_no_heartbeat_freeze_timeout;
+
+/**
+  Decide if the purge system should be frozen and all update operations
+  blocked.
+*/
+extern bool hb_freezer_determine_freeze();
+
+/**
+  If enable the hb_freezer, pretend to send heartbeat before updating, so it
+  won't be blocked because of timeout.
+*/
+void freeze_db_if_no_cn_heartbeat_enable_on_update(THD *, SYS_VAR *, void *var_ptr,
+                                                  const void *save);
+
 }  // namespace xa
 }  // namespace lizard
 

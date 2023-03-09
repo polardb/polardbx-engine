@@ -227,6 +227,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0xa.h"
 #include "lizard0tcn.h"
 #include "lizard0ha_innodb.h"
+#include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
 
 #include "sql/xa_specification.h"
 
@@ -23597,6 +23598,20 @@ static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
                           "max list size of txn_cached_list", NULL, NULL, 0, 0,
                           512, 0);
 
+static MYSQL_SYSVAR_BOOL(
+    cn_no_heartbeat_freeze, lizard::xa::srv_no_heartbeat_freeze,
+    PLUGIN_VAR_OPCMDARG,
+    "If set to true, will freeze purge sys and updating "
+    "if there is no heartbeat.",
+    nullptr, lizard::xa::freeze_db_if_no_cn_heartbeat_enable_on_update, false);
+
+static MYSQL_SYSVAR_ULONG(cn_no_heartbeat_freeze_timeout,
+                          lizard::xa::srv_no_heartbeat_freeze_timeout,
+                          PLUGIN_VAR_OPCMDARG,
+                          "If the heartbeat has not been received after the "
+                          "timeout, freezing the purge sys and updating.",
+                          NULL, NULL, 10, 1, UINT_MAX32, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23847,6 +23862,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(txn_cached_list_keep_size),
+    MYSQL_SYSVAR(cn_no_heartbeat_freeze),
+    MYSQL_SYSVAR(cn_no_heartbeat_freeze_timeout),
     nullptr};
 
 mysql_declare_plugin(innobase){

@@ -69,6 +69,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0purge.h"
+#include "lizard0xa.h"
 
 /** Maximum allowable purge history length.  <=0 means 'infinite'. */
 ulong srv_max_purge_lag = 0;
@@ -2194,6 +2195,10 @@ void Purge_groups_t::distribute_if_needed() {
   }
 
   if (lizard::Undo_retention::instance()->purge_advise()) {
+    return &trx_purge_blocked_rec;
+  }
+
+  if (lizard::xa::hb_freezer_determine_freeze()) {
     return &trx_purge_blocked_rec;
   }
 

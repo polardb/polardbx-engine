@@ -21,18 +21,15 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "storage/innobase/include/lizard0xa0iface.h"
+#include "storage/innobase/include/lizard0ut.h"
 
-#include "sql/xa/sql_xa_prepare.h"
-#include "sql/protocol.h"
 #include "sql/mysqld.h"
+#include "sql/protocol.h"
+#include "sql/sql_parse.h"  // sql_command_flags...
+#include "sql/xa/sql_xa_prepare.h"
 
 #include "sql/xa/xa_proc.h" // server_uuid_ptr...
-
-namespace lizard {
-namespace xa {
-int binlog_start_trans(THD *thd);
-}
-}  // namespace lizard
+#include "sql/binlog_ext.h"
 
 namespace im {
 /* All concurrency control system memory usage */
@@ -272,5 +269,60 @@ void Sql_cmd_xa_proc_prepare_with_trx_slot::send_result(THD *thd, bool error) {
 
   my_eof(thd);
   DBUG_VOID_RETURN;
+}
+
+bool Sql_cmd_xa_proc_send_heartbeat::pc_execute(THD *) {
+  DBUG_ENTER("Sql_cmd_xa_proc_send_heartbeat::pc_execute");
+  lizard::xa::hb_freezer_heartbeat();
+
+  DBUG_RETURN(false);
+}
+
+Proc *Xa_proc_send_heartbeat::instance() {
+  static Proc *proc = new Xa_proc_send_heartbeat(key_memory_xa_proc);
+  return proc;
+}
+
+Sql_cmd *Xa_proc_send_heartbeat::evoke_cmd(THD *thd,
+                                           mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+bool cn_heartbeat_timeout_freeze_updating(LEX *const lex) {
+  DBUG_EXECUTE_IF("hb_timeout_do_not_freeze_operation", { return false; });
+  switch (lex->sql_command) {
+    case SQLCOM_ADMIN_PROC:
+      break;
+
+    default:
+      if ((sql_command_flags[lex->sql_command] & CF_CHANGES_DATA) &&
+          lizard::xa::hb_freezer_is_freeze() && likely(mysqld_server_started)) {
+        my_error(ER_XA_PROC_HEARTBEAT_FREEZE, MYF(0));
+        return true;
+      }
+  }
+
+  return false;
+}
+
+bool cn_heartbeat_timeout_freeze_applying_event(THD *thd) {
+  static lizard::Lazy_printer printer(60);
+
+  if (lizard::xa::hb_freezer_is_freeze()) {
+    THD_STAGE_INFO(thd, stage_wait_for_cn_heartbeat);
+
+    printer.print(
+        "Applying event is blocked because no heartbeat has been received "
+        "for a long time. If you want to advance it, please call "
+        "dbms_xa.send_heartbeat() (or set global innodb_cn_no_heartbeat_freeze "
+        "= 0).");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    return true;
+  } else {
+    printer.reset();
+    return false;
+  }
 }
 }

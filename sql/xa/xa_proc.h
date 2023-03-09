@@ -66,6 +66,21 @@ class Sql_cmd_xa_proc_base : public Sql_cmd_trans_proc {
 };
 
 /**
+  Sql command base for dbms_xa
+
+  1) dbms_xa didn't require any privileges;
+  2) dbms_xa didn't auto commit trans (is admin_proc).
+*/
+class Sql_cmd_xa_proc_trans_base : public Sql_cmd_admin_proc {
+ public:
+  explicit Sql_cmd_xa_proc_trans_base(THD *thd, mem_root_deque<Item *> *list,
+                                      const Proc *proc)
+      : Sql_cmd_admin_proc(thd, list, proc) {
+    set_priv_type(Priv_type::PRIV_NONE_ACL);
+  }
+};
+
+/**
   1) dbms_xa.find_by_gtrid(gtrid, bqual, formatID)
 
   Find transactions status in the finalized state by XID.
@@ -239,6 +254,57 @@ class Xa_proc_prepare_with_trx_slot : public Xa_proc_base {
   /* Proc name */
   virtual const std::string str() const override {
     return std::string("prepare_with_trx_slot");
+  }
+};
+
+/**
+  3) dbms_xa.send_heartbeat()
+
+  Send heartbeat for keeping purge sys advancing.
+*/
+class Sql_cmd_xa_proc_send_heartbeat : public Sql_cmd_xa_proc_trans_base {
+ public:
+  explicit Sql_cmd_xa_proc_send_heartbeat(THD *thd,
+                                          mem_root_deque<Item *> *list,
+                                          const Proc *proc)
+      : Sql_cmd_xa_proc_trans_base(thd, list, proc) {}
+
+  /**
+    Implementation of Proc execution body.
+
+    @param[in]    THD           Thread context
+
+    @retval       true          Failure
+    @retval       false         Success
+  */
+  virtual bool pc_execute(THD *thd) override;
+
+  /* Inherit the default send_result */
+};
+
+class Xa_proc_send_heartbeat : public Xa_proc_base {
+  using Sql_cmd_type = Sql_cmd_xa_proc_send_heartbeat;
+
+ public:
+  explicit Xa_proc_send_heartbeat(PSI_memory_key key) : Xa_proc_base(key) {
+    /* Only OK or ERROR protocol packet */
+    m_result_type = Result_type::RESULT_OK;
+  }
+
+  /* Singleton instance for send_heartbeat */
+  static Proc *instance();
+
+  /**
+    Evoke the sql_cmd object for send_heartbeat() proc.
+  */
+  virtual Sql_cmd *evoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
+
+  virtual ~Xa_proc_send_heartbeat() {}
+
+  /* Proc name */
+  virtual const std::string str() const override {
+    return std::string("send_heartbeat");
   }
 };
 
