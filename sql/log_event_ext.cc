@@ -147,4 +147,5 @@ Log_event::enum_skip_reason Gcn_log_event::do_shall_skip(Relay_log_info *rli) {
 
   return ret;
 }
+
 #endif  // MYSQL_SERVER

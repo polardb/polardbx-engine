@@ -89,6 +89,16 @@ bool trx_slot_assign_for_xa(THD *thd, TSA *tsa);
 */
 void trx_slot_write_xid_for_one_phase_xa(THD *thd);
 
+/**
+  1. Update heartbeat timestamp to stop freezing purge system.
+  2. Update flag to stop freezing operation.
+*/
+void hb_freezer_heartbeat();
+
+/**
+  Check if the purge system is freezing because heartbeat timeout.
+*/
+bool hb_freezer_is_freeze();
 }  // namespace xa
 }  // namespace lizard
 

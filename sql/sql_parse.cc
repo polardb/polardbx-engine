@@ -201,6 +201,8 @@
 #endif
 #include "sql/inventory/inventory_hint.h"
 
+#include "sql/xa_ext.h"
+
 namespace dd {
 class Spatial_reference_system;
 }  // namespace dd
@@ -3219,6 +3221,10 @@ int mysql_execute_command(THD *thd, bool first_level) {
 #endif
 
   im::simulate_snapshot_clause(thd, all_tables);
+
+  if (im::cn_heartbeat_timeout_freeze_updating(lex)) {
+    goto error;
+  }
 
   switch (lex->sql_command) {
     case SQLCOM_SHOW_STATUS: {

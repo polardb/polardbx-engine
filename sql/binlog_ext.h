@@ -22,6 +22,8 @@
 
 #include "sql/binlog.h"
 
+class Binlog_event_writer;
+
 extern ulong opt_recovery_apply_binlog;
 extern uint opt_print_gtid_info_during_recovery;
 enum gtid_info_print {DISABLED, BASIC_INFO, DETAIL_INFO};

@@ -90,4 +90,5 @@ class Gcn_log_event : public binary_log::Gcn_event, public Log_event {
 inline bool is_gcn_event(Log_event *evt) {
   return (evt->get_type_code() == binary_log::GCN_LOG_EVENT);
 }
+
 #endif

@@ -36,6 +36,7 @@
 #include "ha_innodb_ext.h"
 #include "sql/sql_class.h"
 #include "sql/mysqld.h" // innodb_hton
+#include "lizard0ut.h"
 
 /** Bqual format: 'xxx@nnnn' */
 static unsigned int XID_GROUP_SUFFIX_SIZE = 5;
@@ -255,6 +256,84 @@ void trx_slot_write_xid_for_one_phase_xa(THD *thd) {
   txn_undo_write_xid(xid, trx->rsegs.m_txn.txn_undo);
 
   mutex_exit(&trx->rsegs.m_txn.rseg->mutex);
+}
+
+/*************************************************
+*                Heartbeat Freezer              *
+*************************************************/
+bool srv_no_heartbeat_freeze;
+
+ulint srv_no_heartbeat_freeze_timeout;
+
+class Heartbeat_freezer {
+ public:
+  Heartbeat_freezer() : m_is_freeze(false) {}
+
+  bool is_freeze() { return m_is_freeze; }
+
+  void heartbeat() {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    m_timer.update();
+    m_is_freeze = false;
+  }
+
+  bool determine_freeze() {
+    uint64_t diff_time;
+    bool block;
+    constexpr uint64_t PRINTER_INTERVAL_SECONDS = 180;
+    static Lazy_printer printer(PRINTER_INTERVAL_SECONDS);
+
+    std::lock_guard<std::mutex> guard(m_mutex);
+
+    if (!srv_no_heartbeat_freeze) {
+      block = false;
+      goto exit_func;
+    }
+
+    diff_time = m_timer.since_last_update();
+
+    block = (diff_time > srv_no_heartbeat_freeze_timeout);
+
+  exit_func:
+    if (block) {
+      printer.print(
+          "The purge sys is blocked because no heartbeat has been received "
+          "for a long time. If you want to advance the purge sys, please call "
+          "dbms_xa.send_heartbeat().");
+
+      m_is_freeze = true;
+    } else {
+      m_is_freeze = false;
+      printer.reset();
+    }
+
+    return block;
+  }
+
+ private:
+  /** Timer for check timeout. */
+  Simple_timer m_timer;
+
+  /* No need to use std::atomic because no need to read the newest value
+  immediately. */
+  bool m_is_freeze;
+
+  /* Mutex modification of m_is_freeze. */
+  std::mutex m_mutex;
+};
+
+Heartbeat_freezer hb_freezer;
+
+void hb_freezer_heartbeat() {
+  hb_freezer.heartbeat();
+}
+
+bool hb_freezer_determine_freeze() {
+  return hb_freezer.determine_freeze();
+}
+
+bool hb_freezer_is_freeze() {
+  return srv_no_heartbeat_freeze && hb_freezer.is_freeze();
 }
 
 }  // namespace xa

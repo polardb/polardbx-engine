@@ -29,6 +29,7 @@
 
 #include <atomic>
 #include <vector>
+#include <ctime>    // std::time_t ...
 
 namespace lizard {
 
@@ -47,6 +48,40 @@ class Partition {
   std::size_t m_size;
   std::atomic_ullong m_counter;
   Container m_parts;
+};
+
+class Simple_timer {
+ public:
+  Simple_timer() : m_ts(0) {}
+
+  void update() { m_ts = std::time(0); }
+
+  uint64_t since_last_update() const {
+    std::time_t now = std::time(0);
+    return now - m_ts;
+  }
+
+ private:
+  std::time_t m_ts;
+};
+
+class Lazy_printer {
+ public:
+  Lazy_printer(const uint32_t interval_secs)
+      : m_internal_secs(interval_secs), m_timer(), m_first(true) {}
+
+  bool print(const char *msg);
+  void reset();
+
+ private:
+  /** log printing interval */
+  const uint32_t m_internal_secs;
+
+  /** Timer */
+  Simple_timer m_timer;
+
+  /** First time to print, no take interval into consideration. */
+  bool m_first;
 };
 
 }  // namespace lizard

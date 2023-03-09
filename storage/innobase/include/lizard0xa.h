@@ -33,6 +33,7 @@
 #include "trx0types.h"
 #include "trx0xa.h"
 #include "lizard0xa0types.h"
+#include "lizard0ut.h"
 
 namespace lizard {
 class Vision;
@@ -103,6 +104,20 @@ namespace xa {
   @retval hash value.
 */
 uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len);
+
+/** Freeze purge sys and update operations if no heartbeat is received for a
+long time */
+extern bool srv_no_heartbeat_freeze;
+
+/** No heartbeat timeout. */
+extern ulint srv_no_heartbeat_freeze_timeout;
+
+/**
+  Decide if the purge system should be frozen and all update operations
+  blocked.
+*/
+extern bool hb_freezer_determine_freeze();
+
 }  // namespace xa
 }  // namespace lizard
 

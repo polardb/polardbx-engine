@@ -162,6 +162,8 @@
 #endif
 # include "sql/rpl_rli_ext.h"
 
+#include "sql/xa_ext.h"
+
 struct mysql_cond_t;
 struct mysql_mutex_t;
 
@@ -7153,6 +7155,8 @@ extern "C" void *handle_slave_sql(void *arg) {
       THD_STAGE_INFO(thd, stage_reading_event_from_the_relay_log);
       DBUG_ASSERT(rli->info_thd == thd);
       THD_CHECK_SENTRY(thd);
+
+      if (im::cn_heartbeat_timeout_freeze_applying_event(thd)) continue;
 
       if (saved_skip && rli->slave_skip_counter == 0) {
         LogErr(INFORMATION_LEVEL, ER_RPL_SLAVE_SKIP_COUNTER_EXECUTED,

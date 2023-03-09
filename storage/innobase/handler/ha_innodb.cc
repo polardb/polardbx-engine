@@ -215,6 +215,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0tcn.h"
 #include "clone0repl.h"
 #include "btr0sample.h"
+#include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
 
 #ifndef UNIV_HOTBACKUP
 /** Stop printing warnings, if the count exceeds this threshold. */
@@ -22820,6 +22821,20 @@ static MYSQL_SYSVAR_BOOL(btree_sampling, btr_sample_enabled,
                          PLUGIN_VAR_OPCMDARG, "enable btree sampling", NULL,
                          NULL, TRUE);
 
+static MYSQL_SYSVAR_BOOL(cn_no_heartbeat_freeze,
+                         lizard::xa::srv_no_heartbeat_freeze,
+                         PLUGIN_VAR_OPCMDARG,
+                         "If set to true, will freeze purge sys and updating "
+                         "if there is no heartbeat.",
+                         NULL, NULL, FALSE);
+
+static MYSQL_SYSVAR_ULONG(cn_no_heartbeat_freeze_timeout,
+                          lizard::xa::srv_no_heartbeat_freeze_timeout,
+                          PLUGIN_VAR_OPCMDARG,
+                          "If the heartbeat has not been received after the "
+                          "timeout, freezing the purge sys and updating.",
+                          NULL, NULL, 10, 1, UINT_MAX32, 0);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23063,6 +23078,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(sample_advise_pages),
     MYSQL_SYSVAR(btree_sampling),
+    MYSQL_SYSVAR(cn_no_heartbeat_freeze),
+    MYSQL_SYSVAR(cn_no_heartbeat_freeze_timeout),
     NULL};
 
 mysql_declare_plugin(innobase){
