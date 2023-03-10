@@ -652,7 +652,7 @@ bool btr_sample_t::sample_to_next_leaf_by_parent_pcur(mtr_t *mtr, bool &found) {
 
   bool succ;
   if (restore_pcur_optimistic(parent, false, mtr, succ)) {
-    if (succ || parent->m_rel_pos == BTR_PCUR_AFTER) {
+    if (succ) {
       parent->move_to_next_on_page();
     }
 
