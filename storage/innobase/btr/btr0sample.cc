@@ -152,7 +152,7 @@ void btr_sample_t::open_curor(dict_index_t *index, mtr_t *mtr) {
     }
 
     /* Release s-latch as soon as possible */
-    btr_leaf_page_release(parent->get_block(), BTR_SEARCH_LEAF, mtr);
+    btr_leaf_page_release(page_cursor->block, BTR_SEARCH_LEAF, mtr);
 
     /* Child page id */
     auto node_ptr = page_cur_get_rec(page_cursor);
@@ -553,7 +553,7 @@ search_loop:
   if (height > 0) {
     if (need_sampling) {
       /* Release parent s-latch as soon as possible if hold index SX lock */
-      btr_leaf_page_release(parent->get_block(), BTR_SEARCH_LEAF, mtr);
+      btr_leaf_page_release(page_cursor->block, BTR_SEARCH_LEAF, mtr);
     }
 
     n_blocks++;
