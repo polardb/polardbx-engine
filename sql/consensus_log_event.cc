@@ -134,7 +134,7 @@ int Consensus_log_event::pack_info(Protocol *protocol) {
 #else
 void Consensus_log_event::print(FILE *file __attribute__((unused)),
                                 PRINT_EVENT_INFO *print_event_info) const {
-  char buffer[MAX_SET_STRING_LENGTH + 1];
+  char buffer[MAX_SET_STRING_LENGTH + 2];
   IO_CACHE *const head = &print_event_info->head_cache;
   if (!print_event_info->short_form) {
     print_header(head, print_event_info, false);
@@ -359,7 +359,7 @@ int Consensus_cluster_info_log_event::pack_info(Protocol *protocol) {
 void Consensus_cluster_info_log_event::print(
     FILE *file __attribute__((unused)),
     PRINT_EVENT_INFO *print_event_info) const {
-  char buffer[MAX_SET_STRING_LENGTH + 1];
+  char buffer[MAX_SET_STRING_LENGTH + 2];
   IO_CACHE *const head = &print_event_info->head_cache;
   if (!print_event_info->short_form) {
     print_header(head, print_event_info, false);
@@ -438,7 +438,7 @@ int Consensus_empty_log_event::pack_info(Protocol *protocol) {
 void Consensus_empty_log_event::print(
     FILE *file __attribute__((unused)),
     PRINT_EVENT_INFO *print_event_info) const {
-  char buffer[MAX_SET_STRING_LENGTH + 1];
+  char buffer[MAX_SET_STRING_LENGTH + 2];
   IO_CACHE *const head = &print_event_info->head_cache;
   if (!print_event_info->short_form)
   {
