@@ -75,7 +75,7 @@ wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_log	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_sync	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_sync_queue	MANY
 wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_wait_for_group_turn	NONE
-wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_xids	NONE
+wait/synch/mutex/sql/MYSQL_BIN_LOG::LOCK_xids	MANY
 "Expect no slave relay log"
 select * from performance_schema.file_summary_by_instance
 where event_name like "%relaylog%" order by file_name;

@@ -1,0 +1,167 @@
+################################################################################
+# Bug #110533	XA COMMIT may not be recovered after a crash
+#
+# XA COMMIT/ROLLBACK has two steps:
+# - step 1: write into binlog
+# - step 2: commit/rollback to engine.
+#
+# Before this patch, binlog rotation could happen between step 1 and step 2.
+# After rotation, the XA COMMIT/ROLLBACK events was not in the last binlog.
+# Thus XA crash-safe won't work on it.
+#
+# This test verifys binlog rotation cannot happens between step1 and step 2.
+################################################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_binlog_format_row.inc
+
+# Init
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+
+--echo [ connection default ]
+--connection default
+# The debug_sync point reached_finish_commit requires binlog_order_commit off.
+SET @binlog_order_commits_saved = @@GLOBAL.binlog_order_commits;
+SET GLOBAL binlog_order_commits = OFF;
+
+CREATE TABLE t1(c1 INT);
+
+--echo #
+--echo # XA PREPARE binlogged shall block FLUSH BINARY LOGS
+--echo ########################################################################
+--echo #
+XA START "xid1";
+INSERT INTO t1 VALUES(1);
+XA END "xid1";
+
+SET debug_sync = "RESET";
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+--send XA PREPARE "xid1"
+
+--echo [ connection con1 ]
+--connection con1
+SET debug_sync = "now WAIT_FOR finish_commit";
+--send FLUSH BINARY LOGS
+
+--echo [ connection con2 ]
+--connection con2
+# FLUSH BINARY LOGS is waiting for prep_xids to be 0.
+let $wait_condition =
+   SELECT count(*) FROM performance_schema.threads t,
+                        performance_schema.events_waits_current w
+   WHERE w.thread_id = t.thread_id AND w.event_name LIKE "%prep_xids_cond"
+   AND processlist_info = "FLUSH BINARY LOGS";
+--source include/wait_condition.inc
+
+# Signal XA PREPARE to continue
+SET debug_sync = "now SIGNAL continue";
+
+--echo [ connection con1 ]
+--connection con1
+--reap
+
+--echo [ connection default ]
+--connection default
+--reap
+SET debug_sync = "RESET";
+
+--echo #
+--echo # XA COMMIT binlogged shall block FLUSH BINARY LOGS.
+--echo ########################################################################
+--echo #
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+--send XA COMMIT "xid1"
+
+--echo [ connection con1 ]
+--connection con1
+SET debug_sync = "now WAIT_FOR finish_commit";
+--send FLUSH BINARY LOGS
+
+--echo [ connection con2 ]
+--connection con2
+# FLUSH BINARY LOGS is waiting for prep_xids to be 0.
+--source include/wait_condition.inc
+
+# Signal XA COMMIT to continue
+SET debug_sync = "now SIGNAL continue";
+
+--echo [ connection con1 ]
+--connection con1
+--reap
+
+--echo [ connection default ]
+--connection default
+--reap
+SET debug_sync = "RESET";
+
+--echo #
+--echo # XA COMMIT ONE PHASE binlogged shall block FLUSH BINARY LOGS.
+--echo ########################################################################
+--echo #
+XA START "xid2";
+INSERT INTO t1 VALUES(1);
+XA END "xid2";
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+--send XA COMMIT "xid2" ONE PHASE
+
+--echo [ connection con1 ]
+--connection con1
+SET debug_sync = "now WAIT_FOR finish_commit";
+--send FLUSH BINARY LOGS
+
+--echo [ connection con2 ]
+--connection con2
+# FLUSH BINARY LOGS is waiting for prep_xids to be 0.
+--source include/wait_condition.inc
+
+# Signal XA COMMIT to continue
+SET debug_sync = "now SIGNAL continue";
+
+--echo [ connection con1 ]
+--connection con1
+--reap
+
+--echo [ connection default ]
+--connection default
+--reap
+SET debug_sync = "RESET";
+
+--echo #
+--echo # XA ROLLBACK binlogged shall block FLUSH BINARY LOGS.
+--echo ########################################################################
+--echo #
+XA START "xid3";
+INSERT INTO t1 VALUES(1);
+XA END "xid3";
+XA PREPARE "xid3";
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+--send XA ROLLBACK "xid3"
+
+--echo [ connection con1 ]
+--connection con1
+SET debug_sync = "now WAIT_FOR finish_commit";
+--send FLUSH BINARY LOGS
+
+--echo [ connection con2 ]
+--connection con2
+# FLUSH BINARY LOGS is waiting for prep_xids to be 0.
+--source include/wait_condition.inc
+
+# Signal XA ROLLBACK to continue
+SET debug_sync = "now SIGNAL continue";
+
+--echo [ connection con1 ]
+--connection con1
+--reap
+
+--echo [ connection default ]
+--connection default
+--reap
+SET debug_sync = "RESET";
+
+DROP TABLE t1;
+SET GLOBAL binlog_order_commits = @binlog_order_commits_saved;
+
+--disconnect con1
+--disconnect con2

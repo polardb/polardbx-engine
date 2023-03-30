@@ -8345,7 +8345,14 @@ std::pair<int, my_off_t> MYSQL_BIN_LOG::flush_thread_caches(THD *thd) {
       this function documentation for more info.
     */
     thd->set_trans_pos(log_file_name, m_binlog_file->position());
-    if (wrote_xid) inc_prep_xids(thd);
+
+    /*
+      Increases m_atomic_prep_xids even there is no xid generated. Thus
+      XA COMMIT/ROLLBACK can be protected. It guarantees that no rotation
+      could happen between binlogging XA COMMIT/ROLLBACK and the engine
+      commit or rollback.
+    */
+    inc_prep_xids(thd);
 
     PPI_TRANSACTION_CALL(inc_transaction_binlog_size)
     (thd->ppi_transaction, bytes);

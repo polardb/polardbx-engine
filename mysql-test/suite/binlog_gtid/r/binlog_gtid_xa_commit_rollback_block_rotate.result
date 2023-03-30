@@ -1,0 +1,73 @@
+[ connection default ]
+SET @binlog_order_commits_saved = @@GLOBAL.binlog_order_commits;
+SET GLOBAL binlog_order_commits = OFF;
+CREATE TABLE t1(c1 INT);
+#
+# XA PREPARE binlogged shall block FLUSH BINARY LOGS
+########################################################################
+#
+XA START "xid1";
+INSERT INTO t1 VALUES(1);
+XA END "xid1";
+SET debug_sync = "RESET";
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+XA PREPARE "xid1";
+[ connection con1 ]
+SET debug_sync = "now WAIT_FOR finish_commit";
+FLUSH BINARY LOGS;
+[ connection con2 ]
+SET debug_sync = "now SIGNAL continue";
+[ connection con1 ]
+[ connection default ]
+SET debug_sync = "RESET";
+#
+# XA COMMIT binlogged shall block FLUSH BINARY LOGS.
+########################################################################
+#
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+XA COMMIT "xid1";
+[ connection con1 ]
+SET debug_sync = "now WAIT_FOR finish_commit";
+FLUSH BINARY LOGS;
+[ connection con2 ]
+SET debug_sync = "now SIGNAL continue";
+[ connection con1 ]
+[ connection default ]
+SET debug_sync = "RESET";
+#
+# XA COMMIT ONE PHASE binlogged shall block FLUSH BINARY LOGS.
+########################################################################
+#
+XA START "xid2";
+INSERT INTO t1 VALUES(1);
+XA END "xid2";
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+XA COMMIT "xid2" ONE PHASE;
+[ connection con1 ]
+SET debug_sync = "now WAIT_FOR finish_commit";
+FLUSH BINARY LOGS;
+[ connection con2 ]
+SET debug_sync = "now SIGNAL continue";
+[ connection con1 ]
+[ connection default ]
+SET debug_sync = "RESET";
+#
+# XA ROLLBACK binlogged shall block FLUSH BINARY LOGS.
+########################################################################
+#
+XA START "xid3";
+INSERT INTO t1 VALUES(1);
+XA END "xid3";
+XA PREPARE "xid3";
+SET debug_sync = "reached_finish_commit SIGNAL finish_commit WAIT_FOR continue";
+XA ROLLBACK "xid3";
+[ connection con1 ]
+SET debug_sync = "now WAIT_FOR finish_commit";
+FLUSH BINARY LOGS;
+[ connection con2 ]
+SET debug_sync = "now SIGNAL continue";
+[ connection con1 ]
+[ connection default ]
+SET debug_sync = "RESET";
+DROP TABLE t1;
+SET GLOBAL binlog_order_commits = @binlog_order_commits_saved;
