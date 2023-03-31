@@ -1386,6 +1386,12 @@ void THD::store_globals() {
   set_my_thread_var_id(m_thread_id);
 #endif
   real_id = my_thread_self();  // For debugging
+
+#ifdef USE_PPOLL_IN_VIO
+  if (net.vio != nullptr) {
+    net.vio->thread_id = real_id;
+  }
+#endif
 }
 
 /*
