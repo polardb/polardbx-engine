@@ -1043,18 +1043,19 @@ static dberr_t row_merge_write_fts_node(const fts_psort_insert_t *ins_ctx,
 
   /* The third and fourth fileds(TRX_ID, ROLL_PTR) are filled already.*/
   /* Lizard: The fifth and sixth fileds(SCN_ID, UNDO_PTR) are filled already.*/
-  /* The seventh field is last_doc_id */
-  field = dtuple_get_nth_field(tuple, 6);
+  /** Add gcn. */
+  /* The eighth field is last_doc_id */
+  field = dtuple_get_nth_field(tuple, 7);
   fts_write_doc_id((byte *)&write_last_doc_id, node->last_doc_id);
   dfield_set_data(field, &write_last_doc_id, sizeof(doc_id_t));
 
-  /* The eighth field is doc_count */
-  field = dtuple_get_nth_field(tuple, 7);
+  /* The ninth field is doc_count */
+  field = dtuple_get_nth_field(tuple, 8);
   mach_write_to_4((byte *)&write_doc_count, (ib_uint32_t)node->doc_count);
   dfield_set_data(field, &write_doc_count, sizeof(ib_uint32_t));
 
-  /* The ninth field is ilist */
-  field = dtuple_get_nth_field(tuple, 8);
+  /* The tenth field is ilist */
+  field = dtuple_get_nth_field(tuple, 9);
   dfield_set_data(field, node->ilist, node->ilist_size);
 
   ret = ins_ctx->btr_bulk->insert(tuple);
@@ -1409,6 +1410,7 @@ dberr_t row_fts_merge_insert(dict_index_t *index, dict_table_t *table,
   dfield_t *field;
   byte trx_scn_buf[DATA_SCN_ID_LEN];
   byte undo_ptr_buf[DATA_UNDO_PTR_LEN];
+  byte trx_gcn_buf[DATA_GCN_ID_LEN];
 
   ut_ad(index);
   ut_ad(table);
@@ -1532,6 +1534,11 @@ dberr_t row_fts_merge_insert(dict_index_t *index, dict_table_t *table,
   lizard::trx_write_undo_ptr(undo_ptr_buf, &trx->txn_desc);
   field = dtuple_get_nth_field(ins_ctx.tuple, 5);
   dfield_set_data(field, &undo_ptr_buf, DATA_UNDO_PTR_LEN);
+
+  /* Lizard: Set the real value */
+  lizard::trx_write_gcn(trx_gcn_buf, &trx->txn_desc);
+  field = dtuple_get_nth_field(ins_ctx.tuple, 6);
+  dfield_set_data(field, &trx_gcn_buf, DATA_GCN_ID_LEN);
 
 #ifdef UNIV_DEBUG
   ins_ctx.aux_index_id = id;

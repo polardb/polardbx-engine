@@ -275,27 +275,27 @@ s_2k	TABLESPACE	InnoDB	NORMAL	s_2k	MYSQLD_DATADIR/s_2k.ibd
 s_4k	TABLESPACE	InnoDB	NORMAL	s_4k	MYSQLD_DATADIR/s_4k.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t_com_in_4k	s_4k	129	7	Compact	0	General
-test/t_com_in_4k_as	s_4k	129	7	Compact	0	General
-test/t_com_in_4k_from_1k	s_4k	129	7	Compact	0	General
-test/t_com_in_4k_like	s_4k	129	7	Compact	0	General
-test/t_dyn_in_4k	s_4k	161	7	Dynamic	0	General
-test/t_dyn_in_4k_as	s_4k	161	7	Dynamic	0	General
-test/t_dyn_in_4k_from_1k	s_4k	161	7	Dynamic	0	General
-test/t_dyn_in_4k_like	s_4k	161	7	Dynamic	0	General
-test/t_red_in_4k	s_4k	128	7	Redundant	0	General
-test/t_red_in_4k_as	s_4k	128	7	Redundant	0	General
-test/t_red_in_4k_from_1k	s_4k	128	7	Redundant	0	General
-test/t_red_in_4k_like	s_4k	128	7	Redundant	0	General
-test/t_zip1k_in_1k	s_1k	163	7	Compressed	1024	General
-test/t_zip1k_in_1k_as	s_1k	163	7	Compressed	1024	General
-test/t_zip1k_in_1k_like	s_1k	163	7	Compressed	1024	General
-test/t_zip2k_in_2k	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_in_2k_as	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_in_2k_from_1k	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_in_2k_like	s_2k	165	7	Compressed	2048	General
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t_com_in_4k	s_4k	129	8	Compact	0	General
+test/t_com_in_4k_as	s_4k	129	8	Compact	0	General
+test/t_com_in_4k_from_1k	s_4k	129	8	Compact	0	General
+test/t_com_in_4k_like	s_4k	129	8	Compact	0	General
+test/t_dyn_in_4k	s_4k	161	8	Dynamic	0	General
+test/t_dyn_in_4k_as	s_4k	161	8	Dynamic	0	General
+test/t_dyn_in_4k_from_1k	s_4k	161	8	Dynamic	0	General
+test/t_dyn_in_4k_like	s_4k	161	8	Dynamic	0	General
+test/t_red_in_4k	s_4k	128	8	Redundant	0	General
+test/t_red_in_4k_as	s_4k	128	8	Redundant	0	General
+test/t_red_in_4k_from_1k	s_4k	128	8	Redundant	0	General
+test/t_red_in_4k_like	s_4k	128	8	Redundant	0	General
+test/t_zip1k_in_1k	s_1k	163	8	Compressed	1024	General
+test/t_zip1k_in_1k_as	s_1k	163	8	Compressed	1024	General
+test/t_zip1k_in_1k_like	s_1k	163	8	Compressed	1024	General
+test/t_zip2k_in_2k	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_in_2k_as	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_in_2k_from_1k	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_in_2k_like	s_2k	165	8	Compressed	2048	General
 # Directory of MYSQLD_DATADIR/
 lizard.ibd
 mysql.ibd
@@ -323,27 +323,27 @@ s_2k	TABLESPACE	InnoDB	NORMAL	s_2k	MYSQLD_DATADIR/s_2k.ibd
 s_4k	TABLESPACE	InnoDB	NORMAL	s_4k	MYSQLD_DATADIR/s_4k.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t_com_in_4k	s_4k	129	7	Compact	0	General
-test/t_com_in_4k_as	s_4k	129	7	Compact	0	General
-test/t_com_in_4k_from_1k	s_4k	129	7	Compact	0	General
-test/t_com_in_4k_like	s_4k	129	7	Compact	0	General
-test/t_dyn_in_4k	s_4k	161	7	Dynamic	0	General
-test/t_dyn_in_4k_as	s_4k	161	7	Dynamic	0	General
-test/t_dyn_in_4k_from_1k	s_4k	161	7	Dynamic	0	General
-test/t_dyn_in_4k_like	s_4k	161	7	Dynamic	0	General
-test/t_red_in_4k	s_4k	128	7	Redundant	0	General
-test/t_red_in_4k_as	s_4k	128	7	Redundant	0	General
-test/t_red_in_4k_from_1k	s_4k	128	7	Redundant	0	General
-test/t_red_in_4k_like	s_4k	128	7	Redundant	0	General
-test/t_zip1k_in_1k	s_1k	163	7	Compressed	1024	General
-test/t_zip1k_in_1k_as	s_1k	163	7	Compressed	1024	General
-test/t_zip1k_in_1k_like	s_1k	163	7	Compressed	1024	General
-test/t_zip2k_in_2k	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_in_2k_as	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_in_2k_from_1k	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_in_2k_like	s_2k	165	7	Compressed	2048	General
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t_com_in_4k	s_4k	129	8	Compact	0	General
+test/t_com_in_4k_as	s_4k	129	8	Compact	0	General
+test/t_com_in_4k_from_1k	s_4k	129	8	Compact	0	General
+test/t_com_in_4k_like	s_4k	129	8	Compact	0	General
+test/t_dyn_in_4k	s_4k	161	8	Dynamic	0	General
+test/t_dyn_in_4k_as	s_4k	161	8	Dynamic	0	General
+test/t_dyn_in_4k_from_1k	s_4k	161	8	Dynamic	0	General
+test/t_dyn_in_4k_like	s_4k	161	8	Dynamic	0	General
+test/t_red_in_4k	s_4k	128	8	Redundant	0	General
+test/t_red_in_4k_as	s_4k	128	8	Redundant	0	General
+test/t_red_in_4k_from_1k	s_4k	128	8	Redundant	0	General
+test/t_red_in_4k_like	s_4k	128	8	Redundant	0	General
+test/t_zip1k_in_1k	s_1k	163	8	Compressed	1024	General
+test/t_zip1k_in_1k_as	s_1k	163	8	Compressed	1024	General
+test/t_zip1k_in_1k_like	s_1k	163	8	Compressed	1024	General
+test/t_zip2k_in_2k	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_in_2k_as	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_in_2k_from_1k	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_in_2k_like	s_2k	165	8	Compressed	2048	General
 # Directory of MYSQLD_DATADIR/
 lizard.ibd
 mysql.ibd
@@ -428,14 +428,14 @@ test/t_zip4k_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip4k_as_file_per
 test/t_zip4k_as_remote	TABLESPACE	InnoDB	NORMAL	test/t_zip4k_as_remote	MYSQL_TMP_DIR/test/t_zip4k_as_remote.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t_zip1k_as_file_per_table	test/t_zip1k_as_file_per_table	35	7	Compressed	1024	Single
-test/t_zip1k_as_remote	test/t_zip1k_as_remote	99	7	Compressed	1024	Single
-test/t_zip2k_as_file_per_table	test/t_zip2k_as_file_per_table	37	7	Compressed	2048	Single
-test/t_zip2k_as_remote	test/t_zip2k_as_remote	101	7	Compressed	2048	Single
-test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	7	Compressed	4096	Single
-test/t_zip4k_as_remote	test/t_zip4k_as_remote	103	7	Compressed	4096	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t_zip1k_as_file_per_table	test/t_zip1k_as_file_per_table	35	8	Compressed	1024	Single
+test/t_zip1k_as_remote	test/t_zip1k_as_remote	99	8	Compressed	1024	Single
+test/t_zip2k_as_file_per_table	test/t_zip2k_as_file_per_table	37	8	Compressed	2048	Single
+test/t_zip2k_as_remote	test/t_zip2k_as_remote	101	8	Compressed	2048	Single
+test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	8	Compressed	4096	Single
+test/t_zip4k_as_remote	test/t_zip4k_as_remote	103	8	Compressed	4096	Single
 # MYSQLD_DATADIR/
 lizard.ibd
 mysql.ibd
@@ -550,13 +550,13 @@ s_4k	TABLESPACE	InnoDB	NORMAL	s_4k	MYSQLD_DATADIR/s_4k.ibd
 test/t_zip4k_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip4k_as_file_per_table	MYSQLD_DATADIR/test/t_zip4k_as_file_per_table.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t_zip1k_in_s_1k	s_1k	163	7	Compressed	1024	General
-test/t_zip1k_remote_in_s_1k	s_1k	163	7	Compressed	1024	General
-test/t_zip2k_in_s_2k	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_remote_in_s_2k	s_2k	165	7	Compressed	2048	General
-test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	7	Compressed	4096	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t_zip1k_in_s_1k	s_1k	163	8	Compressed	1024	General
+test/t_zip1k_remote_in_s_1k	s_1k	163	8	Compressed	1024	General
+test/t_zip2k_in_s_2k	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_remote_in_s_2k	s_2k	165	8	Compressed	2048	General
+test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	8	Compressed	4096	Single
 # MYSQLD_DATADIR/
 lizard.ibd
 mysql.ibd
@@ -633,13 +633,13 @@ test/t_zip2k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip2k_to_file_per
 test/t_zip4k_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip4k_as_file_per_table	MYSQLD_DATADIR/test/t_zip4k_as_file_per_table.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t_zip1k_remote_in_s_1k	s_1k	163	7	Compressed	1024	General
-test/t_zip1k_to_file_per_table	test/t_zip1k_to_file_per_table	35	7	Compressed	1024	Single
-test/t_zip2k_remote_in_s_2k	s_2k	165	7	Compressed	2048	General
-test/t_zip2k_to_file_per_table	test/t_zip2k_to_file_per_table	37	7	Compressed	2048	Single
-test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	7	Compressed	4096	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t_zip1k_remote_in_s_1k	s_1k	163	8	Compressed	1024	General
+test/t_zip1k_to_file_per_table	test/t_zip1k_to_file_per_table	35	8	Compressed	1024	Single
+test/t_zip2k_remote_in_s_2k	s_2k	165	8	Compressed	2048	General
+test/t_zip2k_to_file_per_table	test/t_zip2k_to_file_per_table	37	8	Compressed	2048	Single
+test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	8	Compressed	4096	Single
 CHECK TABLE `t_zip1k_to_file_per_table`;
 Table	Op	Msg_type	Msg_text
 test.t_zip1k_to_file_per_table	check	status	OK
@@ -682,10 +682,10 @@ test/t_zip1k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip1k_to_file_per
 test/t_zip2k_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_zip2k_to_file_per_table	MYSQLD_DATADIR/test/t_zip2k_to_file_per_table.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t_zip1k_to_file_per_table	test/t_zip1k_to_file_per_table	35	7	Compressed	1024	Single
-test/t_zip2k_to_file_per_table	test/t_zip2k_to_file_per_table	37	7	Compressed	2048	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t_zip1k_to_file_per_table	test/t_zip1k_to_file_per_table	35	8	Compressed	1024	Single
+test/t_zip2k_to_file_per_table	test/t_zip2k_to_file_per_table	37	8	Compressed	2048	Single
 DROP TABLE `t_zip1k_to_file_per_table`;
 DROP TABLE `t_zip2k_to_file_per_table`;
 #

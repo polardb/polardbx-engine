@@ -814,11 +814,11 @@ TRUNCATE TABLE t1;
 affected rows: 0
 DROP TABLE t1;
 Variable_name	Value
-Handler_update	14
+Handler_update	16
 Variable_name	Value
 Handler_delete	0
 Variable_name	Value
-Handler_update	15
+Handler_update	17
 Variable_name	Value
 Handler_delete	1
 #

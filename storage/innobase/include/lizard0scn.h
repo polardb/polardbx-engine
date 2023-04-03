@@ -126,6 +126,9 @@ constexpr gcn_t GCN_UNDO_LOST = 2;
 /** GCN special for temporary table record */
 constexpr gcn_t GCN_TEMP_TAB_REC = 3;
 
+/** GCN special for index */
+constexpr gcn_t GCN_DICT_REC = 4;
+
 /** The initial global commit number value after initialize db */
 constexpr gcn_t GCN_INITIAL = 1024;
 

@@ -132,7 +132,7 @@ t5980.ibd.bak2
 # do not match the current frm file.
 #
 ALTER TABLE t5980 IMPORT TABLESPACE;
-ERROR HY000: Schema mismatch (Number of columns don't match, table has 7 columns but the tablespace meta-data file has 8 columns)
+ERROR HY000: Schema mismatch (Number of columns don't match, table has 8 columns but the tablespace meta-data file has 9 columns)
 CHECK TABLE t5980;
 Table	Op	Msg_type	Msg_text
 test.t5980	check	Error	Tablespace has been discarded for table 't5980'
@@ -205,9 +205,9 @@ a	b	c
 #
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t5980	test/t5980	97	8	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t5980	test/t5980	97	9	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -224,8 +224,8 @@ test/t5980	TABLESPACE	InnoDB	NORMAL	test/t5980	MYSQL_TMP_DIR/alt_dir/test/t5980.
 DROP TABLE t5980;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -428,9 +428,9 @@ t5980	CREATE TABLE `t5980` (
 #
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t5980	test/t5980	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t5980	test/t5980	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -494,12 +494,12 @@ t5980d	CREATE TABLE `t5980d` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci DATA DIRECTORY='MYSQL_TMP_DIR/alt_dir/'
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t5980a	test/t5980a	33	7	Dynamic	0	Single
-test/t5980b	test/t5980b	97	7	Dynamic	0	Single
-test/t5980c	test/t5980c	33	7	Dynamic	0	Single
-test/t5980d	test/t5980d	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t5980a	test/t5980a	33	8	Dynamic	0	Single
+test/t5980b	test/t5980b	97	8	Dynamic	0	Single
+test/t5980c	test/t5980c	33	8	Dynamic	0	Single
+test/t5980d	test/t5980d	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -558,12 +558,12 @@ SHOW CREATE TABLE t5980d;
 ERROR HY000: Tablespace is missing for table `test`.`t5980d`.
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t5980a	test/t5980a	33	7	Dynamic	0	Single
-test/t5980b	test/t5980b	97	7	Dynamic	0	Single
-test/t5980c	test/t5980c	33	7	Dynamic	0	Single
-test/t5980d	test/t5980d	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t5980a	test/t5980a	33	8	Dynamic	0	Single
+test/t5980b	test/t5980b	97	8	Dynamic	0	Single
+test/t5980c	test/t5980c	33	8	Dynamic	0	Single
+test/t5980d	test/t5980d	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -637,12 +637,12 @@ SHOW CREATE TABLE t5980d;
 ERROR HY000: Tablespace is missing for table `test`.`t5980d`.
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t5980aa	test/t5980aa	33	7	Dynamic	0	Single
-test/t5980bb	test/t5980bb	97	7	Dynamic	0	Single
-test/t5980c	test/t5980c	33	7	Dynamic	0	Single
-test/t5980d	test/t5980d	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t5980aa	test/t5980aa	33	8	Dynamic	0	Single
+test/t5980bb	test/t5980bb	97	8	Dynamic	0	Single
+test/t5980c	test/t5980c	33	8	Dynamic	0	Single
+test/t5980d	test/t5980d	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -714,12 +714,12 @@ t5980bb	CREATE TABLE `t5980bb` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci DATA DIRECTORY='MYSQL_TMP_DIR/alt_dir/'
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t5980aa	test/t5980aa	33	7	Dynamic	0	Single
-test/t5980bb	test/t5980bb	97	7	Dynamic	0	Single
-test/t5980c	test/t5980c	33	7	Dynamic	0	Single
-test/t5980d	test/t5980d	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t5980aa	test/t5980aa	33	8	Dynamic	0	Single
+test/t5980bb	test/t5980bb	97	8	Dynamic	0	Single
+test/t5980c	test/t5980c	33	8	Dynamic	0	Single
+test/t5980d	test/t5980d	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -774,12 +774,12 @@ Warnings:
 Warning	1814	InnoDB: Tablespace has been discarded for table 't5980b'
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t5980a	test/t5980a	33	7	Dynamic	0	Single
-test/t5980b	test/t5980b	97	7	Dynamic	0	Single
-test/t5980c	test/t5980c	33	7	Dynamic	0	Single
-test/t5980d	test/t5980d	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t5980a	test/t5980a	33	8	Dynamic	0	Single
+test/t5980b	test/t5980b	97	8	Dynamic	0	Single
+test/t5980c	test/t5980c	33	8	Dynamic	0	Single
+test/t5980d	test/t5980d	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -891,8 +891,8 @@ DROP TABLE t5980c;
 DROP TABLE t5980d;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd

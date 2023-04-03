@@ -8,6 +8,8 @@ insert into t1 select * from t2;
 ERROR 23000: Duplicate entry '2' for key 'a'
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+binlog.000001	#	Previous_consensus_index	#	#	##PREV_CONSENSUS_INDEX: #'
+binlog.000001	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -25,3 +27,6 @@ ERROR 23000: Duplicate entry '1' for key 'a'
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 drop table t1;
+drop table if exists t2;
+Warnings:
+Warning	1017	Can't find file: 't2' (errno: 2 - No such file or directory)

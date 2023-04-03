@@ -233,10 +233,8 @@ rm -rf packaging/deb-in/CMakeFiles/progress.marks
 rm -rf CMakeCache.txt
 make clean
 
-BU="bu-$build_type"
-rm -rf $BU
-mkdir $BU && cd $BU
-cmake ..                               \
+cmake .                               \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DFORCE_INSOURCE_BUILD=ON          \
     -DCMAKE_BUILD_TYPE="$build_type"   \
     -DWITH_NORMANDY_CLUSTER=ON         \
@@ -279,5 +277,7 @@ cmake ..                               \
     -DWITH_BOOST=extra/boost \
     -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
     -DWITHOUT_IS_UT=1
+
+make -j `cat /proc/cpuinfo | grep processor| wc -l`
 
 # end of file

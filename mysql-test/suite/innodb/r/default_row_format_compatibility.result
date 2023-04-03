@@ -4,9 +4,9 @@ col6 TEXT, col7 TEXT, col8 TEXT, col9 TEXT, col10 TEXT,
 col11 TEXT) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/tab	test/tab	33	16	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/tab	test/tab	33	17	Dynamic	0	Single
 INSERT INTO tab SET
 col1=REPEAT('a',1000),col2=REPEAT('b',1000),col3=REPEAT('c',1000),
 col4=REPEAT('d',1000),col5=REPEAT('e',1000),col6=REPEAT('f',1000),
@@ -48,9 +48,9 @@ compact
 CREATE TABLE tab(a INT);
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/tab	test/tab	1	6	Compact	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/tab	test/tab	1	7	Compact	0	Single
 ALTER TABLE tab DISCARD TABLESPACE;
 ALTER TABLE tab IMPORT TABLESPACE;
 SELECT * FROM tab;
@@ -70,9 +70,9 @@ a	b
 1	Check with max column size
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/tab	test/tab	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/tab	test/tab	33	8	Dynamic	0	Single
 SET GLOBAL innodb_default_row_format=COMPACT;
 ALTER TABLE tab ROW_FORMAT=COMPACT;
 ERROR 42000: Specified key was too long; max key length is 767 bytes
@@ -88,31 +88,31 @@ a	b
 1	Check with max column size
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/tab	test/tab	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/tab	test/tab	33	8	Dynamic	0	Single
 ALTER TABLE tab ROW_FORMAT=COMPACT;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/tab	test/tab	1	7	Compact	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/tab	test/tab	1	8	Compact	0	Single
 SELECT * FROM tab;
 a	b
 1	Check with max column size
 ALTER TABLE tab ROW_FORMAT=COMPRESSED;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/tab	test/tab	41	7	Compressed	8192	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/tab	test/tab	41	8	Compressed	8192	Single
 SELECT * FROM tab;
 a	b
 1	Check with max column size
 ALTER TABLE tab ROW_FORMAT=Dynamic;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/tab	test/tab	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/tab	test/tab	33	8	Dynamic	0	Single
 DROP TABLE tab;

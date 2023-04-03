@@ -447,6 +447,9 @@ ulint dtype_get_fixed_size_low(
        case DATA_UNDO_PTR:
           ut_ad(len == DATA_UNDO_PTR_LEN);
           break;
+       case DATA_GCN_ID:
+          ut_ad(len == DATA_GCN_ID_LEN);
+          break;
         default:
           ut_ad(0);
           return (0);
@@ -526,6 +529,9 @@ ulint dtype_get_min_size_low(
           break;
        case DATA_UNDO_PTR:
           ut_ad(len == DATA_UNDO_PTR_LEN);
+          break;
+       case DATA_GCN_ID:
+          ut_ad(len == DATA_GCN_ID_LEN);
           break;
         default:
           ut_ad(0);

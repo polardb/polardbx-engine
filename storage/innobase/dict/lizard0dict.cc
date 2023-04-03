@@ -43,6 +43,9 @@ static_assert(DATA_SCN_ID_LEN == 8, "DATA_SCN_ID_LEN != 8");
 static_assert(DATA_UNDO_PTR == 4, "DATA_UNDO_PTR != 4");
 static_assert(DATA_UNDO_PTR_LEN == 8, "DATA_UNDO_PTR_LEN != 8");
 
+static_assert(DATA_GCN_ID == 5, "DATA_GCN_ID != 5");
+static_assert(DATA_GCN_ID_LEN == 8, "DATA_GCN_ID_LEN != 8");
+
 /** Lizard: First several undo tablespaces will be treated as txn tablespace */
 const char *dict_lizard::s_default_txn_space_names[] = {
     "innodb_undo_001", "innodb_undo_002", "innodb_undo_003", "innodb_undo_004"};
@@ -75,6 +78,9 @@ void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap) {
 
   dict_mem_table_add_col(table, heap, "DB_UNDO_PTR", DATA_SYS,
                          DATA_UNDO_PTR | DATA_NOT_NULL, DATA_UNDO_PTR_LEN);
+
+  dict_mem_table_add_col(table, heap, "DB_GCN_ID", DATA_SYS,
+                         DATA_GCN_ID | DATA_NOT_NULL, DATA_GCN_ID_LEN);
 }
 
 /**
@@ -133,9 +139,7 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
   };
 
   if (scn == SCN_NULL || gcn == GCN_NULL) {
-    txn_lookup_t txn_lookup;
-    lizard::txn_undo_hdr_lookup(&rec_txn, &txn_lookup, nullptr,
-                                lizard::TXN_DD_INDEX_VISIBLE);
+    lizard::txn_rec_real_state_by_misc(&rec_txn);
     /** It might be stored many times but they should be the same value */
     index->txn.scn.store(rec_txn.scn);
     index->txn.gcn.store(rec_txn.gcn);
@@ -213,6 +217,11 @@ void dd_add_lizard_columns(dd::Table *dd_table, dd::Index *primary) {
       dd_add_hidden_column(dd_table, "DB_UNDO_PTR", DATA_UNDO_PTR_LEN,
                            dd::enum_column_types::LONGLONG);
   dd_add_hidden_element(primary, db_undo_ptr);
+
+  dd::Column *db_gcn_id = dd_add_hidden_column(
+      dd_table, "DB_GCN_ID", DATA_GCN_ID_LEN, dd::enum_column_types::LONGLONG);
+
+  dd_add_hidden_element(primary, db_gcn_id);
 }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
@@ -304,6 +313,14 @@ bool lizard_dict_table_check(const dict_table_t *table) {
     ut_a(col->prtype == (DATA_UNDO_PTR | DATA_NOT_NULL));
     ut_a(col->len == DATA_UNDO_PTR_LEN);
     ut_a(strcmp(s, "DB_UNDO_PTR") == 0);
+    s += strlen(s) + 1;
+
+    /* gcn id */
+    col = table->get_col(n_cols - n_sys_cols + DATA_GCN_ID);
+    ut_a(col->mtype == DATA_SYS);
+    ut_a(col->prtype == (DATA_GCN_ID | DATA_NOT_NULL));
+    ut_a(col->len == DATA_GCN_ID_LEN);
+    ut_a(strcmp(s, "DB_GCN_ID") == 0);
   }
   return true;
 }
@@ -352,6 +369,12 @@ bool lizard_dict_index_check(const dict_index_t *index) {
       col = field->col;
       col_name = index->table->get_col_name(col->ind);
       ut_a(strcmp(col_name, "DB_UNDO_PTR") == 0);
+
+      /* gcn id */
+      field = index->get_field(n_uniq + 4);
+      col = field->col;
+      col_name = index->table->get_col_name(col->ind);
+      ut_a(strcmp(col_name, "DB_GCN_ID") == 0);
     } else {
       n_uniq = index->n_uniq;
       /* trx_id */
@@ -374,7 +397,8 @@ bool lizard_dict_index_check(const dict_index_t *index) {
       ut_a(strcmp(col_name, "DB_TRX_ID") != 0 &&
            strcmp(col_name, "DB_ROLL_PTR") != 0 &&
            strcmp(col_name, "DB_SCN_ID") != 0 &&
-           strcmp(col_name, "DB_UNDO_PTR") != 0);
+           strcmp(col_name, "DB_UNDO_PTR") != 0 &&
+           strcmp(col_name, "DB_GCN_ID") != 0);
     }
   }
   return true;

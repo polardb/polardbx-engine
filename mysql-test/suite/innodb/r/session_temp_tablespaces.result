@@ -89,8 +89,8 @@ PATH	SIZE	STATE	PURPOSE
 ./#innodb_temp/temp_5.ibt	81920	INACTIVE	NONE
 ./#innodb_temp/temp_6.ibt	81920	INACTIVE	NONE
 ./#innodb_temp/temp_7.ibt	98304	ACTIVE	INTRINSIC
-./#innodb_temp/temp_8.ibt	10485760	ACTIVE	USER
-./#innodb_temp/temp_9.ibt	10485760	ACTIVE	USER
+./#innodb_temp/temp_8.ibt	11534336	ACTIVE	USER
+./#innodb_temp/temp_9.ibt	11534336	ACTIVE	USER
 ./#innodb_temp/temp_10.ibt	98304	ACTIVE	INTRINSIC
 # Ensure entries in information_schema.processlist and
 # information_schema.innodb_session_temp_tablespaces are
@@ -104,8 +104,8 @@ INFORMATION_SCHEMA.PROCESSLIST a, INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESP
 WHERE a.ID=b.ID ORDER BY SPACE	131072	executing	INTRINSIC
 root	ACTIVE	SELECT USER, b.STATE, INFO, SIZE, a.STATE, PURPOSE FROM
 INFORMATION_SCHEMA.PROCESSLIST a, INFORMATION_SCHEMA.INNODB_SESSION_TEMP_TABLESPACES b
-WHERE a.ID=b.ID ORDER BY SPACE	10485760	executing	USER
-root	ACTIVE	NULL	10485760		USER
+WHERE a.ID=b.ID ORDER BY SPACE	11534336	executing	USER
+root	ACTIVE	NULL	11534336		USER
 root	ACTIVE	NULL	98304		INTRINSIC
 # Create a new connection.
 CREATE TEMPORARY TABLE test.t1(a INT, b BLOB);
@@ -118,8 +118,8 @@ PATH	SIZE	STATE	PURPOSE
 ./#innodb_temp/temp_5.ibt	98304	ACTIVE	INTRINSIC
 ./#innodb_temp/temp_6.ibt	98304	ACTIVE	USER
 ./#innodb_temp/temp_7.ibt	131072	ACTIVE	INTRINSIC
-./#innodb_temp/temp_8.ibt	10485760	ACTIVE	USER
-./#innodb_temp/temp_9.ibt	10485760	ACTIVE	USER
+./#innodb_temp/temp_8.ibt	11534336	ACTIVE	USER
+./#innodb_temp/temp_9.ibt	11534336	ACTIVE	USER
 ./#innodb_temp/temp_10.ibt	98304	ACTIVE	INTRINSIC
 # Create a new connection.
 CREATE TEMPORARY TABLE test.t1(a INT, b BLOB);
@@ -132,8 +132,8 @@ PATH	SIZE	STATE	PURPOSE
 ./#innodb_temp/temp_5.ibt	98304	ACTIVE	INTRINSIC
 ./#innodb_temp/temp_6.ibt	98304	ACTIVE	USER
 ./#innodb_temp/temp_7.ibt	131072	ACTIVE	INTRINSIC
-./#innodb_temp/temp_8.ibt	10485760	ACTIVE	USER
-./#innodb_temp/temp_9.ibt	10485760	ACTIVE	USER
+./#innodb_temp/temp_8.ibt	11534336	ACTIVE	USER
+./#innodb_temp/temp_9.ibt	11534336	ACTIVE	USER
 ./#innodb_temp/temp_10.ibt	98304	ACTIVE	INTRINSIC
 # Create a new connection.
 CREATE TEMPORARY TABLE test.t1(a INT, b BLOB);
@@ -146,8 +146,8 @@ PATH	SIZE	STATE	PURPOSE
 ./#innodb_temp/temp_5.ibt	98304	ACTIVE	INTRINSIC
 ./#innodb_temp/temp_6.ibt	98304	ACTIVE	USER
 ./#innodb_temp/temp_7.ibt	131072	ACTIVE	INTRINSIC
-./#innodb_temp/temp_8.ibt	10485760	ACTIVE	USER
-./#innodb_temp/temp_9.ibt	10485760	ACTIVE	USER
+./#innodb_temp/temp_8.ibt	11534336	ACTIVE	USER
+./#innodb_temp/temp_9.ibt	11534336	ACTIVE	USER
 ./#innodb_temp/temp_10.ibt	98304	ACTIVE	INTRINSIC
 # Create a new connection.
 CREATE TEMPORARY TABLE test.t1(a INT, b BLOB);
@@ -160,8 +160,8 @@ PATH	SIZE	STATE	PURPOSE
 ./#innodb_temp/temp_5.ibt	98304	ACTIVE	INTRINSIC
 ./#innodb_temp/temp_6.ibt	98304	ACTIVE	USER
 ./#innodb_temp/temp_7.ibt	131072	ACTIVE	INTRINSIC
-./#innodb_temp/temp_8.ibt	10485760	ACTIVE	USER
-./#innodb_temp/temp_9.ibt	10485760	ACTIVE	USER
+./#innodb_temp/temp_8.ibt	11534336	ACTIVE	USER
+./#innodb_temp/temp_9.ibt	11534336	ACTIVE	USER
 ./#innodb_temp/temp_10.ibt	98304	ACTIVE	INTRINSIC
 ./#innodb_temp/temp_11.ibt	81920	INACTIVE	NONE
 ./#innodb_temp/temp_12.ibt	81920	INACTIVE	NONE

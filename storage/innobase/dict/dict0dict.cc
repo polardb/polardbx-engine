@@ -2025,8 +2025,9 @@ the program, it should be dealt with here. */
 #error "DATA_N_SYS_COLS != 3"
 #endif
 
-  static const char *reserved_names[] = {
-      "DB_ROW_ID", "DB_TRX_ID", "DB_ROLL_PTR", "DB_SCN_ID", "DB_UNDO_PTR"};
+  static const char *reserved_names[] = {"DB_ROW_ID",   "DB_TRX_ID",
+                                         "DB_ROLL_PTR", "DB_SCN_ID",
+                                         "DB_UNDO_PTR", "DB_GCN_ID"};
 
   ulint i;
 
@@ -2995,6 +2996,8 @@ static dict_index_t *dict_index_build_internal_clust(
     dict_index_add_col(new_index, table, table->get_sys_col(DATA_SCN_ID), 0,
                        true);
     dict_index_add_col(new_index, table, table->get_sys_col(DATA_UNDO_PTR), 0,
+                       true);
+    dict_index_add_col(new_index, table, table->get_sys_col(DATA_GCN_ID), 0,
                        true);
   }
 
@@ -6358,6 +6361,7 @@ void DDTableBuffer::create_tuples() {
   byte *id_buf;
   byte *undo_buf;
   byte *scn_buf;
+  byte *gcn_buf;
 
   id_buf = static_cast<byte *>(mem_heap_alloc(m_heap, 8));
   memset(id_buf, 0, sizeof *id_buf);
@@ -6407,6 +6411,13 @@ void DDTableBuffer::create_tuples() {
   col = m_index->table->get_sys_col(DATA_UNDO_PTR);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, undo_buf, DATA_UNDO_PTR_LEN);
+
+  /** GCN ID: always TXN_DESC_DM */
+  gcn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_GCN_ID_LEN));
+  lizard::trx_write_gcn(gcn_buf, &lizard::TXN_DESC_DM);
+  col = m_index->table->get_sys_col(DATA_GCN_ID);
+  dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
+  dfield_set_data(dfield, gcn_buf, DATA_GCN_ID_LEN);
 }
 
 /** Initialize the in-memory index */

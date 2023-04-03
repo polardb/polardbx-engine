@@ -1763,7 +1763,7 @@ Table	Op	Msg_type	Msg_text
 test.t	analyze	status	OK
 EXPLAIN FORMAT=tree SELECT t1.i AS a, (SELECT t2.i FROM t t2 WHERE t1.j = t2.j ORDER BY j DESC, i DESC LIMIT 1) AS b FROM t t1;
 EXPLAIN
--> Index scan on t1 using j  (cost=412.85 rows=4096)
+-> Index scan on t1 using j  (cost=413.35 rows=4096)
 -> Select #2 (subquery in projection; dependent)
     -> Limit: 1 row(s)
         -> Index lookup on t2 using j (j=t1.j; iterate backwards)  (cost=410.97 rows=4096)

@@ -35,10 +35,10 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 DATA DIRECTORY = 'MYSQL_TMP_DIR/alternate_dir/data2/' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1#p#p0	test/t1#p#p0	97	7	Dynamic	0	Single
-test/t1#p#p1	test/t1#p#p1	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1#p#p0	test/t1#p#p0	97	8	Dynamic	0	Single
+test/t1#p#p1	test/t1#p#p1	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -77,10 +77,10 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 DATA DIRECTORY = 'MYSQL_TMP_DIR/alternate_dir/data2/' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1#p#p0	test/t1#p#p0	97	7	Dynamic	0	Single
-test/t1#p#p1	test/t1#p#p1	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1#p#p0	test/t1#p#p0	97	8	Dynamic	0	Single
+test/t1#p#p1	test/t1#p#p1	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -108,10 +108,10 @@ t11	CREATE TABLE `t11` (
  PARTITION p1 DATA DIRECTORY = 'MYSQL_TMP_DIR/alternate_dir/data2/' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t11#p#p0	test/t11#p#p0	97	7	Dynamic	0	Single
-test/t11#p#p1	test/t11#p#p1	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t11#p#p0	test/t11#p#p0	97	8	Dynamic	0	Single
+test/t11#p#p1	test/t11#p#p1	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -148,10 +148,10 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 DATA DIRECTORY = 'MYSQL_TMP_DIR/alternate_dir/data2/' ENGINE = InnoDB) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1#p#p0	test/t1#p#p0	97	7	Dynamic	0	Single
-test/t1#p#p1	test/t1#p#p1	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1#p#p0	test/t1#p#p0	97	8	Dynamic	0	Single
+test/t1#p#p1	test/t1#p#p1	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -218,14 +218,14 @@ SUBPARTITION BY HASH (to_days(`purchased`))
   SUBPARTITION s5 DATA DIRECTORY = 'MYSQL_TMP_DIR/alternate_dir/data2/' ENGINE = InnoDB)) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1#p#p0#sp#s0	test/t1#p#p0#sp#s0	97	7	Dynamic	0	Single
-test/t1#p#p0#sp#s1	test/t1#p#p0#sp#s1	97	7	Dynamic	0	Single
-test/t1#p#p1#sp#s2	test/t1#p#p1#sp#s2	97	7	Dynamic	0	Single
-test/t1#p#p1#sp#s3	test/t1#p#p1#sp#s3	97	7	Dynamic	0	Single
-test/t1#p#p2#sp#s4	test/t1#p#p2#sp#s4	97	7	Dynamic	0	Single
-test/t1#p#p2#sp#s5	test/t1#p#p2#sp#s5	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1#p#p0#sp#s0	test/t1#p#p0#sp#s0	97	8	Dynamic	0	Single
+test/t1#p#p0#sp#s1	test/t1#p#p0#sp#s1	97	8	Dynamic	0	Single
+test/t1#p#p1#sp#s2	test/t1#p#p1#sp#s2	97	8	Dynamic	0	Single
+test/t1#p#p1#sp#s3	test/t1#p#p1#sp#s3	97	8	Dynamic	0	Single
+test/t1#p#p2#sp#s4	test/t1#p#p2#sp#s4	97	8	Dynamic	0	Single
+test/t1#p#p2#sp#s5	test/t1#p#p2#sp#s5	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -302,14 +302,14 @@ SUBPARTITION BY HASH (to_days(`purchased`))
   SUBPARTITION s5 DATA DIRECTORY = 'MYSQL_TMP_DIR/alternate_dir/data2/' ENGINE = InnoDB)) */
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1#p#p0#sp#s0	test/t1#p#p0#sp#s0	97	7	Dynamic	0	Single
-test/t1#p#p0#sp#s1	test/t1#p#p0#sp#s1	97	7	Dynamic	0	Single
-test/t1#p#p1#sp#s2	test/t1#p#p1#sp#s2	97	7	Dynamic	0	Single
-test/t1#p#p1#sp#s3	test/t1#p#p1#sp#s3	97	7	Dynamic	0	Single
-test/t1#p#p2#sp#s4	test/t1#p#p2#sp#s4	97	7	Dynamic	0	Single
-test/t1#p#p2#sp#s5	test/t1#p#p2#sp#s5	97	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1#p#p0#sp#s0	test/t1#p#p0#sp#s0	97	8	Dynamic	0	Single
+test/t1#p#p0#sp#s1	test/t1#p#p0#sp#s1	97	8	Dynamic	0	Single
+test/t1#p#p1#sp#s2	test/t1#p#p1#sp#s2	97	8	Dynamic	0	Single
+test/t1#p#p1#sp#s3	test/t1#p#p1#sp#s3	97	8	Dynamic	0	Single
+test/t1#p#p2#sp#s4	test/t1#p#p2#sp#s4	97	8	Dynamic	0	Single
+test/t1#p#p2#sp#s5	test/t1#p#p2#sp#s5	97	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -454,11 +454,11 @@ t1	CREATE TABLE t1 (
 SET @@sql_quote_show_create=@old_sql_quote_show_create;
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
-mtr/global_suppressions	mtr/global_suppressions	33	6	Dynamic	0	Single
-mtr/test_suppressions	mtr/test_suppressions	33	6	Dynamic	0	Single
-test/t1#p#p0	test/t1#p#p0	97	6	Dynamic	0	Single
-test/t_file_per_table_off	innodb_system	161	7	Dynamic	0	System
-test/t_file_per_table_on	test/t_file_per_table_on	33	7	Dynamic	0	Single
+mtr/global_suppressions	mtr/global_suppressions	33	7	Dynamic	0	Single
+mtr/test_suppressions	mtr/test_suppressions	33	7	Dynamic	0	Single
+test/t1#p#p0	test/t1#p#p0	97	7	Dynamic	0	Single
+test/t_file_per_table_off	innodb_system	161	8	Dynamic	0	System
+test/t_file_per_table_on	test/t_file_per_table_on	33	8	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd

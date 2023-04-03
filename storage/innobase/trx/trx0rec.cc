@@ -1225,7 +1225,7 @@ static ulint trx_undo_page_report_modify(
 
   ut_ad(first_free <= UNIV_PAGE_SIZE);
 
-  if (trx_undo_left(undo_page, ptr) < 50) {
+  if (trx_undo_left(undo_page, ptr) < 50 + 8) {
     /* NOTE: the value 50 must be big enough so that the general
     fields written below fit on the undo log page */
 
@@ -1294,7 +1294,7 @@ static ulint trx_undo_page_report_modify(
   ptr += mach_u64_write_compressed(ptr, trx_read_roll_ptr(field));
 
   /*----------------------------------------*/
-  /* Lizard: store SCN and UBA */
+  /* Lizard: store SCN, UBA, GCN */
 
   /** Lizard: If updating a record whose last modification from the same
   transaction, check if it has been cleanout. */
@@ -1312,6 +1312,11 @@ static ulint trx_undo_page_report_modify(
                             &flen);
   ut_ad(flen == DATA_UNDO_PTR_LEN);
   ptr += mach_u64_write_compressed(ptr, lizard::trx_read_undo_ptr(field));
+
+  field = rec_get_nth_field(rec, offsets, index->get_sys_col_pos(DATA_GCN_ID),
+                            &flen);
+  ut_ad(flen == DATA_GCN_ID_LEN);
+  ptr += mach_u64_write_compressed(ptr, lizard::trx_read_gcn(field));
 
   /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the
@@ -2474,14 +2479,13 @@ static MY_ATTRIBUTE((warn_unused_result)) bool trx_undo_get_undo_rec(
       missing_history = true;
     } else {
       /** precheck fail */
-      lizard::txn_undo_hdr_lookup(txn_rec, &txn_lookup, txn_mtr,
-                                  lizard::TXN_UNDO_BUILD_REC);
+      lizard::txn_rec_lock_state_by_lookup(txn_rec, &txn_lookup, txn_mtr);
       missing_history = !lizard::txn_lookup_rollptr_is_valid(&txn_lookup);
     }
-    DBUG_EXECUTE_IF("simulate_prev_image_purged_during_query", missing_history = true;);
+    DBUG_EXECUTE_IF("simulate_prev_image_purged_during_query",
+                    missing_history = true;);
   } else {
-
-    lizard::fill_txn_rec(nullptr, nullptr, txn_rec, lizard::TXN_UNDO_BUILD_REC);
+    lizard::txn_rec_real_state_by_misc(txn_rec);
     missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
   }
 
@@ -2552,6 +2556,7 @@ bool trx_undo_prev_version_build(
   /** Lizard begin */
   txn_rec.scn = lizard::row_get_rec_scn_id(rec, index, offsets);
   txn_rec.undo_ptr = lizard::row_get_rec_undo_ptr(rec, index, offsets);
+  txn_rec.gcn = lizard::row_get_rec_gcn(rec, index, offsets);
   assert_undo_ptr_allocated(txn_rec.undo_ptr);
   txn_rec.trx_id = rec_trx_id;
   /** Lizard end */
@@ -2652,18 +2657,11 @@ bool trx_undo_prev_version_build(
           trx_id,
           txn_info.scn,
           txn_info.undo_ptr,
-          lizard::GCN_NULL,
+          txn_info.gcn,
       };
 
-      if (is_as_of_gcn) {
-        txn_lookup_t txn_lookup;
-        lizard::fill_txn_rec_and_txn_lookup_low(nullptr, nullptr, &undo_txn_rec,
-                                                &txn_lookup,
-                                                lizard::TXN_UNDO_BUILD_REC);
-      } else {
-        lizard::fill_txn_rec(nullptr, nullptr, &undo_txn_rec,
-                             lizard::TXN_UNDO_BUILD_REC);
-      }
+      lizard::txn_rec_real_state_by_misc(&undo_txn_rec);
+
       missing_extern = purge_sys->vision.modifications_visible(
           &undo_txn_rec, index->table->name);
 
