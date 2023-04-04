@@ -235,11 +235,6 @@ xa commit '7' one phase;
 --let $gtrid= '7'
 --source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
 
---echo ###############################
---echo # case 8
---echo ###############################
-connection conn1;
-
 connection conn1;
 drop table t1;
 set global innodb_undo_retention = default;
@@ -253,3 +248,9 @@ connection conn3;
 set global innodb_undo_retention = default;
 set global innodb_purge_rseg_truncate_frequency = default;
 
+--echo ###############################
+--echo # case 8
+--echo ###############################
+# xa.test will use con1, con2, con3
+connection default;
+--source t/xa.test

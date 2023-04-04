@@ -42,7 +42,7 @@ id
 1
 xa end '1';
 call dbms_xa.prepare_with_trx_slot('1', '', 1);
-ERROR HY000: This command is not allowed to be executed. Mightbe this XA transaction is a read-only transaction.
-xa prepare '1';
+UUID	UBA
+#	#
 xa commit '1';
 drop table t1;

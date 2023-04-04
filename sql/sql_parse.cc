@@ -201,7 +201,7 @@
 #endif
 #include "sql/inventory/inventory_hint.h"
 
-#include "sql/xa_ext.h"
+#include "sql/xa/xa_trx.h"
 
 namespace dd {
 class Spatial_reference_system;

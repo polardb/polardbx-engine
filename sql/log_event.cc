@@ -170,7 +170,7 @@ Error_log_throttle slave_ignored_err_throttle(
 #include "log_event_ext.h"
 #include "rpl_rli_ext.h"
 
-#include "storage/innobase/include/lizard0xa0iface.h"
+#include "sql/xa/xa_trx.h"
 
 struct mysql_mutex_t;
 
@@ -6477,7 +6477,14 @@ bool XA_prepare_log_event::do_commit(THD *thd_arg) {
 
   xid.set(my_xid.formatID, my_xid.data, my_xid.gtrid_length,
           my_xid.data + my_xid.gtrid_length, my_xid.bqual_length);
+
   if (!one_phase) {
+    /** Before applying XA end on the slave, trx slot should be also allocated
+    if not. */
+    if ((error = lizard::xa::transaction_slot_assign(thd, &xid, nullptr))) {
+      return error;
+    }
+
     /*
       This is XA-prepare branch.
     */
@@ -6485,20 +6492,6 @@ bool XA_prepare_log_event::do_commit(THD *thd_arg) {
     thd_arg->lex->m_sql_cmd = new (thd_arg->mem_root) Sql_cmd_xa_prepare(&xid);
     error = thd_arg->lex->m_sql_cmd->execute(thd_arg);
   } else {
-    /**
-      The following code is designed to handle a special scenario:
-
-      In the xpaxos mode, the follower node commits without trx_prepare of the
-      commit-one-phase.  This is because the follower node does not generate a
-      binlog for the event application, so there is only one participant, the
-      InnoDB engine. However, writing the XID to the transaction slot is done
-      during the prepare phase. As a result, the corresponding transaction
-      status cannot be queried on the follower node.
-
-      To solve the problem, before committing, the XID will be written to the
-      transaction slot.
-    */
-    lizard::xa::trx_slot_write_xid_for_one_phase_xa(thd_arg);
     thd_arg->lex->sql_command = SQLCOM_XA_COMMIT;
     thd_arg->lex->m_sql_cmd =
         new (thd_arg->mem_root) Sql_cmd_xa_commit(&xid, XA_ONE_PHASE);

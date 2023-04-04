@@ -53,9 +53,11 @@ call dbms_xa.prepare_with_trx_slot('1', '', 1);
 xa start '1';
 select * from t1;
 xa end '1';
---error ER_XA_PROC_BLANK_XA_TRX
+# Revistion: Completely empty transactions are now also supported.
+# --error ER_XA_PROC_BLANK_XA_TRX
+--replace_column 1 # 2 #
 call dbms_xa.prepare_with_trx_slot('1', '', 1);
-xa prepare '1';
+# xa prepare '1';
 xa commit '1';
 
 drop table t1;

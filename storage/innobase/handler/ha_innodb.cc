@@ -19615,12 +19615,12 @@ static int innobase_xa_prepare(handlerton *hton, /*!< in: InnoDB handlerton */
   if (prepare_trx ||
       (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))) {
 
-    ut_a(xa_compare_xid_between_thd_and_trx(thd, trx));
-
     /* We were instructed to prepare the whole transaction, or
     this is an SQL statement end and autocommit is on */
 
     ut_ad(trx_is_registered_for_2pc(trx));
+
+    ut_a(xa_compare_xid_between_thd_and_trx(thd, trx));
 
     dberr_t err = trx_prepare_for_mysql(trx);
 
@@ -22821,14 +22821,24 @@ static MYSQL_SYSVAR_BOOL(btree_sampling, btr_sample_enabled,
                          PLUGIN_VAR_OPCMDARG, "enable btree sampling", NULL,
                          NULL, TRUE);
 
+<<<<<<< HEAD
 static MYSQL_SYSVAR_BOOL(cn_no_heartbeat_freeze,
+=======
+static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
+                          lizard::srv_txn_cached_list_keep_size,
+                          PLUGIN_VAR_OPCMDARG,
+                          "max list size of txn_cached_list", NULL, NULL, 0, 0,
+                          512, 0);
+
+static MYSQL_SYSVAR_BOOL(freeze_db_if_no_cn_heartbeat_enable,
+>>>>>>> a3d715a3004 ([Postfix] TXN compatible with the old format)
                          lizard::xa::srv_no_heartbeat_freeze,
                          PLUGIN_VAR_OPCMDARG,
                          "If set to true, will freeze purge sys and updating "
                          "if there is no heartbeat.",
                          NULL, NULL, FALSE);
 
-static MYSQL_SYSVAR_ULONG(cn_no_heartbeat_freeze_timeout,
+static MYSQL_SYSVAR_ULONG(freeze_db_if_no_cn_heartbeat_timeout_sec,
                           lizard::xa::srv_no_heartbeat_freeze_timeout,
                           PLUGIN_VAR_OPCMDARG,
                           "If the heartbeat has not been received after the "
@@ -23078,8 +23088,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(sample_advise_pages),
     MYSQL_SYSVAR(btree_sampling),
-    MYSQL_SYSVAR(cn_no_heartbeat_freeze),
-    MYSQL_SYSVAR(cn_no_heartbeat_freeze_timeout),
+    MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_enable),
+    MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_timeout_sec),
     NULL};
 
 mysql_declare_plugin(innobase){

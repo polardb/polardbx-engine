@@ -162,7 +162,7 @@
 #endif
 # include "sql/rpl_rli_ext.h"
 
-#include "sql/xa_ext.h"
+#include "sql/xa/xa_trx.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;

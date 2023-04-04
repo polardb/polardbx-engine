@@ -1214,13 +1214,6 @@ bool Sql_cmd_xa_end::trans_xa_end(THD *thd) {
   else if (!xid_state->has_same_xid(m_xid))
     my_error(ER_XAER_NOTA, MYF(0));
   else if (!xid_state->xa_trans_rolled_back()) {
-    /** Before applying XA end on the slave, trx slot should be also allocated
-    if not. */
-    if (lizard::xa::replay_trx_slot_alloc_on_slave(thd)) {
-      DBUG_ASSERT(thd->is_error());
-      goto exit_func;
-    }
-
     xid_state->set_state(XID_STATE::XA_IDLE);
     MYSQL_SET_TRANSACTION_XA_STATE(thd->m_transaction_psi,
                                    (int)xid_state->get_state());
@@ -1229,7 +1222,6 @@ bool Sql_cmd_xa_end::trans_xa_end(THD *thd) {
                                    (int)xid_state->get_state());
   }
 
-exit_func:
   return thd->is_error() || !xid_state->has_state(XID_STATE::XA_IDLE);
 }
 
@@ -1846,4 +1838,4 @@ bool reattach_native_trx(THD *thd, plugin_ref plugin, void *) {
   return false;
 }
 
-#include "xa_ext.cc"
+#include "xa/xa_trx.cc"

@@ -423,6 +423,7 @@ struct trx_undo_t {
   /*!< undo log objects in the rollback
   segment are chained into lists */
 
+  /** Only in TXN undo. */
   /*-----------------------------*/
   commit_scn_t cmmt;
   /*!< SCN after commit */
@@ -430,6 +431,8 @@ struct trx_undo_t {
   /** prev_image is only valid for txn undo */
   commit_scn_t prev_image;
   /*!< SCN last commit */
+
+  uint8_t txn_ext_flag; /*!< TXN ext_flag, only useful on TXN. */
 };
 
 /** For saving GTID add update undo slot, if required.

@@ -20,25 +20,29 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#ifndef XA_TRX_INCUDED
+#define XA_TRX_INCUDED
+
 #include "storage/innobase/include/lizard0xa0iface.h"
+
+class THD;
+struct LEX;
 
 namespace lizard {
 namespace xa {
-bool replay_trx_slot_alloc_on_slave(THD *thd) {
-  if (thd->slave_thread) {
-    if (lizard::xa::start_and_register_rw_trx_for_xa(thd) ||
-        lizard::xa::trx_slot_assign_for_xa(thd, nullptr)) {
-      /** TODO: fix it <01-03-23, zanye.zjy> */
-      my_error(ER_XA_PROC_REPLAY_TRX_SLOT_ALLOC_ERROR, MYF(0));
-      return true;
-    } else if ((thd->variables.option_bits & OPTION_BIN_LOG) &&
-               lizard::xa::binlog_start_trans(thd)) {
-      my_error(ER_XA_PROC_REPLAY_REGISTER_BINLOG_ERROR, MYF(0));
-      return true;
-    }
-  }
-
-  return false;
+/**
+  1. start trx in innodb
+  2. register innodb as a participants
+  3. alloc transaction slot in innodb
+  4. register binlog as another participants if need
+*/
+bool transaction_slot_assign(THD *thd, const XID *xid, TSA *tsa);
 }
-}  // namespace xa
 }  // namespace lizard
+
+namespace im {
+bool cn_heartbeat_timeout_freeze_updating(LEX *const lex);
+bool cn_heartbeat_timeout_freeze_applying_event(THD *);
+}
+
+#endif // XA_TRX_INCUDED
