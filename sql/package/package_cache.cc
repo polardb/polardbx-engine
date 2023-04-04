@@ -35,7 +35,7 @@
 #include "sql/package/proc_dummy.h"
 #endif
 
-#include "sql/xa/xa_proc.h"
+#include "sql/xa/lizard_xa_proc.h"
 
 namespace im {
 

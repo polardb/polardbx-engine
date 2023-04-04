@@ -4,13 +4,13 @@ set session debug = "+d, hb_timeout_do_not_freeze_operation";
 flush local logs;
 set global innodb_scn_history_task_enabled = on;
 set global innodb_scn_history_interval = 1;
-set global innodb_cn_no_heartbeat_freeze_timeout = 1;
+set global innodb_freeze_db_if_no_cn_heartbeat_timeout_sec = 1;
 show variables like "innodb_undo_retention";
 Variable_name	Value
 innodb_undo_retention	0
 set global innodb_scn_history_task_enabled = on;
 set global innodb_scn_history_interval = 1;
-set global innodb_cn_no_heartbeat_freeze_timeout = 1;
+set global innodb_freeze_db_if_no_cn_heartbeat_timeout_sec = 1;
 flush local logs;
 show variables like "innodb_undo_retention";
 Variable_name	Value
@@ -24,14 +24,14 @@ select * from t1;
 id
 2
 ERROR HY000: Snapshot too old
-set global innodb_cn_no_heartbeat_freeze = on;
+set global innodb_freeze_db_if_no_cn_heartbeat_enable = on;
 update t1 set id = id + 1;
 select * from t1;
 id
 3
 id
 2
-set global innodb_cn_no_heartbeat_freeze = off;
+set global innodb_freeze_db_if_no_cn_heartbeat_enable = off;
 ERROR HY000: Snapshot too old
 ###############################
 # case 2
@@ -39,14 +39,14 @@ ERROR HY000: Snapshot too old
 ###############################
 # case 3
 ###############################
-set global innodb_cn_no_heartbeat_freeze = on;
+set global innodb_freeze_db_if_no_cn_heartbeat_enable = on;
 update t1 set id = id + 1;
 select * from t1;
 id
 4
 id
 3
-set global innodb_cn_no_heartbeat_freeze_timeout = 3;
+set global innodb_freeze_db_if_no_cn_heartbeat_timeout_sec = 3;
 call dbms_xa.send_heartbeat();
 ERROR HY000: Snapshot too old
 update t1 set id = id + 1;
@@ -58,7 +58,7 @@ id
 ###############################
 # case 4
 ###############################
-set global innodb_cn_no_heartbeat_freeze_timeout = 1;
+set global innodb_freeze_db_if_no_cn_heartbeat_timeout_sec = 1;
 call dbms_xa.send_heartbeat();
 # trigger purge to advance and set freeze.
 update t1 set id = id + 1;
@@ -72,25 +72,26 @@ update t1 set id = id + 1;
 ###############################
 # case 5
 ###############################
-set global innodb_cn_no_heartbeat_freeze = on;
-set global innodb_cn_no_heartbeat_freeze = 0;
+set global innodb_freeze_db_if_no_cn_heartbeat_enable = on;
+set global innodb_freeze_db_if_no_cn_heartbeat_enable = 0;
 # trigger slave's purge to advance and set freeze.
 update t1 set id = id + 1;
 insert into t1 values (1000);
 select count(*) from t1 where id = 1000;
 count(*)
 0
-set global innodb_cn_no_heartbeat_freeze_timeout = 1000;
+set global innodb_freeze_db_if_no_cn_heartbeat_timeout_sec = 1000;
 call dbms_xa.send_heartbeat();
 select * from t1;
 id
 8
+1000
 ###############################
 # cleanup
 ###############################
 set global innodb_scn_history_task_enabled = default;
 set global innodb_scn_history_interval = default;
-set global innodb_cn_no_heartbeat_freeze_timeout = default;
-set global innodb_cn_no_heartbeat_freeze = default;
+set global innodb_freeze_db_if_no_cn_heartbeat_timeout_sec = default;
+set global innodb_freeze_db_if_no_cn_heartbeat_enable = default;
 drop table t1;
 set session debug = "-d, hb_timeout_do_not_freeze_operation";

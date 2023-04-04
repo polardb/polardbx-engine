@@ -113,6 +113,19 @@ namespace xa {
 */
 uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len);
 
+/** Check validity of the XID status of the trx.
+@param[in]      trx   innodb transaction
+@return true if check successfully. */
+extern bool trx_slot_check_validity(const trx_t *trx);
+
+/** Get XID of an external xa from THD.
+@param[in]      THD   thd
+@return nullptr if no external xa. */
+extern const XID *trx_slot_get_xa_xid_from_thd(THD *thd);
+
+/*************************************************
+*                Heartbeat Freezer              *
+*************************************************/
 /** Freeze purge sys and update operations if no heartbeat is received for a
 long time */
 extern bool srv_no_heartbeat_freeze;

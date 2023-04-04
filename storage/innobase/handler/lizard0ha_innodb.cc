@@ -54,8 +54,8 @@ bool xa_compare_xid_between_thd_and_trx(const THD *thd, const trx_t *trx) {
   if (thd->get_transaction()->xid_state()->check_in_xa(false)) {
     ut_a(trx_is_started(trx));
     if (lizard::trx_is_txn_rseg_updated(trx)) {
-      ut_a(!trx->rsegs.m_txn.xid.is_null());
-      ut_a(trx->xid->eq(&trx->rsegs.m_txn.xid));
+      ut_a(!trx->rsegs.m_txn.xid_for_hash.is_null());
+      ut_a(trx->xid->eq(&trx->rsegs.m_txn.xid_for_hash));
       ut_ad(trx->xid->eq(&xid_in_thd));
     }
   }

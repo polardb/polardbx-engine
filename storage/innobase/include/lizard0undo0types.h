@@ -220,13 +220,13 @@ struct txn_index_t {
 /** The struct of transaction undo for UBA */
 struct txn_undo_ptr_t {
   // XID will be actively and explicitly initialized
-  txn_undo_ptr_t() : rseg(nullptr), txn_undo(nullptr), xid() {}
+  txn_undo_ptr_t() : rseg(nullptr), txn_undo(nullptr), xid_for_hash() {}
   /** Rollback segment in txn space */
   trx_rseg_t *rseg;
   /* transaction undo log segment */
   trx_undo_t *txn_undo;
-  /* XID that used to mapping. */
-  XID xid;
+  /** XID that is used to map rseg, and also will be persisted in TXN undo */
+  XID xid_for_hash;
 };
 
 /**
@@ -286,12 +286,14 @@ struct txn_undo_hdr_t {
   /** txn undo header state: TXN_UNDO_LOG_ACTIVE, TXN_UNDO_LOG_COMMITED,
   or TXN_UNDO_LOG_PURGED */
   ulint state;
-  /** flags of the TXN. For example: 0x01 means rollback. */
-  ulint flags;
   /** A flag determining how to explain the txn extension */
   ulint ext_flag;
-  /** Returns true if the transaction was eventually rolled back. */
+  /** flags of the TXN. For example: 0x01 means rollback. */
+  ulint tags_1;
+  /** Return true if the transaction was eventually rolled back. */
   bool is_rollback() const;
+  /** Return true if the txn has new_flags. */
+  bool have_tags_1() const;
 };
 
 struct txn_lookup_t {

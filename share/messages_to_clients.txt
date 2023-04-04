@@ -10037,14 +10037,11 @@ ER_XA_PROC_WRONG_XID
 ER_XA_PROC_BLANK_XA_TRX
   eng "This command is not allowed to be executed. Mightbe this XA transaction is a read-only transaction."
 
-ER_XA_PROC_START_BINLOG_WRONG
-  eng "Cannot register binlog handlerton. Maybe it's because it can't allocate more memory, or can't generate binlog event."
-
 ER_XA_PROC_REPLAY_TRX_SLOT_ALLOC_ERROR
   eng "Failed to replay allocating the transaction slot on the slave."
 
 ER_XA_PROC_REPLAY_REGISTER_BINLOG_ERROR
-  eng "Failed to register binlog when allocating transaction slot on the slave."
+  eng "Failed to register binlog when allocating transaction slot."
 
 ER_XA_PROC_HEARTBEAT_FREEZE
   eng "Cannot do the operation because no heartbeat has been received for a long time. If you want to do the operation, please call dbms_xa.send_heartbeat()."

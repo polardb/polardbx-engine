@@ -701,5 +701,3 @@ bool is_xa_prepare(THD *thd) {
 bool is_xa_rollback(THD *thd) {
   return thd->lex->sql_command == SQLCOM_XA_ROLLBACK;
 }
-
-#include "xa_ext.cc"

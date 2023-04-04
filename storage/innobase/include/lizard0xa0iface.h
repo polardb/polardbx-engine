@@ -46,27 +46,13 @@ typedef uint64_t TSA;
 enum Transaction_state {
   TRANS_STATE_COMMITTED = 0,
   TRANS_STATE_ROLLBACK = 1,
+  TRANS_STATE_UNKNOWN = 2,
 };
 
 struct Transaction_info {
   Transaction_state state;
   uint64_t gcn;
 };
-
-/**
-  Find transactions in the finalized state by GTRID.
-
-  @params[in] in_gtrid          gtird
-  @params[in] in_len            length
-  @param[out] Transaction_info  Corresponding transaction info
-
-  @retval     true if the corresponding transaction is found, false otherwise.
-*/
-bool get_transaction_info_by_gtrid(const char *gtrid, unsigned len,
-                                   Transaction_info *info);
-
-/** trans state to message string. */
-const char *transaction_state_to_str(const enum Transaction_state state);
 
 /**
   1. start trx in innodb
@@ -77,17 +63,26 @@ const char *transaction_state_to_str(const enum Transaction_state state);
 bool start_and_register_rw_trx_for_xa(THD *thd);
 
 /**
+  Find transactions in the finalized state by GTRID.
+
+  @params[in] in_gtrid          gtird
+  @params[in] in_len            length
+  @param[out] Transaction_info  Corresponding transaction info
+
+  @retval     true if the corresponding transaction is found, false otherwise.
+*/
+bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
+                                    Transaction_info *info);
+
+/** trans state to message string. */
+const char *trx_slot_trx_state_to_str(const enum Transaction_state state);
+
+/**
   Alloc transaction slot in innodb
 
   return true if error
 */
 bool trx_slot_assign_for_xa(THD *thd, TSA *tsa);
-
-/**
-  Write XID info to the transaction slot.
-  Only used for commit-one-phase on the slave.
-*/
-void trx_slot_write_xid_for_one_phase_xa(THD *thd);
 
 /**
   1. Update heartbeat timestamp to stop freezing purge system.

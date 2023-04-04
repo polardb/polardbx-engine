@@ -635,6 +635,8 @@ SET(SQL_SHARED_SOURCES
   xa/sql_xa_start.cc
   xa/transaction_cache.cc
   xa/xid_extract.cc
+  xa/lizard_xa_trx.cc
+  xa/lizard_xa_proc.cc
   common/component.cc
   package/package.cc
   package/package_cache.cc
@@ -648,7 +650,6 @@ SET(SQL_SHARED_SOURCES
   ppi/ppi_noop.cc
   ppi/ppi_table_iostat.cc
   xa_handler.cc
-  xa/xa_proc.cc
   ha_sequence.cc
   item_sequence_func.cc
   sequence_common.cc

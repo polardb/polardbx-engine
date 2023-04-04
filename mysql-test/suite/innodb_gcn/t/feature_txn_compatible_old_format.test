@@ -1,0 +1,20 @@
+set global innodb_undo_retention = 900;
+
+create table t1 (id int);
+insert into t1 values (1);
+
+set session debug = "+d, sim_old_txn_undo_hdr";
+xa start '1';
+update t1 set id = id + 1;
+xa end '1';
+xa prepare '1';
+xa commit '1';
+
+set session debug = "-d, sim_old_txn_undo_hdr";
+--replace_column 1 #
+call dbms_xa.find_by_gtrid('1');
+
+--echo # cleanup
+set global innodb_undo_retention = default;
+drop table t1;
+

@@ -40,6 +40,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql_error.h"
 #include "sql_class.h"
 
+#include "ha_innodb.h"
+
 #include "lizard0scn.h"
 #include "lizard0gcs.h"
 #include "lizard0txn.h"
@@ -49,6 +51,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0cleanout.h"
 #include "lizard0mysql.h"
 #include "lizard0row.h"
+#include "lizard0xa.h"
 
 void trx_undo_read_xid(
     trx_ulogf_t *log_hdr, /*!< in: undo log header */
@@ -121,10 +124,27 @@ void trx_undo_write_xid(
 mysql_pfs_key_t lizard_undo_retention_mutex_key;
 #endif
 
+/*-----------------------------------------------------------------------------*/
 /* txn_undo_hdr_t related */
 /*-----------------------------------------------------------------------------*/
+bool txn_undo_hdr_t::have_tags_1() const {
+  return ext_flag & TXN_EXT_FLAG_HAVE_TAGS_1;
+}
+
 bool txn_undo_hdr_t::is_rollback() const {
-  return flags & TXN_UNDO_LOG_FLAGS_ROLLBACK;
+  /** The TXN must be the new format. */
+  ut_a(have_tags_1());
+
+  switch (state) {
+    case TXN_UNDO_LOG_COMMITED:
+    case TXN_UNDO_LOG_PURGED:
+      return tags_1 & TXN_NEW_TAGS_1_ROLLBACK;
+    case TXN_UNDO_LOG_ACTIVE:
+      ut_a(!(tags_1 & TXN_NEW_TAGS_1_ROLLBACK));
+      return false;
+    default:
+      ut_error;
+  }
 }
 
 namespace lizard {
@@ -538,11 +558,20 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
   /* Write initial state */
   txn_undo_set_state_at_init(log_hdr, mtr);
 
-  /* Write the txn undo extension flag */
-  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_FLAGS, 0, MLOG_2BYTES, mtr);
+  if (DBUG_EVALUATE_IF("sim_old_txn_undo_hdr", true, false)) {
+    /* TXN old format: Write the txn undo extension flag */
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, 0, MLOG_1BYTE, mtr);
+  } else {
+    ut_ad(undo->txn_ext_flag == 0);
+    undo->txn_ext_flag |= TXN_EXT_FLAG_V1;
 
-  /* Write the txn undo extension flag */
-  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, 0, MLOG_1BYTE, mtr);
+    /* Write the txn undo extension flag */
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, undo->txn_ext_flag,
+                     MLOG_1BYTE, mtr);
+
+    /* Write the txn undo tags_1 */
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, 0, MLOG_2BYTES, mtr);
+  }
 
   ut_a(undo->flag == 0);
 
@@ -666,16 +695,19 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   txn_undo_hdr->state = mtr_read_ulint(undo_header + TXN_UNDO_LOG_STATE,
                                        MLOG_2BYTES, mtr);
 
-  txn_undo_hdr->flags =
-      mtr_read_ulint(undo_header + TXN_UNDO_LOG_FLAGS, MLOG_2BYTES, mtr);
-  if (txn_undo_hdr->state == TXN_UNDO_LOG_ACTIVE) {
-    ut_a(!txn_undo_hdr->is_rollback());
-  }
-
   txn_undo_hdr->ext_flag =
       mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
 
-  ut_ad(txn_undo_hdr->magic_n == TXN_MAGIC_N && txn_undo_hdr->ext_flag == 0);
+  if (txn_undo_hdr->have_tags_1()) {
+    txn_undo_hdr->tags_1 =
+        mtr_read_ulint(undo_header + TXN_UNDO_LOG_TAGS_1, MLOG_2BYTES, mtr);
+
+    if (txn_undo_hdr->state == TXN_UNDO_LOG_ACTIVE) {
+      ut_ad(!txn_undo_hdr->is_rollback());
+    }
+  }
+
+  ut_ad(txn_undo_hdr->magic_n == TXN_MAGIC_N);
 }
 
 /* Lizard transaction rollback segment operation */
@@ -783,15 +815,14 @@ trx_rseg_t *get_txn_rseg_by_gtrid(const char *gtrid, unsigned len) {
 }
 
 /**
-  Check if the txn rseg is the expected one.
+  If during an external XA, check whether the mapping relationship between gtrid
+  and rollback segment is as expected.
 
-  @params[in]   xid             The XID of the transaction.
-  @params[in]   expected_rseg   Expected rollback segment
+  @param[in]        trx         current transaction
 
-  @retval       true if the the rseg mapped by the GTRID is matched with the
-                expect_rseg.
+  @return           true        if success
 */
-static bool is_txn_rseg_exepected(const XID *xid,
+bool txn_check_gtrid_rseg_mapping(const XID *xid,
                                   const trx_rseg_t *expect_rseg) {
   txn_space_rseg_slot_t txn_slot;
   bool match;
@@ -820,26 +851,26 @@ static bool is_txn_rseg_exepected(const XID *xid,
   return match;
 }
 
-/**
-  If during an external XA, check whether the mapping relationship between gtrid
-  and rollback segment is as expected.
+dberr_t txn_undo_xid_add_txn_undo(THD *thd, trx_t *trx) {
+  dberr_t err;
 
-  @param[in]        trx         current transaction
+  err = DB_SUCCESS;
 
-  @return           true        if success
-*/
-bool txn_check_gtrid_rseg_mapping(const trx_t *trx) {
-  const txn_undo_ptr_t *undo_ptr = &trx->rsegs.m_txn;
+  ut_ad(thd);
 
-  ut_ad(trx_is_txn_rseg_updated(trx));
-  ut_ad(mutex_own(&undo_ptr->rseg->mutex));
+  ut_ad(trx_is_registered_for_2pc(trx) && trx_is_started(trx) && trx->id != 0 &&
+        !trx->read_only && !trx->internal);
 
-  if (!undo_ptr->xid.is_null()) {
-    ut_a(undo_ptr->xid.eq(trx->xid));
-    ut_a(is_txn_rseg_exepected(&undo_ptr->xid, undo_ptr->rseg));
+  ut_ad(trx_is_txn_rseg_assigned(trx));
+
+  auto undo_ptr = &trx->rsegs.m_txn;
+  if (!undo_ptr->txn_undo) {
+    mutex_enter(&trx->undo_mutex);
+    err = trx_always_assign_txn_undo(trx);
+    mutex_exit(&trx->undo_mutex);
   }
 
-  return true;
+  return err;
 }
 
 struct Find_transaction_info_by_gtrid {
@@ -851,6 +882,12 @@ struct Find_transaction_info_by_gtrid {
     XID read_xid;
 
     ut_ad(!found);
+
+    /* Check if undo log has XID. */
+    auto flag = mach_read_ulint(log_hdr + TRX_UNDO_FLAGS, MLOG_1BYTE);
+    if (!(flag & TRX_UNDO_FLAG_XID)) {
+      return false;
+    }
 
     trx_undo_read_xid(const_cast<trx_ulogf_t *>(log_hdr), &read_xid);
 
@@ -955,16 +992,21 @@ bool txn_rseg_find_trx_info_by_gtrid(trx_rseg_t *rseg, const char *gtrid,
   @param[in]      trx
 */
 void trx_assign_txn_rseg(trx_t *trx) {
-  ut_ad(trx->rsegs.m_txn.rseg == nullptr);
-
-  XID &xid = trx->rsegs.m_txn.xid;
+  const XID *xid_in_thd;
+  XID &xid = trx->rsegs.m_txn.xid_for_hash;
   ut_a(xid.is_null());
 
-  if (!trx->internal && trx->mysql_thd &&
-      trx->mysql_thd->get_transaction()->xid_state()->check_in_xa(false)) {
-    thd_get_xid(trx->mysql_thd, (MYSQL_XID *)(&xid));
+  ut_ad(trx->rsegs.m_txn.rseg == nullptr);
+
+  /** 1. Get XID if it is in an external XA. */
+  xid_in_thd = xa::trx_slot_get_xa_xid_from_thd(trx->mysql_thd);
+  if (xid_in_thd) {
+    xid = *xid_in_thd;
+  } else {
+    ut_ad(xid.is_null());
   }
 
+  /** 2. Assign rollback segment. By XID if need. */
   if (srv_read_only_mode) {
     trx->rsegs.m_txn.rseg = nullptr;
   } else if (xid.is_null()) {
@@ -1598,7 +1640,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
   rseg->trx_ref_count++;
   trx->rsegs.m_txn.rseg = rseg;
   trx->rsegs.m_txn.txn_undo = undo;
-  trx->rsegs.m_txn.xid = undo->xid;
+  trx->rsegs.m_txn.xid_for_hash.null();
 
   undo_addr.state = false;
   undo_addr.space_id = undo->space;
@@ -2180,11 +2222,11 @@ static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
   /** NOTES: If the extent flag is used, there might be some records's flag
   that is equal to 0, and there also might be other records's flag that's not
   equal to 0 at the same time. */
-  if (txn_undo_hdr.ext_flag != 0) {
-    /** The header might be raw */
-    lizard_stats.txn_undo_lost_ext_flag_wrong.inc();
-    goto undo_corrupted;
-  }
+  // if (txn_undo_hdr.ext_flag != 0) {
+  //   /** The header might be raw */
+  //   lizard_stats.txn_undo_lost_ext_flag_wrong.inc();
+  //   goto undo_corrupted;
+  // }
 
   /** ----------------------------------------------------------*/
   /** Phase 9: check the trx_id in txn undo header */
@@ -2701,6 +2743,21 @@ void txn_undo_write_xid(const XID *xid, trx_undo_t *undo) {
   trx_undo_write_xid(undo_header, xid, &mtr);
 
   mtr_commit(&mtr);
+}
+
+void txn_undo_set_state_at_finish(trx_t *trx, trx_ulogf_t *log_hdr,
+                                  bool is_rollback, mtr_t *mtr) {
+  auto txn_undo = trx->rsegs.m_txn.txn_undo;
+
+  ut_ad(trx_is_txn_rseg_assigned(trx) && trx_is_txn_rseg_updated(trx));
+
+  /** 1. Set COMMITED state */
+  txn_undo_set_state(log_hdr, TXN_UNDO_LOG_COMMITED, mtr);
+
+  /** 2. Set rollback tag if need */
+  if (is_rollback && (txn_undo->txn_ext_flag & TXN_EXT_FLAG_HAVE_TAGS_1)) {
+    lizard::txn_undo_set_tags_1(log_hdr, TXN_NEW_TAGS_1_ROLLBACK, mtr);
+  }
 }
 
 }  // namespace lizard

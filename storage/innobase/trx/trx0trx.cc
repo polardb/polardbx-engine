@@ -201,7 +201,7 @@ static void trx_init(trx_t *trx) {
 
   trx->rsegs.m_txn.rseg = nullptr;
 
-  trx->rsegs.m_txn.xid.reset();
+  trx->rsegs.m_txn.xid_for_hash.reset();
 
   trx->read_only = false;
 
@@ -1643,13 +1643,9 @@ static bool trx_write_serialisation_history(
       undo_hdr_page =
           trx_undo_set_state_at_finish(trx->rsegs.m_txn.txn_undo, mtr);
       /** Update state */
-      lizard::txn_undo_set_state_at_finish(undo_hdr_page + txn_undo->hdr_offset,
-                                           mtr);
+      lizard::txn_undo_set_state_at_finish(
+          trx, undo_hdr_page + txn_undo->hdr_offset, trx->is_rollback, mtr);
 
-      if (trx->is_rollback) {
-        lizard::txn_undo_set_flags(undo_hdr_page + txn_undo->hdr_offset,
-                                   TXN_UNDO_LOG_FLAGS_ROLLBACK, mtr);
-      }
       /** Generate SCN */
       cmmt = lizard::trx_commit_scn(trx, nullptr, txn_undo, undo_hdr_page,
                                     txn_undo->hdr_offset, &serialised, mtr);

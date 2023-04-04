@@ -20258,12 +20258,12 @@ static int innobase_xa_prepare(handlerton *hton, /*!< in: InnoDB handlerton */
   if (prepare_trx ||
       (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))) {
 
-    ut_a(xa_compare_xid_between_thd_and_trx(thd, trx));
-
     /* We were instructed to prepare the whole transaction, or
     this is an SQL statement end and autocommit is on */
 
     ut_ad(trx_is_registered_for_2pc(trx));
+
+    ut_a(xa_compare_xid_between_thd_and_trx(thd, trx));
 
     dberr_t err = trx_prepare_for_mysql(trx);
 
@@ -23599,13 +23599,13 @@ static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
                           512, 0);
 
 static MYSQL_SYSVAR_BOOL(
-    cn_no_heartbeat_freeze, lizard::xa::srv_no_heartbeat_freeze,
+    freeze_db_if_no_cn_heartbeat_enable, lizard::xa::srv_no_heartbeat_freeze,
     PLUGIN_VAR_OPCMDARG,
     "If set to true, will freeze purge sys and updating "
     "if there is no heartbeat.",
     nullptr, lizard::xa::freeze_db_if_no_cn_heartbeat_enable_on_update, false);
 
-static MYSQL_SYSVAR_ULONG(cn_no_heartbeat_freeze_timeout,
+static MYSQL_SYSVAR_ULONG(freeze_db_if_no_cn_heartbeat_timeout_sec,
                           lizard::xa::srv_no_heartbeat_freeze_timeout,
                           PLUGIN_VAR_OPCMDARG,
                           "If the heartbeat has not been received after the "
@@ -23862,8 +23862,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(txn_cached_list_keep_size),
-    MYSQL_SYSVAR(cn_no_heartbeat_freeze),
-    MYSQL_SYSVAR(cn_no_heartbeat_freeze_timeout),
+    MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_enable),
+    MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_timeout_sec),
     nullptr};
 
 mysql_declare_plugin(innobase){

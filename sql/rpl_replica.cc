@@ -165,7 +165,7 @@
 #endif
 #include "scope_guard.h"
 
-#include "sql/xa_ext.h"
+#include "sql/xa/lizard_xa_trx.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;

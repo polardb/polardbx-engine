@@ -184,7 +184,7 @@
 #endif /* WITH_LOCK_ORDER */
 
 #include "ppi/ppi_statement.h"
-#include "sql/xa_ext.h"
+#include "sql/xa/lizard_xa_trx.h"
 
 namespace resourcegroups {
 class Resource_group;

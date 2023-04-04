@@ -104,12 +104,12 @@ struct SYS_VAR;
 #define TXN_UNDO_PREV_GCN (TXN_UNDO_PREV_UTC + 8)
 /* Undo log state */
 #define TXN_UNDO_LOG_STATE (TXN_UNDO_PREV_GCN + 8)
-/* Transaction finished state: commit, rollback */
-#define TXN_UNDO_LOG_FLAGS (TXN_UNDO_LOG_STATE + 2)
 /* Flag how to use reserved space */
-#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_FLAGS + 2)
+#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_STATE + 2)
+/* New flags. */
+#define TXN_UNDO_LOG_TAGS_1 (TXN_UNDO_LOG_EXT_FLAG + 1)
 /* Unused space */
-#define TXN_UNDO_LOG_EXT_RESERVED (TXN_UNDO_LOG_EXT_FLAG + 1)
+#define TXN_UNDO_LOG_EXT_RESERVED (TXN_UNDO_LOG_TAGS_1 + 2)
 /* Unused space size */
 #define TXN_UNDO_LOG_EXT_RESERVED_LEN 32
 /* txn undo log header size */
@@ -130,8 +130,20 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
 #define TXN_UNDO_LOG_COMMITED 2
 #define TXN_UNDO_LOG_PURGED   3
 
-/* Finish state of the transaction. */
-#define TXN_UNDO_LOG_FLAGS_ROLLBACK 0x01
+/*****************************************
+*        TXN_UNDO_LOG_EXT_FLAG           *
+*****************************************/
+/** bit_0: TXN have TXN_UNDO_LOG_TAGS_1. */
+#define TXN_EXT_FLAG_HAVE_TAGS_1 0x01
+/** Initial value of TXN_UNDO_LOG_EXT_FLAG. */
+#define TXN_EXT_FLAG_V1 TXN_EXT_FLAG_HAVE_TAGS_1
+
+/******************************************
+*           TXN_UNDO_LOG_TAGS_1       *
+******************************************/
+/** bit_0: Finish state of the transaction (true: ROLLBACK,
+false: other state). */
+#define TXN_NEW_TAGS_1_ROLLBACK 0x01
 
 namespace lizard {
 
@@ -470,7 +482,14 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx);
 
   @return           true        if success
 */
-bool txn_check_gtrid_rseg_mapping(const trx_t *trx);
+bool txn_check_gtrid_rseg_mapping(const XID *xid,
+                                  const trx_rseg_t *expect_rseg);
+
+/** For saving XID add txn undo slot, if required.
+@param[in]  trx   transaction
+@return innodb error code. */
+dberr_t txn_undo_xid_add_txn_undo(THD *thd, trx_t *trx);
+
 /*-----------------------------------------------------------------------------*/
 /**
   Init the txn description as NULL initial value.
@@ -685,17 +704,19 @@ bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
 /** Add the rseg into the purge queue heap */
 void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem);
 
-/** Set TXN_UNDO_LOG_FLAGS on txn undo log header.
+/** Set TXN_UNDO_LOG_TAGS_1 on txn undo log header.
 @param[in, out] log_hdr txn undo log header
 @param[in]      flags   flags
 @param[in, out] mtr     mini transaction */
-inline void txn_undo_set_flags(trx_ulogf_t *log_hdr, ulint flags, mtr_t *mtr) {
-  ulint new_flags;
-  ulint old_flags;
-  old_flags = mtr_read_ulint(log_hdr + TXN_UNDO_LOG_FLAGS, MLOG_2BYTES, mtr);
-  new_flags = old_flags | flags;
+inline void txn_undo_set_tags_1(trx_ulogf_t *log_hdr, ulint tags_1,
+                                mtr_t *mtr) {
+  ulint new_tags_1;
+  ulint old_tags_1;
+  /** TODO: Store in memory object, so no need to read. <11-04-23, zanye.zjy> */
+  old_tags_1 = mtr_read_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, MLOG_2BYTES, mtr);
+  new_tags_1 = old_tags_1 | tags_1;
 
-  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_FLAGS, new_flags, MLOG_2BYTES, mtr);
+  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, new_tags_1, MLOG_2BYTES, mtr);
 }
 
 /** Set txn undo log state.
@@ -761,9 +782,8 @@ inline std::pair<commit_scn_t, bool> txn_undo_set_state_at_purge(
 /** Set txn undo log state when commiting.
 @param[in,out]  log_hdr undo log header
 @param[in,out]  mtr     mini transaction */
-inline void txn_undo_set_state_at_finish(trx_ulogf_t *log_hdr, mtr_t *mtr) {
-  txn_undo_set_state(log_hdr, TXN_UNDO_LOG_COMMITED, mtr);
-}
+extern void txn_undo_set_state_at_finish(trx_t *trx, trx_ulogf_t *log_hdr,
+                                         bool is_rollback, mtr_t *mtr);
 
 /** Set txn undo log state when initializing.
 @param[in,out]  log_hdr undo log header
@@ -1020,7 +1040,7 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
   do {                                                                         \
     txn_undo_hdr_t txn_undo_hdr;                                               \
     lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_hdr);    \
-    ut_a(txn_undo_hdr.magic_n == TXN_MAGIC_N && txn_undo_hdr.ext_flag == 0);   \
+    ut_a(txn_undo_hdr.magic_n == TXN_MAGIC_N);                                 \
   } while (0)
 
 #define lizard_undo_addr_validation(undo_addr, index)                          \

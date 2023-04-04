@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2018, Alibaba and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Alibaba and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -19,8 +19,16 @@
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
-#ifndef XA_EXT_INCUDED
-#define XA_EXT_INCUDED
+
+#ifndef XA_TRX_INCUDED
+#define XA_TRX_INCUDED
+
+#include "storage/innobase/include/lizard0xa0iface.h"
+
+#include "sql/binlog_ext.h"
+
+class THD;
+struct LEX;
 
 namespace lizard {
 namespace xa {
@@ -30,15 +38,13 @@ namespace xa {
   3. alloc transaction slot in innodb
   4. register binlog as another participants if need
 */
-bool replay_trx_slot_alloc_on_slave(THD *thd);
+bool transaction_slot_assign(THD *thd, const XID *xid, TSA *tsa);
 }
 }  // namespace lizard
 
-struct LEX;
-class THD;
 namespace im {
 bool cn_heartbeat_timeout_freeze_updating(LEX *const lex);
 bool cn_heartbeat_timeout_freeze_applying_event(THD *);
 }
 
-#endif // XA_EXT_INCUDED
+#endif // XA_TRX_INCUDED

@@ -33,7 +33,6 @@
 #include "sql/rpl_info_factory.h"
 #include "sql/transaction.h"
 #include "sql/tztime.h"
-#include "sql/xa_ext.h"
 
 namespace lizard {
 namespace xa {

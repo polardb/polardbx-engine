@@ -23,12 +23,13 @@
 #include "storage/innobase/include/lizard0xa0iface.h"
 #include "storage/innobase/include/lizard0ut.h"
 
-#include "sql/mysqld.h"
+#include "sql/mysqld.h"     // server_uuid_ptr...
 #include "sql/protocol.h"
 #include "sql/sql_parse.h"  // sql_command_flags...
 #include "sql/xa/sql_xa_prepare.h"
 
-#include "sql/xa/xa_proc.h" // server_uuid_ptr...
+#include "sql/xa/lizard_xa_proc.h"
+#include "sql/xa/lizard_xa_trx.h"
 #include "sql/binlog_ext.h"
 
 namespace im {
@@ -148,13 +149,14 @@ void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
 
   if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
 
-  found = lizard::xa::get_transaction_info_by_gtrid(gtrid, gtrid_length, &info);
+  found =
+      lizard::xa::trx_slot_get_trx_info_by_gtrid(gtrid, gtrid_length, &info);
 
   if (found) {
     protocol->start_row();
     protocol->store((ulonglong)info.gcn);
 
-    const char *state = lizard::xa::transaction_state_to_str(info.state);
+    const char *state = lizard::xa::trx_slot_trx_state_to_str(info.state);
     protocol->store_string(state, strlen(state), system_charset_info);
 
     if (protocol->end_row()) DBUG_VOID_RETURN;
@@ -173,25 +175,6 @@ Sql_cmd *Xa_proc_prepare_with_trx_slot::evoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
-
-class Xa_active_pretender {
- public:
-  Xa_active_pretender(THD *thd) {
-    m_xid_state = thd->get_transaction()->xid_state();
-
-    assert(m_xid_state->has_state(XID_STATE::XA_IDLE));
-
-    m_xid_state->set_state(XID_STATE::XA_ACTIVE);
-  }
-
-  ~Xa_active_pretender() {
-    assert(m_xid_state->has_state(XID_STATE::XA_ACTIVE));
-    m_xid_state->set_state(XID_STATE::XA_IDLE);
-  }
-
- private:
-  XID_STATE *m_xid_state;
-};
 
 bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
   DBUG_ENTER("Sql_cmd_xa_proc_prepare_with_trx_slot");
@@ -214,30 +197,12 @@ bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
     DBUG_RETURN(true);
   }
 
-  {
-    /**
-      Lizard: In the past, the binlog can only be registered in the XA ACTIVE
-      state. But now the registration is completed in the IDLE state.
-
-      So the pretender is introduced to pretend the XA is still in ACTIVE
-      status.
-    */
-    Xa_active_pretender pretender(thd);
-
-    /** 3. Try to assign a transaction slot. */
-    if (lizard::xa::trx_slot_assign_for_xa(thd, &m_tsa)) {
-      my_error(ER_XA_PROC_BLANK_XA_TRX, MYF(0));
-      DBUG_RETURN(true);
-    }
-
-    /** 4. Register binlog handlerton. */
-    if (lizard::xa::binlog_start_trans(thd)) {
-      my_error(ER_XA_PROC_START_BINLOG_WRONG, MYF(0));
-      DBUG_RETURN(true);
-    }
+  /** 3. Assign transaction slot. */
+  if (lizard::xa::transaction_slot_assign(thd, &xid, &m_tsa)) {
+    DBUG_RETURN(true);
   }
 
-  /** 5. Do xa prepare. */
+  /** 4. Do xa prepare. */
   Sql_cmd_xa_prepare *executor = new (thd->mem_root) Sql_cmd_xa_prepare(&xid);
   executor->set_delay_ok();
   if (executor->execute(thd)) {

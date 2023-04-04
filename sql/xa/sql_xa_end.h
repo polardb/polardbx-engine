@@ -26,8 +26,6 @@
 #include "sql/sql_cmd.h"  // Sql_cmd
 #include "sql/xa.h"       // xid_t
 
-#include "sql/xa_ext.h"
-
 /**
   @class Sql_cmd_xa_end
 

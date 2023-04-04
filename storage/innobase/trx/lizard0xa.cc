@@ -157,42 +157,7 @@ uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len) {
   return res;
 }
 
-const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK"};
-
-bool get_transaction_info_by_gtrid(const char *gtrid, unsigned len,
-                                   Transaction_info *info) {
-  trx_rseg_t *rseg;
-  txn_undo_hdr_t txn_hdr;
-  bool found;
-
-  rseg = get_txn_rseg_by_gtrid(gtrid, len);
-
-  ut_ad(rseg);
-
-  found = txn_rseg_find_trx_info_by_gtrid(rseg, gtrid, len, &txn_hdr);
-
-  if (found) {
-    switch (txn_hdr.state) {
-      case TXN_UNDO_LOG_COMMITED:
-      case TXN_UNDO_LOG_PURGED:
-        info->state = txn_hdr.is_rollback() ? TRANS_STATE_ROLLBACK
-                                            : TRANS_STATE_COMMITTED;
-        break;
-      case TXN_UNDO_LOG_ACTIVE:
-        /** Can't be active. */
-        /** fall through */
-      default:
-        ut_error;
-    }
-    info->gcn = txn_hdr.image.gcn;
-  }
-
-  return found;
-}
-
-const char *transaction_state_to_str(const enum Transaction_state state) {
-  return Transaction_state_str[state];
-}
+const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK", "UNKNOWN"};
 
 bool start_and_register_rw_trx_for_xa(THD *thd) {
   trx_t *trx = check_trx_exists(thd);
@@ -209,67 +174,128 @@ bool start_and_register_rw_trx_for_xa(THD *thd) {
   return false;
 }
 
-bool trx_slot_assign_for_xa(THD *thd, TSA *tsa) {
-  bool error = false;
+bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
+                                    Transaction_info *info) {
+  trx_rseg_t *rseg;
+  txn_undo_hdr_t txn_hdr;
+  bool found;
 
+  rseg = get_txn_rseg_by_gtrid(gtrid, len);
+
+  ut_ad(rseg);
+
+  found = txn_rseg_find_trx_info_by_gtrid(rseg, gtrid, len, &txn_hdr);
+
+  if (found) {
+    switch (txn_hdr.state) {
+      case TXN_UNDO_LOG_COMMITED:
+      case TXN_UNDO_LOG_PURGED:
+        if (!txn_hdr.have_tags_1()) {
+          info->state = TRANS_STATE_UNKNOWN;
+        } else {
+          info->state = txn_hdr.is_rollback() ? TRANS_STATE_ROLLBACK
+                                              : TRANS_STATE_COMMITTED;
+        }
+        break;
+      case TXN_UNDO_LOG_ACTIVE:
+        /** Can't be active. */
+        /** fall through */
+      default:
+        ut_error;
+    }
+    info->gcn = txn_hdr.image.gcn;
+  }
+
+  return found;
+}
+
+const char *trx_slot_trx_state_to_str(const enum Transaction_state state) {
+  return Transaction_state_str[state];
+}
+
+bool trx_slot_assign_for_xa(THD *thd, TSA *tsa) {
   trx_t *trx = check_trx_exists(thd);
 
   /** check_trx_exists will create trx if no trx. */
   ut_ad(trx);
 
-  mutex_enter(&trx->undo_mutex);
-
   /** The trx must have been started as rw mode. */
   if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) ||
-      trx->id == 0 || trx->read_only || !trx_is_txn_rseg_assigned(trx)) {
-    error = true;
-    goto exit_func;
+      trx->id == 0 || trx->read_only) {
+    return true;
   }
 
-  ut_ad(trx_is_txn_rseg_assigned(trx));
-
-  /** If the TXN has been assigned, then just return. */
-  if (trx_is_txn_rseg_updated(trx)) {
-    if (tsa) {
-      *tsa = static_cast<TSA>(trx->txn_desc.undo_ptr);
-    }
-    goto exit_func;
-  }
+  ut_ad(!trx->internal);
 
   /** Force to assign a TXN. */
-  if (lizard::trx_always_assign_txn_undo(trx) != DB_SUCCESS) {
-    error = true;
-    goto exit_func;
+  if (txn_undo_xid_add_txn_undo(thd, trx) != DB_SUCCESS) {
+    return true;
   }
+
   if (tsa) {
     *tsa = static_cast<TSA>(trx->txn_desc.undo_ptr);
   }
 
-exit_func:
-  mutex_exit(&trx->undo_mutex);
-
-  return error;
+  return false;
 }
 
-void trx_slot_write_xid_for_one_phase_xa(THD *thd) {
-  const XID *xid = thd->get_transaction()->xid_state()->get_xid();
-  trx_t *trx = check_trx_exists(thd);
+const XID *trx_slot_get_xa_xid_from_thd(THD *thd) {
+  const XID *xid;
 
-  ut_ad(trx_is_registered_for_2pc(trx));
+  if (!thd) {
+    return nullptr;
+  }
 
-  ut_ad(trx_is_started(trx));
+  if (thd == nullptr ||
+      !thd->get_transaction()->xid_state()->check_in_xa(false)) {
+    return nullptr;
+  }
 
-  ut_ad(trx->id != 0 && !trx->read_only);
+  xid = thd->get_transaction()->xid_state()->get_xid();
 
-  ut_ad(trx_is_txn_rseg_assigned(trx));
+  /** Must be a valid and external XID. */
+  ut_ad(!xid->is_null() && !xid->get_my_xid());
 
+  return xid;
+}
+
+bool trx_slot_check_validity(const trx_t *trx) {
+  THD *thd;
+  const txn_undo_ptr_t *undo_ptr;
+
+  thd = trx->mysql_thd;
+  undo_ptr = &trx->rsegs.m_txn;
+
+  ut_ad(mutex_own(&undo_ptr->rseg->mutex));
+
+  /** 1. Check Transaction_ctx::m_xid_state::m_xid and xid_for_hash. */
+  const XID *xid_in_thd = thd->get_transaction()->xid_state()->get_xid();
+  if (thd->get_transaction()->xid_state()->check_in_xa(false)) {
+    ut_a(xid_in_thd->eq(&undo_ptr->xid_for_hash));
+  } else {
+    ut_a(undo_ptr->xid_for_hash.is_null());
+    return true;
+  }
+
+  /** 2. xid_for_hash must be a valid and external XID. */
+  ut_ad(!undo_ptr->xid_for_hash.is_null() &&
+        !undo_ptr->xid_for_hash.get_my_xid());
+
+  /** 3. Check the rseg must be mapped by xid_for_hash. */
   ut_ad(trx_is_txn_rseg_updated(trx));
+  ut_a(txn_check_gtrid_rseg_mapping(&undo_ptr->xid_for_hash, undo_ptr->rseg));
 
-  mutex_enter(&trx->rsegs.m_txn.rseg->mutex);
+  /** 4. Check trx_t::xid and xid_for_hash. */
+  if (!trx->xid->is_null()) {
+    ut_a(trx->xid->eq(&undo_ptr->xid_for_hash));
+  }
 
-  txn_undo_write_xid(xid, trx->rsegs.m_txn.txn_undo);
+  /** 5. Check trx_undo_t::xid and xid_for_hash. */
+  if ((undo_ptr->txn_undo->flag & TRX_UNDO_FLAG_XID)) {
+    ut_a(undo_ptr->txn_undo->xid.eq(&undo_ptr->xid_for_hash));
+  }
 
-  mutex_exit(&trx->rsegs.m_txn.rseg->mutex);
+  return true;
 }
 
 /*************************************************
