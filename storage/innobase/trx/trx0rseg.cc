@@ -46,7 +46,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0txn.h"
 #include "lizard0undo.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0mon.h"
 #include "lizard0cleanout.h"
 #include "lizard0undo0types.h"
@@ -290,7 +290,7 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
   auto free_list_len = flst_get_len(rseg_header + TXN_RSEG_FREE_LIST);
   if (free_list_len > 0) {
     lizard_ut_ad(lizard::fsp_is_txn_tablespace_by_id(space_id));
-    lizard::lizard_sys->txn_undo_log_free_list_len += free_list_len;
+    lizard::gcs->txn_undo_log_free_list_len += free_list_len;
   }
 
   /** Lizard: Init txn undo log hash table */
@@ -375,7 +375,7 @@ active undo logs.
 @param[in]	purge_queue	queue of rsegs to purge */
 void trx_rsegs_init(lizard::purge_heap_t *purge_heap) {
   trx_sys->rseg_history_len = 0;
-  lizard::lizard_sys->txn_undo_log_free_list_len = 0;
+  lizard::gcs->txn_undo_log_free_list_len = 0;
 
   ulint slot;
   mtr_t mtr;

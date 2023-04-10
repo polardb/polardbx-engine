@@ -72,7 +72,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0mtr.h"
 #include "lizard0scn.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
@@ -1912,7 +1912,7 @@ static void trx_erase_lists(trx_t *trx, bool serialised, Gtid_desc &gtid_desc) {
   //                                                trx_sys->rw_trx_ids.front();
   //
   //  trx_sys->min_active_id.store(min_id);
-  lizard::lizard_sys_mod_min_active_trx_id(trx);
+  lizard::gcs_mod_min_active_trx_id(trx);
 }
 
 static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialized) {
@@ -1991,7 +1991,7 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialized) {
   */
   lizard::gp_wait_cancel_all_when_commit(trx);
 
-  if (serialized) lizard::lizard_sys_erase_lists(trx);
+  if (serialized) lizard::gcs_erase_lists(trx);
 }
 
 /** Commits a transaction in memory. */
@@ -2349,7 +2349,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
 
   ut_d(trx->in_rw_trx_list = FALSE);
 
-  lizard::lizard_sys_mod_min_active_trx_id(trx);
+  lizard::gcs_mod_min_active_trx_id(trx);
 
   trx_sys_mutex_exit();
 

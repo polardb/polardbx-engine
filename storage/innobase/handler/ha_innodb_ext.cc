@@ -17,16 +17,16 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0undo.h"
 
 #include <sql_class.h>
 
 uint64 innobase_acquire_gcn() {
-  return lizard::lizard_sys_acquire_gcn();
+  return lizard::gcs_acquire_gcn();
 }
 
-uint64 innobase_load_scn() { return lizard::lizard_sys_get_scn(); }
+uint64 innobase_load_scn() { return lizard::gcs_load_scn(); }
 
 /**
   Initialize innobase extension.

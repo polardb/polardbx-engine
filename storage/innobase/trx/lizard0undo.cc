@@ -37,7 +37,7 @@
 #include "ha_innodb.h"
 
 #include "lizard0scn.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
@@ -1123,7 +1123,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   mlog_write_ulint(rseg_header + TXN_RSEG_FREE_LIST_SIZE, free_size - seg_size,
                    MLOG_4BYTES, &mtr);
 
-  os_atomic_decrement_ulint(&lizard_sys->txn_undo_log_free_list_len, 1);
+  os_atomic_decrement_ulint(&gcs->txn_undo_log_free_list_len, 1);
 
   /** Phase 4 : Reinit the undo log segment header page */
   trx_undo_page_init(undo_page, type, &mtr);
@@ -1349,7 +1349,7 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
   trx_ulogf_t *undo_hdr;
   commit_scn_t cmmt = COMMIT_SCN_NULL;
 
-  ut_ad(lizard_sys);
+  ut_ad(gcs);
   ut_ad(trx && undo && undo_hdr_page && mtr);
 
   ut_ad((trx->rsegs.m_txn.rseg != nullptr &&
@@ -1391,21 +1391,21 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
 
   /* Step 1: modify trx->scn */
   if (cmmt_ptr == nullptr) {
-    lizard_sys_scn_mutex_enter();
+    gcs_scn_mutex_enter();
 
     DBUG_EXECUTE_IF("crash_before_gcn_commit",
                     ut_ad(trx->txn_desc.cmmt.gcn != GCN_NULL ? 0 : 1););
 
     /** Generate a new scn */
     std::pair<commit_scn_t, bool> cmmt_result =
-        lizard_sys->scn.new_commit_scn(trx->txn_desc.cmmt.gcn);
+        gcs->scn.new_commit_scn(trx->txn_desc.cmmt.gcn);
 
     cmmt = cmmt_result.first;
     ut_a(!cmmt_result.second);
 
     assert_trx_scn_initial(trx);
     /** We don't want to call **ut_time_system_us** within the scope
-    of the lizard_sys mutex protection. So we just only set
+    of the gcs mutex protection. So we just only set
     trx->txn_desc.scn.first here */
     trx->txn_desc.cmmt.scn = cmmt.scn;
 
@@ -1417,14 +1417,14 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
         Temp undo still need to purge/truncate, so delay it by adding into
         serialisation list */
 
-    /** add to lizard_sys->serialisation_list_scn */
-    UT_LIST_ADD_LAST(lizard_sys->serialisation_list_scn, trx);
+    /** add to gcs->serialisation_list_scn */
+    UT_LIST_ADD_LAST(gcs->serialisation_list_scn, trx);
 
     ut_ad(*serialised == false);
     *serialised = true;
 
     trx->txn_desc.cmmt.gcn = cmmt.gcn;
-    lizard_sys_scn_mutex_exit();
+    gcs_scn_mutex_exit();
 
     trx->txn_desc.cmmt.utc = cmmt.utc = ut_time_system_us();
 
@@ -1852,7 +1852,7 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
   flst_add_first(rseg_hdr + TXN_RSEG_FREE_LIST,
                 undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, &mtr);
 
-  os_atomic_increment_ulint(&lizard_sys->txn_undo_log_free_list_len, 1);
+  os_atomic_increment_ulint(&gcs->txn_undo_log_free_list_len, 1);
 
   lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, &mtr);
 

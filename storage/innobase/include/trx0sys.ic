@@ -294,7 +294,7 @@ trx_t *trx_rw_is_active(trx_id_t trx_id, ibool *corrupt, bool do_ref_count) {
   /* Fast checking. If it's smaller than minimal active trx id, just
   return NULL. */
 
-  if (lizard::lizard_sys_get_min_active_trx_id() > trx_id) {
+  if (lizard::gcs_load_min_active_trx_id() > trx_id) {
     return (NULL);
   }
 

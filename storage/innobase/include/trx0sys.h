@@ -53,7 +53,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 
 namespace lizard {
-extern trx_id_t lizard_sys_get_min_active_trx_id();
+extern trx_id_t gcs_load_min_active_trx_id();
 }
 
 #ifndef UNIV_HOTBACKUP

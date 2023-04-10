@@ -27,7 +27,7 @@
 #include "mysql/status_var.h"
 
 #include "lizard0mon.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0undo.h"
 
 namespace lizard {
@@ -41,10 +41,10 @@ static lizard_var_t lizard_vars;
 lizard_stats_t lizard_stats;
 
 static void export_lizard_status(void) {
-  if (lizard_sys != nullptr) {
+  if (gcs != nullptr) {
     lizard_vars.txn_undo_log_free_list_len =
-        lizard_sys->txn_undo_log_free_list_len;
-    lizard_vars.txn_undo_log_cached = lizard_sys->txn_undo_log_cached;
+        gcs->txn_undo_log_free_list_len;
+    lizard_vars.txn_undo_log_cached = gcs->txn_undo_log_cached;
   } else {
     lizard_vars.txn_undo_log_free_list_len = 0;
     lizard_vars.txn_undo_log_cached = 0;
@@ -94,10 +94,10 @@ static void export_lizard_status(void) {
   lizard_vars.commit_cleanout_collects = lizard_stats.commit_cleanout_collects;
   lizard_vars.commit_cleanout_cleaned = lizard_stats.commit_cleanout_cleaned;
 
-  lizard_vars.snapshot_gcn = lizard_sys_get_snapshot_gcn();
-  lizard_vars.commit_gcn = lizard_sys_get_gcn();
+  lizard_vars.snapshot_gcn = gcs_get_snapshot_gcn();
+  lizard_vars.commit_gcn = gcs_load_gcn();
 
-  lizard_vars.purged_gcn = lizard_sys_get_purged_gcn();
+  lizard_vars.purged_gcn = gcs_get_purged_gcn();
 
   lizard_vars.block_tcn_cache_hit = lizard_stats.block_tcn_cache_hit;
   lizard_vars.block_tcn_cache_miss = lizard_stats.block_tcn_cache_miss;

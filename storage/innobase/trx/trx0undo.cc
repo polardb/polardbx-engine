@@ -59,7 +59,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0fsp.h"
 #include "lizard0scn.h"
 #include "lizard0mon.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0cleanout.h"
 #include "lizard0xa.h"
 

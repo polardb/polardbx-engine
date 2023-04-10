@@ -201,7 +201,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0mon.h"
 #include "lizard0read0read.h"
 #include "lizard0scn.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0row.h"
@@ -704,7 +704,6 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(lizard_scn_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_undo_hdr_hash_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(lizard_sys_mtx_id_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(file_purge_list_mutex, 0, 0, PSI_DOCUMENT_ME),
@@ -5517,7 +5516,7 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
       trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn;
       if (trx->txn_desc.cmmt.gcn == lizard::GCN_NULL) {
         trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn =
-            lizard::lizard_sys_acquire_gcn();
+            lizard::gcs_acquire_gcn();
       }
     }
 

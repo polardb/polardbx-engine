@@ -112,7 +112,7 @@ std::pair<trx_t *, trx_state_t> trx_rw_is_prepared(trx_id_t trx_id) {
   trx_state_t state;
 
   /** Already committed; */
-  if (lizard_sys_get_min_active_trx_id() > trx_id)
+  if (gcs_load_min_active_trx_id() > trx_id)
     return std::make_pair(nullptr, TRX_STATE_COMMITTED_IN_MEMORY);
 
   trx_sys_mutex_enter();

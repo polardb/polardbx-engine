@@ -371,16 +371,16 @@ void txn_lookup_stat(txn_lookup_entry entry);
 
 #define LIZARD_MONITOR_INC_TXN_CACHED(NUMBER)                             \
   do {                                                                    \
-    if (lizard::lizard_sys != nullptr) {                                  \
-      os_atomic_increment_ulint(&lizard::lizard_sys->txn_undo_log_cached, \
+    if (lizard::gcs != nullptr) {                                  \
+      os_atomic_increment_ulint(&lizard::gcs->txn_undo_log_cached, \
                                 (NUMBER));                                \
     }                                                                     \
   } while (0)
 
 #define LIZARD_MONITOR_DEC_TXN_CACHED(NUMBER)                             \
   do {                                                                    \
-    if (lizard::lizard_sys != nullptr) {                                  \
-      os_atomic_decrement_ulint(&lizard::lizard_sys->txn_undo_log_cached, \
+    if (lizard::gcs != nullptr) {                                  \
+      os_atomic_decrement_ulint(&lizard::gcs->txn_undo_log_cached, \
                                 (NUMBER));                                \
     }                                                                     \
   } while (0)

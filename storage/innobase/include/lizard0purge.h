@@ -30,7 +30,7 @@
 #include "lizard0undo0types.h"
 #include "lizard0scn.h"
 #include "page0size.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 
 struct trx_purge_t;
 struct mtr_t;
@@ -166,7 +166,7 @@ bool purged_scn_validation();
 
 }  // namespace lizard
 
-using Purged_gcn = lizard::Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>;
+using Purged_gcn = lizard::Purged_cnum<gcn_t, GCS_DATA_PURGE_GCN>;
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
