@@ -47,6 +47,10 @@ struct Table_snapshot {
             1);
   }
 
+  void unset() {
+    ts = scn = gcn = nullptr;
+  }
+
   bool itemize(Parse_context *pc, TABLE_LIST *owner);
   bool fix_fields(THD *thd);
   bool evaluate(Snapshot_info_t *snapshot);

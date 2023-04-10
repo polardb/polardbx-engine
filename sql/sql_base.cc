@@ -2951,10 +2951,7 @@ bool open_table(THD *thd, TABLE_LIST *table_list, Open_table_context *ot_ctx) {
         }
 
         /* Snapshot not allowed for view */
-        if (table_list->snapshot_expr.is_set()) {
-          my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
-          return true;
-        }
+        table_list->snapshot_expr.unset();
 
         if (!tdc_open_view(thd, table_list, key, key_length)) {
           DBUG_ASSERT(table_list->is_view());
@@ -3191,12 +3188,7 @@ retry_share : {
   */
   if (share->is_view) {
     /* Snapshot not allowed for view */
-    if (table_list->snapshot_expr.is_set()) {
-      release_table_share(share);
-      mysql_mutex_unlock(&LOCK_open);
-      my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
-      return true;
-    }
+    table_list->snapshot_expr.unset();
 
     /* Sample scan not allowed for view */
     if (thd->lex && thd->lex->opt_hints_global &&
@@ -7073,10 +7065,7 @@ bool open_temporary_table(THD *thd, TABLE_LIST *tl) {
   }
 
   /* Snapshot not allowed for temp table */
-  if (tl->snapshot_expr.is_set()) {
-    my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), tl->table_name);
-    return true;
-  }
+  tl->snapshot_expr.unset();
 
   if (tl->partition_names) {
     /* Partitioned temporary tables is not supported. */
