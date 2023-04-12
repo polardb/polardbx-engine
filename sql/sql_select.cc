@@ -712,7 +712,7 @@ bool Sql_cmd_dml::execute(THD *thd) {
   }
 
   /* Evaluate snapshot expressions */
-  if (im::evaluate_snapshot(thd, lex)) goto err;
+  if (lizard::evaluate_snapshot(thd, lex)) goto err;
 
   // Perform statement-specific execution
   res = execute_inner(thd);

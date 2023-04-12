@@ -926,8 +926,7 @@ bool SELECT_LEX::setup_tables(THD *thd, TABLE_LIST *tables,
     tr->reset();
     if (tr->process_index_hints(thd, table)) return true;
 
-    /* Fix snapshot expression */
-    if (tr->snapshot_expr.fix_fields(thd)) return true;
+    if (tr->process_snapshot_hint(thd)) return true;
 
     if (table->part_info)  // Count number of partitioned tables
       partitioned_table_count++;

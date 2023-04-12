@@ -32,3 +32,11 @@ bool ha_acquire_gcn(uint64 *gcn) {
   }
   return true;
 }
+
+bool ha_acquire_scn(uint64 *scn) {
+  if (scn && innodb_hton && innodb_hton->ext.acquire_scn) {
+    *scn = innodb_hton->ext.acquire_scn();
+    return false;
+  }
+  return true;
+}

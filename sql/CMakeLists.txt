@@ -542,7 +542,6 @@ SET(SQL_SHARED_SOURCES
   sys_vars_resource_mgr.cc
   system_variables.cc
   table.cc
-  table_ext.cc
   table_cache.cc
   table_function.cc
   table_trigger_dispatcher.cc
@@ -616,6 +615,7 @@ SET(SQL_SHARED_SOURCES
   inventory/inventory_hint_parse.cc
   inventory/inventory_hint.cc
   xa/xa_proc.cc
+  lizard/lizard_snapshot.cc
   ${MYSQL_SERVER_SUB_COMPONENT_SOURCES}
 )
 

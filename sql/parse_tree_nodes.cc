@@ -1537,7 +1537,7 @@ bool PT_query_block_locking_clause::set_lock_for_tables(Parse_context *pc) {
         return true;
       }
 
-      if (table_list->snapshot_expr.is_set()) {
+      if (table_list->snapshot_hint) {
         my_error(ER_AS_OF_CONFLICT_LOCK_CLAUSE, MYF(0), table_list->alias);
         return true;
       }
@@ -1699,7 +1699,7 @@ bool PT_table_locking_clause::set_lock_for_tables(Parse_context *pc) {
     if (table_list == NULL)
       return raise_error(thd, table_ident, ER_UNRESOLVED_TABLE_LOCK);
 
-    if (table_list->snapshot_expr.is_set())
+    if (table_list->snapshot_hint)
       return raise_error(thd, table_ident, ER_AS_OF_CONFLICT_LOCK_CLAUSE);
 
     if (table_list->lock_descriptor().type != TL_READ_DEFAULT)

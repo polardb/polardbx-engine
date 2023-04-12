@@ -177,14 +177,7 @@ int handler_open_table(THD *thd,
                      ret, db_name, table_name, lock_type);
     } else {
 #ifdef MYSQL8
-      // set the snapshot seq if needed
-      if (thd->variables.innodb_snapshot_gcn != MYSQL_GCN_NULL)
-        tables.table->snapshot.set_gcn(thd->variables.innodb_snapshot_gcn);
-      else if (thd->variables.innodb_current_snapshot_gcn) {
-        uint64_t gcn;
-        if (!ha_acquire_gcn(&gcn)) ++gcn;
-        tables.table->snapshot.set_gcn(gcn);
-      }
+      lizard::simulate_snapshot_clause(thd, &tables);
 #endif
       // In any other case this function fails,
       // new_exec_table will be released by unique_ptr

@@ -20,13 +20,15 @@
 #ifndef HANDLER_EXT_INCLUDED
 #define HANDLER_EXT_INCLUDED
 
-typedef uint64 (*acquire_gcn_t)();
+typedef uint64_t (*acquire_gcn_t)();
+typedef uint64_t (*acquire_scn_t)();
 
 /**
   The extension of handlerton struct.
 */
 struct handlerton_ext {
   acquire_gcn_t acquire_gcn;
+  acquire_scn_t acquire_scn;
 };
 
 /**
@@ -36,6 +38,7 @@ struct handlerton_ext {
   @retval false Succeed
   @retval true Error
 */
-bool ha_acquire_gcn(uint64 *gcn);
+bool ha_acquire_gcn(uint64_t *gcn);
+bool ha_acquire_scn(uint64_t *scn);
 
 #endif

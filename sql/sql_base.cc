@@ -2951,7 +2951,7 @@ bool open_table(THD *thd, TABLE_LIST *table_list, Open_table_context *ot_ctx) {
         }
 
         /* Snapshot not allowed for view */
-        table_list->snapshot_expr.unset();
+        table_list->snapshot_hint = nullptr;
 
         if (!tdc_open_view(thd, table_list, key, key_length)) {
           DBUG_ASSERT(table_list->is_view());
@@ -3188,7 +3188,7 @@ retry_share : {
   */
   if (share->is_view) {
     /* Snapshot not allowed for view */
-    table_list->snapshot_expr.unset();
+    table_list->snapshot_hint = nullptr;
 
     /* Sample scan not allowed for view */
     if (thd->lex && thd->lex->opt_hints_global &&
@@ -7065,7 +7065,7 @@ bool open_temporary_table(THD *thd, TABLE_LIST *tl) {
   }
 
   /* Snapshot not allowed for temp table */
-  tl->snapshot_expr.unset();
+  tl->snapshot_hint = nullptr;
 
   if (tl->partition_names) {
     /* Partitioned temporary tables is not supported. */

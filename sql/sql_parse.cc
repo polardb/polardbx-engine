@@ -201,6 +201,8 @@
 #endif
 #include "sql/inventory/inventory_hint.h"
 
+#include "sql/lizard/lizard_snapshot.h"
+
 #include "sql/xa/xa_trx.h"
 
 namespace dd {
@@ -3220,7 +3222,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
   }
 #endif
 
-  im::simulate_snapshot_clause(thd, all_tables);
+  lizard::simulate_snapshot_clause(thd, all_tables);
 
   if (im::cn_heartbeat_timeout_freeze_updating(lex)) {
     goto error;
@@ -6401,6 +6403,7 @@ TABLE_LIST *SELECT_LEX::add_table_to_list(
 
   ptr->sequence_scan.set(seq_scan_mode);
 
+  ptr->snapshot_hint = nullptr;
   return ptr;
 }
 

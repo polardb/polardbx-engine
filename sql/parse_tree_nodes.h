@@ -84,6 +84,8 @@
 #include "sql_string.h"
 #include "thr_lock.h"
 
+#include "sql/lizard/lizard_snapshot.h"
+
 class PT_field_def_base;
 class PT_hint_list;
 class PT_query_expression;
@@ -499,19 +501,19 @@ class PT_table_factor_table_ident : public PT_table_reference {
   List<String> *opt_use_partition;
   const char *const opt_table_alias;
   List<Index_hint> *opt_key_definition;
-  im::Table_snapshot opt_snapshot{0, 0, 0};
+  lizard::Snapshot_hint *opt_snapshot_hint{nullptr};
 
  public:
   PT_table_factor_table_ident(Table_ident *table_ident_arg,
                               List<String> *opt_use_partition_arg,
                               const LEX_CSTRING &opt_table_alias_arg,
-                              List<Index_hint> *opt_key_definition_arg)
+                              List<Index_hint> *opt_key_definition_arg,
+                              lizard::Snapshot_hint *opt_snapshot_hint_arg)
       : table_ident(table_ident_arg),
         opt_use_partition(opt_use_partition_arg),
         opt_table_alias(opt_table_alias_arg.str),
-        opt_key_definition(opt_key_definition_arg) {}
-
-  void set_snapshot(const im::Table_snapshot &s) { opt_snapshot = s; }
+        opt_key_definition(opt_key_definition_arg),
+        opt_snapshot_hint{opt_snapshot_hint_arg} {}
 
   bool contextualize(Parse_context *pc) override {
     if (super::contextualize(pc)) return true;
@@ -524,7 +526,7 @@ class PT_table_factor_table_ident : public PT_table_reference {
         yyps->m_mdl_type, opt_key_definition, opt_use_partition, nullptr, pc);
     if (value == NULL) return true;
     if (pc->select->add_joined_table(value)) return true;
-    if (opt_snapshot.itemize(pc, value)) return true; /* Itemize snapshot */
+    if (opt_snapshot_hint && opt_snapshot_hint->itemize(pc, value)) return true;
     return false;
   }
 };

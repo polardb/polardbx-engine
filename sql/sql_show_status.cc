@@ -159,7 +159,7 @@ static SELECT_LEX *build_query(const POS &pos, THD *thd,
   /* ... FROM performance_schema.<table_name> ... */
   PT_table_factor_table_ident *table_factor;
   table_factor = new (thd->mem_root)
-      PT_table_factor_table_ident(table_ident, NULL, NULL_CSTR, NULL);
+      PT_table_factor_table_ident(table_ident, NULL, NULL_CSTR, NULL, NULL);
   if (table_factor == NULL) return NULL;
 
   Mem_root_array_YY<PT_table_reference *> table_reference_list;

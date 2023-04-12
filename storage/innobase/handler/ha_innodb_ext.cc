@@ -26,6 +26,8 @@ uint64 innobase_acquire_gcn() {
   return lizard::lizard_sys_acquire_gcn();
 }
 
+uint64 innobase_load_scn() { return lizard::lizard_sys_get_scn(); }
+
 /**
   Initialize innobase extension.
 
@@ -33,6 +35,7 @@ uint64 innobase_acquire_gcn() {
 */
 void innobase_init_ext(handlerton *innobase_hton) {
   innobase_hton->ext.acquire_gcn = innobase_acquire_gcn;
+  innobase_hton->ext.acquire_scn = innobase_load_scn;
 }
 
 /**
