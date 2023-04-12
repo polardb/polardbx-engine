@@ -189,6 +189,24 @@ void SCN::set_snapshot_gcn(gcn_t gcn, bool mutex_held) {
 
 gcn_t SCN::get_snapshot_gcn() { return m_snapshot_gcn.load(); }
 
+void SCN::set_snapshot_gcn(gcn_t gcn, bool mutex_hold) {
+  if(gcn == GCN_NULL || gcn == GCN_INITIAL) 
+    return;
+
+  if (!mutex_hold) {
+    mutex_enter(&m_mutex);
+  }
+
+  if( gcn > m_snapshot_gcn )
+    m_snapshot_gcn = gcn;
+
+  if (!mutex_hold) {
+    mutex_exit(&m_mutex);
+  }
+}
+
+gcn_t SCN::get_snapshot_gcn() { return m_snapshot_gcn.load(); }
+
 /**
   Check the commit scn state
 

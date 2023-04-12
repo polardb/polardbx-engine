@@ -178,6 +178,10 @@ class SCN {
 
   gcn_t get_snapshot_gcn();
 
+  void set_snapshot_gcn(gcn_t gcn, bool mutex_hold = false);
+
+  gcn_t get_snapshot_gcn();
+
   /** lock mutex */
   void lock() {
     ut_ad(m_inited);
