@@ -176,6 +176,10 @@ class SCN {
 
   scn_t get_scn();
 
+  void set_snapshot_gcn(gcn_t gcn, bool mutex_hold = false);
+
+  gcn_t get_snapshot_gcn();
+
   /** lock mutex */
   void lock() {
     ut_ad(m_inited);
@@ -211,6 +215,8 @@ class SCN {
  private:
   std::atomic<scn_t> m_scn;
   std::atomic<gcn_t> m_gcn;
+  /*snapshot gcn*/
+  std::atomic<gcn_t> m_snapshot_gcn;
   bool m_inited;
   ib_mutex_t m_mutex;
 };

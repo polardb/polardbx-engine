@@ -58,7 +58,7 @@
 #include "sql/xa.h"                   // xa_option_words
 #include "thr_lock.h"                 // thr_lock_type
 				      //
-#include "sql/sql_lex_ext.h"      // Table_snapshot, Table_snapshot_and_alias
+#include "sql/lizard/lizard_snapshot.h"
 
 class Index_hint;
 class Item;
@@ -712,8 +712,8 @@ union YYSTYPE {
   my_thread_id query_id;
   Bipartite_name bipartite_name;
   Set_operator query_operator;
-  struct im::Table_snapshot table_snapshot;
-  struct im::Table_snapshot_and_alias table_snapshot_and_alias;
+  lizard::Snapshot_hint *snapshot_hint;
+  struct lizard::Table_snapshot_hint_and_alias table_snapshot_hint_and_alias;
 };
 
 static_assert(sizeof(YYSTYPE) <= 40, "YYSTYPE is too big");

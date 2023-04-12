@@ -64,8 +64,8 @@
 #include "sql/mem_root_array.h"
 
 #include "sql/sql_statistics_common.h"  // Stats_data
-#include "sql/table_ext.h"
 #include "sql/sequence_common.h"  // Sequence_property, Sequence_scan, Sequence_last_value
+#include "sql/lizard/lizard_snapshot.h"
 
 class Field;
 class Field_longlong;
@@ -2389,14 +2389,14 @@ struct TABLE {
   */
   bool should_binlog_drop_if_temp(void) const;
 
-  /* Snapshot information */
-  im::Snapshot_info_t snapshot;
-
   /**
     Sequence scan mode only affect one table but not all query lex,
     so We define this option within TABLE object.
   */
   Sequence_scan sequence_scan;
+
+  /** Table snapshot that come from snapshot hint on statement. */
+  lizard::Table_snapshot table_snapshot;
 };
 
 static inline void empty_record(TABLE *table) {
@@ -3932,12 +3932,13 @@ class Table_ref {
   my_bitmap_map write_set_small[bitmap_buffer_size(64) / sizeof(my_bitmap_map)];
 
  public:
-  /** Snapshot struct.
-  Note that the table may be a view or a derived table (sub query). */
-  im::Table_snapshot snapshot_expr{0, 0, 0};
-
   /** Represent the sequence query scan mode */
   Sequence_scan sequence_scan;
+
+  /** Snapshot hint upon table */
+  lizard::Snapshot_hint *snapshot_hint{nullptr};
+
+  bool process_snapshot_hint(THD *thd);
 };
 
 /*

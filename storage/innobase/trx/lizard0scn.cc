@@ -46,7 +46,11 @@ mysql_pfs_key_t lizard_scn_mutex_key;
 namespace lizard {
 
 /** Constructor of SCN */
-SCN::SCN() : m_scn(SCN_NULL), m_gcn(GCN_NULL), m_inited(false) {
+SCN::SCN()
+    : m_scn(SCN_NULL),
+      m_gcn(GCN_NULL),
+      m_snapshot_gcn(GCN_NULL),
+      m_inited(false) {
   mutex_create(LATCH_ID_LIZARD_SCN, &m_mutex);
 }
 
@@ -69,6 +73,7 @@ void SCN::init() {
                              LIZARD_SCN_NUMBER_MAGIN);
 
   m_gcn = mach_read_from_8(lzd_hdr + LIZARD_SYS_GCN);
+  m_snapshot_gcn = m_gcn.load();
 
   lizard_sys->min_safe_scn = m_scn.load();
 
@@ -166,6 +171,24 @@ scn_t SCN::acquire_scn(bool mutex_hold) {
 scn_t SCN::get_scn() { return m_scn.load(); }
 
 gcn_t SCN::get_gcn() { return m_gcn.load(); }
+
+void SCN::set_snapshot_gcn(gcn_t gcn, bool mutex_hold) {
+  if(gcn == GCN_NULL || gcn == GCN_INITIAL) 
+    return;
+
+  if (!mutex_hold) {
+    mutex_enter(&m_mutex);
+  }
+
+  if( gcn > m_snapshot_gcn )
+    m_snapshot_gcn = gcn;
+
+  if (!mutex_hold) {
+    mutex_exit(&m_mutex);
+  }
+}
+
+gcn_t SCN::get_snapshot_gcn() { return m_snapshot_gcn.load(); }
 
 /**
   Check the commit scn state

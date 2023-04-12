@@ -157,10 +157,9 @@ static Query_block *build_query(const POS &pos, THD *thd,
 
   /* ... FROM performance_schema.<table_name> ... */
   PT_table_factor_table_ident *table_factor;
-  table_factor = new (thd->mem_root)
-      PT_table_factor_table_ident(table_ident, nullptr, NULL_CSTR, nullptr);
+  table_factor = new (thd->mem_root) PT_table_factor_table_ident(
+      table_ident, nullptr, NULL_CSTR, nullptr, nullptr);
   if (table_factor == nullptr) return nullptr;
-
   Mem_root_array_YY<PT_table_reference *> table_reference_list;
   table_reference_list.init(thd->mem_root);
   if (table_reference_list.push_back(table_factor)) return nullptr;

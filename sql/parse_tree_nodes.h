@@ -71,6 +71,8 @@
 #include "sql/window_lex.h"
 #include "thr_lock.h"
 
+#include "sql/lizard/lizard_snapshot.h"
+
 class Item;
 class Item_cache;
 class Json_table_column;
@@ -431,21 +433,21 @@ class PT_table_factor_table_ident : public PT_table_reference {
   List<String> *opt_use_partition;
   const char *const opt_table_alias;
   List<Index_hint> *opt_key_definition;
-  im::Table_snapshot opt_snapshot{0, 0, 0};
+  lizard::Snapshot_hint *opt_snapshot_hint{nullptr};
 
  public:
   PT_table_factor_table_ident(Table_ident *table_ident_arg,
                               List<String> *opt_use_partition_arg,
                               const LEX_CSTRING &opt_table_alias_arg,
-                              List<Index_hint> *opt_key_definition_arg)
+                              List<Index_hint> *opt_key_definition_arg,
+                              lizard::Snapshot_hint *opt_snapshot_hint_arg)
       : table_ident(table_ident_arg),
         opt_use_partition(opt_use_partition_arg),
         opt_table_alias(opt_table_alias_arg.str),
-        opt_key_definition(opt_key_definition_arg) {}
+        opt_key_definition(opt_key_definition_arg),
+        opt_snapshot_hint{opt_snapshot_hint_arg} {}
 
   bool contextualize(Parse_context *pc) override;
-
-  void set_snapshot(const im::Table_snapshot &s) { opt_snapshot = s; }
 };
 
 class PT_json_table_column : public Parse_tree_node {

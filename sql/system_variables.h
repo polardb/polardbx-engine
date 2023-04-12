@@ -511,6 +511,8 @@ struct System_variables {
 
   /** Commit gcn for next transition. */
   ulonglong innodb_commit_gcn;
+
+  bool innodb_current_snapshot_gcn;
 };
 
 /**

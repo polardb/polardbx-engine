@@ -104,3 +104,9 @@ static Sys_var_bool Sys_only_report_warning_when_skip(
     GLOBAL_VAR(opt_only_report_warning_when_skip_sequence), CMD_LINE(OPT_ARG),
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static Sys_var_bool Sys_innodb_current_snapshot_gcn(
+    "innodb_current_snapshot_seq",
+    "Get snapshot_seq from innodb," 
+    "the value is current max snapshot sequence and plus one",
+    HINT_UPDATEABLE SESSION_ONLY(innodb_current_snapshot_gcn), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));

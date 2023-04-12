@@ -7,6 +7,8 @@
 #include "lizard0scn0hist.h"
 #include "lizard0sys.h"
 #include "sql/sql_class.h"
+#include "sql/lizard/lizard_snapshot.h"
+
 
 /* To get current session thread default THD */
 THD *thd_get_current_thd();
@@ -116,7 +118,7 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
 
 #if defined TURN_MVCC_SEARCH_TO_AS_OF
 
-  if (!table || !table->snapshot.valid()) {
+  if (!table || !table->table_snapshot.is_vision()) {
     ut_ad(prebuilt->trx->vision.is_active());
 
     /* temporary table is not allowed using as-of query */
@@ -129,11 +131,13 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
 #endif
 
   /* If it's not a flash back query, just return */
-  if (!table || !table->snapshot.valid()) return DB_SUCCESS;
+  if (!table || !table->table_snapshot.is_vision()) return DB_SUCCESS;
 
-  switch (table->snapshot.get_type()) {
-    case im::Snapshot_type::AS_OF_GCN: {
-      fbq_gcn = table->snapshot.get_asof_gcn();
+  Snapshot_vision *snapshot_vision = table->table_snapshot.vision();
+
+  switch (snapshot_vision->type()) {
+    case Snapshot_type::AS_OF_GCN: {
+      fbq_gcn = snapshot_vision->val_int();
       ut_ad(fbq_gcn != GCN_NULL && fbq_scn == SCN_NULL);
 
       DBUG_EXECUTE_IF("simulate_gcn_def_changed_error", { err = true; });
@@ -149,12 +153,12 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
       }
       break;
     }
-    case im::Snapshot_type::AS_OF_TIMESTAMP: {
+    case Snapshot_type::AS_OF_TIMESTAMP: {
       dberr_t err = DB_SUCCESS;
 
       /* convert timestamp to scn */
       fbq_scn = convert_flashback_query_timestamp_to_scn(
-          prebuilt, table->snapshot.get_asof_timestamp(), &err);
+          prebuilt, snapshot_vision->val_int(), &err);
 
       if (err != DB_SUCCESS) {
         return err;
@@ -166,8 +170,8 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
       }
       break;
     }
-    case im::Snapshot_type::AS_OF_SCN: {
-      fbq_scn = table->snapshot.get_asof_scn();
+    case Snapshot_type::AS_OF_SCN: {
+      fbq_scn = snapshot_vision->val_int();
       ut_ad(fbq_gcn == GCN_NULL && fbq_scn != SCN_NULL);
       /* required undo has been purged */
       if (fbq_scn <= purge_sys->purged_scn.load()) {
@@ -202,6 +206,10 @@ simulate_error:
 
   /* set as as-of query */
   prebuilt->m_asof_query.set(fbq_scn, fbq_gcn);
+
+  if (snapshot_vision->type() == Snapshot_type::AS_OF_GCN &&
+      snapshot_vision->is_outer())
+    lizard::lizard_sys->scn.set_snapshot_gcn(fbq_gcn);
 
   return DB_SUCCESS;
 }

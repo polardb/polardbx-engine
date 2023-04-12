@@ -170,6 +170,7 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 #include "violite.h"
 
 #include "sql/package/package_interface.h"  // find_native_proc_and_evoke
+#include "lizard_iface.h"
 
 #include "sql/item_sequence_func.h"              // Item_func_nextval, Item_func_currval
 #include "sql/sql_sequence.h"                    // Sql_cmd_create_sequence
@@ -1485,10 +1486,10 @@ void warn_about_deprecated_binary(THD *thd)
         json_attribute
         opt_channel
 
-%type <table_snapshot>
+%type <snapshot_hint>
         scn_or_timestamp_or_gcn
 
-%type <table_snapshot_and_alias>
+%type <table_snapshot_hint_and_alias>
         opt_table_snapshot_alias
 
 %type <lex_str_list> TEXT_STRING_sys_list
@@ -10160,7 +10161,7 @@ explicit_table:
           {
             $$.init(YYMEM_ROOT);
             auto table= NEW_PTN
-                PT_table_factor_table_ident($2, nullptr, NULL_CSTR, nullptr);
+                PT_table_factor_table_ident($2, nullptr, NULL_CSTR, nullptr, nullptr);
             if ($$.push_back(table))
               MYSQL_YYABORT; // OOM
           }
@@ -12143,8 +12144,8 @@ single_table_parens:
 single_table:
           table_ident opt_use_partition opt_table_snapshot_alias opt_key_definition
           {
-            $$= NEW_PTN PT_table_factor_table_ident($1, $2, $3.alias, $4);
-            ((PT_table_factor_table_ident*)$$)->set_snapshot($3.snapshot);
+            $$ = NEW_PTN PT_table_factor_table_ident($1, $2, $3.alias, $4,
+                                                     $3.snapshot_hint);
           }
         ;
 
@@ -12464,18 +12465,19 @@ opt_table_alias:
         ;
 
 opt_table_snapshot_alias:
-          /* empty */ { $$ = {NULL_CSTR, {0, 0, 0}}; }
-        | ident       { $$ = {to_lex_cstring($1), {0, 0, 0}}; }
-        | AS ident    { $$ = {to_lex_cstring($2), {0, 0, 0}}; }
+          /* empty */ { $$ = {NULL_CSTR, nullptr}; }
+        | ident       { $$ = {to_lex_cstring($1), nullptr}; }
+        | AS ident    { $$ = {to_lex_cstring($2), nullptr}; }
         | AS OF_SYM scn_or_timestamp_or_gcn { $$ = {NULL_CSTR, $3}; }
         | AS OF_SYM scn_or_timestamp_or_gcn ident { $$ = {to_lex_cstring($4), $3}; }
         | AS OF_SYM scn_or_timestamp_or_gcn AS ident { $$ = {to_lex_cstring($5), $3}; }
 
 scn_or_timestamp_or_gcn:
-          TIMESTAMP_SYM expr { $$ = {$2, 0, 0}; }
-        | SCN_SYM expr { $$ = {0, $2, 0}; }
-        | GCN_SYM expr { $$ = {0, 0,$2}; }
-        ;
+          TIMESTAMP_SYM expr { $$ = NEW_PTN lizard::Snapshot_time_hint($2); }
+        | SCN_SYM expr { $$ = NEW_PTN lizard::Snapshot_scn_hint($2); }
+        | GCN_SYM expr {
+            $$ = NEW_PTN lizard::Snapshot_gcn_hint($2, MYSQL_CSR_OUTER);
+        };
 
 opt_all:
           /* empty */

@@ -123,6 +123,9 @@
 #include "sql_string.h"
 #include "template_utils.h"  // down_cast
 #include "thr_mutex.h"
+
+#include "sql/lizard/lizard_snapshot.h"
+
 /* INFORMATION_SCHEMA name */
 LEX_CSTRING INFORMATION_SCHEMA_NAME = {STRING_WITH_LEN("information_schema")};
 
@@ -4143,14 +4146,13 @@ void TABLE::init(THD *thd, Table_ref *tl) {
     bind_value_generators_to_fields();
   }
 
-  /** Reset snapshot */
-  im::init_table_snapshot(this, thd);
-
   /**
     Inherit the sequence scan mode every TABLE::init() from TABLE_LIST
     for each statement.
   */
   sequence_scan = tl->sequence_scan;
+
+  lizard::init_table_snapshot(this, thd);
 }
 
 /**

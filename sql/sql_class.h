@@ -4810,6 +4810,7 @@ class THD : public MDL_context_owner,
   void reset_gcn() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
+    variables.innodb_current_snapshot_gcn = false;
   }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }

@@ -94,8 +94,6 @@
 #include "sql_string.h"
 #include "thr_lock.h"  // thr_lock_type
 #include "violite.h"   // SSL_type
-		       //
-#include "sql/sql_lex_ext.h"
 
 #include "sql/sequence_common.h"  // Sequence_scan
 

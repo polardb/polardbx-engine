@@ -3007,7 +3007,7 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
           return add_view_place_holder(thd, table_list);
 
         /* Snapshot not allowed for view */
-        if (table_list->snapshot_expr.is_set()) {
+        if (table_list->snapshot_hint) {
           my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
           return true;
         }
@@ -3257,7 +3257,7 @@ retry_share : {
   */
   if (table_list->is_view() || share->is_view) {
     /* Snapshot not allowed for view */
-    if (table_list->snapshot_expr.is_set()) {
+    if (table_list->snapshot_hint) {
       release_table_share(share);
       mysql_mutex_unlock(&LOCK_open);
       my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
@@ -7409,7 +7409,7 @@ bool open_temporary_table(THD *thd, Table_ref *tl) {
   }
 
   /* Snapshot not allowed for temp table */
-  if (tl->snapshot_expr.is_set()) {
+  if (tl->snapshot_hint) {
     my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), tl->table_name);
     return true;
   }

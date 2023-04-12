@@ -268,6 +268,10 @@ our @DEFAULT_SUITES = qw(
   x
   component_keyring_file
   galaxy_sql
+  rds
+  xcluster
+  lizard
+  innodb_gcn
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;

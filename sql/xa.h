@@ -41,6 +41,8 @@
 #include "sql/sql_plugin_ref.h"    // plugin_ref
 #include "sql/xa_aux.h"            // serialize_xid
 
+#include "lizard_iface.h"
+
 class Protocol;
 class THD;
 struct xid_t;
@@ -63,6 +65,7 @@ static const int TC_HEURISTIC_RECOVER_COMMIT = 1;
 static const int TC_HEURISTIC_RECOVER_ROLLBACK = 2;
 
 typedef ulonglong my_xid;  // this line is the same as in log_event.h
+
 #define MYSQL_XID_PREFIX "MySQLXid"
 
 /*
