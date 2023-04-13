@@ -2159,7 +2159,8 @@ dberr_t srv_start(bool create_new_db, const std::string &scan_directories) {
   lock_sys_create(srv_lock_table_size);
   srv_start_state_set(SRV_START_STATE_LOCK_SYS);
 
-  lizard::gcs_create();
+  lizard::gcs_init();
+
   lizard::gp_sys_create();
 
   /* Create i/o-handler threads: */
@@ -2420,7 +2421,7 @@ files_checked:
       return (srv_init_abort(DB_ERROR));
 
     lizard::gcs_create_sys_pages();
-    lizard::gcs_init();
+    lizard::gcs_boot();
 
     /* To maintain backward compatibility we create only
     the first rollback segment before the double write buffer.
@@ -2490,6 +2491,8 @@ files_checked:
     if (err != DB_SUCCESS) {
       return (srv_init_abort(err));
     }
+
+    lizard::gcs_boot();
 
     ut_ad(clone_check_recovery_crashpoint(recv_sys->is_cloned_db));
 
@@ -2701,8 +2704,6 @@ files_checked:
     if (err != DB_SUCCESS && srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN) {
       return (srv_init_abort(err));
     }
-
-    lizard::gcs_init();
 
     purge_heap = trx_sys_init_at_db_start();
 

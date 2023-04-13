@@ -46,8 +46,8 @@ namespace lizard {
 /** The global Global Change System memory structure */
 gcs_t *gcs = nullptr;
 
-/** Create Global Change System structure. */
-void gcs_create() {
+/** Initialize GCS system memory structure. */
+void gcs_init() {
   ut_ad(gcs == nullptr);
 
   gcs =
@@ -55,6 +55,8 @@ void gcs_create() {
 
   /** Placement new SCN object  */
   new (&(gcs->scn)) SCN();
+
+  new (&(gcs->persisters)) Persisters();
 
   gcs->min_active_trx_id.store(GCS_DATA_MTX_ID_NULL);
 
@@ -106,6 +108,7 @@ void gcs_close() {
     lizard_ut_ad(UT_LIST_GET_LEN(gcs->serialisation_list_scn) == 0);
 
     gcs->scn.~SCN();
+    gcs->persisters.~Persisters();
     gcs->mtx_inited = false;
 
     ut_free(gcs);
@@ -130,9 +133,11 @@ gcs_sysf_t *gcs_sysf_get(mtr_t *mtr) {
 }
 
 /** Init the elements of Global Change System */
-void gcs_init() {
+void gcs_boot() {
   ut_ad(gcs);
-  gcs->scn.init();
+  gcs->scn.boot();
+
+  gcs->min_safe_scn = gcs->scn.load_scn();
 
   /** Init vision system */
   trx_vision_container_init();

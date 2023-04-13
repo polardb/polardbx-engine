@@ -1615,8 +1615,6 @@ void srv_export_innodb_status(void) {
 
   export_vars.commit_gcn = lizard::gcs_load_gcn();
 
-  export_vars.innodb_buffered_aio_submitted = srv_stats.n_aio_submitted;
-
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch);
   scn_t done_trx_scn = purge_sys->done.scn;
