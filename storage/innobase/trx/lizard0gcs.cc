@@ -37,8 +37,13 @@
 #include "lizard0gcs.h"
 #include "lizard0dbg.h"
 
-
 #ifdef UNIV_PFS_MUTEX
+/* GCS scn list mutex PFS key */
+mysql_pfs_key_t scn_list_mutex_key;
+/* GCS gcn order mutex PFS key */
+mysql_pfs_key_t gcn_order_mutex_key;
+/* GCS gcn persist mutex PFS key */
+mysql_pfs_key_t gcn_persist_mutex_key;
 #endif
 
 namespace lizard {
@@ -55,6 +60,8 @@ void gcs_init() {
 
   /** Placement new SCN object  */
   new (&(gcs->scn)) SCN();
+  /** Placement new GCN object  */
+  new (&(gcs->gcn)) GCN();
 
   new (&(gcs->persisters)) Persisters();
 
@@ -71,7 +78,50 @@ void gcs_init() {
 
   UT_LIST_INIT(gcs->serialisation_list_scn, &trx_t::scn_list);
 
+  mutex_create(LATCH_ID_SCN_LIST, &gcs->m_scn_list_mutex);
+  mutex_create(LATCH_ID_GCN_ORDER, &gcs->m_gcn_order_mutex);
+  mutex_create(LATCH_ID_GCN_PERSIST, &gcs->m_gcn_persist_mutex);
+
   return;
+}
+
+commit_scn_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
+  commit_scn_t cmmt = COMMIT_SCN_NULL;
+  /** 1. generate scn number */
+  scn_list_mutex_enter();
+
+  DBUG_EXECUTE_IF("crash_before_gcn_commit",
+                  ut_ad(trx->txn_desc.cmmt.gcn != GCN_NULL ? 0 : 1););
+
+  assert_trx_scn_initial(trx);
+
+  /** We don't want to call **ut_time_system_us** within the scope
+  of the gcs mutex protection. So we just only set
+  trx->txn_desc.scn.first here */
+  trx->txn_desc.cmmt.scn = cmmt.scn = scn.new_scn();
+
+  /** If a read only transaction (for example: start transaction read only),
+  temporary table can be also modified. It doesn't matter if purge_sys purges
+  them */
+
+  /** Revision:
+      Temp undo still need to purge/truncate, so delay it by adding into
+      serialisation list */
+
+  /** add to gcs->serialisation_list_scn */
+  UT_LIST_ADD_LAST(gcs->serialisation_list_scn, trx);
+
+  scn_list_mutex_exit();
+
+  /** 2. generate gcn number. */
+  gcn_order_mutex_enter();
+  trx->txn_desc.cmmt.gcn = cmmt.gcn = gcn.new_gcn(trx->txn_desc.cmmt.gcn);
+  gcn_order_mutex_exit();
+
+  /** 3. generate utc time. */
+  trx->txn_desc.cmmt.utc = cmmt.utc = ut_time_system_us();
+
+  return cmmt;
 }
 
 /** Erase trx in serialisation_list_scn, and update min_safe_scn
@@ -79,7 +129,7 @@ void gcs_init() {
 void gcs_erase_lists(trx_t *trx) {
   assert_lizard_min_safe_scn_valid();
 
-  gcs_scn_mutex_enter();
+  scn_list_mutex_enter();
 
   lizard_ut_ad(UT_LIST_GET_LEN(gcs->serialisation_list_scn) > 0);
 
@@ -97,7 +147,7 @@ void gcs_erase_lists(trx_t *trx) {
     gcs->min_safe_scn.store(oldest_trx->txn_desc.cmmt.scn);
   }
 
-  gcs_scn_mutex_exit();
+  scn_list_mutex_exit();
 
   assert_lizard_min_safe_scn_valid();
 }
@@ -108,8 +158,14 @@ void gcs_close() {
     lizard_ut_ad(UT_LIST_GET_LEN(gcs->serialisation_list_scn) == 0);
 
     gcs->scn.~SCN();
+    gcs->gcn.~GCN();
+
     gcs->persisters.~Persisters();
     gcs->mtx_inited = false;
+
+    mutex_free(&gcs->m_scn_list_mutex);
+    mutex_free(&gcs->m_gcn_order_mutex);
+    mutex_free(&gcs->m_gcn_persist_mutex);
 
     ut_free(gcs);
     gcs = nullptr;
@@ -138,6 +194,8 @@ void gcs_boot() {
   gcs->scn.boot();
 
   gcs->min_safe_scn = gcs->scn.load_scn();
+
+  gcs->gcn.boot();
 
   /** Init vision system */
   trx_vision_container_init();
@@ -203,14 +261,14 @@ scn_t gcs_load_scn() {
 gcn_t gcs_load_gcn() {
   ut_a(gcs);
 
-  return gcs->scn.load_gcn();
+  return gcs->gcn.load_gcn();
 }
 
 /** Get max snapthot GCN number */
-gcn_t gcs_get_snapshot_gcn() {
+gcn_t gcs_load_snapshot_gcn() {
   ut_a(gcs);
 
-  return gcs->scn.get_snapshot_gcn();
+  return gcs->gcn.load_snapshot_gcn();
 }
 
 /**
@@ -267,9 +325,9 @@ void min_safe_scn_valid() {
   trx_t *trx = nullptr;
   trx_t *prev_trx = nullptr;
 
-  ut_ad(!gcs_scn_mutex_own());
+  ut_ad(!scn_list_mutex_own());
 
-  gcs_scn_mutex_enter();
+  scn_list_mutex_enter();
 
   sys_scn = gcs_load_scn();
   if (UT_LIST_GET_LEN(gcs->serialisation_list_scn) == 0) {
@@ -291,7 +349,7 @@ void min_safe_scn_valid() {
     }
   }
 
-  gcs_scn_mutex_exit();
+  scn_list_mutex_exit();
 }
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
@@ -325,7 +383,7 @@ void min_safe_scn_valid() {
   @retval         the min safe commited scn in current lizard sys
 */
 scn_t gcs_load_min_safe_scn() {
-  ut_ad(!gcs_scn_mutex_own());
+  ut_ad(!scn_list_mutex_own());
   assert_lizard_min_safe_scn_valid();
   /* Get the oldest transaction from serialisation list. */
   return gcs->min_safe_scn.load();
@@ -336,8 +394,13 @@ scn_t gcs_load_min_safe_scn() {
 
   @retval         the valid gcn. */
 gcn_t gcs_acquire_gcn() {
-  ut_ad(!gcs_scn_mutex_own());
-  return gcs->scn.acquire_gcn(false);
+  ut_ad(!gcn_order_mutex_own());
+  gcn_t gcn;
+  gcn_order_mutex_enter();
+  gcn = gcs->gcn.acquire_gcn();
+  gcn_order_mutex_exit();
+
+  return gcn;
 }
 
 }  // namespace lizard

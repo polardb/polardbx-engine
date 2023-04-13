@@ -94,7 +94,7 @@ static void export_lizard_status(void) {
   lizard_vars.commit_cleanout_collects = lizard_stats.commit_cleanout_collects;
   lizard_vars.commit_cleanout_cleaned = lizard_stats.commit_cleanout_cleaned;
 
-  lizard_vars.snapshot_gcn = gcs_get_snapshot_gcn();
+  lizard_vars.snapshot_gcn = gcs_load_snapshot_gcn();
   lizard_vars.commit_gcn = gcs_load_gcn();
 
   lizard_vars.purged_gcn = gcs_get_purged_gcn();

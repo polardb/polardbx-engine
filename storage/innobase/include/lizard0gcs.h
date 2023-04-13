@@ -74,7 +74,12 @@ typedef byte gcs_sysf_t;
 
 
 #ifdef UNIV_PFS_MUTEX
-
+/* GCS scn list mutex PFS key */
+extern mysql_pfs_key_t scn_list_mutex_key;
+/* GCS gcn order mutex PFS key */
+extern mysql_pfs_key_t gcn_order_mutex_key;
+/* GCS gcn persist mutex PFS key */
+extern mysql_pfs_key_t gcn_persist_mutex_key;
 #endif
 
 namespace lizard {
@@ -99,6 +104,9 @@ struct gcs_t {
   /** The global scn number which is total order. */
   SCN scn;
 
+  /** The global gcn number which come from TSO or Inner. */
+  GCN gcn;
+
   /** The min active trx id */
   std::atomic<trx_id_t> min_active_trx_id;
 
@@ -120,6 +128,18 @@ struct gcs_t {
 
   /** Persister for gcs metadata. */
   Persisters persisters;
+
+  /** Protect serialisation list scn */
+  ib_mutex_t m_scn_list_mutex;
+
+  /** Protect m_gcn order */
+  ib_mutex_t m_gcn_order_mutex;
+
+  /** Serialize gcn persist */
+  ib_mutex_t m_gcn_persist_mutex;
+
+  /** New trx commit. */
+  commit_scn_t new_commit(trx_t *trx, mtr_t *mtr);
 };
 
 /** Initialize GCS system memory structure. */
@@ -147,7 +167,7 @@ extern scn_t gcs_load_scn();
 extern gcn_t gcs_load_gcn();
 
 /** Get max snapshot GCN number */
-extern gcn_t gcs_get_snapshot_gcn();
+extern gcn_t gcs_load_snapshot_gcn();
 
 /**
   Modify the min active trx id
@@ -208,6 +228,54 @@ void min_safe_scn_valid();
 extern gcn_t gcs_acquire_gcn();
 
 }  // namespace lizard
+
+#define scn_list_mutex_enter()                   \
+  do {                                           \
+    ut_ad(lizard::gcs != nullptr);               \
+    mutex_enter(&lizard::gcs->m_scn_list_mutex); \
+  } while (0)
+
+#define scn_list_mutex_exit()                   \
+  do {                                          \
+    ut_ad(lizard::gcs != nullptr);              \
+    mutex_exit(&lizard::gcs->m_scn_list_mutex); \
+  } while (0)
+
+#ifdef UNIV_DEBUG
+#define scn_list_mutex_own() mutex_own(&lizard::gcs->m_scn_list_mutex)
+#endif
+
+#define gcn_order_mutex_enter()                   \
+  do {                                            \
+    ut_ad(lizard::gcs != nullptr);                \
+    mutex_enter(&lizard::gcs->m_gcn_order_mutex); \
+  } while (0)
+
+#define gcn_order_mutex_exit()                   \
+  do {                                           \
+    ut_ad(lizard::gcs != nullptr);               \
+    mutex_exit(&lizard::gcs->m_gcn_order_mutex); \
+  } while (0)
+
+#ifdef UNIV_DEBUG
+#define gcn_order_mutex_own() mutex_own(&lizard::gcs->m_gcn_order_mutex)
+#endif
+
+#define gcn_persist_mutex_enter()                   \
+  do {                                              \
+    ut_ad(lizard::gcs != nullptr);                  \
+    mutex_enter(&lizard::gcs->m_gcn_persist_mutex); \
+  } while (0)
+
+#define gcn_persist_mutex_exit()                   \
+  do {                                             \
+    ut_ad(lizard::gcs != nullptr);                 \
+    mutex_exit(&lizard::gcs->m_gcn_persist_mutex); \
+  } while (0)
+
+#ifdef UNIV_DEBUG
+#define gcn_persist_mutex_own() mutex_own(&lizard::gcs->m_gcn_persist_mutex)
+#endif
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 #define assert_lizard_min_safe_scn_valid() \
