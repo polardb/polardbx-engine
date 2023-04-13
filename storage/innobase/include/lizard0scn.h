@@ -38,11 +38,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "mtr0types.h"
 
-#ifdef UNIV_PFS_MUTEX
-/* lizard scn mutex PFS key */
-extern mysql_pfs_key_t lizard_scn_mutex_key;
-#endif
-
 /** The number gap of persist scn number into system tablespace */
 #define GCS_SCN_NUMBER_MAGIN 8192 
 
@@ -239,45 +234,12 @@ class SCN {
   @return     scn */
   scn_t new_scn();
 
-  /** Calculate a new scn number and consistent UTC time
-      or external GCN
-  @return   <SCN, UTC, GCN, Error> */
-  std::pair<commit_scn_t, bool> new_commit_scn(gcn_t gcn);
-
-  gcn_t acquire_gcn(bool mutex_held = false);
-
-  scn_t load_scn();
-
-  gcn_t load_gcn();
-
-  void set_snapshot_gcn(gcn_t gcn, bool mutex_held = false);
-
-  gcn_t get_snapshot_gcn();
-
-  /** lock mutex */
-  void lock() {
+  scn_t load_scn() {
     ut_ad(m_inited);
-    mutex_enter(&m_mutex);
+    return m_scn.load();
   }
-
-  /** unlock mutex */
-  void unlock() {
-    ut_ad(m_inited);
-    mutex_exit(&m_mutex);
-  }
-
-#ifdef UNIV_DEBUG
-  /** check if own mutex */
-  bool own_lock() {
-    ut_ad(m_inited);
-    return mutex_own(&m_mutex);
-  }
-#endif
 
  private:
-  /** Flush the global commit number to system tablepace */
-  void flush_gcn();
-
   /** Disable the copy and assign function */
   SCN(const SCN &) = delete;
   SCN(const SCN &&) = delete;
@@ -285,12 +247,69 @@ class SCN {
 
  private:
   std::atomic<scn_t> m_scn;
-  std::atomic<gcn_t> m_gcn;
-  /*snapshot gcn*/
-  std::atomic<gcn_t> m_snapshot_gcn;
   bool m_inited;
-  ib_mutex_t m_mutex;
 };
+
+/* The structure of gcn number generation */
+class GCN {
+ public:
+  GCN();
+  virtual ~GCN() { m_inited = false; }
+
+  void boot();
+
+  /**
+    Prepare a gcn number according to source type when
+    commit.
+
+    1) GSR_NULL
+      -- Use current gcn as commit gcn.
+    2) GSR_INNER
+      -- Generate from current gcn early, use it directly.
+    3) GSR_OURTER
+      -- Come from 3-party component, use it directly,
+         increase current gcn if bigger.
+
+    @param[in]	gix
+    @param[in]	mini transaction
+
+    @retval	gix
+  */
+  gcn_t new_gcn(gcn_t gcn);
+
+  gcn_t load_gcn() const { return m_gcn.load(); }
+
+  gcn_t acquire_gcn();
+
+  void set_snapshot_gcn_if_bigger(gcn_t gcn);
+
+  gcn_t load_snapshot_gcn() { return m_snapshot_gcn.load(); }
+
+  /** Flush the global commit number to system tablepace */
+  void flush_gcn(gcn_t gcn);
+
+  /**
+     Push up current gcn if bigger.
+
+     @param[in]	gcn
+  */
+  void set_gcn_if_bigger(const gcn_t gcn);
+
+  /** Disable the copy and assign function */
+  GCN(const GCN &) = delete;
+  GCN(const GCN &&) = delete;
+  GCN &operator=(const GCN &) = delete;
+
+ private:
+  std::atomic<scn_t> m_scn;
+  std::atomic<gcn_t> m_gcn;
+  std::atomic<gcn_t> m_snapshot_gcn;
+
+  std::atomic<gcn_t> m_persisted_gcn;
+
+  bool m_inited;
+};
+
 
 /** gcn persister */
 class GcnPersister : public Persister {
@@ -350,25 +369,6 @@ inline bool commit_scn_is_uninitial(commit_scn_t &cmmt) {
   }
   return false;
 }
-
-#define gcs_scn_mutex_enter()      \
-  do {                                    \
-    ut_ad(lizard::gcs != nullptr); \
-    lizard::gcs->scn.lock();       \
-  } while (0)
-
-#define gcs_scn_mutex_exit()       \
-  do {                                    \
-    ut_ad(lizard::gcs != nullptr); \
-    lizard::gcs->scn.unlock();     \
-  } while (0)
-
-/*--------------------------------------------------------------------*/
-/* DEBUG */
-/*--------------------------------------------------------------------*/
-#ifdef UNIV_DEBUG
-#define gcs_scn_mutex_own() lizard::gcs->scn.own_lock()
-#endif
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 

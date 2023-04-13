@@ -1352,53 +1352,9 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
 
   /* Step 1: modify trx->scn */
   if (cmmt_ptr == nullptr) {
-    gcs_scn_mutex_enter();
-
-    /** Fetch commit gcn */
-    gcn_t gcn = GCN_NULL;
-
-    /* If have set commit_gcn on trx, just use it. */
-    if (trx->txn_desc.cmmt.gcn != GCN_NULL) {
-      ut_ad(!trx->mysql_thd);
-      gcn = trx->txn_desc.cmmt.gcn;
-      trx->txn_desc.cmmt.gcn = GCN_NULL;
-    } else {
-      gcn = trx_mysql_has_gcn(trx);
-    }
-
-    DBUG_EXECUTE_IF("crash_before_gcn_commit", ut_ad(gcn != GCN_NULL ? 0 : 1););
-
-    /** Generate a new scn */
-    std::pair<commit_scn_t, bool> cmmt_result = gcs->scn.new_commit_scn(gcn);
-
-    cmmt = cmmt_result.first;
-    ut_a(!cmmt_result.second);
-
-    assert_trx_scn_initial(trx);
-    /** We don't want to call **ut_time_system_us** within the scope
-    of the gcs mutex protection. So we just only set
-    trx->txn_desc.scn.first here */
-    trx->txn_desc.cmmt.scn = cmmt.scn;
-
-    /** If a read only transaction (for example: start transaction read only),
-    temporary table can be also modified. It doesn't matter if purge_sys purges
-    them */
-
-    /** Revision:
-        Temp undo still need to purge/truncate, so delay it by adding into
-        serialisation list */
-
-    /** add to gcs->serialisation_list_scn */
-    UT_LIST_ADD_LAST(gcs->serialisation_list_scn, trx);
-
     ut_ad(*serialised == false);
     *serialised = true;
-
-    trx->txn_desc.cmmt.gcn = cmmt.gcn;
-    gcs_scn_mutex_exit();
-
-    trx->txn_desc.cmmt.utc = cmmt.utc = ut_time_system_us();
-
+    cmmt = gcs->new_commit(trx, mtr);
   } else {
     assert_trx_scn_allocated(trx);
     cmmt = *cmmt_ptr;

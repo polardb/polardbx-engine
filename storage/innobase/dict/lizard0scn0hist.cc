@@ -214,9 +214,9 @@ static dberr_t roll_forward_scn() {
   scn_t scn;
   trx_t *trx;
 
-  gcs_scn_mutex_enter();
-  scn = gcs->scn.new_commit_scn(GCN_NULL).first.scn;
-  gcs_scn_mutex_exit();
+  scn_list_mutex_enter();
+  scn = gcs->scn.new_scn();
+  scn_list_mutex_exit();
 
   utc = ut_time_system_us() / 1000000;
 

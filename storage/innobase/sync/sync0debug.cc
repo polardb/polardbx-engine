@@ -1505,7 +1505,11 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
   LATCH_ADD_MUTEX(FILE_PURGE_LIST, SYNC_NO_ORDER_CHECK,
                   file_purge_list_mutex_key);
 
-  LATCH_ADD_MUTEX(LIZARD_SCN, SYNC_NO_ORDER_CHECK, lizard_scn_mutex_key);
+  LATCH_ADD_MUTEX(SCN_LIST, SYNC_NO_ORDER_CHECK, scn_list_mutex_key);
+
+  LATCH_ADD_MUTEX(GCN_ORDER, SYNC_NO_ORDER_CHECK, gcn_order_mutex_key);
+
+  LATCH_ADD_MUTEX(GCN_PERSIST, SYNC_NO_ORDER_CHECK, gcn_persist_mutex_key);
 
   LATCH_ADD_MUTEX(LIZARD_UNDO_HDR_HASH, SYNC_NO_ORDER_CHECK,
                   lizard_undo_hdr_hash_mutex_key);

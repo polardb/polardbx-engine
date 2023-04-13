@@ -38,11 +38,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn.h"
 #include "lizard0gcs.h"
 
-#ifdef UNIV_PFS_MUTEX
-/* Lizard scn mutex PFS key */
-mysql_pfs_key_t lizard_scn_mutex_key;
-#endif
-
 namespace lizard {
 
 /** Write scn value into tablespace.
@@ -136,16 +131,10 @@ void GcnPersister::read(PersistentGcsData *metadata) {
 }
 
 /** Constructor of SCN */
-SCN::SCN()
-    : m_scn(SCN_NULL),
-      m_gcn(GCN_NULL),
-      m_snapshot_gcn(GCN_NULL),
-      m_inited(false) {
-  mutex_create(LATCH_ID_LIZARD_SCN, &m_mutex);
-}
+SCN::SCN() : m_scn(SCN_NULL), m_inited(false) {}
 
 /** Destructor of SCN */
-SCN::~SCN() { mutex_free(&m_mutex); }
+SCN::~SCN() { m_inited = false; }
 
 /** Assign the init value by reading from tablespace */
 void SCN::boot() {
@@ -158,24 +147,8 @@ void SCN::boot() {
   m_scn = meta.get_scn();
   ut_a(m_scn > 0 && m_scn < SCN_NULL);
 
-  gcs->persisters.gcn_persister()->read(&meta);
-  m_gcn = meta.get_gcn();
-  m_snapshot_gcn = m_gcn.load();
-  ut_a(m_gcn > 0 && m_gcn < GCN_NULL);
-
   m_inited = true;
   return;
-}
-
-/** Flush the global commit number to system tablepace */
-void SCN::flush_gcn() {
-  ut_ad(m_mutex.is_owned());
-  ut_ad(m_inited);
-  ut_ad(m_gcn != SCN_NULL);
-
-  PersistentGcsData meta;
-  meta.set_gcn(m_gcn.load());
-  gcs->persisters.gcn_persister()->write(&meta);
 }
 
 /** Calucalte a new scn number
@@ -184,7 +157,7 @@ scn_t SCN::new_scn() {
   scn_t num;
   ut_ad(m_inited);
 
-  ut_ad(mutex_own(&m_mutex));
+  ut_ad(scn_list_mutex_own());
 
   /** flush scn every magin */
   if (!(m_scn % GCS_SCN_NUMBER_MAGIN)) {
@@ -200,62 +173,85 @@ scn_t SCN::new_scn() {
   return num;
 }
 
-/** Calculate a new scn number and consistent UTC time
-@return   <SCN, UTC, GCN, Error> */
-std::pair<commit_scn_t, bool> SCN::new_commit_scn(gcn_t gcn) {
-  commit_scn_t cmmt = COMMIT_SCN_NULL;
+/** GCN constructor. */
+GCN::GCN()
+    : m_gcn(GCN_NULL),
+      m_snapshot_gcn(GCN_NULL),
+      m_persisted_gcn(GCN_NULL),
+      m_inited(false) {}
 
-  if (gcn != GCN_NULL && gcn > m_gcn) {
-    // TODO: the flush frequency of gcn.
-    m_gcn = gcn;
-    flush_gcn();
-  }
+/** Boot GCN module, read gcn value from tablespace,
+ */
+void GCN::boot() {
+  ut_ad(!m_inited);
+  ut_ad(m_gcn.load() == GCN_NULL);
 
-  cmmt.gcn = (gcn != GCN_NULL) ? gcn : m_gcn.load();
-  cmmt.scn = new_scn();
+  PersistentGcsData meta;
+  gcs->persisters.gcn_persister()->read(&meta);
 
-  ut_ad(cmmt.scn > SCN_RESERVERD_MAX);
+  m_gcn.store(meta.get_gcn());
+  m_snapshot_gcn.store(meta.get_gcn());
+  m_persisted_gcn.store(meta.get_gcn());
 
-  return std::make_pair(cmmt, false);
+  ut_ad(m_gcn >= GCN_INITIAL && m_gcn < GCN_NULL);
+  ut_ad(m_snapshot_gcn >= GCN_INITIAL && m_snapshot_gcn < GCN_NULL);
+  ut_ad(m_persisted_gcn >= GCN_INITIAL && m_persisted_gcn < GCN_NULL);
+
+  m_inited = true;
+  return;
 }
 
-/** Get current scn which is committed.
-@param[in]  true if m_mutex is hold
-@return     m_scn */
-gcn_t SCN::acquire_gcn(bool mutex_held) {
-  gcn_t ret;
-  if (!mutex_held) {
-    mutex_enter(&m_mutex);
+/** Flush the global commit number to system tablepace */
+void GCN::flush_gcn(gcn_t gcn) {
+  ut_ad(m_inited);
+  ut_ad(gcn != GCN_NULL);
+  ut_ad(gcn_order_mutex_own());
+
+  PersistentGcsData meta;
+  meta.set_gcn(gcn);
+  gcs->persisters.gcn_persister()->write(&meta);
+}
+
+gcn_t GCN::new_gcn(gcn_t gcn) {
+  gcn_t cmmt = GCN_NULL;
+  ut_ad(gcn_order_mutex_own());
+
+  if (gcn != GCN_NULL)
+    cmmt = gcn;
+  else
+    cmmt = acquire_gcn();
+
+  if (cmmt > m_gcn) {
+    m_gcn = cmmt;
   }
+  if (cmmt > m_persisted_gcn) {
+    m_persisted_gcn = cmmt;
+    flush_gcn(cmmt);
+  }
+  return cmmt;
+}
+
+/** Acquire bigger gcn between gcn and snapshot_gcn
+@return     gcn */
+gcn_t GCN::acquire_gcn() {
+  gcn_t ret;
+  ut_ad(gcn_order_mutex_own());
 
   ret = m_gcn > m_snapshot_gcn ? m_gcn.load() : m_snapshot_gcn.load();
 
-  if (!mutex_held) {
-    mutex_exit(&m_mutex);
-  }
   return ret;
 }
 
-scn_t SCN::load_scn() { return m_scn.load(); }
+void GCN::set_snapshot_gcn_if_bigger(gcn_t gcn) {
+  ut_ad(!gcn_order_mutex_own());
 
-gcn_t SCN::load_gcn() { return m_gcn.load(); }
+  if(gcn == GCN_NULL || gcn == GCN_INITIAL) 
+    return;
 
-void SCN::set_snapshot_gcn(gcn_t gcn, bool mutex_held) {
-  if (gcn == GCN_NULL || gcn == GCN_INITIAL) return;
-
-  if (!mutex_held) {
-    mutex_enter(&m_mutex);
-  }
-
-  if( gcn > m_snapshot_gcn )
-    m_snapshot_gcn = gcn;
-
-  if (!mutex_held) {
-    mutex_exit(&m_mutex);
-  }
+  gcn_order_mutex_enter();
+  if (gcn > m_snapshot_gcn.load()) m_snapshot_gcn.store(gcn);
+  gcn_order_mutex_exit();
 }
-
-gcn_t SCN::get_snapshot_gcn() { return m_snapshot_gcn.load(); }
 
 /**
   Check the commit scn state
