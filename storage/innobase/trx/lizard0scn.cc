@@ -45,6 +45,96 @@ mysql_pfs_key_t lizard_scn_mutex_key;
 
 namespace lizard {
 
+/** Write scn value into tablespace.
+
+    @param[in]	metadata   scn metadata
+ */
+void ScnPersister::write(const PersistentGcsData *metadata) {
+  ut_ad(metadata->get_scn() != SCN_NULL);
+
+  gcs_sysf_t *hdr;
+  mtr_t mtr;
+
+  mtr_start(&mtr);
+  hdr = gcs_sysf_get(&mtr);
+  mlog_write_ull(hdr + GCS_DATA_SCN, metadata->get_scn(), &mtr);
+  mtr_commit(&mtr);
+}
+
+/** Write scn value redo log.
+
+    @param[in]	metadata   scn metadata
+    @param[in]	mini transacton context
+
+    @TODO
+ */
+void ScnPersister::write_log(const PersistentGcsData *, mtr_t *) { ut_a(0); }
+
+/** Read scn value from tablespace and increase GCS_SCN_NUMBER_MAGIN
+    to promise unique.
+
+    @param[in/out]	metadata   scn metadata
+
+ */
+void ScnPersister::read(PersistentGcsData *metadata) {
+  scn_t scn = SCN_NULL;
+  gcs_sysf_t *hdr;
+  mtr_t mtr;
+  mtr.start();
+
+  hdr = gcs_sysf_get(&mtr);
+
+  scn = 2 * GCS_SCN_NUMBER_MAGIN +
+        ut_uint64_align_up(mach_read_from_8(hdr + GCS_DATA_SCN),
+                           GCS_SCN_NUMBER_MAGIN);
+
+  ut_a(scn > 0 && scn < SCN_NULL);
+  mtr.commit();
+
+  metadata->set_scn(scn);
+}
+
+/**------------------------------------------------------------------------*/
+/** GCN */
+/**------------------------------------------------------------------------*/
+/** Write gcn value into tablespace.
+
+    @param[in]	metadata   gcn metadata
+ */
+void GcnPersister::write(const PersistentGcsData *metadata) {
+  gcs_sysf_t *hdr;
+  mtr_t mtr;
+
+  ut_ad(metadata->get_gcn() != GCN_NULL);
+
+  mtr_start(&mtr);
+  hdr = gcs_sysf_get(&mtr);
+  mlog_write_ull(hdr + GCS_DATA_GCN, metadata->get_gcn(), &mtr);
+  mtr_commit(&mtr);
+}
+
+void GcnPersister::write_log(const PersistentGcsData *, mtr_t *) { ut_a(0); }
+
+/** Read gcn value from tablespace
+
+    @param[in/out]	metadata   gcn metadata
+
+ */
+void GcnPersister::read(PersistentGcsData *metadata) {
+  gcn_t gcn = GCN_NULL;
+  gcs_sysf_t *hdr;
+  mtr_t mtr;
+  mtr.start();
+
+  hdr = gcs_sysf_get(&mtr);
+  gcn = mach_read_from_8(hdr + GCS_DATA_GCN);
+
+  mtr.commit();
+
+  ut_a(gcn > 0 && gcn < GCN_NULL);
+  metadata->set_gcn(gcn);
+}
+
 /** Constructor of SCN */
 SCN::SCN()
     : m_scn(SCN_NULL),
@@ -57,61 +147,35 @@ SCN::SCN()
 /** Destructor of SCN */
 SCN::~SCN() { mutex_free(&m_mutex); }
 
-/** Assign the init value by reading from zesu tablespace */
-void SCN::init() {
+/** Assign the init value by reading from tablespace */
+void SCN::boot() {
   ut_ad(!m_inited);
   ut_ad(m_scn == SCN_NULL);
 
-  gcs_sysf_t *hdr;
-  mtr_t mtr;
-  mtr.start();
+  PersistentGcsData meta;
 
-  hdr = gcs_sysf_get(&mtr);
-
-  m_scn = 2 * LIZARD_SCN_NUMBER_MAGIN +
-          ut_uint64_align_up(mach_read_from_8(hdr + GCS_DATA_SCN),
-                             LIZARD_SCN_NUMBER_MAGIN);
-
-  m_gcn = mach_read_from_8(hdr + GCS_DATA_GCN);
-  m_snapshot_gcn = m_gcn.load();
-
-  gcs->min_safe_scn = m_scn.load();
-
+  gcs->persisters.scn_persister()->read(&meta);
+  m_scn = meta.get_scn();
   ut_a(m_scn > 0 && m_scn < SCN_NULL);
-  mtr.commit();
+
+  gcs->persisters.gcn_persister()->read(&meta);
+  m_gcn = meta.get_gcn();
+  m_snapshot_gcn = m_gcn.load();
+  ut_a(m_gcn > 0 && m_gcn < GCN_NULL);
 
   m_inited = true;
   return;
 }
 
-/** Flush the scn number to tablepace every ZEUS_SCN_NUMBER_MAGIN */
-void SCN::flush_scn() {
-  gcs_sysf_t *hdr;
-  mtr_t mtr;
-
-  ut_ad(m_mutex.is_owned());
-  ut_ad(m_inited);
-  ut_ad(m_scn != SCN_NULL);
-
-  mtr_start(&mtr);
-  hdr = gcs_sysf_get(&mtr);
-  mlog_write_ull(hdr + GCS_DATA_SCN, m_scn, &mtr);
-  mtr_commit(&mtr);
-}
-
 /** Flush the global commit number to system tablepace */
 void SCN::flush_gcn() {
-  gcs_sysf_t *hdr;
-  mtr_t mtr;
-
   ut_ad(m_mutex.is_owned());
   ut_ad(m_inited);
   ut_ad(m_gcn != SCN_NULL);
 
-  mtr_start(&mtr);
-  hdr = gcs_sysf_get(&mtr);
-  mlog_write_ull(hdr + GCS_DATA_GCN, m_gcn, &mtr);
-  mtr_commit(&mtr);
+  PersistentGcsData meta;
+  meta.set_gcn(m_gcn.load());
+  gcs->persisters.gcn_persister()->write(&meta);
 }
 
 /** Calucalte a new scn number
@@ -123,7 +187,11 @@ scn_t SCN::new_scn() {
   ut_ad(mutex_own(&m_mutex));
 
   /** flush scn every magin */
-  if (!(m_scn % LIZARD_SCN_NUMBER_MAGIN)) flush_scn();
+  if (!(m_scn % GCS_SCN_NUMBER_MAGIN)) {
+    PersistentGcsData meta;
+    meta.set_scn(m_scn.load());
+    gcs->persisters.scn_persister()->write(&meta);
+  }
 
   num = ++m_scn;
 

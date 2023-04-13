@@ -1810,7 +1810,8 @@ dberr_t srv_start(bool create_new_db) {
   trx_sys_create();
   lock_sys_create(srv_lock_table_size);
 
-  lizard::gcs_create();
+  lizard::gcs_init();
+
   lizard::gp_sys_create();
 
   /* Create i/o-handler threads: */
@@ -1957,7 +1958,7 @@ dberr_t srv_start(bool create_new_db) {
       return (srv_init_abort(DB_ERROR));
 
     lizard::gcs_create_sys_pages();
-    lizard::gcs_init();
+    lizard::gcs_boot();
 
     /* To maintain backward compatibility we create only
     the first rollback segment before the double write buffer.
@@ -2046,6 +2047,8 @@ dberr_t srv_start(bool create_new_db) {
     if (err != DB_SUCCESS) {
       return (srv_init_abort(err));
     }
+
+    lizard::gcs_boot();
 
     ut_ad(clone_check_recovery_crashpoint(recv_sys->is_cloned_db));
 
@@ -2370,8 +2373,6 @@ dberr_t srv_start(bool create_new_db) {
     if (err != DB_SUCCESS && srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN) {
       return (srv_init_abort(err));
     }
-
-    lizard::gcs_init();
 
     trx_purge_sys_mem_create();
 

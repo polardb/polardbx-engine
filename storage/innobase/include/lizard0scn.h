@@ -36,13 +36,17 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn0types.h"
 #include "ut0mutex.h"
 
+#include "mtr0types.h"
+
 #ifdef UNIV_PFS_MUTEX
 /* lizard scn mutex PFS key */
 extern mysql_pfs_key_t lizard_scn_mutex_key;
 #endif
 
 /** The number gap of persist scn number into system tablespace */
-#define LIZARD_SCN_NUMBER_MAGIN 8192 
+#define GCS_SCN_NUMBER_MAGIN 8192 
+
+struct mtr_t;
 
 namespace lizard {
 
@@ -150,14 +154,86 @@ constexpr gcn_t GCN_DYNAMIC_METADATA = GCN_MAX;
 /** The gcn for innodb log ddl */
 constexpr gcn_t GCN_LOG_DDL = GCN_MAX;
 
+/** GCS Metadata which is used to persist */
+class PersistentGcsData {
+ public:
+  PersistentGcsData() : m_scn(SCN_NULL), m_gcn(GCN_NULL) {}
+
+  scn_t get_scn() const { return m_scn; }
+  gcn_t get_gcn() const { return m_gcn; }
+
+  void set_scn(scn_t scn) { m_scn = scn; }
+  void set_gcn(gcn_t gcn) { m_gcn = gcn; }
+
+  /**
+    Set gcn if bigger
+  */
+  void set_gcn_if_bigger(const gcn_t gcn) {
+    if (gcn == GCN_NULL) return;
+
+    if (m_gcn == GCN_NULL || gcn > m_gcn) {
+      m_gcn = gcn;
+    }
+  }
+
+ private:
+  scn_t m_scn;
+  gcn_t m_gcn;
+};
+
+/** Persister of metadata interface. */
+class Persister {
+ public:
+  Persister() {}
+  virtual ~Persister() {}
+
+ public:
+  /** Write metadata and redo log. */
+  virtual void write(const PersistentGcsData *metadata) = 0;
+
+  /** Write only redo log */
+  virtual void write_log(const PersistentGcsData *metadata, mtr_t *mtr) = 0;
+
+  /** Read metadata */
+  virtual void read(PersistentGcsData *metadata) = 0;
+};
+
+/** SCN persister */
+class ScnPersister : public Persister {
+ public:
+  /** Write scn value into tablespace.
+
+      @param[in]	metadata   scn metadata
+   */
+  virtual void write(const PersistentGcsData *metadata) override;
+
+  /** Write scn value redo log.
+
+      @param[in]	metadata   scn metadata
+      @param[in]	mini transacton context
+
+      @TODO
+   */
+  virtual void write_log(const PersistentGcsData *metadata,
+                         mtr_t *mtr) override;
+
+  /** Read scn value from tablespace and increase GCS_SCN_NUMBER_MAGIN
+   *  to promise unique.
+
+      @param[in/out]	metadata   scn metadata
+
+   */
+  virtual void read(PersistentGcsData *metadata) override;
+};
+
 /* The structure of scn number generation */
 class SCN {
  public:
   SCN();
   virtual ~SCN();
 
-  /** Assign the init value by reading from lizard tablespace */
-  void init();
+  /** Assign the init value by reading from tablespace */
+  void boot();
 
   /** Calculate a new scn number
   @return     scn */
@@ -199,9 +275,6 @@ class SCN {
 #endif
 
  private:
-  /** Flush the scn number to system tablepace every LIZARD_SCN_NUMBER_MAGIN */
-  void flush_scn();
-
   /** Flush the global commit number to system tablepace */
   void flush_gcn();
 
@@ -217,6 +290,32 @@ class SCN {
   std::atomic<gcn_t> m_snapshot_gcn;
   bool m_inited;
   ib_mutex_t m_mutex;
+};
+
+/** gcn persister */
+class GcnPersister : public Persister {
+ public:
+  /** Write gcn value into tablespace.
+
+      @param[in]	metadata   gcn metadata
+   */
+  virtual void write(const PersistentGcsData *metadata) override;
+
+  /** Write gcn value redo log.
+
+      @param[in]	metadata   gcn metadata
+      @param[in]	mini transacton context
+
+   */
+  virtual void write_log(const PersistentGcsData *metadata,
+                         mtr_t *mtr) override;
+
+  /** Read gcn value from tablespace
+
+      @param[in/out]	metadata   gcn metadata
+
+   */
+  virtual void read(PersistentGcsData *metadata) override;
 };
 
 /**

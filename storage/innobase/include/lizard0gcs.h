@@ -85,6 +85,21 @@ typedef byte gcs_sysf_t;
 
 namespace lizard {
 
+/** GCS Persister container. */
+struct Persisters {
+ public:
+  Persisters() : m_scn_persister(), m_gcn_persister() {}
+
+  virtual ~Persisters() {}
+
+  Persister *scn_persister() { return &m_scn_persister; }
+  Persister *gcn_persister() { return &m_gcn_persister; }
+
+ private:
+  ScnPersister m_scn_persister;
+  GcnPersister m_gcn_persister;
+};
+
 /** The memory structure of GCS system */
 struct gcs_t {
   /** The global scn number which is total order. */
@@ -108,16 +123,18 @@ struct gcs_t {
   /*!< Ordered on commited scn of trx_t of all the
   currenrtly active RW transactions */
   UT_LIST_BASE_NODE_T(trx_t, scn_list) serialisation_list_scn;
+  /** Persister for gcs metadata. */
+  Persisters persisters;
 };
 
-/** Create GCS system structure. */
-void gcs_create();
+/** Initialize GCS system memory structure. */
+void gcs_init();
 
 /** Close GCS system structure. */
 void gcs_close();
 
-/** Init the elements of GCS system */
-void gcs_init();
+/** Boot GCS system */
+void gcs_boot();
 
 /** Get the address of GCS system header */
 extern gcs_sysf_t *gcs_sysf_get(mtr_t *mtr);
@@ -141,13 +158,13 @@ extern gcn_t gcs_get_snapshot_gcn();
   Modify the min active trx id
 
   @param[in]      the add/removed trx */
-void gcs_mod_min_active_trx_id(trx_t *trx);
+extern void gcs_mod_min_active_trx_id(trx_t * trx);
 
 /**
   Get the min active trx id
 
   @retval         the min active id in trx_sys. */
-trx_id_t gcs_load_min_active_trx_id();
+extern trx_id_t gcs_load_min_active_trx_id();
 
 /**
   In MySQL 8.0:
@@ -178,7 +195,7 @@ trx_id_t gcs_load_min_active_trx_id();
 
   @retval         the min safe commited scn in current lizard sys
 */
-scn_t gcs_load_min_safe_scn();
+extern scn_t gcs_load_min_safe_scn();
 
 /** Erase trx in serialisation_list_scn, and update min_safe_scn
 @param[in]      trx      trx to be removed */
@@ -193,7 +210,7 @@ void min_safe_scn_valid();
   Get the max gcn between snapshot gcn and m_gcn
 
   @retval         the valid gcn. */
-gcn_t gcs_acquire_gcn();
+extern gcn_t gcs_acquire_gcn();
 
 }  // namespace lizard
 
