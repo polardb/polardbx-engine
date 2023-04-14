@@ -247,8 +247,10 @@ enum mlog_id_t {
   /** Lizard: update the lizard fields (scn, uba) in compact format */
   MLOG_COMP_REC_CLUST_LIZARD_UPDATE = 80,
 
+  /** Lizard: GCN metadata when commit. */
+  MLOG_GCN_METADATA = 81,
   /** Used in tests of redo log. It must never be used outside unit tests. */
-  MLOG_TEST = 81,
+  MLOG_TEST = 82,
 
   /** biggest value (used in assertions) */
   MLOG_BIGGEST_TYPE = MLOG_TEST

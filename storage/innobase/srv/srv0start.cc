@@ -2610,6 +2610,9 @@ files_checked:
         srv_dict_metadata->store();
       }
 
+      /** Persist if needed. */
+      lizard::gcs_persist_gcn();
+
       /* Prepare to delete the old redo log files */
       flushed_lsn = srv_prepare_to_delete_redo_log_files(i);
 

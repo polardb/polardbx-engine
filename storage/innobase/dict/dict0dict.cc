@@ -5525,7 +5525,7 @@ void dict_persist_to_dd_table_buffer() {
   /* Get this lsn with dict_persist->mutex held,
   so no other concurrent dynamic metadata change logs
   would be before this lsn. */
-  const lsn_t persisted_lsn = log_get_lsn(*log_sys);
+  lsn_t persisted_lsn = log_get_lsn(*log_sys);
 
   /* As soon as we release the dict_persist->mutex, new dynamic
   metadata changes could happen. They would be not persisted
@@ -5537,7 +5537,11 @@ void dict_persist_to_dd_table_buffer() {
 
   mutex_exit(&dict_persist->mutex);
 
-  if (persisted) {
+  /** Try to write gcn. */
+  bool written_gcn = lizard::gcs_persist_gcn();
+  persisted_lsn = log_get_lsn(*log_sys);
+
+  if (persisted || written_gcn) {
     log_write_up_to(*log_sys, persisted_lsn, true);
   }
 }
