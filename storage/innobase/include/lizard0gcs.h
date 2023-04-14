@@ -105,6 +105,32 @@ struct Persisters {
   GcnPersister m_gcn_persister;
 };
 
+class CRecover {
+ public:
+  CRecover() : m_need_recovery(false), m_metadata() {}
+  virtual ~CRecover() {}
+
+  /**
+    Raise gcn metadata when parse gcn redo log record.
+
+    @param[in]	gcn	Parsed gcn
+  */
+  void recover_gcn(const gcn_t gcn);
+
+  /**
+    Recover the max parsed gcn to current gcn.
+  */
+  void apply_gcn();
+
+  void need_recovery(bool value) { m_need_recovery = value; }
+
+  bool is_need_recovery() { return m_need_recovery; }
+
+ private:
+  bool m_need_recovery;
+  PersistentGcsData m_metadata;
+};
+
 /** The memory structure of GCS system */
 struct gcs_t {
   /** The global scn number which is total order. */
@@ -145,6 +171,19 @@ struct gcs_t {
 
   /** New trx commit. */
   commit_scn_t new_commit(trx_t *trx, mtr_t *mtr);
+
+  /** Persisted gcn value. */
+  std::atomic<gcn_t> m_persisted_gcn;
+
+  /**
+    Persist gcn if current gcn > persisted gcn.
+
+    @retval	true	if written
+   */
+  bool persist_gcn();
+
+  /** Commit number recover. */
+  CRecover crecover;
 };
 
 /** Initialize GCS system memory structure. */
@@ -173,6 +212,8 @@ extern gcn_t gcs_load_gcn();
 
 /** Get max snapshot GCN number */
 extern gcn_t gcs_load_snapshot_gcn();
+
+extern bool gcs_persist_gcn();
 
 /**
   Modify the min active trx id

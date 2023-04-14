@@ -40,6 +40,58 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace lizard {
 
+/**
+   Writes a log record about gcn rise.
+
+   @param[in]		type	redo log record type
+   @param[in,out]	log_ptr		current end of mini-transaction log
+   @param[in/out]	mtr	mini-transaction
+
+   @reval	end of mtr
+ */
+byte *mlog_write_initial_gcn_log_record(mlog_id_t type, byte *log_ptr,
+                                        mtr_t *mtr) {
+  ut_ad(type <= MLOG_BIGGEST_TYPE);
+  ut_ad(type == MLOG_GCN_METADATA);
+
+  mach_write_to_1(log_ptr, type);
+  log_ptr++;
+
+  mtr->added_rec();
+  return (log_ptr);
+}
+
+/**
+   Parses an initial log record written by mlog_write_initial_gcn_log_record.
+
+   @param[in]	ptr		buffer
+   @param[in]	end_ptr		buffer end
+   @param[out]	type		log record type, should be
+                                MLOG_GCN_METADATA
+   @param[out]	gcn
+
+   @return parsed record end, NULL if not a complete record
+ */
+byte *mlog_parse_initial_gcn_log_record(const byte *ptr, const byte *end_ptr,
+                                        mlog_id_t *type, gcn_t *gcn) {
+  if (end_ptr < ptr + 1) {
+    return nullptr;
+  }
+
+  *type = (mlog_id_t)((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
+  ut_ad(*type == MLOG_GCN_METADATA);
+
+  ptr++;
+
+  if (end_ptr < ptr + 1) {
+    return nullptr;
+  }
+
+  *gcn = mach_parse_u64_much_compressed(&ptr, end_ptr);
+
+  return (const_cast<byte *>(ptr));
+}
+
 /** Write scn value into tablespace.
 
     @param[in]	metadata   scn metadata
@@ -108,7 +160,30 @@ void GcnPersister::write(const PersistentGcsData *metadata) {
   mtr_commit(&mtr);
 }
 
-void GcnPersister::write_log(const PersistentGcsData *, mtr_t *) { ut_a(0); }
+void GcnPersister::write_log(const PersistentGcsData *metadata, mtr_t *mtr) {
+  ut_ad(metadata->get_gcn() != GCN_NULL);
+
+  byte *log_ptr;
+
+  /** 1 byte for MLOG_GCN_METADATA, 1...11 for gcn value. */
+  static constexpr uint8_t write_size = 1 + 11;
+
+  if (!mlog_open(mtr, write_size, log_ptr)) {
+    /** Maybe redo disabled. */
+    ut_ad(log_ptr == nullptr);
+    return;
+  }
+
+  ut_ad(log_ptr != nullptr);
+
+  log_ptr = mlog_write_initial_gcn_log_record(MLOG_GCN_METADATA, log_ptr, mtr);
+
+  ulint consumed = mach_u64_write_much_compressed(log_ptr, metadata->get_gcn());
+
+  log_ptr += consumed;
+
+  mlog_close(mtr, log_ptr);
+}
 
 /** Read gcn value from tablespace
 
@@ -212,22 +287,41 @@ void GCN::flush_gcn(gcn_t gcn) {
   gcs->persisters.gcn_persister()->write(&meta);
 }
 
-gcn_t GCN::new_gcn(gcn_t gcn) {
+/**
+  Prepare a gcn number according to source type when
+  commit.
+
+  1) GSR_NULL
+    -- Use current gcn as commit gcn.
+  2) GSR_INNER
+    -- Generate from current gcn early, use it directly.
+  3) GSR_OURTER
+    -- Come from 3-party component, use it directly,
+       increase current gcn if bigger.
+
+  @param[in]	gcn
+  @param[in]	mini transaction
+
+  @retval	gcn
+*/
+gcn_t GCN::new_gcn(const gcn_t gcn, mtr_t *mtr) {
   gcn_t cmmt = GCN_NULL;
-  ut_ad(gcn_order_mutex_own());
+  ut_ad(!gcn_order_mutex_own());
+
+  gcn_order_mutex_enter();
 
   if (gcn != GCN_NULL)
     cmmt = gcn;
   else
     cmmt = acquire_gcn();
 
-  if (cmmt > m_gcn) {
-    m_gcn = cmmt;
-  }
-  if (cmmt > m_persisted_gcn) {
-    m_persisted_gcn = cmmt;
-    flush_gcn(cmmt);
-  }
+  set_gcn_if_bigger(cmmt);
+
+  gcn_order_mutex_exit();
+
+  PersistentGcsData meta;
+  meta.set_gcn(cmmt);
+  gcs->persisters.gcn_persister()->write_log(&meta, mtr);
   return cmmt;
 }
 
@@ -242,15 +336,30 @@ gcn_t GCN::acquire_gcn() {
   return ret;
 }
 
-void GCN::set_snapshot_gcn_if_bigger(gcn_t gcn) {
-  ut_ad(!gcn_order_mutex_own());
+/**
+   Push up snapshot gcn if bigger.
 
-  if(gcn == GCN_NULL || gcn == GCN_INITIAL) 
-    return;
+   @param[in]	gcn
+*/
+void GCN::set_snapshot_gcn_if_bigger(const gcn_t gcn) {
+  ut_ad(gcn_order_mutex_own());
 
-  gcn_order_mutex_enter();
+  if (gcn == GCN_NULL) return;
+
   if (gcn > m_snapshot_gcn.load()) m_snapshot_gcn.store(gcn);
-  gcn_order_mutex_exit();
+}
+
+/**
+   Push up current gcn if bigger.
+
+   @param[in]	gcn
+*/
+void GCN::set_gcn_if_bigger(const gcn_t gcn) {
+  ut_ad(gcn_order_mutex_own());
+
+  if (gcn == GCN_NULL) return;
+
+  if (gcn > m_gcn.load()) m_gcn.store(gcn);
 }
 
 /**

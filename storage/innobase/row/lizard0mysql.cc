@@ -209,7 +209,9 @@ simulate_error:
 
   if (snapshot_vision->type() == Snapshot_type::AS_OF_GCN &&
       snapshot_vision->is_outer()) {
+    gcn_order_mutex_enter();
     lizard::gcs->gcn.set_snapshot_gcn_if_bigger(fbq_gcn);
+    gcn_order_mutex_exit();
   }
 
   return DB_SUCCESS;

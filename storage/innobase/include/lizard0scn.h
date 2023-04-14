@@ -45,6 +45,31 @@ struct mtr_t;
 
 namespace lizard {
 
+/**
+   Writes a log record about gcn.
+
+   @param[in]		type	redo log record type
+   @param[in,out]	log_ptr	current end of mini-transaction log
+   @param[in/out]	mtr	mini-transaction
+
+   @reval	end of mtr
+ */
+byte *mlog_write_initial_gcn_log_record(mlog_id_t type, byte *log_ptr,
+                                        mtr_t *mtr);
+/**
+   Parses an initial log record written by mlog_write_initial_gcn_log_record.
+
+   @param[in]	ptr		buffer
+   @param[in]	end_ptr		buffer end
+   @param[out]	type		log record type, should be
+                                MLOG_GCN_METADATA
+   @param[out]	gcn
+
+   @return parsed record end, NULL if not a complete record
+ */
+byte *mlog_parse_initial_gcn_log_record(const byte *ptr, const byte *end_ptr,
+                                        mlog_id_t *type, gcn_t *gcn);
+
 /**------------------------------------------------------------------------*/
 /** Predefined SCN */
 /**------------------------------------------------------------------------*/
@@ -270,18 +295,18 @@ class GCN {
       -- Come from 3-party component, use it directly,
          increase current gcn if bigger.
 
-    @param[in]	gix
+    @param[in]	gcn
     @param[in]	mini transaction
 
-    @retval	gix
+    @retval	gcn
   */
-  gcn_t new_gcn(gcn_t gcn);
+  gcn_t new_gcn(const gcn_t gcn, mtr_t *mtr);
 
   gcn_t load_gcn() const { return m_gcn.load(); }
 
   gcn_t acquire_gcn();
 
-  void set_snapshot_gcn_if_bigger(gcn_t gcn);
+  void set_snapshot_gcn_if_bigger(const gcn_t gcn);
 
   gcn_t load_snapshot_gcn() { return m_snapshot_gcn.load(); }
 

@@ -2180,6 +2180,11 @@ dberr_t srv_start(bool create_new_db) {
       log_buffer_flush_to_disk(*log_sys);
     }
 
+    /** Persist if needed. */
+    lizard::gcs_persist_gcn();
+    /* Flush logs to persist the changes. */
+    log_buffer_flush_to_disk(*log_sys);
+
     RECOVERY_CRASH(4);
 
     log_sys->m_allow_checkpoints.store(true, std::memory_order_release);

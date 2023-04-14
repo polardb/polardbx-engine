@@ -2976,6 +2976,18 @@ static ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
       }
 
       return new_ptr == nullptr ? 0 : new_ptr - ptr;
+
+    case MLOG_GCN_METADATA:
+    case MLOG_GCN_METADATA | MLOG_SINGLE_REC_FLAG:
+
+      gcn_t gcn = lizard::GCN_NULL;
+
+      new_ptr =
+          lizard::mlog_parse_initial_gcn_log_record(ptr, end_ptr, type, &gcn);
+
+      lizard::gcs->crecover.recover_gcn(gcn);
+
+      return new_ptr == nullptr ? 0 : new_ptr - ptr;
   }
 
   new_ptr =
@@ -3148,6 +3160,7 @@ static bool recv_single_rec(byte *ptr, byte *end_ptr) {
     case MLOG_FILE_CREATE:
     case MLOG_FILE_EXTEND:
     case MLOG_TABLE_DYNAMIC_META:
+    case MLOG_GCN_METADATA:
 
       /* These were already handled by
       recv_parse_log_rec() and
@@ -3296,6 +3309,7 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
       case MLOG_FILE_RENAME:
       case MLOG_FILE_EXTEND:
       case MLOG_TABLE_DYNAMIC_META:
+      case MLOG_GCN_METADATA:
         /* case MLOG_TRUNCATE: Disabled for WL6378 */
         /* These were already handled by
         recv_parse_or_apply_log_rec_body(). */
@@ -3837,6 +3851,8 @@ static dberr_t recv_init_crash_recovery() {
   ut_a(!recv_needed_recovery);
 
   recv_needed_recovery = true;
+  /** Scan gcn redo log to recover. */
+  lizard::gcs->crecover.need_recovery(true);
 
   ib::info(ER_IB_MSG_726);
   ib::info(ER_IB_MSG_727);
@@ -4192,6 +4208,8 @@ MetadataRecover *recv_recovery_from_checkpoint_finish(bool aborting) {
     metadata = nullptr;
   }
 
+  lizard::gcs->crecover.apply_gcn();
+
   recv_sys_free();
 
   if (!aborting) {
@@ -4423,6 +4441,9 @@ const char *get_mlog_string(mlog_id_t type) {
 
     case MLOG_REC_CLUST_LIZARD_UPDATE:
       return ("MLOG_REC_CLUST_LIZARD_UPDATE");
+
+    case MLOG_GCN_METADATA:
+      return ("MLOG_GCN_METADATA");
 
     case MLOG_TEST:
       return "MLOG_TEST";

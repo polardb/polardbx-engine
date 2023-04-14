@@ -73,9 +73,7 @@ void gcs_init() {
 
   new (&(gcs->persisters)) Persisters();
 
-  gcs->min_active_trx_id.store(GCS_DATA_MTX_ID_NULL);
-
-  gcs->mtx_inited = true;
+  new (&(gcs->crecover)) CRecover();
 
   /** Promise here didn't have any active trx */
   ut_ad(trx_sys == nullptr || UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
@@ -90,11 +88,58 @@ void gcs_init() {
   mutex_create(LATCH_ID_GCN_ORDER, &gcs->m_gcn_order_mutex);
   mutex_create(LATCH_ID_GCN_PERSIST, &gcs->m_gcn_persist_mutex);
 
+  gcs->min_active_trx_id.store(GCS_DATA_MTX_ID_NULL);
+
+  gcs->m_persisted_gcn.store(0);
+
+  gcs->mtx_inited = true;
+
+  return;
+}
+
+/**
+  Raise gcn metadata when parse gcn redo log record.
+
+  @param[in]	gcn	Parsed gcn
+*/
+void CRecover::recover_gcn(gcn_t gcn) {
+  ut_ad(is_need_recovery());
+  ut_ad(gcn != GCN_NULL);
+
+  m_metadata.set_gcn_if_bigger(gcn);
+  return;
+}
+
+/**
+  Recover the max parsed gcn to current gcn.
+*/
+void CRecover::apply_gcn() {
+  gcn_t recovered_gcn = m_metadata.get_gcn();
+
+  /** Not found any gcn redo log record. */
+  if (recovered_gcn == GCN_NULL) {
+    m_need_recovery = false;
+    return;
+  }
+
+  ut_ad(is_need_recovery());
+
+  ut_ad(gcs->gcn.load_gcn() == gcs->m_persisted_gcn.load());
+
+  gcn_order_mutex_enter();
+  gcs->gcn.set_gcn_if_bigger(recovered_gcn);
+  gcs->gcn.set_snapshot_gcn_if_bigger(recovered_gcn);
+  gcn_order_mutex_exit();
+
+  m_need_recovery = false;
   return;
 }
 
 commit_scn_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   commit_scn_t cmmt = COMMIT_SCN_NULL;
+
+  ut_ad(!crecover.is_need_recovery());
+
   /** 1. generate scn number */
   scn_list_mutex_enter();
 
@@ -122,14 +167,53 @@ commit_scn_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   scn_list_mutex_exit();
 
   /** 2. generate gcn number. */
-  gcn_order_mutex_enter();
-  trx->txn_desc.cmmt.gcn = cmmt.gcn = gcn.new_gcn(trx->txn_desc.cmmt.gcn);
-  gcn_order_mutex_exit();
+  trx->txn_desc.cmmt.gcn = cmmt.gcn = gcn.new_gcn(trx->txn_desc.cmmt.gcn, mtr);
 
   /** 3. generate utc time. */
   trx->txn_desc.cmmt.utc = cmmt.utc = ut_time_system_us();
 
   return cmmt;
+}
+
+/**
+  Persist gcn if current gcn > persisted gcn.
+
+  @retval	true	if written
+ */
+bool gcs_persist_gcn() {
+  ut_ad(gcs);
+  return gcs->persist_gcn();
+}
+
+/**
+  Persist gcn if current gcn > persisted gcn.
+
+  @retval	true	if written
+ */
+bool gcs_t::persist_gcn() {
+  bool written = false;
+  gcn_t current_gcn;
+  /** Recover must be completed. */
+  ut_ad(!crecover.is_need_recovery());
+
+  gcn_persist_mutex_enter();
+
+  gcn_order_mutex_enter();
+  current_gcn = gcn.acquire_gcn();
+  gcn_order_mutex_exit();
+
+  if (current_gcn > m_persisted_gcn.load()) {
+    m_persisted_gcn.store(current_gcn);
+
+    PersistentGcsData meta;
+    meta.set_gcn(m_persisted_gcn.load());
+    persisters.gcn_persister()->write(&meta);
+
+    written = true;
+  }
+  gcn_persist_mutex_exit();
+
+  return written;
 }
 
 /** Erase trx in serialisation_list_scn, and update min_safe_scn
@@ -169,6 +253,9 @@ void gcs_close() {
     gcs->gcn.~GCN();
 
     gcs->persisters.~Persisters();
+
+    gcs->crecover.~CRecover();
+
     gcs->mtx_inited = false;
 
     mutex_free(&gcs->m_scn_list_mutex);
@@ -199,11 +286,17 @@ gcs_sysf_t *gcs_sysf_get(mtr_t *mtr) {
 /** Init the elements of Global Change System */
 void gcs_boot() {
   ut_ad(gcs);
+
   gcs->scn.boot();
 
   gcs->min_safe_scn = gcs->scn.load_scn();
 
   gcs->gcn.boot();
+
+  gcs->m_persisted_gcn = gcs->gcn.load_gcn();
+
+  ut_ad(gcs->m_persisted_gcn.load() != GCN_NULL &&
+        gcs->m_persisted_gcn.load() >= GCN_INITIAL);
 
   /** Init vision system */
   trx_vision_container_init();
