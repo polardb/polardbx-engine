@@ -210,9 +210,6 @@ extern scn_t gcs_load_scn();
 /** Get current persisted GCN number */
 extern gcn_t gcs_load_gcn();
 
-/** Get max snapshot GCN number */
-extern gcn_t gcs_load_snapshot_gcn();
-
 extern bool gcs_persist_gcn();
 
 /**
@@ -266,12 +263,6 @@ void gcs_erase_lists(trx_t *trx);
 /** Check if min_safe_scn is valid */
 void min_safe_scn_valid();
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
-
-/**
-  Get the max gcn between snapshot gcn and m_gcn
-
-  @retval         the valid gcn. */
-extern gcn_t gcs_acquire_gcn();
 
 }  // namespace lizard
 

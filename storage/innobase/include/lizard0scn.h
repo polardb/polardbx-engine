@@ -304,15 +304,6 @@ class GCN {
 
   gcn_t load_gcn() const { return m_gcn.load(); }
 
-  gcn_t acquire_gcn();
-
-  void set_snapshot_gcn_if_bigger(const gcn_t gcn);
-
-  gcn_t load_snapshot_gcn() { return m_snapshot_gcn.load(); }
-
-  /** Flush the global commit number to system tablepace */
-  void flush_gcn(gcn_t gcn);
-
   /**
      Push up current gcn if bigger.
 
@@ -328,9 +319,6 @@ class GCN {
  private:
   std::atomic<scn_t> m_scn;
   std::atomic<gcn_t> m_gcn;
-  std::atomic<gcn_t> m_snapshot_gcn;
-
-  std::atomic<gcn_t> m_persisted_gcn;
 
   bool m_inited;
 };

@@ -126,10 +126,7 @@ void CRecover::apply_gcn() {
 
   ut_ad(gcs->gcn.load_gcn() == gcs->m_persisted_gcn.load());
 
-  gcn_order_mutex_enter();
   gcs->gcn.set_gcn_if_bigger(recovered_gcn);
-  gcs->gcn.set_snapshot_gcn_if_bigger(recovered_gcn);
-  gcn_order_mutex_exit();
 
   m_need_recovery = false;
   return;
@@ -198,10 +195,7 @@ bool gcs_t::persist_gcn() {
 
   gcn_persist_mutex_enter();
 
-  gcn_order_mutex_enter();
-  current_gcn = gcn.acquire_gcn();
-  gcn_order_mutex_exit();
-
+  current_gcn = gcn.load_gcn();
   if (current_gcn > m_persisted_gcn.load()) {
     m_persisted_gcn.store(current_gcn);
 
@@ -365,13 +359,6 @@ gcn_t gcs_load_gcn() {
   return gcs->gcn.load_gcn();
 }
 
-/** Get max snapthot GCN number */
-gcn_t gcs_load_snapshot_gcn() {
-  ut_a(gcs);
-
-  return gcs->gcn.load_snapshot_gcn();
-}
-
 /**
   Modify the min active trx id
 
@@ -491,27 +478,6 @@ scn_t gcs_load_min_safe_scn() {
   return gcs->min_safe_scn.load();
 }
 
-/**
-  Get the max gcn between snapshot gcn and m_gcn
-
-  @retval         the valid gcn. */
-gcn_t gcs_acquire_gcn() {
-  ut_ad(!gcn_order_mutex_own());
-  gcn_t gcn;
-  gcn_order_mutex_enter();
-  gcn = gcs->gcn.acquire_gcn();
-  gcn_order_mutex_exit();
-
-  return gcn;
-}
-
-/** TODO: snapshot_gcn -> gcn <14-04-23, zanye.zjy> */
-void gcs_set_snapshot_gcn_if_bigger(gcn_t gcn) {
-  if (gcs->gcn.load_snapshot_gcn() < gcn) {
-    gcn_order_mutex_enter();
-    gcs->gcn.set_snapshot_gcn_if_bigger(gcn);
-    gcn_order_mutex_exit();
-  }
-}
+void gcs_set_gcn_if_bigger(gcn_t gcn) { gcs->gcn.set_gcn_if_bigger(gcn); }
 
 }  // namespace lizard

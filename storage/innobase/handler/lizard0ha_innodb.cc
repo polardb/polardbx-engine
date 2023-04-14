@@ -84,7 +84,7 @@ static void innobase_register_xa_attributes(THD *thd) {
   }
 }
 
-uint64 innobase_load_gcn() { return lizard::gcs_acquire_gcn(); }
+uint64 innobase_load_gcn() { return lizard::gcs_load_gcn(); }
 
 uint64 innobase_load_scn() { return lizard::gcs_load_scn(); }
 

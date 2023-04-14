@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/item.h"
 #include "sql/item_func.h"
 #include "sql/item_timefunc.h"
+#include "sql/mysqld.h"
 
 #include "sql/mysqld.h"
 
@@ -354,9 +355,7 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
   return false;
 }
 
-void Snapshot_gcn_vision::after_activate() {
-  gcs_set_snapshot_gcn_if_bigger(val_int());
-}
+void Snapshot_gcn_vision::after_activate() { gcs_set_gcn_if_bigger(val_int()); }
 
 /*
   Reset snapshot, increase the snapshot table count.
@@ -385,6 +384,7 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
     return false;
 
   assert(thd->open_tables);
+  assert(innodb_hton && innodb_hton->ext.load_scn());
 
   my_scn_t current_scn = innodb_hton->ext.load_scn();
 
@@ -414,13 +414,10 @@ void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
   Item *item = nullptr;
   ulonglong gcn = thd->variables.innodb_snapshot_gcn;
 
-  /**
-   * The value is max gcn + 1 if innodb_current_snapshot_gcn is setted.
-   * It will make sure lastest record can be seen by current gcn.
-  */
+  assert(innodb_hton && innodb_hton->ext.load_gcn());
+
   if (gcn == MYSQL_GCN_NULL && thd->variables.innodb_current_snapshot_gcn) {
     gcn = innodb_hton->ext.load_gcn();
-    gcn = gcn + 1;
   }
 
   if (gcn != MYSQL_GCN_NULL) {

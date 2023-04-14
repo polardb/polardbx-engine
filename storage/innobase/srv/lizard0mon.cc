@@ -100,7 +100,7 @@ static void export_lizard_status(void) {
   lizard_vars.commit_cleanout_collects = lizard_stats.commit_cleanout_collects;
   lizard_vars.commit_cleanout_cleaned = lizard_stats.commit_cleanout_cleaned;
 
-  lizard_vars.commit_gcn = gcs_load_gcn();
+  lizard_vars.current_gcn = gcs_load_gcn();
 
   lizard_vars.purged_gcn = gcs_get_purged_gcn();
 
@@ -304,7 +304,7 @@ static SHOW_VAR lizard_status_variables[] = {
     {"undo_retention_stats", Undo_retention::status, SHOW_CHAR,
      SHOW_SCOPE_GLOBAL},
 
-    {"commit_gcn", (char *)&lizard_vars.commit_gcn, SHOW_LONG,
+    {"current_gcn", (char *)&lizard_vars.current_gcn, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
     {"purged_gcn", (char *)&lizard_vars.purged_gcn, SHOW_LONG,

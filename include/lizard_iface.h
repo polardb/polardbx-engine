@@ -54,9 +54,8 @@ namespace lizard {
 /** Convert timestamp to SCN. */
 int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn);
 
-/** TODO: No snapshot_gcn ==> gcn. <16-04-23, zanye.zjy> */
 /** Push up memory gcn if bigger. */
-void gcs_set_snapshot_gcn_if_bigger(my_gcn_t gcn);
+void gcs_set_gcn_if_bigger(my_gcn_t gcn);
 
 }  // namespace lizard
 
