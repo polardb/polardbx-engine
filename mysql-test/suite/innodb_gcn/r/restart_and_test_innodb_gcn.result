@@ -1,4 +1,4 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 set global innodb_undo_retention=1800;
 set global innodb_undo_space_reserved_size=1024;
 DROP TABLE IF EXISTS t1;

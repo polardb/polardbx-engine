@@ -1,5 +1,5 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create database mydb;
 create table mydb.t1 (a int auto_increment, b int, primary key (a));
 use mydb;
@@ -40,7 +40,7 @@ set innodb_snapshot_seq = @base_seq +1000;
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
 a	b
 1	1000
-select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result;
+select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_current_gcn')) as result;
 result
 1
 set innodb_current_snapshot_seq = ON;
@@ -87,7 +87,7 @@ a	b
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON) */ * from t1 where a = 5;
 a	b
 5	5001
-select (@base_seq + 5000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result;
+select (@base_seq + 5000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_current_gcn')) as result;
 result
 1
 insert into t1 (b) value (6000);

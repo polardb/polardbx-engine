@@ -15,7 +15,7 @@ create table test1.t1 (n int);
 --let $MYSQL_PORT= `SELECT @@port`
 --let $MYSQL_MESSAGESDIR= `SELECT @@lc_messages_dir`
 
---let $base_seq= `SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn'`
+--let $base_seq= `SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn'`
 
 # Shutdown mysqld which is started by mtr.
 --let $_server_id= `SELECT @@server_id`

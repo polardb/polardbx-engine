@@ -51,7 +51,7 @@ select * from t1;
 set innodb_snapshot_seq = @base_seq +1000;
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
 
-select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result; 
+select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_current_gcn')) as result; 
 
 #
 # innodb_current_snapshot_seq and insert
@@ -106,7 +106,7 @@ select * from t1 where a = 5;
 
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON) */ * from t1 where a = 5;
 
-select (@base_seq + 5000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result; 
+select (@base_seq + 5000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_current_gcn')) as result; 
 #
 # reset innodb_current_snapshot_seq
 # 1. use db will not reset innodb_current_snapshot_seq

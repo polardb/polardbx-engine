@@ -1,3 +1,2 @@
 --innodb_undo_retention=1800
---innodb_snapshot_update_gcn=true
 --transaction-isolation=READ-COMMITTED

@@ -1,11 +1,10 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 SHOW VARIABLES LIKE "gcn_write_event";
 Variable_name	Value
 gcn_write_event	ON
 SHOW STATUS LIKE "%gcn%";
 Variable_name	Value
-Lizard_commit_gcn	1024
-Lizard_snapshot_gcn	1024
+Lizard_current_gcn	1024
 Lizard_purged_gcn	1024
 Lizard_buffer_pool_txn_lookup_gcn_read_sees	0
 create database mydb;
@@ -42,7 +41,7 @@ binlog.000001	3562	Query	1	227	#
 delete from t1;
 flush logs;
 # restart: --gcn_write_event=false
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 set innodb_snapshot_seq = @base_seq +20000;
 select * from t1;
 a	b

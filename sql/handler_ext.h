@@ -20,25 +20,25 @@
 #ifndef HANDLER_EXT_INCLUDED
 #define HANDLER_EXT_INCLUDED
 
-typedef uint64_t (*acquire_gcn_t)();
-typedef uint64_t (*acquire_scn_t)();
+#include "lizard_iface.h"
+#include "my_inttypes.h"
+
+typedef my_gcn_t (*load_gcn_t)();
+typedef my_scn_t (*load_scn_t)();
 
 /**
   The extension of handlerton struct.
 */
 struct handlerton_ext {
-  acquire_gcn_t acquire_gcn;
-  acquire_scn_t acquire_scn;
+  load_gcn_t load_gcn;
+  load_scn_t load_scn;
 };
 
 /**
-  Acquire gcn from storage engine(s)
+  load gcn from storage engine(s)
 
-  @param gcn  input/out thd object
-  @retval false Succeed
-  @retval true Error
 */
-bool ha_acquire_gcn(uint64_t *gcn);
-bool ha_acquire_scn(uint64_t *scn);
+my_gcn_t ha_load_gcn();
+my_scn_t ha_load_scn();
 
 #endif

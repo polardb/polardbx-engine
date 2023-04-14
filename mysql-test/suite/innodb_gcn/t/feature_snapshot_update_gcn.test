@@ -15,8 +15,6 @@ connection con_u2;
 eval SET @base_seq = $global_base_seq;
 --enable_query_log
 
---echo # innodb_snapshot_update_gcn = true
-set global innodb_snapshot_update_gcn = true;
 
 --echo # global query with normal trx, xa trx
 connection con_u1;
@@ -65,7 +63,7 @@ connection default;
 
 --echo # restart && global query
 --let $wait_counter=10000
---let $restart_parameters = restart: --innodb_snapshot_update_gcn=true
+--let $restart_parameters = restart:
 --source include/restart_mysqld.inc
 --source include/wait_until_connected_again.inc
 
@@ -123,10 +121,6 @@ truncate table t1;
 
 disconnect con_u1;
 disconnect con_u2;
-
---echo # innodb_snapshot_update_gcn = false
-connection default;
-set global innodb_snapshot_update_gcn = false;
 
 connect(con_u1, 127.0.0.1, root,,);
 connect(con_u2, 127.0.0.1, root,,);
@@ -186,7 +180,7 @@ connection default;
 
 --echo # restart && global query
 --let $wait_counter=10000
---let $restart_parameters = restart: --innodb_snapshot_update_gcn=false
+--let $restart_parameters = restart:
 --source include/restart_mysqld.inc
 --source include/wait_until_connected_again.inc
 
@@ -238,7 +232,6 @@ xa end 'x25001';
 xa commit 'x25001' one phase;
 
 drop table t1;
-set global innodb_snapshot_update_gcn = default;
 
 disconnect con_u1;
 disconnect con_u2;

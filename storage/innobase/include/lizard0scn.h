@@ -162,8 +162,6 @@ constexpr gcn_t GCN_DYNAMIC_METADATA = GCN_MAX;
 /** The gcn for innodb log ddl */
 constexpr gcn_t GCN_LOG_DDL = GCN_MAX;
 
-extern bool srv_snapshot_update_gcn;
-
 /** GCS Metadata which is used to persist */
 class PersistentGcsData {
  public:
@@ -294,15 +292,6 @@ class GCN {
 
   gcn_t load_gcn() const { return m_gcn.load(); }
 
-  gcn_t acquire_gcn();
-
-  void set_snapshot_gcn_if_bigger(const gcn_t gcn);
-
-  gcn_t load_snapshot_gcn() { return m_snapshot_gcn.load(); }
-
-  /** Flush the global commit number to system tablepace */
-  void flush_gcn(gcn_t gcn);
-
   /**
      Push up current gcn if bigger.
 
@@ -317,9 +306,6 @@ class GCN {
 
  private:
   std::atomic<gcn_t> m_gcn;
-  std::atomic<gcn_t> m_snapshot_gcn;
-
-  std::atomic<gcn_t> m_persisted_gcn;
 
   bool m_inited;
 };

@@ -5518,7 +5518,7 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
       trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn;
       if (trx->txn_desc.cmmt.gcn == lizard::GCN_NULL) {
         trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn =
-            lizard::gcs_acquire_gcn();
+            lizard::gcs_load_gcn();
       }
     }
 
@@ -22783,13 +22783,6 @@ static MYSQL_SYSVAR_BOOL(tcn_cache_replace_after_commit,
                          "whether to replace global tcn cache after commit",
                          NULL, NULL, true);
 
-static MYSQL_SYSVAR_BOOL(snapshot_update_gcn,
-                         lizard::srv_snapshot_update_gcn,
-                         PLUGIN_VAR_OPCMDARG,
-                         "whether using snapshot gcn when acquiring a new gcn, "
-                         "then updating commit gcn",
-                         NULL, NULL, TRUE);
-
 static MYSQL_SYSVAR_BOOL(write_non_innodb_gtids,
                          svr_write_non_innodb_gtids,
                          PLUGIN_VAR_OPCMDARG,
@@ -23066,7 +23059,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(tcn_cache_level),
     MYSQL_SYSVAR(tcn_block_cache_type),
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
-    MYSQL_SYSVAR(snapshot_update_gcn),
     MYSQL_SYSVAR(write_non_innodb_gtids),
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),

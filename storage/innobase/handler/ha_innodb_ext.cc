@@ -20,13 +20,17 @@
 #include "lizard0gcs.h"
 #include "lizard0undo.h"
 
+#include "lizard_iface.h"
+
 #include <sql_class.h>
 
-uint64 innobase_acquire_gcn() {
-  return lizard::gcs_acquire_gcn();
+my_gcn_t innobase_load_gcn() {
+  return static_cast<my_gcn_t>(lizard::gcs_load_gcn());
 }
 
-uint64 innobase_load_scn() { return lizard::gcs_load_scn(); }
+my_scn_t innobase_load_scn() {
+  return static_cast<my_scn_t>(lizard::gcs_load_scn());
+}
 
 /**
   Initialize innobase extension.
@@ -34,8 +38,8 @@ uint64 innobase_load_scn() { return lizard::gcs_load_scn(); }
   param[in]  innobase_hton  handlerton of innobase.
 */
 void innobase_init_ext(handlerton *innobase_hton) {
-  innobase_hton->ext.acquire_gcn = innobase_acquire_gcn;
-  innobase_hton->ext.acquire_scn = innobase_load_scn;
+  innobase_hton->ext.load_gcn = innobase_load_gcn;
+  innobase_hton->ext.load_scn = innobase_load_scn;
 }
 
 /**

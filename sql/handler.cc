@@ -1904,16 +1904,10 @@ int ha_commit_low(THD *thd, bool all, bool run_after_commit) {
         if (thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
           gcn = thd->variables.innodb_commit_gcn;
         } else {
-#ifndef DBUG_OFF
-          error =
-#endif
-          ha_acquire_gcn(&gcn);
+          gcn = innodb_hton->ext.load_gcn();
+          DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
         }
 
-#ifndef DBUG_OFF
-        if (!error)
-          DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
-#endif
         thd->m_extra_desc.m_commit_gcn = gcn;
     }
 
@@ -8956,4 +8950,3 @@ bool ha_check_reserved_db_name(const char *name) {
                          const_cast<char *>(name)));
 }
 
-#include "handler_ext.cc"

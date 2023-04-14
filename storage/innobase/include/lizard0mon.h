@@ -104,11 +104,8 @@ struct lizard_var_t {
   ulint commit_cleanout_collects;
   ulint commit_cleanout_cleaned;
 
-  /*Max Snapshot gcn. */
-  ulint snapshot_gcn;
-
   /*Max commit gcn. */
-  ulint commit_gcn;
+  ulint current_gcn;
 
   /* Max purged gcn, snapshot gcn before that is too old to asof select. */
   ulint purged_gcn;

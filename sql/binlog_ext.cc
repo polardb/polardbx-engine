@@ -55,8 +55,8 @@ bool Binlog_ext::assign_gcn_to_flush_group(THD *first_seen) {
     if (head->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
       gcn = head->variables.innodb_commit_gcn;
     } else if (get_xa_opt(head) != XA_ONE_PHASE) {
-      error = ha_acquire_gcn(&gcn);
-      DBUG_ASSERT(error || gcn != MYSQL_GCN_NULL);
+      gcn = innodb_hton->ext.load_gcn();
+      DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
     } else {
       gcn = MYSQL_GCN_NULL;
       DBUG_ASSERT(head->get_transaction()->m_flags.real_commit);

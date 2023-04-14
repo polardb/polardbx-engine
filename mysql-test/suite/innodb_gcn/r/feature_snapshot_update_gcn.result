@@ -1,7 +1,5 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create table t1 (a int , primary key (a));
-# innodb_snapshot_update_gcn = true
-set global innodb_snapshot_update_gcn = true;
 # global query with normal trx, xa trx
 xa begin 'x10000';
 insert into t1 values (10000);
@@ -44,7 +42,7 @@ xa end 'x14000';
 xa commit 'x14000' one phase;
 insert into t1 values (14001);
 # restart && global query
-# restart: --innodb_snapshot_update_gcn=true
+# restart:
 xa begin 'x12000';
 set innodb_snapshot_seq = @base_seq +12000;
 select * from t1;
@@ -81,8 +79,6 @@ a
 xa end 'x15001';
 xa commit 'x15001' one phase;
 truncate table t1;
-# innodb_snapshot_update_gcn = false
-set global innodb_snapshot_update_gcn = false;
 # global query with normal trx, xa trx
 xa begin 'x20000';
 insert into t1 values (20000);
@@ -125,7 +121,7 @@ xa end 'x24000';
 xa commit 'x24000' one phase;
 insert into t1 values (24001);
 # restart && global query
-# restart: --innodb_snapshot_update_gcn=false
+# restart:
 xa begin 'x22000';
 set innodb_snapshot_seq = @base_seq +22000;
 select * from t1;
@@ -162,4 +158,3 @@ a
 xa end 'x25001';
 xa commit 'x25001' one phase;
 drop table t1;
-set global innodb_snapshot_update_gcn = default;

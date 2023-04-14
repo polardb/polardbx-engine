@@ -33,8 +33,6 @@
 
 namespace lizard {
 
-bool srv_snapshot_update_gcn = false;
-
 /**
    Writes a log record about gcn rise.
 
@@ -244,11 +242,7 @@ scn_t SCN::new_scn() {
 }
 
 /** GCN constructor. */
-GCN::GCN()
-    : m_gcn(GCN_NULL),
-      m_snapshot_gcn(GCN_NULL),
-      m_persisted_gcn(GCN_NULL),
-      m_inited(false) {}
+GCN::GCN() : m_gcn(GCN_NULL), m_inited(false) {}
 
 /** Boot GCN module, read gcn value from tablespace,
  */
@@ -260,26 +254,11 @@ void GCN::boot() {
   gcs->persisters.gcn_persister()->read(&meta);
 
   m_gcn.store(meta.get_gcn());
-  m_snapshot_gcn.store(meta.get_gcn());
-  m_persisted_gcn.store(meta.get_gcn());
 
   ut_ad(m_gcn >= GCN_INITIAL && m_gcn < GCN_NULL);
-  ut_ad(m_snapshot_gcn >= GCN_INITIAL && m_snapshot_gcn < GCN_NULL);
-  ut_ad(m_persisted_gcn >= GCN_INITIAL && m_persisted_gcn < GCN_NULL);
 
   m_inited = true;
   return;
-}
-
-/** Flush the global commit number to system tablepace */
-void GCN::flush_gcn(gcn_t gcn) {
-  ut_ad(m_inited);
-  ut_ad(gcn != GCN_NULL);
-  ut_ad(gcn_order_mutex_own());
-
-  PersistentGcsData meta;
-  meta.set_gcn(gcn);
-  gcs->persisters.gcn_persister()->write(&meta);
 }
 
 /**
@@ -303,48 +282,19 @@ gcn_t GCN::new_gcn(const gcn_t gcn, mtr_t *mtr) {
   gcn_t cmmt = GCN_NULL;
   ut_ad(!gcn_order_mutex_own());
 
-  gcn_order_mutex_enter();
-
-  if (gcn != GCN_NULL)
+  if (gcn != GCN_NULL) {
+    /** Assign and pushup gcn when outer gcn.*/
     cmmt = gcn;
-  else
-    cmmt = acquire_gcn();
-
-  set_gcn_if_bigger(cmmt);
-
-  gcn_order_mutex_exit();
+    set_gcn_if_bigger(cmmt);
+  } else {
+    /** Assign current gcn. */
+    cmmt = m_gcn.load();
+  }
 
   PersistentGcsData meta;
   meta.set_gcn(cmmt);
   gcs->persisters.gcn_persister()->write_log(&meta, mtr);
   return cmmt;
-}
-
-/** Acquire bigger gcn between gcn and snapshot_gcn
-@return     gcn */
-gcn_t GCN::acquire_gcn() {
-  gcn_t ret;
-  ut_ad(gcn_order_mutex_own());
-
-  if (srv_snapshot_update_gcn)
-    ret = m_gcn > m_snapshot_gcn ? m_gcn.load() : m_snapshot_gcn.load();
-  else
-    ret = m_gcn.load();
-
-  return ret;
-}
-
-/**
-   Push up snapshot gcn if bigger.
-
-   @param[in]	gcn
-*/
-void GCN::set_snapshot_gcn_if_bigger(const gcn_t gcn) {
-  ut_ad(gcn_order_mutex_own());
-
-  if (gcn == GCN_NULL) return;
-
-  if (gcn > m_snapshot_gcn.load()) m_snapshot_gcn.store(gcn);
 }
 
 /**
@@ -353,11 +303,19 @@ void GCN::set_snapshot_gcn_if_bigger(const gcn_t gcn) {
    @param[in]	gcn
 */
 void GCN::set_gcn_if_bigger(const gcn_t gcn) {
-  ut_ad(gcn_order_mutex_own());
+  ut_ad(!gcn_order_mutex_own());
 
   if (gcn == GCN_NULL) return;
 
-  if (gcn > m_gcn.load()) m_gcn.store(gcn);
+  if (gcn > m_gcn.load()) {
+    gcn_order_mutex_enter();
+
+    if (gcn > m_gcn.load()) {
+      m_gcn.store(gcn);
+    }
+
+    gcn_order_mutex_exit();
+  }
 }
 
 /**

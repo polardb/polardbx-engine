@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/item.h"
 #include "sql/item_func.h"
 #include "sql/item_timefunc.h"
+#include "sql/mysqld.h"
 
 namespace lizard {
 
@@ -349,9 +350,7 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
   return false;
 }
 
-void Snapshot_gcn_vision::after_activate() {
-  gcs_set_snapshot_gcn_if_bigger(val_int());
-}
+void Snapshot_gcn_vision::after_activate() { gcs_set_gcn_if_bigger(val_int()); }
 
 /*
   Reset snapshot, increase the snapshot table count.
@@ -380,9 +379,9 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
     return false;
 
   DBUG_ASSERT(thd->open_tables);
+  DBUG_ASSERT(innodb_hton && innodb_hton->ext.load_scn());
 
-  my_scn_t current_scn = MYSQL_SCN_NULL;
-  ha_acquire_scn(&current_scn);
+  my_scn_t current_scn = innodb_hton->ext.load_scn();
 
   for (TABLE *table = thd->open_tables; table; table = table->next) {
     DBUG_ASSERT(table->pos_in_table_list);
@@ -410,12 +409,10 @@ void simulate_snapshot_clause(THD *thd, TABLE_LIST *all_tables) {
   Item *item = nullptr;
   ulonglong gcn = thd->variables.innodb_snapshot_gcn;
 
-  /**
-   * The value is max gcn + 1 if innodb_current_snapshot_gcn is setted.
-   * It will make sure lastest record can be seen by current gcn.
-   */
+  DBUG_ASSERT(innodb_hton && innodb_hton->ext.load_gcn());
+
   if (gcn == MYSQL_GCN_NULL && thd->variables.innodb_current_snapshot_gcn) {
-    ha_acquire_gcn((uint64 *)&gcn);
+    gcn = innodb_hton->ext.load_gcn();
   }
 
   if (gcn != MYSQL_GCN_NULL) {
