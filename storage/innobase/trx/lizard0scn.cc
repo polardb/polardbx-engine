@@ -328,7 +328,7 @@ gcn_t GCN::acquire_gcn() {
 
   if (srv_snapshot_update_gcn)
     ret = m_gcn > m_snapshot_gcn ? m_gcn.load() : m_snapshot_gcn.load();
-  else 
+  else
     ret = m_gcn.load();
 
   return ret;

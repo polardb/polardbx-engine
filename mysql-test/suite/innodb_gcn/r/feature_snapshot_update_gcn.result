@@ -28,6 +28,8 @@ xa commit 'x13000';
 select * from t1;
 a
 10000
+12001
+12002
 xa end 'x12000';
 xa commit 'x12000' one phase;
 xa begin 'x14000';
@@ -48,6 +50,8 @@ set innodb_snapshot_seq = @base_seq +12000;
 select * from t1;
 a
 10000
+12001
+12002
 xa end 'x12000';
 xa commit 'x12000' one phase;
 delete from t1;
@@ -73,6 +77,7 @@ set innodb_snapshot_seq = @base_seq +15001;
 select * from t1 where a >= 13000;
 a
 15000
+15001
 xa end 'x15001';
 xa commit 'x15001' one phase;
 truncate table t1;

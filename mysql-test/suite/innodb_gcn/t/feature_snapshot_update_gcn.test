@@ -47,6 +47,7 @@ xa prepare 'x13000';
 set innodb_commit_seq = @base_seq +13000;
 xa commit 'x13000';
 
+# TODO: We might fix again.
 connection con_u1;
 select * from t1;
 xa end 'x12000';

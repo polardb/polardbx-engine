@@ -22670,7 +22670,8 @@ static MYSQL_SYSVAR_ULONG(scn_history_interval,
                           NULL, NULL, 3, 1, 10, 0);
 
 static MYSQL_SYSVAR_BOOL(rds_flashback_enabled,
-                         lizard::srv_scn_valid_enabled, PLUGIN_VAR_OPCMDARG,
+                         lizard::srv_force_normal_query_if_fbq,
+                         PLUGIN_VAR_OPCMDARG,
                          "Whether to enable use as of query (true by default)",
                          NULL, NULL, TRUE);
 
@@ -22788,13 +22789,6 @@ static MYSQL_SYSVAR_BOOL(snapshot_update_gcn,
                          "whether using snapshot gcn when acquiring a new gcn, "
                          "then updating commit gcn",
                          NULL, NULL, TRUE);
-
-static MYSQL_SYSVAR_BOOL(equal_gcn_visible,
-                         lizard::srv_equal_gcn_visible,
-                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
-                         "whether the record is visible to a vision which gcn is "
-                         "equal to the gcn stored in record",
-                         NULL, NULL, FALSE);
 
 static MYSQL_SYSVAR_BOOL(write_non_innodb_gtids,
                          svr_write_non_innodb_gtids,
@@ -23073,7 +23067,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(tcn_block_cache_type),
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
     MYSQL_SYSVAR(snapshot_update_gcn),
-    MYSQL_SYSVAR(equal_gcn_visible),
     MYSQL_SYSVAR(write_non_innodb_gtids),
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),

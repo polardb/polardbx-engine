@@ -55,9 +55,6 @@ constexpr ulint VISION_LIST_IDX_NULL = std::numeric_limits<ulint>::max();
 /** Vision list mutex type */
 typedef ib_mutex_t VisionListMutex;
 
-/** Whether equal gcn is visible */
-extern bool srv_equal_gcn_visible;
-
 class Vision {
  public:
   explicit Vision();
