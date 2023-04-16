@@ -30,6 +30,7 @@ n
 set innodb_snapshot_seq = @base_seq;
 select * from t1;
 n
+5
 commit;
 set transaction_isolation = "REPEATABLE-READ";
 begin;
@@ -44,6 +45,7 @@ n
 set innodb_snapshot_seq = @base_seq;
 select * from t1;
 n
+5
 commit;
 begin;
 set innodb_commit_seq = @base_seq + 5;

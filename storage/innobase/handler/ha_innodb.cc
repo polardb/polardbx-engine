@@ -23509,7 +23509,8 @@ static MYSQL_SYSVAR_ULONG(scn_history_interval,
                           NULL, NULL, 3, 1, 10, 0);
 
 static MYSQL_SYSVAR_BOOL(rds_flashback_enabled,
-                         lizard::srv_scn_valid_enabled, PLUGIN_VAR_OPCMDARG,
+                         lizard::srv_force_normal_query_if_fbq,
+                         PLUGIN_VAR_OPCMDARG,
                          "Whether to enable use as of query (true by default)",
                          NULL, NULL, TRUE);
 

@@ -10,7 +10,7 @@ struct row_prebuilt_t;
 namespace lizard {
 
 /** Whether to enable use as of query (true by default) */
-extern bool srv_scn_valid_enabled;
+extern bool srv_force_normal_query_if_fbq;
 
 /** The max tolerable lease time of a snapshot */
 extern ulint srv_scn_valid_volumn;

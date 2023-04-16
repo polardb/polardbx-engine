@@ -276,7 +276,7 @@ bool Snapshot_time_hint::val_int(uint64_t *value) {
   @retval	true	Failure
   @retval	false	Success
  */
-bool Snapshot_hint::evoke_vision(TABLE *table, my_scn_t scn) {
+int Snapshot_hint::evoke_vision(TABLE *table, my_scn_t scn, THD *thd) {
   uint64_t value;
   bool error;
   if ((error = val_int(&value))) {
@@ -285,12 +285,12 @@ bool Snapshot_hint::evoke_vision(TABLE *table, my_scn_t scn) {
 
   Snapshot_vision *vision = table->table_snapshot.get(type());
   vision->store_int(value);
-  vision->store_csr(m_csr);
-  vision->store_current_scn(scn);
 
-  table->table_snapshot.activate(vision);
+  if (type() == AS_OF_GCN) {
+    (dynamic_cast<Snapshot_gcn_vision *>(vision))->store_current_scn(scn);
+  }
 
-  return false;
+  return table->table_snapshot.activate(vision, thd);
 }
 
 /**
@@ -355,9 +355,7 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
 }
 
 void Snapshot_gcn_vision::after_activate() {
-  if (m_csr == MYSQL_CSR_OUTER) {
-    // TODO: pushup gcn;
-  }
+  gcs_set_snapshot_gcn_if_bigger(val_int());
 }
 
 /*
@@ -378,6 +376,7 @@ void init_table_snapshot(TABLE *table, THD *thd) {
   @return true   If some error occurs.
 */
 bool evaluate_snapshot(THD *thd, const LEX *lex) {
+  int error;
   assert(thd->lex->table_snap_expr_count_to_evaluate >= 0);
 
   /* Cases that need not do evaluating */
@@ -395,7 +394,11 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
 
     Snapshot_hint *hint = table->pos_in_table_list->snapshot_hint;
     if (hint) {
-      hint->evoke_vision(table, current_scn);
+      error = hint->evoke_vision(table, current_scn, thd);
+      if (error) {
+        table->file->print_error(error, 0);
+        return true;
+      }
     }
   }
 
@@ -409,17 +412,15 @@ Simulate asof syntax by adding Item onto Table_snapshot.
 */
 void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
   Item *item = nullptr;
-  my_csr_t csr = MYSQL_CSR_OUTER;
   ulonglong gcn = thd->variables.innodb_snapshot_gcn;
-  
-  /** 
+
+  /**
    * The value is max gcn + 1 if innodb_current_snapshot_gcn is setted.
    * It will make sure lastest record can be seen by current gcn.
   */
   if (gcn == MYSQL_GCN_NULL && thd->variables.innodb_current_snapshot_gcn) {
     gcn = innodb_hton->ext.load_gcn();
     gcn = gcn + 1;
-    csr = MYSQL_CSR_INNER;
   }
 
   if (gcn != MYSQL_GCN_NULL) {
@@ -427,11 +428,30 @@ void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
     for (table = all_tables; table; table = table->next_global) {
       if (table->snapshot_hint == nullptr) {
         item = new (thd->mem_root) Item_int(gcn);
-        Snapshot_hint *hint = new (thd->mem_root) Snapshot_gcn_hint(item, csr);
+        Snapshot_hint *hint = new (thd->mem_root) Snapshot_gcn_hint(item);
         table->snapshot_hint = hint;
       }
     }
   }
+}
+
+int Table_snapshot::exchange_timestamp_vision_to_scn_vision(
+    Snapshot_vision **vision, THD *thd) {
+  int error = 0;
+
+  my_utc_t utc_second = (*vision)->val_int();
+  my_scn_t scn;
+
+  error = convert_timestamp_to_scn(thd, utc_second, &scn);
+
+  if (!error) {
+    /** Change the vision. */
+    *vision = get(AS_OF_SCN);
+
+    (*vision)->store_int(scn);
+  }
+
+  return error;
 }
 
 }  // namespace lizard

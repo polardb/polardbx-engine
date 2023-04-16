@@ -12475,9 +12475,7 @@ opt_table_snapshot_alias:
 scn_or_timestamp_or_gcn:
           TIMESTAMP_SYM expr { $$ = NEW_PTN lizard::Snapshot_time_hint($2); }
         | SCN_SYM expr { $$ = NEW_PTN lizard::Snapshot_scn_hint($2); }
-        | GCN_SYM expr {
-            $$ = NEW_PTN lizard::Snapshot_gcn_hint($2, MYSQL_CSR_OUTER);
-        };
+        | GCN_SYM expr { $$ = NEW_PTN lizard::Snapshot_gcn_hint($2); };
 
 opt_all:
           /* empty */

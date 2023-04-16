@@ -12,6 +12,7 @@ set innodb_snapshot_seq = @base_seq +2000;
 select * from t1;
 a	b
 1	1000
+2	2000
 select * from t1;
 a	b
 1	1000
@@ -29,13 +30,16 @@ set innodb_snapshot_seq = @base_seq +1000;
 set innodb_current_snapshot_seq = ON;
 select * from t1;
 a	b
+1	1000
 set innodb_current_snapshot_seq = ON;
 set innodb_snapshot_seq = @base_seq +1000;
 select * from t1;
 a	b
+1	1000
 set innodb_snapshot_seq = @base_seq +1000;
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
 a	b
+1	1000
 select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_snapshot_gcn')) as result;
 result
 1
@@ -49,6 +53,7 @@ a	b
 1	1000
 2	2000
 3	3003
+4	3004
 set innodb_current_snapshot_seq = ON;
 select * from t1;
 a	b
@@ -78,7 +83,7 @@ xa commit '5000';
 set innodb_snapshot_seq = @base_seq +5000;
 select * from t1 where a = 5;
 a	b
-5	5000
+5	5001
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON) */ * from t1 where a = 5;
 a	b
 5	5001

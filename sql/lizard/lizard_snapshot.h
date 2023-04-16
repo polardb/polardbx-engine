@@ -62,16 +62,14 @@ typedef enum {
     2) Snapshot timestamp hint
 
       SELECT * FROM tbl AS OF TIMESTAMP [expr]
- 
+
     3) Snapshot gcn hint
 
       SELECT * FROM tbl AS OF GCN [expr]
  */
 class Snapshot_hint {
  public:
-  explicit Snapshot_hint(Item *item) : m_item(item), m_csr(MYSQL_CSR_NONE) {}
-
-  explicit Snapshot_hint(Item *item, my_csr_t csr) : m_item(item), m_csr(csr) {}
+  explicit Snapshot_hint(Item *item) : m_item(item) {}
 
   /** Item type. */
   virtual Snapshot_type type() const = 0;
@@ -98,17 +96,16 @@ class Snapshot_hint {
     Evoke table snapshot vision.
     My_error if failure.
 
-    @retval	true	Failure
-    @retval	false	Success
+    @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
+    @retval 0 Success
    */
-  bool evoke_vision(TABLE *table, my_scn_t scn);
+  int evoke_vision(TABLE *table, my_scn_t scn, THD *thd);
 
   /** Calculate number from hint item. */
   virtual bool val_int(uint64_t *value) = 0;
 
  protected:
   Item *m_item;
-  my_csr_t m_csr;
 };
 
 /** Parse node special */
@@ -162,8 +159,7 @@ class Snapshot_time_hint : public Snapshot_hint {
 /** As of gcn hint */
 class Snapshot_gcn_hint : public Snapshot_hint {
  public:
-  explicit Snapshot_gcn_hint(Item *item, my_csr_t csr)
-      : Snapshot_hint(item, csr) {}
+  explicit Snapshot_gcn_hint(Item *item) : Snapshot_hint(item) {}
 
   virtual Snapshot_type type() const override { return AS_OF_GCN; }
   /**
@@ -189,8 +185,6 @@ class Snapshot_gcn_hint : public Snapshot_hint {
  */
 class Snapshot_vision {
  public:
-  Snapshot_vision() : m_csr(MYSQL_CSR_NONE), m_current_scn(MYSQL_SCN_NULL) {}
-
   virtual ~Snapshot_vision() {}
 
   /*------------------------------------------------------------------------------*/
@@ -210,19 +204,6 @@ class Snapshot_vision {
 
   /** Store number into vision. */
   virtual void store_int(uint64_t value) = 0;
-
-  /*------------------------------------------------------------------------------*/
-  /* Virtual function */
-  /*------------------------------------------------------------------------------*/
-  void store_current_scn(my_scn_t scn) { m_current_scn = scn; }
-  void store_csr(my_csr_t csr) { m_csr = csr; }
-  bool is_outer() const { return m_csr == MYSQL_CSR_OUTER; }
-
- protected:
-  /** Where do i come from. */
-  my_csr_t m_csr;
-  /** Current scn must be acquire from innodb whatever vision. */
-  my_scn_t m_current_scn;
 };
 
 /**
@@ -231,7 +212,7 @@ class Snapshot_vision {
 */
 class Snapshot_time_vision : public Snapshot_vision {
  public:
-  Snapshot_time_vision() : Snapshot_vision(), m_second(0) {}
+  Snapshot_time_vision() : m_second(0) {}
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -255,7 +236,7 @@ class Snapshot_time_vision : public Snapshot_vision {
 */
 class Snapshot_scn_vision : public Snapshot_vision {
  public:
-  Snapshot_scn_vision() : Snapshot_vision(), m_scn(MYSQL_SCN_NULL) {}
+  Snapshot_scn_vision() : m_scn(MYSQL_SCN_NULL) {}
 
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
@@ -279,7 +260,8 @@ class Snapshot_scn_vision : public Snapshot_vision {
 */
 class Snapshot_gcn_vision : public Snapshot_vision {
  public:
-  Snapshot_gcn_vision() : Snapshot_vision(), m_gcn(MYSQL_GCN_NULL) {}
+  Snapshot_gcn_vision()
+      : m_gcn(MYSQL_GCN_NULL), m_current_scn(MYSQL_SCN_NULL) {}
 
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
@@ -295,8 +277,13 @@ class Snapshot_gcn_vision : public Snapshot_vision {
 
   virtual uint64_t val_int() override { return static_cast<uint64_t>(m_gcn); }
 
+  void store_current_scn(my_scn_t scn) { m_current_scn = scn; }
+
  private:
   my_gcn_t m_gcn;
+
+  /** Current scn must be acquire from innodb whatever vision. */
+  my_scn_t m_current_scn;
 };
 
 /**
@@ -304,7 +291,7 @@ class Snapshot_gcn_vision : public Snapshot_vision {
  */
 class Snapshot_noop_vision : public Snapshot_vision {
  public:
-  Snapshot_noop_vision() : Snapshot_vision() {}
+  Snapshot_noop_vision() {}
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -349,15 +336,21 @@ class Table_snapshot {
   /** Return current vision. */
   Snapshot_vision *vision() { return m_vision; }
 
-  /** Activate a vision that can be used by innodb later. */
-  void activate(Snapshot_vision *vision) {
+  /** Activate a vision that can be used by innodb later.
+  return true if error. */
+  int activate(Snapshot_vision *vision, THD *thd) {
+    int error;
     assert(vision == get(vision->type()));
 
-    vision = do_exchange(vision);
+    error = do_exchange(&vision, thd);
 
-    m_vision = vision;
+    if (!error) {
+      m_vision = vision;
 
-    vision->after_activate();
+      vision->after_activate();
+    }
+
+    return error;
   }
 
   bool is_activated() { return m_vision->type() != AS_OF_NONE; }
@@ -366,16 +359,29 @@ class Table_snapshot {
 
   /** Whether it's a real vision. */
   bool is_vision() {
-    /**TODO: timestamp must be exchanged to scn vision. */
-    return m_vision->type() == AS_OF_SCN || m_vision->type() == AS_OF_GCN ||
-           m_vision->type() == AS_OF_TIMESTAMP;
+    return m_vision->type() == AS_OF_SCN || m_vision->type() == AS_OF_GCN;
   }
 
  private:
+  int exchange_timestamp_vision_to_scn_vision(Snapshot_vision **vision,
+                                              THD *thd);
+
   /**
-   * TODO:
-   */
-  Snapshot_vision *do_exchange(Snapshot_vision *vision) { return vision; }
+    Change Snapshot_time_vision to Snapshot_scn_vision.
+
+    @param[in/out]   vision
+    @param[in]       thd       THD
+
+    @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
+    @retval 0 Success
+  */
+  int do_exchange(Snapshot_vision **vision, THD *thd) {
+    if ((*vision)->type() != AS_OF_TIMESTAMP) {
+      return 0;
+    }
+
+    return exchange_timestamp_vision_to_scn_vision(vision, thd);
+  }
 
  private:
   Snapshot_noop_vision m_noop_vision;

@@ -172,7 +172,7 @@ update u1 set b = 3400 where a = 3202;
 set innodb_snapshot_seq = @base_seq +3210;
 select * from u1;
 a	b
-3201	3300
+3201	0
 3202	0
 set innodb_snapshot_seq = @base_seq +3410;
 select * from u1;

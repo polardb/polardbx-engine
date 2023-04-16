@@ -2,6 +2,7 @@
 #include "sql/table.h"
 #include "trx0purge.h"
 #include "row0mysql.h"
+#include "ha_innodb.h"
 
 #include "lizard0mysql.h"
 #include "lizard0scn0hist.h"
@@ -16,7 +17,7 @@ THD *thd_get_current_thd();
 namespace lizard {
 
 /** Whether to enable use as of query (true by default) */
-bool srv_scn_valid_enabled = true;
+bool srv_force_normal_query_if_fbq = true;
 
 /** The max tolerable lease time of a snapshot */
 ulint srv_scn_valid_volumn = 30;
@@ -35,10 +36,7 @@ static utc_t utc_distance(utc_t x, utc_t y) {
                                 ERROR: DB_AS_OF_INTERNAL, DB_SNAPSHOT_OUT_OF_RANGE,
                                 DB_AS_OF_TABLE_DEF_CHANGED
 */
-static scn_t
-convert_flashback_query_timestamp_to_scn(row_prebuilt_t *prebuilt,
-                                         utc_t user_utc,
-                                         dberr_t *err) {
+static scn_t convert_timestamp_to_scn_low(utc_t user_utc, dberr_t *err) {
   scn_t fbq_scn;
   utc_t cur_utc;
   scn_transform_result_t trans_res;
@@ -71,9 +69,23 @@ convert_flashback_query_timestamp_to_scn(row_prebuilt_t *prebuilt,
   } else {
     /* normal case */
     fbq_scn = trans_res.scn;
+    *err = DB_SUCCESS;
   }
 
   return fbq_scn;
+}
+
+int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn) {
+  dberr_t err;
+
+  if (!srv_force_normal_query_if_fbq) {
+    *scn = SCN_MAX;
+    return 0;
+  }
+
+  *scn = convert_timestamp_to_scn_low(utc, &err);
+
+  return convert_error_code_to_mysql(err, 0, thd);
 }
 
 /**
@@ -100,7 +112,7 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   trx = prebuilt->trx;
 
   /* forbid as-of query */
-  if (!srv_scn_valid_enabled) return DB_SUCCESS;
+  if (!srv_force_normal_query_if_fbq) return DB_SUCCESS;
 
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_set()) return DB_SUCCESS;
@@ -153,23 +165,6 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
       }
       break;
     }
-    case Snapshot_type::AS_OF_TIMESTAMP: {
-      dberr_t err = DB_SUCCESS;
-
-      /* convert timestamp to scn */
-      fbq_scn = convert_flashback_query_timestamp_to_scn(
-          prebuilt, snapshot_vision->val_int(), &err);
-
-      if (err != DB_SUCCESS) {
-        return err;
-      }
-
-      /* required undo has been purged */
-      if (fbq_scn <= purge_sys->purged_scn.load()) {
-        return DB_SNAPSHOT_TOO_OLD;
-      }
-      break;
-    }
     case Snapshot_type::AS_OF_SCN: {
       fbq_scn = snapshot_vision->val_int();
       ut_ad(fbq_gcn == GCN_NULL && fbq_scn != SCN_NULL);
@@ -180,7 +175,7 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
       break;
     }
     default:
-      ut_ad(0);
+      ut_error;
       break;
   }
 
@@ -206,13 +201,6 @@ simulate_error:
 
   /* set as as-of query */
   prebuilt->m_asof_query.set(fbq_scn, fbq_gcn);
-
-  if (snapshot_vision->type() == Snapshot_type::AS_OF_GCN &&
-      snapshot_vision->is_outer()) {
-    gcn_order_mutex_enter();
-    lizard::gcs->gcn.set_snapshot_gcn_if_bigger(fbq_gcn);
-    gcn_order_mutex_exit();
-  }
 
   return DB_SUCCESS;
 }

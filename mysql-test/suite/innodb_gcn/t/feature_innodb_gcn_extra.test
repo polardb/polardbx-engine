@@ -186,6 +186,7 @@ set innodb_commit_seq = @base_seq +3200;
 insert into u1 values (3201, 0),(3202, 0);
 
 # expect use current gcn 3200
+# Revision: expect use snapshot gcn 3300
 set innodb_snapshot_seq = @base_seq +3300;
 update u1 set b = 3300 where a = 3201;
 

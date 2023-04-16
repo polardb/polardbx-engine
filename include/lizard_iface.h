@@ -36,6 +36,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 typedef uint64_t my_scn_t;
 typedef uint64_t my_gcn_t;
+typedef uint64_t my_utc_t;
+
+class THD;
 
 /** Commit number source type. */
 enum my_csr_t { MYSQL_CSR_NONE = -1, MYSQL_CSR_INNER = 0, MYSQL_CSR_OUTER = 1 };
@@ -45,5 +48,16 @@ constexpr my_scn_t MYSQL_SCN_NULL = std::numeric_limits<my_scn_t>::max();
 constexpr my_gcn_t MYSQL_GCN_NULL = std::numeric_limits<my_gcn_t>::max();
 
 constexpr my_gcn_t MYSQL_GCN_MIN = 1024;
+
+namespace lizard {
+
+/** Convert timestamp to SCN. */
+int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn);
+
+/** TODO: No snapshot_gcn ==> gcn. <16-04-23, zanye.zjy> */
+/** Push up memory gcn if bigger. */
+void gcs_set_snapshot_gcn_if_bigger(my_gcn_t gcn);
+
+}  // namespace lizard
 
 #endif

@@ -1,8 +1,12 @@
 --source include/have_debug.inc
 --source include/have_binlog_format_row.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
 
 connect (con1,localhost,root,,);
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
 connect (con2,localhost,root,,);
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
 
 connection con1;
 set global innodb_rds_flashback_enabled = on;
@@ -15,7 +19,10 @@ create table t (id int primary key, col1 int, key(col1))engine = innodb;
 begin;
 insert into t values(1, 1);
 commit;
-select * from t as of gcn 2048;
+--let $my_gcn = `select @base_seq + 2048`
+--disable_query_log
+--eval select * from t as of gcn $my_gcn
+--enable_query_log
 
 #-----------------------------------------------
 # simultate table def change
@@ -30,7 +37,9 @@ set session debug = "-d,simulate_gcn_def_changed_error";
 # simultate previous image has purged
 #-----------------------------------------------
 set session debug = "+d, simulate_prev_image_purged_during_query";
-select * from t as of gcn 2048;
+--disable_query_log
+--eval select * from t as of gcn $my_gcn
+--enable_query_log
 set session debug = "-d, simulate_prev_image_purged_during_query";
 
 #-----------------------------------------------
@@ -44,7 +53,9 @@ XA PREPARE 'xatest';
 
 
 connection con2;
---send select * from t as of gcn 2048;
+--disable_query_log
+--send_eval select * from t as of gcn $my_gcn;
+--enable_query_log
 
 connection con1;
 XA COMMIT 'xatest';
@@ -65,7 +76,9 @@ XA PREPARE 'xatest';
 
 connection con2;
 set session innodb_global_query_wait_timeout=2;
---send select * from t as of gcn 2048;
+--disable_query_log
+--send_eval select * from t as of gcn $my_gcn;
+--enable_query_log
 
 sleep 5;
 connection con1;

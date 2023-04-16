@@ -505,4 +505,13 @@ gcn_t gcs_acquire_gcn() {
   return gcn;
 }
 
+/** TODO: snapshot_gcn -> gcn <14-04-23, zanye.zjy> */
+void gcs_set_snapshot_gcn_if_bigger(gcn_t gcn) {
+  if (gcs->gcn.load_snapshot_gcn() < gcn) {
+    gcn_order_mutex_enter();
+    gcs->gcn.set_snapshot_gcn_if_bigger(gcn);
+    gcn_order_mutex_exit();
+  }
+}
+
 }  // namespace lizard

@@ -1,9 +1,11 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
 set global innodb_rds_flashback_enabled = on;
 create table t (id int primary key, col1 int, key(col1))engine = innodb;
 begin;
 insert into t values(1, 1);
 commit;
-select * from t as of gcn 2048;
 id	col1
 1	1
 set session debug = "+d,simulate_gcn_def_changed_error";
@@ -11,7 +13,6 @@ select * from t as of gcn 1;
 ERROR HY000: The definition of the table required by the flashback query has changed
 set session debug = "-d,simulate_gcn_def_changed_error";
 set session debug = "+d, simulate_prev_image_purged_during_query";
-select * from t as of gcn 2048;
 id	col1
 1	1
 set session debug = "-d, simulate_prev_image_purged_during_query";
@@ -19,7 +20,6 @@ XA START 'xatest';
 INSERT INTO t VALUES(2, 1);
 XA END 'xatest';
 XA PREPARE 'xatest';
-select * from t as of gcn 2048;;
 XA COMMIT 'xatest';
 id	col1
 1	1
@@ -29,7 +29,6 @@ INSERT INTO t VALUES(3, 1);
 XA END 'xatest';
 XA PREPARE 'xatest';
 set session innodb_global_query_wait_timeout=2;
-select * from t as of gcn 2048;;
 XA COMMIT 'xatest';
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 INSERT INTO t VALUES(4, 1);
