@@ -120,14 +120,15 @@ my_xid xid_t::get_my_xid() const {
   return 0;
 }
 
-void xid_t::set(my_xid xid) {
+void xid_t::set(my_xid xid, MyGCN my_gcn) {
   formatID = 1;
   memcpy(data, MYSQL_XID_PREFIX, MYSQL_XID_PREFIX_LEN);
   memcpy(data + MYSQL_XID_PREFIX_LEN, &server_id, sizeof(server_id));
   memcpy(data + MYSQL_XID_OFFSET, &xid, sizeof(xid));
   gtrid_length = MYSQL_XID_GTRID_LEN;
   bqual_length = 0;
-  commit_gcn = MYSQL_GCN_NULL;
+
+  commit_gcn = my_gcn;
 }
 
 static bool xacommit_handlerton(THD *, plugin_ref plugin, void *arg) {
@@ -249,7 +250,7 @@ MEM_ROOT *Recovered_xa_transactions::get_allocated_memroot() {
 struct xarecover_st {
   int len, found_foreign_xids, found_my_xids;
   XA_recover_txn *list;
-  const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list;
+  const memroot_unordered_map<my_xid, MyGCN> *commit_list;
   bool dry_run;
 };
 
@@ -377,7 +378,7 @@ static bool xarecover_handlerton(THD *, plugin_ref plugin, void *arg) {
   return false;
 }
 
-int ha_recover(const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list) {
+int ha_recover(const memroot_unordered_map<my_xid, MyGCN> *commit_list) {
   xarecover_st info;
   DBUG_TRACE;
   info.found_foreign_xids = info.found_my_xids = 0;
@@ -778,14 +779,14 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
   else
     xid_state->unset_binlogged();
 
-  /* 
-    External_xid do not have mysql_thd, so give it current commit_gcn. 
+  /*
+    External_xid do not have mysql_thd, so give it current commit_gcn.
 
-    The value of thd->variables.innodb_commit_gcn is from : 
-    1. set variable innodb_commit_gcn = 
+    The value of thd->variables.innodb_commit_gcn is from :
+    1. set variable innodb_commit_gcn =
     2. sql_thread apply gcn event
   */
-  external_xid->set_commit_gcn(thd->variables.innodb_commit_gcn);
+  external_xid->set_commit_gcn(thd->owned_gcn);
 
 
   DBUG_EXECUTE_IF("crash_on_external_xa_commit", DBUG_SUICIDE(););

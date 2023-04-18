@@ -46,18 +46,19 @@ int ConsensusRecoveryManager::cleanup()
   return 0;
 }
 
-void ConsensusRecoveryManager::add_trx_to_total_commit_map(uint64 consensus_index, uint64 xid, ulonglong gcn, Gtid gtid)
-{
+void ConsensusRecoveryManager::add_trx_to_total_commit_map(
+    uint64 consensus_index, uint64 xid, const MyGCN my_gcn, Gtid gtid) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   total_commit_trx_map[xid] = consensus_index;
-  total_xid_gcn_map[xid] = gcn;
+  total_xid_gcn_map[xid] = my_gcn;
   total_xid_gtid_map[xid] = gtid;
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
 // int ConsensusRecoveryManager::collect_commit_trx_to_hash(HASH *xid_hash, MEM_ROOT* mem_root)
-int ConsensusRecoveryManager::collect_commit_trx_to_hash(memroot_unordered_map<my_xid, my_commit_gcn> &commit_list, MEM_ROOT* mem_root __attribute__((unused)))
-{
+int ConsensusRecoveryManager::collect_commit_trx_to_hash(
+    memroot_unordered_map<my_xid, MyGCN> &commit_list,
+    MEM_ROOT *mem_root __attribute__((unused))) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   for (auto iter = total_commit_trx_map.begin();
     iter != total_commit_trx_map.end(); iter++)
@@ -68,7 +69,7 @@ int ConsensusRecoveryManager::collect_commit_trx_to_hash(memroot_unordered_map<m
 
     // if (!x || my_hash_insert(xid_hash, x))
     my_xid xid = iter->first;
-    ulonglong gcn = total_xid_gcn_map.at(xid);
+    MyGCN gcn = total_xid_gcn_map.at(xid);
 
     if (!commit_list.insert({xid, gcn}).second)
     {

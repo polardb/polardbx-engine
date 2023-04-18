@@ -44,16 +44,16 @@ xa commit '4';
 ###############################
 xa start '5';
 call dbms_xa.find_by_gtrid('5');
-GCN	State
+GCN	State	CSR
 insert into t1 values (1);
 call dbms_xa.find_by_gtrid('5');
-GCN	State
+GCN	State	CSR
 xa end '5';
 call dbms_xa.find_by_gtrid('5');
-GCN	State
+GCN	State	CSR
 xa prepare '5';
 call dbms_xa.find_by_gtrid('5');
-GCN	State
+GCN	State	CSR
 xa commit '5';
 ###############################
 # case 6

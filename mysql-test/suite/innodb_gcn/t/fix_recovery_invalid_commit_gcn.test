@@ -27,11 +27,13 @@ create table test1.t1 (n int);
 # Run the mysqld with exec with --daemonize option.
 --exec $MYSQLD --defaults-file=$MYSQLTEST_VARDIR/my.cnf --innodb_undo_retention=100 --basedir=$MYSQL_BASEDIR --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --daemonize --secure-file-priv="" >$MYSQLTEST_VARDIR/log/mysqld_out_err.log 2>&1
 
+# TODO: fix it <18-04-23, zanye.zjy> #
 # Mysqld crash before commit by gcn, after write binlog.
---exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set global debug = '+d,crash_before_gcn_commit';"
+# --exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set global debug = '+d,crash_before_gcn_commit';"
 
+# Mysqld crash before commit by gcn, after write binlog.
 --error 1
---exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "insert into test1.t1 values (1);"
+--exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set session debug = '+d, crash_before_gcn_commit'; insert into test1.t1 values (1);"
 
 # Run the mysqld with exec with --daemonize option.
 --exec $MYSQLD --defaults-file=$MYSQLTEST_VARDIR/my.cnf --innodb_undo_retention=100 --basedir=$MYSQL_BASEDIR --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --daemonize --secure-file-priv="" >$MYSQLTEST_VARDIR/log/mysqld_out_err.log 2>&1

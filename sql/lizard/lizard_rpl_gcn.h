@@ -23,43 +23,63 @@ this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
-#ifndef LIZARD_IFACE_INCLUDED
-#define LIZARD_IFACE_INCLUDED
 
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
+#ifndef LIZARD_LIZARD_RPL_GCN_INCLUDED
+#define LIZARD_LIZARD_RPL_GCN_INCLUDED
 
-#include <limits>
-#include <numeric>
+#include "my_dbug.h"
+#include "lizard_iface.h"
 
-typedef uint64_t my_scn_t;
-typedef uint64_t my_gcn_t;
-typedef uint64_t my_utc_t;
+struct MyGCN {
+ private:
+  my_csr_t csr;
+  my_gcn_t gcn;
 
-class THD;
+ public:
+  MyGCN() { reset(); }
 
-/** Commit number source type. */
-enum my_csr_t {
-  MYSQL_CSR_NONE = -1,
-  MYSQL_CSR_AUTOMATIC = 0,
-  MYSQL_CSR_ASSIGNED = 1
+  void set(const my_gcn_t _gcn, const my_csr_t _csr) {
+    gcn = _gcn;
+    csr = _csr;
+  }
+
+  bool is_empty() const {
+#ifdef UNIV_DEBUG
+    if (gcn == MYSQL_GCN_NULL) {
+      DBUG_ASSERT(csr != MYSQL_CSR_NONE);
+    }
+#endif
+    return gcn == MYSQL_GCN_NULL;
+  }
+
+  bool is_automatic() const {
+#ifdef UNIV_DEBUG
+    if (csr == MYSQL_CSR_AUTOMATIC) {
+      DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
+    }
+#endif
+    return csr == MYSQL_CSR_AUTOMATIC;
+  }
+
+  bool is_assigned() const {
+#ifdef UNIV_DEBUG
+    if (csr == MYSQL_CSR_ASSIGNED) {
+      DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
+    }
+#endif
+    return csr == MYSQL_CSR_ASSIGNED;
+  }
+
+  my_gcn_t get_gcn() const { return gcn; }
+
+  my_csr_t get_csr() const { return csr; }
+
+  void reset() {
+    gcn = MYSQL_GCN_NULL;
+    csr = MYSQL_CSR_NONE;
+  }
 };
 
-constexpr my_scn_t MYSQL_SCN_NULL = std::numeric_limits<my_scn_t>::max();
-
-constexpr my_gcn_t MYSQL_GCN_NULL = std::numeric_limits<my_gcn_t>::max();
-
-constexpr my_gcn_t MYSQL_GCN_MIN = 1024;
-
-namespace lizard {
-
-/** Convert timestamp to SCN. */
-int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn);
-
-/** Push up memory gcn if bigger. */
-void gcs_set_gcn_if_bigger(my_gcn_t gcn);
-}
+#define MyGCN_NULL (MyGCN{})
 
 #endif

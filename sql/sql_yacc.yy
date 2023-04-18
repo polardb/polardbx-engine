@@ -16767,7 +16767,7 @@ xid:
             XID *xid;
             if (!(xid= (XID *)YYTHD->alloc(sizeof(XID))))
               MYSQL_YYABORT;
-            xid->set(1L, $1->ptr(), $1->length(), 0, 0);
+            xid->set(1L, $1->ptr(), $1->length(), 0, 0, MyGCN_NULL);
             $$= xid;
           }
           | text_string ',' text_string
@@ -16777,7 +16777,8 @@ xid:
             XID *xid;
             if (!(xid= (XID *)YYTHD->alloc(sizeof(XID))))
               MYSQL_YYABORT;
-            xid->set(1L, $1->ptr(), $1->length(), $3->ptr(), $3->length());
+            xid->set(1L, $1->ptr(), $1->length(), $3->ptr(), $3->length(),
+                     MyGCN_NULL);
             $$= xid;
           }
           | text_string ',' text_string ',' ulong_num
@@ -16792,7 +16793,8 @@ xid:
             XID *xid;
             if (!(xid= (XID *)YYTHD->alloc(sizeof(XID))))
               MYSQL_YYABORT;
-            xid->set($5, $1->ptr(), $1->length(), $3->ptr(), $3->length());
+            xid->set($5, $1->ptr(), $1->length(), $3->ptr(), $3->length(),
+                     MyGCN_NULL);
             $$= xid;
           }
         ;

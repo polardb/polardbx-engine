@@ -22,6 +22,7 @@
 
 #include "libbinlogevents/include/control_events_ext.h"
 #include "sql/log_event.h"
+#include "sql/lizard/lizard_rpl_gcn.h"
 
 /**
   A Gcn event is written to the binary log whenever the database is
@@ -36,11 +37,11 @@
   @internal
   The inheritance structure is as follows:
 
-Binary_log_event  
-                   \       
+Binary_log_event
+            \
          Gcn_event    Log_event
-                    \         /
-                Gcn_log_event
+              \         /
+             Gcn_log_event
   @endinternal
 */
 

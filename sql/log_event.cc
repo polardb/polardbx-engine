@@ -6476,7 +6476,7 @@ bool XA_prepare_log_event::do_commit(THD *thd_arg) {
     return false;
 
   xid.set(my_xid.formatID, my_xid.data, my_xid.gtrid_length,
-          my_xid.data + my_xid.gtrid_length, my_xid.bqual_length);
+          my_xid.data + my_xid.gtrid_length, my_xid.bqual_length, MyGCN_NULL);
 
   if (!one_phase) {
     /** Before applying XA end on the slave, trx slot should be also allocated
@@ -6505,7 +6505,7 @@ bool XA_prepare_log_event::do_commit(THD *thd_arg) {
 
 void XA_prepare_log_event::get_xid(XID *xid) {
   xid->set(my_xid.formatID, my_xid.data, my_xid.gtrid_length,
-           my_xid.data + my_xid.gtrid_length, my_xid.bqual_length);
+           my_xid.data + my_xid.gtrid_length, my_xid.bqual_length, MyGCN_NULL);
 }
 
 /**************************************************************************

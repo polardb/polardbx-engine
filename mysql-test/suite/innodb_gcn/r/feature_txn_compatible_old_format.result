@@ -9,8 +9,8 @@ xa prepare '1';
 xa commit '1';
 set session debug = "-d, sim_old_txn_undo_hdr";
 call dbms_xa.find_by_gtrid('1');
-GCN	State
-#	UNKNOWN
+GCN	State	CSR
+#	UNKNOWN	AUTOMATIC_GCN
 # cleanup
 set global innodb_undo_retention = default;
 drop table t1;

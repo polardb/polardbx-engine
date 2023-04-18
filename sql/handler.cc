@@ -1883,34 +1883,6 @@ int ha_commit_low(THD *thd, bool all, bool run_after_commit) {
       restore_backup_ha_data = true;
     }
 
-    /*
-      Thd->get_commit_gcn() is not setted if the binlog is disabled
-      in follow conditions:
-      1. opt_bin_log is false
-      2. thread->slave and opt_log_slave_updates is false
-      3. xpaxos_replication_channel
-      (condition from commit_owned_gtids)
-
-      If commit is false or some error occurs, setting gcn is not
-      necessary. Gcn is used for committing transaction.
-    */
-
-  if ((!opt_bin_log || (thd->slave_thread &&
-      (!opt_log_slave_updates || thd->xpaxos_replication_channel))) &&
-      (all || !thd->in_multi_stmt_transaction_mode()) &&
-      !thd->is_operating_gtid_table_implicitly &&
-      !thd->is_operating_substatement_implicitly) {
-        uint64 gcn = 0;
-        if (thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
-          gcn = thd->variables.innodb_commit_gcn;
-        } else {
-          gcn = innodb_hton->ext.load_gcn();
-          DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
-        }
-
-        thd->m_extra_desc.m_commit_gcn = gcn;
-    }
-
     for (; ha_info; ha_info = ha_info_next) {
       int err;
       handlerton *ht = ha_info->ht();

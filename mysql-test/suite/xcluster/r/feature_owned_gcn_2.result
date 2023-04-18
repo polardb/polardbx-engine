@@ -1,0 +1,50 @@
+flush local logs;
+set global innodb_purge_rseg_truncate_frequency = 1;
+set global innodb_undo_retention = 0;
+set global innodb_undo_retention = 9000;
+flush local logs;
+set global innodb_purge_rseg_truncate_frequency = 1;
+set global innodb_undo_retention = 0;
+set global innodb_undo_retention = 9000;
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+create table tt (id int);
+###############################
+# case 1
+###############################
+xa start '1';
+insert into tt values (1);
+xa end '1';
+xa prepare '1';
+xa commit '1';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 2
+###############################
+xa start '2';
+# push up gcn by innodb_snapshot_seq
+select * from tt;
+id
+1
+insert into tt values (2);
+xa end '2';
+xa prepare '2';
+xa commit '2';
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+ROLE
+Follower
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# cleanup
+###############################
+drop table tt;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;

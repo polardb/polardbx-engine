@@ -24,10 +24,9 @@
 #ifdef MYSQL_SERVER
 Gcn_log_event::Gcn_log_event(THD *thd_arg)
     : binary_log::Gcn_event(),
-      Log_event(thd_arg,
-                LOG_EVENT_IGNORABLE_F,
+      Log_event(thd_arg, LOG_EVENT_IGNORABLE_F,
                 Log_event::EVENT_TRANSACTIONAL_CACHE,
-                Log_event::EVENT_NORMAL_LOGGING, header(), footer()){
+                Log_event::EVENT_NORMAL_LOGGING, header(), footer()) {
   DBUG_TRACE;
 
   Log_event_type event_type = binary_log::GCN_LOG_EVENT;
@@ -39,7 +38,7 @@ Gcn_log_event::Gcn_log_event(THD *thd_arg)
 int Gcn_log_event::pack_info(Protocol *protocol) {
   String str_buf;
   str_buf.append("SET @@SESSION.INNODB_COMMIT_SEQ=");
-  
+
   char gcn_buf[64];
   longlong10_to_str(commit_gcn, gcn_buf, 10);
   str_buf.append(gcn_buf);
@@ -55,16 +54,20 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
   DBUG_TRACE;
   uchar *ptr_buffer = buffer;
 
-	if (thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
+  if (!thd->owned_gcn.is_empty()) {
     flags |= FLAG_HAVE_COMMITTED_GCN;
-    commit_gcn = thd->get_commit_gcn();
+    commit_gcn = thd->owned_gcn.get_gcn();
+
+    if (thd->owned_gcn.is_assigned()) {
+      flags |= FLAG_GCN_ASSIGNED;
+    }
   }
 
-  if (thd != nullptr && thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
+  if (thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
     flags |= FLAG_HAVE_COMMITTED_SEQ;
   }
 
-  if (thd != nullptr && thd->variables.innodb_snapshot_gcn != MYSQL_GCN_NULL) {
+  if (thd->variables.innodb_snapshot_gcn != MYSQL_GCN_NULL) {
     flags |= FLAG_HAVE_SNAPSHOT_SEQ;
   }
 
@@ -100,12 +103,14 @@ void Gcn_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
   DBUG_ASSERT(flags != 0);
   IO_CACHE *const head = &print_event_info->head_cache;
 
-  if (!print_event_info->short_form)
-  {
+  if (!print_event_info->short_form) {
     print_header(head, print_event_info, false);
-    my_b_printf(head, "\tGcn\thave_snapshot_seq=%s\thave_commit_seq=%s\n",
-                (flags & FLAG_HAVE_SNAPSHOT_SEQ) ? "true" : "false", 
-                (flags & FLAG_HAVE_COMMITTED_SEQ) ? "true" : "false");
+    my_b_printf(
+        head,
+        "\tGcn\thave_snapshot_seq=%s\thave_commit_seq=%s\tGCN_ASSIGNED=%s\n",
+        (flags & FLAG_HAVE_SNAPSHOT_SEQ) ? "true" : "false",
+        (flags & FLAG_HAVE_COMMITTED_SEQ) ? "true" : "false",
+        (flags & FLAG_GCN_ASSIGNED) ? "ture" : "false");
   }
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {
@@ -122,7 +127,14 @@ int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
   DBUG_ASSERT(rli->info_thd == thd);
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {
+    DBUG_ASSERT(commit_gcn != MYSQL_GCN_NULL);
+
     thd->variables.innodb_commit_gcn = commit_gcn;
+
+    /** Set owned_gcn in THD. */
+    thd->owned_gcn.set(commit_gcn, (flags & FLAG_GCN_ASSIGNED)
+                                       ? MYSQL_CSR_ASSIGNED
+                                       : MYSQL_CSR_AUTOMATIC);
   }
 
   return 0;
@@ -142,7 +154,7 @@ Log_event::enum_skip_reason Gcn_log_event::do_shall_skip(Relay_log_info *rli) {
   Log_event::enum_skip_reason ret = Log_event::continue_group(rli);
 
   if (ret != EVENT_SKIP_NOT) {
-    thd->m_extra_desc.m_commit_gcn = MYSQL_GCN_NULL;
+    thd->owned_gcn.reset();
   }
 
   return ret;

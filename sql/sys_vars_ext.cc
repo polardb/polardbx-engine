@@ -36,6 +36,7 @@
 */
 
 #include "my_config.h"
+
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_bucket.h"
 #include "sql/ccl/ccl_interface.h"
@@ -47,6 +48,8 @@
 #include "sql/log_table.h"
 #include "sql/sys_vars_ext.h"
 #include "sql/replica_read_manager.h"
+
+#include "lizard_iface.h"
 
 static char *polardbx_engine_version_ptr = NULL;
 int32 rpc_port = DEFAULT_RPC_PORT;
@@ -285,15 +288,17 @@ static Sys_var_ulonglong Sys_innodb_snapshot_seq(
     HINT_UPDATEABLE SESSION_ONLY(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(MYSQL_GCN_MIN, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
 
+static bool set_assigned_gcn_on_update(sys_var *, THD *thd, enum_var_type) {
+  thd->owned_gcn.set(thd->variables.innodb_commit_gcn, MYSQL_CSR_ASSIGNED);
+  return false;
+}
+
 static Sys_var_ulonglong Sys_innodb_commit_seq(
     "innodb_commit_seq", "Innodb commit sequence",
     HINT_UPDATEABLE SESSION_ONLY(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(MYSQL_GCN_MIN, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
-
-static Sys_var_ulonglong Sys_innodb_prepare_seq(
-    "innodb_prepare_seq", "Innodb xa prepare sequence",
-    HINT_UPDATEABLE SESSION_ONLY(innodb_prepare_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+    VALID_RANGE(MYSQL_GCN_MIN, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(set_assigned_gcn_on_update));
 
 static Sys_var_bool Sys_only_report_warning_when_skip(
     "only_report_warning_when_skip_sequence",
@@ -329,7 +334,7 @@ static Sys_var_charptr Sys_rotate_log_table_last_name(
 
 static Sys_var_bool Sys_innodb_current_snapshot_gcn(
     "innodb_current_snapshot_seq",
-    "Get snapshot_seq from innodb," 
+    "Get snapshot_seq from innodb,"
     "the value is current max snapshot sequence and plus one",
     HINT_UPDATEABLE SESSION_ONLY(innodb_current_snapshot_gcn), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
@@ -338,11 +343,11 @@ extern ulong opt_recovery_apply_binlog;
 static const char *recovery_apply_binlog_type_names[] = {"OFF", "ON", "SAME_AS_GTID", 0};
 static Sys_var_enum Sys_recovery_apply_binlog(
     "recovery_apply_binlog",
-    "Applying binlog to generate the lost data at server startup. 0: OFF, 1: ON, 2:SAME_AS_GTID",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_recovery_apply_binlog), 
-    CMD_LINE(OPT_ARG), recovery_apply_binlog_type_names, 
-    DEFAULT(2), NO_MUTEX_GUARD, 
-    NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
+    "Applying binlog to generate the lost data at server startup. 0: OFF, 1: "
+    "ON, 2:SAME_AS_GTID",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_recovery_apply_binlog),
+    CMD_LINE(OPT_ARG), recovery_apply_binlog_type_names, DEFAULT(2),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
 
 extern uint opt_recovery_apply_binlog_skip_counter;
 static Sys_var_uint Sys_recovery_apply_binlog_skip_counter(

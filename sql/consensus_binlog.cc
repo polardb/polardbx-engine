@@ -1713,14 +1713,14 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
   // HASH xids;
   // MEM_ROOT mem_root;
   MEM_ROOT mem_root(key_memory_binlog_recover_exec, MEM_ROOT_BLOCK_SIZE);
-  memroot_unordered_map<my_xid, my_commit_gcn> xids(&mem_root);
+  memroot_unordered_map<my_xid, MyGCN> xids(&mem_root);
   Consensus_cluster_info_log_event *rci_ev = NULL;
   uint64 start_pos = BIN_LOG_HEADER_SIZE;
   uint64 end_pos = start_pos;
   uint64 recover_term = 0;  // mark the last term that this node as leader write log
   std::string log_content;
 
-  ulonglong current_commit_gcn = MYSQL_GCN_NULL;
+  MyGCN current_commit_gcn;
 
   /*
     The flag is used for handling the case that a transaction
@@ -1807,28 +1807,29 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
             DBUG_ASSERT(in_transaction == TRUE);
 #endif
           in_transaction = FALSE;
-          current_commit_gcn = MYSQL_GCN_NULL;
+          current_commit_gcn.reset();
         }
-      } 
-      
+      }
+
       if (ev->get_type_code() == binary_log::GCN_LOG_EVENT) {
         Gcn_log_event *gcn_ev = (Gcn_log_event *)ev;
-        if (gcn_ev->have_commit_gcn())
+        if (gcn_ev->have_commit_gcn()) {
           current_commit_gcn = gcn_ev->get_commit_gcn();
+        }
       }
 
       if (ev->get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) {
         in_transaction = FALSE;
-        current_commit_gcn = MYSQL_GCN_NULL;
-      } 
-      
-      /* 
-       * is_atomic_ddl_event(ev) should been collect and 
+        current_commit_gcn.reset();
+      }
+
+      /*
+       * is_atomic_ddl_event(ev) should been collect and
        * commit or rollback.
-       * 
+       *
        * DDL log operation will fail due to
        * PolarX move commit or rollback after open_binlog
-       * 
+       *
        * We rollback is_atomic_ddl_event(ev) and executing ddl
        * again in recovery apply binlog.
       */
@@ -1848,7 +1849,7 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
           consensus_log_manager.get_recovery_manager()
               ->add_trx_to_total_commit_map(current_index, xev->xid,
                                             current_commit_gcn, gtid);
-          current_commit_gcn = MYSQL_GCN_NULL;
+          current_commit_gcn.reset();
         }
       }
 

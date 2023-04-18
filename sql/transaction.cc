@@ -87,7 +87,7 @@ void trans_reset_one_shot_chistics(THD *thd) {
   thd->tx_read_only = thd->variables.transaction_read_only;
   /* Reset commit and snapshot gcn when transition end. */
   thd->reset_gcn_variables();
-  thd->m_extra_desc.reset();
+  thd->owned_gcn.reset();
 }
 
 /**

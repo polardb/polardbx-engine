@@ -299,7 +299,7 @@ struct txn_undo_hdr_t {
   ulint tags_1;
   /** Return true if the transaction was eventually rolled back. */
   bool is_rollback() const;
-  /** Return true if the txn has new_flags. */
+  /** Return true if the txn has tags_1. */
   bool have_tags_1() const;
 };
 

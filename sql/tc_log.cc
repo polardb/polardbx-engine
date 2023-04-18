@@ -533,11 +533,11 @@ int TC_LOG_MMAP::recover() {
 
   {
     MEM_ROOT mem_root(PSI_INSTRUMENT_ME, tc_log_page_size / 3);
-    memroot_unordered_map<my_xid, my_commit_gcn> xids(&mem_root);
+    memroot_unordered_map<my_xid, MyGCN> xids(&mem_root);
 
     for (; p < end_p; p++) {
       for (my_xid *x = p->start; x < p->end; x++) {
-        if (*x) xids.insert({*x, MYSQL_GCN_NULL});
+        if (*x) xids.insert({*x, MyGCN{}});
       }
     }
 

@@ -42,6 +42,7 @@
 #include "sql/xa_ext.h"
 
 #include "lizard_iface.h"
+#include "sql/lizard/lizard_rpl_gcn.h"
 
 class Protocol;
 class THD;
@@ -204,10 +205,6 @@ class Sql_cmd_xa_rollback : public Sql_cmd {
 };
 
 typedef ulonglong my_xid;  // this line is the same as in log_event.h
-typedef ulonglong my_commit_gcn;
-
-// this line is the same as in sql_class.h
-const my_commit_gcn MYSQL_GCN_MIN = 1024;
 
 #define MYSQL_XID_PREFIX "MySQLXid"
 
@@ -250,12 +247,12 @@ typedef struct xid_t {
   /**
     The gcn used to commit in innodb of this xid.
   */
-  my_commit_gcn commit_gcn;
+  MyGCN commit_gcn;
 
  public:
-  xid_t() : formatID(-1), gtrid_length(0), bqual_length(0),
-            commit_gcn(MYSQL_GCN_NULL) {
+  xid_t() : formatID(-1), gtrid_length(0), bqual_length(0) {
     memset(data, 0, XIDDATASIZE);
+    commit_gcn.reset();
   }
 
   long get_format_id() const { return formatID; }
@@ -282,10 +279,9 @@ typedef struct xid_t {
     memcpy(data, v, l);
   }
 
-  my_commit_gcn get_commit_gcn() const { return commit_gcn; }
+  const MyGCN &get_commit_gcn() const { return commit_gcn; }
 
-  void set_commit_gcn(my_commit_gcn v) {
-    DBUG_ASSERT(v >= MYSQL_GCN_MIN);
+  void set_commit_gcn(const MyGCN &v) {
     commit_gcn = v;
   }
 
@@ -294,17 +290,19 @@ typedef struct xid_t {
     gtrid_length = 0;
     bqual_length = 0;
     memset(data, 0, XIDDATASIZE);
-    commit_gcn = MYSQL_GCN_NULL;
+    commit_gcn.reset();
   }
 
-  void set(long f, const char *g, long gl, const char *b, long bl) {
+  void set(long f, const char *g, long gl, const char *b, long bl,
+           MyGCN my_gcn) {
     DBUG_TRACE;
     DBUG_PRINT("debug", ("SETTING XID_STATE formatID: %ld", f));
     formatID = f;
     memcpy(data, g, gtrid_length = gl);
     bqual_length = bl;
     if (bl > 0) memcpy(data + gl, b, bl);
-    commit_gcn = MYSQL_GCN_NULL;
+
+    commit_gcn = my_gcn;
     return;
   }
 
@@ -363,13 +361,12 @@ typedef struct xid_t {
 
   bool is_null() const { return formatID == -1; }
 
-  void set(my_xid xid);
+  void set(my_xid xid, MyGCN my_gcn);
 
  public:
   void set(const xid_t *xid) {
     memcpy(this, xid, sizeof(xid->formatID) + xid->key_length());
-    DBUG_ASSERT(xid->commit_gcn >= MYSQL_GCN_MIN);
-    commit_gcn = xid->commit_gcn;
+    commit_gcn = xid->get_commit_gcn();
   }
 
   void null() { formatID = -1; }
@@ -461,7 +458,7 @@ class XID_STATE {
   bool has_same_xid(const XID *xid) const { return m_xid.eq(xid); }
 
   void set_query_id(query_id_t query_id) {
-    if (m_xid.is_null()) m_xid.set(query_id);
+    if (m_xid.is_null()) m_xid.set(query_id, MyGCN_NULL);
   }
 
   void set_error(THD *thd);

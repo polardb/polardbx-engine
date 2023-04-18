@@ -1969,7 +1969,7 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
 
     if (!error)
       if ((error = mysql_bin_log_ext.write_gcn(thd, &writer)))
-        thd->commit_error = THD::CE_FLUSH_ERROR;  
+        thd->commit_error = THD::CE_FLUSH_ERROR;
 
     if (!error)
       if ((error = mysql_bin_log.write_gtid(thd, this, &writer)))
@@ -2184,26 +2184,8 @@ inline xa_status_code binlog_xa_commit_or_rollback(THD *thd, XID *xid,
     else
       error = mysql_bin_log.rollback(thd, true);
 
-    /*
-      Thd->get_commit_gcn() is not setted if the binlog is disabled
-      in follow conditions:
-      1. opt_bin_log is false
-      2. thread->slave and opt_log_slave_updates is false
-      3. xpaxos_replication_channel
-      (condition from commit_owned_gtids)
-
-      If commit is false or some error occurs, setting gcn is not
-      necessary. Gcn is used for committing transaction.
-    */
-    if (error == TC_LOG::RESULT_SUCCESS && commit &&
-        !((!opt_bin_log ||
-           (thd->slave_thread &&
-            (!opt_log_slave_updates || thd->xpaxos_replication_channel))) &&
-          !thd->is_operating_gtid_table_implicitly &&
-          !thd->is_operating_substatement_implicitly)) {
-      DBUG_ASSERT(xid->get_commit_gcn() == MYSQL_GCN_NULL ||
-                  xid->get_commit_gcn() == thd->get_commit_gcn());
-      xid->set_commit_gcn(thd->get_commit_gcn());
+    if (error == TC_LOG::RESULT_SUCCESS) {
+      xid->set_commit_gcn(thd->owned_gcn);
     }
 
     if (cache_mngr) cache_mngr->has_logged_xid = false;
@@ -9242,6 +9224,10 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
       sleep(2); DBUG_SUICIDE();
   });
   DEBUG_SYNC(thd, "sync_before_commit_stage_in_order_commit");
+
+  DBUG_EXECUTE_IF("simulate_crash_between_ib_commit_and_binlog_commit", {
+      DBUG_SUICIDE();
+  });
 
 commit_stage:
   /* Clone needs binlog commit order. */

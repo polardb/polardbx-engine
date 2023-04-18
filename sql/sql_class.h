@@ -115,6 +115,7 @@
 #include "sql/ccl/ccl_interface.h"
 
 #include "sql_class_ext.h"
+#include "sql/lizard/lizard_rpl_gcn.h" // struct MyGCN...
 
 namespace im {
 namespace recycle_bin {
@@ -4307,16 +4308,13 @@ private:
   /** Hash table to save last CURRVAL value of sequence table */
   Sequence_last_value_hash *seq_thd_hash;
 
-  extra_desc_t m_extra_desc;
+  MyGCN owned_gcn;
 
   void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
     variables.innodb_current_snapshot_gcn = false;
   }
-
-  ulonglong get_snapshot_gcn() { return m_extra_desc.m_snapshot_gcn; }
-  ulonglong get_commit_gcn() { return m_extra_desc.m_commit_gcn; }
 
   /** For polarx rpc/galaxy parallel thread pool. */
   THD_event_functions *polarx_rpc_monitor = nullptr;

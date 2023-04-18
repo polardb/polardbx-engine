@@ -5503,23 +5503,9 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
     }
 
     assert_trx_commit_mark_initial(trx);
-    /*
-      The value of thd->m_extra_desc.m_commit_gcn is GCN_NULL
-    if server do not need to write binlog.
-
-      It will store gcn value into  thd->m_extra_desc.m_commit_gcn
-    where writing gcn log event.
-       Some function trx is not start and will not enter trx_commit_for_mysql(trx).
-     It will not reset trx->txn_desc.cmmt.gcn after innobase_commit and It need not
-     set trx->txn_desc.cmmt.gcn. (log_and_commit_acl_ddl)
-    */
     if (trx_is_started(trx)) {
       ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
-      trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn;
-      if (trx->txn_desc.cmmt.gcn == lizard::GCN_NULL) {
-        trx->txn_desc.cmmt.gcn = thd->m_extra_desc.m_commit_gcn =
-            lizard::gcs_load_gcn();
-      }
+      trx->txn_desc.cmmt.copy_my_gcn(&thd->owned_gcn);
     }
 
     innobase_commit_low(trx);
@@ -19700,11 +19686,12 @@ static xa_status_code innobase_commit_by_xid(
 
     assert_trx_commit_mark_initial(trx);
     /*
-        The value of xid->get_commit_gcn() is GCN_NULL 
+        The value of xid->get_commit_gcn() is GCN_NULL
       if binlog contains no gcn event.
     */
-    ut_a(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);		 
-    trx->txn_desc.cmmt.gcn = xid->get_commit_gcn();
+    ut_a(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
+
+    trx->txn_desc.cmmt.copy_my_gcn(&xid->get_commit_gcn());
 
     innobase_commit_low(trx);
     ut_ad(trx->mysql_thd == NULL);

@@ -421,9 +421,6 @@ struct System_variables {
   /** Commit gcn for next transition. */
   ulonglong innodb_commit_gcn;
 
-  /** Prepare gcn for next xa prepare. */
-  ulonglong innodb_prepare_gcn;
-  
   bool rotate_log_table;
 
   char *client_endpoint_ip;

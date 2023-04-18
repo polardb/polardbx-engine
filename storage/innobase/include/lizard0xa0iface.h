@@ -51,7 +51,7 @@ enum Transaction_state {
 
 struct Transaction_info {
   Transaction_state state;
-  uint64_t gcn;
+  MyGCN my_gcn;
 };
 
 /**
@@ -73,9 +73,6 @@ bool start_and_register_rw_trx_for_xa(THD *thd);
 */
 bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
                                     Transaction_info *info);
-
-/** trans state to message string. */
-const char *trx_slot_trx_state_to_str(const enum Transaction_state state);
 
 /**
   Alloc transaction slot in innodb

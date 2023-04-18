@@ -143,8 +143,6 @@ uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len) {
   return res;
 }
 
-const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK", "UNKNOWN"};
-
 bool start_and_register_rw_trx_for_xa(THD *thd) {
   trx_t *trx = check_trx_exists(thd);
 
@@ -165,6 +163,7 @@ bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
   trx_rseg_t *rseg;
   txn_undo_hdr_t txn_hdr;
   bool found;
+  my_csr_t my_csr;
 
   rseg = get_txn_rseg_by_gtrid(gtrid, len);
 
@@ -189,14 +188,15 @@ bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
       default:
         ut_error;
     }
-    info->gcn = txn_hdr.image.gcn;
+    if (txn_hdr.image.csr == csr_t::CSR_AUTOMATIC) {
+      my_csr = my_csr_t::MYSQL_CSR_AUTOMATIC;
+    } else {
+      my_csr = my_csr_t::MYSQL_CSR_ASSIGNED;
+    }
+    info->my_gcn.set(txn_hdr.image.gcn, my_csr);
   }
 
   return found;
-}
-
-const char *trx_slot_trx_state_to_str(const enum Transaction_state state) {
-  return Transaction_state_str[state];
 }
 
 bool trx_slot_assign_for_xa(THD *thd, TSA *tsa) {

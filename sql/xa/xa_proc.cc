@@ -26,6 +26,29 @@
 #include "sql/xa/xa_trx.h"
 #include "sql/binlog_ext.h"
 
+namespace lizard {
+namespace xa {
+const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK", "UNKNOWN"};
+const char *Transaction_csr_str[] = {"AUTOMATIC_GCN", "ASSIGNED_GCN", "NONE"};
+
+/** trans state to message string. */
+static const char *trx_slot_trx_state_to_str(
+    const enum Transaction_state state) {
+  return Transaction_state_str[state];
+}
+
+/** trans gcn source to message string. */
+static const char *trx_slot_trx_gcn_csr_to_str(const enum my_csr_t my_csr) {
+  if (my_csr == MYSQL_CSR_NONE) {
+    return Transaction_csr_str[2];
+  } else {
+    return Transaction_csr_str[my_csr];
+  }
+}
+
+}  // namespace xa
+}  // namespace lizard
+
 namespace im {
 /* All concurrency control system memory usage */
 PSI_memory_key key_memory_xa_proc;
@@ -108,7 +131,7 @@ bool get_xid(const List<Item> *list, XID *xid) {
   formatID = (*list)[2]->val_int();
 
   /** Set XID. */
-  xid->set(formatID, gtrid, gtrid_length, bqual, bqual_length);
+  xid->set(formatID, gtrid, gtrid_length, bqual, bqual_length, MyGCN_NULL);
 
   return false;
 }
@@ -147,10 +170,14 @@ void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
 
   if (found) {
     protocol->start_row();
-    protocol->store((ulonglong)info.gcn);
+    protocol->store((ulonglong)info.my_gcn.get_gcn());
 
     const char *state = lizard::xa::trx_slot_trx_state_to_str(info.state);
     protocol->store_string(state, strlen(state), system_charset_info);
+
+    const char *csr =
+        lizard::xa::trx_slot_trx_gcn_csr_to_str(info.my_gcn.get_csr());
+    protocol->store_string(csr, strlen(csr), system_charset_info);
 
     if (protocol->end_row()) DBUG_VOID_RETURN;
   }

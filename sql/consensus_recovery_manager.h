@@ -45,10 +45,9 @@ class ConsensusRecoveryManager {
     { last_leader_term_index = last_leader_term_index_arg; }
 
   // for recover
-  void add_trx_to_total_commit_map(uint64 consensus_index, uint64 xid, ulonglong gcn, Gtid gtid);
+  void add_trx_to_total_commit_map(uint64 consensus_index, uint64 xid, const MyGCN my_gcn, Gtid gtid);
   int collect_commit_trx_to_hash(
-      memroot_unordered_map<my_xid, my_commit_gcn> &commit_list,
-      MEM_ROOT *mem_root);
+      memroot_unordered_map<my_xid, MyGCN> &commit_list, MEM_ROOT *mem_root);
   void add_xid_to_commit_map(XID *xid);
   void clear_total_xid_map();
   void clear_all_map();
@@ -73,12 +72,12 @@ class ConsensusRecoveryManager {
 
  public:
   std::map<uint64, Gtid>&  get_total_gtid_map() { return total_xid_gtid_map; }
-  std::map<uint64, ulonglong>& get_xid_gcn_map() { return total_xid_gcn_map; }
+  std::map<uint64, MyGCN>& get_xid_gcn_map() { return total_xid_gcn_map; }
   void clear_xid_gcn_and_gtid_xid_map();
 
  private:
   std::map<uint64, Gtid>                    total_xid_gtid_map;   // <xid, gtid> used to get gtid 
-  std::map<uint64, ulonglong>               total_xid_gcn_map;    //<xid, gcn> for save relation between my_xid and gcn when recovering
+  std::map<uint64, MyGCN>               total_xid_gcn_map;    //<xid, gcn> for save relation between my_xid and gcn when recovering
 
 };
 

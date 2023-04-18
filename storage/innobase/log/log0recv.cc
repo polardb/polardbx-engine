@@ -3642,6 +3642,9 @@ static void recv_recovery_begin(log_t &log, lsn_t *contiguous_lsn) {
 
   mutex_exit(&recv_sys->mutex);
 
+  /** Scan gcn redo log to recover. */
+  lizard::gcs->crecover.need_recovery(true);
+
   ulint max_mem =
       UNIV_PAGE_SIZE * (buf_pool_get_n_pages() -
                         (recv_n_pool_free_frames * srv_buf_pool_instances));
@@ -3677,8 +3680,6 @@ static void recv_init_crash_recovery() {
   ut_a(!recv_needed_recovery);
 
   recv_needed_recovery = true;
-  /** Scan gcn redo log to recover. */
-  lizard::gcs->crecover.need_recovery(true);
 
   ib::info(ER_IB_MSG_726);
   ib::info(ER_IB_MSG_727);

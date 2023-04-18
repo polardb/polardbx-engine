@@ -1692,7 +1692,6 @@ class Rand_log_event : public binary_log::Rand_event, public Log_event {
 */
 #ifndef MYSQL_SERVER
 typedef ulonglong my_xid;  // this line is the same as in handler.h
-typedef ulonglong my_commit_gcn;
 #endif
 
 class Xid_apply_log_event : public Log_event {

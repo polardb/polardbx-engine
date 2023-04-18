@@ -1,0 +1,91 @@
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+flush local logs;
+set global innodb_purge_rseg_truncate_frequency = 1;
+set global innodb_undo_retention = 0;
+--source include/wait_innodb_all_purged.inc
+set global innodb_undo_retention = 9000;
+
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+flush local logs;
+set global innodb_purge_rseg_truncate_frequency = 1;
+set global innodb_undo_retention = 0;
+--source include/wait_innodb_all_purged.inc
+set global innodb_undo_retention = 9000;
+
+--connection conn1
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+create table tt (id int);
+
+--echo ###############################
+--echo # case 1
+--echo ###############################
+--connection conn1
+--let $my_gcn = `select @base_seq + 100`
+xa start '1';
+insert into tt values (1);
+xa end '1';
+xa prepare '1';
+
+--disable_query_log
+--eval set innodb_commit_seq = $my_gcn
+--enable_query_log
+xa commit '1';
+
+--connection conn2
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+--source include/wait_apply_catchup.inc
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $gtrid= '1'
+--let $expect_csr= ASSIGNED_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+--echo ###############################
+--echo # case 2
+--echo ###############################
+--connection conn1
+--let $my_gcn = `select @base_seq + 200`
+xa start '2';
+
+--echo # push up gcn by innodb_snapshot_seq
+--disable_query_log
+--eval set innodb_snapshot_seq = $my_gcn
+--enable_query_log
+select * from tt;
+
+insert into tt values (2);
+xa end '2';
+
+xa prepare '2';
+xa commit '2';
+
+--connection conn2
+select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
+--source include/wait_apply_catchup.inc
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $gtrid= '2'
+--let $expect_csr= AUTOMATIC_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+--echo ###############################
+--echo # cleanup
+--echo ###############################
+connection conn1;
+drop table tt;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;
+
+connection conn2;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;
+
+disconnect conn1;
+disconnect conn2;
+
+connection default;

@@ -48,22 +48,12 @@ void log_gtid_set(const char *gtid_set_name, const Gtid_set *gtids) {
 Binlog_ext::Binlog_ext() {}
 
 bool Binlog_ext::assign_gcn_to_flush_group(THD *first_seen) {
-  uint64_t gcn = MYSQL_GCN_NULL;
   bool error = false;
 
   for (THD *head = first_seen; head; head = head->next_to_commit) {
-    if (head->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
-      gcn = head->variables.innodb_commit_gcn;
-    } else if (get_xa_opt(head) != XA_ONE_PHASE) {
-      gcn = innodb_hton->ext.load_gcn();
-      DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
-    } else {
-      gcn = MYSQL_GCN_NULL;
-      DBUG_ASSERT(head->get_transaction()->m_flags.real_commit);
-      DBUG_ASSERT(!head->get_transaction()->m_flags.commit_low);
+    if (head->owned_gcn.is_empty() && get_xa_opt(head) != XA_ONE_PHASE) {
+      head->owned_gcn.set(innodb_hton->ext.load_gcn(), MYSQL_CSR_AUTOMATIC);
     }
-
-    head->m_extra_desc.m_commit_gcn = gcn;
   }
 
   return error;
@@ -376,7 +366,7 @@ bool Binlog_recovery::apply_binlog() {
           if (skip_trx) {
             reader.seek(current_group_end);
             /*GCN_LOG_EVENT has been applied before GTID_LOG_EVENT*/
-            thd->m_extra_desc.reset();
+            thd->owned_gcn.reset();
             break;
           }
         }
@@ -393,7 +383,7 @@ bool Binlog_recovery::apply_binlog() {
               current_group_end > reader.event_start_pos()) {
             skip_counter--;
             reader.seek(current_group_end);
-            thd->m_extra_desc.reset();
+            thd->owned_gcn.reset();
 
             if (!current_gtid.is_empty()) {
               global_sid_lock->wrlock();

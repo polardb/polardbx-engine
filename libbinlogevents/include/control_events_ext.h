@@ -38,6 +38,7 @@
 
 #include "control_events.h"
 #include "statement_events.h"
+#include "sql/lizard/lizard_rpl_gcn.h"
 #include "sql/xa.h"
 
 namespace binary_log {
@@ -79,6 +80,10 @@ public:
   static const unsigned char FLAG_HAVE_SNAPSHOT_SEQ = 0x02;
   /** Whether there is committed seq passed external */
   static const unsigned char FLAG_HAVE_COMMITTED_SEQ = 0x04;
+  /** If the source of the commit_gcn is assigned, the flag will be set.
+  If the source of the commit_gcn is automatic, the flag will not be set.
+  This flag is only meaningful when FLAG_HAVE_COMMITTED_GCN was set. */
+  static const unsigned char FLAG_GCN_ASSIGNED = 0x08;
 
   static const int FLAGS_LENGTH = 1;
   static const int COMMITTED_GCN_LENGTH = 8;
@@ -99,7 +104,7 @@ public:
     |flag|commit_gcn|
     +----------+---+---+-------+------------------------+----------+
     </pre>
-   
+
     @param buf  Contains the serialized event.
     @param fde  An FDE event (see Rotate_event constructor for more info).
   */
@@ -118,7 +123,18 @@ public:
 #endif
 
   bool have_commit_gcn() { return flags & FLAG_HAVE_COMMITTED_GCN; }
-  uint64_t get_commit_gcn() { return commit_gcn; }
+  bool is_assigned_gcn() const { return flags & FLAG_GCN_ASSIGNED; }
+
+  MyGCN get_commit_gcn() {
+    MyGCN my_gcn;
+
+    DBUG_ASSERT(have_commit_gcn());
+
+    my_gcn.set(commit_gcn,
+               is_assigned_gcn() ? MYSQL_CSR_ASSIGNED : MYSQL_CSR_AUTOMATIC);
+
+    return my_gcn;
+  }
 };
 
 }  // end namespace binary_log

@@ -6865,7 +6865,7 @@ int ha_prepare(THD *thd);
 */
 
 typedef ulonglong my_xid;  // this line is the same as in log_event.h
-int ha_recover(const memroot_unordered_map<my_xid, my_commit_gcn> *commit_list);
+int ha_recover(const memroot_unordered_map<my_xid, MyGCN> *commit_list);
 int ha_commit_xids_by_recover_map(ConsensusLogManager *consensusLogManager);
 int ha_rollback_xids(XID* xid_vector);
 

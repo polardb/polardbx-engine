@@ -576,7 +576,8 @@ THD::THD(bool enable_plugins)
   rds_audit_event_buf = NULL;
 
   recycle_state = new im::recycle_bin::Recycle_state();
-  m_extra_desc.reset();
+
+  owned_gcn.reset();
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {
