@@ -50,7 +50,7 @@ enum csr_t {
 /** Commit undo structure {SCN, UTC, GCN} */
 struct commit_mark_t {
   scn_t scn;
-  utc_t utc;
+  utc_t us;
   gcn_t gcn;
   /** Current only represent gcn source. since utc and scn only be allowed to
    * generate automatically */
@@ -59,8 +59,7 @@ struct commit_mark_t {
 
 /** Compare function */
 inline bool operator==(const commit_mark_t &lhs, const commit_mark_t &rhs) {
-  if (lhs.scn == rhs.scn && lhs.utc == rhs.utc && lhs.gcn == rhs.gcn)
-    return true;
+  if (lhs.scn == rhs.scn && lhs.us == rhs.us && lhs.gcn == rhs.gcn) return true;
 
   return false;
 }
