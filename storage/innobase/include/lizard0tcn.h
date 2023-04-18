@@ -59,21 +59,26 @@ typedef struct tcn_t {
   scn_t scn;
   /** Transaction global commit number that has committed. */
   gcn_t gcn;
+  /** Commit number source for gcn */
+  csr_t csr;
 
   explicit tcn_t() {
     trx_id = 0;
     scn = SCN_NULL;
     gcn = GCN_NULL;
+    csr = CSR_AUTOMATIC;
   }
   explicit tcn_t(txn_commit_t cmmt) {
     trx_id = cmmt.trx_id;
     scn = cmmt.scn;
     gcn = cmmt.gcn;
+    csr = undo_ptr_get_csr(cmmt.undo_ptr);
   }
   explicit tcn_t(trx_id_t id, commit_scn_t cmmt) {
     trx_id = id;
     scn = cmmt.scn;
     gcn = cmmt.gcn;
+    csr = cmmt.csr;
   }
   trx_id_t key() { return trx_id; }
 } tcn_t;
@@ -92,6 +97,8 @@ typedef struct tcn_node_t {
   /** Transaction global commit number that has committed. */
   gcn_t gcn;
 
+  csr_t csr;
+
   explicit tcn_node_t() {
     hash = nullptr;
     list.prev= nullptr;
@@ -99,6 +106,7 @@ typedef struct tcn_node_t {
     trx_id = 0;
     scn = SCN_NULL;
     gcn = GCN_NULL;
+    csr = CSR_AUTOMATIC;
   }
 
   trx_id_t key() { return trx_id; }
@@ -108,12 +116,14 @@ typedef struct tcn_node_t {
     trx_id = tcn.trx_id;
     scn = tcn.scn;
     gcn = tcn.gcn;
+    csr = tcn.csr;
   }
 
   void copy_to(tcn_t &tcn) const {
     tcn.trx_id = trx_id;
     tcn.scn = scn;
     tcn.gcn = gcn;
+    tcn.csr = csr;
   }
 } tcn_node_t;
 

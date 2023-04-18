@@ -78,13 +78,14 @@ bool trx_search_tcn(txn_rec_t *txn_rec, btr_pcur_t *pcur,
 
     if (tcn.trx_id == txn_rec->trx_id) {
       lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+      undo_ptr_set_csr(&txn_rec->undo_ptr, tcn.csr);
       txn_rec->scn = tcn.scn;
       txn_rec->gcn = tcn.gcn;
 
       ut_a(txn_rec->scn != SCN_NULL);
       ut_a(txn_rec->gcn != GCN_NULL);
       if (txn_lookup) {
-        txn_lookup->real_image = {tcn.scn, UTC_UNDO_LOST, tcn.gcn};
+        txn_lookup->real_image = {tcn.scn, UTC_UNDO_LOST, tcn.gcn, tcn.csr};
         txn_lookup->real_state = TXN_STATE_COMMITTED;
       }
 

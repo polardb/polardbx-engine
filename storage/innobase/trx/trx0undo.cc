@@ -1631,8 +1631,8 @@ MY_ATTRIBUTE((warn_unused_result)) dberr_t
   offset = trx_undo_header_create(undo_page, trx_id, nullptr, mtr);
 
   /** Lizard: add UBA into undo log header */
-  undo_addr_t undo_addr = {rseg->space_id,   page_no, offset,
-                           lizard::SCN_NULL, true,    lizard::GCN_NULL};
+  undo_addr_t undo_addr = {rseg->space_id, page_no, offset, true,
+                           CSR_AUTOMATIC};
 
   /* GTID storage is needed only for update undo log. */
   if (type != TRX_UNDO_UPDATE) {
@@ -1767,9 +1767,8 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
     /* Lizard: special for txn undo log header */
 
     /** Lizard: add UBA into undo log header */
-    undo_addr_t undo_addr = {undo->space, undo->hdr_page_no,
-                             offset,      lizard::SCN_NULL,
-                             true,        lizard::GCN_NULL};
+    undo_addr_t undo_addr = {undo->space, undo->hdr_page_no, offset, true,
+                             CSR_AUTOMATIC};
 
     /** Current undo log hdr is UBA */
     lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, mtr);
