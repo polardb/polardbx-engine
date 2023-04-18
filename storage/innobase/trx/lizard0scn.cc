@@ -272,15 +272,15 @@ void GCN::boot() {
   Prepare a gcn number according to source type when
   commit.
 
-  1) GSR_NULL
-    -- Use current gcn as commit gcn.
-  2) GSR_INNER
+  2) GSR_AUTOMATIC
     -- Generate from current gcn early, use it directly.
-  3) GSR_OURTER
+    -- Use current gcn as commit gcn.
+  3) GSR_ASSIGNED
     -- Come from 3-party component, use it directly,
        increase current gcn if bigger.
 
   @param[in]	gcn
+  @param[in]	csr
   @param[in]	mini transaction
 
   @retval	gcn
@@ -290,14 +290,20 @@ std::pair<gcn_t, csr_t> GCN::new_gcn(const gcn_t gcn, const csr_t csr,
   gcn_t cmmt = GCN_NULL;
   ut_ad(!gcn_order_mutex_own());
 
-  if (gcn != GCN_NULL) {
-    /** Assign and pushup gcn when outer gcn.*/
-    cmmt = gcn;
-    set_gcn_if_bigger(cmmt);
-  } else {
-    /** Assign current gcn. */
-    cmmt = m_gcn.load();
+  switch (csr) {
+    case CSR_AUTOMATIC:
+      /** 1. generate when binlog commit.
+       *  2. didn't generate until now. */
+      cmmt = (gcn == GCN_NULL ? m_gcn.load() : gcn);
+      break;
+    case CSR_ASSIGNED:
+      ut_ad(gcn != GCN_NULL);
+      cmmt = gcn;
+      set_gcn_if_bigger(cmmt);
+      break;
   }
+
+  ut_ad(cmmt != GCN_NULL);
 
   PersistentGcsData meta;
   meta.set_gcn(cmmt);
@@ -333,10 +339,9 @@ void GCN::set_gcn_if_bigger(const gcn_t gcn) {
   @return       scn state SCN_STATE_INITIAL, SCN_STATE_ALLOCATED or
                           SCN_STATE_INVALID
 */
-enum scn_state_t commit_scn_state(const commit_scn_t &cmmt) {
+enum scn_state_t commit_mark_state(const commit_mark_t &cmmt) {
   /** The init value */
-  if (cmmt.scn == SCN_NULL && cmmt.utc == UTC_NULL && cmmt.gcn == GCN_NULL)
-    return SCN_STATE_INITIAL;
+  if (cmmt.scn == SCN_NULL && cmmt.utc == UTC_NULL) return SCN_STATE_INITIAL;
 
   /** The assigned commit scn value */
   if (cmmt.scn > 0 && cmmt.scn < SCN_MAX && cmmt.utc > 0 &&

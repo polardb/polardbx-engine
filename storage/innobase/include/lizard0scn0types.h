@@ -54,7 +54,7 @@ enum csr_t {
 };
 
 /** Commit undo structure {SCN, UTC, GCN} */
-struct commit_scn_t {
+struct commit_mark_t {
   scn_t scn;
   utc_t utc;
   gcn_t gcn;
@@ -64,7 +64,7 @@ struct commit_scn_t {
 };
 
 /** Compare function */
-inline bool operator==(const commit_scn_t &lhs, const commit_scn_t &rhs) {
+inline bool operator==(const commit_mark_t &lhs, const commit_mark_t &rhs) {
   if (lhs.scn == rhs.scn && lhs.utc == rhs.utc && lhs.gcn == rhs.gcn)
     return true;
 

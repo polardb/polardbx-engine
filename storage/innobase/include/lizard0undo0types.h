@@ -164,7 +164,7 @@ struct txn_desc_t {
   /** undo log header address */
   undo_ptr_t undo_ptr;
   /** scn number */
-  commit_scn_t cmmt;
+  commit_mark_t cmmt;
 };
 
 /**
@@ -282,7 +282,7 @@ enum txn_state_t {
 
 struct txn_undo_hdr_t {
   /** commit image in txn undo header */
-  commit_scn_t image;
+  commit_mark_t image;
   /** undo log header address */
   undo_ptr_t undo_ptr;
   /** current trx who own the txn header */
@@ -290,7 +290,7 @@ struct txn_undo_hdr_t {
   /** A magic number, check if the page is corrupt */
   ulint magic_n;
   /* Previous scn/utc of the trx who used the same TXN */
-  commit_scn_t prev_image;
+  commit_mark_t prev_image;
   /** txn undo header state: TXN_UNDO_LOG_ACTIVE, TXN_UNDO_LOG_COMMITED,
   or TXN_UNDO_LOG_PURGED */
   ulint state;
@@ -320,17 +320,17 @@ struct txn_lookup_t {
       * real_state: [TXN_STATE_UNDO_CORRUPTED]
       * real_image == {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED}
   */
-  commit_scn_t real_image;
+  commit_mark_t real_image;
   txn_state_t real_state;
 };
 
 namespace lizard {
 
-inline bool lizard_undo_ptr_is_active(undo_ptr_t undo_ptr) {
+inline bool undo_ptr_is_active(undo_ptr_t undo_ptr) {
   return !(bool)(undo_ptr >> UBA_POS_STATE);
 }
 
-inline void lizard_undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
+inline void undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
   *undo_ptr |= (undo_ptr_t)1 << UBA_POS_STATE;
 }
 

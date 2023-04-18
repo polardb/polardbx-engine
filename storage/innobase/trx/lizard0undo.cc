@@ -121,7 +121,7 @@ void trx_undo_write_xid(
 
 #ifdef UNIV_PFS_MUTEX
 /* Lizard undo retention start mutex PFS key */
-mysql_pfs_key_t lizard_undo_retention_mutex_key;
+mysql_pfs_key_t undo_retention_mutex_key;
 #endif
 
 /*-----------------------------------------------------------------------------*/
@@ -158,7 +158,7 @@ ulint txn_undo_page_reuse_max_percent = TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF;
   @param[out]     undo ptr
 */
 void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr) {
-  lizard_undo_addr_validation(&undo_addr, nullptr);
+  undo_addr_validation(&undo_addr, nullptr);
 
 
   ulint rseg_id = undo::id2num(undo_addr.space_id);
@@ -179,8 +179,8 @@ void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr) {
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
 /** Check the UBA validation */
-bool undo_addr_validation(const undo_addr_t *undo_addr,
-                          const dict_index_t *index) {
+bool undo_addr_validate(const undo_addr_t *undo_addr,
+                        const dict_index_t *index) {
   bool internal_dm_table = false;
   if (index) {
     internal_dm_table =
@@ -215,7 +215,7 @@ bool undo_addr_validation(const undo_addr_t *undo_addr,
   @param[in]      page      undo page
   @return         true      it's undo page
 */
-bool trx_undo_page_validation(const page_t *page) {
+bool trx_undo_page_validate(const page_t *page) {
   const trx_upagef_t *page_hdr = nullptr;
   page_type_t page_type;
   ulint undo_type;
@@ -238,16 +238,16 @@ bool trx_undo_page_validation(const page_t *page) {
 }
 
 /** Confirm the consistent of scn, undo type, undo state. */
-bool undo_scn_validation(const trx_undo_t *undo) {
-  commit_scn_t scn = undo->cmmt;
+bool undo_commit_mark_validate(const trx_undo_t *undo) {
+  commit_mark_t scn = undo->cmmt;
   ulint type = undo->type;
   ulint state = undo->state;
 
   if (type == TRX_UNDO_INSERT) {
     if (state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_FREE) {
-      ut_a(commit_scn_state(scn) == SCN_STATE_INITIAL);
-    } else if (state == TRX_UNDO_ACTIVE || undo->is_prepared()) {
-      ut_a(commit_scn_state(scn) == SCN_STATE_INITIAL);
+      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
+    } else if (state == TRX_UNDO_ACTIVE || state == TRX_UNDO_PREPARED) {
+      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
     } else {
       ut_a(0);
     }
@@ -255,10 +255,10 @@ bool undo_scn_validation(const trx_undo_t *undo) {
     if (state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_PURGE) {
       /** The update undo log has put into history,
           so commit scn must be valid */
-      ut_a(commit_scn_state(scn) == SCN_STATE_ALLOCATED);
-    } else if (state == TRX_UNDO_ACTIVE || undo->is_prepared()) {
+      ut_a(commit_mark_state(scn) == SCN_STATE_ALLOCATED);
+    } else if (state == TRX_UNDO_ACTIVE || state == TRX_UNDO_PREPARED) {
       /** The transaction still be active or has been prepared, */
-      ut_a(commit_scn_state(scn) == SCN_STATE_INITIAL);
+      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
     } else if (state == TRX_UNDO_TO_FREE) {
       /** It's impossible to be FREE for update undo log */
       ut_a(0);
@@ -269,10 +269,10 @@ bool undo_scn_validation(const trx_undo_t *undo) {
     if (state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_PURGE) {
       /** The txn undo log has put into history,
           so commit scn must be valid */
-      ut_a(commit_scn_state(scn) == SCN_STATE_ALLOCATED);
-    } else if (state == TRX_UNDO_ACTIVE || undo->is_prepared()) {
+      ut_a(commit_mark_state(scn) == SCN_STATE_ALLOCATED);
+    } else if (state == TRX_UNDO_ACTIVE || state == TRX_UNDO_PREPARED) {
       /** The transaction still be active or has been prepared, */
-      ut_a(commit_scn_state(scn) == SCN_STATE_INITIAL);
+      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
     } else if (state == TRX_UNDO_TO_FREE) {
       /** It's impossible to be FREE for update undo log */
       ut_a(0);
@@ -287,14 +287,14 @@ bool undo_scn_validation(const trx_undo_t *undo) {
 
 /** Comfirm the commit scn is uninited */
 static bool trx_undo_hdr_scn_committed(trx_ulogf_t *log_hdr, mtr_t *mtr) {
-  commit_scn_t scn = trx_undo_hdr_read_scn(log_hdr, mtr);
-  if (commit_scn_state(scn) == SCN_STATE_ALLOCATED) return true;
+  commit_mark_t scn = trx_undo_hdr_read_cmmt(log_hdr, mtr);
+  if (commit_mark_state(scn) == SCN_STATE_ALLOCATED) return true;
 
   return false;
 }
 
 /** Confirm the UBA is valid in undo log header */
-bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
+bool trx_undo_hdr_uba_validate(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
   undo_addr_t undo_addr;
   undo_ptr_t undo_ptr = trx_undo_hdr_read_uba(log_hdr, mtr);
   undo_decode_undo_ptr(undo_ptr, &undo_addr);
@@ -415,7 +415,7 @@ ulint decide_txn_undo_state_at_finish(ulint free_limit) {
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-void trx_undo_hdr_init_scn(trx_ulogf_t *log_hdr, mtr_t *mtr) {
+void trx_undo_hdr_init_cmmt(trx_ulogf_t *log_hdr, mtr_t *mtr) {
   ut_a(mtr && log_hdr);
 
   /** Here must hold the SX/X lock on the page */
@@ -423,7 +423,7 @@ void trx_undo_hdr_init_scn(trx_ulogf_t *log_hdr, mtr_t *mtr) {
       mtr, log_hdr, MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
 
   /** Validate the undo page */
-  lizard_trx_undo_page_validation(page_align(log_hdr));
+  trx_undo_page_validation(page_align(log_hdr));
 
   mach_write_to_8(log_hdr + TRX_UNDO_SCN, SCN_NULL);
   mach_write_to_8(log_hdr + TRX_UNDO_UTC, UTC_NULL);
@@ -436,17 +436,17 @@ void trx_undo_hdr_init_scn(trx_ulogf_t *log_hdr, mtr_t *mtr) {
   Include the redo log
 
   @param[in]      log_hdr       undo log header
-  @param[in]      commit_scn    commit scn number
+  @param[in]      commit_mark    commit scn number
   @param[in]      mtr           current mtr context
 */
-void trx_undo_hdr_write_scn(trx_ulogf_t *log_hdr, commit_scn_t &cmmt,
+void trx_undo_hdr_write_cmmt(trx_ulogf_t *log_hdr, commit_mark_t &cmmt,
                             mtr_t *mtr) {
   /** Here must hold the SX/X lock on the page */
   ut_ad(mtr_memo_contains_page_flagged(
       mtr, log_hdr, MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
 
   /** Validate the undo page */
-  lizard_trx_undo_page_validation(page_align(log_hdr));
+  trx_undo_page_validation(page_align(log_hdr));
 
   /** utc didn't include csr. */
   ut_ad(UTC_GET_CSR(cmmt.utc) == 0);
@@ -462,16 +462,16 @@ void trx_undo_hdr_write_scn(trx_ulogf_t *log_hdr, commit_scn_t &cmmt,
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-commit_scn_t trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
+commit_mark_t trx_undo_hdr_read_cmmt(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
   /** Here must hold the S/SX/X lock on the page */
   ut_ad(mtr_memo_contains_page_flagged(
       mtr, log_hdr,
       MTR_MEMO_PAGE_S_FIX | MTR_MEMO_PAGE_X_FIX | MTR_MEMO_PAGE_SX_FIX));
 
   /** Validate the undo page */
-  lizard_trx_undo_page_validation(page_align(log_hdr));
+  trx_undo_page_validation(page_align(log_hdr));
 
-  commit_scn_t cmmt;
+  commit_mark_t cmmt;
 
   cmmt.scn = mach_read_from_8(log_hdr + TRX_UNDO_SCN);
   cmmt.gcn = mach_read_from_8(log_hdr + TRX_UNDO_GCN);
@@ -491,17 +491,17 @@ commit_scn_t trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-commit_scn_t txn_undo_hdr_read_prev_scn(const trx_ulogf_t *log_hdr,
-                                        mtr_t *mtr) {
+commit_mark_t txn_undo_hdr_read_prev_cmmt(const trx_ulogf_t *log_hdr,
+                                          mtr_t *mtr) {
   /** Here must hold the S/SX/X lock on the page */
   ut_ad(mtr_memo_contains_page_flagged(
       mtr, log_hdr,
       MTR_MEMO_PAGE_S_FIX | MTR_MEMO_PAGE_X_FIX | MTR_MEMO_PAGE_SX_FIX));
 
   /** Validate the undo page */
-  lizard_trx_undo_page_validation(page_align(log_hdr));
+  trx_undo_page_validation(page_align(log_hdr));
 
-  commit_scn_t cmmt;
+  commit_mark_t cmmt;
 
   cmmt.scn = mach_read_from_8(log_hdr + TXN_UNDO_PREV_SCN);
   cmmt.gcn = mach_read_from_8(log_hdr + TXN_UNDO_PREV_GCN);
@@ -558,7 +558,7 @@ void trx_undo_hdr_add_space_for_txn(page_t *undo_page, trx_ulogf_t *log_hdr,
 */
 void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
                                trx_ulogf_t *log_hdr,
-                               const commit_scn_t &prev_image, mtr_t *mtr) {
+                               const commit_mark_t &prev_image, mtr_t *mtr) {
   ut_ad(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
         TRX_UNDO_TXN);
 
@@ -566,7 +566,7 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
   mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_MAGIC, TXN_MAGIC_N, MLOG_4BYTES,
                    mtr);
 
-  assert_commit_scn_allocated(prev_image);
+  assert_commit_mark_allocated(prev_image);
   /* Write the prev scn */
   mlog_write_ull(log_hdr + TXN_UNDO_PREV_SCN, prev_image.scn, mtr);
   /* Write the prev utc */
@@ -604,7 +604,7 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
 
   /** Copy prev image into undo structure */
   undo->prev_image = prev_image;
-  assert_commit_scn_allocated(undo->prev_image);
+  assert_commit_mark_allocated(undo->prev_image);
 }
 
 /**
@@ -620,7 +620,7 @@ undo_ptr_t trx_undo_hdr_read_uba(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
       MTR_MEMO_PAGE_S_FIX | MTR_MEMO_PAGE_X_FIX | MTR_MEMO_PAGE_SX_FIX));
 
   /** Validate the undo page */
-  lizard_trx_undo_page_validation(page_align(log_hdr));
+  trx_undo_page_validation(page_align(log_hdr));
 
   return mach_read_from_8(log_hdr + TRX_UNDO_UBA);
 }
@@ -1092,7 +1092,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   ulint seg_size;
   ulint free_size;
   undo_addr_t undo_addr;
-  commit_scn_t prev_image = COMMIT_SCN_LOST;
+  commit_mark_t prev_image = COMMIT_MARK_LOST;
 
   ulint slot_no = ULINT_UNDEFINED;
   dberr_t err = DB_SUCCESS;
@@ -1213,7 +1213,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
 
   ut_ad((*undo)->flag == TRX_UNDO_FLAG_TXN);
 
-  assert_commit_scn_allocated((*undo)->prev_image);
+  assert_commit_mark_allocated((*undo)->prev_image);
 
   if (*undo == NULL) {
     err = DB_OUT_OF_MEMORY;
@@ -1353,7 +1353,7 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx){
 
       undo_encode_undo_addr(undo_addr, &trx->txn_desc.undo_ptr);
 
-      assert_commit_scn_allocated(undo->prev_image);
+      assert_commit_mark_allocated(undo->prev_image);
     }
   } else {
     assert_trx_undo_ptr_allocated(trx);
@@ -1382,12 +1382,12 @@ void trx_init_txn_desc(trx_t *trx) { trx->txn_desc = TXN_DESC_NULL; }
 
   @retval         scn       commit scn struture
 */
-commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
-                            trx_undo_t *undo, page_t *undo_hdr_page,
-                            ulint hdr_offset, bool *serialised, mtr_t *mtr) {
+commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
+                             trx_undo_t *undo, page_t *undo_hdr_page,
+                             ulint hdr_offset, bool *serialised, mtr_t *mtr) {
   trx_usegf_t *seg_hdr;
   trx_ulogf_t *undo_hdr;
-  commit_scn_t cmmt = COMMIT_SCN_NULL;
+  commit_mark_t cmmt = COMMIT_MARK_NULL;
 
   ut_ad(gcs);
   ut_ad(trx && undo && undo_hdr_page && mtr);
@@ -1405,12 +1405,12 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
   ut_ad(trx_state_eq(trx, TRX_STATE_PREPARED) ||
         trx_state_eq(trx, TRX_STATE_ACTIVE));
 
-  lizard_trx_undo_page_validation(undo_hdr_page);
+  trx_undo_page_validation(undo_hdr_page);
 
   /** Here we didn't hold trx_sys mutex */
   ut_ad(!trx_sys_mutex_own());
 
-  ut_ad(!cmmt_ptr || commit_scn_state(*cmmt_ptr) == SCN_STATE_ALLOCATED);
+  ut_ad(!cmmt_ptr || commit_mark_state(*cmmt_ptr) == SCN_STATE_ALLOCATED);
 
   /** Here must hold the X lock on the page */
   ut_ad(mtr_memo_contains_page(mtr, undo_hdr_page, MTR_MEMO_PAGE_X_FIX));
@@ -1435,18 +1435,18 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
     *serialised = true;
     cmmt = gcs->new_commit(trx, mtr);
   } else {
-    assert_trx_scn_allocated(trx);
+    assert_trx_commit_mark_allocated(trx);
     cmmt = *cmmt_ptr;
     ut_ad(trx->txn_desc.cmmt.scn == cmmt.scn);
   }
-  ut_ad(commit_scn_state(cmmt) == SCN_STATE_ALLOCATED);
+  ut_ad(commit_mark_state(cmmt) == SCN_STATE_ALLOCATED);
 
   /* Step 2: modify undo header. */
-  trx_undo_hdr_write_scn(undo_hdr, cmmt, mtr);
+  trx_undo_hdr_write_cmmt(undo_hdr, cmmt, mtr);
   ut_ad(trx_undo_hdr_scn_committed(undo_hdr, mtr));
 
   /* Step 3: modify undo->scn */
-  assert_undo_scn_initial(undo);
+  assert_undo_commit_mark_initial(undo);
   undo->cmmt = cmmt;
 
   assert_lizard_min_safe_scn_valid();
@@ -1486,7 +1486,7 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
 
   undo_header = undo_page + undo->hdr_offset;
 
-  lizard_trx_undo_hdr_uba_validation(undo_header, mtr);
+  trx_undo_hdr_uba_validation(undo_header, mtr);
 
   if (undo->state != TRX_UNDO_CACHED) {
     ulint hist_size;
@@ -1542,7 +1542,7 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
   }
 
   /* Update maximum transaction scn for this rollback segment. */
-  assert_trx_scn_allocated(trx);
+  assert_trx_commit_mark_allocated(trx);
   mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.cmmt.scn,
                  mtr);
 
@@ -1568,7 +1568,7 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
     rseg->last_del_marks = undo->del_marks;
 
     /** trx->scn must be allocated  */
-    assert_trx_scn_allocated(trx);
+    assert_trx_commit_mark_allocated(trx);
 
     rseg->last_scn = trx->txn_desc.cmmt.scn;
   }
@@ -1603,7 +1603,7 @@ void trx_txn_undo_cleanup(trx_t *trx, txn_undo_ptr_t *undo_ptr,
   rseg = undo_ptr->rseg;
 
   ut_ad(mutex_own(&(rseg->mutex)));
-  assert_undo_scn_allocated(undo);
+  assert_undo_commit_mark_allocated(undo);
 
   trx_purge_add_txn_undo_to_history(trx, undo_ptr, undo_page,
                                     update_rseg_history_len, n_added_logs, mtr);
@@ -1658,11 +1658,11 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
     ut_ad(trx->is_recovered);
     if (trx->rsegs.m_redo.update_undo != nullptr &&
         trx->state == TRX_STATE_COMMITTED_IN_MEMORY) {
-      assert_trx_scn_allocated(trx);
+      assert_trx_commit_mark_allocated(trx);
       assert_trx_undo_ptr_initial(trx);
       lizard_ut_ad(trx->txn_desc.cmmt == undo->cmmt);
     } else {
-      assert_trx_scn_initial(trx);
+      assert_trx_commit_mark_initial(trx);
     }
   } else {
     /** It must be the case: MySQL crashed as soon as the txn undo is created.
@@ -1684,7 +1684,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
   undo_addr.page_no = undo->hdr_page_no;
   undo_addr.offset = undo->hdr_offset;
 
-  assert_commit_scn_allocated(undo->prev_image);
+  assert_commit_mark_allocated(undo->prev_image);
 
   /**
      Currently it's impossible only have txn undo for normal transaction.
@@ -1707,8 +1707,8 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
 
     //trx->no = TRX_ID_MAX;
 
-    assert_undo_scn_initial(undo);
-    assert_trx_scn_initial(trx);
+    assert_undo_commit_mark_initial(undo);
+    assert_trx_commit_mark_initial(trx);
     assert_txn_desc_initial(trx);
 
   } else {
@@ -1719,10 +1719,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
       /** SCN info wasn't written in insert undo. */
       if (trx->state == TRX_STATE_COMMITTED_IN_MEMORY) {
         /** Since the insert undo didn't have valid scn number */
-        assert_undo_scn_allocated(undo);
-
-        /** Commit state. */
-        undo_addr.state = true;
+        assert_undo_commit_mark_allocated(undo);
         trx->txn_desc.cmmt = undo->cmmt;
       }
     } else if (trx->rsegs.m_redo.update_undo != nullptr) {
@@ -2004,7 +2001,7 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
 
   gcs->txn_undo_log_free_list_len.fetch_add(1);
 
-  lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr);
+  txn_undo_free_list_validation(rseg_hdr, undo_page, mtr);
 
   lizard_stats.txn_undo_log_free_list_put.inc();
 }
@@ -2301,17 +2298,17 @@ static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
   }
 
 still_active:
-  assert_commit_scn_initial(txn_undo_hdr.image);
+  assert_commit_mark_initial(txn_undo_hdr.image);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_ACTIVE);
   if (!have_mtr) mtr_commit(mtr);
   return true; 
 
 already_commit:
-  assert_commit_scn_allocated(txn_undo_hdr.image);
+  assert_commit_mark_allocated(txn_undo_hdr.image);
   txn_rec->scn = txn_undo_hdr.image.scn;
   txn_rec->gcn = txn_undo_hdr.image.gcn;
-  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_commit(&txn_rec->undo_ptr);
   undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_COMMITTED);
@@ -2319,10 +2316,10 @@ already_commit:
   return false;
 
 undo_purged:
-  assert_commit_scn_allocated(txn_undo_hdr.image);
+  assert_commit_mark_allocated(txn_undo_hdr.image);
   txn_rec->scn = txn_undo_hdr.image.scn;
   txn_rec->gcn = txn_undo_hdr.image.gcn;
-  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_commit(&txn_rec->undo_ptr);
   undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_PURGED);
@@ -2330,10 +2327,10 @@ undo_purged:
   return false;
 
 undo_reuse:
-  assert_commit_scn_allocated(txn_undo_hdr.prev_image);
+  assert_commit_mark_allocated(txn_undo_hdr.prev_image);
   txn_rec->scn = txn_undo_hdr.prev_image.scn;
   txn_rec->gcn = txn_undo_hdr.prev_image.gcn;
-  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_commit(&txn_rec->undo_ptr);
   undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.prev_image,
                    txn_state_t::TXN_STATE_REUSE);
@@ -2346,7 +2343,7 @@ undo_corrupted:
   ut_a(opt_cleanout_safe_mode);
   txn_rec->scn = SCN_UNDO_CORRUPTED;
   txn_rec->gcn = GCN_UNDO_CORRUPTED;
-  lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_commit(&txn_rec->undo_ptr);
   undo_ptr_set_csr(&txn_rec->undo_ptr, CSR_AUTOMATIC);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr,
                    {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED,
@@ -2403,7 +2400,7 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
       };
       txn_rec->scn = SCN_UNDO_CORRUPTED;
       txn_rec->gcn = GCN_UNDO_CORRUPTED;
-      lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+      undo_ptr_set_commit(&txn_rec->undo_ptr);
       undo_ptr_set_csr(&txn_rec->undo_ptr, CSR_AUTOMATIC);
       lizard_stats.txn_undo_lost_page_miss_when_safe.inc();
       txn_lookup_t_set(txn_lookup, txn_undo_hdr,
@@ -2433,7 +2430,7 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
   return ret;
 }
 /** Add the rseg into the purge queue heap */
-void trx_add_rsegs_for_purge(commit_scn_t &cmmt, TxnUndoRsegs *elem) {
+void trx_add_rsegs_for_purge(commit_mark_t &cmmt, TxnUndoRsegs *elem) {
   ut_ad(cmmt.scn == elem->get_scn());
   mutex_enter(&purge_sys->pq_mutex);
   purge_sys->purge_heap->push(*elem);
@@ -2735,7 +2732,7 @@ bool txn_rec_cleanout_state_by_misc(txn_rec_t *txn_rec, btr_pcur_t *pcur,
   bool cache_hit = false;
 
   /** If record is not active, return false directly. */
-  if (!lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
+  if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
     lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
     return false;
@@ -2744,7 +2741,7 @@ bool txn_rec_cleanout_state_by_misc(txn_rec_t *txn_rec, btr_pcur_t *pcur,
   /** Search tcn cache */
   cache_hit = trx_search_tcn(txn_rec, pcur, nullptr);
   if (cache_hit) {
-    ut_ad(!lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
     lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
 
@@ -2760,7 +2757,7 @@ bool txn_rec_cleanout_state_by_misc(txn_rec_t *txn_rec, btr_pcur_t *pcur,
   if (active) {
     return active;
   } else {
-    ut_ad(!lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
     lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
 

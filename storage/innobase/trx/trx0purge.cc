@@ -265,7 +265,7 @@ void trx_purge_add_update_undo_to_history(
 
   undo_header = undo_page + undo->hdr_offset;
 
-  lizard_trx_undo_hdr_uba_validation(undo_header, mtr);
+  trx_undo_hdr_uba_validation(undo_header, mtr);
 
   if (undo->state != TRX_UNDO_CACHED) {
     ulint hist_size;
@@ -305,7 +305,7 @@ void trx_purge_add_update_undo_to_history(
   }
 
   /* Update maximum transaction scn for this rollback segment. */
-  assert_trx_scn_allocated(trx);
+  assert_trx_commit_mark_allocated(trx);
   mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.cmmt.scn,
                  mtr);
 
@@ -477,7 +477,7 @@ loop:
 
   log_hdr = undo_page + hdr_addr.boffset;
 
-  undo_trx_scn = lizard::trx_undo_hdr_read_scn(log_hdr, &mtr).scn;
+  undo_trx_scn = lizard::trx_undo_hdr_read_cmmt(log_hdr, &mtr).scn;
 
   ut_ad(lizard::gcs && undo_trx_scn <= lizard::gcs_load_scn());
 
@@ -1657,7 +1657,7 @@ static void trx_purge_rseg_get_next_history_log(
                             handled */
 {
   mtr_t mtr;
-  commit_scn_t cmmt;
+  commit_mark_t cmmt;
 
   rseg->latch();
 
@@ -1729,7 +1729,7 @@ static void trx_purge_rseg_get_next_history_log(
 
   auto del_marks = mach_read_from_2(log_hdr + TRX_UNDO_DEL_MARKS);
 
-  cmmt = lizard::trx_undo_hdr_read_scn(log_hdr, &mtr);
+  cmmt = lizard::trx_undo_hdr_read_cmmt(log_hdr, &mtr);
 
   mtr_commit(&mtr);
 
@@ -1823,8 +1823,8 @@ static void trx_purge_read_undo_rec(trx_purge_t *purge_sys,
  because of its scn is larger than purge_sys->vision */
 static bool trx_purge_choose_next_log(void) {
   bool keep_top = false;
+  std::pair<commit_mark_t, bool> purged_result;
   ut_ad(purge_sys->next_stored == false);
-  std::pair<commit_scn_t, bool> purged_result;
 
   const page_size_t &page_size = purge_sys->rseg_iter->set_next(&keep_top);
 

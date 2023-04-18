@@ -51,7 +51,7 @@ struct btr_pcur_t;
 
 #ifdef UNIV_PFS_MUTEX
 /* lizard undo hdr hash mutex PFS key */
-extern mysql_pfs_key_t lizard_undo_hdr_hash_mutex_key;
+extern mysql_pfs_key_t undo_hdr_hash_mutex_key;
 #endif
 
 /** Undo log header page as key */

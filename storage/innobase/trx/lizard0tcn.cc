@@ -77,7 +77,7 @@ bool trx_search_tcn(txn_rec_t *txn_rec, btr_pcur_t *pcur,
     tcn = cont->search(txn_rec->trx_id);
 
     if (tcn.trx_id == txn_rec->trx_id) {
-      lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+      undo_ptr_set_commit(&txn_rec->undo_ptr);
       undo_ptr_set_csr(&txn_rec->undo_ptr, tcn.csr);
       txn_rec->scn = tcn.scn;
       txn_rec->gcn = tcn.gcn;
@@ -130,7 +130,7 @@ void trx_cache_tcn(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
 void trx_cache_tcn(trx_t *trx) {
   if (innodb_tcn_cache_replace_after_commit &&
       innodb_tcn_cache_level == GLOBAL_LEVEL && global_tcn_cache != nullptr) {
-    commit_scn_t cmmt = trx->txn_desc.cmmt;
+    commit_mark_t cmmt = trx->txn_desc.cmmt;
     trx_id_t trx_id = trx->id;
 
     if (trx_id != 0 && cmmt.scn != SCN_NULL && cmmt.gcn != GCN_NULL) {

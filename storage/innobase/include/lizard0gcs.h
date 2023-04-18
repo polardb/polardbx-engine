@@ -170,7 +170,7 @@ struct gcs_t {
   ib_mutex_t m_gcn_persist_mutex;
 
   /** New trx commit. */
-  commit_scn_t new_commit(trx_t *trx, mtr_t *mtr);
+  commit_mark_t new_commit(trx_t *trx, mtr_t *mtr);
 
   /** Persisted gcn value. */
   std::atomic<gcn_t> m_persisted_gcn;

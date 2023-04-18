@@ -434,11 +434,11 @@ struct trx_undo_t {
 
   /** Only in TXN undo. */
   /*-----------------------------*/
-  commit_scn_t cmmt;
+  commit_mark_t cmmt;
   /*!< SCN after commit */
 
   /** prev_image is only valid for txn undo */
-  commit_scn_t prev_image;
+  commit_mark_t prev_image;
   /*!< SCN last commit */
 
   uint8_t txn_ext_flag; /*!< TXN ext_flag, only useful on TXN. */

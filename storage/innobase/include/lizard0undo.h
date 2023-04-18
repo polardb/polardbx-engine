@@ -53,7 +53,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #ifdef UNIV_PFS_MUTEX
 /* Lizard undo retention start mutex PFS key */
-extern mysql_pfs_key_t lizard_undo_retention_mutex_key;
+extern mysql_pfs_key_t undo_retention_mutex_key;
 #endif
 
 struct trx_rseg_t;
@@ -227,20 +227,20 @@ constexpr undo_ptr_t UNDO_PTR_INDEX_UPGRADE =
 /*-----------------------------------------------------------------------------*/
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /** Check the UBA validation */
-bool undo_addr_validation(const undo_addr_t *undo_addr,
-                          const dict_index_t *index);
+bool undo_addr_validate(const undo_addr_t *undo_addr,
+                        const dict_index_t *index);
 /**
   Validate the page is undo page
 
   @param[in]      page      undo page
   @return         true      it's undo page
 */
-bool trx_undo_page_validation(const page_t *page);
+bool trx_undo_page_validate(const page_t *page);
 
 /** Confirm the consistent of scn, undo type, undo state. */
-bool undo_scn_validation(const trx_undo_t *undo);
+bool undo_commit_mark_validate(const trx_undo_t *undo);
 
-bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+bool trx_undo_hdr_uba_validate(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 
 /** Check if an update undo log has been marked as purged.
 @param[in]  rseg txn rseg
@@ -267,18 +267,18 @@ extern ulint decide_txn_undo_state_at_finish(ulint free_limit);
   @param[in]      mtr           current mtr context
 */
 
-extern void trx_undo_hdr_init_scn(trx_ulogf_t *log_hdr, mtr_t *mtr);
+extern void trx_undo_hdr_init_cmmt(trx_ulogf_t *log_hdr, mtr_t *mtr);
 
 /**
   Write the scn and utc when commit.
   Include the redo log
 
   @param[in]      log_hdr       undo log header
-  @param[in]      commit_scn    commit scn number
+  @param[in]      commit_mark    commit scn number
   @param[in]      mtr           current mtr context
 */
-extern void trx_undo_hdr_write_scn(trx_ulogf_t *log_hdr, commit_scn_t &cmmt_scn,
-                                   mtr_t *mtr);
+extern void trx_undo_hdr_write_cmmt(trx_ulogf_t *log_hdr,
+                                    commit_mark_t &cmmt_scn, mtr_t *mtr);
 /**
   Read UBA.
 
@@ -308,22 +308,20 @@ extern void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-extern commit_scn_t trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr,
-                                          mtr_t *mtr);
+extern commit_mark_t trx_undo_hdr_read_cmmt(const trx_ulogf_t *log_hdr,
+                                            mtr_t *mtr);
 
 /**
   Check if the undo log header is reused.
 
   @param[in]      undo_page     undo log header page
-  @param[out]     commit_scn    commit scn if have, otherwise 0
+  @param[out]     commit_mark    commit scn if have, otherwise 0
   @param[in]      mtr
 
   @return         bool          ture if the undo log header is reused
 */
-bool txn_undo_header_reuse_if_need(
-    const page_t *undo_page,
-    commit_scn_t *commit_scn,
-    mtr_t *mtr);
+bool txn_undo_header_reuse_if_need(const page_t *undo_page,
+                                   commit_mark_t *commit_mark, mtr_t *mtr);
 
 /**
   Add the space for the txn especially.
@@ -345,7 +343,7 @@ extern void trx_undo_hdr_add_space_for_txn(page_t *undo_page,
 */
 void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
                                trx_ulogf_t *log_hdr,
-                               const commit_scn_t &prev_image, mtr_t *mtr);
+                               const commit_mark_t &prev_image, mtr_t *mtr);
 
 /**
   Read the txn undo log header extension information.
@@ -364,7 +362,7 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-commit_scn_t txn_undo_hdr_read_prev_scn(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+commit_mark_t txn_undo_hdr_read_prev_cmmt(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 
 /**
   Write the scn into the buffer
@@ -509,9 +507,9 @@ void trx_init_txn_desc(trx_t *trx);
 
   @retval         scn       commit scn struture
 */
-commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *scn_ptr, trx_undo_t *undo,
-                            page_t *undo_hdr_page, ulint hdr_offset,
-                            bool *serialised, mtr_t *mtr);
+commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *scn_ptr,
+                              trx_undo_t *undo, page_t *undo_hdr_page,
+                              ulint hdr_offset, bool *serialised, mtr_t *mtr);
 /**
   Cleanup txn undo log segment when commit,
 
@@ -596,7 +594,7 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
 */
 inline void txn_lookup_t_set(txn_lookup_t *txn_lookup,
                              const txn_undo_hdr_t &txn_undo_hdr,
-                             const commit_scn_t &real_image,
+                             const commit_mark_t &real_image,
                              const txn_state_t &real_state) {
   if (txn_lookup == nullptr)  return;
 
@@ -642,7 +640,7 @@ inline bool txn_rec_real_state_by_misc(txn_rec_t *txn_rec,
   bool active = false;
   bool cache_hit = false;
   /** If record is not active, the trx must be committed. */
-  if (!lizard_undo_ptr_is_active(txn_rec->undo_ptr)) {
+  if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
     lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
       /** The record has been cleaned out already. */
@@ -654,7 +652,7 @@ inline bool txn_rec_real_state_by_misc(txn_rec_t *txn_rec,
   /** Pcur is nullptr, didn't support block level tcn cache. */
   cache_hit = trx_search_tcn(txn_rec, nullptr, nullptr);
   if (cache_hit) {
-    ut_ad(!lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
     lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
     if (cleanout) *cleanout = true;
@@ -702,7 +700,7 @@ bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
                                  txn_undo_ptr_t *txn_rseg_undo_ptr);
 
 /** Add the rseg into the purge queue heap */
-void trx_add_rsegs_for_purge(commit_scn_t &scn, TxnUndoRsegs *elem);
+void trx_add_rsegs_for_purge(commit_mark_t &scn, TxnUndoRsegs *elem);
 
 /** Set TXN_UNDO_LOG_TAGS_1 on txn undo log header.
 @param[in, out] log_hdr txn undo log header
@@ -754,11 +752,11 @@ inline void txn_undo_set_state(trx_ulogf_t *log_hdr, ulint state, mtr_t *mtr) {
 /** Set txn undo log state to purged.
 @param[in]  rseg txn rseg
 @param[in]  page_size
-@return     The corresponding commit_scn if it's TXN undo,
+@return     The corresponding commit_mark if it's TXN undo,
             or err if it's not TXN undo */
-inline std::pair<commit_scn_t, bool> txn_undo_set_state_at_purge(
+inline std::pair<commit_mark_t, bool> txn_undo_set_state_at_purge(
     const trx_rseg_t *rseg, const page_size_t &page_size) {
-  commit_scn_t cmmt = COMMIT_SCN_NULL;
+  commit_mark_t cmmt = COMMIT_MARK_NULL;
 
   if (fsp_is_txn_tablespace_by_id(rseg->space_id)) {
     mtr_t mtr;
@@ -770,7 +768,7 @@ inline std::pair<commit_scn_t, bool> txn_undo_set_state_at_purge(
 
     txn_undo_set_state(undo_header, TXN_UNDO_LOG_PURGED, &mtr);
 
-    cmmt = trx_undo_hdr_read_scn(undo_header, &mtr);
+    cmmt = trx_undo_hdr_read_cmmt(undo_header, &mtr);
 
     mtr_commit(&mtr);
 
@@ -852,7 +850,7 @@ class Undo_retention {
 
   /* Create the lizard undo retention mutex. */
   inline void init_mutex() {
-    mutex_create(LATCH_ID_LIZARD_UNDO_RETENTION, &m_mutex);
+    mutex_create(LATCH_ID_UNDO_RETENTION, &m_mutex);
   }
 
   /* Free the lizard undo retention mutex. */
@@ -967,7 +965,7 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
                                                 TRX_UNDO_LOG_HDR_SIZE bytes
                                                 free space on it */
                              trx_id_t trx_id,   /*!< in: transaction id */
-                             commit_scn_t *prev_image,
+                             commit_mark_t *prev_image,
                                                 /*!< out: previous scn/utc
                                                 if have. Only used in TXN
                                                 undo header. Pass in as NULL
@@ -991,66 +989,68 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
 
 /*=============================================================================*/
 
-#define TXN_DESC_NULL                                                          \
-  { lizard::UNDO_PTR_NULL, COMMIT_SCN_NULL }
+#define TXN_DESC_NULL \
+  { lizard::UNDO_PTR_NULL, COMMIT_MARK_NULL }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
 /* Assert the txn_desc is initial */
-#define assert_txn_desc_initial(trx)                                           \
-  do {                                                                         \
-    ut_a((trx)->txn_desc.undo_ptr == lizard::UNDO_PTR_NULL &&                  \
-         lizard::commit_scn_state((trx)->txn_desc.cmmt) == SCN_STATE_INITIAL); \
+#define assert_txn_desc_initial(trx)                          \
+  do {                                                        \
+    ut_a((trx)->txn_desc.undo_ptr == lizard::UNDO_PTR_NULL && \
+         lizard::commit_mark_state((trx)->txn_desc.cmmt) ==   \
+             SCN_STATE_INITIAL);                              \
   } while (0)
 
 /* Assert the txn_desc is allocated */
-#define assert_txn_desc_allocated(trx)                                         \
-  do {                                                                         \
-    ut_a((trx)->txn_desc.undo_ptr != lizard::UNDO_PTR_NULL &&                  \
-         lizard::commit_scn_state((trx)->txn_desc.cmmt) == SCN_STATE_INITIAL); \
+#define assert_txn_desc_allocated(trx)                        \
+  do {                                                        \
+    ut_a((trx)->txn_desc.undo_ptr != lizard::UNDO_PTR_NULL && \
+         lizard::commit_mark_state((trx)->txn_desc.cmmt) ==   \
+             SCN_STATE_INITIAL);                              \
   } while (0)
 
-#define assert_undo_ptr_initial(undo_ptr)                                      \
-  do {                                                                         \
-    ut_a((*(undo_ptr)) == lizard::UNDO_PTR_NULL);                              \
+#define assert_undo_ptr_initial(undo_ptr)         \
+  do {                                            \
+    ut_a((*(undo_ptr)) == lizard::UNDO_PTR_NULL); \
   } while (0)
 
-#define assert_undo_ptr_allocated(undo_ptr)                                    \
-  do {                                                                         \
-    ut_a((undo_ptr) != lizard::UNDO_PTR_NULL);                                 \
+#define assert_undo_ptr_allocated(undo_ptr)    \
+  do {                                         \
+    ut_a((undo_ptr) != lizard::UNDO_PTR_NULL); \
   } while (0)
 
-#define assert_trx_undo_ptr_initial(trx)                                       \
+#define assert_trx_undo_ptr_initial(trx) \
   assert_undo_ptr_initial((&(trx)->txn_desc.undo_ptr))
 
-#define assert_trx_undo_ptr_allocated(trx)                                     \
+#define assert_trx_undo_ptr_allocated(trx) \
   assert_undo_ptr_allocated((trx)->txn_desc.undo_ptr)
 
-#define lizard_trx_undo_page_validation(page)                                  \
-  do {                                                                         \
-    ut_a(lizard::trx_undo_page_validation(page));                              \
+#define trx_undo_page_validation(page)          \
+  do {                                          \
+    ut_a(lizard::trx_undo_page_validate(page)); \
   } while (0)
 
-#define lizard_trx_undo_hdr_uba_validation(undo_hdr, mtr)     \
-  do {                                                        \
-    ut_a(lizard::trx_undo_hdr_uba_validation(undo_hdr, mtr)); \
+#define trx_undo_hdr_uba_validation(undo_hdr, mtr)          \
+  do {                                                      \
+    ut_a(lizard::trx_undo_hdr_uba_validate(undo_hdr, mtr)); \
   } while (0)
 
-#define lizard_trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)           \
-  do {                                                                         \
-    txn_undo_hdr_t txn_undo_hdr;                                               \
-    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_hdr);    \
-    ut_a(txn_undo_hdr.magic_n == TXN_MAGIC_N);                                 \
+#define trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)                \
+  do {                                                                       \
+    txn_undo_hdr_t txn_undo_hdr;                                             \
+    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_hdr);  \
+    ut_a(txn_undo_hdr.magic_n == TXN_MAGIC_N);                               \
   } while (0)
 
-#define lizard_undo_addr_validation(undo_addr, index)                          \
-  do {                                                                         \
-    ut_a(lizard::undo_addr_validation(undo_addr, index));                      \
+#define undo_addr_validation(undo_addr, index)          \
+  do {                                                  \
+    ut_a(lizard::undo_addr_validate(undo_addr, index)); \
   } while (0)
 
-#define lizard_undo_scn_validation(undo)                                       \
-  do {                                                                         \
-    ut_a(lizard::undo_scn_validation(undo));                                   \
+#define undo_commit_mark_validation(undo)          \
+  do {                                             \
+    ut_a(lizard::undo_commit_mark_validate(undo)); \
   } while (0)
 
 #define assert_trx_in_recovery(trx)                                            \
@@ -1060,13 +1060,13 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
     }                                                                          \
   } while (0)
 
-#define lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)           \
-  do {                                                                         \
-    ut_a(lizard::txn_undo_free_list_validate(rseg_hdr, undo_page, mtr));       \
+#define txn_undo_free_list_validation(rseg_hdr, undo_page, mtr)          \
+  do {                                                                   \
+    ut_a(lizard::txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)); \
   } while (0)
 #else
 
-#define lizard_trx_undo_page_validation(page)
+#define trx_undo_page_validation(page)
 #define assert_txn_desc_initial(trx)
 #define assert_txn_desc_allocated(trx)
 #define assert_undo_ptr_initial(undo_ptr)
@@ -1074,12 +1074,12 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
 #define assert_trx_undo_ptr_initial(trx)
 #define assert_trx_undo_ptr_allocated(trx)
 
-#define lizard_trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)
-#define lizard_undo_addr_validation(undo_addr, index)
-#define lizard_undo_scn_validation(undo)
+#define trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)
+#define undo_addr_validation(undo_addr, index)
+#define undo_commit_mark_validation(undo)
 #define assert_trx_in_recovery(trx)
-#define lizard_txn_undo_free_list_validate(rseg_hdr, undo_page, mtr)
-#define lizard_trx_undo_hdr_uba_validation(undo_hdr, mtr)
+#define txn_undo_free_list_validation(rseg_hdr, undo_page, mtr)
+#define trx_undo_hdr_uba_validation(undo_hdr, mtr)
 
 #endif
 

@@ -132,8 +132,8 @@ void CRecover::apply_gcn() {
   return;
 }
 
-commit_scn_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
-  commit_scn_t cmmt = COMMIT_SCN_NULL;
+commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
+  commit_mark_t cmmt = COMMIT_MARK_NULL;
 
   ut_ad(!crecover.is_need_recovery());
 
@@ -143,7 +143,7 @@ commit_scn_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   DBUG_EXECUTE_IF("crash_before_gcn_commit",
                   ut_ad(trx->txn_desc.cmmt.gcn != GCN_NULL ? 0 : 1););
 
-  assert_trx_scn_initial(trx);
+  assert_trx_commit_mark_initial(trx);
 
   /** We don't want to call **ut_time_system_us** within the scope
   of the gcs mutex protection. So we just only set

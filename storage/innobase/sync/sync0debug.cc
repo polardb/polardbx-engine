@@ -1511,8 +1511,8 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(GCN_PERSIST, SYNC_NO_ORDER_CHECK, gcn_persist_mutex_key);
 
-  LATCH_ADD_MUTEX(LIZARD_UNDO_HDR_HASH, SYNC_NO_ORDER_CHECK,
-                  lizard_undo_hdr_hash_mutex_key);
+  LATCH_ADD_MUTEX(UNDO_HDR_HASH, SYNC_NO_ORDER_CHECK,
+                  undo_hdr_hash_mutex_key);
 
   LATCH_ADD_MUTEX(LIZARD_VISION_LIST, SYNC_NO_ORDER_CHECK,
                   lizard_vision_list_mutex_key);
@@ -1521,8 +1521,8 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(GP_SYS_WAIT, SYNC_NO_ORDER_CHECK, gp_sys_wait_mutex_key);
 
-  LATCH_ADD_MUTEX(LIZARD_UNDO_RETENTION, SYNC_NO_ORDER_CHECK,
-                  lizard_undo_retention_mutex_key);
+  LATCH_ADD_MUTEX(UNDO_RETENTION, SYNC_NO_ORDER_CHECK,
+                  undo_retention_mutex_key);
 
   latch_id_t id = LATCH_ID_NONE;
 

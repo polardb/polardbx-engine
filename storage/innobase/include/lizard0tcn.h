@@ -74,7 +74,7 @@ typedef struct tcn_t {
     gcn = cmmt.gcn;
     csr = undo_ptr_get_csr(cmmt.undo_ptr);
   }
-  explicit tcn_t(trx_id_t id, commit_scn_t cmmt) {
+  explicit tcn_t(trx_id_t id, commit_mark_t cmmt) {
     trx_id = id;
     scn = cmmt.scn;
     gcn = cmmt.gcn;

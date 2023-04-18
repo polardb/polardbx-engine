@@ -63,7 +63,7 @@ bool Undo_hdr_equal::operator()(const Undo_hdr_key &lhr,
 
 #ifdef UNIV_PFS_MUTEX
 /* lizard undo hdr hash mutex PFS key */
-mysql_pfs_key_t lizard_undo_hdr_hash_mutex_key;
+mysql_pfs_key_t undo_hdr_hash_mutex_key;
 #endif
 
 namespace lizard {
@@ -188,7 +188,7 @@ void trx_rseg_init_undo_hdr_hash(space_id_t space_id, trx_rsegf_t *rseg_hdr,
 }
 
 Undo_logs::Undo_logs() {
-  mutex_create(LATCH_ID_LIZARD_UNDO_HDR_HASH, &m_mutex);
+  mutex_create(LATCH_ID_UNDO_HDR_HASH, &m_mutex);
 }
 
 Undo_logs::~Undo_logs() { mutex_free(&m_mutex); }

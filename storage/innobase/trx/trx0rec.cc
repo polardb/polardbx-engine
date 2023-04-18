@@ -2459,7 +2459,7 @@ err_exit:
     no need to hold TXN page latch and undo page latch */
     if (lizard::precheck_if_txn_is_purged(txn_rec)) {
       /** Must be cleanout, so no need to lookup again */
-      ut_ad(!lizard::lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+      ut_ad(!lizard::undo_ptr_is_active(txn_rec->undo_ptr));
       missing_history = true;
     } else {
       /** precheck fail */

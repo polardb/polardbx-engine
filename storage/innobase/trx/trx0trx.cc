@@ -413,7 +413,7 @@ struct TrxFactory {
 
     ut_ad(trx->killed_by == std::thread::id{});
 
-    assert_trx_scn_initial(trx);
+    assert_trx_commit_mark_initial(trx);
     assert_txn_desc_initial(trx);
 
     assert_gp_state_initial(trx);
@@ -493,7 +493,7 @@ static trx_t *trx_create_low() {
 
   assert_trx_is_free(trx);
 
-  assert_trx_scn_initial(trx);
+  assert_trx_commit_mark_initial(trx);
   assert_txn_desc_initial(trx);
 
   mem_heap_t *heap;
@@ -881,7 +881,7 @@ static trx_t *trx_resurrect_insert(
   trx->rsegs.m_redo.insert_undo = undo;
   trx->is_recovered = true;
 
-  assert_trx_scn_initial(trx);
+  assert_trx_commit_mark_initial(trx);
   assert_txn_desc_initial(trx);
 
   /* This is single-threaded startup code, we do not need the
@@ -906,7 +906,7 @@ static trx_t *trx_resurrect_insert(
       }
     } else {
       /** We have to wait for the scn number from resurrect txn undo log */
-      trx->txn_desc.cmmt = COMMIT_SCN_NULL;
+      trx->txn_desc.cmmt = COMMIT_MARK_NULL;
 
       trx->state.store(TRX_STATE_COMMITTED_IN_MEMORY,
                        std::memory_order_relaxed);
@@ -954,8 +954,8 @@ void trx_resurrect_update_in_prepared_state(
           TRX_STATE_FORCED_ROLLBACK);
     /** Prepared trx didn't has valid scn, it will assign a new scn
         if need to commit */
-    assert_undo_scn_initial(undo);
-    assert_trx_scn_initial(trx);
+    assert_undo_commit_mark_initial(undo);
+    assert_trx_commit_mark_initial(trx);
     assert_txn_desc_initial(trx);
 
     if (trx_state_eq(trx, TRX_STATE_NOT_STARTED)) {
@@ -969,9 +969,9 @@ void trx_resurrect_update_in_prepared_state(
     /** Only CACHED state here, because state PURGE undo must be added
     to history list */
     ut_ad(undo->state == TRX_UNDO_CACHED);
-    assert_undo_scn_allocated(undo);
+    assert_undo_commit_mark_allocated(undo);
     trx->txn_desc.cmmt = undo->cmmt;
-    assert_trx_scn_allocated(trx);
+    assert_trx_commit_mark_allocated(trx);
     assert_trx_undo_ptr_initial(trx);
 
     trx->state.store(TRX_STATE_COMMITTED_IN_MEMORY, std::memory_order_relaxed);
@@ -1019,8 +1019,8 @@ static void trx_resurrect_update(
   } else {
     trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
 
-    assert_undo_scn_initial(undo);
-    assert_trx_scn_initial(trx);
+    assert_undo_commit_mark_initial(undo);
+    assert_trx_commit_mark_initial(trx);
     assert_txn_desc_initial(trx);
   }
 
@@ -1587,13 +1587,13 @@ static bool trx_write_serialisation_history(
     /** Always has txn undo log segment */
     ut_ad(lizard::trx_is_txn_rseg_assigned(trx) &&
           lizard::trx_is_txn_rseg_updated(trx));
-    assert_commit_scn_initial(trx->rsegs.m_redo.insert_undo->prev_image);
+    assert_commit_mark_initial(trx->rsegs.m_redo.insert_undo->prev_image);
 
     trx_undo_set_state_at_finish(trx->rsegs.m_redo.insert_undo, mtr);
   }
 
   if (trx->rsegs.m_noredo.insert_undo != nullptr) {
-    assert_commit_scn_initial(trx->rsegs.m_noredo.insert_undo->prev_image);
+    assert_commit_mark_initial(trx->rsegs.m_noredo.insert_undo->prev_image);
     trx_undo_set_state_at_finish(trx->rsegs.m_noredo.insert_undo, &temp_mtr);
   }
 
@@ -1628,7 +1628,7 @@ static bool trx_write_serialisation_history(
                                                    : nullptr;
 
     /** Lizard: txn undo header */
-    commit_scn_t cmmt = COMMIT_SCN_NULL;
+    commit_mark_t cmmt = COMMIT_MARK_NULL;
     lizard::TxnUndoRsegs elem;
     bool has_collected = lizard::trx_collect_rsegs_for_purge(
         &elem, redo_rseg_undo_ptr, temp_rseg_undo_ptr, txn_rseg_undo_ptr);
@@ -1637,7 +1637,7 @@ static bool trx_write_serialisation_history(
     if (trx->rsegs.m_txn.txn_undo != nullptr) {
       page_t *undo_hdr_page;
       trx_undo_t *txn_undo = trx->rsegs.m_txn.txn_undo;
-      assert_commit_scn_allocated(txn_undo->prev_image);
+      assert_commit_mark_allocated(txn_undo->prev_image);
 
       auto undo_ptr = &trx->rsegs.m_txn;
       undo_hdr_page =
@@ -1647,7 +1647,7 @@ static bool trx_write_serialisation_history(
           trx, undo_hdr_page + txn_undo->hdr_offset, trx->is_rollback, mtr);
 
       /** Generate SCN */
-      cmmt = lizard::trx_commit_scn(trx, nullptr, txn_undo, undo_hdr_page,
+      cmmt = lizard::trx_commit_mark(trx, nullptr, txn_undo, undo_hdr_page,
                                     txn_undo->hdr_offset, &serialised, mtr);
       elem.set_scn(cmmt.scn);
       ut_a(cmmt.scn > txn_undo->prev_image.scn);
@@ -1668,7 +1668,7 @@ static bool trx_write_serialisation_history(
       page_t *undo_hdr_page;
       trx_undo_t *update_undo = trx->rsegs.m_redo.update_undo;
 
-      assert_commit_scn_initial(update_undo->prev_image);
+      assert_commit_mark_initial(update_undo->prev_image);
 
       undo_hdr_page =
           trx_undo_set_state_at_finish(trx->rsegs.m_redo.update_undo, mtr);
@@ -1684,8 +1684,8 @@ static bool trx_write_serialisation_history(
       trx_undo_gtid_set(trx, undo_ptr->update_undo, false);
 
       /** Always has txn undo log for transaction */
-      ut_ad(lizard::commit_scn_state(cmmt) == SCN_STATE_ALLOCATED);
-      lizard::trx_commit_scn(trx, &cmmt, update_undo, undo_hdr_page,
+      ut_ad(lizard::commit_mark_state(cmmt) == SCN_STATE_ALLOCATED);
+      lizard::trx_commit_mark(trx, &cmmt, update_undo, undo_hdr_page,
                              update_undo->hdr_offset, &serialised, mtr);
 
       trx_undo_update_cleanup(trx, undo_ptr, undo_hdr_page, update_rseg_len,
@@ -1698,7 +1698,7 @@ static bool trx_write_serialisation_history(
       page_t *undo_hdr_page;
       trx_undo_t *update_undo = trx->rsegs.m_noredo.update_undo;
 
-      assert_commit_scn_initial(update_undo->prev_image);
+      assert_commit_mark_initial(update_undo->prev_image);
 
       undo_hdr_page = trx_undo_set_state_at_finish(
           trx->rsegs.m_noredo.update_undo, &temp_mtr);
@@ -1706,14 +1706,14 @@ static bool trx_write_serialisation_history(
       ulint n_added_logs =
           (redo_rseg_undo_ptr != nullptr) ? 2 + txn_rseg_len : 1 + txn_rseg_len;
 
-      if (lizard::commit_scn_state(cmmt) == SCN_STATE_ALLOCATED) {
+      if (lizard::commit_mark_state(cmmt) == SCN_STATE_ALLOCATED) {
         /** Use already SCN */
-        lizard::trx_commit_scn(trx, &cmmt, update_undo, undo_hdr_page,
+        lizard::trx_commit_mark(trx, &cmmt, update_undo, undo_hdr_page,
                                update_undo->hdr_offset, &serialised, &temp_mtr);
       } else {
         /** Temporary update undo log purge still need SCN number */
         /** Generate SCN */
-        cmmt = lizard::trx_commit_scn(trx, nullptr, update_undo, undo_hdr_page,
+        cmmt = lizard::trx_commit_mark(trx, nullptr, update_undo, undo_hdr_page,
                                       update_undo->hdr_offset, &serialised,
                                       &temp_mtr);
         elem.set_scn(cmmt.scn);

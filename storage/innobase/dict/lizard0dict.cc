@@ -117,9 +117,9 @@ dberr_t dd_index_init_txn_desc(dict_index_t *index, trx_t *trx) {
     mutex_exit(&trx->undo_mutex);
 
     if (err == DB_SUCCESS) {
-      assert_trx_scn_initial(trx);
+      assert_trx_commit_mark_initial(trx);
       assert_undo_ptr_allocated(trx->txn_desc.undo_ptr);
-      ut_ad(lizard_undo_ptr_is_active(trx->txn_desc.undo_ptr));
+      ut_ad(undo_ptr_is_active(trx->txn_desc.undo_ptr));
 
       index->txn.uba = trx->txn_desc.undo_ptr;
       index->txn.scn = trx->txn_desc.cmmt.scn;

@@ -402,21 +402,21 @@ class GcnPersister : public Persister {
   @return       scn state SCN_STATE_INITIAL, SCN_STATE_ALLOCATED or
                           SCN_STATE_INVALID
 */
-enum scn_state_t commit_scn_state(const commit_scn_t &scn);
+enum scn_state_t commit_mark_state(const commit_mark_t &cmmt);
 
 }  // namespace lizard
 
 /** Commit scn initial value */
-#define COMMIT_SCN_NULL \
+#define COMMIT_MARK_NULL \
   { lizard::SCN_NULL, lizard::UTC_NULL, lizard::GCN_NULL, CSR_AUTOMATIC }
 
-#define COMMIT_SCN_LOST                                                  \
+#define COMMIT_MARK_LOST                                                  \
   {                                                                      \
     lizard::SCN_UNDO_LOST, lizard::UTC_UNDO_LOST, lizard::GCN_UNDO_LOST, \
         CSR_AUTOMATIC                                                    \
   }
 
-inline bool commit_scn_is_lost(commit_scn_t &cmmt) {
+inline bool commit_mark_is_lost(commit_mark_t &cmmt) {
   if (cmmt.scn == lizard::SCN_UNDO_LOST && cmmt.utc == lizard::UTC_UNDO_LOST &&
       cmmt.gcn == lizard::GCN_UNDO_LOST) {
     return true;
@@ -424,7 +424,7 @@ inline bool commit_scn_is_lost(commit_scn_t &cmmt) {
   return false;
 }
 
-inline bool commit_scn_is_uninitial(commit_scn_t &cmmt) {
+inline bool commit_mark_is_uninitial(commit_mark_t &cmmt) {
   if (cmmt.scn == 0 && cmmt.utc == 0 && cmmt.gcn == 0) {
     return true;
   }
@@ -434,78 +434,78 @@ inline bool commit_scn_is_uninitial(commit_scn_t &cmmt) {
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
 /* Debug validation of commit scn directly */
-#define assert_commit_scn_state(scn, state)       \
-  do {                                            \
-    ut_a(lizard::commit_scn_state(scn) == state); \
+#define assert_commit_mark_state(scn, state)       \
+  do {                                             \
+    ut_a(lizard::commit_mark_state(scn) == state); \
   } while (0)
 
-#define assert_commit_scn_initial(scn)               \
-  do {                                               \
-    assert_commit_scn_state(scn, SCN_STATE_INITIAL); \
+#define assert_commit_mark_initial(scn)               \
+  do {                                                \
+    assert_commit_mark_state(scn, SCN_STATE_INITIAL); \
   } while (0)
 
-#define assert_commit_scn_allocated(scn)               \
-  do {                                                 \
-    assert_commit_scn_state(scn, SCN_STATE_ALLOCATED); \
+#define assert_commit_mark_allocated(scn)               \
+  do {                                                  \
+    assert_commit_mark_state(scn, SCN_STATE_ALLOCATED); \
   } while (0)
 
 /* Debug validation of commit scn from trx->scn */
-#define assert_trx_scn_state(trx, state)                         \
-  do {                                                           \
-    ut_a(lizard::commit_scn_state(trx->txn_desc.cmmt) == state); \
+#define assert_trx_commit_mark_state(trx, state)                  \
+  do {                                                            \
+    ut_a(lizard::commit_mark_state(trx->txn_desc.cmmt) == state); \
   } while (0)
 
-#define assert_trx_scn_initial(trx)               \
-  do {                                            \
-    assert_trx_scn_state(trx, SCN_STATE_INITIAL); \
+#define assert_trx_commit_mark_initial(trx)               \
+  do {                                                    \
+    assert_trx_commit_mark_state(trx, SCN_STATE_INITIAL); \
   } while (0)
 
-#define assert_trx_scn_allocated(trx)               \
-  do {                                              \
-    assert_trx_scn_state(trx, SCN_STATE_ALLOCATED); \
+#define assert_trx_commit_mark_allocated(trx)               \
+  do {                                                      \
+    assert_trx_commit_mark_state(trx, SCN_STATE_ALLOCATED); \
   } while (0)
 
-#define assert_trx_scn(trx)                                                 \
+#define assert_trx_commit_mark(trx)                                         \
   do {                                                                      \
     if (trx->state == TRX_STATE_PREPARED || trx->state == TRX_STATE_ACTIVE) \
-      assert_trx_scn_state(trx, SCN_STATE_INITIAL);                         \
+      assert_trx_commit_mark_state(trx, SCN_STATE_INITIAL);                 \
     else if (trx->state == TRX_STATE_COMMITTED_IN_MEMORY)                   \
-      assert_trx_scn_state(trx, SCN_STATE_ALLOCATED);                       \
+      assert_trx_commit_mark_state(trx, SCN_STATE_ALLOCATED);               \
   } while (0)
 
 /* Debug validation of commit scn from undo->scn */
-#define assert_undo_scn_state(undo, state)               \
-  do {                                                   \
-    ut_a(lizard::commit_scn_state(undo->cmmt) == state); \
+#define assert_undo_commit_mark_state(undo, state)        \
+  do {                                                    \
+    ut_a(lizard::commit_mark_state(undo->cmmt) == state); \
   } while (0)
 
-#define assert_undo_scn_initial(undo)               \
-  do {                                              \
-    assert_undo_scn_state(undo, SCN_STATE_INITIAL); \
+#define assert_undo_commit_mark_initial(undo)               \
+  do {                                                      \
+    assert_undo_commit_mark_state(undo, SCN_STATE_INITIAL); \
   } while (0)
 
-#define assert_undo_scn_allocated(undo)               \
-  do {                                                \
-    assert_undo_scn_state(undo, SCN_STATE_ALLOCATED); \
+#define assert_undo_commit_mark_allocated(undo)               \
+  do {                                                        \
+    assert_undo_commit_mark_state(undo, SCN_STATE_ALLOCATED); \
   } while (0)
 
 #else
 
 /* Debug validation of commit scn directly */
-#define assert_commit_scn_state(scn, state)
-#define assert_commit_scn_initial(scn)
-#define assert_commit_scn_allocated(scn)
+#define assert_commit_mark_state(scn, state)
+#define assert_commit_mark_initial(scn)
+#define assert_commit_mark_allocated(scn)
 
 /* Debug validation of commit scn from trx->scn */
-#define assert_trx_scn_state(trx, state)
-#define assert_trx_scn_initial(trx)
-#define assert_trx_scn_allocated(trx)
-#define assert_trx_scn(trx)
+#define assert_trx_commit_mark_state(trx, state)
+#define assert_trx_commit_mark_initial(trx)
+#define assert_trx_commit_mark_allocated(trx)
+#define assert_trx_commit_mark(trx)
 
 /* Debug validation of commit scn from undo->scn */
-#define assert_undo_scn_state(undo, state)
-#define assert_undo_scn_initial(undo)
-#define assert_undo_scn_allocated(undo)
+#define assert_undo_commit_mark_state(undo, state)
+#define assert_undo_commit_mark_initial(undo)
+#define assert_undo_commit_mark_allocated(undo)
 
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
 

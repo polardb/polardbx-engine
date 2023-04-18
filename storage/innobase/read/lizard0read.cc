@@ -275,13 +275,13 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
       unless it's a temp table */
       lizard_ut_ad((txn_rec->scn == SCN_TEMP_TAB_REC &&
                     txn_rec->undo_ptr == UNDO_PTR_TEMP_TAB_REC) ||
-                   lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+                   undo_ptr_is_active(txn_rec->undo_ptr));
     }
     return true;
   } else if (txn_rec->scn == SCN_NULL) {
     if (group_ids.has(txn_rec->trx_id)) return true;
     /** If transaction still active,  not seen */
-    ut_ad(!check_consistent || lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    ut_ad(!check_consistent || undo_ptr_is_active(txn_rec->undo_ptr));
     return false;
   } else {
     if (group_ids.has(txn_rec->trx_id)) return true;
@@ -289,7 +289,7 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
       Modification scn is less than snapshot mean that
       the trx commit is prior the query lanuch.
     */
-    ut_ad(!check_consistent || !lizard_undo_ptr_is_active(txn_rec->undo_ptr));
+    ut_ad(!check_consistent || !undo_ptr_is_active(txn_rec->undo_ptr));
     return txn_rec->scn <= m_snapshot_scn;
   }
 }
