@@ -285,7 +285,8 @@ void GCN::boot() {
 
   @retval	gcn
 */
-gcn_t GCN::new_gcn(const gcn_t gcn, mtr_t *mtr) {
+std::pair<gcn_t, csr_t> GCN::new_gcn(const gcn_t gcn, const csr_t csr,
+                                     mtr_t *mtr) {
   gcn_t cmmt = GCN_NULL;
   ut_ad(!gcn_order_mutex_own());
 
@@ -301,7 +302,7 @@ gcn_t GCN::new_gcn(const gcn_t gcn, mtr_t *mtr) {
   PersistentGcsData meta;
   meta.set_gcn(cmmt);
   gcs->persisters.gcn_persister()->write_log(&meta, mtr);
-  return cmmt;
+  return std::make_pair(cmmt, csr);
 }
 
 /**

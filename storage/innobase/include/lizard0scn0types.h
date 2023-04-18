@@ -43,11 +43,24 @@ typedef uint64_t utc_t;
 /** Global commit number */
 typedef uint64_t gcn_t;
 
+/** Commit number source */
+enum csr_t {
+  /** Automatic generated commit number. like scn, utc or local trx gcn */
+  /** Defaultly, all commit numbers are automatical */
+  CSR_AUTOMATIC = 0,
+
+  /** Assigned commit number. like global trx gcn */
+  CSR_ASSIGNED = 1,
+};
+
 /** Commit undo structure {SCN, UTC, GCN} */
 struct commit_scn_t {
   scn_t scn;
   utc_t utc;
   gcn_t gcn;
+  /** Current only represent gcn source. since utc and scn only be allowed to
+   * generate automatically */
+  csr_t csr;
 };
 
 /** Compare function */

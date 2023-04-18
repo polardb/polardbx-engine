@@ -1704,7 +1704,8 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
     lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
 
     /** Lizard: add UBA into undo log header */
-    undo_addr_t undo_addr = {rseg->space_id, page_no, offset, true};
+    undo_addr_t undo_addr = {rseg->space_id, page_no, offset, true,
+                           CSR_AUTOMATIC};
 
     /** Current undo log hdr is UBA */
     lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, mtr);
@@ -1823,9 +1824,9 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       gtid_storage);
     /* Lizard: special for txn undo log header */
-
     /** Lizard: add UBA into undo log header */
-    undo_addr_t undo_addr = {undo->space, undo->hdr_page_no, offset, true};
+    undo_addr_t undo_addr = {undo->space, undo->hdr_page_no, offset, true,
+                             CSR_AUTOMATIC};
 
     /** Current undo log hdr is UBA */
     lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, mtr);

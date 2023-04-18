@@ -33,8 +33,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0scn_h
 #define lizard0scn_h
 
+#include <utility>
+
 #include "lizard0scn0types.h"
+#include "lizard0ut.h"
 #include "ut0mutex.h"
+
 
 #include "mtr0types.h"
 
@@ -79,6 +83,47 @@ constexpr scn_t SCN_NULL = std::numeric_limits<scn_t>::max();
 
 /** The max of scn number, crash direct if more than SCN_MAX */
 constexpr scn_t SCN_MAX = std::numeric_limits<scn_t>::max() - 1;
+
+/**------------------------------------------------------------------------*/
+/** Format in UTC */
+/*
+ *	-------		---------
+ *	1  bit		csr
+ *	63 bit		time (us)
+ */
+/**------------------------------------------------------------------------*/
+
+/** US */
+#define UTC_POS_US 0
+#define UTC_WIDTH_US 63
+
+#define UTC_MASK_US ((~(~0ULL << UTC_WIDTH_US)) << UTC_POS_US)
+#define UTC_GET_US(value) ((((utc_t)value) & UTC_MASK_US) >> UTC_POS_US)
+
+/** The most bit for commit source of UTC. */
+#define UTC_POS_CSR (UTC_POS_US + UTC_WIDTH_US)
+#define UTC_WIDTH_CSR 1
+
+#define UTC_MASK_CSR ((~(~0ULL << UTC_WIDTH_CSR)) << UTC_POS_CSR)
+
+#define UTC_GET_CSR(value) ((((utc_t)value) & UTC_MASK_CSR) >> UTC_POS_CSR)
+
+inline utc_t encode_utc(const ib_time_system_us_t us, const csr_t csr) {
+  ut_ad(UTC_GET_CSR(us) == 0);
+  static_assert(CSR_AUTOMATIC == 0, "csr automatic != 0");
+  static_assert(CSR_ASSIGNED == 1, "csr assigned != 1");
+
+  utc_t value = static_cast<utc_t>(csr);
+
+  return (utc_t)us | (value << UTC_POS_CSR);
+}
+
+inline std::pair<utc_t, csr_t> decode_utc(const utc_t utc) {
+  utc_t us = UTC_GET_US(utc);
+  csr_t csr = static_cast<csr_t>(UTC_GET_CSR(utc));
+  return std::make_pair(us, csr);
+}
+/**------------------------------------------------------------------------*/
 
 /** For troubleshooting and readability, we use mutiple SCN FAKE in different
 scenarios */
@@ -300,7 +345,7 @@ class GCN {
 
     @retval	gcn
   */
-  gcn_t new_gcn(const gcn_t gcn, mtr_t *mtr);
+  std::pair<gcn_t, csr_t> new_gcn(const gcn_t gcn, const csr_t csr, mtr_t *mtr);
 
   gcn_t load_gcn() const { return m_gcn.load(); }
 
@@ -363,10 +408,13 @@ enum scn_state_t commit_scn_state(const commit_scn_t &scn);
 
 /** Commit scn initial value */
 #define COMMIT_SCN_NULL \
-  { lizard::SCN_NULL, lizard::UTC_NULL, lizard::GCN_NULL }
+  { lizard::SCN_NULL, lizard::UTC_NULL, lizard::GCN_NULL, CSR_AUTOMATIC }
 
-#define COMMIT_SCN_LOST \
-  { lizard::SCN_UNDO_LOST, lizard::UTC_UNDO_LOST, lizard::GCN_UNDO_LOST }
+#define COMMIT_SCN_LOST                                                  \
+  {                                                                      \
+    lizard::SCN_UNDO_LOST, lizard::UTC_UNDO_LOST, lizard::GCN_UNDO_LOST, \
+        CSR_AUTOMATIC                                                    \
+  }
 
 inline bool commit_scn_is_lost(commit_scn_t &cmmt) {
   if (cmmt.scn == lizard::SCN_UNDO_LOST && cmmt.utc == lizard::UTC_UNDO_LOST &&

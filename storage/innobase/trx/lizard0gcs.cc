@@ -164,7 +164,11 @@ commit_scn_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   scn_list_mutex_exit();
 
   /** 2. generate gcn number. */
-  trx->txn_desc.cmmt.gcn = cmmt.gcn = gcn.new_gcn(trx->txn_desc.cmmt.gcn, mtr);
+  std::pair<gcn_t, csr_t> ret =
+      gcn.new_gcn(trx->txn_desc.cmmt.gcn, trx->txn_desc.cmmt.csr, mtr);
+
+  trx->txn_desc.cmmt.gcn = cmmt.gcn = ret.first;
+  trx->txn_desc.cmmt.csr = cmmt.csr = ret.second;
 
   /** 3. generate utc time. */
   trx->txn_desc.cmmt.utc = cmmt.utc = ut_time_system_us();

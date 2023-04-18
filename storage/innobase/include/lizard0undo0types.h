@@ -98,6 +98,8 @@ struct undo_addr_t {
   ulint offset;
   /* Active or Commit state */
   bool state;
+  /** Commit number source for gcn */
+  csr_t csr;
 };
 
 typedef struct undo_addr_t undo_addr_t;
@@ -112,7 +114,8 @@ typedef struct undo_addr_t undo_addr_t;
   2) Format of undo log address in record:
 
    1  bit     active/commit state (0:active 1:commit)
-   8  bit     reserved unused
+   1  bit     commit source
+   7  bit     reserved unused
    7  bit     undo space number (1-127)
    32 bit     page no (4 bytes)
    16 bit     Offset of undo log header (2 bytes)
@@ -128,9 +131,14 @@ typedef struct undo_addr_t undo_addr_t;
 #define UBA_WIDTH_SPACE_ID 7
 
 #define UBA_POS_UNUSED (UBA_POS_SPACE_ID + UBA_WIDTH_SPACE_ID)
-#define UBA_WIDTH_UNUSED 8
+#define UBA_WIDTH_UNUSED 7
 
-#define UBA_POS_STATE (UBA_POS_UNUSED + UBA_WIDTH_UNUSED)
+#define UBA_POS_CSR (UBA_POS_UNUSED + UBA_WIDTH_UNUSED)
+#define UBA_WIDTH_CSR 1
+
+#define UBA_MASK_CSR ((~(~0ULL << UBA_WIDTH_CSR)) << UBA_POS_CSR)
+
+#define UBA_POS_STATE (UBA_POS_CSR + UBA_WIDTH_CSR)
 #define UBA_WIDTH_STATE 1
 
 static_assert((UBA_POS_STATE + UBA_WIDTH_STATE) == 64,
@@ -324,6 +332,15 @@ inline bool lizard_undo_ptr_is_active(undo_ptr_t undo_ptr) {
 
 inline void lizard_undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
   *undo_ptr |= (undo_ptr_t)1 << UBA_POS_STATE;
+}
+
+inline csr_t undo_ptr_get_csr(undo_ptr_t undo_ptr) {
+  return static_cast<csr_t>((undo_ptr & UBA_MASK_CSR) >> UBA_POS_CSR);
+}
+
+inline void undo_ptr_set_csr(undo_ptr_t *undo_ptr, csr_t csr) {
+  undo_ptr_t value = static_cast<undo_ptr_t>(csr);
+  *undo_ptr |= value << UBA_POS_CSR;
 }
 
 /**

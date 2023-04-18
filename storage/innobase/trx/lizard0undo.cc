@@ -159,12 +159,15 @@ ulint txn_undo_page_reuse_max_percent = TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF;
 */
 void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr) {
   lizard_undo_addr_validation(&undo_addr, nullptr);
+
+
   ulint rseg_id = undo::id2num(undo_addr.space_id);
   /** Reserved UNDO_PTR didn't need encode, so assert here */
   /** 1. assert temporary table undo ptr */
   lizard_ut_ad(undo_addr.offset != UNDO_PTR_OFFSET_TEMP_TAB_REC);
 
   *undo_ptr = (undo_ptr_t)(undo_addr.state) << UBA_POS_STATE |
+              (undo_ptr_t)(undo_addr.csr) << UBA_POS_CSR |
               (undo_ptr_t)rseg_id << UBA_POS_SPACE_ID |
               (undo_ptr_t)(undo_addr.page_no) << UBA_POS_PAGE_NO |
               undo_addr.offset;
@@ -299,8 +302,10 @@ bool trx_undo_hdr_uba_validation(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
     Maybe the UBA in undo log header is fixed and predefined UBA
     or a meaningful UBA.
   */
+  /** UBA in undo header is prefined and not changed when commit,
+   *  so csr is prefined automatic, and real csr is read from UTC. */
   if (undo_ptr == UNDO_PTR_UNDO_HDR ||
-      (undo_addr.state == true &&
+      (undo_addr.state == true && undo_addr.csr == CSR_AUTOMATIC &&
        (fsp_is_txn_tablespace_by_id(undo_addr.space_id))))
     return true;
 
@@ -353,7 +358,8 @@ bool txn_undo_log_has_purged(const trx_rseg_t *rseg,
   mtr_commit(&mtr);
 
   undo_decode_undo_ptr(uba_ptr, &undo_addr);
-  ut_ad(undo_addr.state && fsp_is_txn_tablespace_by_id(undo_addr.space_id));
+  ut_ad(undo_addr.state && undo_addr.csr == CSR_AUTOMATIC &&
+        fsp_is_txn_tablespace_by_id(undo_addr.space_id));
 
   mtr_start(&mtr);
 
@@ -442,8 +448,11 @@ void trx_undo_hdr_write_scn(trx_ulogf_t *log_hdr, commit_scn_t &cmmt,
   /** Validate the undo page */
   lizard_trx_undo_page_validation(page_align(log_hdr));
 
+  /** utc didn't include csr. */
+  ut_ad(UTC_GET_CSR(cmmt.utc) == 0);
+
   mlog_write_ull(log_hdr + TRX_UNDO_SCN, cmmt.scn, mtr);
-  mlog_write_ull(log_hdr + TRX_UNDO_UTC, cmmt.utc, mtr);
+  mlog_write_ull(log_hdr + TRX_UNDO_UTC, encode_utc(cmmt.utc, cmmt.csr), mtr);
   mlog_write_ull(log_hdr + TRX_UNDO_GCN, cmmt.gcn, mtr);
 }
 
@@ -465,8 +474,13 @@ commit_scn_t trx_undo_hdr_read_scn(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
   commit_scn_t cmmt;
 
   cmmt.scn = mach_read_from_8(log_hdr + TRX_UNDO_SCN);
-  cmmt.utc = mach_read_from_8(log_hdr + TRX_UNDO_UTC);
   cmmt.gcn = mach_read_from_8(log_hdr + TRX_UNDO_GCN);
+
+  std::pair<utc_t, csr_t> utc =
+      decode_utc(mach_read_from_8(log_hdr + TRX_UNDO_UTC));
+
+  cmmt.utc = utc.first;
+  cmmt.csr = utc.second;
 
   return cmmt;
 }
@@ -490,8 +504,13 @@ commit_scn_t txn_undo_hdr_read_prev_scn(const trx_ulogf_t *log_hdr,
   commit_scn_t cmmt;
 
   cmmt.scn = mach_read_from_8(log_hdr + TXN_UNDO_PREV_SCN);
-  cmmt.utc = mach_read_from_8(log_hdr + TXN_UNDO_PREV_UTC);
   cmmt.gcn = mach_read_from_8(log_hdr + TXN_UNDO_PREV_GCN);
+
+  std::pair<utc_t, csr_t> utc =
+      decode_utc(mach_read_from_8(log_hdr + TXN_UNDO_PREV_UTC));
+
+  cmmt.utc = utc.first;
+  cmmt.csr = utc.second;
 
   return cmmt;
 }
@@ -551,7 +570,10 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
   /* Write the prev scn */
   mlog_write_ull(log_hdr + TXN_UNDO_PREV_SCN, prev_image.scn, mtr);
   /* Write the prev utc */
-  mlog_write_ull(log_hdr + TXN_UNDO_PREV_UTC, prev_image.utc, mtr);
+  ut_ad(UTC_GET_CSR(prev_image.utc) == 0);
+
+  mlog_write_ull(log_hdr + TXN_UNDO_PREV_UTC,
+                 encode_utc(prev_image.utc, prev_image.csr), mtr);
   /* Write the prev gcn */
   mlog_write_ull(log_hdr + TXN_UNDO_PREV_GCN, prev_image.gcn, mtr);
 
@@ -618,6 +640,9 @@ void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const undo_addr_t &undo_addr,
   undo_ptr_t undo_ptr;
   undo_encode_undo_addr(undo_addr, &undo_ptr);
 
+  /** Trx still be active, predefine undo ptr automatic. */
+  ut_ad(undo_ptr_get_csr(undo_ptr) == CSR_AUTOMATIC);
+
   mlog_write_ull(log_hdr + TRX_UNDO_UBA, undo_ptr, mtr);
 }
 
@@ -635,6 +660,8 @@ void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
 
   if (trx_is_txn_rseg_updated(trx)) {
     assert_trx_undo_ptr_allocated(trx);
+    ut_ad(undo_ptr_get_csr(trx->txn_desc.undo_ptr) == CSR_AUTOMATIC);
+
     /** Modify the state as commit, then write into log header */
     mlog_write_ull(log_hdr + TRX_UNDO_UBA,
                    trx->txn_desc.undo_ptr | (undo_ptr_t)1 << UBA_POS_STATE,
@@ -660,6 +687,7 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
                            const trx_ulogf_t *undo_header, mtr_t *mtr,
                            txn_undo_hdr_t *txn_undo_hdr) {
   ulint type;
+  std::pair<utc_t, csr_t> utc_pair;
   type = mtr_read_ulint(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE,
                         MLOG_2BYTES, mtr);
   ut_a(type == TRX_UNDO_TXN);
@@ -672,7 +700,10 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   /** read commit image in txn undo header */
   txn_undo_hdr->image.scn = mach_read_from_8(undo_header + TRX_UNDO_SCN);
 
-  txn_undo_hdr->image.utc = mach_read_from_8(undo_header + TRX_UNDO_UTC);
+  utc_pair = decode_utc(mach_read_from_8(undo_header + TRX_UNDO_UTC));
+
+  txn_undo_hdr->image.utc = utc_pair.first;
+  txn_undo_hdr->image.csr = utc_pair.second;
 
   txn_undo_hdr->image.gcn = mach_read_from_8(undo_header + TRX_UNDO_GCN);
 
@@ -686,8 +717,10 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   txn_undo_hdr->prev_image.scn =
       mach_read_from_8(undo_header + TXN_UNDO_PREV_SCN);
 
-  txn_undo_hdr->prev_image.utc =
-      mach_read_from_8(undo_header + TXN_UNDO_PREV_UTC);
+  utc_pair = decode_utc(mach_read_from_8(undo_header + TXN_UNDO_PREV_UTC));
+
+  txn_undo_hdr->prev_image.utc = utc_pair.first;
+  txn_undo_hdr->prev_image.csr = utc_pair.second;
 
   txn_undo_hdr->prev_image.gcn =
       mach_read_from_8(undo_header + TXN_UNDO_PREV_GCN);
@@ -1155,7 +1188,10 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   ut_ad(offset == TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE);
 
   /** Lizard: add UBA into undo log header */
-  undo_addr = {rseg->space_id, page_no, offset, true};
+  /** We didn't overwrite csr When commit, since we don't lookup CSR through
+   * it.
+   */
+  undo_addr = {rseg->space_id, page_no, offset, true, CSR_AUTOMATIC};
 
   /** Current undo log hdr is UBA */
   lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, &mtr);
@@ -1313,6 +1349,7 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx){
       undo_addr.space_id = undo->space;
       undo_addr.page_no = undo->hdr_page_no;
       undo_addr.offset = undo->hdr_offset;
+      undo_addr.csr = CSR_AUTOMATIC;
 
       undo_encode_undo_addr(undo_addr, &trx->txn_desc.undo_ptr);
 
@@ -2083,11 +2120,14 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
   undo_addr->page_no = (ulint)undo_ptr & 0xFFFFFFFF;
   undo_ptr >>= UBA_WIDTH_PAGE_NO;
   rseg_id = (ulint)undo_ptr & 0x7F;
+  undo_ptr >>= UBA_WIDTH_SPACE_ID;
 
   /* Confirm the reserved bits */
-  ut_ad(((ulint)undo_ptr & 0x7f80) == 0);
+  ut_ad(((ulint)undo_ptr & 0x7f) == 0);
+  undo_ptr >>= UBA_WIDTH_UNUSED;
+  undo_addr->csr = static_cast<csr_t>(undo_ptr & 0x1);
 
-  undo_ptr >>= (UBA_WIDTH_SPACE_ID + UBA_WIDTH_UNUSED);
+  undo_ptr >>= UBA_WIDTH_CSR;
   undo_addr->state = (bool)undo_ptr;
 
   /**
@@ -2272,6 +2312,7 @@ already_commit:
   txn_rec->scn = txn_undo_hdr.image.scn;
   txn_rec->gcn = txn_undo_hdr.image.gcn;
   lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_COMMITTED);
   if (!have_mtr) mtr_commit(mtr);
@@ -2282,6 +2323,7 @@ undo_purged:
   txn_rec->scn = txn_undo_hdr.image.scn;
   txn_rec->gcn = txn_undo_hdr.image.gcn;
   lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_PURGED);
   if (!have_mtr) mtr_commit(mtr);
@@ -2292,6 +2334,7 @@ undo_reuse:
   txn_rec->scn = txn_undo_hdr.prev_image.scn;
   txn_rec->gcn = txn_undo_hdr.prev_image.gcn;
   lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.prev_image,
                    txn_state_t::TXN_STATE_REUSE);
   if (!have_mtr) mtr_commit(mtr);
@@ -2304,8 +2347,10 @@ undo_corrupted:
   txn_rec->scn = SCN_UNDO_CORRUPTED;
   txn_rec->gcn = GCN_UNDO_CORRUPTED;
   lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+  undo_ptr_set_csr(&txn_rec->undo_ptr, CSR_AUTOMATIC);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr,
-                   {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED},
+                   {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED,
+                    CSR_AUTOMATIC},
                    txn_state_t::TXN_STATE_UNDO_CORRUPTED);
   if (!have_mtr) mtr_commit(mtr);
   return false;
@@ -2343,13 +2388,15 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
     exist = txn_undo_logs->exist({undo_addr.space_id, undo_addr.page_no});
     if (!exist) {
       txn_undo_hdr_t txn_undo_hdr = {
-          {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED},
+          {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED,
+           CSR_AUTOMATIC},
           /** txn_undo_hdr.undo_ptr should be from txn undo header, and it
           must be active state when coming here */
           txn_rec->undo_ptr,
           txn_rec->trx_id,
           TXN_MAGIC_N,
-          {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED},
+          {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED,
+           CSR_AUTOMATIC},
           TXN_UNDO_LOG_PURGED,
           0,
           0,
@@ -2357,9 +2404,11 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
       txn_rec->scn = SCN_UNDO_CORRUPTED;
       txn_rec->gcn = GCN_UNDO_CORRUPTED;
       lizard_undo_ptr_set_commit(&txn_rec->undo_ptr);
+      undo_ptr_set_csr(&txn_rec->undo_ptr, CSR_AUTOMATIC);
       lizard_stats.txn_undo_lost_page_miss_when_safe.inc();
       txn_lookup_t_set(txn_lookup, txn_undo_hdr,
-                       {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED},
+                       {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED,
+                        GCN_UNDO_CORRUPTED, CSR_AUTOMATIC},
                        txn_state_t::TXN_STATE_UNDO_CORRUPTED);
       return false;
     }
