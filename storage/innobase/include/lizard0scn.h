@@ -417,7 +417,7 @@ enum scn_state_t commit_mark_state(const commit_mark_t &cmmt);
   }
 
 inline bool commit_mark_is_lost(commit_mark_t &cmmt) {
-  if (cmmt.scn == lizard::SCN_UNDO_LOST && cmmt.utc == lizard::UTC_UNDO_LOST &&
+  if (cmmt.scn == lizard::SCN_UNDO_LOST && cmmt.us == lizard::UTC_UNDO_LOST &&
       cmmt.gcn == lizard::GCN_UNDO_LOST) {
     return true;
   }
@@ -425,7 +425,7 @@ inline bool commit_mark_is_lost(commit_mark_t &cmmt) {
 }
 
 inline bool commit_mark_is_uninitial(commit_mark_t &cmmt) {
-  if (cmmt.scn == 0 && cmmt.utc == 0 && cmmt.gcn == 0) {
+  if (cmmt.scn == 0 && cmmt.us == 0 && cmmt.gcn == 0) {
     return true;
   }
   return false;

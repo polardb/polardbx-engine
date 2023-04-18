@@ -171,7 +171,13 @@ commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   trx->txn_desc.cmmt.csr = cmmt.csr = ret.second;
 
   /** 3. generate utc time. */
-  trx->txn_desc.cmmt.utc = cmmt.utc = ut_time_system_us();
+  trx->txn_desc.cmmt.us = cmmt.us = ut_time_system_us();
+
+  /** 4. mark undo_ptr, only memory structure, didn't modify undo header UBA. */
+  ut_ad(undo_ptr_is_active(trx->txn_desc.undo_ptr));
+
+  undo_ptr_set_commit(&trx->txn_desc.undo_ptr);
+  undo_ptr_set_csr(&trx->txn_desc.undo_ptr, trx->txn_desc.cmmt.csr);
 
   return cmmt;
 }

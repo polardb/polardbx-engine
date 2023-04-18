@@ -449,10 +449,10 @@ void trx_undo_hdr_write_cmmt(trx_ulogf_t *log_hdr, commit_mark_t &cmmt,
   trx_undo_page_validation(page_align(log_hdr));
 
   /** utc didn't include csr. */
-  ut_ad(UTC_GET_CSR(cmmt.utc) == 0);
+  ut_ad(UTC_GET_CSR(cmmt.us) == 0);
 
   mlog_write_ull(log_hdr + TRX_UNDO_SCN, cmmt.scn, mtr);
-  mlog_write_ull(log_hdr + TRX_UNDO_UTC, encode_utc(cmmt.utc, cmmt.csr), mtr);
+  mlog_write_ull(log_hdr + TRX_UNDO_UTC, encode_utc(cmmt.us, cmmt.csr), mtr);
   mlog_write_ull(log_hdr + TRX_UNDO_GCN, cmmt.gcn, mtr);
 }
 
@@ -479,7 +479,7 @@ commit_mark_t trx_undo_hdr_read_cmmt(const trx_ulogf_t *log_hdr, mtr_t *mtr) {
   std::pair<utc_t, csr_t> utc =
       decode_utc(mach_read_from_8(log_hdr + TRX_UNDO_UTC));
 
-  cmmt.utc = utc.first;
+  cmmt.us = utc.first;
   cmmt.csr = utc.second;
 
   return cmmt;
@@ -509,7 +509,7 @@ commit_mark_t txn_undo_hdr_read_prev_cmmt(const trx_ulogf_t *log_hdr,
   std::pair<utc_t, csr_t> utc =
       decode_utc(mach_read_from_8(log_hdr + TXN_UNDO_PREV_UTC));
 
-  cmmt.utc = utc.first;
+  cmmt.us = utc.first;
   cmmt.csr = utc.second;
 
   return cmmt;
@@ -570,10 +570,10 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
   /* Write the prev scn */
   mlog_write_ull(log_hdr + TXN_UNDO_PREV_SCN, prev_image.scn, mtr);
   /* Write the prev utc */
-  ut_ad(UTC_GET_CSR(prev_image.utc) == 0);
+  ut_ad(UTC_GET_CSR(prev_image.us) == 0);
 
   mlog_write_ull(log_hdr + TXN_UNDO_PREV_UTC,
-                 encode_utc(prev_image.utc, prev_image.csr), mtr);
+                 encode_utc(prev_image.us, prev_image.csr), mtr);
   /* Write the prev gcn */
   mlog_write_ull(log_hdr + TXN_UNDO_PREV_GCN, prev_image.gcn, mtr);
 
@@ -702,7 +702,7 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
 
   utc_pair = decode_utc(mach_read_from_8(undo_header + TRX_UNDO_UTC));
 
-  txn_undo_hdr->image.utc = utc_pair.first;
+  txn_undo_hdr->image.us = utc_pair.first;
   txn_undo_hdr->image.csr = utc_pair.second;
 
   txn_undo_hdr->image.gcn = mach_read_from_8(undo_header + TRX_UNDO_GCN);
@@ -719,7 +719,7 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
 
   utc_pair = decode_utc(mach_read_from_8(undo_header + TXN_UNDO_PREV_UTC));
 
-  txn_undo_hdr->prev_image.utc = utc_pair.first;
+  txn_undo_hdr->prev_image.us = utc_pair.first;
   txn_undo_hdr->prev_image.csr = utc_pair.second;
 
   txn_undo_hdr->prev_image.gcn =
@@ -1438,6 +1438,7 @@ commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
     assert_trx_commit_mark_allocated(trx);
     cmmt = *cmmt_ptr;
     ut_ad(trx->txn_desc.cmmt.scn == cmmt.scn);
+    ut_ad(trx->txn_desc.cmmt.gcn == cmmt.gcn);
   }
   ut_ad(commit_mark_state(cmmt) == SCN_STATE_ALLOCATED);
 
@@ -2113,7 +2114,7 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
   ut_ad(undo_addr);
 
   undo_addr->offset = (ulint)undo_ptr & 0xFFFF;
-  undo_ptr >>= UBA_WIDTH_OFSET;
+  undo_ptr >>= UBA_WIDTH_OFFSET;
   undo_addr->page_no = (ulint)undo_ptr & 0xFFFFFFFF;
   undo_ptr >>= UBA_WIDTH_PAGE_NO;
   rseg_id = (ulint)undo_ptr & 0x7F;
@@ -2331,7 +2332,7 @@ undo_reuse:
   txn_rec->scn = txn_undo_hdr.prev_image.scn;
   txn_rec->gcn = txn_undo_hdr.prev_image.gcn;
   undo_ptr_set_commit(&txn_rec->undo_ptr);
-  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
+  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.prev_image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.prev_image,
                    txn_state_t::TXN_STATE_REUSE);
   if (!have_mtr) mtr_commit(mtr);
@@ -2589,12 +2590,12 @@ void Undo_retention::refresh_stat_data() {
   @return     true     if blocking purge
 */
 bool Undo_retention::purge_advise() {
-  m_last_top_utc = (ulint)(purge_sys->top_undo_utc / 1000000);
+  m_last_top_utc = (ulint)(purge_sys->top_undo_us / 1000000);
 
   /* Retention turned off or stating not done, can not advise */
   if (retention_time == 0 || !m_stat_done) return false;
 
-  /* During recovery, purge_sys::top_undo_utc may be not initialized,
+  /* During recovery, purge_sys::top_undo_us may be not initialized,
   because txn_rseg of this transaction has been processed. */
   if (m_last_top_utc == 0) return false;
 

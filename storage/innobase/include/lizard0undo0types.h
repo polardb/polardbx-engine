@@ -122,9 +122,9 @@ typedef struct undo_addr_t undo_addr_t;
 */
 
 #define UBA_POS_OFFSET 0
-#define UBA_WIDTH_OFSET 16
+#define UBA_WIDTH_OFFSET 16
 
-#define UBA_POS_PAGE_NO (UBA_POS_OFFSET + UBA_WIDTH_OFSET)
+#define UBA_POS_PAGE_NO (UBA_POS_OFFSET + UBA_WIDTH_OFFSET)
 #define UBA_WIDTH_PAGE_NO 32
 
 #define UBA_POS_SPACE_ID (UBA_POS_PAGE_NO + UBA_WIDTH_PAGE_NO)
@@ -140,6 +140,12 @@ typedef struct undo_addr_t undo_addr_t;
 
 #define UBA_POS_STATE (UBA_POS_CSR + UBA_WIDTH_CSR)
 #define UBA_WIDTH_STATE 1
+
+/** Address, include [offset, page_no, space_id] */
+#define UBA_POS_ADDR 0
+#define UBA_WIDTH_ADDR \
+  (UBA_WIDTH_OFFSET + UBA_WIDTH_PAGE_NO + UBA_WIDTH_SPACE_ID)
+#define UBA_MASK_ADDR ((~(~0ULL << UBA_WIDTH_ADDR)) << UBA_POS_ADDR)
 
 static_assert((UBA_POS_STATE + UBA_WIDTH_STATE) == 64,
               "UBA length must be 8 bytes");
@@ -341,6 +347,10 @@ inline csr_t undo_ptr_get_csr(undo_ptr_t undo_ptr) {
 inline void undo_ptr_set_csr(undo_ptr_t *undo_ptr, csr_t csr) {
   undo_ptr_t value = static_cast<undo_ptr_t>(csr);
   *undo_ptr |= value << UBA_POS_CSR;
+}
+
+inline undo_ptr_t undo_ptr_get_addr(const undo_ptr_t undo_ptr) {
+  return ((undo_ptr & UBA_MASK_ADDR) >> UBA_POS_ADDR);
 }
 
 /**

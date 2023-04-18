@@ -184,7 +184,7 @@ void trx_purge_sys_initialize(uint32_t n_purge_threads,
   lizard::trx_purge_set_purged_scn(lizard::trx_purge_reload_purged_scn());
 
   /* undo retention */
-  purge_sys->top_undo_utc = 0;
+  purge_sys->top_undo_us = 0;
 
   new (&purge_sys->purged_gcn) Purged_gcn;
   purge_sys->purged_gcn.init();
@@ -1836,7 +1836,7 @@ static bool trx_purge_choose_next_log(void) {
     if (!purged_result.second) {
       lizard::trx_purge_set_purged_scn(purged_result.first.scn);
       purge_sys->purged_gcn.flush(purged_result.first.gcn);
-      purge_sys->top_undo_utc = purged_result.first.utc;
+      purge_sys->top_undo_us = purged_result.first.us;
     }
     trx_purge_read_undo_rec(purge_sys, page_size);
   } else {

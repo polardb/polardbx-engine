@@ -992,7 +992,9 @@ struct CommitCleanout {
       if (m_txn_rec.trx_id == trx_id) {
         if (undo_ptr_is_active(undo_ptr)) {
           undo_ptr_set_commit(&undo_ptr);
-          ut_a(m_txn_rec.undo_ptr == undo_ptr);
+          ut_a(undo_ptr_get_csr(undo_ptr) == CSR_AUTOMATIC);
+          ut_a(undo_ptr_get_addr(m_txn_rec.undo_ptr) ==
+               undo_ptr_get_addr(undo_ptr));
 
           row_upd_rec_lizard_fields_in_cleanout(
               rec, buf_block_get_page_zip(block), index, offsets, &m_txn_rec);
@@ -1001,7 +1003,8 @@ struct CommitCleanout {
 
           cleaned = 1;
         } else {
-          ut_a(m_txn_rec.undo_ptr == undo_ptr);
+          ut_a(undo_ptr_get_addr(m_txn_rec.undo_ptr) ==
+               undo_ptr_get_addr(undo_ptr));
           ut_a(m_txn_rec.scn == row_get_rec_scn_id(rec, index, offsets));
         }
       }

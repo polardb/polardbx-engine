@@ -1137,7 +1137,7 @@ struct trx_purge_t {
   Only the purge sys coordinator thread and recover thread can modify it. */
   std::atomic<scn_t> purged_scn;
 
-  utc_t top_undo_utc;
+  utc_t top_undo_us;
 
   /** Similar with purged_scn */
   Purged_gcn purged_gcn;

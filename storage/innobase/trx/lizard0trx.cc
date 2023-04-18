@@ -57,7 +57,7 @@ void cleanout_rows_at_commit(trx_t *trx) {
   }
 
   auto undo_ptr = trx->txn_desc.undo_ptr;
-  undo_ptr_set_commit(&undo_ptr);
+  ut_ad(!undo_ptr_is_active(trx->txn_desc.undo_ptr));
 
   txn_rec_t txn_rec{trx->id, trx->txn_desc.cmmt.scn, undo_ptr,
                     trx->txn_desc.cmmt.gcn};
