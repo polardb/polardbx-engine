@@ -316,8 +316,8 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
         node_addr.boffset;
 
     /** Lizard: Retrieve the lowest SCN from history list. */
-    commit_scn_t cmmt = lizard::trx_undo_hdr_read_scn(undo_log_hdr, mtr);
-    assert_commit_scn_allocated(cmmt);
+    commit_mark_t cmmt = lizard::trx_undo_hdr_read_cmmt(undo_log_hdr, mtr);
+    assert_commit_mark_allocated(cmmt);
     rseg->last_scn = cmmt.scn;
 
     rseg->last_del_marks =

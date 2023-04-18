@@ -1261,7 +1261,7 @@ struct trx_t {
   */
   txn_desc_t txn_desc;
 
-  commit_scn_t prev_image;
+  commit_mark_t prev_image;
 
   /** Global query thread state */
   gp_state_t gp_state;

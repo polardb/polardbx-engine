@@ -503,7 +503,7 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
                                                 TRX_UNDO_LOG_HDR_SIZE bytes
                                                 free space on it */
                              trx_id_t trx_id,   /*!< in: transaction id */
-                             commit_scn_t *prev_image,
+                             commit_mark_t *prev_image,
                                                 /*!< out: previous scn/utc
                                                 if have. Only used in TXN
                                                 undo header. Pass in as NULL
@@ -567,12 +567,12 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
 
   if (prev_image) {
     /** Copy commit scn info */
-    commit_scn_t cmmt = lizard::trx_undo_hdr_read_scn(log_hdr, mtr);
-    if (!commit_scn_is_uninitial(cmmt)) *prev_image = cmmt;
+    commit_mark_t cmmt = lizard::trx_undo_hdr_read_cmmt(log_hdr, mtr);
+    if (!commit_mark_is_uninitial(cmmt)) *prev_image = cmmt;
   }
 
   /** Init the scn as NULL */
-  lizard::trx_undo_hdr_init_scn(log_hdr, mtr);
+  lizard::trx_undo_hdr_init_cmmt(log_hdr, mtr);
 
   /* Write the log record about the header creation */
   trx_undo_header_create_log(undo_page, trx_id, mtr);
@@ -920,7 +920,7 @@ static ulint trx_undo_insert_header_reuse(
   mach_write_to_1(log_hdr + TRX_UNDO_FLAGS, 0);
   mach_write_to_1(log_hdr + TRX_UNDO_DICT_TRANS, FALSE);
 
-  lizard::trx_undo_hdr_init_scn(log_hdr, mtr);
+  lizard::trx_undo_hdr_init_cmmt(log_hdr, mtr);
 
   /* Write the log record MLOG_UNDO_HDR_REUSE */
   trx_undo_insert_header_reuse_log(undo_page, trx_id, mtr);
@@ -1346,7 +1346,7 @@ static trx_undo_t *trx_undo_mem_init(
   /* Lizard: Confirm txn undo extension */
   bool txn_exists = ((flag & TRX_UNDO_FLAG_TXN) != 0);
   if (txn_exists) {
-    lizard_trx_undo_hdr_txn_validation(undo_page, undo_header, mtr);
+    trx_undo_hdr_txn_validation(undo_page, undo_header, mtr);
 
     txn_ext_flag =
         mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
@@ -1386,14 +1386,14 @@ static trx_undo_t *trx_undo_mem_init(
   undo->size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST);
 
   /** Lizard: Confirm the undo scn */
-  undo->cmmt = lizard::trx_undo_hdr_read_scn(undo_header, mtr);
-  lizard_undo_scn_validation(undo);
+  undo->cmmt = lizard::trx_undo_hdr_read_cmmt(undo_header, mtr);
+  undo_commit_mark_validation(undo);
 
   if (type == TRX_UNDO_TXN) {
-    undo->prev_image = lizard::txn_undo_hdr_read_prev_scn(undo_header, mtr);
-    assert_commit_scn_allocated(undo->prev_image);
+    undo->prev_image = lizard::txn_undo_hdr_read_prev_cmmt(undo_header, mtr);
+    assert_commit_mark_allocated(undo->prev_image);
   } else {
-    assert_commit_scn_initial(undo->prev_image);
+    assert_commit_mark_initial(undo->prev_image);
   }
 
   /* If the log segment is being freed, the page list is inconsistent! */
@@ -1559,8 +1559,8 @@ trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
   undo->withdraw_clock = 0;
 
   /** Lizard: init undo scn */
-  undo->cmmt = COMMIT_SCN_NULL;
-  undo->prev_image = COMMIT_SCN_NULL;
+  undo->cmmt = COMMIT_MARK_NULL;
+  undo->prev_image = COMMIT_MARK_NULL;
 
   return (undo);
 }
@@ -1591,8 +1591,8 @@ static void trx_undo_mem_init_for_reuse(
   undo->empty = TRUE;
 
   /** Lizard: init undo scn */
-  undo->cmmt = COMMIT_SCN_NULL;
-  undo->prev_image = COMMIT_SCN_NULL;
+  undo->cmmt = COMMIT_MARK_NULL;
+  undo->prev_image = COMMIT_MARK_NULL;
 }
 
 /** Frees an undo log memory copy. */
@@ -1625,7 +1625,7 @@ MY_ATTRIBUTE((warn_unused_result)) dberr_t
   ulint offset;
   ulint id;
   page_t *undo_page;
-  commit_scn_t prev_image = COMMIT_SCN_LOST;
+  commit_mark_t prev_image = COMMIT_MARK_LOST;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1713,7 +1713,7 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
                                   trx_undo_t::Gtid_storage gtid_storage,
                                   mtr_t *mtr) {
   trx_undo_t *undo;
-  commit_scn_t prev_image = COMMIT_SCN_LOST;
+  commit_mark_t prev_image = COMMIT_MARK_LOST;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1967,7 +1967,7 @@ page_t *trx_undo_set_state_at_finish(
   ut_a(undo->id < TRX_RSEG_N_SLOTS);
 
   /** Set scn before cleanup undo */
-  assert_undo_scn_initial(undo);
+  assert_undo_commit_mark_initial(undo);
 
   undo_page = trx_undo_page_get(page_id_t(undo->space, undo->hdr_page_no),
                                 undo->page_size, mtr);
@@ -1975,7 +1975,7 @@ page_t *trx_undo_set_state_at_finish(
   seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
   page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
 
-  lizard_trx_undo_hdr_uba_validation(undo_page + undo->hdr_offset, mtr);
+  trx_undo_hdr_uba_validation(undo_page + undo->hdr_offset, mtr);
 
   free_offset = mach_read_from_2(page_hdr + TRX_UNDO_PAGE_FREE);
 
@@ -2022,7 +2022,7 @@ page_t *trx_undo_set_state_at_prepare(trx_t *trx, trx_undo_t *undo,
   offset = mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG);
   undo_header = undo_page + offset;
 
-  lizard_trx_undo_hdr_uba_validation(undo_header, mtr);
+  trx_undo_hdr_uba_validation(undo_header, mtr);
 
   /* Write GTID information if there. */
   trx_undo_gtid_write(trx, undo_header, undo, mtr, !rollback);
@@ -2073,7 +2073,7 @@ void trx_undo_update_cleanup(
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
-  assert_undo_scn_allocated(undo);
+  assert_undo_commit_mark_allocated(undo);
 
   trx_purge_add_update_undo_to_history(
       trx, undo_ptr, undo_page, update_rseg_history_len, n_added_logs, mtr);
@@ -2106,7 +2106,7 @@ void trx_undo_insert_cleanup(trx_undo_ptr_t *undo_ptr, bool noredo) {
   ut_ad(undo != NULL);
 
   /** Insert undo log is under init state forever */
-  assert_undo_scn_initial(undo);
+  assert_undo_commit_mark_initial(undo);
 
   rseg = undo_ptr->rseg;
 

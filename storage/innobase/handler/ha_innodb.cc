@@ -704,12 +704,12 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(scn_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gcn_order_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gcn_persist_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(lizard_undo_hdr_hash_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(undo_hdr_hash_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(file_purge_list_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(lizard_undo_retention_mutex, 0, 0, PSI_DOCUMENT_ME)};
+    PSI_MUTEX_KEY(undo_retention_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -5502,7 +5502,7 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
       trx->flush_log_later = true;
     }
 
-    assert_trx_scn_initial(trx);
+    assert_trx_commit_mark_initial(trx);
     /*
       The value of thd->m_extra_desc.m_commit_gcn is GCN_NULL
     if server do not need to write binlog.
@@ -19698,7 +19698,7 @@ static xa_status_code innobase_commit_by_xid(
   if (trx != NULL) {
     TrxInInnoDB trx_in_innodb(trx);
 
-    assert_trx_scn_initial(trx);
+    assert_trx_commit_mark_initial(trx);
     /*
         The value of xid->get_commit_gcn() is GCN_NULL 
       if binlog contains no gcn event.
