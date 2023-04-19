@@ -17,6 +17,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include "trx0purge.h"
+
 #include "lizard0gcs.h"
 #include "lizard0undo.h"
 
@@ -32,6 +34,14 @@ my_scn_t innobase_load_scn() {
   return static_cast<my_scn_t>(lizard::gcs_load_scn());
 }
 
+bool innobase_snapshot_scn_too_old(my_scn_t scn) {
+  return scn < purge_sys->purged_scn.load();
+}
+
+bool innobase_snapshot_gcn_too_old(my_gcn_t gcn) {
+  return gcn < purge_sys->purged_gcn.get();
+}
+
 /**
   Initialize innobase extension.
 
@@ -40,6 +50,9 @@ my_scn_t innobase_load_scn() {
 void innobase_init_ext(handlerton *innobase_hton) {
   innobase_hton->ext.load_gcn = innobase_load_gcn;
   innobase_hton->ext.load_scn = innobase_load_scn;
+
+  innobase_hton->ext.snapshot_scn_too_old = innobase_snapshot_scn_too_old;
+  innobase_hton->ext.snapshot_gcn_too_old = innobase_snapshot_gcn_too_old;
 }
 
 /**

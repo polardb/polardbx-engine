@@ -26,19 +26,17 @@
 typedef my_gcn_t (*load_gcn_t)();
 typedef my_scn_t (*load_scn_t)();
 
+typedef bool (*snapshot_scn_too_old_t)(my_scn_t scn);
+typedef bool (*snapshot_gcn_too_old_t)(my_gcn_t gcn);
+
 /**
   The extension of handlerton struct.
 */
 struct handlerton_ext {
   load_gcn_t load_gcn;
   load_scn_t load_scn;
+  snapshot_scn_too_old_t snapshot_scn_too_old;
+  snapshot_gcn_too_old_t snapshot_gcn_too_old;
 };
-
-/**
-  load gcn from storage engine(s)
-
-*/
-my_gcn_t ha_load_gcn();
-my_scn_t ha_load_scn();
 
 #endif

@@ -973,7 +973,7 @@ Max size Secondary index: 16 * 8 bytes + PK = 256 bytes. */
   prebuilt->m_no_prefetch = false;
   prebuilt->m_read_virtual_key = false;
 
-  prebuilt->m_asof_query.reset();
+  prebuilt->m_asof_query.release_vision();
 
   return prebuilt;
 }
