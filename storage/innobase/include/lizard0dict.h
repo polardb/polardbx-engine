@@ -52,6 +52,8 @@ class Index;
 
 namespace lizard {
 
+class Snapshot_vision;
+
 /** Here define the lizard related dictionary content */
 
 struct dict_lizard {
@@ -144,8 +146,7 @@ bool dd_index_fill_txn_desc(dict_index_t *index, const dd::Properties &p);
   @return         true if visible
 */
 bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
-                                    bool is_as_of, scn_t as_of_scn,
-                                    gcn_t as_of_gcn);
+                                    lizard::Snapshot_vision *snapshot_vision);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**

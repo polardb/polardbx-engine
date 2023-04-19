@@ -80,6 +80,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0data0types.h"
 #include "lizard0undo0types.h"
 
+#include "sql/lizard/lizard_snapshot.h"
+
 /* Forward declaration. */
 struct ib_rbt_t;
 
@@ -1354,7 +1356,8 @@ struct dict_index_t {
   @param[in] trx            transaction
   @param[in] as_of_scn      as of scn
   @param[in] as_of_gcn      as of gcn */
-  bool is_usable_as_of(const trx_t *trx, const scn_t scn, const gcn_t gcn);
+  bool is_usable_as_of(const trx_t *trx,
+                       lizard::Snapshot_vision *snapshot_vision);
 
   /** Check whether index has any instantly added columns.
   Possible only if table has INSTANT ADD columns and is upgraded.

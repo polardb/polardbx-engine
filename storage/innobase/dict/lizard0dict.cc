@@ -138,8 +138,7 @@ dberr_t dd_index_init_txn_desc(dict_index_t *index, trx_t *trx) {
   @return         true if visible
 */
 bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
-                                    bool is_as_of, scn_t as_of_scn,
-                                    gcn_t as_of_gcn) {
+                                    lizard::Snapshot_vision *snapshot_vision) {
   txn_rec_t rec_txn;
   scn_t scn = index->txn.scn.load();
   gcn_t gcn = index->txn.gcn.load();
@@ -159,7 +158,21 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
     index->txn.gcn.store(rec_txn.gcn);
   }
 
-  if (is_as_of) {
+  if (snapshot_vision) {
+    /** TODO: */
+    scn_t as_of_scn = SCN_NULL;
+    gcn_t as_of_gcn = GCN_NULL;
+    switch (snapshot_vision->type()) {
+      case lizard::Snapshot_type::AS_OF_SCN:
+        as_of_scn = snapshot_vision->val_int();
+        break;
+      case lizard::Snapshot_type::AS_OF_GCN:
+        as_of_gcn = snapshot_vision->val_int();
+        break;
+      default:
+        ut_a(0);
+        break;
+    }
     ut_ad(as_of_scn != SCN_NULL || as_of_gcn != GCN_NULL);
 
     if (as_of_scn != SCN_NULL) {

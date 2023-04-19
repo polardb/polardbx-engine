@@ -952,7 +952,7 @@ row_prebuilt_t *row_create_prebuilt(
   prebuilt->m_no_prefetch = false;
   prebuilt->m_read_virtual_key = false;
 
-  prebuilt->m_asof_query.reset();
+  prebuilt->m_asof_query.release_vision();
 
   return prebuilt;
 }

@@ -57,6 +57,11 @@ mysql_pfs_key_t gcn_persist_mutex_key;
 
 namespace lizard {
 
+#ifdef UNIV_DEBUG
+/** simulate assigned gcn to run all testcases. */
+bool srv_simulate_assigned_gcn_debug = false;
+#endif
+
 /** The global Global Change System memory structure */
 gcs_t *gcs = nullptr;
 
@@ -175,6 +180,12 @@ commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
 
   /** 4. mark undo_ptr, only memory structure, didn't modify undo header UBA. */
   ut_ad(undo_ptr_is_active(trx->txn_desc.undo_ptr));
+
+#ifdef UNIV_DEBUG
+  if (srv_simulate_assigned_gcn_debug) {
+    trx->txn_desc.cmmt.csr = cmmt.csr = CSR_ASSIGNED;
+  }
+#endif
 
   undo_ptr_set_commit(&trx->txn_desc.undo_ptr);
   undo_ptr_set_csr(&trx->txn_desc.undo_ptr, trx->txn_desc.cmmt.csr);

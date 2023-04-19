@@ -195,7 +195,7 @@ class Snapshot_vision {
   /**
     Return static_cast number from vision.
   */
-  virtual uint64_t val_int() = 0;
+  virtual uint64_t val_int() const = 0;
 
   /**
     Do something after myself is activated.
@@ -204,6 +204,15 @@ class Snapshot_vision {
 
   /** Store number into vision. */
   virtual void store_int(uint64_t value) = 0;
+
+  /** Whether is it a real vision that can be used by innodb. */
+  virtual bool is_vision() const = 0;
+
+  /** Whether this vision is too old.
+   *  Because it need to compare with purge_sys,
+   *  so its definition is see in lizard0mysql.cc file in InnoDB module.
+   * */
+  virtual bool too_old() const = 0;
 };
 
 /**
@@ -213,6 +222,8 @@ class Snapshot_vision {
 class Snapshot_time_vision : public Snapshot_vision {
  public:
   Snapshot_time_vision() : m_second(0) {}
+
+  virtual ~Snapshot_time_vision() {}
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -223,9 +234,17 @@ class Snapshot_time_vision : public Snapshot_vision {
   /** Do nothing since of never activated. */
   virtual void after_activate() override{
       // TODO:
-      // assert(0);
+      // DBUG_ASSERT(0);
   }
-  virtual uint64_t val_int() override { return m_second; }
+  virtual uint64_t val_int() const override { return m_second; }
+
+  /** Time snapshot cann't be used by innodb directly. */
+  virtual bool is_vision() const override { return false; }
+
+  virtual bool too_old() const override {
+      assert(0);
+      return false;
+  }
 
  private:
   uint64_t m_second;
@@ -238,6 +257,7 @@ class Snapshot_scn_vision : public Snapshot_vision {
  public:
   Snapshot_scn_vision() : m_scn(MYSQL_SCN_NULL) {}
 
+  virtual ~Snapshot_scn_vision() {}
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -249,7 +269,13 @@ class Snapshot_scn_vision : public Snapshot_vision {
   /** Do nothing, can be used directly by innodb. */
   virtual void after_activate() override {}
 
-  virtual uint64_t val_int() override { return static_cast<uint64_t>(m_scn); }
+  virtual uint64_t val_int() const override {
+    return static_cast<uint64_t>(m_scn);
+  }
+
+  virtual bool is_vision() const override { return true; }
+
+  virtual bool too_old() const override;
 
  private:
   my_scn_t m_scn;
@@ -263,6 +289,8 @@ class Snapshot_gcn_vision : public Snapshot_vision {
   Snapshot_gcn_vision()
       : m_gcn(MYSQL_GCN_NULL), m_current_scn(MYSQL_SCN_NULL) {}
 
+  virtual ~Snapshot_gcn_vision() {}
+
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -275,9 +303,17 @@ class Snapshot_gcn_vision : public Snapshot_vision {
   /** Do pushup GCS gcn if come from outer. */
   virtual void after_activate() override;
 
-  virtual uint64_t val_int() override { return static_cast<uint64_t>(m_gcn); }
+  virtual uint64_t val_int() const override {
+    return static_cast<uint64_t>(m_gcn);
+  }
 
   void store_current_scn(my_scn_t scn) { m_current_scn = scn; }
+
+  my_scn_t current_scn() const { return m_current_scn; }
+
+  virtual bool is_vision() const override { return true; }
+
+  virtual bool too_old() const override;
 
  private:
   my_gcn_t m_gcn;
@@ -292,6 +328,9 @@ class Snapshot_gcn_vision : public Snapshot_vision {
 class Snapshot_noop_vision : public Snapshot_vision {
  public:
   Snapshot_noop_vision() {}
+
+  virtual ~Snapshot_noop_vision() {}
+
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -301,7 +340,14 @@ class Snapshot_noop_vision : public Snapshot_vision {
 
   virtual void after_activate() override { assert(0); }
 
-  virtual uint64_t val_int() override { return MYSQL_SCN_NULL; }
+  virtual uint64_t val_int() const override { return MYSQL_SCN_NULL; }
+
+  virtual bool is_vision() const override { return false; }
+
+  virtual bool too_old() const override {
+    assert(0);
+    return false;
+  }
 };
 
 /** Table snapshot worked on TABLE object.
@@ -358,9 +404,7 @@ class Table_snapshot {
   void release_vision() { m_vision = &m_noop_vision; }
 
   /** Whether it's a real vision. */
-  bool is_vision() {
-    return m_vision->type() == AS_OF_SCN || m_vision->type() == AS_OF_GCN;
-  }
+  bool is_vision() { return m_vision->is_vision(); }
 
  private:
   int exchange_timestamp_vision_to_scn_vision(Snapshot_vision **vision,

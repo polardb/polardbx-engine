@@ -616,16 +616,15 @@ bool dict_index_t::is_usable(const trx_t *trx) {
 
   /* Check if the specified transaction can see this index. */
   return (table->is_temporary() || trx_id == 0 || !trx->vision.is_active() ||
-          lizard::dd_index_modificatsion_visible(
-              this, trx, false, lizard::SCN_NULL, lizard::GCN_NULL));
+          lizard::dd_index_modificatsion_visible(this, trx, nullptr));
 }
 
 /** Check whether index can be used by an as-of query
 @param[in] trx            transaction
 @param[in] as_of_scn      as of scn
 @param[in] as_of_gcn      as of gcn */
-bool dict_index_t::is_usable_as_of(const trx_t *trx, const scn_t as_of_scn,
-                                   const gcn_t as_of_gcn) {
+bool dict_index_t::is_usable_as_of(const trx_t *trx,
+                                   lizard::Snapshot_vision *snapshot_vision) {
   /* Indexes that are being created are not usable. */
   if (!is_clustered() && dict_index_is_online_ddl(this)) {
     return false;
@@ -639,8 +638,8 @@ bool dict_index_t::is_usable_as_of(const trx_t *trx, const scn_t as_of_scn,
   /* as of query don't support temporary table. */
   if (table->is_temporary()) return false;
 
-  return (trx_id == 0 || lizard::dd_index_modificatsion_visible(
-                             this, trx, true, as_of_scn, as_of_gcn));
+  return (trx_id == 0 ||
+          lizard::dd_index_modificatsion_visible(this, trx, snapshot_vision));
 }
 
 #endif /* !UNIV_HOTBACKUP */

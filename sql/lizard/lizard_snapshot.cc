@@ -355,6 +355,35 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
   return false;
 }
 
+/** Whether is it too old.
+ *
+ *  @retval	true	too old
+ *  @retval	false	normal
+ */
+bool Snapshot_scn_vision::too_old() const {
+  assert(m_scn != MYSQL_SCN_NULL);
+
+  if (innodb_hton->ext.snapshot_scn_too_old(m_scn)) {
+    return true;
+  }
+  return false;
+}
+
+/** Whether is it too old.
+ *
+ *  @retval	true	too old
+ *  @retval	false	normal
+ */
+bool Snapshot_gcn_vision::too_old() const {
+  assert(m_current_scn != MYSQL_SCN_NULL && m_gcn != MYSQL_GCN_NULL);
+
+  if (innodb_hton->ext.snapshot_scn_too_old(m_current_scn) ||
+      innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn)) {
+    return true;
+  }
+  return false;
+}
+
 void Snapshot_gcn_vision::after_activate() { gcs_set_gcn_if_bigger(val_int()); }
 
 /*

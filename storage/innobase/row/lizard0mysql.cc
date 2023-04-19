@@ -33,8 +33,8 @@ static utc_t utc_distance(utc_t x, utc_t y) {
 
   @return           dberr_t     DB_SUCCESS if convert successfully or it's not
                                 a flashback query.
-                                ERROR: DB_AS_OF_INTERNAL, DB_SNAPSHOT_OUT_OF_RANGE,
-                                DB_AS_OF_TABLE_DEF_CHANGED
+                                ERROR: DB_AS_OF_INTERNAL,
+  DB_SNAPSHOT_OUT_OF_RANGE, DB_AS_OF_TABLE_DEF_CHANGED
 */
 static scn_t convert_timestamp_to_scn_low(utc_t user_utc, dberr_t *err) {
   scn_t fbq_scn;
@@ -103,9 +103,7 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   trx_t *trx;
   bool err = false;
   dict_index_t *clust_index;
-  scn_t fbq_scn = SCN_NULL;
-  gcn_t fbq_gcn = GCN_NULL;
-  scn_transform_result_t trans_res;
+  Snapshot_vision *snapshot_vision = nullptr;
   ut_ad(prebuilt);
 
   table = prebuilt->m_mysql_table;
@@ -115,7 +113,7 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   if (!srv_force_normal_query_if_fbq) return DB_SUCCESS;
 
   /* scn query context should never set twice */
-  if (prebuilt->m_asof_query.is_set()) return DB_SUCCESS;
+  if (prebuilt->m_asof_query.is_assigned()) return DB_SUCCESS;
 
   if (trx) {
     /* Change gcn on vision to current snapshot gcn. */
@@ -123,7 +121,7 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
     if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
     /* Set gcn on m_asof_query if exist. */
     if (trx->vision.is_asof_gcn()) {
-      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
+//      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
       return DB_SUCCESS;
     }
   }
@@ -145,45 +143,17 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   /* If it's not a flash back query, just return */
   if (!table || !table->table_snapshot.is_vision()) return DB_SUCCESS;
 
-  Snapshot_vision *snapshot_vision = table->table_snapshot.vision();
+  snapshot_vision = table->table_snapshot.vision();
 
-  switch (snapshot_vision->type()) {
-    case Snapshot_type::AS_OF_GCN: {
-      fbq_gcn = snapshot_vision->val_int();
-      ut_ad(fbq_gcn != GCN_NULL && fbq_scn == SCN_NULL);
+  DBUG_EXECUTE_IF("simulate_gcn_def_changed_error", { goto simulate_error; });
 
-      DBUG_EXECUTE_IF("simulate_gcn_def_changed_error", { err = true; });
-
-      /* handle the simulated error */
-      if (err) {
-        goto simulate_error;
-      }
-
-      /* required undo has been purged */
-      if (fbq_gcn < purge_sys->purged_gcn.get()) {
-        return DB_SNAPSHOT_TOO_OLD;
-      }
-      break;
-    }
-    case Snapshot_type::AS_OF_SCN: {
-      fbq_scn = snapshot_vision->val_int();
-      ut_ad(fbq_gcn == GCN_NULL && fbq_scn != SCN_NULL);
-      /* required undo has been purged */
-      if (fbq_scn <= purge_sys->purged_scn.load()) {
-        return DB_SNAPSHOT_TOO_OLD;
-      }
-      break;
-    }
-    default:
-      ut_error;
-      break;
+  if (snapshot_vision->too_old()) {
+    return DB_SNAPSHOT_TOO_OLD;
   }
 
 #ifdef UNIV_DEBUG
 simulate_error:
 #endif
-
-  ut_ad(fbq_scn != SCN_NULL || fbq_gcn != GCN_NULL);
 
   /* Check if it's a temporary table */
   if (prebuilt->index && prebuilt->index->table &&
@@ -195,12 +165,12 @@ simulate_error:
   /** Check if there is a DDL before the moment of as-of query. Only check
   clustered index */
   clust_index = prebuilt->index->table->first_index();
-  if (!clust_index->is_usable_as_of(prebuilt->trx, fbq_scn, fbq_gcn)) {
+  if (!clust_index->is_usable_as_of(prebuilt->trx, snapshot_vision)) {
     return DB_AS_OF_TABLE_DEF_CHANGED;
   }
 
   /* set as as-of query */
-  prebuilt->m_asof_query.set(fbq_scn, fbq_gcn);
+  prebuilt->m_asof_query.assign_vision(snapshot_vision);
 
   return DB_SUCCESS;
 }
@@ -214,19 +184,13 @@ simulate_error:
 */
 dberr_t reset_prebuilt_flashback_query_ctx(row_prebuilt_t *prebuilt) {
   dberr_t err = DB_SUCCESS;
-  if (prebuilt->m_asof_query.is_asof_query()) {
 
-    if (prebuilt->m_asof_query.is_asof_scn()) {
-      if (prebuilt->m_asof_query.m_scn <= purge_sys->purged_scn.load()) {
-        err = DB_SNAPSHOT_TOO_OLD;
-      }
-    } else if (prebuilt->m_asof_query.is_asof_gcn()) {
-      if (prebuilt->m_asof_query.m_gcn < purge_sys->purged_gcn.get()) {
-        err = DB_SNAPSHOT_TOO_OLD;
-      }
-    }
+  if (prebuilt->m_asof_query.too_old()) {
+    err = DB_SNAPSHOT_TOO_OLD;
   }
-  prebuilt->m_asof_query.reset();
+
+  prebuilt->m_asof_query.release_vision();
+
   DBUG_EXECUTE_IF("required_scn_purged_before_reset",
                   err = DB_SNAPSHOT_TOO_OLD;);
   return err;

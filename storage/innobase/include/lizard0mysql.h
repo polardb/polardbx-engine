@@ -4,6 +4,7 @@
 
 #include "lizard0scn.h"
 #include "lizard0read0types.h"
+#include "sql/lizard/lizard_snapshot.h"
 
 struct row_prebuilt_t;
 
@@ -16,13 +17,14 @@ extern bool srv_force_normal_query_if_fbq;
 extern ulint srv_scn_valid_volumn;
 
 class Vision;
+class Snapshot_vision;
 
 /**
   as of query context in row_prebuilt_t
 */
 struct asof_query_context_t {
   /** If it has been set, only set once */
-  bool m_is_set;
+  bool m_is_assigned;
 
   /** Determine if it is a as of query */
   bool m_is_asof_query;
@@ -32,40 +34,58 @@ struct asof_query_context_t {
 
   gcn_t m_gcn;
 
+  Snapshot_vision *m_snapshot_vision;
+
   /** TODO: ban constructor <16-10-20, zanye.zjy> */
   explicit asof_query_context_t()
-      : m_is_set(false),
-        m_is_asof_query(false),
+      : m_is_assigned(false),
         m_scn(SCN_NULL),
-        m_gcn(GCN_NULL) {}
+        m_gcn(GCN_NULL),
+        m_snapshot_vision(nullptr) {}
 
-  ~asof_query_context_t() { reset(); }
+  ~asof_query_context_t() { release_vision(); }
 
-  bool is_set() { return m_is_set; }
+  bool is_assigned() { return m_is_assigned; }
 
-  bool is_asof_query() const { return m_is_asof_query; }
+  bool is_asof_query() const { return m_snapshot_vision != nullptr; }
 
-  bool is_asof_scn() const { return m_is_asof_query && m_scn != SCN_NULL; }
-  bool is_asof_gcn() const { return m_is_asof_query && m_gcn != GCN_NULL; }
-
-  void set(scn_t scn, gcn_t gcn) {
-    ut_ad(scn == SCN_NULL || gcn == GCN_NULL);
-
-    if (scn != SCN_NULL) {
-      m_is_asof_query = true;
-      m_scn = scn;
-    }
-    if (gcn != GCN_NULL) {
-      m_is_asof_query = true;
-      m_gcn = gcn;
-    }
-    /** Only set once */
-    m_is_set = true;
+  bool is_asof_scn() const {
+    return m_snapshot_vision &&
+           m_snapshot_vision->type() == Snapshot_type::AS_OF_SCN;
+  }
+  bool is_asof_gcn() const {
+    return m_snapshot_vision &&
+           m_snapshot_vision->type() == Snapshot_type::AS_OF_GCN;
   }
 
-  void reset() {
-    m_is_set = false;
-    m_is_asof_query = false;
+  void assign_vision(Snapshot_vision *v) {
+    ut_ad(v && v->is_vision());
+    switch (v->type()) {
+      case Snapshot_type::AS_OF_SCN:
+        m_scn = v->val_int();
+	break;
+      case Snapshot_type::AS_OF_GCN:
+	m_gcn = v->val_int();
+	break;
+      default:
+	ut_ad(0);
+	break;
+    }
+    m_snapshot_vision = v;
+    /** Only set once */
+    m_is_assigned = true;
+  }
+
+  /** Judge whether snapshot vision is tool old.
+
+      @retval		true	too old
+      @retval		false	normal
+  */
+  bool too_old() { return m_snapshot_vision && m_snapshot_vision->too_old(); }
+
+  void release_vision() {
+    m_is_assigned = false;
+    m_snapshot_vision = nullptr;
     m_scn = SCN_NULL;
     m_gcn = GCN_NULL;
   }
@@ -106,5 +126,4 @@ dberr_t reset_prebuilt_flashback_query_ctx(row_prebuilt_t *prebuilt);
 gcn_t trx_mysql_has_gcn(const trx_t *trx);
 
 }
-
 #endif
