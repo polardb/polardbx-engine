@@ -441,7 +441,23 @@ struct trx_undo_t {
   commit_mark_t prev_image;
   /*!< SCN last commit */
 
-  uint8_t txn_ext_flag; /*!< TXN ext_flag, only useful on TXN. */
+  /**
+    TXN ext_flag, only useful on TXN.
+
+    Format:
+    bit_0, TXN_EXT_FLAG_HAVE_TAGS_1
+    bit_1~bit_7, unused for now.
+  */
+  uint8_t txn_ext_flag;
+
+  /**
+    TXN_UNDO_LOG_TAGS_1 in TXN. Only valid if TXN_EXT_FLAG_HAVE_TAGS_1 is set.
+
+    Format:
+    bit_0, TXN_NEW_TAGS_1_ROLLBACK.
+    bit_1~bit_15, unused for now.
+  */
+  uint16_t txn_tags_1;
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(trx_undo_t, undo_list)

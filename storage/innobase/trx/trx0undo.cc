@@ -1342,7 +1342,6 @@ static trx_undo_t *trx_undo_mem_init(
   page_t *last_page;
   trx_undo_rec_t *rec;
   XID xid;
-  uint32_t txn_ext_flag = 0;
 
   ut_a(id < TRX_RSEG_N_SLOTS);
 
@@ -1388,15 +1387,6 @@ static trx_undo_t *trx_undo_mem_init(
 
   bool xid_exists = ((flag & TRX_UNDO_FLAG_XID) != 0);
 
-  /* Lizard: Confirm txn undo extension */
-  bool txn_exists = ((flag & TRX_UNDO_FLAG_TXN) != 0);
-  if (txn_exists) {
-    trx_undo_hdr_txn_validation(undo_page, undo_header, mtr);
-
-    txn_ext_flag =
-        mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
-  }
-
   /* Read X/Open XA transaction identification if it exists, or
   set it to NULL. */
   xid.reset();
@@ -1412,8 +1402,6 @@ static trx_undo_t *trx_undo_mem_init(
 
   undo->flag = flag;
 
-  undo->txn_ext_flag = txn_ext_flag;
-
   undo->m_gtid_storage = trx_undo_t::Gtid_storage::NONE;
 
   if ((flag & TRX_UNDO_FLAG_XA_PREPARE_GTID) != 0) {
@@ -1428,16 +1416,8 @@ static trx_undo_t *trx_undo_mem_init(
   undo->state = state;
   undo->size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST);
 
-  /** Lizard: Confirm the undo scn */
-  undo->cmmt = lizard::trx_undo_hdr_read_cmmt(undo_header, mtr);
-  undo_commit_mark_validation(undo);
-
-  if (type == TRX_UNDO_TXN) {
-    undo->prev_image = lizard::txn_undo_hdr_read_prev_cmmt(undo_header, mtr);
-    assert_commit_mark_allocated(undo->prev_image);
-  } else {
-    assert_commit_mark_initial(undo->prev_image);
-  }
+  lizard::trx_undo_mem_init_for_txn(rseg, undo, undo_page, undo_header, type,
+                                    flag, state, mtr);
 
   /* If the log segment is being freed, the page list is inconsistent! */
   if (state == TRX_UNDO_TO_FREE) {
@@ -1487,13 +1467,6 @@ add_to_list:
   } else {
     /** Lizard: transaction undo log segment */
     ut_ad(type == TRX_UNDO_TXN);
-    if (state != TRX_UNDO_CACHED) {
-      UT_LIST_ADD_LAST(rseg->txn_undo_list, undo);
-    } else {
-      UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
-      MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
-      LIZARD_MONITOR_INC_TXN_CACHED(1);
-    }
   }
 
   return (undo);
@@ -1583,7 +1556,6 @@ trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
 
   undo->dict_operation = false;
   undo->flag = 0;
-  undo->txn_ext_flag = 0;
   undo->m_gtid_storage = trx_undo_t::Gtid_storage::NONE;
 
   undo->rseg = rseg;
@@ -1602,6 +1574,8 @@ trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
   /** Lizard: init undo scn */
   undo->cmmt = COMMIT_MARK_NULL;
   undo->prev_image = COMMIT_MARK_NULL;
+  undo->txn_ext_flag = 0;
+  undo->txn_tags_1 = 0;
 
   return (undo);
 }
@@ -1625,7 +1599,6 @@ static void trx_undo_mem_init_for_reuse(
 
   undo->dict_operation = false;
   undo->flag = 0;
-  undo->txn_ext_flag = 0;
   undo->m_gtid_storage = trx_undo_t::Gtid_storage::NONE;
 
   undo->hdr_offset = offset;
@@ -1634,6 +1607,8 @@ static void trx_undo_mem_init_for_reuse(
   /** Lizard: init undo scn */
   undo->cmmt = COMMIT_MARK_NULL;
   undo->prev_image = COMMIT_MARK_NULL;
+  undo->txn_ext_flag = 0;
+  undo->txn_tags_1 = 0;
 }
 
 /** Frees an undo log memory copy. */

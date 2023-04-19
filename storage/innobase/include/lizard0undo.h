@@ -703,21 +703,6 @@ bool trx_collect_rsegs_for_purge(TxnUndoRsegs *elem,
 /** Add the rseg into the purge queue heap */
 void trx_add_rsegs_for_purge(commit_mark_t &scn, TxnUndoRsegs *elem);
 
-/** Set TXN_UNDO_LOG_TAGS_1 on txn undo log header.
-@param[in, out] log_hdr txn undo log header
-@param[in]      flags   flags
-@param[in, out] mtr     mini transaction */
-inline void txn_undo_set_tags_1(trx_ulogf_t *log_hdr, ulint tags_1,
-                                mtr_t *mtr) {
-  ulint new_tags_1;
-  ulint old_tags_1;
-  /** TODO: Store in memory object, so no need to read. <11-04-23, zanye.zjy> */
-  old_tags_1 = mtr_read_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, MLOG_2BYTES, mtr);
-  new_tags_1 = old_tags_1 | tags_1;
-
-  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, new_tags_1, MLOG_2BYTES, mtr);
-}
-
 /** Set txn undo log state.
 @param[in,out]  log_hdr undo log header
 @param[in,out]  mtr     mini transaction
@@ -935,6 +920,24 @@ bool txn_rseg_find_trx_info_by_gtrid(trx_rseg_t *rseg, const char *gtrid,
   @params[in/out] undo        TXN undo
 */
 void txn_undo_write_xid(const XID *xid, trx_undo_t *undo);
+
+/**
+  Initializes the part of TXN for an undo log memory object if it's TXN undo
+  log. The memory object is inserted in the appropriate list in the rseg.
+
+  @params[in] rseg        rollback segment memory object
+  @params[in] undo        undo log memory object
+  @params[in] undo_page   undo log page
+  @params[in] undo_header undo log header
+  @params[in] type        undo type, TRX_UNDO_TXN or others
+  @params[in] flag        undo log flag, read from TRX_UNDO_FLAGS
+  @params[in] state       undo log state, TRX_UNDO_CACHED, or others
+  @params[in] mtr         mini transaction for write
+*/
+void trx_undo_mem_init_for_txn(trx_rseg_t *rseg, trx_undo_t *undo,
+                               page_t *undo_page, trx_ulogf_t *undo_header,
+                               ulint type, uint32_t flag, ulint state,
+                               mtr_t *mtr);
 
 }  // namespace lizard
 

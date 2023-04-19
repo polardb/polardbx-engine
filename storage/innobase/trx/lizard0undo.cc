@@ -586,13 +586,14 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
   } else {
     ut_ad(undo->txn_ext_flag == 0);
     undo->txn_ext_flag |= TXN_EXT_FLAG_V1;
-
     /* Write the txn undo extension flag */
     mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, undo->txn_ext_flag,
                      MLOG_1BYTE, mtr);
 
+    ut_ad(undo->txn_tags_1 == 0);
     /* Write the txn undo tags_1 */
-    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, 0, MLOG_2BYTES, mtr);
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, undo->txn_tags_1,
+                     MLOG_2BYTES, mtr);
   }
 
   ut_a(undo->flag == 0);
@@ -2801,7 +2802,54 @@ void txn_undo_set_state_at_finish(trx_t *trx, trx_ulogf_t *log_hdr,
 
   /** 2. Set rollback tag if need */
   if (is_rollback && (txn_undo->txn_ext_flag & TXN_EXT_FLAG_HAVE_TAGS_1)) {
-    lizard::txn_undo_set_tags_1(log_hdr, TXN_NEW_TAGS_1_ROLLBACK, mtr);
+    txn_undo->txn_tags_1 |= TXN_NEW_TAGS_1_ROLLBACK;
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, txn_undo->txn_tags_1,
+                     MLOG_2BYTES, mtr);
+  }
+}
+
+void trx_undo_mem_init_for_txn(trx_rseg_t *rseg, trx_undo_t *undo,
+                               page_t *undo_page, trx_ulogf_t *undo_header,
+                               ulint type, uint32_t flag, ulint state,
+                               mtr_t *mtr) {
+  assert_commit_mark_initial(undo->cmmt);
+  assert_commit_mark_initial(undo->prev_image);
+  ut_ad(undo->txn_ext_flag == 0);
+  ut_ad(undo->txn_tags_1 == 0);
+
+  if (type == TRX_UNDO_TXN) {
+    ut_ad(flag & TRX_UNDO_FLAG_TXN);
+    ut_ad(state != TRX_UNDO_TO_FREE);
+    trx_undo_hdr_txn_validation(undo_page, undo_header, mtr);
+
+    /* 1. Init SCN, GCN, UTC */
+    undo->cmmt = lizard::trx_undo_hdr_read_cmmt(undo_header, mtr);
+    undo_commit_mark_validation(undo);
+
+    /* 2. Init prev image. */
+    undo->prev_image = lizard::txn_undo_hdr_read_prev_cmmt(undo_header, mtr);
+    assert_commit_mark_allocated(undo->prev_image);
+
+    /** 3. Init txn_ext_flag */
+    undo->txn_ext_flag =
+        mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
+
+    /** 4. Init txn_tags_1 */
+    if (undo->txn_ext_flag & TXN_EXT_FLAG_HAVE_TAGS_1) {
+      undo->txn_tags_1 =
+          mtr_read_ulint(undo_header + TXN_UNDO_LOG_TAGS_1, MLOG_2BYTES, mtr);
+    }
+
+    /** 5. Init txn_undo_list or txn_undo_cached */
+    if (state != TRX_UNDO_CACHED) {
+      UT_LIST_ADD_LAST(rseg->txn_undo_list, undo);
+    } else {
+      UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
+      MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
+      LIZARD_MONITOR_INC_TXN_CACHED(1);
+    }
+  } else {
+    ut_ad(!(flag & TRX_UNDO_FLAG_TXN));
   }
 }
 
