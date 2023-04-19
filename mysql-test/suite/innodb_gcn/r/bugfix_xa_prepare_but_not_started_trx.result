@@ -1,0 +1,8 @@
+create table t1 (id int unique key default null);
+xa start '';
+select * from t1 where (id in (null));
+id
+xa end '';
+xa prepare '';
+xa commit '';
+drop table t1;

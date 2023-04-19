@@ -1,0 +1,10 @@
+create table t1 (id int unique key default null);
+xa start '';
+# Will get a trx_t whose state is TRX_STATE_NOT_STARTED,
+# and also run into innobase_xa_prepare
+select * from t1 where (id in (null));
+xa end '';
+xa prepare '';
+xa commit '';
+
+drop table t1;
