@@ -22821,17 +22821,7 @@ static MYSQL_SYSVAR_BOOL(btree_sampling, btr_sample_enabled,
                          PLUGIN_VAR_OPCMDARG, "enable btree sampling", NULL,
                          NULL, TRUE);
 
-<<<<<<< HEAD
-static MYSQL_SYSVAR_BOOL(cn_no_heartbeat_freeze,
-=======
-static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
-                          lizard::srv_txn_cached_list_keep_size,
-                          PLUGIN_VAR_OPCMDARG,
-                          "max list size of txn_cached_list", NULL, NULL, 0, 0,
-                          512, 0);
-
 static MYSQL_SYSVAR_BOOL(freeze_db_if_no_cn_heartbeat_enable,
->>>>>>> a3d715a3004 ([Postfix] TXN compatible with the old format)
                          lizard::xa::srv_no_heartbeat_freeze,
                          PLUGIN_VAR_OPCMDARG,
                          "If set to true, will freeze purge sys and updating "
