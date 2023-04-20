@@ -1,4 +1,4 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 set global innodb_purge_rseg_truncate_frequency = 1;
 create table t1 (id int);
 set global innodb_undo_retention = 9000;
@@ -24,7 +24,7 @@ include/assert.inc [expect_state == actual_state]
 ###############################
 # case 3
 ###############################
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 xa start '3';
 insert into t1 values (1);
 xa end '3';
