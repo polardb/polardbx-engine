@@ -90,29 +90,9 @@ class Vision {
             m_snapshot_scn);
   }
 
-  bool modifications_visible_mvcc(txn_rec_t *txn_rec,
-                                  const table_name_t &name,
+  bool modifications_visible_mvcc(txn_rec_t *txn_rec, const table_name_t &name,
                                   bool check_consistent) const;
 
-  /**
-    Check whether the changes by id are visible. Only used in as-of query.
-
-    @param[in]  txn_rec           txn related information of record.
-
-    @retval     whether the vision sees the modifications of id
-                True if visible.
-  */
-  bool modifications_visible_asof_scn(txn_rec_t *txn_rec) const;
-
-  /**
-    Check whether the changes by id are visible. Only used in global query.
-
-    @param[in]  txn_rec           txn related information of record.
-
-    @retval     whether the vision sees the modifications of id
-                True if visible.
-  */
-  bool modifications_visible_asof_gcn(txn_rec_t *txn_rec) const;
   /**
     Check whether the changes by id are visible.
 
@@ -146,10 +126,8 @@ class Vision {
     ut_ad(id < TRX_ID_MAX && m_creator_trx_id < TRX_ID_MAX);
     ut_ad(m_list_idx != VISION_LIST_IDX_NULL);
     /** If it's a as of scn snapshot query, we always force using pk */
-    if (m_is_asof_scn) return false;
-
     /** Simliar with as of scn */
-    if (m_is_asof_gcn) return false;
+    if (m_snapshot_vision) return false;
 
     return id < m_up_limit_id;
   }
@@ -172,28 +150,21 @@ class Vision {
   /** Reset as initialzed values */
   void reset();
 
-  /**
-    Set m_snapshot_scn, m_is_as_of
+  void assign_snapshot_vision(Snapshot_vision *v) {
+    ut_ad(v->is_vision());
+    m_snapshot_vision = v;
+  }
 
-    @param[in]    scn           m_snapshot_scn
-    @param[in]    is_as_of      true if it's a as-of query
-  */
-  void set_asof_scn(scn_t scn);
+  void release_snapshot_vision() { m_snapshot_vision = nullptr; }
 
-  /** reset m_as_of_scn, m_is_as_of as initialized values */
-  void reset_asof_scn();
+  Snapshot_vision *snapshot_vision() const { return m_snapshot_vision; }
 
-  bool is_asof_scn() const { return m_is_asof_scn; }
+  bool is_asof_gcn() const {
+    return m_snapshot_vision &&
+           m_snapshot_vision->type() == Snapshot_type::AS_OF_GCN;
+  }
 
-  void set_asof_gcn(gcn_t gcn);
-
-  void reset_asof_gcn();
-
-  bool is_asof_gcn() const { return m_is_asof_gcn; }
-
-  gcn_t get_asof_gcn() const { return m_asof_gcn; }
-
-  bool is_asof() const { return m_is_asof_scn || m_is_asof_gcn; }
+  bool is_asof() const { return m_snapshot_vision != nullptr; }
 
 #ifdef UNIV_DEBUG
   /**
@@ -225,18 +196,8 @@ class Vision {
   /** Whether the vision is active, the active vision must be in list. */
   bool m_active;
 
-  /** true if it's a as-of query. An as-of query is that searches rows only
-  condiering scn. The as-of query context also uses m_snapshot_scn. */
-  bool m_is_asof_scn;
-
-  /** SCN_NULL if it's not a as-of query. Only used in
-  modifications_visible_as_of */
-  scn_t m_asof_scn;
-
-  /** true if it's global query */
-  bool m_is_asof_gcn;
-  /** Global commit number for query */
-  gcn_t m_asof_gcn;
+  /** Snapshot vision used for asof query. */
+  Snapshot_vision *m_snapshot_vision;
 
   UT_LIST_NODE_T(Vision) list;
 

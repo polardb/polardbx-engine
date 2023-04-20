@@ -26,28 +26,20 @@ struct asof_query_context_t {
   /** If it has been set, only set once */
   bool m_is_assigned;
 
-  /** Determine if it is a as of query */
-  bool m_is_asof_query;
-
-  /** SCN_NULL if it's not a as-of query */
-  scn_t m_scn;
-
-  gcn_t m_gcn;
-
+  /** Snapshot vision that is used by asof query. */
   Snapshot_vision *m_snapshot_vision;
 
   /** TODO: ban constructor <16-10-20, zanye.zjy> */
   explicit asof_query_context_t()
-      : m_is_assigned(false),
-        m_scn(SCN_NULL),
-        m_gcn(GCN_NULL),
-        m_snapshot_vision(nullptr) {}
+      : m_is_assigned(false), m_snapshot_vision(nullptr) {}
 
   ~asof_query_context_t() { release_vision(); }
 
   bool is_assigned() { return m_is_assigned; }
 
   bool is_asof_query() const { return m_snapshot_vision != nullptr; }
+
+  Snapshot_vision *snapshot_vision() const { return m_snapshot_vision; }
 
   bool is_asof_scn() const {
     return m_snapshot_vision &&
@@ -60,17 +52,6 @@ struct asof_query_context_t {
 
   void assign_vision(Snapshot_vision *v) {
     ut_ad(v && v->is_vision());
-    switch (v->type()) {
-      case Snapshot_type::AS_OF_SCN:
-        m_scn = v->val_int();
-	break;
-      case Snapshot_type::AS_OF_GCN:
-	m_gcn = v->val_int();
-	break;
-      default:
-	ut_ad(0);
-	break;
-    }
     m_snapshot_vision = v;
     /** Only set once */
     m_is_assigned = true;
@@ -86,8 +67,6 @@ struct asof_query_context_t {
   void release_vision() {
     m_is_assigned = false;
     m_snapshot_vision = nullptr;
-    m_scn = SCN_NULL;
-    m_gcn = GCN_NULL;
   }
 };
 

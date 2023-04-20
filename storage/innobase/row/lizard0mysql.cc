@@ -22,9 +22,7 @@ bool srv_force_normal_query_if_fbq = true;
 /** The max tolerable lease time of a snapshot */
 ulint srv_scn_valid_volumn = 30;
 
-static utc_t utc_distance(utc_t x, utc_t y) {
-  return x > y ? x - y : y - x;
-}
+static utc_t utc_distance(utc_t x, utc_t y) { return x > y ? x - y : y - x; }
 
 /**
   Try to convert timestamp to scn for flashback query.
@@ -100,14 +98,14 @@ int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn) {
 */
 dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   TABLE *table;
-  trx_t *trx;
-  bool err = false;
+ // trx_t *trx;
+ // bool err = false;
   dict_index_t *clust_index;
   Snapshot_vision *snapshot_vision = nullptr;
   ut_ad(prebuilt);
 
   table = prebuilt->m_mysql_table;
-  trx = prebuilt->trx;
+  //trx = prebuilt->trx;
 
   /* forbid as-of query */
   if (!srv_force_normal_query_if_fbq) return DB_SUCCESS;
@@ -115,16 +113,16 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_assigned()) return DB_SUCCESS;
 
-  if (trx) {
-    /* Change gcn on vision to current snapshot gcn. */
-    gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
-    if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
+//  if (trx) {
+//    /* Change gcn on vision to current snapshot gcn. */
+//    gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
+//    if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
     /* Set gcn on m_asof_query if exist. */
-    if (trx->vision.is_asof_gcn()) {
+//    if (trx->vision.is_asof_gcn()) {
 //      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
-      return DB_SUCCESS;
-    }
-  }
+//      return DB_SUCCESS;
+//    }
+//  }
 
 #if defined TURN_MVCC_SEARCH_TO_AS_OF
 

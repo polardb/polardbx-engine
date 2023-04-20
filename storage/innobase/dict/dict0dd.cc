@@ -2500,7 +2500,7 @@ static void dd_write_index(dd::Object_id dd_space_id, Index *dd_index,
   p.set(dd_index_key_strings[DD_TABLE_ID], index->table->id);
   p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page);
   p.set(dd_index_key_strings[DD_INDEX_TRX_ID], index->trx_id);
-  p.set(dd_index_key_strings[DD_INDEX_UBA], index->txn.uba);
+  p.set(dd_index_key_strings[DD_INDEX_UBA], index->txn.uba.load());
   p.set(dd_index_key_strings[DD_INDEX_SCN], index->txn.scn.load());
   p.set(dd_index_key_strings[DD_INDEX_GCN], index->txn.gcn.load());
 }

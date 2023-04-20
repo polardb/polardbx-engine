@@ -41,6 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0gcs.h"
 #include "lizard0undo.h"
 
+#include "sql/lizard/lizard_snapshot.h"
+
 #ifdef UNIV_PFS_MUTEX
 /* Vision container list mutex key */
 mysql_pfs_key_t lizard_vision_list_mutex_key;
@@ -57,10 +59,7 @@ Vision::Vision()
       m_creator_trx_id(TRX_ID_MAX),
       m_up_limit_id(TRX_ID_MAX),
       m_active(false),
-      m_is_asof_scn(false),
-      m_asof_scn(SCN_NULL),
-      m_is_asof_gcn(false),
-      m_asof_gcn(GCN_NULL),
+      m_snapshot_vision(nullptr),
       group_ids() {}
 
 /** Reset as initialzed values */
@@ -70,10 +69,7 @@ void Vision::reset() {
   m_creator_trx_id = TRX_ID_MAX;
   m_up_limit_id = TRX_ID_MAX;
   m_active = false;
-  m_is_asof_scn = false;
-  m_asof_scn = SCN_NULL;
-  m_is_asof_gcn = false;
-  m_asof_gcn = GCN_NULL;
+  m_snapshot_vision = nullptr;
   group_ids.clear();
 }
 
@@ -259,6 +255,60 @@ ulint VisionContainer::size() const {
   return m_size;
 }
 
+/**
+  Judge visible by txn relation info.
+
+  Attention:
+   asof
+    1) Will see myself modification
+    2) Not see uncommitted modification
+
+  @retval     whether the vision sees the modifications of id.
+              True if visible
+*/
+bool Snapshot_scn_vision::modification_visible(void *txn_rec) const {
+  txn_rec_t *rec = static_cast<txn_rec_t *>(txn_rec);
+  /** Promise committed trx and not myself. */
+  ut_ad(rec->scn != SCN_NULL && rec->gcn != GCN_NULL);
+  ut_ad(!undo_ptr_is_active(rec->undo_ptr));
+  return rec->scn <= m_scn;
+}
+
+/**
+  Judge visible by txn relation info.
+
+  Attention:
+   asof
+    1) Will see myself modification
+    2) Not see uncommitted modification
+
+  @retval     whether the vision sees the modifications of id.
+              True if visible
+*/
+bool Snapshot_gcn_vision::modification_visible(void *txn_rec) const {
+  csr_t csr;
+  txn_rec_t *rec = static_cast<txn_rec_t *>(txn_rec);
+  
+  /** Promise committed trx and not myself. */
+  ut_ad(rec->scn != SCN_NULL && rec->gcn != GCN_NULL);
+  ut_ad(!undo_ptr_is_active(rec->undo_ptr));
+
+  csr = undo_ptr_get_csr(rec->undo_ptr);
+
+  if (rec->gcn == m_gcn) {
+    /** 1. Assigned gcn can be see.*/
+    if (csr == CSR_ASSIGNED) {
+      return true;
+    } else {
+      /** 2. Automatic will changed to scn compare. */
+      return rec->scn <= m_current_scn;
+    }
+  } else {
+    /** 3. compare directly if not equal.*/
+    return rec->gcn < m_gcn;
+  }
+}
+
 bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
                                         const table_name_t &name,
                                         bool check_consistent) const {
@@ -290,74 +340,14 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
       the trx commit is prior the query lanuch.
     */
     ut_ad(!check_consistent || !undo_ptr_is_active(txn_rec->undo_ptr));
-    return txn_rec->scn <= m_snapshot_scn;
+
+    /** Use snapshot vision first when committed txn and not myself. */
+    if (m_snapshot_vision) {
+      return m_snapshot_vision->modification_visible(txn_rec);
+    } else {
+      return txn_rec->scn <= m_snapshot_scn;
+    }
   }
-}
-
-/**
-  Check whether the changes by id are visible. Only used in as-of query.
-
-  @param[in]  txn_rec           txn related information of record.
-
-  @retval     whether the vision sees the modifications of id
-              True if visible.
-*/
-bool Vision::modifications_visible_asof_scn(txn_rec_t *txn_rec) const {
-  ut_ad(m_is_asof_scn);
-
-#if defined UNIV_DEBUG && defined TURN_MVCC_SEARCH_TO_AS_OF
-  if (txn_rec->trx_id == m_creator_trx_id) {
-    return true;
-  }
-#endif
-
-  if (group_ids.has(txn_rec->trx_id)) return true;
-
-  if (txn_rec->scn == SCN_NULL) {
-    /* flash back query can never see the un-committed modifications */
-    return false;
-  }
-
-  return txn_rec->scn <= m_asof_scn;
-}
-
-/**
-  Check whether the changes by id are visible. Only used in global query.
-
-  @param[in]  txn_rec           txn related information of record.
-
-  @retval     whether the vision sees the modifications of id
-              True if visible.
-*/
-bool Vision::modifications_visible_asof_gcn(txn_rec_t *txn_rec) const {
-  ut_ad(!m_is_asof_scn);
-  ut_ad(m_is_asof_gcn);
-
-  /** Promise that caller has used txn_undo_hdr_lookup() correctly.
-      It means that gcn number is not null if the trx has committed.
-  */
-#ifndef DBUG_OFF
-  if (txn_rec->scn != SCN_NULL) {
-    ut_a(txn_rec->gcn != GCN_NULL);
-  }
-#endif
-
-  /** Global query should see myself */
-  if (txn_rec->trx_id == m_creator_trx_id) {
-    return true;
-  }
-
-  if (group_ids.has(txn_rec->trx_id)) return true;
-
-  if (txn_rec->gcn == GCN_NULL) {
-    ut_ad(txn_rec->scn == SCN_NULL);
-    /* global query can never see the un-committed modifications */
-    return false;
-  }
-
-  ut_ad(txn_rec->gcn != GCN_NULL);
-
-  return txn_rec->gcn <= m_asof_gcn;
 }
 
 /**
@@ -376,44 +366,7 @@ bool Vision::modifications_visible(txn_rec_t *txn_rec,
   ut_ad(txn_rec);
   ut_ad(txn_rec->trx_id > 0 && txn_rec->trx_id < TRX_ID_MAX);
 
-  if (m_is_asof_scn) {
-    return modifications_visible_asof_scn(txn_rec);
-  } else if (m_is_asof_gcn) {
-    return modifications_visible_asof_gcn(txn_rec);
-  } else {
-    return modifications_visible_mvcc(txn_rec, name, check_consistent);
-  }
-}
-
-/**
-  Set m_snapshot_scn, m_is_as_of
-
-  @param[in]    scn           m_snapshot_scn
-  @param[in]    is_as_of      true if it's a as-of query
-*/
-void Vision::set_asof_scn(scn_t scn) {
-  if (scn != SCN_NULL) {
-    m_asof_scn = scn;
-    m_is_asof_scn = true;
-  }
-}
-
-/** reset m_as_of_scn, m_is_as_of as initialized values */
-void Vision::reset_asof_scn() {
-  m_is_asof_scn = false;
-  m_asof_scn = SCN_NULL;
-}
-
-void Vision::set_asof_gcn(gcn_t gcn) {
-  if (gcn != GCN_NULL) {
-    m_asof_gcn = gcn;
-    m_is_asof_gcn = true;
-  }
-}
-
-void Vision::reset_asof_gcn() {
-  m_is_asof_gcn = false;
-  m_asof_gcn = GCN_NULL;
+  return modifications_visible_mvcc(txn_rec, name, check_consistent);
 }
 
 /**
@@ -489,17 +442,12 @@ void AsofVisonWrapper::set_as_of_vision(row_prebuilt_t *prebuilt) {
 
   m_vision = &prebuilt->trx->vision;
 
-  if (prebuilt->m_asof_query.is_asof_scn()) {
-    m_vision->set_asof_scn(prebuilt->m_asof_query.m_scn);
-  } else if (prebuilt->m_asof_query.is_asof_gcn()) {
-    m_vision->set_asof_gcn(prebuilt->m_asof_query.m_gcn);
-  }
+  m_vision->assign_snapshot_vision(prebuilt->m_asof_query.snapshot_vision());
 }
 
 void AsofVisonWrapper::reset() {
   if (m_vision) {
-    m_vision->reset_asof_scn();
-    m_vision->reset_asof_gcn();
+    m_vision->release_snapshot_vision();
     m_vision = nullptr;
   }
 }

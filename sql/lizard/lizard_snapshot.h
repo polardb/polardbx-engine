@@ -213,6 +213,8 @@ class Snapshot_vision {
    *  so its definition is see in lizard0mysql.cc file in InnoDB module.
    * */
   virtual bool too_old() const = 0;
+
+  virtual bool modification_visible(void *txn_rec) const = 0;
 };
 
 /**
@@ -232,9 +234,9 @@ class Snapshot_time_vision : public Snapshot_vision {
   virtual void store_int(uint64_t value) override { m_second = value; }
 
   /** Do nothing since of never activated. */
-  virtual void after_activate() override{
-      // TODO:
-      // DBUG_ASSERT(0);
+  virtual void after_activate() override {
+    // TODO:
+    // DBUG_ASSERT(0);
   }
   virtual uint64_t val_int() const override { return m_second; }
 
@@ -242,6 +244,17 @@ class Snapshot_time_vision : public Snapshot_vision {
   virtual bool is_vision() const override { return false; }
 
   virtual bool too_old() const override {
+      assert(0);
+      return false;
+  }
+
+  /**
+    Judge visible by txn relation info.
+
+    @retval     whether the vision sees the modifications of id.
+                True if visible
+  */
+  virtual bool modification_visible(void *) const override {
       assert(0);
       return false;
   }
@@ -276,6 +289,14 @@ class Snapshot_scn_vision : public Snapshot_vision {
   virtual bool is_vision() const override { return true; }
 
   virtual bool too_old() const override;
+
+  /**
+    Judge visible by txn relation info.
+
+    @retval     whether the vision sees the modifications of id.
+                True if visible
+  */
+  virtual bool modification_visible(void *) const override;
 
  private:
   my_scn_t m_scn;
@@ -315,6 +336,14 @@ class Snapshot_gcn_vision : public Snapshot_vision {
 
   virtual bool too_old() const override;
 
+  /**
+    Judge visible by txn relation info.
+
+    @retval     whether the vision sees the modifications of id.
+                True if visible
+  */
+  virtual bool modification_visible(void *) const override;
+
  private:
   my_gcn_t m_gcn;
 
@@ -345,6 +374,17 @@ class Snapshot_noop_vision : public Snapshot_vision {
   virtual bool is_vision() const override { return false; }
 
   virtual bool too_old() const override {
+    assert(0);
+    return false;
+  }
+
+  /**
+    Judge visible by txn relation info.
+
+    @retval     whether the vision sees the modifications of id.
+                True if visible
+  */
+  virtual bool modification_visible(void *) const override {
     assert(0);
     return false;
   }

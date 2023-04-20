@@ -140,51 +140,54 @@ dberr_t dd_index_init_txn_desc(dict_index_t *index, trx_t *trx) {
 bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
                                     lizard::Snapshot_vision *snapshot_vision) {
   txn_rec_t rec_txn;
-  scn_t scn = index->txn.scn.load();
-  gcn_t gcn = index->txn.gcn.load();
   ut_ad(trx);
 
   rec_txn = {
       index->trx_id,
-      scn,
-      index->txn.uba,
-      gcn,
+      SCN_NULL,
+      index->txn.uba.load(),
+      GCN_NULL,
   };
 
-  if (scn == SCN_NULL || gcn == GCN_NULL) {
+  if (undo_ptr_is_active(rec_txn.undo_ptr)) {
+    mutex_enter(&dict_sys->mutex);
+
+    if (!undo_ptr_is_active(index->txn.uba.load())) {
+      rec_txn.scn = index->txn.scn.load();
+      rec_txn.gcn = index->txn.gcn.load();
+      rec_txn.undo_ptr = index->txn.uba.load();
+      mutex_exit(&dict_sys->mutex);
+      goto judge;
+    }
+
     lizard::txn_rec_real_state_by_misc(&rec_txn);
     /** It might be stored many times but they should be the same value */
     index->txn.scn.store(rec_txn.scn);
     index->txn.gcn.store(rec_txn.gcn);
+
+    ut_ad(undo_ptr_get_addr(index->txn.uba.load()) ==
+          undo_ptr_get_addr(rec_txn.undo_ptr));
+    ut_ad(!undo_ptr_is_active(rec_txn.undo_ptr));
+    ut_ad(undo_ptr_is_active(index->txn.uba.load()));
+
+    /** Copy onto index->txn from lookup. */
+    index->txn.uba.store(rec_txn.undo_ptr);
+
+    mutex_exit(&dict_sys->mutex);
+  } else {
+    ut_ad(!undo_ptr_is_active(index->txn.uba.load()));
+    ut_ad(index->txn.scn.load() != SCN_NULL &&
+          index->txn.gcn.load() != GCN_NULL);
+    rec_txn.scn = index->txn.scn.load();
+    rec_txn.gcn = index->txn.gcn.load();
   }
 
-  if (snapshot_vision) {
-    /** TODO: */
-    scn_t as_of_scn = SCN_NULL;
-    gcn_t as_of_gcn = GCN_NULL;
-    switch (snapshot_vision->type()) {
-      case lizard::Snapshot_type::AS_OF_SCN:
-        as_of_scn = snapshot_vision->val_int();
-        break;
-      case lizard::Snapshot_type::AS_OF_GCN:
-        as_of_gcn = snapshot_vision->val_int();
-        break;
-      default:
-        ut_a(0);
-        break;
-    }
-    ut_ad(as_of_scn != SCN_NULL || as_of_gcn != GCN_NULL);
+judge:
 
-    if (as_of_scn != SCN_NULL) {
-      ut_ad(as_of_gcn == GCN_NULL);
-      return (rec_txn.scn != SCN_NULL && as_of_scn != SCN_NULL &&
-              rec_txn.scn <= as_of_scn);
-    } else {
-      ut_ad(as_of_scn == SCN_NULL);
-      return (rec_txn.gcn != GCN_NULL && as_of_gcn != GCN_NULL &&
-              rec_txn.gcn <= as_of_gcn);
-    }
+  if (snapshot_vision) {
+    return snapshot_vision->modification_visible(&rec_txn);
   } else {
+    ut_ad(!trx->vision.is_asof());
     ut_ad(trx->vision.is_active());
     /**
       When is_usable() is executed concurrently, SCN and UBA will be not

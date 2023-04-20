@@ -224,7 +224,7 @@ typedef struct txn_rec_t txn_commit_t;
 */
 struct txn_index_t {
   /** undo log header address */
-  undo_ptr_t uba;
+  std::atomic<undo_ptr_t> uba;
   /** scn number */
   std::atomic<scn_id_t> scn;
   /** gcn number */
