@@ -38,9 +38,7 @@ bool srv_force_normal_query_if_fbq = true;
 /** The max tolerable lease time of a snapshot */
 ulint srv_scn_valid_volumn = 30;
 
-static utc_t utc_distance(utc_t x, utc_t y) {
-  return x > y ? x - y : y - x;
-}
+static utc_t utc_distance(utc_t x, utc_t y) { return x > y ? x - y : y - x; }
 
 /**
   Try to convert timestamp to scn for flashback query.
