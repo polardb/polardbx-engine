@@ -10,7 +10,7 @@ flush local logs;
 set global innodb_purge_rseg_truncate_frequency = 1;
 set global innodb_undo_retention = 0;
 set global innodb_undo_retention = 9000;
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create table t1 (id int);
 ###############################
 # case 1
