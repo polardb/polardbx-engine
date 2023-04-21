@@ -167,8 +167,6 @@ bool dd_index_modificatsion_visible(dict_index_t *index, const trx_t *trx,
 
     ut_ad(undo_ptr_get_addr(index->txn.uba.load()) ==
           undo_ptr_get_addr(rec_txn.undo_ptr));
-    ut_ad(!undo_ptr_is_active(rec_txn.undo_ptr));
-    ut_ad(undo_ptr_is_active(index->txn.uba.load()));
 
     /** Copy onto index->txn from lookup. */
     index->txn.uba.store(rec_txn.undo_ptr);

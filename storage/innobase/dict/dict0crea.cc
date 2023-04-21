@@ -396,6 +396,14 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
 
   DBUG_EXECUTE_IF("ib_dict_create_index_tree_fail", return (DB_OUT_OF_MEMORY););
 
+  dberr_t err = DB_SUCCESS;
+
+  /* Assign txn undo in advance during DDL operation */
+  err = lizard::dd_index_init_txn_desc(index, trx);
+  if (err != DB_SUCCESS) {
+    return err;
+  }
+
   if (index->type == DICT_FTS) {
     /* FTS index does not need an index tree */
     return (DB_SUCCESS);
@@ -416,11 +424,6 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
   if (index->table->is_temporary()) {
     mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
   }
-
-  dberr_t err = DB_SUCCESS;
-
-  /* Assign txn undo in advance during DDL operation */
-  err = lizard::dd_index_init_txn_desc(index, trx);
 
   if (err == DB_SUCCESS) {
     page_no = btr_create(index->type, index->space, index->id, index, &mtr);
