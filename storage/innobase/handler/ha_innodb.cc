@@ -22757,9 +22757,11 @@ static MYSQL_SYSVAR_ENUM(tcn_cache_level, lizard::innodb_tcn_cache_level,
 
 static MYSQL_SYSVAR_LONGLONG(tcn_cache_size, lizard::innodb_tcn_cache_size,
                              PLUGIN_VAR_READONLY,
-                             "The size of the global tcn cache in bytes. 0 indicates "
-                             "using the default mapping policy according to the buffer pool size", NULL, NULL,
-                             lizard::innodb_tcn_cache_def_size, 0, lizard::innodb_tcn_cache_max_size, 0);
+                             "The size of the global tcn cache in bytes. "
+                             "0 indicates using the default mapping policy "
+                             "according to the buffer pool size", NULL, NULL,
+                             lizard::innodb_tcn_cache_def_size, 0, 
+                             lizard::innodb_tcn_cache_max_size, 0);
 
 static const char *innodb_tcn_block_cache_type_names[] = {"lru",    /* lru */
                                                           "random", /* random */
