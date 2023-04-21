@@ -41,7 +41,9 @@ namespace lizard {
 ulong innodb_tcn_cache_level = GLOBAL_LEVEL;
 ulong innodb_tcn_block_cache_type = BLOCK_LRU;
 bool innodb_tcn_cache_replace_after_commit = true;
-ulong innodb_tcn_cache_size = 1024 * 1024 * 4;
+longlong innodb_tcn_cache_size = 0;
+const longlong innodb_tcn_cache_def_size = 0;
+const longlong innodb_tcn_cache_max_size = LLONG_MAX;
 
 Cache_tcn *global_tcn_cache = nullptr;
 
@@ -157,5 +159,23 @@ void deallocate_block_tcn(buf_block_t *block) {
   }
 }
 
+/** Get the number of tcn entries according to the innodb_tcn_cache_size. */
+ulong tcn_cache_size_align() {
+  /** Mapping rules between buffer pool size and the number of entries in global tcn cache*/
+  static std::map<longlong, ulong> buf_2_tcn = {
+    {4LL * 1024 * 1024 * 1024, 1 * 1024 * 1024}, {8LL * 1024 * 1024 * 1024, 2 * 1024 * 1024}, 
+    {16LL * 1024 * 1024 * 1024, 4 * 1024 * 1024}, {32LL * 1024 * 1024 * 1024, 8 * 1024 * 1024}, 
+    {64LL * 1024 * 1024 * 1024, 16 * 1024 * 1024}, {LLONG_MAX, 32 * 1024 * 1024}
+  };
+  
+  ulong tcn_entry_num;
+  if (innodb_tcn_cache_size == 0) {
+    tcn_entry_num = buf_2_tcn.upper_bound(srv_buf_pool_curr_size)->second;
+    innodb_tcn_cache_size = tcn_entry_num * sizeof(tcn_t);
+  } else {
+    tcn_entry_num = innodb_tcn_cache_size / sizeof(tcn_t);
+  }
+  return tcn_entry_num;
+}
 }  // namespace lizard
 

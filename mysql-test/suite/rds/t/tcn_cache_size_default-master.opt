@@ -1,0 +1,2 @@
+--innodb_buffer_pool_size=32G
+--innodb_tcn_cache_size=0

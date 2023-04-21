@@ -51,7 +51,9 @@ namespace lizard {
 extern ulong innodb_tcn_cache_level;
 extern ulong innodb_tcn_block_cache_type;
 extern bool innodb_tcn_cache_replace_after_commit;
-extern ulong innodb_tcn_cache_size;
+extern longlong innodb_tcn_cache_size;
+extern const longlong innodb_tcn_cache_def_size;
+extern const longlong innodb_tcn_cache_max_size;
 
 typedef struct tcn_t {
   /** Transaction id that has committed. */
@@ -157,6 +159,9 @@ void trx_cache_tcn(trx_id_t trx_id, txn_rec_t &txn_rec, const rec_t *rec,
                    btr_pcur_t *pcur);
 
 void trx_cache_tcn(trx_t *trx);
+
+/** Get the number of tcn entries according to the innodb_tcn_cache_size. */
+ulong tcn_cache_size_align();
 
 extern Cache_tcn *global_tcn_cache;
 
