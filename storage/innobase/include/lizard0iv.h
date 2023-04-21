@@ -133,21 +133,24 @@ class Cache_interface {
   virtual Value_type search(Key_type key) = 0;
 };
 
-template <typename Element_type, typename Key_type, typename Value_type,
-          size_t Prealloc>
+template <typename Element_type, typename Key_type, typename Value_type>
 class Random_array
     : public Cache_interface<Element_type, Key_type, Value_type> {
  public:
-  Random_array() {}
+  Random_array(size_t size) : m_size(size) {
+    m_elements = new Value_type[m_size];
+  }
 
-  virtual ~Random_array() {}
+  virtual ~Random_array() {
+    delete[] m_elements;
+  }
 
   virtual bool do_before_operation(size_t pos) { return false; }
 
   virtual void do_after_operation(bool required, size_t pos) {}
 
   virtual bool insert(Value_type value) {
-    size_t pos = ut_hash_ulint(value.key(), Prealloc);
+    size_t pos = ut_hash_ulint(value.key(), m_size);
     bool pre_check = do_before_operation(pos);
     if (!pre_check) {
       m_elements[pos] = value;
@@ -158,7 +161,7 @@ class Random_array
   }
 
   virtual Value_type search(Key_type key) {
-    size_t pos = ut_hash_ulint(key, Prealloc);
+    size_t pos = ut_hash_ulint(key, m_size);
     bool pre_check = do_before_operation(pos);
     Value_type value;
     if (!pre_check) {
@@ -169,18 +172,19 @@ class Random_array
   }
 
  private:
-  Value_type m_elements[Prealloc];
+  size_t m_size;
+  Value_type *m_elements;
 };
 
 #define ATOMIC_RANDOM_ARRAY_RETRY_MAX_TIMES 10
 
-template <typename Element_type, typename Key_type, typename Value_type,
-          size_t Prealloc>
+template <typename Element_type, typename Key_type, typename Value_type>
 class Atomic_random_array
-    : public Random_array<Element_type, Key_type, Value_type, Prealloc> {
+    : public Random_array<Element_type, Key_type, Value_type> {
  public:
-  Atomic_random_array() {}
+  Atomic_random_array(size_t size) : Random_array<Element_type, Key_type, Value_type>(size) {}
 
+  virtual ~Atomic_random_array() {}
   virtual bool do_before_operation(size_t pos) {
     uint loop = 0;
     bool expected;

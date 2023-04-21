@@ -41,6 +41,7 @@ namespace lizard {
 ulong innodb_tcn_cache_level = GLOBAL_LEVEL;
 ulong innodb_tcn_block_cache_type = BLOCK_LRU;
 bool innodb_tcn_cache_replace_after_commit = true;
+ulong innodb_tcn_cache_size = 1024 * 1024 * 4;
 
 Cache_tcn *global_tcn_cache = nullptr;
 
@@ -146,7 +147,7 @@ void allocate_block_tcn(buf_block_t *block) {
     if (innodb_tcn_block_cache_type == BLOCK_LRU)
       block->cache_tcn = new Lru_tcn();
     else
-      block->cache_tcn = new Array_tcn();
+      block->cache_tcn = new Array_tcn(ARRAY_TCN_SIZE);
   }
 }
 void deallocate_block_tcn(buf_block_t *block) {

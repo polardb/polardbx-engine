@@ -4990,7 +4990,7 @@ static int innodb_init(void *p) {
     return innodb_init_abort();
   }
 
-  lizard::global_tcn_cache = new lizard::Global_tcn();
+  lizard::global_tcn_cache = new lizard::Global_tcn(lizard::innodb_tcn_cache_size);
 
   return 0;
 }
@@ -22748,6 +22748,11 @@ static MYSQL_SYSVAR_ENUM(tcn_cache_level, lizard::innodb_tcn_cache_level,
                          "transaction commit number cache level.", NULL, NULL,
                          GLOBAL_LEVEL, &innodb_tcn_cache_level_typelib);
 
+static MYSQL_SYSVAR_ULONG(tcn_cache_size, lizard::innodb_tcn_cache_size,
+                         PLUGIN_VAR_READONLY,
+                         "size of global tcn cache", NULL, NULL,
+                         1024 * 1024 * 4, 0, UINT_MAX32, 0);
+
 static const char *innodb_tcn_block_cache_type_names[] = {"lru",    /* lru */
                                                           "random", /* random */
                                                           NullS};
@@ -23061,6 +23066,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(print_data_file_purge_process),
     MYSQL_SYSVAR(transaction_group),
     MYSQL_SYSVAR(tcn_cache_level),
+    MYSQL_SYSVAR(tcn_cache_size),
     MYSQL_SYSVAR(tcn_block_cache_type),
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
     MYSQL_SYSVAR(write_non_innodb_gtids),
