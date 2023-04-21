@@ -1,0 +1,6 @@
+show variables like '%innodb_buffer_pool_size%';
+Variable_name	Value
+innodb_buffer_pool_size	34359738368
+show variables like '%tcn_cache_size%';
+Variable_name	Value
+innodb_tcn_cache_size	4194304
