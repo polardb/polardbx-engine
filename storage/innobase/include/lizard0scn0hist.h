@@ -76,6 +76,9 @@ extern os_event_t scn_history_event;
 /** SCN rolling forward interval */
 extern ulint srv_scn_history_interval;
 
+/** Max gap (seconds) allowed scn snapshot. */
+constexpr ulint SRV_SCN_HISTORY_INTERVAL_MAX = 10;
+
 /** SCN rolling forward task */
 extern bool srv_scn_history_task_enabled;
 

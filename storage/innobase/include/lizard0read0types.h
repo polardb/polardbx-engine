@@ -150,7 +150,7 @@ class Vision {
   /** Reset as initialzed values */
   void reset();
 
-  void assign_snapshot_vision(Snapshot_vision *v) {
+  void store_snapshot_vision(Snapshot_vision *v) {
     ut_ad(v->is_vision());
     m_snapshot_vision = v;
   }
@@ -215,11 +215,11 @@ class AsofVisonWrapper {
  public:
   AsofVisonWrapper() : m_vision(nullptr) {}
 
-  ~AsofVisonWrapper() { reset(); }
+  ~AsofVisonWrapper() { release_snapshot_vision(); }
 
-  void set_as_of_vision(row_prebuilt_t *prebuilt);
+  void trx_store_snapshot_vision(row_prebuilt_t *prebuilt);
 
-  void reset();
+  void release_snapshot_vision();
 
  private:
   Vision *m_vision;

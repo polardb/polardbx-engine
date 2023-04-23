@@ -431,7 +431,7 @@ void trx_vision_container_destroy() {
   vision_container = nullptr;
 }
 
-void AsofVisonWrapper::set_as_of_vision(row_prebuilt_t *prebuilt) {
+void AsofVisonWrapper::trx_store_snapshot_vision(row_prebuilt_t *prebuilt) {
   if (!prebuilt || !prebuilt->m_asof_query.is_asof_query()) return;
 
   ut_ad(prebuilt->trx);
@@ -442,10 +442,10 @@ void AsofVisonWrapper::set_as_of_vision(row_prebuilt_t *prebuilt) {
 
   m_vision = &prebuilt->trx->vision;
 
-  m_vision->assign_snapshot_vision(prebuilt->m_asof_query.snapshot_vision());
+  m_vision->store_snapshot_vision(prebuilt->m_asof_query.snapshot_vision());
 }
 
-void AsofVisonWrapper::reset() {
+void AsofVisonWrapper::release_snapshot_vision() {
   if (m_vision) {
     m_vision->release_snapshot_vision();
     m_vision = nullptr;

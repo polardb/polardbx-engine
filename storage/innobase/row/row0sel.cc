@@ -4703,7 +4703,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
       trx->has_search_latch = true;
 
       /* set as-of condition vision if need */
-      asof_wrapper.set_as_of_vision(prebuilt);
+      asof_wrapper.trx_store_snapshot_vision(prebuilt);
 
       switch (row_sel_try_search_shortcut_for_mysql(&rec, prebuilt, &offsets,
                                                     &heap, &mtr)) {
@@ -4863,8 +4863,8 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
       trx_assign_read_view(trx);
 
       /* convert ctx to innobase, only set once */
-      if ((err = lizard::convert_fbq_ctx_to_innobase(prebuilt))
-            != DB_SUCCESS) {
+      if ((err = lizard::prebuilt_bind_flashback_query(prebuilt)) !=
+          DB_SUCCESS) {
         goto as_of_error;
       }
     }
@@ -4884,7 +4884,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   }
 
   /* set as-of condition vision if need */
-  asof_wrapper.set_as_of_vision(prebuilt);
+  asof_wrapper.trx_store_snapshot_vision(prebuilt);
 
   /* Open or restore index cursor position */
 

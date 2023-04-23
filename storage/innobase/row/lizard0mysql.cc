@@ -19,9 +19,6 @@ namespace lizard {
 /** Whether to enable use as of query (true by default) */
 bool srv_force_normal_query_if_fbq = true;
 
-/** The max tolerable lease time of a snapshot */
-ulint srv_scn_valid_volumn = 30;
-
 static utc_t utc_distance(utc_t x, utc_t y) { return x > y ? x - y : y - x; }
 
 /**
@@ -59,8 +56,8 @@ static scn_t convert_timestamp_to_scn_low(utc_t user_utc, dberr_t *err) {
 
     /* case 3: can't find the appropriate records in innodb_flashback_snapshot */
     *err = DB_SNAPSHOT_OUT_OF_RANGE;
-  } else if (utc_distance(trans_res.utc, user_utc)
-               > srv_scn_valid_volumn * 60) {
+  } else if (utc_distance(trans_res.utc, user_utc) >
+             2 * SRV_SCN_HISTORY_INTERVAL_MAX) {
     /** case 4: The corresponding utc in innodb_flashback_snapshot is quite
     different from user_utc */
     *err = DB_SNAPSHOT_OUT_OF_RANGE;
@@ -96,7 +93,7 @@ int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn) {
                                 ERROR: DB_AS_OF_INTERNAL, DB_SNAPSHOT_OUT_OF_RANGE,
                                 DB_AS_OF_TABLE_DEF_CHANGED, DB_SNAPSHOT_TOO_OLD
 */
-dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
+dberr_t prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt) {
   TABLE *table;
  // trx_t *trx;
  // bool err = false;
@@ -180,7 +177,7 @@ simulate_error:
 
   @return           dberr_t     DB_SUCCESS, or DB_SNAPSHOT_OUT_OF_RANGE.
 */
-dberr_t reset_prebuilt_flashback_query_ctx(row_prebuilt_t *prebuilt) {
+dberr_t prebuilt_unbind_flashback_query(row_prebuilt_t *prebuilt) {
   dberr_t err = DB_SUCCESS;
 
   if (prebuilt->m_asof_query.too_old()) {

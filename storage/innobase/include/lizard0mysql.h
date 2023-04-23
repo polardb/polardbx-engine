@@ -80,7 +80,7 @@ struct asof_query_context_t {
                                 ERROR: DB_AS_OF_INTERNAL, DB_SNAPSHOT_OUT_OF_RANGE,
                                 DB_AS_OF_TABLE_DEF_CHANGED
 */
-dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt);
+dberr_t prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt);
 
 /**
   Reset row_prebuilt_t::m_scn_query, query block level.
@@ -89,7 +89,6 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt);
 
   @return           dberr_t     DB_SUCCESS, or DB_SNAPSHOT_OUT_OF_RANGE.
 */
-dberr_t reset_prebuilt_flashback_query_ctx(row_prebuilt_t *prebuilt);
-
+dberr_t prebuilt_unbind_flashback_query(row_prebuilt_t *prebuilt);
 }
 #endif
