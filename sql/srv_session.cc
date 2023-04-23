@@ -739,7 +739,7 @@ bool Srv_session::module_deinit() {
 */
 bool Srv_session::is_valid(const Srv_session *session) {
   const THD *thd = session ? &session->thd : nullptr;
-  return thd ? (session->safe_session || (bool)server_session_list.find(thd)) : false;
+  return thd ? (session->safe_session && (bool)server_session_list.find(thd)) : false;
 }
 
 /**
@@ -755,7 +755,8 @@ Srv_session::Srv_session(srv_session_error_cb err_cb, void *err_cb_ctx)
       protocol_error(&error_protocol_callbacks, CS_TEXT_REPRESENTATION,
                      (void *)&err_protocol_ctx),
       state(SRV_SESSION_CREATED),
-      vio_type(NO_VIO_TYPE) {
+      vio_type(NO_VIO_TYPE),
+      safe_session(true) {
   // thd.mark_as_srv_session();
 }
 
@@ -977,6 +978,9 @@ bool Srv_session::close() {
   if (backup.attach_error) return true;
 
   state = SRV_SESSION_CLOSED;
+
+  /* mark unsafe */
+  set_safe(false);
 
   server_session_list.remove(&thd);
 
