@@ -18476,7 +18476,7 @@ int ha_innobase::external_lock(THD *thd, /*!< in: handle to the user thread */
     ++trx->will_lock;
   }
 
-  dberr_t error = lizard::reset_prebuilt_flashback_query_ctx(m_prebuilt);
+  dberr_t error = lizard::prebuilt_unbind_flashback_query(m_prebuilt);
   if (error != DB_SUCCESS) {
     /** Lizard: Just call **my_error** here because only lock errors will
     be expected, see unlock_external, handler::ha_external_lock. */
@@ -22654,18 +22654,14 @@ static MYSQL_SYSVAR_BOOL(scn_history_task_enabled,
 static MYSQL_SYSVAR_ULONG(scn_history_interval,
                           lizard::srv_scn_history_interval, PLUGIN_VAR_OPCMDARG,
                           "Generate new scn record every scn_history_interval",
-                          NULL, NULL, 3, 1, 10, 0);
+                          NULL, NULL, 3, 1,
+                          lizard::SRV_SCN_HISTORY_INTERVAL_MAX, 0);
 
 static MYSQL_SYSVAR_BOOL(rds_flashback_enabled,
                          lizard::srv_force_normal_query_if_fbq,
                          PLUGIN_VAR_OPCMDARG,
                          "Whether to enable use as of query (true by default)",
                          NULL, NULL, TRUE);
-
-static MYSQL_SYSVAR_ULONG(rds_flashback_allow_gap,
-                          lizard::srv_scn_valid_volumn, PLUGIN_VAR_OPCMDARG,
-                          "the max tolerable lease time of a snapshot",
-                          NULL, NULL, 30, 0, 10080, 0);
 
 static MYSQL_SYSVAR_ULONG(
     scn_history_keep_days, lizard::srv_scn_history_keep_days,
@@ -23026,7 +23022,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(parallel_read_threads),
     MYSQL_SYSVAR(fatal_semaphore_wait_threshold),
     MYSQL_SYSVAR(rds_flashback_enabled),
-    MYSQL_SYSVAR(rds_flashback_allow_gap),
     MYSQL_SYSVAR(cleanout_safe_mode),
     MYSQL_SYSVAR(cleanout_disable),
     MYSQL_SYSVAR(cleanout_max_scans_on_page),
