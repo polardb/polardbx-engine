@@ -111,6 +111,12 @@ class GProtocol_encoder : public Protobuf_encoder {
     set_header_config(m_header_configuration);
   }
 
+  explicit GProtocol_encoder(Encoding_buffer *buffer)
+      : Protobuf_encoder(buffer), m_hdr() {
+    ensure_buffer_size<1>();
+    set_header_config(m_header_configuration);
+  }
+
   void rebuild_header() { set_header_config(m_header_configuration); }
 
 #if GALAXY_XMESSAGE_DEBUG

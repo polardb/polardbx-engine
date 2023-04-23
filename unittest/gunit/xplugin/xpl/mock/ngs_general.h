@@ -140,6 +140,9 @@ class Mock_socket_events : public Socket_events_interface {
   MOCK_METHOD2(add_timer, void(const std::size_t, std::function<bool()>));
   MOCK_METHOD0(loop, void());
   MOCK_METHOD0(break_loop, void());
+  MOCK_METHOD3(listen, bool(Socket_interface::Shared_ptr ,
+      std::function<void(Connection_acceptor_interface &)> ,
+      gx::Protocol_type ));
 };
 
 class Mock_listener_factory_interface : public Listener_factory_interface {

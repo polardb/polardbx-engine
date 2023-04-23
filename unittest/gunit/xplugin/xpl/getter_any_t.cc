@@ -67,6 +67,8 @@ class Mock_type_handler : public Type_handler {
 
   void put(const bool &arg) { put_void(arg); }
 
+  void put(const gx::Identifier &arg) {  }
+
   void put(const std::string &arg) { put_void(arg); }
 
   void put() { put_void(); }

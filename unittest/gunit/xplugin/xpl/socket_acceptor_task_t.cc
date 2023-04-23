@@ -27,6 +27,7 @@
 #include "plugin/x/ngs/include/ngs/interface/listener_factory_interface.h"
 #include "plugin/x/ngs/include/ngs/socket_acceptors_task.h"
 #include "unittest/gunit/xplugin/xpl/mock/ngs_general.h"
+#include "plugin/x/src/interface/galaxy_listener_factory.h"
 
 namespace ngs {
 namespace test {
@@ -40,6 +41,7 @@ const std::string k_host = "host test";
 const std::string k_net_ns = "";
 const uint16 k_port = 11;
 const uint32 k_open_timeout = 12;
+gx::Galaxy_listener_factory galaxy_listener_factory;
 
 TEST(Socket_acceptors_task_suite, prepare_without_any_interface) {
   Mock_listener_factory_interface mock_factory;
@@ -60,7 +62,8 @@ TEST(Socket_acceptors_task_suite, prepare_without_any_interface) {
 #endif
 
   Socket_acceptors_task sut(mock_factory, k_host, k_net_ns, k_port,
-                            k_open_timeout, k_unix_file, k_backlog, mock_event);
+                            k_open_timeout, k_unix_file, k_backlog, mock_event,
+                            std::ref(galaxy_listener_factory), 0);
 
   Server_task_interface::Task_context context;
   ASSERT_FALSE(sut.prepare(&context));

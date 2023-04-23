@@ -63,6 +63,10 @@ class Mock_vio : public Vio_interface {
   MOCK_METHOD0(delete_vio, void());
   MOCK_METHOD0(get_vio, Vio *());
   MOCK_METHOD0(get_mysql_socket, MYSQL_SOCKET &());
+  MOCK_METHOD0(get_ptype, gx::Protocol_type());
+  MOCK_METHOD0(get_send_mutex, xpl::Mutex &());
+  MOCK_METHOD0(is_corrupted, std::atomic<bool> &());
+  MOCK_METHOD0(prepare_for_parallel, bool());
 };
 
 class Mock_ssl_context : public Ssl_context_interface {
@@ -104,10 +108,11 @@ class Mock_server : public Server_interface {
                      std::shared_ptr<Scheduler_dynamic>());
   MOCK_CONST_METHOD0(ssl_context, Ssl_context_interface *());
   MOCK_METHOD1(on_client_closed, void(const Client_interface &));
-  MOCK_METHOD3(create_session,
+  MOCK_METHOD4(create_session,
                std::shared_ptr<Session_interface>(Client_interface &,
                                                   Protocol_encoder_interface &,
-                                                  const int));
+                                                  const int,
+                                                  const gx::GSession_id));
   MOCK_METHOD0(get_client_exit_mutex, xpl::Mutex &());
   MOCK_METHOD0(restart_client_supervision_timer, void());
 
@@ -182,6 +187,8 @@ class Mock_sql_data_context : public Sql_session_interface {
   MOCK_METHOD0(detach, Error_code());
   MOCK_METHOD0(reset, Error_code());
   MOCK_METHOD1(is_sql_mode_set, bool(const std::string &));
+  MOCK_METHOD3(init_db,
+               Error_code(const char *db_name, std::size_t db_len, Resultset_interface *rset));
 };
 
 class Mock_protocol_encoder : public Protocol_encoder_interface {
@@ -222,6 +229,10 @@ class Mock_protocol_encoder : public Protocol_encoder_interface {
   MOCK_METHOD1(enqueue_empty_message, uint8 *(const uint8_t message_id));
 
   MOCK_METHOD0(get_flusher, xpl::iface::Protocol_flusher *());
+  MOCK_METHOD0(get_gheader, gx::GHeader *());
+  MOCK_METHOD2(build_header, void(gx::Protocol_type , gx::GSession_id ));
+  MOCK_METHOD2(send_tso, void(const uint64_t , int32_t ));
+  MOCK_METHOD1(set_flow_control, void(xpl::Galaxy_flow_control *));
 
   MOCK_METHOD2(send_error,
                bool(const Error_code &error_code, const bool init_error));
@@ -248,6 +259,7 @@ class Mock_session : public Session_interface {
  public:
   MOCK_CONST_METHOD0(session_id, Session_id());
   MOCK_METHOD0(init, Error_code());
+  MOCK_METHOD0(on_free, void());
   MOCK_METHOD1(on_close, void(const bool));
   MOCK_METHOD0(on_kill, void());
   MOCK_METHOD1(on_auth_success,
@@ -278,6 +290,8 @@ class Mock_session : public Session_interface {
   MOCK_METHOD0(get_options, Options &());
   MOCK_METHOD0(get_document_id_aggregator,
                Document_id_aggregator_interface &());
+
+  MOCK_CONST_METHOD0(gsession_id, gx::GSession_id ());
 };
 
 class Mock_notice_configuration : public Notice_configuration_interface {
@@ -418,6 +432,8 @@ class Mock_client : public ngs::Client_interface {
                void(const Mysqlx::Connection::CapabilitiesGet &));
   MOCK_METHOD1(set_capabilities,
                void(const Mysqlx::Connection::CapabilitiesSet &));
+
+  MOCK_METHOD1(allocate_encoder, ngs::Protocol_encoder_interface *(ngs::Memory_block_pool *));
 
  public:
   MOCK_METHOD1(on_session_reset_void, bool(ngs::Session_interface &));

@@ -136,6 +136,7 @@ class Mock_protocol : public XProtocol {
                                XError *out_error));
 
   MOCK_METHOD1(use_compression, void(const Compression_algorithm algo));
+  MOCK_METHOD0(get_gheader, gx::GHeader *());
 
  private:
   using XQuery_result_ptr = std::unique_ptr<XQuery_result>;
