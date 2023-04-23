@@ -298,6 +298,8 @@ static char *innodb_version_str = (char *)INNODB_VERSION_STR;
 
 static Innodb_data_lock_inspector innodb_data_lock_inspector;
 
+bool opt_force_index_pct_cached = false;
+
 /** Note we cannot use rec_format_enum because we do not allow
 COMPRESSED row format for innodb_default_row_format option. */
 enum default_row_format_enum {
@@ -16396,6 +16398,9 @@ static void calculate_index_size_stats(const dict_table_t *ib_table,
 */
 inline double index_pct_cached(const dict_index_t *index) {
   const ulint n_leaf = index->stat_n_leaf_pages;
+
+  if (opt_force_index_pct_cached)
+    return 1.0;
 
   if (n_leaf == 0) {
     return (0.0);
