@@ -1212,9 +1212,9 @@ void ConsensusLogManager::update_commit_pos(const std::string &log_name, uint64_
   commit_pos.fname = log_name;
   commit_pos.pos = pos;
   commit_pos.index = index;
-#ifndef DBUG_OFF
-  sql_print_information("Report binlog commit position: %s %lu %lu", commit_pos.fname.c_str(), commit_pos.pos, commit_pos.index);
-#endif
+  if (opt_consensus_log_level >= 2)
+    sql_print_information("Report binlog commit position: %s %lu %lu", commit_pos.fname.c_str(), commit_pos.pos, commit_pos.index);
+
   mysql_mutex_unlock(&LOCK_consensus_commit_pos);
 }
 
