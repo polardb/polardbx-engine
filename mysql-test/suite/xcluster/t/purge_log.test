@@ -1,14 +1,15 @@
 --source include/paxos.inc
 
---let $learner_cluster_info= '127.0.0.1:13600'
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
-#add consensus_learner '127.0.0.1:13600';
-call dbms_consensus.add_learner("127.0.0.1:13600");
+#add consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.add_learner($learner_cluster_info);
 #change consensus_node 100 consensus_learner_source 1;
---replace_result $PAXOS_PORT_1 PAXOS_PORT_1
-eval call dbms_consensus.configure_learner("127.0.0.1:13600", "127.0.0.1:$PAXOS_PORT_1");
+--replace_result $learner_cluster_info learner_cluster_info $PAXOS_PORT_1 PAXOS_PORT_1
+eval call dbms_consensus.configure_learner($learner_cluster_info, "127.0.0.1:$PAXOS_PORT_1");
 select server_id, role, learner_source from information_schema.alisql_cluster_global;
 create table t1(id int);
 insert into t1 values (1);
@@ -38,12 +39,9 @@ show consensus logs;
 call dbms_consensus.local_purge_log(100);
 --replace_column 2 # 3 #
 show consensus logs;
-
-#drop consensus_learner '127.0.0.1:13600';
-call dbms_consensus.drop_learner("127.0.0.1:13600");
---exec rm -rf $MYSQL_TMP_DIR/learner1*
---exec rm -f $MYSQL_TMP_DIR/server.log
-
+#drop consensus_learner '$learner_cluster_info';
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info);
 #purge consensus_log before 100;
 call dbms_consensus.purge_log(100);
 --replace_column 2 # 3 #
@@ -56,3 +54,6 @@ call dbms_consensus.force_purge_log(100);
 --replace_column 2 # 3 #
 show consensus logs;
 drop table t1;
+
+# cleanup
+--source include/stop_new_learner.inc

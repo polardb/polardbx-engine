@@ -52,6 +52,7 @@ set innodb_snapshot_seq = @base_seq +  10020;
 select * from t1;
 a	b
 10011	10011
+10021	10021
 xa end 'f2';
 xa commit 'f2' one phase;
 set innodb_snapshot_seq = @base_seq +  10030;
@@ -77,6 +78,7 @@ set innodb_snapshot_seq = @base_seq +  20020;
 select * from t2;
 a	b
 20011	1988-12-12
+20021	1991-12-12
 xa end 'f3';
 xa commit 'f3' one phase;
 set innodb_snapshot_seq = @base_seq +  20030;

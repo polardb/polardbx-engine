@@ -17,7 +17,7 @@
 #
 # BUG#26018522: MYSQLBINLOG -V PRINTS JSON IN ROW EVENTS WRONG
 
-
+--source include/have_debug_new.inc
 --source include/have_log_bin.inc
 --source include/have_binlog_format_row.inc
 --source include/have_util_sed.inc

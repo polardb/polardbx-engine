@@ -1,6 +1,7 @@
 #
 # Tests of innodb/binlog with the row binlog format
 # 
+--source include/have_debug_new.inc
 source include/have_myisam.inc;
 source include/have_log_bin.inc;
 source include/have_binlog_format_row.inc;

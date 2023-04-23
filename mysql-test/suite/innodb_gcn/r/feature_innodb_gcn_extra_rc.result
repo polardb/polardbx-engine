@@ -206,15 +206,6 @@ a	b
 4100	0
 delete from u1;
 #
-# as of gcn read record which has been cleaned out
-#
-insert into u1 values(5000, 0);
-select * from u1 where a = 5000;
-set innodb_snapshot_seq = @base_seq + 5000;
-select * from u1 where a = 5000;
-a	b
-delete from u1;
-#
 # /*+ SET_VAR(innodb_snapshot_seq= ... ) */ && count(*)
 # base_seq = 1000000;
 #

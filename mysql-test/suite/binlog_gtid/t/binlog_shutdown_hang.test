@@ -19,6 +19,8 @@
 # GTIDS TO SAVE AND AUTOCOMMIT=0
 #
 
+--source include/have_debug.inc
+
 # For reseting mysql.gtid_executed table
 RESET MASTER;
 

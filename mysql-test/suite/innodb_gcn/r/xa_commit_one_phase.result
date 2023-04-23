@@ -6,9 +6,6 @@ value VARCHAR(50) NOT NULL,
 PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
 xa start '1';
 set innodb_snapshot_seq = @base_seq + 102;
 set innodb_snapshot_seq = @base_seq + 110;

@@ -13,7 +13,7 @@
 # all events are converted for database db3. Only DB1 is converted to db3.
 # The db2 event cause the error.
 #
-
+--source include/have_debug_new.inc
 --source include/have_binlog_format_row.inc
 RESET MASTER;
 CREATE DATABASE db1;

@@ -18,6 +18,7 @@
 
 # Test in this file is binlog format agnostic, thus no need
 # to rerun it for every format.
+--source include/have_debug_new.inc
 CALL mtr.add_suppression("The option expire_logs_days cannot be used together*");
 --source include/have_binlog_format_row.inc
 --source include/not_windows.inc

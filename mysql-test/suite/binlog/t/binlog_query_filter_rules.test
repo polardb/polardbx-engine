@@ -3,7 +3,7 @@
 # Bug#36099 replicate-do-db affects replaying RBR events with mysqlbinlog
 # The test verifies that the slave side filtering rule does not affect
 # applying of row-events on master via mysqlbinlog
-
+-- source include/have_debug_new.inc
 -- source include/have_log_bin.inc
 -- source include/have_binlog_format_row.inc
 

@@ -34,10 +34,10 @@ WHERE	t.table_id = i.table_id
 AND	t.name LIKE 'test%'
 	ORDER BY t.name, i.name;
 table_name	n_cols	table_flags	index_name	root_page	type	n_fields	merge_threshold
-test/t1	5	0	PRIMARY	4	3	4	50
-test/t2	5	1	PRIMARY	4	3	4	50
-test/t3	5	41	PRIMARY	4	3	4	50
-test/t4	5	33	PRIMARY	4	3	4	50
+test/t1	8	0	PRIMARY	4	3	7	50
+test/t2	8	1	PRIMARY	4	3	7	50
+test/t3	8	41	PRIMARY	4	3	7	50
+test/t4	8	33	PRIMARY	4	3	7	50
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	Formats_Permitted	Path
 mtr/global_suppressions	Single	DEFAULT	0	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
@@ -679,9 +679,11 @@ ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 Warnings:
 Warning	139	Row size too large (> 8126). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 DROP TABLE t1;
-CREATE TABLE t1(c text, PRIMARY KEY (c(438)))
+CREATE TABLE t1(c text, PRIMARY KEY (c(430)))
 ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
-INSERT INTO t1 VALUES(REPEAT('A',512)),(REPEAT('B',512));
+Warnings:
+Warning	139	Row size too large (> 8126). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
+INSERT INTO t1 VALUES(REPEAT('A',400)),(REPEAT('B',400));
 DROP TABLE t1;
 #
 # Bug#56862 Execution of a query that uses index merge returns a wrong result

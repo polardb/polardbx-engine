@@ -1528,7 +1528,6 @@ drop table t1;
 #
 # Bug#15328 Segmentation fault occurred if my.cnf is invalid for escape sequence
 #
---fields-optionally-enclosed-by="
 #
 # Bug#19025 mysqldump doesn't correctly dump "auto_increment = [int]"
 #

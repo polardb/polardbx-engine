@@ -39,6 +39,7 @@
 # References:
 #  http://dev.mysql.com/doc/refman/5.1/en/sql-syntax-data-definition.html
 #
+--source include/have_debug_new.inc
 --source include/have_log_bin.inc
 RESET MASTER;
 

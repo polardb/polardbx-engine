@@ -44,7 +44,6 @@ main.ds_mrr-big @solaris : BUG#14168107 Test leads to timeout on Solaris on slow
 
 # Disabled due to InnoDB issues
 main.internal_tmp_disk_storage_engine : BUG#26917416 Disabled it since it's failing on pb2.
-
 main.persisted_variables_extended                : WL#21509040 reset master
 #main.wl6301_3                                    : WL#21509040 ipv6
 main.skip_log_bin                                : WL#21509040 skip-log-bin
@@ -72,16 +71,7 @@ main.dd_upgrade_error                            : WL#21509040 not support start
 main.dd_upgrade_error_ci                         : WL#21509040 not support start from no 3 nodes dir
 main.dd_upgrade_error_cs                         : WL#21509040 not support start from no 3 nodes dir
 main.dd_upgrade_non_debug                        : WL#21509040 not support start from no 3 nodes dir
-main.i_s_schema_definition_debug                 : WL#21509040 disable temp
-main.mysql_inplace_upgrade                       : WL#21509040 disable temp
-main.mysqladmin                                  : WL#21509040 disable tmp
-main.dd_schema_definition_debug                  : WL#21509040 disable tmp
-main.bind_address_3                              : WL#21509040 ipv6
-main.events_1                                    : WL#21509040 disable tmp
-main.events_bugs                                 : WL#21509040 disable tmp
-main.all_persisted_variables                     : WL#21509040 disable tmp
-main.mysql_upgrade                               : WL#21509040 disable tmp
-
+encryption.upgrade                               : WL#21509040 not support start from no 3 nodes dir
 binlog.binlog_reencrypt_logs                     : WL#21509040 encrypt binlog
 binlog.binlog_rotate_binlog_master_key_errors    : WL#21509040 encrypt binlog
 binlog.binlog_rotate_binlog_master_key_crash_recovery_at_startup : WL#21509040 encrypt binlog
@@ -99,14 +89,6 @@ binlog.binlog_purge_binary_logs_to               : WL#21509040 crash
 binlog.binlog_rewrite                            : WL#21509040 change master failed
 binlog.binlog_reset_master_active_trx            : WL#21509040 binlog check failed
 binlog_nogtid.binlog_gtid_simple_recovery        : WL#21509040 failed
-binlog_nogtid.binlog_persist_only_variables      : WL#21509040 disable tmp
-binlog.binlog_cache_temp_file_encrypt_cover      : WL#21509040 encrypt binlog
-main.ssl_dynamic_binlog                          : WL#21509040 reset master
-
-innodb.innodb_read_only-2                        : WL#21509040 disalbe temp
-innodb.bootstrap                                 : WL#21509040 disalbe temp
-innodb.log_corruption                            : WL#21509040 disable temp
-innodb.portability_tablespace_linux              : BUG#28352630 The maintainability of the zip files required by this test is not acceptable.
 innodb.log_encrypt_6                             : WL#21509040 start from not 3 node dir
 innodb.sdi                                       : WL#21509040 master branch not support
 innodb.optimizer_temporary_table                 : WL#21509040 --innodb-read-only
@@ -116,7 +98,9 @@ innodb.ibuf_not_empty                            : WL#21509040 --innodb-force-re
 innodb.innodb_bug-13628249                       : WL#21509040 --innodb-force-recovery=2
 innodb.row_format_redundant                      : WL#21509040 --innodb-read-only
 innodb.temporary_table                           : WL#21509040 --innodb-read-only
+#innodb.innodb-wl6445-2                           : WL#21509040 --innodb-read-only
 innodb.create_tablespace                         : WL#21509040 --innodb-read-only
+#innodb.innodb-wl6445                             : WL#21509040 --innodb-read-only
 innodb.portability_basic                         : WL#21509040 start from not 3 node dir
 innodb_undo.truncate_recover_09                  : WL#21509040 not support remove file binlog*
 innodb.portability_tablespace                    : WL#21509040 start from not 3 node dir
@@ -126,7 +110,6 @@ innodb_undo.truncate_recover_08                  : WL#21509040 not support remov
 innodb_undo.truncate_recover_03                  : WL#21509040 not support remove file binlog*
 innodb_undo.truncate_recover_07                  : WL#21509040 not support remove file binlog*
 innodb.readonly                                  : WL#21509040 --innodb-read-only
-innodb.innodb_read_only                          : WL#21509040 flush consensus_info failed
 innodb_undo.truncate_recover_02                  : WL#21509040 not support remove file binlog*
 innodb.innodb_force_recovery                     : WL#21509040 --innodb-force-recovery
 innodb_undo.truncate_recover_05                  : WL#21509040 not support remove file binlog*
@@ -135,14 +118,6 @@ innodb.upgrade_compressed_recv                   : WL#21509040 skip_bin_log
 innodb_undo.truncate_recover_01                  : WL#21509040 not support remove file binlog*
 innodb.upgrade_orphan                            : WL#21509040 start from not 3 node dir
 innodb.ddl_crash_basic                           : WL#21509040 disable temp
-innodb.crc32_endianness                          : WL#21509040 disable temp
-innodb.log_corruption_1                          : WL#21509040 disable temp
-innodb.import_5_7                                : WL#21509040 disable temp
-innodb.table_encrypt_portable_64                 : WL#21509040 disable temp lizard
-innodb.innodb_buffer_pool_load                   : WL#21509040 disable temp
-innodb.innodb-import-lctn_1                      : WL#21509040 disable temp
-innodb.mysqldump_max_recordsize                  : WL#21509040 disable temp
-
 perfschema.hostcache_ipv6_addrinfo_again_allow : WL#21509040 not support ipv6
 perfschema.hostcache_ipv6_addrinfo_again_deny : WL#21509040 not support ipv6
 perfschema.hostcache_ipv6_addrinfo_bad_allow : WL#21509040 not support ipv6
@@ -171,121 +146,25 @@ performance_schema.socket_instances                 : WL#21509040 ipv6
 service_sys_var_registration.sys_var_service_cl     : WL#21509040 not support restart --log-in
 test_services.test_host_application_signal_plugin   : WL#21509040 disable temp
 test_services.test_services                         : WL#21509040 disable temp
-test_service_sql_api.test_session_info              : WL#21509040 disable temp
-opt_trace.bugs_no_prot_none                         : WL#21509040 disable temp
-
-# ssl
-main.ssl_crl                                        : WL#21509040 ssl
-main.ssl_crl_clients_valid                          : WL#21509040 ssl
-main.ssl_crl_crlpath                                : WL#21509040 ssl
-main.ssl_ca                                         : WL#21509040 ssl
-auth_sec.server_withssl_client_withssl              : WL#21509040 ssl
-
-# resource group
-main.resource_group_thr_prio_unsupported_debug      : WL#21509040 resource group
-main.resource_group_thr_prio_unsupported            : WL#21509040 resource group
-main.resource_group_bugs                            : WL#21509040 resource group
-main.resource_group_binlog_events                   : WL#21509040 resource group
-
-binlog.binlog_mysqlbinlog_compression               : WL#21509040 reset master
-
-service_sys_var_registration.sys_var_service_cl     : WL#21509040 not support restart --log-in
-
-federated.federated                            : WL#001 x-cluster does not support master / slave mode
-federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_13118                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_25714                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_35333                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_connection_attrs           : WL#001 x-cluster does not support master / slave mode
-federated.federated_debug                      : WL#001 x-cluster does not support master / slave mode
-federated.federated_get_table_share            : WL#001 x-cluster does not support master / slave mode
-federated.federated_innodb                     : WL#001 x-cluster does not support master / slave mode
-federated.federated_server                     : WL#001 x-cluster does not support master / slave mode
-federated.percona_bug1739734                   : WL#001 x-cluster does not support master / slave mode
-
-clone.remote_encrypt                           : WL#21509040 disable temp
-clone.remote_error_features                    : WL#21509040 disable temp
-clone.remote_features                          : WL#21509040 disable temp
-clone.remote_file_extend                       : WL#21509040 disable temp
-clone.remote_insert                            : WL#21509040 disable temp
-clone.remote_monitor_progress                  : WL#21509040 disable temp
-clone.remote_restart                           : WL#21509040 disable temp
-clone.remote_stage                             : WL#21509040 disable temp
-clone.remote_stage_restart                     : WL#21509040 disable temp
-clone.error_features                           : WL#21509040 disable temp
-clone.remote_stage_sys                         : WL#21509040 disable temp
-clone.local_compress                           : WL#21509040 disable temp
-clone.local_dml_auto_tune                      : WL#21509040 disable temp
-clone.local_dml_compressed_row                 : WL#21509040 disable temp
-clone.local_encrypt                            : WL#21509040 disable temp
-clone.local_features                           : WL#21509040 disable temp
-clone.local_file_extend                        : WL#21509040 disable temp
-clone.local_insert                             : WL#21509040 disable temp
-clone.local_stage                              : WL#21509040 disable temp
-clone.local_xa                                 : WL#21509040 disable temp
-clone.monitor_progress                         : WL#21509040 disable temp
-clone.remote_basic                             : WL#21509040 disable temp
-clone.remote_boundary                          : WL#21509040 disable temp
-clone.remote_compress                          : WL#21509040 disable temp
-clone.remote_dml                               : WL#21509040 disable temp
-clone.error_archival                           : WL#21509040 disable temp
-clone.local_basic                              : WL#21509040 disable temp
-clone.local_boundary                           : WL#21509040 disable temp
-clone.local_stage_sys                          : WL#21509040 disable temp
-clone.remote_basic_replace                     : WL#21509040 disable temp
-clone.remote_dml_recovery                      : WL#21509040 disable temp
-
-# disalbe binlog binlog_gtid binlog_nogtid temp for x-paxos
-binlog.binlog_table_map_optional_metadata                  : WL#21509040 disable temp
-binlog.binlog_temp_table_prevents_switch_session_binlog_format : WL#21509040 disable temp
-binlog.binlog_truncate_myisam                              : WL#21509040 disable temp
-binlog.binlog_xa_commit_failure                            : WL#21509040 disable temp
-binlog.binlog_xa_handling                                  : WL#21509040 disable temp
-binlog.binlog_xa_prepare_failure                           : WL#21509040 disable temp
-binlog.binlog_xa_rollback_failure                          : WL#21509040 disable temp
-binlog.binlog_xa_trx_split_across_binlog                   : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_log_status_errors                  : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_mysqlbinlog_row                    : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_mysqlbinlog_row_myisam             : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_row_ctype_ucs                      : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_select_taking_write_locks          : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_show_binlog_events                 : WL#21509040 disable temp
-binlog_gtid.binlog_gtids_table_gcov                        : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_table_readonly                     : WL#21509040 disable temp
-binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table  : WL#21509040 disable temp
-binlog_gtid.binlog_xa_empty_rollback                       : WL#21509040 disable temp
-binlog_gtid.binlog_gtid_mysqlbinlog_row_innodb             : WL#21509040 disable temp
-
-binlog_nogtid.binlog_bug23533                              : WL#21509040 disable temp
-binlog_nogtid.binlog_gtid_next_single_stmt_trx_rollback    : WL#21509040 disable temp
-binlog_nogtid.binlog_gtid_next_temporary_table             : WL#21509040 disable temp
-binlog_nogtid.binlog_implicit_commit                       : WL#21509040 disable temp
-binlog_nogtid.binlog_mysqlbinlog_row                       : WL#21509040 disable temp
-binlog_nogtid.binlog_mysqlbinlog_row_myisam                : WL#21509040 disable temp
-binlog_nogtid.binlog_mysqlbinlog_row_trans                 : WL#21509040 disable temp
-binlog_nogtid.binlog_nogtid_create_drop_temporary_table    : WL#21509040 disable temp
-binlog_nogtid.binlog_nogtid_not_yet_determined_reacquire   : WL#21509040 disable temp
-binlog_nogtid.binlog_nogtid_select_taking_write_locks      : WL#21509040 disable temp
-binlog_nogtid.binlog_replication_applier_priv_checks       : WL#21509040 disable temp
-binlog_nogtid.binlog_row_cache_stat                        : WL#21509040 disable temp
-binlog_nogtid.binlog_row_create_select_crash               : WL#21509040 disable temp
-binlog_nogtid.binlog_row_ctype_cp932                       : WL#21509040 disable temp
-binlog_nogtid.binlog_row_ctype_ucs                         : WL#21509040 disable temp
-binlog_nogtid.binlog_row_kill_create_select                : WL#21509040 disable temp
-binlog_nogtid.binlog_xa_gtid_consistency_violation         : WL#21509040 disable temp
-
-
-federated.federated                            : WL#001 x-cluster does not support master / slave mode
-federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_13118                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_25714                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_bug_35333                  : WL#001 x-cluster does not support master / slave mode
-federated.federated_connection_attrs           : WL#001 x-cluster does not support master / slave mode
-federated.federated_debug                      : WL#001 x-cluster does not support master / slave mode
-federated.federated_get_table_share            : WL#001 x-cluster does not support master / slave mode
-federated.federated_innodb                     : WL#001 x-cluster does not support master / slave mode
-federated.federated_server                     : WL#001 x-cluster does not support master / slave mode
-federated.percona_bug1739734                   : WL#001 x-cluster does not support master / slave mode
+x.performance_schema_sockets                        : WL#21509040 disable temp
+x.system_variable_bind_address                      : WL#21509040 disable temp
+xcluster.long_trx_leader_transfer                   : WL#21509040 X-Cluster bug
+#xcluster.io_state                                   : WL#21509040 disable temp
+perfschema.table_component_lifecycle                : WL#21509040 write before consensus module init
+#rds.feature_force_memory_to_innodb                    : WL#21509040 check failed
+main.mysqladmin                                       : WL#21509040 disable tmp
+sys_vars.innodb_version_basic                         : WL#21509040 modify the version
+binlog_nogtid.binlog_persist_only_variables           : WL#21509040 disable tmp
+#rds.recovery_inconsistency_check_upgraded_server      : WL#21509040 start from not 3 node dir
+innodb.innodb_read_only                               : WL#21509040 flush consensus_info failed
+main.bind_address_3                                   : WL#21509040 ipv6
+binlog.binlog_cache_temp_file_encrypt_cover           : WL#21509040 encrypt binlog
+innodb.innodb_read_only-2                             : WL#21509040 flush consensus_info failed
+#rds.feature_auto_upgrade_8017_issue76399              : WL#21509040 third directory
+test_services.test_services_threaded                  : WL#21509040 not stable
+binlog.binlog_mysqlbinlog_linux                       : WL#21509040 reset master
+main.ssl_dynamic_binlog                               : WL#21509040 reset master
+binlog.binlog_mysqlbinlog_compression                 : WL#21509040 reset master
 
 # max_parts suite tests
 max_parts.innodb-import-partition-1                         : BUG#27413612 Fails consistently on hudson jobs. Disabled until bug is fixed.
@@ -321,41 +200,39 @@ sysschema.v_wait_classes_global_by_avg_latency : BUG#21550054 Test fails too oft
 
 # x plugin suite tests
 
-# IPv6
-perfschema.hostcache_ipv6_addrinfo_again_allow : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_addrinfo_again_deny : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_addrinfo_bad_allow : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_addrinfo_bad_deny : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_addrinfo_good_allow : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_addrinfo_good_deny : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_addrinfo_noname_allow : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_addrinfo_noname_deny : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_auth_plugin : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_blocked : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_max_con : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_nameinfo_again_allow : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_nameinfo_again_deny : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_nameinfo_noname_allow : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_nameinfo_noname_deny : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_passwd : BUG#000 We don't support IPv6
-perfschema.hostcache_ipv6_ssl : BUG#000 We don't support IPv6
-perfschema.idx_compare_socket_instances : BUG#000 We don't support IPv6
-main.bind_address_3 : BUG#000 We don't support IPv6
-main.multiaddress_bind : BUG#000 We don't support IPv6
-rpl.rpl_ip_mix : BUG#000 We don't support IPv6
-rpl.rpl_ip_mix2 : BUG#000 We don't support IPv6
-rpl.rpl_ipv6 : BUG#000 We don't support IPv6
-x.system_variable_bind_address : BUG#000 We don't support IPv6
-x.performance_schema_sockets : BUG#000 We don't support IPv6
-x.notices_gr_quorum : BUG#000 We don't support IPv6
-x.notices_gr_single_primary : BUG#000 We don't support IPv6
-x.notices_gr_join_leave : BUG#000 We don't support IPv6
-large_tests.innodb_innochecksum_3gb : BUG#000 Take too long (timeout)
-main.multi_update2 : BUG#000 Take too long (timeout)
-main.window_functions_big : BUG#000 Take too long (timeout)
-innodb_gis.rtree_split_geographic : BUG#000 Take too long (timeout)
-large_tests.alter_table : BUG#000 Consume too much space
-rpl_gtid.rpl_wait_for_executed_gtid_set_no_timeout: BUG#000 unstable
-binlog.binlog_max_flush_queue_time_warn : BUG#000 unstable
-main.mysqlpump_extended : BUG#000 timeout
-x.status_variables : BUG#000 We don't support IPv6
+
+innodb.innodb_read_only-1                               :  WL#21509040 flush consensus_info failed
+main.resource_group_binlog_events  						:  WL#001 not support, both branch
+main.resource_group_bugs  								:  WL#001 not support, both branch
+main.resource_group_thr_prio_unsupported  				:  WL#001 not support, both branch
+main.resource_group_thr_prio_unsupported_debug 			:  WL#001 not support, both branch
+main.initialize-bug20350099 :  WL#001 run failed	
+main.initialize-errors		:  WL#001 run failed
+main.initialize-sha256		:  WL#001 run failed
+main.initialize-init-acls	:  WL#001 run failed
+main.initialize				:  WL#001 run failed
+
+
+# run failed in opensource, need fix
+xcluster.gtid 						: BUG#000 binlog name is not stable
+xcluster.rpl_mts_table 				: BUG#000 unknown variable slave-pr-mode=TABLE
+xcluster.feature_wait_apply_index 	: BUG#000 wait_wait_index is not supported
+xcluster.smart_row_image_not_full 	: BUG#000 smart Slave_exec_mode is not supported
+xcluster.smart_uk_conflict 			: BUG#000 smart Slave_exec_mode is not supported
+xcluster.large_event 				: BUG#000 wait_follower_catchup is not supported
+xcluster.bugfix_missing_binlogged 	: BUG#000 wait_follower_catchup is not supported
+xcluster.large_trx 					: BUG#000 wait_follower_catchup is not supported
+xcluster.restart_learner 			: WL#001 not pass in sequence run
+xcluster.binlog_rds_rotate_xa_safe 	: WL#001 not pass in sequence run
+xcluster.bug11006344 				: WL#001 not pass in parallel run
+
+innodb.index_merge_threshold        					:  WL#001 index bug, both branch
+innodb_gcn.feature_innodb_gcn_extra_rc					:  WL#001 not stable, must with bug
+innodb_gcn.feature_innodb_gcn_extra						:  WL#001 not stable, must with bug
+innodb_gcn.restart_and_test_innodb_gcn					:  WL#001 not stable, must with bug
+innodb_gcn.xa_commit_in_another_session					:  WL#001 not stable, must with bug
+binlog_nogtid.binlog_xa_gtid_consistency_violation  	:  WL#001 gcn coredump
+binlog.binlog_expire_warnings							:  WL#001 run failed
+
+main.feature_record_row_read_delete_mark_aone32620657	:  WL#001 not stable, must with bug
+main.count_distinct3									:  WL#001 too long time

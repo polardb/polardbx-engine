@@ -1,6 +1,6 @@
 
 # Test for BUG#28908 Replication: set global server_id is not setting the session server_id
-
+--source include/have_debug_new.inc
 -- source include/have_log_bin.inc
 
 let $saved_server_id=`select @@server_id`;

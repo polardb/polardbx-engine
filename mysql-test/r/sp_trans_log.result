@@ -19,7 +19,6 @@ ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 binlog.000001	#	Query	#	#	BEGIN
-binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 select count(*),@a from t1 /* must be 1,1 */;
 count(*)	@a
 1	1

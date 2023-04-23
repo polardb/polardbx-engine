@@ -32,7 +32,7 @@ eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_1");
 let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='follower';
 --source include/wait_condition.inc
 --sleep 2
---replace_column 4 # 5 # 7 # 8 # 9 # 22 # 23 # 45 # 46 #
+--replace_column 4 # 5 # 7 # 8 # 9 # 22 # 23 # 45 # 46 # 52 # 53 #
 show slave status;
 
 --connection conn1

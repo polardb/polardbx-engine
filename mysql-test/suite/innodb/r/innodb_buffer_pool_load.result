@@ -9,7 +9,7 @@ COUNT(*)
 SELECT COUNT(*) FROM information_schema.innodb_buffer_page_lru
 WHERE table_name LIKE '%ib_bp_test%';
 COUNT(*)
-{checked_valid}
+355
 # restart
 SELECT variable_value
 FROM performance_schema.global_status

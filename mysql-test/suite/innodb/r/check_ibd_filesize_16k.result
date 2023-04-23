@@ -7,9 +7,9 @@ CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
 Empty table:
 The size of file 'test/t1.ibd' is 114688 bytes.
 Rows inserted: 5000
-The size of file 'test/t1.ibd' is 376832 bytes.
+The size of file 'test/t1.ibd' is 360448 bytes.
 Rows inserted: 10000
-The size of file 'test/t1.ibd' is 2097152 bytes.
+The size of file 'test/t1.ibd' is 622592 bytes.
 Rows inserted: 15000
 The size of file 'test/t1.ibd' is 9437184 bytes.
 Rows inserted: 20000

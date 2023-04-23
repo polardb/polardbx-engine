@@ -158,7 +158,7 @@ select * from t1;
 set innodb_commit_seq = @base_seq +  1004;
 xa commit 't';
 include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 select * from t1;
 id	value
 0	zero
@@ -195,7 +195,7 @@ select * from t2 force index(sec) where sec = 2;
 set innodb_commit_seq = @base_seq + 1504;
 xa commit 't';
 include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 select * from t2;
 id	sec	value
 0	0	zero

@@ -36,8 +36,8 @@ if ($value_old == $value_new)
 }
 
 #change consensus_leader to 2;
-let $MYPORT_CONSENSUS_1 = query_get_value("select $MYPORT_1+8000 as c1", c1, 1);
-let $MYPORT_CONSENSUS_2 = query_get_value("select $MYPORT_2+8000 as c1", c1, 1);
+let $MYPORT_CONSENSUS_1 = query_get_value("select $MYPORT_1+40 as c1", c1, 1);
+let $MYPORT_CONSENSUS_2 = query_get_value("select $MYPORT_2+40 as c1", c1, 1);
 --replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
 eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
 

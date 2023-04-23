@@ -22,9 +22,11 @@ flush logs;
 insert into t1 values (7);
 insert into t1 values (8);
 # add a learner (sync log will fail)
---let $learner_port=9010
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
+--let $learner1_pid_file= $learner_pid_file
 #eval add consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);
 insert into t1 values (9);
 insert into t1 values (10);
@@ -34,9 +36,12 @@ insert into t1 values (12);
 select ROLE from information_schema.alisql_cluster_global where role='LEARNER';
 
 #eval drop consensus_learner $learner_cluster_info;
+--disable_query_log
 eval call dbms_consensus.drop_learner($learner_cluster_info);
---exec rm -rf $MYSQL_TMP_DIR/learner1*
---exec rm -f $MYSQL_TMP_DIR/server.log
-
+--enable_query_log
 drop table t1;
 select ROLE from information_schema.alisql_cluster_global where role='LEARNER';
+
+# cleanup
+--source include/stop_new_learner.inc
+

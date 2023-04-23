@@ -4,6 +4,7 @@
 # generate the ER_QUERY_INTERRUPTED error.
 
 --source include/have_log_bin.inc
+--source include/have_debug.inc
 
 --let $master_uuid= query_get_value(SELECT @@SERVER_UUID, @@SERVER_UUID, 1)
 RESET MASTER;

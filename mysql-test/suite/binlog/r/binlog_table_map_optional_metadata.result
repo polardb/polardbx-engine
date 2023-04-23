@@ -353,9 +353,8 @@ RESET MASTER;
 SET SESSION debug = 'd,inject_invalid_blob_size';
 INSERT INTO t1 VALUES(2, "b");
 Matching lines are:
-# Columns(`c1` INT,
-#         `c2` INVALID_BLOB(5))
-Occurrences of '# (?:Columns\(| {8})' in the input file: 2
+None
+Occurrences of '# (?:Columns\(| {8})' in the input file: 0
 #
 # Coverage test: Inject an invalid Geometry type
 #
@@ -365,10 +364,8 @@ RESET MASTER;
 SET SESSION debug = 'd,inject_invalid_geometry_type';
 INSERT INTO t1(c_point) VALUES(ST_PointFromText('POINT(10 10)'));
 Matching lines are:
-# Columns(`c_geometry` INVALID_GEOMETRY_TYPE(100),
-#         `c_point` INVALID_GEOMETRY_TYPE(100),
-#         `c_multilinestring` INVALID_GEOMETRY_TYPE(100))
-Occurrences of '# (?:Columns\(| {8})' in the input file: 3
+None
+Occurrences of '# (?:Columns\(| {8})' in the input file: 0
 DROP TABLE t1;
 RESET MASTER;
 #

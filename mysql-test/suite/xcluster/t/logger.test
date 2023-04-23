@@ -12,30 +12,30 @@ start slave;
 stop slave;
 
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#add consensus_learner "127.0.0.1:10001";
-call dbms_consensus.add_learner("127.0.0.1:10001");
+#add consensus_learner "127.0.0.1:20001";
+call dbms_consensus.add_learner("127.0.0.1:20001");
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#drop consensus_learner "127.0.0.1:10001";
-call dbms_consensus.drop_learner("127.0.0.1:10001");
+#drop consensus_learner "127.0.0.1:20001";
+call dbms_consensus.drop_learner("127.0.0.1:20001");
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#add consensus_follower "127.0.0.1:10001";
-call dbms_consensus.add_follower("127.0.0.1:10001");
+#add consensus_follower "127.0.0.1:20001";
+call dbms_consensus.add_follower("127.0.0.1:20001");
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#drop consensus_follower "127.0.0.1:10001";
-call dbms_consensus.downgrade_follower("127.0.0.1:10001");
-#call dbms_consensus.drop_learner("127.0.0.1:10001");
+#drop consensus_follower "127.0.0.1:20001";
+call dbms_consensus.downgrade_follower("127.0.0.1:20001");
+#call dbms_consensus.drop_learner("127.0.0.1:20001");
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#change consensus_follower "127.0.0.1:10001" to consensus_learner;
-call dbms_consensus.downgrade_follower("127.0.0.1:10001");
+#change consensus_follower "127.0.0.1:20001" to consensus_learner;
+call dbms_consensus.downgrade_follower("127.0.0.1:20001");
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#change consensus_learner "127.0.0.1:10001" to consensus_follower;
-call dbms_consensus.upgrade_learner("127.0.0.1:10001");
+#change consensus_learner "127.0.0.1:20001" to consensus_follower;
+call dbms_consensus.upgrade_learner("127.0.0.1:20001");
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#change consensus_node "127.0.0.1:10001" consensus_force_sync true consensus_election_weight 9;
-call dbms_consensus.configure_follower("127.0.0.1:10001", 9, 1);
+#change consensus_node "127.0.0.1:20001" consensus_force_sync true consensus_election_weight 9;
+call dbms_consensus.configure_follower("127.0.0.1:20001", 9, 1);
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#change consensus_node "127.0.0.1:10001" consensus_learner_source "127.0.0.1:10002";
-call dbms_consensus.configure_learner("127.0.0.1:10001", "127.0.0.1:10002");
+#change consensus_node "127.0.0.1:20001" consensus_learner_source "127.0.0.1:20002";
+call dbms_consensus.configure_learner("127.0.0.1:20001", "127.0.0.1:20002");
 --error ER_CONSENSUS_LOG_TYPE_NODE
 start xpaxos_replication;
 --error ER_CONSENSUS_LOG_TYPE_NODE
@@ -51,18 +51,18 @@ set force_revise=OFF;
 
 # test force_revise
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#add consensus_learner "127.0.0.1:10001";
-call dbms_consensus.add_learner("127.0.0.1:10001");
+#add consensus_learner "127.0.0.1:20001";
+call dbms_consensus.add_learner("127.0.0.1:20001");
 set force_revise=ON;
-#add consensus_learner "127.0.0.1:10001";
-call dbms_consensus.add_learner("127.0.0.1:10001");
+#add consensus_learner "127.0.0.1:20001";
+call dbms_consensus.add_learner("127.0.0.1:20001");
 set force_revise=OFF;
 --error ER_CONSENSUS_LOG_TYPE_NODE
-#drop consensus_learner "127.0.0.1:10001";
-call dbms_consensus.drop_learner("127.0.0.1:10001");
+#drop consensus_learner "127.0.0.1:20001";
+call dbms_consensus.drop_learner("127.0.0.1:20001");
 set force_revise=ON;
-#drop consensus_learner "127.0.0.1:10001";
-call dbms_consensus.drop_learner("127.0.0.1:10001");
+#drop consensus_learner "127.0.0.1:20001";
+call dbms_consensus.drop_learner("127.0.0.1:20001");
 set force_revise=OFF;
 
 # test binlog dump

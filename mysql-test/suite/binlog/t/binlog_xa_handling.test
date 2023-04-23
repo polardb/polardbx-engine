@@ -9,6 +9,7 @@
 # Execution should fail and a `ER_VARIABLE_NOT_SETTABLE_IN_TRANSACTION` should
 # be expected.
 ###############################################################################
+--source include/have_debug_new.inc
 --source include/have_log_bin.inc
 CALL mtr.add_suppression("Statement is unsafe because it is being used inside a XA transaction");
 

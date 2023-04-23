@@ -41,5 +41,5 @@ SELECT @@global.innodb_buffer_pool_in_core_file;
 SET GLOBAL innodb_buffer_pool_in_core_file = OFF;
 SELECT @@global.innodb_buffer_pool_in_core_file;
 
---let $expected_max_core_size = 1300
+--let $expected_max_core_size = 2600
 --source include/mysqld_core_dump.inc

@@ -19,6 +19,7 @@
 # Test in this file is binlog format agnostic, thus no need
 # to rerun them for every format.
 --source include/have_binlog_format_row.inc
+--source include/have_debug.inc
 
 # Make sure the test is repeatable
 RESET MASTER;

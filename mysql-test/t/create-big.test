@@ -548,7 +548,7 @@ source include/show_binlog_events.inc;
 #
 # InnoDB has separate internal limits
 
-let $colnum= 1016;
+let $colnum= 1010;
 let $str= c text;
 while ($colnum)
 {
@@ -574,7 +574,7 @@ let $str= c1017 int, $str;
 #
 # InnoDB has separate internal limits
 
-let $colnum= 1016;
+let $colnum= 1010;
 let $str= c1017 ENUM('a');
 while ($colnum)
 {
@@ -593,7 +593,7 @@ let $str= $str, too_much ENUM('a9999');
 #
 # InnoDB has separate internal limits
 
-let $colnum= 1016;
+let $colnum= 1010;
 let $str= c1017 SET('a');
 while ($colnum)
 {

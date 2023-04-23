@@ -12,6 +12,7 @@
 --source include/have_debug.inc
 --source include/master-slave.inc
 --source include/install_semisync.inc
+--source include/rpl_save_variables.inc
 
 --source include/rpl_connection_slave.inc
 STOP SLAVE IO_THREAD;
@@ -31,6 +32,7 @@ SET GLOBAL rpl_semi_sync_master_timeout= 6000000;
 
 --source include/rpl_connection_master.inc
 SET @@GLOBAL.MAX_BINLOG_SIZE= @max_binlog_size_save;
+--source include/rpl_restore_variables.inc
 --source include/uninstall_semisync.inc
 
 --source include/rpl_connection_slave.inc

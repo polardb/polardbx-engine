@@ -28,7 +28,7 @@ srv_session_open 2
 srv_session_open 3
 srv_session_open 4
 Number of threads of this plugin: 0
-Number of threads of all (NULL) plugins: 0
+Number of threads of all (NULL) plugins: 192
 srv_session_close 4
 srv_session_close 3
 srv_session_close 2
@@ -56,7 +56,7 @@ srv_session_open 2
 srv_session_open 3
 srv_session_open 4
 Number of threads of this plugin: 1
-Number of threads of all (NULL) plugins: 1
+Number of threads of all (NULL) plugins: 193
 srv_session_close 4
 srv_session_close 3
 srv_session_close 2

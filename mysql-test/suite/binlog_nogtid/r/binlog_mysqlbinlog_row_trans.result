@@ -141,7 +141,7 @@ ROLLBACK/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=276
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -174,7 +174,7 @@ c2 VARCHAR(20)
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=267
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -197,7 +197,7 @@ c2 VARCHAR(20)
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=635
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -269,7 +269,7 @@ COMMIT/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=205
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -288,7 +288,7 @@ TRUNCATE TABLE t1
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=205
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -307,7 +307,7 @@ TRUNCATE TABLE t1
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=396
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -348,7 +348,7 @@ COMMIT
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=460
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -398,7 +398,7 @@ COMMIT
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=366
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -431,7 +431,7 @@ COMMIT
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=635
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -503,7 +503,7 @@ COMMIT/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=205
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -522,7 +522,7 @@ TRUNCATE TABLE t1
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=196
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -541,7 +541,7 @@ TRUNCATE TABLE t2
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=396
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -582,7 +582,7 @@ COMMIT
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=460
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -632,7 +632,7 @@ COMMIT
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=366
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -665,7 +665,7 @@ COMMIT
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=205
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
@@ -684,7 +684,7 @@ TRUNCATE TABLE t1
 # # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=196
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Gcn
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false
 SET @@session.innodb_commit_seq=#/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#

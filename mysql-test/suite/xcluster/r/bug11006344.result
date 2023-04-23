@@ -1,5 +1,5 @@
 # start a new learner
-call dbms_consensus.add_learner("127.0.0.1:13800");
+call dbms_consensus.add_learner("127.0.0.1:23800");
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
 count(*)
 1
@@ -11,4 +11,4 @@ count(*)
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
 count(*)
 1
-call dbms_consensus.drop_learner("127.0.0.1:13800");
+call dbms_consensus.drop_learner("127.0.0.1:23800");

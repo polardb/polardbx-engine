@@ -32,6 +32,8 @@ INSERT INTO t1 VALUES ('1999-07-10',100100,24), ('1999-07-11',100100,25),
 ('1999-08-31',100600,33), ('1999-09-17',100100,37), ('1999-09-18',100100,37),
 ('1999-09-19',100100,37), ('2000-12-18',100700,38);
 
+ANALYZE TABLE t1;
+
 explain select event_date,type,event_id from t1 WHERE event_date >= "1999-07-01" AND event_date < "1999-07-15" AND (type=100600 OR type=100100) ORDER BY event_date;
 explain format=tree select event_date,type,event_id from t1 WHERE event_date >= "1999-07-01" AND event_date < "1999-07-15" AND (type=100600 OR type=100100) ORDER BY event_date;
 select event_date,type,event_id from t1 WHERE event_date >= "1999-07-01" AND event_date < "1999-07-15" AND (type=100600 OR type=100100) ORDER BY event_date;
@@ -204,6 +206,7 @@ CREATE TABLE t1 (key1 int(11) NOT NULL default '0', KEY i1 (key1));
 INSERT INTO t1 VALUES (0),(0),(0),(0),(0),(1),(1);
 CREATE TABLE t2 (keya int(11) NOT NULL default '0', KEY j1 (keya));
 INSERT INTO t2 VALUES (0),(0),(1),(1),(2),(2);
+ANALYZE TABLE t1, t2;
 explain select * from t1, t2 where (t1.key1 <t2.keya + 1) and t2.keya=3;
 explain select * from t1 force index(i1), t2 force index(j1) where 
  (t1.key1 <t2.keya + 1) and t2.keya=3;
@@ -228,6 +231,7 @@ INSERT INTO t1 VALUES
 (33,5),(33,5),(33,5),(33,5),(34,5),(35,5);
 
 # we expect that optimizer will choose index on A
+ANALYZE TABLE t1;
 EXPLAIN SELECT * FROM t1 WHERE a IN(1,2) AND b=5;
 SELECT * FROM t1 WHERE a IN(1,2) AND b=5;
 DROP TABLE t1;
@@ -445,6 +449,7 @@ create index t1i on t1(a);
 insert into t1 select 18446744073709551615;
 insert into t1 select 18446744073709551614;
 
+ANALYZE TABLE t1;
 explain select * from t1 where a <> -1;
 select * from t1 where a <> -1;
 explain select * from t1 where a > -1 or a < -1;
@@ -465,6 +470,7 @@ create table t1 (a char(10), b text, key (a)) character set latin1;
 INSERT INTO t1 (a) VALUES
 ('111'),('222'),('222'),('222'),('222'),('444'),('aaa'),('AAA'),('bbb');
 # all these three can be optimized
+ANALYZE TABLE t1;
 explain select * from t1 where a='aaa';
 explain select * from t1 where a=binary 'aaa';
 explain select * from t1 where a='aaa' collate latin1_bin;
@@ -524,6 +530,7 @@ drop table t1, t2;
 
 create table t1(a char(2), key(a(1))) charset utf8mb4;
 insert into t1 values ('x'), ('xx');
+ANALYZE TABLE t1;
 explain select a from t1 where a > 'x';
 select a from t1 where a > 'x';
 drop table t1;
@@ -740,6 +747,7 @@ INSERT INTO t1 VALUES
 (49,'A'), (50,'A'), (51,'A'), (52,'A'), (53,'C'), (54,'C'),
 (55,'C'), (56,'C'), (57,'C'), (58,'C'), (59,'C'), (60,'C');
 
+ANALYZE TABLE t1;
 EXPLAIN SELECT * FROM t1 WHERE status <> 'A' AND status <> 'B';
 EXPLAIN SELECT * FROM t1 WHERE status NOT IN ('A','B');
 
@@ -768,6 +776,7 @@ INSERT INTO  t1 VALUES
 
 CREATE VIEW v1 as SELECT a,b FROM t1 WHERE b=3;
 
+ANALYZE TABLE t1;
 EXPLAIN SELECT a,b FROM t1 WHERE a < 2 and b=3;
 EXPLAIN SELECT a,b FROM v1 WHERE a < 2 and b=3;
 
@@ -813,6 +822,7 @@ INSERT INTO `t1` VALUES
 (0,0),(1,0),(2,0),(3,0),(4,0),(5,1),(6,1),(7,1),(8,1),(9,1),(10,2),(11,2),(12,2)
 ,(13,2),(14,2),(15,3),(16,3),(17,3),(18,3),(19,3);
 
+ANALYZE TABLE t1;
 --replace_column 10 #
 explain select * from t1 where a in (3,4)  and b in (1,2,3);
 --replace_column 10 #
@@ -838,6 +848,7 @@ insert into t1 select concat('a', 1000 + A.a + 10 * (B.a + 10 * C.a)), ''
 
 create table t2 (a varchar(10), filler char(200), key(a)) charset utf8mb4;
 insert into t2 select * from t1;
+ANALYZE TABLE t1;
 
 --replace_column 10 #
 explain select * from t1 where a between 'a' and 'a '; 
@@ -850,6 +861,8 @@ explain select * from t2 where a between 'a' and 'A';
 explain select * from t2 where a = 'a' or a='A';
 
 update t1 set a='b' where a<>'a';
+
+ANALYZE TABLE t1;
 --replace_column 10 #
 explain select * from t1 where a not between 'b' and 'b'; 
 select a, hex(filler) from t1 where a not between 'b' and 'b'; 
@@ -961,6 +974,7 @@ INSERT INTO t1 VALUES
 (1,'2007-01-01'),(2,'2007-01-02'),(3,'2007-01-03'),(4,'2007-01-04'),
 (5,'2007-01-05'),(6,'2007-01-06'),(7,'2007-01-07'),(8,'2007-01-08'),
 (9,'2007-01-09'),(10,'2007-01-10'),(11,'2007-01-11');
+ANALYZE TABLE t1;
 
 --echo This must use range access:
 explain select * from t1 where dateval >= '2007-01-01 00:00:00' and dateval <= '2007-01-02 23:59:59';
@@ -1052,6 +1066,7 @@ alter table t2 add index (a,b);
 #  (1000, 10, 'filler') - 500 times
 
 # 500 rows, 1 row
+ANALYZE TABLE t2;
 
 --echo Access method can be range/ALL with #rows >= 500.
 --echo Or it can be ref with #rows = 2, only when there is memory limit.
@@ -1337,6 +1352,7 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (c_key INT, c_notkey INT, KEY(c_key));
 INSERT INTO t1 VALUES (1, 1), (2, 2), (3, 3);
+ANALYZE TABLE t1;
 
 EXPLAIN SELECT * FROM t1 WHERE 2 NOT BETWEEN c_notkey AND c_key;
 SELECT * FROM t1 WHERE 2 NOT BETWEEN c_notkey AND c_key;
@@ -1534,7 +1550,6 @@ INSERT INTO t1
 VALUES (2,3),(2,3),(2,3),(2,3),(2,3),(2,3),(2,3),(2,3),(2,3),(2,3);
 INSERT INTO t1 SELECT 3, 4 FROM t1 WHERE a = 2 AND b = 3;
 INSERT INTO t1 SELECT 4, 1 FROM t1 WHERE a = 2 AND b = 3;
-ANALYZE TABLE t1;
 INSERT INTO t1 VALUES (1, 2);
 INSERT INTO t1 SELECT a, b FROM t1 WHERE a=1 AND b=2; # 2
 INSERT INTO t1 SELECT a, b FROM t1 WHERE a=1 AND b=2; # 4
@@ -1543,6 +1558,7 @@ INSERT INTO t1 SELECT a, b FROM t1 WHERE a=1 AND b=2; # 16
 INSERT INTO t1 SELECT a, b FROM t1 WHERE a=1 AND b=2; # 32
 INSERT INTO t1 SELECT a, b FROM t1 WHERE a=1 AND b=2; # 64
 INSERT INTO t1 SELECT a, b FROM t1 WHERE a=1 AND b=2; # 128
+ANALYZE TABLE t1;
 --echo # This must use range over index l, not k.
 --echo # Update: Due to patch being reverted and minor differences in 
 --echo #         range estimates k is selected.
@@ -1564,7 +1580,6 @@ VALUES (2,3,3),(2,3,3),(2,3,3),(2,3,3),(2,3,3),
        (2,3,3),(2,3,3),(2,3,3),(2,3,3),(2,3,3);
 INSERT INTO t2 SELECT 3, 4, 4 FROM t2 WHERE a = 2 AND b = 3;
 INSERT INTO t2 SELECT 4, 1, 1 FROM t2 WHERE a = 2 AND b = 3;
-ANALYZE TABLE t2;
 INSERT INTO t2 VALUES (1, 2, 2);
 INSERT INTO t2 SELECT a, b, c FROM t2 WHERE a=1 AND b=2; # 2
 INSERT INTO t2 SELECT a, b, c FROM t2 WHERE a=1 AND b=2; # 4
@@ -1573,6 +1588,7 @@ INSERT INTO t2 SELECT a, b, c FROM t2 WHERE a=1 AND b=2; # 16
 INSERT INTO t2 SELECT a, b, c FROM t2 WHERE a=1 AND b=2; # 32
 INSERT INTO t2 SELECT a, b, c FROM t2 WHERE a=1 AND b=2; # 64
 INSERT INTO t2 VALUES (1, 1, 2);
+ANALYZE TABLE t2;
 
 --echo # This must use range over index l, not n.
 --echo # Update: Due to patch being reverted and minor differences in 
@@ -1631,6 +1647,7 @@ CREATE TABLE t2 (
 
 INSERT INTO t2 VALUES
 (1,"GOOD",1),(100,"",2),(200,"",3),(300,"",4),(400,"",5),(500,"",8);
+ANALYZE TABLE t1,t2;
 
 let $query=SELECT t1.*,t2.* FROM t1 straight_join t2
 ON t2.col_int_key = t1.col_int WHERE t2.pk < t1.pk;
@@ -1802,6 +1819,7 @@ INSERT INTO t2 VALUES ('2001.01.01');
 INSERT INTO t2 VALUES ('2001#01#01');
 INSERT INTO t2 VALUES ('2001-01-01 00:00:00');
 INSERT INTO t2 VALUES ('2001-01-01 11:22:33');
+ANALYZE TABLE t1,t2;
 
 --echo
 --echo # range/ref access cannot be used for this query
@@ -2090,6 +2108,7 @@ DROP TABLE t2;
 CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
 
 INSERT INTO t1 VALUES (1,1), (2,1), (3,1), (4,1), (5,1), (6,1);
+ANALYZE TABLE t1;
 
 EXPLAIN SELECT * FROM t1 WHERE a IN (1, 2);
 EXPLAIN SELECT * FROM t1 WHERE a IN (1, "2");
@@ -2326,6 +2345,7 @@ CREATE TABLE t1 (
 ) ENGINE=InnoDB;
 
 INSERT INTO t1 VALUES ('ABCDE',19), ('JLVGO',14);
+ANALYZE TABLE t1;
 
 Let query1= SELECT * FROM t1 WHERE t1.v1 < CHAR(128);
 Let query2= SELECT * FROM t1 WHERE t1.v1 = CHAR(128);
@@ -2391,6 +2411,7 @@ CREATE TABLE t1 (
 ) ENGINE=InnoDB, CHARSET utf8mb4;
 
 INSERT INTO t1 VALUES ('abcde', 10);
+ANALYZE TABLE t1;
 
 let $query1= SELECT MAX(col2) FROM t1 WHERE col1 = 'abcdeaa';
 let $query2= SELECT MAX(col2) FROM t1 WHERE col1 = 'abcde  ';
@@ -2417,6 +2438,7 @@ INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(1
 
 SET @orig_range_optimizer_max_mem_size= @@range_optimizer_max_mem_size;
 SET range_optimizer_max_mem_size= 5000;
+ANALYZE TABLE t1;
 
 EXPLAIN SELECT * FROM t1 WHERE f1=1 OR f1=2 OR f1=3 OR f1=4 OR f1=5
 OR f1=6 OR f1=7 OR f1=8 OR f1=9 OR f1=10 OR f1=11;
@@ -2517,7 +2539,7 @@ INSERT INTO giant_table (id,one_id) VALUES (66136539, 0), (68983258,1),
                                            (89628210,1), (77869520,2);
 INSERT INTO giant_table (id,one_id, some_other_id) VALUES(84673401, 0, 1),
                                                          (61069031, 1, 1);
-
+ANALYZE TABLE t1;
 EXPLAIN SELECT id, something, comment, time_created, one_id, other_id,
                some_other_id, flags
 FROM giant_table
@@ -2674,6 +2696,7 @@ GROUP BY '2017-10-23 01:01:01', HOUR(created), source_lvl1, source_lvl2;
 
 #UPDATE stats to produce a ref-access plan on 'trans_type_created_idx'
 --disable_query_log
+ANALYZE TABLE transactions;
 ALTER TABLE transactions STATS_PERSISTENT=1, STATS_AUTO_RECALC=0;
 
 UPDATE mysql.innodb_index_stats
@@ -2682,6 +2705,7 @@ WHERE index_name ='trans_type_created_idx' AND TABLE_name='transactions';
 
 UPDATE mysql.innodb_table_stats SET n_rows=3001 WHERE TABLE_name='transactions';
 
+ANALYZE TABLE transactions;
 FLUSH TABLE transactions;
 --enable_query_log
 

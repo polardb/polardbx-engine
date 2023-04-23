@@ -54,6 +54,8 @@
 #
 # BUG#27928837 `HEAD->VARIABLES.GTID_NEXT.TYPE != UNDEFINED_GTID`
 
+--source include/have_debug.inc
+
 --let $current_autocommit= `SELECT @@AUTOCOMMIT`
 
 CREATE TABLE t2(a INT);

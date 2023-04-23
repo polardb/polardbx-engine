@@ -234,6 +234,7 @@ innodb/log_write_notifier_thread	BACKGROUND
 innodb/log_writer_thread	BACKGROUND
 innodb/page_flush_coordinator_thread	BACKGROUND
 innodb/scn_history_thread	BACKGROUND
+rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
 sql/consensus_commit_pos_watcher	BACKGROUND
@@ -289,6 +290,7 @@ innodb/log_write_notifier_thread	BACKGROUND
 innodb/log_writer_thread	BACKGROUND
 innodb/page_flush_coordinator_thread	BACKGROUND
 innodb/scn_history_thread	BACKGROUND
+rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
 sql/consensus_commit_pos_watcher	BACKGROUND

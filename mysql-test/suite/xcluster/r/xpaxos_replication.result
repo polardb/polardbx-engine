@@ -13,9 +13,6 @@ stop slave;
 reset slave all for channel 'aaa';
 stop xpaxos_replication;
 reset slave;
-show consensus logs;
-Log_name	File_size	Start_log_index
-#	#	#
 start xpaxos_replication;
 start slave for channel '';
 ERROR HY000: Slave channel '' does not exist.

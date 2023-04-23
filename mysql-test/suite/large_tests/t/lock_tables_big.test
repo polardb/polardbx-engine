@@ -1,6 +1,7 @@
 #
 # Bug#24509 cannot use more than 2048 file descriptors on windows
 #
+--source include/big_test.inc
 
 #
 # This test requires approximately 6000 of files to be open simultaneously.

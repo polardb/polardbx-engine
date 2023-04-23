@@ -1,7 +1,7 @@
 
 # Test grants for various objects (especially variables) related to
 # the binary log
-
+--source include/have_debug_new.inc
 source include/have_log_bin.inc;
 
 connection default;

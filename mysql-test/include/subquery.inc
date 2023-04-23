@@ -14,6 +14,7 @@
 set @old_opt_switch=@@optimizer_switch;
 set optimizer_switch='subquery_materialization_cost_based=off';
 SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+
 # Initialise
 --disable_warnings
 drop table if exists t1,t2,t3,t4,t5,t6,t7,t8,t11,t12;

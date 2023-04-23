@@ -1,17 +1,15 @@
 --disable_query_log
 call mtr.add_suppression('\\[Warning\\] .*');
 --enable_query_log
---let $learner_server_id= 6
---let $learner_datadir= $MYSQL_TMP_DIR/learner1
---let $learner_logdir= $MYSQL_TMP_DIR/server1.log
---let $learner_cluster_info= '127.0.0.1:13400'
-let $learner_port = query_get_value("select $MYPORT_1+9013 as c1", c1, 1);
+
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
 
 --echo # connect leader
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
 #eval add consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);
 # wait learner get log
 --sleep 5
@@ -31,16 +29,15 @@ show databases like '%aaa%';
 --connection leader
 drop database aaa;
 #eval drop consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.drop_learner($learner_cluster_info); 
 
---let $learner_server_id= 7
---let $learner_datadir= $MYSQL_TMP_DIR/learner2
---let $learner_logdir= $MYSQL_TMP_DIR/server2.log
---let $learner_cluster_info= '127.0.0.1:14601'
-let $learner_port = query_get_value("select $MYPORT_1+9014 as c1", c1, 1);
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
 --source include/start_new_learner.inc
+
 --connection leader
 #eval add consensus_follower $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_follower($learner_cluster_info);
 # wait learner get log
 --sleep 5
@@ -52,11 +49,20 @@ create database aaa;
 --source include/wait_apply_catchup.inc
 
 show databases like '%aaa%';
+
 # clean up
 --connection leader
 drop database aaa;
 #eval drop consensus_follower $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.downgrade_follower($learner_cluster_info);
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.drop_learner($learner_cluster_info);
---exec rm -rf $MYSQL_TMP_DIR/learner*
---exec rm -f $MYSQL_TMP_DIR/server*
+
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
+--source include/stop_new_learner.inc
+
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
+--source include/stop_new_learner.inc
+
+

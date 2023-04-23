@@ -1,10 +1,10 @@
 # variables 
 show variables like "gtid_mode";
 Variable_name	Value
-gtid_mode	OFF
+gtid_mode	ON
 show variables like "recovery_apply_binlog";
 Variable_name	Value
-recovery_apply_binlog	OFF
+recovery_apply_binlog	ON
 set global recovery_apply_binlog=OFF;
 ERROR HY000: Variable 'recovery_apply_binlog' is a read only variable
 # restart: --gtid_mode=on --enforce_gtid_consistency=ON

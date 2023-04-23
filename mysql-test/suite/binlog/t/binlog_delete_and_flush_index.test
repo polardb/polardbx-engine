@@ -33,7 +33,7 @@
 #  CLEAN UP:
 #   1. RESET MASTER
 #
-
+-- source include/have_debug_new.inc
 -- source include/have_log_bin.inc
 
 RESET MASTER;

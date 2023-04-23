@@ -19,8 +19,6 @@ call mtr.add_suppression(".*using log_message.. with .*");
 call mtr.add_suppression(".*System schema directory does not exist.");
 call mtr.add_suppression(".* Simulated");
 
-let GREP_START=`SELECT DATE_FORMAT(CONVERT_TZ(SYSDATE(6),'SYSTEM','UTC'),'%Y%m%d%H%i%s%f');`;
-
 SET @orig_log_error_verbosity= @@GLOBAL.log_error_verbosity;
 SET @@global.log_error_verbosity=3;
 
@@ -35,6 +33,9 @@ if($log_error_ == "stderr")
   let $log_json_1_ = $MYSQLTEST_VARDIR/log/mysqld.1.err.01.json;
 }
 FLUSH LOGS;
+
+# don't get time until now to avoid unwanted messages
+let GREP_START=`SELECT DATE_FORMAT(CONVERT_TZ(SYSDATE(6),'SYSTEM','UTC'),'%Y%m%d%H%i%s%f');`;
 
 # Send parse-trace to error log; first one with a current timestamp
 # to compare against our GREP_START defined above.
@@ -66,10 +67,10 @@ UNINSTALL COMPONENT "file://component_log_sink_json";
 
 
 --echo # cleanup
+SET @@global.log_error_verbosity= @orig_log_error_verbosity;
 SET @@session.debug="-d,parser_stmt_to_error_log_with_system_prio";
 SET @@session.debug="-d,parser_stmt_to_error_log";
 SET @@session.debug="-d,log_error_normalize";
-SET @@global.log_error_verbosity= @orig_log_error_verbosity;
 ## WL#9651
 # SET @@global.log_error_filter_rules=@save_filters;
 

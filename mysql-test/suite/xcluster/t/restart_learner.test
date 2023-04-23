@@ -2,14 +2,14 @@
 # bug 10948203 and bug 10947778
 #
 
---let $learner_cluster_info= '127.0.0.1:14400'
-let $learner_port = query_get_value("select $MYPORT_1+10023 as c1", c1, 1);
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
 
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
-#add consensus_learner '127.0.0.1:14400';
-call dbms_consensus.add_learner("127.0.0.1:14400");
+#add consensus_learner '$learner_cluster_info';
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.add_learner($learner_cluster_info);
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
 create database aaa;
 use aaa;
@@ -48,7 +48,9 @@ let $wait_condition= select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_sch
 --source include/wait_condition.inc
 show databases like '%aaa%';
 --connection leader
-#drop consensus_learner '127.0.0.1:14400';
-call dbms_consensus.drop_learner("127.0.0.1:14400");
---exec rm -rf $MYSQL_TMP_DIR/learner1*
---exec rm -f $MYSQL_TMP_DIR/server.log
+#drop consensus_learner '127.0.0.1:24400';
+call dbms_consensus.drop_learner("127.0.0.1:24400");
+
+# cleanup
+--source include/stop_new_learner.inc
+

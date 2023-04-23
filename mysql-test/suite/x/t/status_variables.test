@@ -274,9 +274,10 @@ if (`SELECT CONVERT(@@version_compile_os using latin1) IN ("Win32","Win64","Wind
 --let $assert_cond= [select VARIABLE_VALUE="" as Value from performance_schema.global_status WHERE VARIABLE_NAME like "Mysqlx_ssl_server_not_before", Value, 1] = 1
 --source include/assert.inc
 
---let $assert_text= Mysqlx_address must match default value which is "::"
---let $assert_cond= [select VARIABLE_VALUE="::" as Value from performance_schema.global_status WHERE VARIABLE_NAME like "Mysqlx_address", Value, 1] = 1
---source include/assert.inc
+# ipv6 is not supported for RDS, disable it
+# --let $assert_text= Mysqlx_address must match default value which is "::"
+# --let $assert_cond= [select VARIABLE_VALUE="::" as Value from performance_schema.global_status WHERE VARIABLE_NAME like "Mysqlx_address", Value, 1] = 1
+# --source include/assert.inc
 
 --let $assert_text= No connections were made, Mysqlx_aborted_clients must match default value which is 0.
 --let $assert_cond= [SHOW STATUS LIKE "Mysqlx_aborted_clients", Value, 1] = 0

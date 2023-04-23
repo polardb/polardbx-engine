@@ -39,10 +39,10 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 DROP TABLE t1;
 DROP TABLE IF EXISTS t2;
 Warnings:
-Warning	1017	Can't find file: 't2' (errno: 2 - No such file or directory)
+Note	1051	Unknown table 'test.t2'
 DROP TABLE IF EXISTS t3;
 Warnings:
-Warning	1017	Can't find file: 't3' (errno: 2 - No such file or directory)
+Note	1051	Unknown table 'test.t3'
 DROP TABLE IF EXISTS t4;
 Warnings:
-Warning	1017	Can't find file: 't4' (errno: 2 - No such file or directory)
+Note	1051	Unknown table 'test.t4'

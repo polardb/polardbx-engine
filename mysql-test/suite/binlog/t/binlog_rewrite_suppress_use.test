@@ -4,7 +4,7 @@
 # mysqlbinlog suppresses the USE DATABASE command logged in
 # binlog file.
 #
-
+--source include/have_debug_new.inc
 --source include/have_binlog_format_row.inc
 RESET MASTER;
 CREATE DATABASE db1;

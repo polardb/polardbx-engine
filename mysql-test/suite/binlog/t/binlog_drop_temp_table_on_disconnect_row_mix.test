@@ -15,7 +15,7 @@
 #
 # Bug#24670909:USING TEMPORARY TABLES ON SLAVES INCREASES GTID SEQUENCE NUMBER
 #
-
+--source include/have_debug_new.inc
 --source include/have_log_bin.inc
 --source include/have_myisam.inc
 --source include/have_binlog_format_mixed_or_row.inc

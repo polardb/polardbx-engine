@@ -65,8 +65,8 @@ uncompress_ops	0
 database_name	test
 table_name	t
 index_name	PRIMARY
-compress_ops	74
-compress_ops_ok	74
+compress_ops	80
+compress_ops_ok	80
 uncompress_ops	0
 SET GLOBAL innodb_log_compressed_pages=@save_innodb_log_compressed_pages;
 DROP TABLE t;

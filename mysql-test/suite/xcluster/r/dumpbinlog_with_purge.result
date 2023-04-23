@@ -4,10 +4,10 @@
 # start a new learner
 flush local logs;
 flush local logs;
-call dbms_consensus.add_learner('127.0.0.1:24002');
+call dbms_consensus.add_learner(learner_cluster_info);
 create table t1(id int);
 insert into t1 values (1);
-call dbms_consensus.drop_learner('127.0.0.1:24002');
+call dbms_consensus.drop_learner(learner_cluster_info);
 call dbms_consensus.force_single_mode();
 CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MYPORT_1, MASTER_USER='root', MASTER_PASSWORD='', MASTER_LOG_FILE='MASTER_BINLOG', MASTER_LOG_POS=MASTER_POS, MASTER_AUTO_POSITION=0 FOR CHANNEL 'testsync';
 Warnings:
@@ -59,9 +59,9 @@ stop slave for channel "testsync";
 flush local logs;
 flush local logs;
 # start a new learner
-call dbms_consensus.add_learner('127.0.0.1:24003');
+call dbms_consensus.add_learner(learner_cluster_info);
 insert into t1 values (1);
-call dbms_consensus.drop_learner('127.0.0.1:24003');
+call dbms_consensus.drop_learner(learner_cluster_info);
 insert into t1 values (2);
 call dbms_consensus.force_single_mode();
 CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MYPORT_2, MASTER_USER='root', MASTER_PASSWORD='', MASTER_LOG_FILE='MASTER_BINLOG', MASTER_LOG_POS=MASTER_POS, MASTER_AUTO_POSITION=0 FOR CHANNEL 'testsync';

@@ -27,6 +27,8 @@ connection con2;
 let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
 --source include/wait_condition.inc
 
+--sleep 5
+
 xa commit 'xa1';
 xa recover;
 select * from test.t1;
@@ -46,6 +48,8 @@ connection con1;
 
 let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
 --source include/wait_condition.inc
+
+--sleep 5
 
 xa recover;
 select * from test.t1;

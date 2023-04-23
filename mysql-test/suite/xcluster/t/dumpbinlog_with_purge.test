@@ -3,12 +3,8 @@
 --echo #
 --echo # ---- test Leader ----
 --echo #
---let $learner_server_id= 4
---let $learner_datadir= $MYSQL_TMP_DIR/learner1
---let $learner_logdir= $MYSQL_TMP_DIR/server1.log
---let $learner_cluster_id= 1
---let $learner_cluster_info= '127.0.0.1:24002'
-let $learner_port = query_get_value("select $MYPORT_1+3 as c1", c1, 1);
+
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
 
 --connection default
@@ -16,6 +12,7 @@ flush local logs;
 flush local logs;
 
 #eval add consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);
 create table t1(id int);
 insert into t1 values (1);
@@ -26,6 +23,7 @@ insert into t1 values (1);
 
 --connection default
 #eval drop consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.drop_learner($learner_cluster_info);
 --let $MASTER_BINLOG= query_get_value(SHOW MASTER STATUS, File, 1)
 --let $MASTER_POS= query_get_value(SHOW MASTER STATUS, Position, 1)
@@ -77,16 +75,12 @@ stop slave for channel "testsync";
 flush local logs;
 flush local logs;
 
---let $learner_server_id= 5
---let $learner_datadir= $MYSQL_TMP_DIR/learner2
---let $learner_logdir= $MYSQL_TMP_DIR/server2.log
---let $learner_cluster_id= 1
---let $learner_cluster_info= '127.0.0.1:24003'
-let $learner_port = query_get_value("select $MYPORT_1+4 as c1", c1, 1);
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
 --source include/start_new_learner.inc
 
 --connection default
 #eval add consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);
 insert into t1 values (1);
 --sleep 2
@@ -96,6 +90,7 @@ insert into t1 values (1);
 
 --connection default
 #eval drop consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.drop_learner($learner_cluster_info);
 insert into t1 values (2);  # not in learner2
 
@@ -165,5 +160,11 @@ select * from t1;
 
 --connection default
 drop table t1;
---exec rm -rf $MYSQL_TMP_DIR/learner*
---exec rm -f $MYSQL_TMP_DIR/server*
+
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
+--source include/stop_new_learner.inc
+
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
+--source include/stop_new_learner.inc
+
+

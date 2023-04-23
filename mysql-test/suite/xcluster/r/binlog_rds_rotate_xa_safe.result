@@ -193,7 +193,6 @@ include/assert_grep.inc [Find Log: Turning logging off for the whole duration]
 XA COMMIT "2201";
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000017	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
 master-bin.000017	#	Query	#	#	XA START X'32323031',X'',1
 master-bin.000017	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000017	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -201,7 +200,6 @@ master-bin.000017	#	Query	#	#	XA END X'32323031',X'',1
 master-bin.000017	#	XA_prepare	#	#	XA PREPARE X'32323031',X'',1
 master-bin.000017	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
 master-bin.000017	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
-master-bin.000017	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
 master-bin.000017	#	Query	#	#	XA COMMIT X'32323031',X'',1
 #
 # Rotation Error on XA PREPARE and Abort server
@@ -222,7 +220,6 @@ formatID	gtrid_length	bqual_length	data
 XA COMMIT "2301";
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000018	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
 master-bin.000018	#	Query	#	#	XA START X'32333031',X'',1
 master-bin.000018	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000018	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -230,7 +227,6 @@ master-bin.000018	#	Query	#	#	XA END X'32333031',X'',1
 master-bin.000018	#	XA_prepare	#	#	XA PREPARE X'32333031',X'',1
 master-bin.000018	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
 master-bin.000018	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
-master-bin.000018	#	Gcn	#	#	SET @@SESSION.INNODB_COMMIT_SEQ=1024
 master-bin.000018	#	Query	#	#	XA COMMIT X'32333031',X'',1
 master-bin.000018	#	Rotate	#	#	master-bin.000019;pos=POS
 drop table t1;

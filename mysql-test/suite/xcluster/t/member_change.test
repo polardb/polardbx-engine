@@ -1,68 +1,70 @@
-let $MYPORT_CONSENSUS_1 = query_get_value("select $MYPORT_1+8000 as c1", c1, 1);
-let $MYPORT_CONSENSUS_2 = query_get_value("select $MYPORT_2+8000 as c1", c1, 1);
+let $MYPORT_CONSENSUS_1 = query_get_value("select $MYPORT_1+40 as c1", c1, 1);
+let $MYPORT_CONSENSUS_2 = query_get_value("select $MYPORT_2+40 as c1", c1, 1);
 
 # start with leader follower1 follower2
 # add learner1
---let $learner_server_id= 6
---let $learner_datadir= $MYSQL_TMP_DIR/learner1
---let $learner_logdir= $MYSQL_TMP_DIR/server1.log
---let $learner_cluster_id= 1
---let $learner_cluster_info= '127.0.0.1:14200'
-let $learner_port = query_get_value("select $MYPORT_1+9016 as c1", c1, 1);
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
-#add consensus_learner '127.0.0.1:14200';
-call dbms_consensus.add_learner("127.0.0.1:14200");
+let $learner1_cluster_info = $learner_cluster_info;
+#add consensus_learner '$learner1_cluster_info';
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.add_learner($learner1_cluster_info);
 
 # add learner2
---let $learner_server_id= 7
---let $learner_datadir= $MYSQL_TMP_DIR/learner2
---let $learner_logdir= $MYSQL_TMP_DIR/server2.log
---let $learner_cluster_id= 1
---let $learner_cluster_info= '127.0.0.1:14201'
-let $learner_port = query_get_value("select $MYPORT_1+9017 as c1", c1, 1);
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
 --source include/start_new_learner.inc
-#add consensus_learner '127.0.0.1:14201';
-call dbms_consensus.add_learner("127.0.0.1:14201");
+let $learner2_cluster_info = $learner_cluster_info;
+#add consensus_learner '$learner2_cluster_info';
+--replace_result $learner2_cluster_info learner2_cluster_info
+eval call dbms_consensus.add_learner($learner2_cluster_info);
 
 select server_id, role from information_schema.alisql_cluster_global;
 
 # learner1 to follower3
-#change consensus_learner '127.0.0.1:14200' to consensus_follower;
-call dbms_consensus.upgrade_learner("127.0.0.1:14200");
+#change consensus_learner '$learner1_cluster_info' to consensus_follower;
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.upgrade_learner($learner1_cluster_info);
 
 select server_id, role from information_schema.alisql_cluster_global;
 
 # drop learner2
-#drop consensus_learner '127.0.0.1:14201';
-call dbms_consensus.drop_learner("127.0.0.1:14201");
+#drop consensus_learner '$learner2_cluster_info';
+--replace_result $learner2_cluster_info learner2_cluster_info
+eval call dbms_consensus.drop_learner($learner2_cluster_info);
 
 select server_id, role from information_schema.alisql_cluster_global;
 
-#change consensus_node '127.0.0.1:14200' consensus_force_sync true consensus_election_weight 5;
-call dbms_consensus.configure_follower("127.0.0.1:14200", 5, 1);
+#change consensus_node '$learner1_cluster_info' consensus_force_sync true consensus_election_weight 5;
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.configure_follower($learner1_cluster_info, 5, 1);
 
-#change consensus_follower '127.0.0.1:14200' to consensus_learner;
-call dbms_consensus.downgrade_follower("127.0.0.1:14200");
+#change consensus_follower '$learner1_cluster_info' to consensus_learner;
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.downgrade_follower($learner1_cluster_info);
 
---replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
-#eval change consensus_node '127.0.0.1:14200' consensus_learner_source '127.0.0.1:$MYPORT_CONSENSUS_1' consensus_use_applyindex true;
-eval call dbms_consensus.configure_learner("127.0.0.1:14200", "127.0.0.1:$MYPORT_CONSENSUS_1", 1);
+#eval change consensus_node '$learner1_cluster_info' consensus_learner_source '127.0.0.1:$MYPORT_CONSENSUS_1' consensus_use_applyindex true;
+--replace_result $learner1_cluster_info learner1_cluster_info $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.configure_learner($learner1_cluster_info, "127.0.0.1:$MYPORT_CONSENSUS_1", 1);
 
 #change consensus_learner for consensus_meta;
 call dbms_consensus.refresh_learner_meta();
 
 # drop learner2
-#drop consensus_learner '127.0.0.1:14200';
-call dbms_consensus.drop_learner("127.0.0.1:14200");
+#drop consensus_learner '$learner1_cluster_info';
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.drop_learner($learner1_cluster_info);
 
 # add follower
-#add consensus_follower '127.0.0.1:14200';
-call dbms_consensus.add_follower("127.0.0.1:14200");
+#add consensus_follower '$learner1_cluster_info';
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.add_follower($learner1_cluster_info);
 
 # drop follower
-#drop consensus_follower '127.0.0.1:14200';
-call dbms_consensus.downgrade_follower("127.0.0.1:14200");
-call dbms_consensus.drop_learner("127.0.0.1:14200");
+#drop consensus_follower '$learner1_cluster_info';
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.downgrade_follower($learner1_cluster_info);
+--replace_result $learner1_cluster_info learner1_cluster_info
+eval call dbms_consensus.drop_learner($learner1_cluster_info);
 select server_id, role from information_schema.alisql_cluster_global;
 
 --replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
@@ -76,8 +78,9 @@ eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
 let $wait_condition= select role='Leader' from information_schema.alisql_cluster_local;
 --source include/wait_condition.inc
 
---replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+--replace_result $learner1_cluster_info learner1_cluster_info $learner2_cluster_info learner2_cluster_info $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
 select command from information_schema.alisql_cluster_consensus_membership_change;
+
 --replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
 #eval change consensus_leader to "127.0.0.1:$MYPORT_CONSENSUS_1";
 eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
@@ -88,19 +91,22 @@ eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
 let $wait_condition= select role='Leader' from information_schema.alisql_cluster_local;
 --source include/wait_condition.inc
 
---replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+--replace_result $learner1_cluster_info learner1_cluster_info $learner2_cluster_info learner2_cluster_info $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
 select command from information_schema.alisql_cluster_consensus_membership_change;
 
 # show from follower
 --connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
 --connection conn3
 
---replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+--replace_result $learner1_cluster_info learner1_cluster_info $learner2_cluster_info learner2_cluster_info $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
 select command from information_schema.alisql_cluster_consensus_membership_change;
 
 --connection conn1
 select server_id, role from information_schema.alisql_cluster_global;
 
 # cleanup
---exec rm -rf $MYSQL_TMP_DIR/learner*
---exec rm -f $MYSQL_TMP_DIR/server*
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
+--source include/stop_new_learner.inc
+
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
+--source include/stop_new_learner.inc

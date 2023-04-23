@@ -1,0 +1,37 @@
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT,
+PRIMARY KEY (id)
+) ENGINE=InnoDB;
+insert into t1 () values ();
+call dbms_consensus.wait_apply_index(1);
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_consensus.wait_apply_index; expected 2, got 1
+call dbms_consensus.wait_apply_index(1, 5, 5);
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_consensus.wait_apply_index; expected 2, got 3
+call dbms_consensus.wait_apply_index(-1, 5);
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_consensus.wait_apply_index
+call dbms_consensus.wait_apply_index(1, "aaaaa");
+ERROR HY000: The 2th parameter didn't match for native procedure dbms_consensus.wait_apply_index
+call dbms_consensus.wait_apply_index(5, 5);
+ERROR HY000: Only follwer(RELAY_LOG_WORKING) can wait apply index
+call dbms_consensus.wait_apply_index(99999, 5);
+ERROR HY000: Only follwer(RELAY_LOG_WORKING) can wait apply index
+call dbms_consensus.wait_apply_index(1);
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_consensus.wait_apply_index; expected 2, got 1
+call dbms_consensus.wait_apply_index(1, 5, 5);
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_consensus.wait_apply_index; expected 2, got 3
+call dbms_consensus.wait_apply_index(-1, 5);
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_consensus.wait_apply_index
+call dbms_consensus.wait_apply_index(1, "aaaaa");
+ERROR HY000: The 2th parameter didn't match for native procedure dbms_consensus.wait_apply_index
+call dbms_consensus.wait_apply_index(1, 30);
+call dbms_consensus.wait_apply_index(99999, 3);;
+ERROR HY000: Wait apply index 99999 timeout waiting for 3 s
+call dbms_consensus.wait_apply_index(99999, 30);
+STOP XPAXOS_REPLICATION;
+ERROR HY000: Xpaxos apply thread is not running or change master happened
+START XPAXOS_REPLICATION;
+call dbms_consensus.wait_apply_index(99999, 30);
+ERROR HY000: Xpaxos apply thread is not running or change master happened
+Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
+drop table t1;

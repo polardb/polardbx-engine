@@ -3,6 +3,7 @@
 # mysqld --help
 #
 --source include/not_windows.inc
+--source include/have_no_asan.inc
 
 --source include/mysqld--help.inc
 

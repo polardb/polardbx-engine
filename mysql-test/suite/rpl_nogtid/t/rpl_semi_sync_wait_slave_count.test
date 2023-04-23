@@ -400,6 +400,12 @@ SET GLOBAL rpl_semi_sync_master_enabled= ON;
 --let $rpl_connection_name= server_1
 --source include/rpl_connection.inc
 DROP TABLE t1;
+
+SET GLOBAL rpl_semi_sync_master_timeout = DEFAULT;
+SET GLOBAL rpl_semi_sync_master_trace_level = DEFAULT;
+SET GLOBAL rpl_semi_sync_master_wait_for_slave_count = DEFAULT;
+SET GLOBAL rpl_semi_sync_master_wait_no_slave = DEFAULT;
+
 CALL mtr.add_suppression(".* Timeout waiting for reply of binlog .*");
 CALL mtr.add_suppression(".* Failed to allocate memory for ack_array .*");
 --source include/rpl_end.inc

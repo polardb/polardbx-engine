@@ -1020,7 +1020,6 @@ Information in the data-dictionary needs to be updated. */
 /* Prepare wait timeout */
 #define HA_ERR_GP_WAIT_TIMEOUT 219
 
-
 /** Copy of last error number */
 #define HA_ERR_LAST 219
 

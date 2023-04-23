@@ -1,3 +1,4 @@
+--disable_ps_protocol
 --echo #
 --echo # Bug #84958 InnoDB's MVCC has O(N^2) behaviors
 --echo # https://bugs.mysql.com/bug.php?id=84958

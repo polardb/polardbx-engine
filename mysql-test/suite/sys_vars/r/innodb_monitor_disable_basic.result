@@ -506,6 +506,9 @@ commit;
 begin;
 insert into monitor_test values(9);
 rollback;
+analyze table monitor_test;
+Table	Op	Msg_type	Msg_text
+test.monitor_test	analyze	status	OK
 select name, max_count, min_count, count,
 max_count_reset, min_count_reset, count_reset, status
 from information_schema.innodb_metrics

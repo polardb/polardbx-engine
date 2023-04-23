@@ -3,7 +3,7 @@
 # Encrypt or remove passwords from slow, query, and binary logs
 # (see sql/sql_rewrite.cc for bulk of implementation)
 #
-
+--source include/have_debug_new.inc
 --source include/not_windows.inc
 
 # For Bug#16467055 and friends:

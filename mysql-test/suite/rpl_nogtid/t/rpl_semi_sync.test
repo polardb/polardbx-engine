@@ -2,6 +2,7 @@
 --source include/no_valgrind_without_big.inc
 # Adding big test option for this test.
 --source include/big_test.inc
+--source include/rpl_save_variables.inc
 
 source include/have_semisync_plugin.inc;
 source include/master-slave.inc;
@@ -10,6 +11,7 @@ let $engine_type= InnoDB;
 
 # Suppress warnings that might be generated during the test
 connection master;
+--source include/rpl_save_variables.inc
 disable_query_log;
 call mtr.add_suppression("Timeout waiting for reply of binlog");
 call mtr.add_suppression("Read semi-sync reply");
@@ -32,21 +34,10 @@ let $_connections_normal_slave= query_get_value(SHOW STATUS LIKE 'Threads_connec
 --echo # Uninstall semi-sync plugins on master and slave
 --echo #
 connection slave;
+--source include/rpl_save_variables.inc
 source include/stop_slave.inc;
-disable_warnings;
-error 0,1305;
-UNINSTALL PLUGIN rpl_semi_sync_slave;
-error 0,1305;
-UNINSTALL PLUGIN rpl_semi_sync_master;
-enable_warnings;
 
 connection master;
-disable_warnings;
-error 0,1305;
-UNINSTALL PLUGIN rpl_semi_sync_slave;
-error 0,1305;
-UNINSTALL PLUGIN rpl_semi_sync_master;
-enable_warnings;
 --let $rpl_only_running_threads= 1
 --let $rpl_no_start_slave= 1
 --source include/rpl_reset.inc
@@ -57,15 +48,6 @@ enable_warnings;
 --echo #
 
 source include/rpl_connection_master.inc;
-let $value = query_get_value(show variables like 'rpl_semi_sync_master_enabled', Value, 1);
-if ($value == No such row)
-{
-  disable_query_log;
-  eval INSTALL PLUGIN rpl_semi_sync_master SONAME '$SEMISYNC_MASTER_PLUGIN';
-  set global rpl_semi_sync_master_timeout= 60000 /* 60s */;
-  set global rpl_semi_sync_master_wait_point= AFTER_COMMIT;
-  enable_query_log;
-}
 
 echo [ default state of semi-sync on master should be OFF ];
 show variables like 'rpl_semi_sync_master_enabled';
@@ -120,13 +102,6 @@ show status like 'Rpl_semi_sync_master_yes_tx';
 --echo #
 
 source include/rpl_connection_slave.inc;
-let $value= query_get_value(show variables like 'rpl_semi_sync_slave_enabled', Value, 1);
-if ($value == No such row)
-{
-  disable_query_log;
-  eval INSTALL PLUGIN rpl_semi_sync_slave SONAME '$SEMISYNC_SLAVE_PLUGIN';
-  enable_query_log;
-}
 
 echo [ default state of semi-sync on slave should be OFF ];
 show variables like 'rpl_semi_sync_slave_enabled';
@@ -249,6 +224,7 @@ FLUSH STATUS;
 --echo #
 connection slave;
 source include/stop_slave.inc;
+--source include/rpl_save_variables.inc
 
 source include/rpl_connection_master.inc;
 # Kill the dump thread(s) on master for previous slave connection
@@ -570,7 +546,6 @@ source include/stop_slave.inc;
 connection master;
 echo [ on master ];
 --source include/stop_dump_threads.inc
-UNINSTALL PLUGIN rpl_semi_sync_master;
 enable_query_log;
 SHOW VARIABLES LIKE 'rpl_semi_sync_master_enabled';
 
@@ -589,8 +564,6 @@ SHOW STATUS LIKE 'Rpl_semi_sync_slave_status';
 --echo #
 
 connection master;
-replace_result $SEMISYNC_MASTER_PLUGIN SEMISYNC_MASTER_PLUGIN;
-eval INSTALL PLUGIN rpl_semi_sync_master SONAME '$SEMISYNC_MASTER_PLUGIN';
 set global rpl_semi_sync_master_timeout= 60000; /* 60s */
 set global rpl_semi_sync_master_enabled= 1;
 
@@ -599,15 +572,12 @@ source include/stop_slave.inc;
 SHOW STATUS LIKE 'Rpl_semi_sync_slave_status';
 
 echo [ uninstall semi-sync slave plugin ];
-UNINSTALL PLUGIN rpl_semi_sync_slave;
 SHOW VARIABLES LIKE 'rpl_semi_sync_slave_enabled';
 source include/start_slave.inc;
 SHOW STATUS LIKE 'Rpl_semi_sync_slave_status';
 source include/stop_slave.inc;
 
 echo [ reinstall semi-sync slave plugin and disable semi-sync ];
-replace_result $SEMISYNC_SLAVE_PLUGIN SEMISYNC_SLAVE_PLUGIN;
-eval INSTALL PLUGIN rpl_semi_sync_slave SONAME '$SEMISYNC_SLAVE_PLUGIN';
 set global rpl_semi_sync_slave_enabled= 0;
 SHOW VARIABLES LIKE 'rpl_semi_sync_slave_enabled';
 SHOW STATUS LIKE 'Rpl_semi_sync_slave_status';
@@ -617,10 +587,10 @@ SHOW STATUS LIKE 'Rpl_semi_sync_slave_status';
 --echo #
 --echo # Clean up
 --echo #
---source include/uninstall_semisync.inc
 
 connection slave;
 --source include/stop_slave.inc
+--source include/rpl_restore_variables.inc
 --replace_column 2 ####
 change master to master_user='root',master_password='', get_master_public_key=0;
 source include/start_slave.inc;
@@ -632,4 +602,5 @@ drop table t1;
 connection master;
 drop user rpl@127.0.0.1;
 flush privileges;
+--source include/rpl_restore_variables.inc
 --source include/rpl_end.inc

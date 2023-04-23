@@ -32,6 +32,7 @@
 #    any error (i.e., no ER_GTID_NEXT_TYPE_UNDEFINED_GTID error)
 #################################################################
 --source include/have_binlog_format_statement.inc
+--source include/have_debug.inc
 
 # Use this so that we can use rpl_restart_server.inc later.
 --let $rpl_server_count= 1

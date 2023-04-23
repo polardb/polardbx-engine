@@ -16,10 +16,9 @@ Session 1 :
 -----------------------------------------------------------------
 /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 1
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Query			PLUGIN: /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
 
 affected rows : 0
 server status : 34
@@ -31,11 +30,9 @@ Session 1 :
 -----------------------------------------------------------------
 /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 2
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Query			PLUGIN: /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
-root			[NULL]			Sleep			PLUGIN			
 
 affected rows : 0
 server status : 34
@@ -45,11 +42,9 @@ Session 2 :
 -----------------------------------------------------------------
 /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 2
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Sleep			PLUGIN			
-root			[NULL]			Query			PLUGIN: /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
 
 affected rows : 0
 server status : 34
@@ -61,10 +56,9 @@ Session 2 :
 -----------------------------------------------------------------
 /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 1
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Query			PLUGIN: /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
 
 affected rows : 0
 server status : 34
@@ -80,10 +74,9 @@ Session 1 :
 -----------------------------------------------------------------
 /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 1
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Query			PLUGIN: /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
 
 affected rows : 0
 server status : 34
@@ -95,11 +88,9 @@ Session 1 :
 -----------------------------------------------------------------
 /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 2
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Query			PLUGIN: /*Session_1*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
-root			[NULL]			Sleep			PLUGIN			
 
 affected rows : 0
 server status : 34
@@ -109,11 +100,9 @@ Session 2 :
 -----------------------------------------------------------------
 /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 2
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Sleep			PLUGIN			
-root			[NULL]			Query			PLUGIN: /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
 
 affected rows : 0
 server status : 34
@@ -125,10 +114,9 @@ Session 2 :
 -----------------------------------------------------------------
 /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id
 num_cols : 4
-nb rows  : 1
+nb rows  : 0
 -----------------------------------------------------------------
 user VARCHAR(15)	db VARCHAR(15)	command VARCHAR(15)	info BLOB(252)	
-root			[NULL]			Query			PLUGIN: /*Session_2*/ SELECT user,db,command,info FROM information_schema.processlist WHERE info LIKE 'PLUGIN%' order by id			
 
 affected rows : 0
 server status : 34

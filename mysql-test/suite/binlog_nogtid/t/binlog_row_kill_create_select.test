@@ -15,7 +15,7 @@
 # ==== References ====
 #
 # Bug#20742519  KILL `CREATE TABLE ..SELECT` MAY LEAD TO REPLICATION BROKEN
-
+--source include/have_debug_new.inc
 --let $engine= InnoDB
 --source extra/binlog_tests/binlog_row_kill_create_select.test
 

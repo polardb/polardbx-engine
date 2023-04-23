@@ -16,7 +16,7 @@ INSERT INTO t1 VALUES (1);
 [connection server2]
 # CHANGE MASTER with options apart from the MASTER_USER and
 # MASTER_PASSWORD will cause error.
-CHANGE MASTER TO MASTER_USER='MANISH', MASTER_PASSWORD='abc_manish_abc', MASTER_PORT=13000 FOR CHANNEL 'group_replication_recovery';
+CHANGE MASTER TO MASTER_USER='MANISH', MASTER_PASSWORD='abc_manish_abc', MASTER_PORT=23000 FOR CHANNEL 'group_replication_recovery';
 ERROR HY000: CHANGE MASTER with the given parameters cannot be performed on channel 'group_replication_recovery'.
 include/assert.inc [No new user is created after the execution of the change master]
 # MASTER_PASSWORD value for the CHANGE MASTER command will not be logged in the error log.

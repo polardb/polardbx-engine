@@ -38,7 +38,7 @@
 #
 # Bug #20748502  ASSERTION `THD->VARIABLES.GTID_NEXT.TYPE== ANONYMOUS_GROUP' FAILED.
 # mysql-test/t/no_binlog_gtid_next_temporary_table.test
-
+--source include/have_debug_new.inc
 --source include/have_log_bin.inc
 --source include/have_binlog_format_row.inc
 

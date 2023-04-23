@@ -87,7 +87,7 @@ RESET MASTER TO 100;
 
 # Grant priviliges to user1
 --connection default
-GRANT RELOAD ON *.* TO 'user1'@'localhost';
+GRANT SUPER,RELOAD ON *.* TO 'user1'@'localhost';
 
 connect (conn_user,localhost,user1,pass1,);
 RESET MASTER TO 100;

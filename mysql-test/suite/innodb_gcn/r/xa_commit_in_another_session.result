@@ -7,8 +7,6 @@ value VARCHAR(50) NOT NULL,
 PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'xa_commit_in_another_session');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'xa_commit_in_another_session');
 xa start '1';
 update t1 set value = 'UPDATED!' where id % 2 = 0;
 xa end '1';

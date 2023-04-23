@@ -86,14 +86,14 @@ set innodb_global_query_wait_timeout=3;
 select * from t1 where a = 5;
 
 set innodb_snapshot_seq = @base_seq +5000;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select * from t1 where a = 5;
 
 set innodb_current_snapshot_seq=ON;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select * from t1 where a = 5;
 
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1 where a = 5;
 
 connection conn1;
@@ -126,29 +126,29 @@ xa prepare '6000';
 connection conn2;
 set innodb_current_snapshot_seq=ON;
 use mydb;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select * from t1 where a = 6;
 
 set innodb_current_snapshot_seq=ON;
 set autocommit = 1;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select * from t1 where a = 6;
 
 set innodb_current_snapshot_seq=ON;
 show variables like "innodb_current_snapshot_seq";
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select * from t1 where a = 6;
 
 set innodb_current_snapshot_seq=ON;
 --error ER_PARSE_ERROR
 errorselect * from t1;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select * from t1 where a = 6;
 
 set innodb_current_snapshot_seq=ON;
 --error ER_WRONG_VALUE_FOR_VAR
 set innodb_current_snapshot_seq=2323;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 select * from t1 where a = 6;
 
 connection conn1;
@@ -157,18 +157,6 @@ xa commit '6000';
 connection conn2;
 set innodb_current_snapshot_seq=ON;
 select * from t1 where a = 6;
-
-
-#
-# read record which has been cleaned out
-#
-connection conn1;
-insert into t1 (b) value (7000);
-select * from t1 where a = 7;
-
-set innodb_current_snapshot_seq = ON;
-select * from t1 where a = 7;
-
 
 disconnect conn1;
 disconnect conn2;

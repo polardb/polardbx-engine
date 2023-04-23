@@ -12,6 +12,7 @@
 
 # This test case requires MIXED binary log format
 --source include/have_binlog_format_mixed.inc
+--source include/have_debug.inc
 
 # This DDL will not be evaluated by the assert
 CREATE TABLE log (

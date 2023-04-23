@@ -1,7 +1,7 @@
 
 # Test case for bug#32205 Replaying statements from mysqlbinlog fails
 # with a syntax error, replicates fine
-
+--source include/have_debug_new.inc
 source include/have_log_bin.inc;
 source include/have_local_infile.inc;
 

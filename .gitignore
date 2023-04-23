@@ -459,7 +459,8 @@ extra/.deps/perror.Po
 extra/.deps/replace.Po
 extra/.deps/resolve_stack_dump.Po
 extra/.deps/resolveip.Po
-extra/boost
+extra/boost/boost_1_70_0.tar.gz
+extra/boost/boost_1_70_0/
 extra/comp_err
 extra/created_include_files
 extra/innochecksum

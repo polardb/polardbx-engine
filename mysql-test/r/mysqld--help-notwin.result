@@ -243,6 +243,8 @@ The following options may be given as the first argument:
  proxy user mapping should be done according to GRANT
  PROXY privilege definition.
  -r, --chroot=name   Chroot mysqld daemon during startup.
+ --client-endpoint-ip=name 
+ The endpoint ip that client use to connect.
  --cluster-current-term=# 
  Normandy cluster nodes current term  information
  --cluster-dump-meta Normandy cluster dump meta
@@ -324,6 +326,9 @@ The following options may be given as the first argument:
  consensus forceSync epoch diff
  --consensus-heartbeat-thread-cnt[=#] 
  Number of consensus heartbeat thread
+ --consensus-index-buf-enabled 
+ Whether to enable Relay_log_info::consensus_index_buf
+ (Defaults to on; use --skip-consensus-index-buf-enabled to disable.)
  --consensus-io-thread-cnt[=#] 
  Number of consensus io thread
  --consensus-large-batch-ratio[=#] 
@@ -445,6 +450,10 @@ The following options may be given as the first argument:
  client that does INSERT DELAYED will wait until there is
  room in the queue again. This variable is deprecated
  along with INSERT DELAYED.
+ --disable-wait-commitindex 
+ Whether to wait commitdex when applying binlog in
+ follower, it may detory the cluster data if some crash
+ happen
  --disabled-storage-engines=name 
  Limit CREATE TABLE for the storage engines listed
  --disconnect-on-expired-password 
@@ -541,6 +550,7 @@ The following options may be given as the first argument:
  --galaxyx-max-queued-messages[=#] 
  Number of max queued messages that session is going to
  handle.
+ --galaxyx-mtr       Enable galaxy x protocol for mtr mode.
  --galaxyx-port[=#]  Port on which Galaxy X-protocol is going to accept
  incoming connections.
  --galaxyx-socket-recv-buffer[=#] 
@@ -885,6 +895,7 @@ The following options may be given as the first argument:
  Number of seconds to wait for a block to be written to a
  connection before aborting the write
  -n, --new           Use very new possible "unsafe" functions
+ --new-rpc           Use new open PolarDB-X RPC
  --no-dd-upgrade     Abort restart if automatic upgrade or downgrade of the
  data dictionary is needed. Deprecated option. Use
  --upgrade=NONE instead.
@@ -905,6 +916,9 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
+ --opt-force-index-pct-cached 
+ force cached table index in memory when estimate query
+ cost
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
@@ -1185,6 +1199,98 @@ The following options may be given as the first argument:
  in plugin_dir. This option adds to the list specified by
  --plugin-load in an incremental way. Multiple
  --plugin-load-add are supported.
+ --polarx-rpc[=name] Enable or disable polarx_rpc plugin. Possible values are
+ ON, OFF, FORCE (don't start if the plugin fails to load).
+ --polarx-rpc-auto-cpu-affinity 
+ Enable auto thread CPU affinity(RO)
+ (Defaults to on; use --skip-polarx-rpc-auto-cpu-affinity to disable.)
+ --polarx-rpc-enable-epoll-in-tasker 
+ Enable tasker to do epoll(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-epoll-in-tasker to disable.)
+ --polarx-rpc-enable-kill-log 
+ Enable session kill log(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-kill-log to disable.)
+ --polarx-rpc-enable-perf-hist 
+ Enable performance histogram(RW)
+ --polarx-rpc-enable-tasker 
+ Enable balance tasker(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-tasker to disable.)
+ --polarx-rpc-enable-thread-pool-log 
+ Enable thread pool log(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-thread-pool-log to disable.)
+ --polarx-rpc-epoll-events-per-thread[=#] 
+ Number of event slots per epoll_wait invoking(RW)
+ --polarx-rpc-epoll-extra-groups[=#] 
+ Extra epoll groups(RO)
+ --polarx-rpc-epoll-group-ctx-refresh-time[=#] 
+ Epoll group context(shared session) refresh time in
+ ms(RW)
+ --polarx-rpc-epoll-group-dynamic-threads[=#] 
+ Expected non-base threads for each epoll group(RW)
+ --polarx-rpc-epoll-group-dynamic-threads-shrink-time[=#] 
+ Time of shrinking the thread pool when no stall occurs in
+ ms(RW)
+ --polarx-rpc-epoll-group-tasker-extend-step[=#] 
+ Tasker threads extend step(RW)
+ --polarx-rpc-epoll-group-tasker-multiply[=#] 
+ Workload factor of one thread to n queued tasks(RW)
+ --polarx-rpc-epoll-group-thread-deadlock-check-interval[=#] 
+ Interval of checking thread pool deadlock in ms(RW)
+ --polarx-rpc-epoll-group-thread-scale-thresh[=#] 
+ Thresh(number of stalled threads in one thread pool
+ group) of scaling the thread pool(RW)
+ --polarx-rpc-epoll-groups[=#] 
+ Epoll group number(auto calculate if set to 0)(RO)
+ --polarx-rpc-epoll-threads-per-group[=#] 
+ Base threads number for each epoll group(RO)
+ --polarx-rpc-epoll-timeout[=#] 
+ Timeout of epoll_wait in ms(RW)
+ --polarx-rpc-epoll-work-queue-capacity[=#] 
+ Capacity of work queue for each epoll group(RO)
+ --polarx-rpc-force-all-cores 
+ Enable thread CPU affinity to all CPU cores(RO)
+ --polarx-rpc-galaxy-protocol 
+ Is galaxy protocol(RW)
+ --polarx-rpc-galaxy-version[=#] 
+ Version of galaxy protocol(RW)
+ --polarx-rpc-max-allowed-packet[=#] 
+ Max size of packet which can receive(RW)
+ --polarx-rpc-max-cached-output-buffer-pages[=#] 
+ Max cached page number for output(RW)
+ --polarx-rpc-max-epoll-wait-total-threads[=#] 
+ Number of base threads which wait on epoll in each
+ group(don't limit it if set to 0)(RO)
+ --polarx-rpc-max-queued-messages[=#] 
+ Max queued message for each session(RW)
+ --polarx-rpc-mcs-spin-cnt[=#] 
+ MCS spin lock spin count before snooze(RW)
+ --polarx-rpc-min-auto-epoll-groups[=#] 
+ Minimum epoll group number calculated by auto(RO)
+ --polarx-rpc-multi-affinity-in-group 
+ Enable base thread bind to all cores in group(RO)
+ --polarx-rpc-net-write-timeout[=#] 
+ Timeout for TCP write in ms(RW)
+ --polarx-rpc-request-cache-instances[=#] 
+ Instances number of request cache(RO)
+ --polarx-rpc-request-cache-max-length[=#] 
+ Max length of sql/plan which will store in request
+ cache(RO)
+ --polarx-rpc-request-cache-number[=#] 
+ Total cache number of XRPC requests(RO)
+ --polarx-rpc-session-poll-rwlock-spin-cnt[=#] 
+ Spin count of RW-lock before snooze for session pool(RW)
+ --polarx-rpc-shared-session-lifetime[=#] 
+ Life time for shared session in ms(RW)
+ --polarx-rpc-tcp-fixed-dealing-buf[=#] 
+ TCP fixed dealing buffer size(RW)
+ --polarx-rpc-tcp-keep-alive[=#] 
+ TCP keep alive thresh in s(RW)
+ --polarx-rpc-tcp-listen-queue[=#] 
+ TCP listen queue(RO)
+ --polarx-rpc-tcp-recv-buf[=#] 
+ TCP receive buffer size(not change if set to 0)(RW)
+ --polarx-rpc-tcp-send-buf[=#] 
+ TCP send buffer size(not change if set to 0)(RW)
  -P, --port=#        Port number to use for connection or 0 to default to,
  my.cnf, $MYSQL_TCP_PORT, /etc/services, built-in default
  (3306), whatever comes first
@@ -1194,6 +1300,9 @@ The following options may be given as the first argument:
  --preload-buffer-size=# 
  The size of the buffer that is allocated when preloading
  indexes
+ --print-gtid-info-during-recovery[=#] 
+ 0 - dont print; 1 - print basic info; 2 - print detailed
+ info
  --print-identified-with-as-hex 
  SHOW CREATE USER will print the AS clause as HEX if it
  contains non-prinable characters
@@ -1224,12 +1333,54 @@ The following options may be given as the first argument:
  optimization of a query, index range scan will not be
  considered for this query. A value of 0 means range
  optimizer does not have any cap on memory. 
+ --rds-audit-log-buffer-size=# 
+ Buffer size for log buffer.
+ --rds-audit-log-connection-policy=name 
+ The policy controlling how the audit log plugin writes
+ connection events to its log file. Supported values are
+ 'ALL' (default), 'ERRORS' and 'NONE'.
+ --rds-audit-log-dir=name 
+ Path to store RDS audit logs. Logs will be put under
+ tmpdir is not specified.
+ --rds-audit-log-enabled 
+ The option to enable or disable audit log.
+ --rds-audit-log-event-buffer-size=# 
+ Buffer size for event buffer.
+ --rds-audit-log-flush 
+ When set to enabled, the current log file will be closed,
+ and a new log file will be created.
+ --rds-audit-log-format=name 
+ The format of audit log, currently only support PLAIN
+ (compatible with MySQL_V1 in RDS MySQL 5.6), JSON will be
+ supported soon.
+ --rds-audit-log-policy=name 
+ The policy controlling how the audit log plugin writes
+ events to its log file. Supported values are 'ALL'
+ (default), 'LOGINS', 'QUERIES' and 'NONE'.
+ --rds-audit-log-row-limit=# 
+ Max number of rows in each audit log file. Log records
+ will be discarded above this number.
+ --rds-audit-log-skip 
+ Whether to skip log recording for current session.
+ --rds-audit-log-statement-policy=name 
+ The policy controlling how the audit log plugin writes
+ query events to its log file. Supported values are 'ALL'
+ (default), 'UPDATES', 'UPDATES_OR_ERRORS', 'ERRORS' and
+ 'NONE'.
+ --rds-audit-log-strategy=name 
+ The audit log strategy, currently support ASYNCHRONOUS,
+ PERFORMANCE, SEMISYNCHRONOUS and SYNCHRONOUS.
+ --rds-audit-log-version=name 
+ The version of audit log, currently support MYSQL_V1 and
+ MYSQL_V3.
  --rds-version[=#]   The mysql patch version
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
  buffer of this size for each table it scans. If you do
  many sequential scans, you may want to increase this
  value
+ --read-lsn=#        Minimun log applied index required for replica consistent
+ reads
  --read-only         Make all non-temporary tables read-only, with the
  exception for replication (slave) threads and users with
  the SUPER privilege
@@ -1238,6 +1389,11 @@ The following options may be given as the first argument:
  are read through this buffer to avoid a disk seeks
  --recover-snapshot  recover from the backup of cloud storage and output the
  committed index
+ --recovery-apply-binlog[=name] 
+ Applying binlog to generate the lost data at server
+ startup. 0: OFF, 1: ON, 2:SAME_AS_GTID
+ --recovery-apply-binlog-skip-counter[=#] 
+ recovery_apply_binlog_skip_counter
  --recycle-bin       Whether recycle the table which is going to be dropped
  --recycle-bin-retention=# 
  Seconds before really purging the recycled table.
@@ -1270,6 +1426,9 @@ The following options may be given as the first argument:
  transaction processed
  --relay-log-space-limit=# 
  Maximum space to use for all relay logs
+ --replica-read-timeout=# 
+ Maximum wait period (milliseconds) when performing
+ replica consistent reads
  --replicate-do-db=name 
  Tells the slave thread to restrict replication to the
  specified database. To specify more than one database,
@@ -1352,6 +1511,11 @@ The following options may be given as the first argument:
  are SSL/TLS, Unix socket or Shared Memory (on Windows).
  --reset-consensus-prefetch-cache 
  reset consensus prefetch_cache
+ --rotate-log-table  Whether rotate the data file when flush slow_log or
+ general_log
+ --rotate-log-table-last-name=name 
+ Last rotated log table file name
+ --rpc-port[=#]      RPC port for PolarDB-X
  --rpl-read-size=#   The size for reads done from the binlog and relay log. It
  must be a multiple of 4kb. Making it larger might help
  with IO stalls while reading these files when they are
@@ -1688,6 +1852,7 @@ character-set-server utf8mb4
 character-sets-dir MYSQL_CHARSETSDIR/
 check-proxy-users FALSE
 chroot (No default value)
+client-endpoint-ip (No default value)
 cluster-current-term 0
 cluster-dump-meta FALSE
 cluster-force-change-meta FALSE
@@ -1722,6 +1887,7 @@ consensus-force-promote FALSE
 consensus-force-recovery FALSE
 consensus-force-sync-epoch-diff 0
 consensus-heartbeat-thread-cnt 0
+consensus-index-buf-enabled TRUE
 consensus-io-thread-cnt 3
 consensus-large-batch-ratio 50
 consensus-large-event-limit 1073741824
@@ -1768,6 +1934,7 @@ delay-key-write ON
 delayed-insert-limit 100
 delayed-insert-timeout 300
 delayed-queue-size 1000
+disable-wait-commitindex FALSE
 disabled-storage-engines 
 disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
@@ -1794,6 +1961,7 @@ galaxyx-enable-galaxy-session-pool-log FALSE
 galaxyx-galaxy-worker-threads-per-tcp 2
 galaxyx-galaxy-worker-threads-shrink-time 5000
 galaxyx-max-queued-messages 128
+galaxyx-mtr FALSE
 galaxyx-port 33070
 galaxyx-socket-recv-buffer 16384
 galaxyx-socket-send-buffer 262144
@@ -1902,12 +2070,14 @@ net-read-timeout 30
 net-retry-count 10
 net-write-timeout 60
 new FALSE
+new-rpc FALSE
 no-dd-upgrade FALSE
 offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
 only-report-warning-when-skip-sequence TRUE
+opt-force-index-pct-cached FALSE
 opt-indexstat TRUE
 opt-outline-enabled TRUE
 opt-performance-point-enabled TRUE
@@ -1991,9 +2161,51 @@ performance-schema-setup-objects-size -1
 performance-schema-users-size -1
 persist-only-admin-x509-subject 
 persisted-globals-load TRUE
+polarx-rpc ON
+polarx-rpc-auto-cpu-affinity TRUE
+polarx-rpc-enable-epoll-in-tasker TRUE
+polarx-rpc-enable-kill-log TRUE
+polarx-rpc-enable-perf-hist FALSE
+polarx-rpc-enable-tasker TRUE
+polarx-rpc-enable-thread-pool-log TRUE
+polarx-rpc-epoll-events-per-thread 4
+polarx-rpc-epoll-extra-groups 0
+polarx-rpc-epoll-group-ctx-refresh-time 10000
+polarx-rpc-epoll-group-dynamic-threads 0
+polarx-rpc-epoll-group-dynamic-threads-shrink-time 10000
+polarx-rpc-epoll-group-tasker-extend-step 2
+polarx-rpc-epoll-group-tasker-multiply 3
+polarx-rpc-epoll-group-thread-deadlock-check-interval 500
+polarx-rpc-epoll-group-thread-scale-thresh 2
+polarx-rpc-epoll-groups 0
+polarx-rpc-epoll-threads-per-group 4
+polarx-rpc-epoll-timeout 10000
+polarx-rpc-epoll-work-queue-capacity 256
+polarx-rpc-force-all-cores FALSE
+polarx-rpc-galaxy-protocol FALSE
+polarx-rpc-galaxy-version 0
+polarx-rpc-max-allowed-packet 67108864
+polarx-rpc-max-cached-output-buffer-pages 10
+polarx-rpc-max-epoll-wait-total-threads 0
+polarx-rpc-max-queued-messages 128
+polarx-rpc-mcs-spin-cnt 2000
+polarx-rpc-min-auto-epoll-groups 32
+polarx-rpc-multi-affinity-in-group FALSE
+polarx-rpc-net-write-timeout 10000
+polarx-rpc-request-cache-instances 16
+polarx-rpc-request-cache-max-length 1048576
+polarx-rpc-request-cache-number 1024
+polarx-rpc-session-poll-rwlock-spin-cnt 1
+polarx-rpc-shared-session-lifetime 60000
+polarx-rpc-tcp-fixed-dealing-buf 4096
+polarx-rpc-tcp-keep-alive 30
+polarx-rpc-tcp-listen-queue 128
+polarx-rpc-tcp-recv-buf 0
+polarx-rpc-tcp-send-buf 0
 port ####
 port-open-timeout 0
 preload-buffer-size 32768
+print-gtid-info-during-recovery 0
 print-identified-with-as-hex FALSE
 profiling-history-size 15
 protocol-compression-algorithms zlib,zstd,uncompressed
@@ -2001,12 +2213,27 @@ query-alloc-block-size 8192
 query-prealloc-size 8192
 range-alloc-block-size 4096
 range-optimizer-max-mem-size 8388608
-rds-version 18
+rds-audit-log-buffer-size 8388608
+rds-audit-log-connection-policy ALL
+rds-audit-log-dir (No default value)
+rds-audit-log-enabled FALSE
+rds-audit-log-event-buffer-size 2048
+rds-audit-log-flush FALSE
+rds-audit-log-format PLAIN
+rds-audit-log-policy ALL
+rds-audit-log-row-limit 100000
+rds-audit-log-skip FALSE
+rds-audit-log-statement-policy ALL
+rds-audit-log-strategy ASYNCHRONOUS
+rds-audit-log-version MYSQL_V1
+rds-version 30
 read-buffer-size 131072
+read-lsn 0
 read-only FALSE
 read-rnd-buffer-size 262144
 recover-snapshot FALSE
-recovery-apply-binlog 2
+recovery-apply-binlog SAME_AS_GTID
+recovery-apply-binlog-skip-counter 0
 recycle-bin FALSE
 recycle-bin-retention 604800
 recycle-scheduler FALSE
@@ -2021,6 +2248,7 @@ relay-log-info-repository TABLE
 relay-log-purge TRUE
 relay-log-recovery FALSE
 relay-log-space-limit 0
+replica-read-timeout 3000
 replicate-same-server-id FALSE
 report-host (No default value)
 report-password (No default value)
@@ -2028,6 +2256,9 @@ report-port 0
 report-user (No default value)
 require-secure-transport FALSE
 reset-consensus-prefetch-cache FALSE
+rotate-log-table FALSE
+rotate-log-table-last-name 
+rpc-port 33660
 rpl-read-size 8192
 rpl-stop-slave-timeout 31536000
 safe-user-create FALSE

@@ -27,11 +27,9 @@ x.notices_gr_join_leave : BUG#000 We don't support IPv6
 large_tests.innodb_innochecksum_3gb : BUG#000 Take too long (timeout)
 main.multi_update2 : BUG#000 Take too long (timeout)
 main.window_functions_big : BUG#000 Take too long (timeout)
-innodb_gis.rtree_split_geographic : BUG#000 Take too long (timeout)
 large_tests.alter_table : BUG#000 Consume too much space
 rpl_gtid.rpl_wait_for_executed_gtid_set_no_timeout: BUG#000 unstable
 binlog.binlog_max_flush_queue_time_warn : BUG#000 unstable
-binlog.binlog_table_map_optional_metadata : BUG#000 blob metadata
 main.mysqlpump_extended : BUG#000 timeout
 
 # issues with XEngine integrated
@@ -93,6 +91,7 @@ xengine_main.errors                                     : BUG#22062974 function 
 #xengine_rpl_basic.rpl_master_pos_wait                   : BUG#21887336 Xdb_transaction destructor
 #xengine_rpl_basic.rpl_io_thd_wait_for_disk_space        : BUG#21887336 Xdb_transaction destructor
 xengine.shrink_extent_spaces                            : BUG#000 does not support yet
+#xengine_sysvars.xengine_shrink_n_extent_space_basic     : BUG#000 does not support yet
 xengine_rpl.rpl_gtid_rocksdb_sys_header                 : BUG#000 gtid recover change
 xengine_rpl_basic.rpl_row_jsondiff_binarydiff           : BUG#000 JSON, slave not reach apply_json_diffs
 xengine_rpl_basic.rpl_row_jsondiff_error                : BUG#000 JSON, slave not reach apply_json_diffs
@@ -391,53 +390,8 @@ xengine_main.sp                      : WL#24852289  test is created by init thre
 xengine_ext.xengine_charset          : WL#24852289  test is created by init thread, so use default charset.
 xengine_perfschema.show_aggregate    : WL#24852289  test is created by init thread, so use default charset.
 
-# xengine not supported mixed feature
-xengine.feature_recycle_truncated_table                        : WL#000 XEngine not support  
-xengine.feature_recycle_bin                                  : WL#000 XEngine not support  
-xengine_main.subquery_all                          : WL#000 XEngine not support  
-xengine_rpl_nogtid.rpl_semi_sync_install_at_start_server    : WL#000 XEngine not support  
-xengine_rpl_nogtid.rpl_semi_sync_uninstall_plugin    : WL#000 XEngine not support  
-xengine_rpl_nogtid.rpl_semi_sync_ack_thread        : WL#000 XEngine not support  
-xengine_main.subquery_nomat_nosj_bka_nixbnl        : WL#000 XEngine not support  
-xengine_auth_sec.server_withssl_client_withssl     : WL#000 XEngine not support  
-xengine_rpl_nogtid.rpl_semi_sync_wait_slave_count    : WL#000 XEngine not support  
-xengine_main.subquery_none                         : WL#000 XEngine not support  
-xengine_rpl_nogtid.rpl_nogtid_encryption_read      : WL#000 XEngine not support  
-xengine_main.subquery_nomat_nosj                     : WL#000 XEngine not support  
-xengine_main.subquery_all_bka                        : WL#000 XEngine not support  
-xengine_main.ssl_crl_clients_valid   : WL#000 XEngine not support  
-xengine_main.dd_schema_definition_after_upgrade_80_debug   : WL#000 XEngine not support  
-xengine_main.dd_schema_definition_after_upgrade_57_debug   : WL#000 XEngine not support  
-xengine_main.ssl_ca   : WL#000 XEngine not support  
-xengine_main.dictionary_tablespace                   : WL#000 XEngine not support  
-xengine_main.dd_upgrade_error                        : WL#000 XEngine not support  
-xengine_main.subquery_none_bka_nixbnl                : WL#000 XEngine not support  
-xengine_main.ssl_crl_crlpath                         : WL#000 XEngine not support  
-xengine_sysschema.fn_format_path                     : WL#000 XEngine not support  
-xengine_main.all_persisted_variables                 : WL#000 XEngine not support  
-xengine_rpl_basic.rpl_semi_sync_add_remove_slaves    : WL#000 XEngine not support  
-xengine_main.subquery_nomat_nosj_bka                 : WL#000 XEngine not support  
-xengine_main.grant_dynamic_session_variables_admin   : WL#000 XEngine not support  
-xengine_main.subquery_all_bka_nixbnl                 : WL#000 XEngine not support  
-xengine_rpl_basic.rpl_semi_sync_event                : WL#000 XEngine not support  
-xengine_main.dd_schema_definition_debug              : WL#000 XEngine not support  
-xengine_main.events_bugs   : WL#000 XEngine not support  
-xengine_main.mysql_57_inplace_upgrade                : WL#000 XEngine not support  
-xengine_main.dd_upgrade_cs   : WL#000 XEngine not support  
-xengine_main.dd_upgrade_error_debug                  : WL#000 XEngine not support  
-xengine_rpl_nogtid.rpl_semi_sync                     : WL#000 XEngine not support  
-xengine_main.subquery_none_bka   : WL#000 XEngine not support  
-xengine_main.dd_upgrade_partition   : WL#000 XEngine not support  
-xengine_main.ssl_crl   : WL#000 XEngine not support  
-xengine_main.mysql_80_inplace_upgrade   : WL#000 XEngine not support  
-xengine.inplace_upgrade_xengine_table_unicode   : WL#000 XEngine not support  
-xengine.inplace_upgrade   : WL#000 XEngine not support  
-xengine.inplace_upgrade_xengine_table   : WL#000 XEngine not support  
-xengine.inplace_upgrade_xengine_trashy_table   : WL#000 XEngine not support  
-xengine.inplace_upgrade_xengine_table_debug   : WL#000 XEngine not support  
-
-
 # Lizard didn't support in-place upgrade.
+#rds.feature_auto_upgrade_8017_issue76399        : WL#000 Lizard didn't support in-place upgrade.
 main.dd_upgrade_partition                       : WL#000 Lizard didn't support in-place upgrade.
 innodb.redo_log_archive_02                      : WL#000 Lizard didn't support in-place upgrade.
 main.dictionary_tablespace                      : WL#000 Lizard didn't support in-place upgrade.
@@ -447,6 +401,7 @@ innodb.upgrade_fts                              : WL#000 Lizard didn't support i
 innodb.upgrade_orphan                           : WL#000 Lizard didn't support in-place upgrade.
 innodb.upgrade_partition                        : WL#000 Lizard didn't support in-place upgrade.
 encryption.upgrade                              : WL#000 Lizard didn't support in-place upgrade.
+#rds.recovery_inconsistency_check_upgraded_server : WL#000 Lizard didn't support in-place upgrade.
 innodb.log_corruption                             : WL#000 Lizard didn't support in-place upgrade.
 innodb.log_corruption_1                           : WL#000 Lizard didn't support in-place upgrade.
 main.dd_schema_definition_after_upgrade_57_debug  : WL#000 Lizard didn't support in-place upgrade.
@@ -468,42 +423,75 @@ innodb.crc32_endianness                           : WL#000 Importing a different
 innodb.innodb-import-lctn_1                       : WL#000 Importing a different MySQL existing table is not supported by lizard.
 innodb.table_encrypt_portable_64                  : WL#000 Importing a different MySQL existing table is not supported by lizard.
 innodb.portability_tablespace_linux               : WL#000 Lizard didn't support in-place upgrade.
+#rds.feature_support_tde_sm4                       : WL#000 Lizard didn't support in-place upgrade.
 information_schema.upgrade_cs                     : WL#000 Lizard didn't support in-place upgrade.
+main.dd_upgrade_non_debug                         : WL#000 Lizard didn't support in-place upgrade.
 main.read_only_ddl                                : WL#000 Lizard didn't support in-place upgrade.
-# PolarDB-X Engine
-binlog_gtid.binlog_gtid_log_status_errors      : WL#001 'change master to' does not work for PolarDB-X Engine
-binlog_gtid.binlog_gtid_show_binlog_events     : WL#001 test does not work for PolarDB-X Engine (show binlog events)
-binlog_gtid.binlog_gtids_table_gcov            : WL#001 test does not work for PolarDB-X Engine (show binlog events)
+
+# x-cluster
+#binlog.binlog_rds_flush_binlog_redo_together   : WL#001 pattern to search is not printed in server code
+#binlog.binlog_rds_recovery_apply_binlog        : WL#001 test does not work for x-cluster
+#binlog.binlog_rds_recovery_check_inconsistency : WL#001 test does not work for x-cluster
+binlog_gtid.binlog_gtid_log_status_errors      : WL#001 'change master to' does not work for x-cluster
+binlog_gtid.binlog_gtid_show_binlog_events     : WL#001 test does not work for x-cluster (show binlog events)
+binlog_gtid.binlog_gtids_table_gcov            : WL#001 test does not work for x-cluster (show binlog events)
 binlog_gtid.binlog_gtid_table_readonly         : WL#001 test runs into core dump
 binlog_gtid.binlog_xa_empty_rollback           : WL#001 new binlog events needs to be handled
-federated.federated                            : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_archive                    : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_bug_13118                  : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_bug_25714                  : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_bug_35333                  : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_connection_attrs           : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_debug                      : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_get_table_share            : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_innodb                     : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.federated_server                     : WL#001 PolarDB-X Engine does not support master / slave mode
-federated.percona_bug1739734                   : WL#001 PolarDB-X Engine does not support master / slave mode
+federated.federated                            : WL#001 x-cluster does not support master / slave mode
+federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_13118                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_25714                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_bug_35333                  : WL#001 x-cluster does not support master / slave mode
+federated.federated_connection_attrs           : WL#001 x-cluster does not support master / slave mode
+federated.federated_debug                      : WL#001 x-cluster does not support master / slave mode
+federated.federated_get_table_share            : WL#001 x-cluster does not support master / slave mode
+federated.federated_innodb                     : WL#001 x-cluster does not support master / slave mode
+federated.federated_server                     : WL#001 x-cluster does not support master / slave mode
+federated.percona_bug1739734                   : WL#001 x-cluster does not support master / slave mode
 innodb.upgrade_fts                             : WL#001 test runs into core dump
 innodb.upgrade_partition                       : WL#001 test runs into core dump
 innodb.create_tablespace                       : WL#001 test runs into core dump
 innodb.create_tablespace_8k                    : WL#001 test runs into core dump
 
 main.all_persisted_variables                   : WL#001 test runs into core dump
-main.log_components_syslog                     : WL#001 test does not work for PolarDB-X Engine
-main.log_options_cmdline                       : WL#001 test does not work for PolarDB-X Engine
-main.myisam_explain_json_non_select_all        : WL#001 test does not work for PolarDB-X Engine
-main.myisam_explain_json_non_select_none       : WL#001 test does not work for PolarDB-X Engine
+main.log_components_syslog                     : WL#001 test does not work for x-cluster
+main.log_options_cmdline                       : WL#001 test does not work for x-cluster
+main.myisam_explain_json_non_select_all        : WL#001 test does not work for x-cluster
+main.myisam_explain_json_non_select_none       : WL#001 test does not work for x-cluster
 
 main.dd_schema_definition_after_upgrade_57_debug                   : WL#001 test runs into core dump
 binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table : WL#001 test runs into core dump
-main.multiaddress_bind                         : WL#001 ipv6
 
-xcluster.smart_uk_conflict                     : WL#001 smart replay mode is not supported
-xcluster.smart_row_image_not_full              : WL#001 smart replay mode is not supported
-xcluster.rpl_mts_table                         : WL#001 system variable 'slave-pr-mode=TABLE' is not supported
-xcluster.long_trx_leader_transfer              : WL#001 testcase issue
-xcluster.gtid                                  : WL#001 GTID is not fully supported now
+main.ssl_dynamic                       : WL#001 SSL cert invalid
+auth_sec.tls                           : WL#001 SSL cert invalid
+main.ssl_crl                           : WL#001 SSL cert invalid
+main.ssl_ca                            : WL#001 SSL cert invalid
+auth_sec.server_withssl_client_withssl : WL#001 SSL cert invalid
+main.grant_alter_user_qa               : WL#001 SSL cert invalid
+main.ssl_crl_clients_valid             : WL#001 SSL cert invalid
+main.ssl_crl_crlpath                   : WL#001 SSL cert invalid
+main.grant_user_lock_qa                : WL#001 SSL cert invalid
+
+main.archive_symlink                   : WL#001 Archive Engine
+gcol.gcol_archive                      : WL#001 Archive Engine
+gcol.gcol_blackhole                    : WL#001 Blackhole Engine
+gcol.gcol_rejected_myisam              : WL#001 MyISAM Engine
+
+innodb.trx_id_future                   : WL#001 Lizard Row Format changed
+
+# skip these cases when running release version
+#binlog_gtid.binlog_wait_for_executed_gtid_set_interrupted   : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_wait_for_executed_gtid_set_invalid_input : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_implicit_commit                     : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_innodb                              : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_unknown_xid                         : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_shutdown_hang                            : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_next_partially_failed_stmts         : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_mysqlbinlog_row                     : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_next_partially_failed_grant         : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_row_ctype_ucs                       : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_next_begin_caused_trx               : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_automatic_using_rolled_back         : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_mysqlbinlog_row_innodb              : WL#001 xpaxos do not allow reset master
+#binlog_gtid.binlog_gtid_mysqlbinlog_row_myisam              : WL#001 xpaxos do not allow reset master
+

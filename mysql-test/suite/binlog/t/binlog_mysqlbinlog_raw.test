@@ -22,7 +22,7 @@
 #
 # This test case was extended to also test with compressed protocol. (WL#2726)
 ###############################################################################
-
+--source include/have_debug_new.inc
 # Running MYSQL_BINLOG in a separate shell does not work properly in windows
 # due to MTR limitation.
 --source include/not_windows.inc

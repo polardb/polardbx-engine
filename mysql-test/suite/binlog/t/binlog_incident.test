@@ -2,7 +2,7 @@
 # The purpose of this test is to provide a reference for how the
 # incident log event is represented in the output from the mysqlbinlog
 # program.
-
+--source include/have_debug_new.inc
 source include/have_log_bin.inc;
 #source include/have_innodb.inc;
 # Test in this file is binlog format agnostic, thus no need

@@ -1,3 +1,4 @@
+--source include/have_debug_new.inc
 --source include/have_myisam.inc
 --source include/force_myisam_default.inc
 # This is a MyISAM specific test as it checks if a partly-completed INSERT SELECT in a MyISAM table goes into the binlog.

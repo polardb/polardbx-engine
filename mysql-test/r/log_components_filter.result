@@ -756,11 +756,11 @@ SET @@global.log_error_suppression_list=@save_suppression_list;
 SET @@global.dragnet.log_error_filter_rules=@save_filters;
 UNINSTALL COMPONENT "file://component_log_filter_dragnet";
 
+SET @@global.log_error_verbosity=DEFAULT;
 # cleanup
 SET @@session.debug="-d,parser_stmt_to_error_log";
 SET @@session.debug="-d,log_error_normalize";
 FLUSH ERROR LOGS;
-SET @@global.log_error_verbosity=DEFAULT;
 
 ###
 ### error log file

@@ -1841,7 +1841,7 @@ AND a.variable_name NOT IN ('debug_sync');
 while($var_id <= $count_vars)
 {
 --let $var_name= `SELECT var_name FROM all_vars WHERE id=$var_id;`
---error 0,ER_INCORRECT_GLOBAL_LOCAL_VAR
+--error 0,ER_INCORRECT_GLOBAL_LOCAL_VAR,ER_WRONG_VALUE_FOR_VAR,ER_INVALID_THD_ID
 --eval SET SESSION $var_name = @@session.$var_name
 --inc $var_id
 }

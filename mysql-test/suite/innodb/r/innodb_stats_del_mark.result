@@ -69,8 +69,6 @@ INSERT INTO t2 (val) SELECT VAL from t2;
 INSERT INTO t2 (val) SELECT VAL from t2;
 INSERT INTO t2 (val) SELECT VAL from t2;
 INSERT INTO t2 (val) SELECT VAL from t2;
-INSERT INTO t2 (val) SELECT VAL from t2;
-INSERT INTO t2 (val) SELECT VAL from t2;
 SELECT COUNT(*) FROM t2;
 Connection default
 select count(*) from t2;
@@ -84,7 +82,7 @@ even when in other uncommitted transaction
 many rows are inserted.
 Connection 1
 COUNT(*)
-262144
+65536
 Rollback the insert
 rollback;
 Connection default

@@ -26,6 +26,7 @@
 --source include/not_group_replication_plugin.inc
 --source include/have_binlog_format_statement.inc
 --source include/have_debug.inc
+--source include/rpl_save_variables.inc
 
 #
 # One Master and 8 Slaves in the semi sync topology.
@@ -189,3 +190,4 @@ while ($i >= 1)
 --source include/rpl_connection.inc
 DROP TABLE t1;
 --source include/rpl_end.inc
+--source include/rpl_restore_variables.inc

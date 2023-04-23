@@ -1,5 +1,7 @@
+--source include/have_debug_new.inc
 --source include/have_myisam.inc
 --source include/force_myisam_default.inc
+
 # This is a MyISAM specific test as in MyISAM INSERT INTO .. SELECT FROM takes a read lock on the source table whereas in InnoDB row-level locking is used.
 
 --source include/have_log_bin.inc

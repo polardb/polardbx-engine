@@ -5,7 +5,7 @@
 
 # Mix transactional and non-transactional engines on the same
 # transaction is not supported by gtid-mode=ON.
-
+--source include/have_debug_new.inc
 --source include/have_myisam.inc
 --let $engine_type_nontrans= MyISAM
 --let $engine_type= InnoDB

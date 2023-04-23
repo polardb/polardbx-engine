@@ -1,4 +1,4 @@
-
+--disable_ps_protocol
 CREATE TABLE t (c1 INT,
                 c2 DATE,
                 c3 VARCHAR(128));

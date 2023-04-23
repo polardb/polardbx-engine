@@ -22,7 +22,7 @@
 #   iv) The variable contents are searched for 'test' and 'b42941';
 #    v) Should 'test' be found, an ERROR is reported. Should 'b42941' be
 #       absent, an ERROR is reported.
-
+-- source include/have_debug_new.inc
 -- source include/have_log_bin.inc
 -- source include/have_binlog_format_row.inc
 

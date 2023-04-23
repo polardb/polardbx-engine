@@ -11,6 +11,12 @@ source include/master-slave.inc;
 
 # The slave should be initially connected to the master without SSL/TLS
 --connection master
+
+--let $field= Command
+--let $condition= = 'Binlog Dump'
+--let $show_statement= SHOW PROCESSLIST
+--source include/wait_show_condition.inc
+
 --let $connection_type= `SELECT CONNECTION_TYPE FROM performance_schema.threads WHERE PROCESSLIST_COMMAND LIKE "Binlog Dump%"`
 --let $assert_text= Without MASTER_SSL, the slave should be connected to the master without SSL/TLS
 --let $assert_cond= "$connection_type" <> "SSL/TLS" AND "$connection_type" <> ""

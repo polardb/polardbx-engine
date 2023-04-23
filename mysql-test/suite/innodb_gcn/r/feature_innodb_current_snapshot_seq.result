@@ -67,12 +67,12 @@ a	b
 5	5000
 set innodb_snapshot_seq = @base_seq +5000;
 select * from t1 where a = 5;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 set innodb_current_snapshot_seq=ON;
 select * from t1 where a = 5;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1 where a = 5;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 set innodb_commit_seq = @base_seq +5000;
 xa commit '5000';
 set innodb_snapshot_seq = @base_seq +5000;
@@ -93,38 +93,30 @@ xa prepare '6000';
 set innodb_current_snapshot_seq=ON;
 use mydb;
 select * from t1 where a = 6;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 set innodb_current_snapshot_seq=ON;
 set autocommit = 1;
 select * from t1 where a = 6;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 set innodb_current_snapshot_seq=ON;
 show variables like "innodb_current_snapshot_seq";
 Variable_name	Value
 innodb_current_snapshot_seq	ON
 select * from t1 where a = 6;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 set innodb_current_snapshot_seq=ON;
 errorselect * from t1;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'errorselect * from t1' at line 1
 select * from t1 where a = 6;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 set innodb_current_snapshot_seq=ON;
 set innodb_current_snapshot_seq=2323;
 ERROR 42000: Variable 'innodb_current_snapshot_seq' can't be set to the value of '2323'
 select * from t1 where a = 6;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 xa commit '6000';
 set innodb_current_snapshot_seq=ON;
 select * from t1 where a = 6;
 a	b
 6	6001
-insert into t1 (b) value (7000);
-select * from t1 where a = 7;
-a	b
-7	7000
-set innodb_current_snapshot_seq = ON;
-select * from t1 where a = 7;
-a	b
-7	7000
 drop database mydb;

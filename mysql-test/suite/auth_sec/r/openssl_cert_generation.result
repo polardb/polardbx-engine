@@ -186,5 +186,5 @@ drop user wl7699_sha256;
 Pattern "Auto generated SSL certificates are placed in data directory." found
 # Search completed.
 Variable_name	Value
-Ssl_cipher	TLS_AES_256_GCM_SHA384
+Ssl_cipher	DHE-RSA-AES256-SHA
 # Clean-up

@@ -258,7 +258,7 @@ xa commit 't';
 --source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 reap;
 select * from t1;
 rollback;
@@ -301,7 +301,7 @@ xa commit 't';
 --source suite/innodb_gcn/include/assert_session_seq_cleared.inc
 
 connection conn2;
---error ER_LOCK_WAIT_TIMEOUT
+--error ER_GP_WAIT_TIMEOUT
 reap;
 select * from t2;
 rollback;

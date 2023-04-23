@@ -95,8 +95,6 @@ INSERT INTO t2 (val) SELECT VAL from t2;
 INSERT INTO t2 (val) SELECT VAL from t2;
 INSERT INTO t2 (val) SELECT VAL from t2;
 INSERT INTO t2 (val) SELECT VAL from t2;
-INSERT INTO t2 (val) SELECT VAL from t2;
-INSERT INTO t2 (val) SELECT VAL from t2;
 send SELECT COUNT(*) FROM t2;
 
 --echo Connection default

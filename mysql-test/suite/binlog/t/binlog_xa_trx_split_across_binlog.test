@@ -15,7 +15,7 @@
 # 8) Verify that the old data is restorted properly without any issues.
 # 9) Cleanup.
 ###############################################################################
-
+--source include/have_debug_new.inc
 --source include/have_binlog_format_row.inc
 --let $MYSQLD_DATADIR= `select @@datadir`
 

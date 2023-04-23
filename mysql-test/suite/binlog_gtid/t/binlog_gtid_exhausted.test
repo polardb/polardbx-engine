@@ -18,6 +18,7 @@
 --source include/have_binlog_format_statement.inc
 # Don't test this under valgrind, memory leaks will occur
 --source include/not_valgrind.inc
+--source include/have_debug.inc
 
 call mtr.add_suppression("An error occurred during flush stage of the commit");
 call mtr.add_suppression("Attempting backtrace. You can use the following information to find out");
