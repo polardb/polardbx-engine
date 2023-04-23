@@ -478,7 +478,7 @@ class Sql_cmd_consensus_proc_configure_learner
 };
 
 class Consensus_proc_configure_learner : public Consensus_proc {
-  using Sql_cmd_type = Sql_cmd_consensus_proc_configure_follower;
+  using Sql_cmd_type = Sql_cmd_consensus_proc_configure_learner;
 
  public:
   explicit Consensus_proc_configure_learner(PSI_memory_key key)
