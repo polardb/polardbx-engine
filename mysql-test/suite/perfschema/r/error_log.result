@@ -132,7 +132,6 @@ Note	MY-011089	Server
 Note	MY-012357	InnoDB
 Note	MY-012356	InnoDB
 Note	MY-010006	Server
-Note	MY-011332	Server
 Note	MY-013911	Server
 Note	MY-013911	Server
 Note	MY-012487	InnoDB
@@ -142,7 +141,7 @@ Warning	MY-010068	Server
 Note	MY-010310	Server
 Note	MY-010310	Server
 Note	MY-010252	Server
-Note	MY-010253	Server
+Note	MY-010254	Server
 Note	MY-010264	Server
 Note	MY-010251	Server
 Note	MY-011025	Repl

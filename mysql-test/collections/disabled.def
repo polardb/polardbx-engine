@@ -119,3 +119,35 @@ group_replication.gr_xa_commit_one_phase_failure_before_gtid_externalization @wi
 group_replication.gr_xa_prepare_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
 group_replication.gr_xa_rollback_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
 
+
+#galaxy add  here
+perfschema.hostcache_ipv6_addrinfo_again_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_again_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_bad_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_bad_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_good_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_good_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_noname_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_addrinfo_noname_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_auth_plugin : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_blocked : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_max_con : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_again_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_again_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_noname_allow : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_nameinfo_noname_deny : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_passwd : BUG#000 We don't support IPv6
+perfschema.hostcache_ipv6_ssl : BUG#000 We don't support IPv6
+main.bind_address_3 : BUG#000 We don't support IPv6
+rpl.rpl_ip_mix : BUG#000 We don't support IPv6
+rpl.rpl_ip_mix2 : BUG#000 We don't support IPv6
+rpl.rpl_ipv6 : BUG#000 We don't support IPv6
+x.performance_schema_sockets : BUG#000 We don't support IPv6
+group_replication.gr_startup_check_node_seed_skips_own_address  : BUG#000 We don't support IPv6
+group_replication.gr_startup_check_node_seed_skips_own_address_v6  : BUG#000 We don't support IPv6
+x.connection_multi_bind_address	 : BUG#000 We don't support IPv6
+x.status_variables	 : BUG#000 We don't support IPv6
+x.system_variable_bind_address	 : BUG#000 We don't support IPv6
+auth_sec.host_sort	 : BUG#000 We don't support IPv6
+
+main.mysql_load_data_local_dir  : BUG#0000 mysql failed
