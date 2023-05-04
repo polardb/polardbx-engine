@@ -72,6 +72,10 @@ void gcs_init() {
 
   new (&(gcs->crecover)) CRecover();
 
+  new (&(gcs->csnapshot_mgr))
+      CSnapshot_mgr(commit_snapshot_mem_key, srv_commit_snapshot_partition,
+                    srv_commit_snapshot_capacity);
+
   /** Promise here didn't have any active trx */
   ut_ad(trx_sys == nullptr || UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
 
@@ -184,6 +188,32 @@ commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   return cmmt;
 }
 
+/** Push a commit snapshot. */
+void gcs_t::new_snapshot(const commit_snap_t &snap) {
+  csnapshot_mgr.push(snap);
+  return;
+}
+
+template <typename T>
+trx_id_t gcs_t::search_up_limit_tid(const T &lhs) {
+  return csnapshot_mgr.search_up_limit_tid(lhs);
+}
+
+template <typename T>
+extern trx_id_t gcs_search_up_limit_tid(const T &lhs) {
+  return gcs->search_up_limit_tid(lhs);
+}
+
+template trx_id_t gcs_t::search_up_limit_tid<Snapshot_gcn_vision>(
+    const Snapshot_gcn_vision &lhs);
+template trx_id_t gcs_t::search_up_limit_tid<Snapshot_scn_vision>(
+    const Snapshot_scn_vision &lhs);
+
+template trx_id_t gcs_search_up_limit_tid<Snapshot_gcn_vision>(
+    const Snapshot_gcn_vision &lhs);
+
+template trx_id_t gcs_search_up_limit_tid<Snapshot_scn_vision>(
+    const Snapshot_scn_vision &lhs);
 /**
   Persist gcn if current gcn > persisted gcn.
 
@@ -261,6 +291,8 @@ void gcs_close() {
     gcs->persisters.~Persisters();
 
     gcs->crecover.~CRecover();
+
+    gcs->csnapshot_mgr.~CSnapshot_mgr();
 
     gcs->mtx_inited = false;
 

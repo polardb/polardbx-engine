@@ -35,6 +35,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_compiler.h"
 #include "ut0new.h"
 
+#include "lizard0gcs0hist.h"
+
 /** Maximum number of retries to allocate memory. */
 const size_t alloc_max_retries = 60;
 
@@ -101,6 +103,7 @@ static PSI_memory_info pfs_info[] = {
     {&mem_key_undo_spaces, "undo::Tablespaces", 0, 0, PSI_DOCUMENT_ME},
     {&mem_key_ut_lock_free_hash_t, "ut_lock_free_hash_t", 0, 0,
      PSI_DOCUMENT_ME},
+    {&commit_snapshot_mem_key, "commit_snapshot_buffer", 0, 0, PSI_DOCUMENT_ME},
     /* Please obey alphabetical order in the definitions above. */
 };
 

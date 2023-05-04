@@ -206,6 +206,11 @@ struct lizard_var_t {
 
   /** txn undo log segment put into rseg cached list */
   ulint txn_undo_log_recycle;
+
+  /** Search commit snapshot through scn */
+  ulint commit_snapshot_scn_search_hit;
+  /** Search commit snapshot through gcn */
+  ulint commit_snapshot_gcn_search_hit;
 };
 
 struct lizard_stats_t {
@@ -301,6 +306,12 @@ struct lizard_stats_t {
   ulint_ctr_1_t txn_lookup[lizard::TXN_ENTRY_COUNT];
 
   ulint_ctr_1_t txn_undo_log_recycle;
+
+  /** Search commit snapshot through scn */
+  ulint_ctr_1_t commit_snapshot_scn_search_hit;
+
+  /** Search commit snapshot through gcn */
+  ulint_ctr_1_t commit_snapshot_gcn_search_hit;
 };
 
 namespace lizard {

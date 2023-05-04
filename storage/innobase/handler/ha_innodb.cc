@@ -205,7 +205,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0row.h"
-#include "lizard0scn0hist.h"
+#include "lizard0gcs0hist.h"
 #include "lizard0mysql.h"
 #include "lizard0gp.h"
 
@@ -737,6 +737,7 @@ static PSI_rwlock_info all_innodb_rwlocks[] = {
     PSI_RWLOCK_KEY(index_online_log, 0, PSI_DOCUMENT_ME),
     PSI_RWLOCK_KEY(dict_table_stats, 0, PSI_DOCUMENT_ME),
     PSI_RWLOCK_KEY(hash_table_locks, 0, PSI_DOCUMENT_ME),
+    PSI_RWLOCK_KEY(commit_snapshot_rw_lock, 0, PSI_DOCUMENT_ME),
 };
 #endif /* UNIV_PFS_RWLOCK */
 
@@ -22812,6 +22813,21 @@ static MYSQL_SYSVAR_ULONG(freeze_db_if_no_cn_heartbeat_timeout_sec,
                           "timeout, freezing the purge sys and updating.",
                           NULL, NULL, 10, 1, UINT_MAX32, 0);
 
+static MYSQL_SYSVAR_BOOL(commit_snapshot_search_enabled,
+                         lizard::srv_commit_snapshot_search_enabled,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Whether enable commit snapshot search to "
+                         "find a suitable up_limit_tid for Vision::sees on "
+                         "secondary index.",
+                         NULL, NULL, true);
+
+static MYSQL_SYSVAR_BOOL(vision_use_commit_snapshot_debug,
+                         lizard::srv_vision_use_commit_snapshot_debug,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Whether enable commit snapshot search to "
+                         "find a suitable up_limit_tid for general Vision on",
+                         NULL, NULL, false);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23055,6 +23071,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(txn_cached_list_keep_size),
     MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_enable),
     MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_timeout_sec),
+    MYSQL_SYSVAR(commit_snapshot_search_enabled),
+    MYSQL_SYSVAR(vision_use_commit_snapshot_debug),
     NULL};
 
 mysql_declare_plugin(innobase){
