@@ -1524,6 +1524,9 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
   LATCH_ADD_MUTEX(UNDO_RETENTION, SYNC_NO_ORDER_CHECK,
                   undo_retention_mutex_key);
 
+  LATCH_ADD_RWLOCK(COMMIT_SNAPSHOT_RW_LOCK, SYNC_NO_ORDER_CHECK,
+                   commit_snapshot_rw_lock_key);
+
   latch_id_t id = LATCH_ID_NONE;
 
   /* The array should be ordered on latch ID.We need to

@@ -130,7 +130,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0gcs.h"
 #include "lizard0txn.h"
 #include "lizard0undo0types.h"
-#include "lizard0scn0hist.h"
+#include "lizard0gcs0hist.h"
 #include "lizard0undo.h"
 #include "lizard0gp.h"
 

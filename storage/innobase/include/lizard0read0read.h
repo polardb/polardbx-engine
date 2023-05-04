@@ -45,6 +45,12 @@ extern mysql_pfs_key_t lizard_vision_list_mutex_key;
 
 namespace lizard {
 
+/** Whether to use commit snapshot history to search
+ * a suitable up_limit_id to decide sees on secondary index */
+
+/** Only verify commit snapshot correct. */
+extern bool srv_vision_use_commit_snapshot_debug;
+
 class VisionContainer {
 
   typedef UT_LIST_BASE_NODE_T(Vision, list) vision_list_t;

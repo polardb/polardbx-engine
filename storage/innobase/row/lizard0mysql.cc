@@ -5,7 +5,7 @@
 #include "ha_innodb.h"
 
 #include "lizard0mysql.h"
-#include "lizard0scn0hist.h"
+#include "lizard0gcs0hist.h"
 #include "lizard0gcs.h"
 #include "sql/sql_class.h"
 #include "sql/lizard/lizard_snapshot.h"

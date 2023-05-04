@@ -215,6 +215,8 @@ class Snapshot_vision {
   virtual bool too_old() const = 0;
 
   virtual bool modification_visible(void *txn_rec) const = 0;
+
+  virtual my_trx_id_t up_limit_tid() const { return 0; }
 };
 
 /**
@@ -268,9 +270,23 @@ class Snapshot_time_vision : public Snapshot_vision {
 */
 class Snapshot_scn_vision : public Snapshot_vision {
  public:
-  Snapshot_scn_vision() : m_scn(MYSQL_SCN_NULL) {}
+  Snapshot_scn_vision() : m_scn(MYSQL_SCN_NULL), m_up_limit_tid(0) {}
+
+  Snapshot_scn_vision(my_scn_t scn, my_trx_id_t tid)
+      : m_scn(scn), m_up_limit_tid(tid) {}
 
   virtual ~Snapshot_scn_vision() {}
+
+  Snapshot_scn_vision(const Snapshot_scn_vision &v) = delete;
+
+  Snapshot_scn_vision &operator=(const Snapshot_scn_vision &v) {
+    if (this != &v) {
+      m_scn = v.m_scn;
+      m_up_limit_tid = v.m_up_limit_tid;
+    }
+    return *this;
+  }
+
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -279,8 +295,7 @@ class Snapshot_scn_vision : public Snapshot_vision {
   virtual void store_int(uint64_t value) override {
     m_scn = static_cast<my_scn_t>(value);
   }
-  /** Do nothing, can be used directly by innodb. */
-  virtual void after_activate() override {}
+  virtual void after_activate() override;
 
   virtual uint64_t val_int() const override {
     return static_cast<uint64_t>(m_scn);
@@ -298,8 +313,13 @@ class Snapshot_scn_vision : public Snapshot_vision {
   */
   virtual bool modification_visible(void *) const override;
 
+  virtual my_trx_id_t up_limit_tid() const override { return m_up_limit_tid; }
+
+  void set_up_limit_tid(my_trx_id_t tid) { m_up_limit_tid = tid; }
+
  private:
   my_scn_t m_scn;
+  my_trx_id_t m_up_limit_tid;
 };
 
 /**
@@ -308,9 +328,25 @@ class Snapshot_scn_vision : public Snapshot_vision {
 class Snapshot_gcn_vision : public Snapshot_vision {
  public:
   Snapshot_gcn_vision()
-      : m_gcn(MYSQL_GCN_NULL), m_current_scn(MYSQL_SCN_NULL) {}
+      : m_gcn(MYSQL_GCN_NULL),
+        m_current_scn(MYSQL_SCN_NULL),
+        m_up_limit_tid(0) {}
+
+  Snapshot_gcn_vision(my_gcn_t gcn, my_scn_t scn, my_trx_id_t tid)
+      : m_gcn(gcn), m_current_scn(scn), m_up_limit_tid(tid) {}
 
   virtual ~Snapshot_gcn_vision() {}
+
+  Snapshot_gcn_vision(const Snapshot_gcn_vision &v) = delete;
+
+  Snapshot_gcn_vision &operator=(const Snapshot_gcn_vision &v) {
+    if (this != &v) {
+      m_gcn = v.m_gcn;
+      m_current_scn = v.m_current_scn;
+      m_up_limit_tid = v.m_up_limit_tid;
+    }
+    return *this;
+  }
 
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
@@ -344,11 +380,17 @@ class Snapshot_gcn_vision : public Snapshot_vision {
   */
   virtual bool modification_visible(void *) const override;
 
+  virtual my_trx_id_t up_limit_tid() const override { return m_up_limit_tid; }
+
+  void set_up_limit_tid(my_trx_id_t tid) { m_up_limit_tid = tid; }
+
  private:
   my_gcn_t m_gcn;
 
   /** Current scn must be acquire from innodb whatever vision. */
   my_scn_t m_current_scn;
+
+  my_trx_id_t m_up_limit_tid;
 };
 
 /**

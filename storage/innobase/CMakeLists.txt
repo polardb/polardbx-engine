@@ -275,7 +275,7 @@ SET(INNOBASE_SOURCES
   read/lizard0read.cc
   trx/lizard0purge.cc
   trx/lizard0trx.cc
-  dict/lizard0scn0hist.cc
+  dict/lizard0gcs0hist.cc
   row/lizard0mysql.cc
   trx/lizard0gp.cc
   trx/lizard0xa.cc

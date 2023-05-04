@@ -223,6 +223,12 @@ static void export_lizard_status(void) {
       MONITOR_VALUE(MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE);
 
   lizard_vars.txn_undo_log_recycle = lizard_stats.txn_undo_log_recycle;
+
+  lizard_vars.commit_snapshot_scn_search_hit =
+      lizard_stats.commit_snapshot_scn_search_hit;
+
+  lizard_vars.commit_snapshot_gcn_search_hit =
+      lizard_stats.commit_snapshot_gcn_search_hit;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -504,6 +510,14 @@ static SHOW_VAR lizard_status_variables[] = {
 
     {"txn_undo_log_recycle", (char *)&lizard_vars.txn_undo_log_recycle,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"commit_snapshot_scn_search_hit",
+     (char *)&lizard_vars.commit_snapshot_scn_search_hit, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"commit_snapshot_gcn_search_hit",
+     (char *)&lizard_vars.commit_snapshot_gcn_search_hit, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 

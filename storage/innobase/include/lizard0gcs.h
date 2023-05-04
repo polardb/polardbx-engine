@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn.h"
 #include "trx0types.h"
 #include "trx0sys.h"
+#include "lizard0gcs0hist.h"
 
 struct mtr_t;
 
@@ -89,6 +90,8 @@ extern mysql_pfs_key_t gcn_persist_mutex_key;
 #endif
 
 namespace lizard {
+
+class CSnapshot_mgr;
 
 /** GCS Persister container. */
 struct Persisters {
@@ -181,6 +184,13 @@ struct gcs_t {
     @retval	true	if written
    */
   bool persist_gcn();
+
+  /** Commit number snapshot. */
+  CSnapshot_mgr csnapshot_mgr;
+  void new_snapshot(const commit_snap_t &snap);
+
+  template <typename T>
+  trx_id_t search_up_limit_tid(const T &lhs);
 };
 
 /** Initialize GCS system memory structure. */
@@ -255,6 +265,9 @@ extern scn_t gcs_load_min_safe_scn();
 /** Erase trx in serialisation_list_scn, and update min_safe_scn
 @param[in]      trx      trx to be removed */
 void gcs_erase_lists(trx_t *trx);
+
+template <typename T>
+extern trx_id_t gcs_search_up_limit_tid(const T &lhs);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /** Check if min_safe_scn is valid */

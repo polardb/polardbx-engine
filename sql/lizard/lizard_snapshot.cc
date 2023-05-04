@@ -172,7 +172,7 @@ static bool try_cast_to_datetime(THD *thd, Item **item) {
   if (!cast) return true;
 
   cast->fix_fields(thd, item);
-  thd->change_item_tree(item, cast);
+  // thd->change_item_tree(item, cast);
   return false;
 }
 
@@ -369,6 +369,12 @@ bool Snapshot_scn_vision::too_old() const {
   return false;
 }
 
+void Snapshot_scn_vision::after_activate() {
+  my_trx_id_t tid = gcs_search_up_limit_tid<Snapshot_scn_vision>(*this);
+  set_up_limit_tid(tid);
+  return;
+}
+
 /** Whether is it too old.
  *
  *  @retval	true	too old
@@ -384,7 +390,12 @@ bool Snapshot_gcn_vision::too_old() const {
   return false;
 }
 
-void Snapshot_gcn_vision::after_activate() { gcs_set_gcn_if_bigger(val_int()); }
+void Snapshot_gcn_vision::after_activate() {
+  gcs_set_gcn_if_bigger(val_int());
+  my_trx_id_t tid = gcs_search_up_limit_tid<Snapshot_gcn_vision>(*this);
+  set_up_limit_tid(tid);
+  return;
+}
 
 /*
   Reset snapshot, increase the snapshot table count.

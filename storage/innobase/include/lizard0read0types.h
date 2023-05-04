@@ -122,15 +122,7 @@ class Vision {
     @param       id		transaction to check
     @retval      true  if view sees transaction id
   */
-  bool sees(trx_id_t id) const {
-    ut_ad(id < TRX_ID_MAX && m_creator_trx_id < TRX_ID_MAX);
-    ut_ad(m_list_idx != VISION_LIST_IDX_NULL);
-    /** If it's a as of scn snapshot query, we always force using pk */
-    /** Simliar with as of scn */
-    if (m_snapshot_vision) return false;
-
-    return id < m_up_limit_id;
-  }
+  bool sees(trx_id_t id) const;
 
   /**
     Set the view creator transaction id. This should be set only

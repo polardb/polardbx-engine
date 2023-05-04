@@ -50,6 +50,12 @@ mysql_pfs_key_t lizard_vision_list_mutex_key;
 
 namespace lizard {
 
+/** Whether to use commit snapshot history to search
+ * a suitable up_limit_id to decide sees on secondary index */
+
+/** Only verify commit snapshot correct. */
+bool srv_vision_use_commit_snapshot_debug = false;
+
 /** Global visions */
 VisionContainer *vision_container;
 
@@ -187,6 +193,12 @@ void VisionContainer::vision_open(trx_t *trx) {
   m_size.fetch_add(1);
 
   vision->m_list_idx = idx;
+
+  /** Verify commit snapshot module correctness. */
+  if (srv_vision_use_commit_snapshot_debug) {
+    Snapshot_scn_vision v(vision->snapshot_scn(), 0);
+    vision->m_up_limit_id = gcs_search_up_limit_tid<Snapshot_scn_vision>(v);
+  }
 
   vision_collect_trx_group_ids(trx, vision);
 }
@@ -367,6 +379,27 @@ bool Vision::modifications_visible(txn_rec_t *txn_rec,
   ut_ad(txn_rec->trx_id > 0 && txn_rec->trx_id < TRX_ID_MAX);
 
   return modifications_visible_mvcc(txn_rec, name, check_consistent);
+}
+  /**
+    Whether Vision can see the target trx id,
+    if the target trx id is less than the least
+    active trx, then it will see.
+
+    @param       id		transaction to check
+    @retval      true  if view sees transaction id
+  */
+bool Vision::sees(trx_id_t id) const {
+  ut_ad(id < TRX_ID_MAX && m_creator_trx_id < TRX_ID_MAX);
+  ut_ad(m_list_idx != VISION_LIST_IDX_NULL);
+  /** If it's a as of scn snapshot query, we always force using pk */
+  /** Simliar with as of scn */
+
+  /** Revision:  Support snapshot vision on secondary index. */
+  if (m_snapshot_vision) {
+    return id < m_snapshot_vision->up_limit_tid();
+  }
+
+  return id < m_up_limit_id;
 }
 
 /**

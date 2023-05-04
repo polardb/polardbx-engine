@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 typedef uint64_t my_scn_t;
 typedef uint64_t my_gcn_t;
 typedef uint64_t my_utc_t;
+typedef uint64_t my_trx_id_t;
 
 class THD;
 
@@ -60,6 +61,9 @@ int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn);
 
 /** Push up memory gcn if bigger. */
 void gcs_set_gcn_if_bigger(my_gcn_t gcn);
+
+template <typename T>
+extern my_trx_id_t gcs_search_up_limit_tid(const T &lhs);
 
 }  // namespace lizard
 
