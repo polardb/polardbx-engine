@@ -699,6 +699,7 @@ SET(SQL_SHARED_SOURCES
   lizard_rpl_binlog_sender.cc
   lizard_rpl_rli.cc
   sql_common_ext.cc
+  raft/raft0err.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)

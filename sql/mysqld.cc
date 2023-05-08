@@ -982,6 +982,7 @@ MySQL clients support the protocol:
 #include "sql/common/reload.h"
 
 #include "sql/binlog/lizard0recovery.h"
+#include "sql/raft/raft0err.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle.h"
@@ -7340,6 +7341,8 @@ int mysqld_main(int argc, char **argv)
   remaining_argv = argv;
 
   init_variable_default_paths();
+
+  raft::system(ER_RAFT_0) << "Raft server start.";
 
   int heo_error;
 

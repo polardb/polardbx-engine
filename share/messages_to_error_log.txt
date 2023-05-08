@@ -12178,6 +12178,9 @@ ER_RECYCLE_BIN
 ER_OUTLINE
   eng "Statement outline : %s"
 
+ER_RAFT_0
+  eng "%s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
