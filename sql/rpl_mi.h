@@ -44,6 +44,8 @@
 #include "sql/rpl_trx_boundary_parser.h"  // Transaction_boundary_parser
 #include "sql/sql_const.h"
 
+#include "sql/raft/channel.h"
+
 class Rpl_info_handler;
 class Server_ids;
 class THD;
@@ -626,6 +628,7 @@ class Master_info : public Rpl_info {
   uint m_failover_list_position{0};
   bool m_network_error{false};
 
+ protected:
   Master_info(
 #ifdef HAVE_PSI_INTERFACE
       PSI_mutex_key *param_key_info_run_lock,
@@ -641,6 +644,7 @@ class Master_info : public Rpl_info {
 #endif
       uint param_id, const char *param_channel);
 
+ private:
   Master_info(const Master_info &info);
   Master_info &operator=(const Master_info &info);
 
@@ -809,6 +813,9 @@ class Master_info : public Rpl_info {
     receiver position related information might be outdated.
   */
   bool m_is_receiver_position_info_invalid;
+
+ public:
+  virtual Channel_style style() { return Channel_style::Tradition; }
 };
 
 #endif /* RPL_MI_H */

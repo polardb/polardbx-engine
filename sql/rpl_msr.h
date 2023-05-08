@@ -445,6 +445,13 @@ class Multisource_info {
   inline void assert_some_wrlock() const {
     m_channel_map_lock->assert_some_wrlock();
   }
+
+  /** Raft replication channel. */
+ private:
+  static const char *raft_channel;
+
+ public:
+  bool is_raft_replication_channel_name(const char *channel);
 };
 
 /**

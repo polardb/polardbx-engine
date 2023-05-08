@@ -31,6 +31,7 @@
 #include "my_io.h"
 #include "sql/rpl_info_handler.h"  // enum_return_check
 
+class Consensus_info;
 class Master_info;
 class Multisource_info;
 class Relay_log_info;
@@ -177,6 +178,16 @@ class Rpl_info_factory {
   static bool load_channel_names_from_table(
       std::vector<std::string> &channel_list, const char *default_channel,
       bool *default_channel_created_previously);
+
+ public:
+  static Consensus_info *create_consensus_info();
+  static void init_consensus_repo_metadata();
+
+ private:
+  static struct_table_data consensus_table_data;
+  static struct_file_data consensus_file_data;
+
+
 };
 
 #endif

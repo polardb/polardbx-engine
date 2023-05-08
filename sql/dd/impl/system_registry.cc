@@ -244,6 +244,7 @@ void System_tables::add_remaining_dd_tables() {
   register_table("time_zone_transition", system);
   register_table("time_zone_transition_type", system);
   register_table("user", system);
+  register_table("consensus_info", system);
 
   /*
     MTR tests expects following tables to be created in the 'mysql' tablespace.

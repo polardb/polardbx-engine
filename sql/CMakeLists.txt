@@ -700,7 +700,10 @@ SET(SQL_SHARED_SOURCES
   lizard_rpl_rli.cc
   sql_common_ext.cc
   raft/raft0err.cc
-)
+  raft/channel.cc
+  raft/raft0rpl_info_factory.cc
+  raft/raft0rpl_info_handler.cc 
+  )
 
 IF(BUILD_IS_SINGLE_CONFIG)
   GET_PROPERTY(CWD_DEFINITIONS DIRECTORY PROPERTY COMPILE_DEFINITIONS)
@@ -1095,6 +1098,7 @@ SET(BINLOG_SOURCE
   stream_cipher.cc
   binlog/lizard0recovery.cc
   gcn_log_event.cc
+  consensus_info.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
 TARGET_LINK_LIBRARIES(binlog binlogevents_static)
@@ -1150,6 +1154,7 @@ SET (SLAVE_SOURCE
   rpl_trx_boundary_parser.cc
   udf_service_impl.cc
   udf_service_util.cc
+  consensus_info.cc
   )
 ADD_LIBRARY(slave STATIC ${SLAVE_SOURCE})
 ADD_DEPENDENCIES(slave GenError)

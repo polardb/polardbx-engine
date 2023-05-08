@@ -36,7 +36,7 @@ enum enum_return_id { FOUND_ID = 1, NOT_FOUND_ID, ERROR_ID };
 
 class Rpl_info_table_access : public System_table_access {
  public:
-  Rpl_info_table_access() : thd_created(false) {}
+  Rpl_info_table_access() : thd_created(false), old_thd(nullptr) {}
   ~Rpl_info_table_access() override = default;
 
   /**
@@ -66,5 +66,11 @@ class Rpl_info_table_access : public System_table_access {
 
   Rpl_info_table_access &operator=(const Rpl_info_table_access &info);
   Rpl_info_table_access(const Rpl_info_table_access &info);
+
+ public:
+  THD *force_create_thd();
+
+ private:
+  THD *old_thd;
 };
 #endif /* RPL_INFO_TABLE_ACCESS_H */

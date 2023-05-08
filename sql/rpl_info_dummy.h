@@ -89,5 +89,8 @@ class Rpl_info_dummy : public Rpl_info_handler {
 
   Rpl_info_dummy &operator=(const Rpl_info_dummy &info);
   Rpl_info_dummy(const Rpl_info_dummy &info);
+
+ private:
+  virtual int do_flush_info_force_new_thd(const bool force) override;
 };
 #endif /* RPL_INFO_DUMMY_H */

@@ -174,5 +174,8 @@ class Rpl_info_file : public Rpl_info_handler {
 
   Rpl_info_file(const Rpl_info_file &info);
   Rpl_info_file &operator=(const Rpl_info_file &info);
+
+ private:
+  virtual int do_flush_info_force_new_thd(const bool force) override;
 };
 #endif /* RPL_INFO_FILE_H */

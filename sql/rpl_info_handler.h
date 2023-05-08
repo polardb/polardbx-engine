@@ -434,6 +434,17 @@ class Rpl_info_handler {
   virtual bool do_is_transactional() = 0;
   virtual bool do_update_is_transactional() = 0;
   virtual uint do_get_rpl_info_type() = 0;
+
+ private:
+  /* for consensus_info table, commit phase write meta will cause crash
+   * #11004688 */
+  virtual int do_flush_info_force_new_thd(const bool force) = 0;
+
+
+ public:
+  int flush_info_force_new_thd(const bool force) {
+    return do_flush_info_force_new_thd(force);
+  }
 };
 
 bool operator!(Rpl_info_handler::enum_field_get_status status);

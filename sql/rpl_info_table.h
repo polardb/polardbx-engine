@@ -227,5 +227,8 @@ class Rpl_info_table : public Rpl_info_handler {
 
   Rpl_info_table(const Rpl_info_table &info);
   Rpl_info_table &operator=(const Rpl_info_table &info);
+
+ private:
+  virtual int do_flush_info_force_new_thd(const bool force) override;
 };
 #endif /* RPL_INFO_TABLE_H */

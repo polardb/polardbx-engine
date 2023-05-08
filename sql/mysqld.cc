@@ -983,6 +983,7 @@ MySQL clients support the protocol:
 
 #include "sql/binlog/lizard0recovery.h"
 #include "sql/raft/raft0err.h"
+#include "sql/consensus_info.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle.h"
@@ -11900,7 +11901,14 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_group_replication_connection_mutex, "LOCK_group_replication_connection_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 { &key_LOCK_authentication_policy, "LOCK_authentication_policy", PSI_FLAG_SINGLETON, 0, "A lock to ensure execution of CREATE USER or ALTER USER sql and SET @@global.authentication_policy variable are serialized"},
   { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &im::key_LOCK_internal_account_string, "LOCK_internal_account_string", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
+  { &im::key_LOCK_internal_account_string, "LOCK_internal_account_string", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+
+  { &key_consensus_info_data_lock, "consensus_info::data_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_run_lock, "consensus_info::run_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_sleep_lock, "consensus_info::sleep_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_thd_lock, "consensus_info::info_thd_lock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_lock, "consensus_info::lock", 
+	  0, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 
@@ -12015,9 +12023,13 @@ static PSI_cond_info all_server_conds[]=
   { &key_cond_slave_worker_hash, "Relay_log_info::replica_worker_hash_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_monitor_info_run_cond, "Source_IO_monitor::run_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_delegate_connection_cond_var, "THD::COND_delegate_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
-  { &key_COND_group_replication_connection_cond_var, "THD::COND_group_replication_connection_cond_var", 0, 0, PSI_DOCUMENT_ME}
-};
-/* clang-format on */
+  { &key_COND_group_replication_connection_cond_var, "THD::COND_group_replication_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
+
+  { &key_consensus_info_data_cond, "Consensus_info::data_cond", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_start_cond, "Consensus_info::start_cond", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_stop_cond, "Consensus_info::stop_cond", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_sleep_cond, "Consensus_info::sleep_cond", 0, 0, PSI_DOCUMENT_ME}
+}; /* clang-format on */
 
 PSI_thread_key key_thread_bootstrap;
 PSI_thread_key key_thread_handle_manager;

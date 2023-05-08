@@ -64,6 +64,7 @@
 #include "sql/table.h"
 
 #include "sql/lizard_rpl_rli.h"
+#include "sql/raft/channel.h"
 
 class Commit_order_manager;
 class Master_info;
@@ -2125,6 +2126,9 @@ class Relay_log_info : public Rpl_info {
   lizard::Begin_events_before_gtid_manager &get_b_events_before_gtid_mgr() {
     return m_b_events_before_gtid_mgr;
   }
+
+ public:
+  virtual Channel_style style() { return Channel_style::Tradition; }
 
  private:
   friend lizard::Begin_events_before_gtid_manager;
