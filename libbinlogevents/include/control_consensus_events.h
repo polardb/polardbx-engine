@@ -117,7 +117,7 @@ class Consensus_cluster_info_event : public Binary_log_event {
   Constructor.
   */
   explicit Consensus_cluster_info_event(unsigned int info_length_arg,
-                                        char *info_arg)
+                                        const char *info_arg)
       : Binary_log_event(CONSENSUS_CLUSTER_INFO_EVENT),
         info_length(info_length_arg),
         info(info_arg) {}

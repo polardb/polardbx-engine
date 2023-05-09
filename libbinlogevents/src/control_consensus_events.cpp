@@ -86,7 +86,6 @@ Consensus_cluster_info_event::Consensus_cluster_info_event(
   memcpy(&info_length, ptr_buffer, sizeof(info_length));
   ptr_buffer += ENCODED_INFO_LENGTH_LENGTH;
   info = bapi_strndup(ptr_buffer, info_length);
-  return;
 }
 
 Consensus_empty_event::Consensus_empty_event(

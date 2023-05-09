@@ -14384,3 +14384,5 @@ std::pair<bool, binary_log::Log_event_basic_info> extract_log_event_basic_info(
       uint2korr(buf + FLAGS_OFFSET) & LOG_EVENT_IGNORABLE_F;
   return std::make_pair(false, event_info);
 }
+
+#include "consensus_log_event.cc"

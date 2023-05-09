@@ -1895,16 +1895,19 @@ class Stop_log_event : public binary_log::Stop_event, public Log_event {
  private:
 #if defined(MYSQL_SERVER)
   int do_update_pos(Relay_log_info *rli) override;
-  enum_skip_reason do_shall_skip(Relay_log_info *) override {
-    /*
-      Events from ourself should be skipped, but they should not
-      decrease the slave skip counter.
-     */
-    if (this->server_id == ::server_id)
-      return Log_event::EVENT_SKIP_IGNORE;
-    else
-      return Log_event::EVENT_SKIP_NOT;
-  }
+  //  See sql/consensus_log_event.cc
+  enum_skip_reason do_shall_skip(Relay_log_info *) override;
+
+//  {
+//    /*
+//      Events from ourself should be skipped, but they should not
+//      decrease the slave skip counter.
+//     */
+//    if (this->server_id == ::server_id)
+//      return Log_event::EVENT_SKIP_IGNORE;
+//    else
+//      return Log_event::EVENT_SKIP_NOT;
+//  }
 #endif
 };
 
@@ -4392,5 +4395,7 @@ std::pair<bool, binary_log::Log_event_basic_info> extract_log_event_basic_info(
 /**
   @} (end of group Replication)
 */
+
+#include "sql/consensus_log_event.h"
 
 #endif /* _log_event_h */
