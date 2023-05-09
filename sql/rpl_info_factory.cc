@@ -99,16 +99,7 @@ Master_info *Rpl_info_factory::create_mi(uint mi_option, const char *channel,
 
   DBUG_TRACE;
 
-  if (!(mi = new Master_info(
-#ifdef HAVE_PSI_INTERFACE
-            &key_source_info_run_lock, &key_source_info_data_lock,
-            &key_source_info_sleep_lock, &key_source_info_thd_lock,
-            &key_source_info_rotate_lock, &key_source_info_data_cond,
-            &key_source_info_start_cond, &key_source_info_stop_cond,
-            &key_source_info_sleep_cond, &key_source_info_rotate_cond,
-#endif
-            instances, channel)))
-    goto err;
+  if (!(mi = new_mi_object(instances, channel))) goto err;
 
   if (init_repositories(mi_table_data, mi_file_data, mi_option, &handler_src,
                         &handler_dest, &msg))
@@ -231,17 +222,10 @@ Relay_log_info *Rpl_info_factory::create_rli(uint rli_option,
     msg = scan_msg.c_str();
     goto err;
   }
-  if (!(rli = new Relay_log_info(
-            is_slave_recovery,
-#ifdef HAVE_PSI_INTERFACE
-            &key_relay_log_info_run_lock, &key_relay_log_info_data_lock,
-            &key_relay_log_info_sleep_lock, &key_relay_log_info_thd_lock,
-            &key_relay_log_info_data_cond, &key_relay_log_info_start_cond,
-            &key_relay_log_info_stop_cond, &key_relay_log_info_sleep_cond,
-#endif
-            instances, channel,
-            (rli_option != INFO_REPOSITORY_TABLE &&
-             rli_option != INFO_REPOSITORY_FILE)))) {
+
+  if (!(rli = new_rli_object(is_slave_recovery, instances, channel,
+                             (rli_option != INFO_REPOSITORY_TABLE &&
+                              rli_option != INFO_REPOSITORY_FILE)))) {
     msg = msg_alloc;
     goto err;
   }

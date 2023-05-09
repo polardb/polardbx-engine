@@ -451,7 +451,7 @@ class Multisource_info {
   static const char *raft_channel;
 
  public:
-  bool is_raft_replication_channel_name(const char *channel);
+  static bool is_raft_replication_channel_name(const char *channel);
 };
 
 /**

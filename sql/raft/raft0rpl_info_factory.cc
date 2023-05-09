@@ -28,15 +28,95 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/consensus_info.h"
 #include "sql/rpl_info_factory.h"
 #include "sql/table.h"
+#include "sql/rpl_msr.h"
 
 #include "sql/raft/raft0err.h"
 #include "sql/raft/raft0rpl_info_factory.h"
+#include "sql/raft/raft0rpl_mi.h"
+#include "sql/raft/raft0rpl_rli.h"
 
 /* Consensus info table name */
 LEX_CSTRING CONSENSUS_INFO_NAME = {STRING_WITH_LEN("consensus_info")};
 
 Rpl_info_factory::struct_table_data Rpl_info_factory::consensus_table_data;
 Rpl_info_factory::struct_file_data Rpl_info_factory::consensus_file_data;
+
+/**
+ * Create different channel style master info object according to channel
+ * name.
+ *
+ * @retval	nullptr if error.
+ */
+Master_info *Rpl_info_factory::new_mi_object(uint instances,
+                                             const char *channel) {
+  Master_info *mi = nullptr;
+  bool is_raft = Multisource_info::is_raft_replication_channel_name(channel);
+
+  if (is_raft) {
+    mi = new Raft_master_info(
+#ifdef HAVE_PSI_INTERFACE
+        &key_source_info_run_lock, &key_source_info_data_lock,
+        &key_source_info_sleep_lock, &key_source_info_thd_lock,
+        &key_source_info_rotate_lock, &key_source_info_data_cond,
+        &key_source_info_start_cond, &key_source_info_stop_cond,
+        &key_source_info_sleep_cond, &key_source_info_rotate_cond,
+#endif
+        instances, channel);
+  } else {
+    mi = new Master_info(
+#ifdef HAVE_PSI_INTERFACE
+        &key_source_info_run_lock, &key_source_info_data_lock,
+        &key_source_info_sleep_lock, &key_source_info_thd_lock,
+        &key_source_info_rotate_lock, &key_source_info_data_cond,
+        &key_source_info_start_cond, &key_source_info_stop_cond,
+        &key_source_info_sleep_cond, &key_source_info_rotate_cond,
+#endif
+        instances, channel);
+  }
+  return mi;
+}
+
+/**
+ * Create different channel style relay log info object according to channel
+ * name.
+ *
+ * @retval	nullptr if error.
+ */
+Relay_log_info *Rpl_info_factory::new_rli_object(bool is_slave_recovery,
+                                                 uint instances,
+                                                 const char *channel,
+                                                 bool is_rli_fake) {
+  Relay_log_info *rli = nullptr;
+  bool is_raft = Multisource_info::is_raft_replication_channel_name(channel);
+
+  if (is_raft) {
+    rli = new Raft_relay_log_info(
+        false,
+#ifdef HAVE_PSI_INTERFACE
+        &key_relay_log_info_run_lock, &key_relay_log_info_data_lock,
+        &key_relay_log_info_sleep_lock, &key_relay_log_info_thd_lock,
+        &key_relay_log_info_data_cond, &key_relay_log_info_start_cond,
+        &key_relay_log_info_stop_cond, &key_relay_log_info_sleep_cond,
+#endif
+        instances, channel, is_rli_fake);
+
+    /** Attention.  */
+    rli->replicate_same_server_id = true;
+
+  } else {
+    rli = new Relay_log_info(
+        is_slave_recovery,
+#ifdef HAVE_PSI_INTERFACE
+        &key_relay_log_info_run_lock, &key_relay_log_info_data_lock,
+        &key_relay_log_info_sleep_lock, &key_relay_log_info_thd_lock,
+        &key_relay_log_info_data_cond, &key_relay_log_info_start_cond,
+        &key_relay_log_info_stop_cond, &key_relay_log_info_sleep_cond,
+#endif
+        instances, channel, is_rli_fake);
+  }
+
+  return rli;
+}
 
 /**
  * Create consensus info table handler.

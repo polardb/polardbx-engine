@@ -183,6 +183,23 @@ class Rpl_info_factory {
   static Consensus_info *create_consensus_info();
   static void init_consensus_repo_metadata();
 
+  /**
+   * Create different channel style master info object according to channel
+   * name.
+   *
+   * @retval	nullptr if error.
+   */
+  static Master_info *new_mi_object(uint instances, const char *channel);
+
+  /**
+   * Create different channel style relay log info object according to channel
+   * name.
+   *
+   * @retval	nullptr if error.
+   */
+  static Relay_log_info *new_rli_object(bool is_slave_recovery, uint instances,
+                                        const char *channel, bool is_rli_fake);
+
  private:
   static struct_table_data consensus_table_data;
   static struct_file_data consensus_file_data;
