@@ -4021,7 +4021,9 @@ bool udf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     if (!initid.const_item && used_tables_cache == 0)
       used_tables_cache = RAND_TABLE_BIT;
     func->decimals = min<uint>(initid.decimals, DECIMAL_NOT_SPECIFIED);
-    func->set_data_type_string(func->max_length, &my_charset_bin);
+    if (result_type() == STRING_RESULT) {
+      func->set_data_type_string(func->max_length, &my_charset_bin);
+    }
   }
   initialized = 1;
   if (error) {
