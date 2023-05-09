@@ -148,7 +148,7 @@ class COPY_INFO {
 
  public:
   Statistics stats;
-  int escape_char, last_errno;
+  int escape_char, last_errno, prev_errno;
   /** Values for UPDATE; needed by write_record() if INSERT with DUP_UPDATE */
   List<Item> *update_values;
 
@@ -177,6 +177,7 @@ class COPY_INFO {
         stats(),
         escape_char(0),
         last_errno(0),
+        prev_errno(0),
         update_values(NULL) {
     DBUG_ASSERT(optype == INSERT_OPERATION);
   }
@@ -215,6 +216,7 @@ class COPY_INFO {
         stats(),
         escape_char(escape_character),
         last_errno(0),
+        prev_errno(0),
         update_values(NULL) {
     DBUG_ASSERT(optype == INSERT_OPERATION);
   }
@@ -239,6 +241,7 @@ class COPY_INFO {
         stats(),
         escape_char(0),
         last_errno(0),
+        prev_errno(0),
         update_values(values) {
     DBUG_ASSERT(optype == UPDATE_OPERATION);
   }
