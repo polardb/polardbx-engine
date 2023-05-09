@@ -357,6 +357,19 @@ enum Log_event_type {
   TRANSACTION_PAYLOAD_EVENT = 40,
 
   HEARTBEAT_LOG_EVENT_V2 = 41,
+
+  /* CONSENSUS EVENTS BEGIN */
+  CONSENSUS_LOG_EVENT = 101,
+
+  PREVIOUS_CONSENSUS_INDEX_LOG_EVENT = 102,
+
+  CONSENSUS_CLUSTER_INFO_EVENT = 103,
+
+  CONSENSUS_EMPTY_EVENT = 104,
+  /* CONSENSUS EVENTS END */
+
+  GCN_LOG_EVENT = 105,
+
   /**
     Add new events here - right above this comment!
     Existing events (except ENUM_END_EVENT) should never change their numbers

@@ -46,6 +46,7 @@ SET(REPLICATION_SOURCES
   uuid.cpp
 
   gcn_event.cpp
+  control_consensus_events.cpp
   )
 
 MY_CHECK_CXX_COMPILER_WARNING("-Wmissing-profile" HAS_MISSING_PROFILE)
