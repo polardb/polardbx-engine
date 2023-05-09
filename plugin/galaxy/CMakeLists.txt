@@ -23,12 +23,15 @@
 
 ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="galaxy")
 
+INCLUDE_DIRECTORIES(${BOOST_INCLUDE_DIR})
+
 SET(GALAXY_SOURCES
     plugin.h
     plugin.cc
     udf/udf.cc
     udf/bloomfilter.cc
     udf/hyperloglog.cc
+    udf/hashcheck.cc
     udf/registry.cc
     udf/registrator.cc
     service/service_registry.cc

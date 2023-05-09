@@ -49,7 +49,7 @@ static int galaxy_init(void *) {
 
   if ((udf_cnt = udf_registry->insert(
            {udf::UDF(bloomfilter_udf).def(), udf::UDF(hllndv_udf).def(),
-            udf::UDF(hyperloglog_udf).def()})) != 3) {
+            udf::UDF(hyperloglog_udf).def(), udf::UDF(hashcheck_udf).def()})) != 4) {
     /** Log error */
     LogErr(ERROR_LEVEL, ER_GALAXY_PLUGIN, "Register UDF error!");
 
@@ -57,7 +57,7 @@ static int galaxy_init(void *) {
     return 1;
   }
 
-  LogErr(INFORMATION_LEVEL, ER_GALAXY_PLUGIN, "Register three UDFs.");
+  LogErr(INFORMATION_LEVEL, ER_GALAXY_PLUGIN, "Register four UDFs.");
   return 0;
 }
 
@@ -84,6 +84,8 @@ static SHOW_VAR galaxy_status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"galaxy_hllndv_call_count", (char *)&udf::udf_counter.hllndv_counter,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"galaxy_hashcheck_call_count", (char*)&udf::udf_counter.hashcheck_counter, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
     {NULL, NULL, SHOW_LONG, SHOW_SCOPE_GLOBAL},
 };
 

@@ -4082,6 +4082,7 @@ bool udf_handler::get_arguments() {
     (String*)NULL in case of NULL values
 */
 String *udf_handler::val_str(String *str, String *save_str) {
+  char *res = nullptr;
   uchar is_null_tmp = 0;
   ulong res_length;
   DBUG_TRACE;
@@ -4095,10 +4096,22 @@ String *udf_handler::val_str(String *str, String *save_str) {
       error = 1;
       return 0;
     }
+    res_length = MAX_FIELD_WIDTH;
   }
-  char *res =
-      func(&initid, &f_args, str->ptr(), &res_length, &is_null_tmp, &error);
-  DBUG_PRINT("info", ("udf func returned, res_length: %lu", res_length));
+
+  do {
+    if (res_length > str->alloced_length()) {
+      if (str->alloc(res_length)) {
+        error = 1;
+        return nullptr;
+      }
+      error = 0;
+    }
+    res = func(&initid, &f_args, (char *)str->ptr(), &res_length,
+               &is_null_tmp, &error);
+    DBUG_PRINT("info", ("udf func returned, res_length: %lu", res_length));
+  } while (error && res_length > str->alloced_length());
+
   if (is_null_tmp || !res || error)  // The !res is for safety
   {
     DBUG_PRINT("info", ("Null or error"));

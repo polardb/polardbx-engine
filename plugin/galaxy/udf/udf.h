@@ -38,6 +38,7 @@ struct st_udf_counter {
   unsigned long long bloomfilter_counter = 0;
   unsigned long long hyperloglog_counter = 0;
   unsigned long long hllndv_counter = 0;
+  unsigned long long hashcheck_counter = 0;
 };
 
 extern struct st_udf_counter udf_counter;
@@ -92,5 +93,6 @@ class UDF {
 void bloomfilter_udf(gs::udf::Udf_definition *def);
 void hllndv_udf(gs::udf::Udf_definition *def);
 void hyperloglog_udf(gs::udf::Udf_definition *def);
+void hashcheck_udf(gs::udf::Udf_definition *def);
 
 #endif

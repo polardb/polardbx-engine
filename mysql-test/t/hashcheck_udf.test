@@ -1,0 +1,225 @@
+# test hashcheck udf
+#
+
+--disable_warnings
+drop table if exists tb_hashcheck;
+--enable_warnings
+
+INSTALL PLUGIN galaxy SONAME "galaxy.so";
+
+# normal test
+create table hash_check_normal_tb (
+    pk bigint not null,
+    col1 int default null,
+    col2 varchar(50) default null,
+    col3 varchar(50) default null,
+    primary key(pk)
+);
+
+insert into hash_check_normal_tb (pk, col1, col2, col3) values 
+    (1, 1000, "stringpadding0", "stringpadding1234"),
+    (2, null, null, null),
+    (3, 1001, "", null),
+    (4, 1002, "", ""),
+    (5, 1003, "abc", "de"),
+    (6, 1004, "ab", "cde");
+
+select hashcheck(pk, col1, col2, col3) from hash_check_normal_tb;
+select hashcheck(pk, col1, col2, col3) from hash_check_normal_tb order by pk desc;
+select hashcheck(pk, col1, col2, col3) from hash_check_normal_tb where pk = 1;
+select hashcheck(pk, col1, col2, col3) from hash_check_normal_tb where pk = 2;
+select hashcheck(pk, col1, col2, col3) from hash_check_normal_tb where pk = 3;
+select hashcheck(pk, col1, col2, col3) from hash_check_normal_tb where pk = 4;
+select hashcheck(pk, col1, col2, col3) from hash_check_normal_tb where pk <= 2;
+select hashcheck(col1, col2, col3) from hash_check_normal_tb where pk = 2;
+select hashcheck(col2, col3) from hash_check_normal_tb where pk = 2;
+select hashcheck(col2, col3) from hash_check_normal_tb where pk = 3;
+select hashcheck(col2, col3) from hash_check_normal_tb where pk = 4;
+select hashcheck(col2, col3) from hash_check_normal_tb where pk = 5;
+select hashcheck(col2, col3) from hash_check_normal_tb where pk = 6;
+select hashcheck(col2, col3) from hash_check_normal_tb where false;
+
+# full type test
+--disable_warnings
+CREATE TABLE hashcheck_full_type_table (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `c_bit_1` bit(1) DEFAULT NULL,
+    `c_bit_8` bit(8) DEFAULT NULL,
+    `c_bit_16` bit(16) DEFAULT NULL,
+    `c_bit_32` bit(32) DEFAULT NULL,
+    `c_bit_64` bit(64) DEFAULT NULL,
+    `c_tinyint_1` tinyint(1) DEFAULT NULL,
+    `c_tinyint_1_un` tinyint(1) unsigned DEFAULT NULL,
+    `c_tinyint_4` tinyint(4) DEFAULT NULL,
+    `c_tinyint_4_un` tinyint(4) unsigned DEFAULT NULL,
+    `c_tinyint_8` tinyint(8) DEFAULT NULL,
+    `c_tinyint_8_un` tinyint(8) unsigned DEFAULT NULL,
+    `c_smallint_1` smallint(1) DEFAULT NULL,
+    `c_smallint_16` smallint(16) DEFAULT NULL,
+    `c_smallint_16_un` smallint(16) unsigned DEFAULT NULL,
+    `c_mediumint_1` mediumint(1) DEFAULT NULL,
+    `c_mediumint_24` mediumint(24) DEFAULT NULL,
+    `c_mediumint_24_un` mediumint(24) unsigned DEFAULT NULL,
+    `c_int_1` int(1) DEFAULT NULL,
+    `c_int_32` int(32) NOT NULL DEFAULT 0 COMMENT "For multi pk.",
+    `c_int_32_un` int(32) unsigned DEFAULT NULL,
+    `c_bigint_1` bigint(1) DEFAULT NULL,
+    `c_bigint_64` bigint(64) DEFAULT NULL,
+    `c_bigint_64_un` bigint(64) unsigned DEFAULT NULL,
+    `c_decimal` decimal DEFAULT NULL,
+    `c_decimal_pr` decimal(10,3) DEFAULT NULL,
+    `c_float` float DEFAULT NULL,
+    `c_float_pr` float(10,3) DEFAULT NULL,
+    `c_float_un` float(10,3) unsigned DEFAULT NULL,
+    `c_double` double DEFAULT NULL,
+    `c_double_pr` double(10,3) DEFAULT NULL,
+    `c_double_un` double(10,3) unsigned DEFAULT NULL,
+    `c_date` date DEFAULT NULL COMMENT "date",
+    `c_datetime` datetime DEFAULT NULL,
+    `c_datetime_1` datetime(1) DEFAULT NULL,
+    `c_datetime_3` datetime(3) DEFAULT NULL,
+    `c_datetime_6` datetime(6) DEFAULT NULL,
+    `c_timestamp` timestamp DEFAULT CURRENT_TIMESTAMP,
+    `c_timestamp_1` timestamp(1) DEFAULT "2000-01-01 00:00:00",
+    `c_timestamp_3` timestamp(3) DEFAULT "2000-01-01 00:00:00",
+    `c_timestamp_6` timestamp(6) DEFAULT "2000-01-01 00:00:00",
+    `c_time` time DEFAULT NULL,
+    `c_time_1` time(1) DEFAULT NULL,
+    `c_time_3` time(3) DEFAULT NULL,
+    `c_time_6` time(6) DEFAULT NULL,
+    `c_year` year DEFAULT NULL,
+    `c_year_4` year(4) DEFAULT NULL,
+    `c_char` char(10) DEFAULT NULL,
+    `c_varchar` varchar(10) DEFAULT NULL,
+    `c_binary` binary(10) DEFAULT NULL,
+    `c_varbinary` varbinary(10) DEFAULT NULL,
+    `c_blob_tiny` tinyblob DEFAULT NULL,
+    `c_blob` blob DEFAULT NULL,
+    `c_blob_medium` mediumblob DEFAULT NULL,
+    `c_blob_long` longblob DEFAULT NULL,
+    `c_text_tiny` tinytext DEFAULT NULL,
+    `c_text` text DEFAULT NULL,
+    `c_text_medium` mediumtext DEFAULT NULL,
+    `c_text_long` longtext DEFAULT NULL,
+    `c_enum` enum("a","b","c") DEFAULT NULL,
+    `c_set` set("a","b","c") DEFAULT NULL,
+    `c_json` json DEFAULT NULL,
+    `c_geometory` geometry DEFAULT NULL,
+    `c_point` point DEFAULT NULL,
+    `c_linestring` linestring DEFAULT NULL,
+    `c_polygon` polygon DEFAULT NULL,
+    `c_multipoint` multipoint DEFAULT NULL,
+    `c_multilinestring` multilinestring DEFAULT NULL,
+    `c_multipolygon` multipolygon DEFAULT NULL,
+    `c_geometrycollection` geometrycollection DEFAULT NULL,
+    PRIMARY KEY (`id`)
+ );
+ --enable_warnings
+
+ insert into hashcheck_full_type_table values (
+            10240,
+            1,2,2,2,2,
+            -1,1,-1,1,-1,1,
+            -1,-1,1,
+            -1,-1,1,
+            -1,-1,1,
+            -1,-1,1,
+            -100.003, -100.000,
+            100.000,100.003,100.003,100.000,100.003,100.003,
+            '2017-12-12',
+            '2017-12-12 23:59:59','2017-12-12 23:59:59.1','2017-12-12 23:59:59.001','2017-12-12 23:59:59.000001',
+            '2017-12-12 23:59:59','2017-12-12 23:59:59.1','2017-12-12 23:59:59.001','2017-12-12 23:59:59.000001',
+            '01:01:01','01:01:01.1','01:01:01.001','01:01:01.000001',
+            '2000','2000',
+            '11','11','11','11',
+            '11','11','11','11',
+            '11','11','11','11',
+            'a','b,a',
+            '{"k1": "v1", "k2": 10}',
+            ST_GEOMFROMTEXT('LINESTRING(0 0, 10 10, 20 25, 50 60)'),
+            ST_POINTFROMTEXT('POINT(15 20)'),
+            ST_GEOMFROMTEXT('LINESTRING(0 0, 10 10, 20 25, 50 60)'),
+            ST_GEOMFROMTEXT('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'),
+            ST_GEOMFROMTEXT('MULTIPOINT(0 0, 15 25, 45 65)'),
+            ST_GEOMFROMTEXT('MULTILINESTRING((10 10, 20 20), (15 15, 30 15))'),
+            ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)),((5 5,7 5,7 7,5 7, 5 5)))'),
+            ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))')
+    );
+
+select hashcheck(
+            `id`,
+            `c_bit_1`,
+            `c_bit_8` ,
+            `c_bit_16`,
+            `c_bit_32`,
+            `c_bit_64` ,
+            `c_tinyint_1`,
+            `c_tinyint_1_un` ,
+            `c_tinyint_4` ,
+            `c_tinyint_4_un` ,
+            `c_tinyint_8` ,
+            `c_tinyint_8_un` ,
+            `c_smallint_1`,
+            `c_smallint_16`,
+            `c_smallint_16_un` ,
+            `c_mediumint_1` ,
+            `c_mediumint_24`,
+            `c_mediumint_24_un` ,
+            `c_int_1`,
+            `c_int_32` ,
+            `c_int_32_un` ,
+            `c_bigint_1`,
+            `c_bigint_64` ,
+            `c_bigint_64_un` ,
+            `c_decimal` ,
+            `c_decimal_pr`,
+            `c_float`,
+            `c_float_pr`,
+            `c_float_un` ,
+            `c_double` ,
+            `c_double_pr`,
+            `c_double_un` ,
+            `c_date` ,
+            `c_datetime` ,
+            `c_datetime_1`,
+            `c_datetime_3` ,
+            `c_datetime_6`,
+            `c_timestamp` ,
+            `c_timestamp_1` ,
+            `c_timestamp_3` ,
+            `c_timestamp_6` ,
+            `c_time`,
+            `c_time_1`,
+            `c_time_3` ,
+            `c_time_6` ,
+            `c_year` ,
+            `c_year_4` ,
+            `c_char` ,
+            `c_varchar`,
+            `c_binary` ,
+            `c_varbinary` ,
+            `c_blob_tiny` ,
+            `c_blob`,
+            `c_blob_medium`,
+            `c_blob_long` ,
+            `c_text_tiny`,
+            `c_text`,
+            `c_text_medium`,
+            `c_text_long` ,
+            `c_enum` ,
+            `c_set` ,
+            `c_json` ,
+            `c_geometory` ,
+            `c_point`,
+            `c_linestring` ,
+            `c_polygon`,
+            `c_multipoint` ,
+            `c_multilinestring` ,
+            `c_multipolygon` ,
+            `c_geometrycollection`) 
+    from hashcheck_full_type_table;
+
+# clean
+drop table hash_check_normal_tb;
+drop table hashcheck_full_type_table;
+UNINSTALL PLUGIN galaxy;
