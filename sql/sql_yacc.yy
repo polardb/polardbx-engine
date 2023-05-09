@@ -169,6 +169,8 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 #include "thr_lock.h"
 #include "violite.h"
 
+#include "sql/package/package_interface.h"  // find_native_proc_and_evoke
+
 /* this is to get the bison compilation windows warnings out */
 #ifdef _MSC_VER
 /* warning C4065: switch statement contains 'default' but no 'case' labels */
@@ -3962,7 +3964,9 @@ sp_suid:
 call_stmt:
           CALL_SYM sp_name opt_paren_expr_list
           {
-            $$= NEW_PTN PT_call($2, $3);
+            $$ = im::find_native_proc_and_evoke(YYTHD, $2, $3);
+            if ($$ == NULL)
+              $$ = NEW_PTN PT_call($2, $3);
           }
         ;
 

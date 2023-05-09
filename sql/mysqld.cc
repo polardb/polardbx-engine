@@ -883,6 +883,8 @@ MySQL clients support the protocol:
 #include "violite.h"
 #include "my_openssl_fips.h"  // OPENSSL_ERROR_LENGTH, set_fips_mode
 
+#include "sql/package/package_interface.h"
+
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
@@ -4469,6 +4471,9 @@ SHOW_VAR com_status_vars[] = {
     {"xa_start",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_XA_START]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"native_proc",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_PROC]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
@@ -7484,6 +7489,9 @@ int mysqld_main(int argc, char **argv)
     server instruments.
   */
   init_server_psi_keys();
+
+  /* Initialize Package context. */
+  im::package_context_init();
 
   /*
     Now that some instrumentation is in place,

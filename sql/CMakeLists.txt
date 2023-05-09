@@ -633,6 +633,13 @@ SET(SQL_SHARED_SOURCES
   xa/sql_xa_start.cc
   xa/transaction_cache.cc
   xa/xid_extract.cc
+  common/component.cc
+  package/package.cc
+  package/package_cache.cc
+  package/package_common.cc
+  package/proc.cc
+  package/package_parse.cc
+  package/proc_dummy.cc
   daemon_proxy_keyring/daemon_proxy_keyring.cc
   )
 

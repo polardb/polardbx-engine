@@ -75,7 +75,6 @@ parse_options()
 {
   while test $# -gt 0
   do
-    echo argc=$#, "$1", `get_key_value "$1"`
     case "$1" in
     -t=*)
       build_type=`get_key_value "$1"`;;

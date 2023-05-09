@@ -1158,7 +1158,11 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_RENAME_USER] |= CF_REQUIRE_ACL_CACHE;
   sql_command_flags[SQLCOM_SHOW_GRANTS] |= CF_REQUIRE_ACL_CACHE;
   sql_command_flags[SQLCOM_SET_PASSWORD] |= CF_REQUIRE_ACL_CACHE;
+
+  /* Native package proc flags */
+  sql_command_flags[SQLCOM_PROC] = CF_AUTO_COMMIT_TRANS;
 }
+
 
 bool sqlcom_can_generate_row_events(enum enum_sql_command command) {
   return (sql_command_flags[command] & CF_CAN_GENERATE_ROW_EVENTS);
@@ -4683,6 +4687,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_RESTART_SERVER:
     case SQLCOM_CREATE_SRS:
     case SQLCOM_DROP_SRS: {
+    case SQLCOM_PROC:
       assert(lex->m_sql_cmd != nullptr);
 
       res = lex->m_sql_cmd->execute(thd);
