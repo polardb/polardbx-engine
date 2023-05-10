@@ -9966,7 +9966,7 @@ reserved-error-section 5000 5999
 start-error-number 7500
 
 ER_NATIVE_PROC_PARAMETER_MISMATCH
-   eng "Native procedure %s the %dth parameter mismatch"
+  eng "The %dth parameter didn't match for native procedure %s"
 
 
 

@@ -1,7 +1,3 @@
--- source include/have_debug.inc
-
---disable_ps_protocol
-
 connection default;
 
 create user 'u0'@'%';
@@ -43,7 +39,8 @@ call mysql.dummy_2(1, 1);
 --error ER_NATIVE_PROC_PARAMETER_MISMATCH
 call mysql.dummy_2("xpchild", 1);
 
-
+--error ER_SP_WRONG_NO_OF_ARGS
+call mysql.dummy_2(1);
 
 #
 # normal account
@@ -67,18 +64,35 @@ delimiter ;$$
 drop procedure mysql.dummy;
 
 --error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call mysql.dummy();
+
+--error ER_SP_WRONG_NO_OF_ARGS
 call mysql.dummy(1);
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call mysql.dummy(`xxx`.tttt);
 
 
 --error ER_SPECIFIC_ACCESS_DENIED_ERROR
 call mysql.dummy_2(1, 'xpchild');
 
---error ER_SPECIFIC_ACCESS_DENIED_ERROR
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
 call mysql.dummy_2(1, 1);
 
---error ER_SPECIFIC_ACCESS_DENIED_ERROR
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
 call mysql.dummy_2("xpchild", 1);
 
+
+# test support ps
+connection default;
+
+prepare p1 from "call mysql.dummy_2(1, 'xpchild')";
+execute p1;
+deallocate prepare p1;
+
+prepare p1 from "call mysql.dummy()";
+execute p1;
+deallocate prepare p1;
 
 
 connection default;
@@ -86,5 +100,3 @@ drop user 'u0'@'%';
 
 disconnect con_u0;
 disconnect con_root;
-
---enable_ps_protocol

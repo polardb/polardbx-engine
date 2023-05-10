@@ -624,22 +624,21 @@ static bool check_routine_already_exists(THD *thd, sp_head *sp,
   }
 
   // need report error for native procedure
-  if (exists)
-    goto er_already_exists;
+  if (!exists) {
+    if (sr == nullptr) {
+      // Routine with same name does not exist.
+      return false;
+    }
 
-  if (sr == nullptr) {
-    // Routine with same name does not exist.
-    return false;
-  }
-  already_exists = true;
-  if (if_not_exists) {
-    push_warning_printf(thd, Sql_condition::SL_NOTE, ER_SP_ALREADY_EXISTS,
-                        ER_THD(thd, ER_SP_ALREADY_EXISTS),
-                        SP_TYPE_STRING(sp->m_type), sp->m_name.str);
-    return false;
+    already_exists = true;
+    if (if_not_exists) {
+      push_warning_printf(thd, Sql_condition::SL_NOTE, ER_SP_ALREADY_EXISTS,
+                          ER_THD(thd, ER_SP_ALREADY_EXISTS),
+                          SP_TYPE_STRING(sp->m_type), sp->m_name.str);
+      return false;
+    }
   }
 
-er_already_exists:
   my_error(ER_SP_ALREADY_EXISTS, MYF(0), SP_TYPE_STRING(sp->m_type),
            sp->m_name.str);
   return true;

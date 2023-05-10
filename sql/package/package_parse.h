@@ -32,9 +32,6 @@ class Proc;
 /**
   Interface of all native package element parser tree.
 
-  PT_package_base is the uniform interface of all different types of
-  package element for parser.
-
   1) Proc
     PT_package_proc is the uniform parser interface for all native proc objects.
 

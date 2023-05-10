@@ -1163,7 +1163,6 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_ADMIN_PROC] = CF_AUTO_COMMIT_TRANS;
 }
 
-
 bool sqlcom_can_generate_row_events(enum enum_sql_command command) {
   return (sql_command_flags[command] & CF_CAN_GENERATE_ROW_EVENTS);
 }

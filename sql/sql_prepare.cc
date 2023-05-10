@@ -1416,6 +1416,8 @@ bool Prepared_statement::prepare_query(THD *thd) {
     case SQLCOM_SHOW_VARIABLES:
     case SQLCOM_SET_RESOURCE_GROUP:
     case SQLCOM_SHOW_WARNS:
+    case SQLCOM_ADMIN_PROC:
+    case SQLCOM_TRANS_PROC:
       res = m_lex->m_sql_cmd->prepare(thd);
       break;
 

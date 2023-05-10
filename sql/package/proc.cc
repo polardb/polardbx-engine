@@ -108,9 +108,14 @@ void Sql_cmd_proc::send_result(THD *thd, bool error) {
 */
 bool Sql_cmd_proc::check_access(THD *thd) {
   Security_context *sctx = thd->security_context();
-  if (!sctx->check_access(SUPER_ACL)) {
-    my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "SUPER");
-    return true;
+  if (m_priv_type == Priv_type::PRIV_NONE_ACL) {
+    return false;
+  } else if (m_priv_type == Priv_type::PRIV_SUPER_ACL) {
+    if (!sctx->check_access(SUPER_ACL)) {
+      my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "SUPER");
+      return true;
+    }
+    return false;
   }
   return false;
 }
@@ -133,8 +138,8 @@ bool Sql_cmd_proc::check_parameter() {
     std::size_t i = 0;
     for (Item *item : *m_list) {
       if (item->data_type() != m_proc->get_parameters()->at(i)) {
-        my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0),
-                 m_proc->qname().c_str(), i + 1);
+        my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), i + 1,
+                 m_proc->qname().c_str());
         return true;
       }
       i++;
@@ -147,7 +152,8 @@ bool Sql_cmd_proc::check_parameter() {
   Prepare the proc before execution.
 */
 bool Sql_cmd_proc::prepare(THD *thd) {
-  if (check_access(thd) || check_parameter()) return true;
+  if (check_parameter() || check_access(thd))
+    return true;
   set_prepared();
   return false;
 }
