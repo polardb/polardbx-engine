@@ -704,8 +704,10 @@ SET(SQL_SHARED_SOURCES
   raft/raft0consensus.cc
   raft/raft0rpl_info_factory.cc
   raft/raft0rpl_info_handler.cc
+  raft/raft0xa.cc
 
   consensus_log_index.cc
+  consensus_recovery_manager.cpp
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

@@ -985,6 +985,7 @@ MySQL clients support the protocol:
 #include "sql/raft/raft0err.h"
 #include "sql/consensus_info.h"
 #include "sql/consensus_log_index.h"
+#include "sql/consensus_recovery_manager.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle.h"
@@ -11911,6 +11912,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_consensus_info_lock, "consensus_info::lock", 
 	  0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_index, "ConsensusLogIndex::LOCK_consensuslog_index", 0, 0, PSI_DOCUMENT_ME },
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "ConsensusRecoveryManager::LOCK_consensus_log_recover_hash", 0, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
