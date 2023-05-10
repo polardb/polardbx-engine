@@ -39,12 +39,13 @@ Sql_cmd *PT_package_proc::make_cmd(THD *thd) {
   if (m_opt_expr_list != NULL && m_opt_expr_list->contextualize(&pc))
     return NULL; /* purecov: inspected */
 
-  lex->sql_command = SQLCOM_PROC;
-
   mem_root_deque<Item *> *proc_args = NULL;
   if (m_opt_expr_list != NULL) proc_args = &m_opt_expr_list->value;
 
-  return m_proc->evoke_cmd(thd, proc_args);
+  Sql_cmd *sql_cmd = m_proc->evoke_cmd(thd, proc_args);
+  lex->sql_command = sql_cmd->sql_command_code();
+
+  return sql_cmd;
 }
 
 } /* namespace im */

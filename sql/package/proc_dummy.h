@@ -34,10 +34,10 @@ namespace im {
 /**
   Dummy proc sql command class.
 */
-class Sql_cmd_proc_dummy : public Sql_cmd_proc {
+class Sql_cmd_proc_dummy : public Sql_cmd_admin_proc {
  public:
   explicit Sql_cmd_proc_dummy(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
-      : Sql_cmd_proc(thd, list, proc) {}
+      : Sql_cmd_admin_proc(thd, list, proc) {}
 
   /**
     Implementation of Proc execution body.
@@ -73,10 +73,10 @@ class Proc_dummy : public Proc {
 /**
   Dummy proc sql command class.
 */
-class Sql_cmd_proc_dummy_2 : public Sql_cmd_proc {
+class Sql_cmd_proc_dummy_2 : public Sql_cmd_admin_proc {
  public:
   explicit Sql_cmd_proc_dummy_2(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
-      : Sql_cmd_proc(thd, list, proc) {}
+      : Sql_cmd_admin_proc(thd, list, proc) {}
 
   /**
     Implementation of Proc execution body.

@@ -336,7 +336,8 @@ enum enum_sql_command {
   SQLCOM_RESTART_SERVER,
   SQLCOM_CREATE_SRS,
   SQLCOM_DROP_SRS,
-  SQLCOM_PROC,
+  SQLCOM_ADMIN_PROC,
+  SQLCOM_TRANS_PROC,
   SQLCOM_END
 };
 #include "plugin_audit_message_types.h"

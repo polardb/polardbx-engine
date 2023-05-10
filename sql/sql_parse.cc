@@ -1160,7 +1160,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SET_PASSWORD] |= CF_REQUIRE_ACL_CACHE;
 
   /* Native package proc flags */
-  sql_command_flags[SQLCOM_PROC] = CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_ADMIN_PROC] = CF_AUTO_COMMIT_TRANS;
 }
 
 
@@ -4687,7 +4687,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_RESTART_SERVER:
     case SQLCOM_CREATE_SRS:
     case SQLCOM_DROP_SRS: {
-    case SQLCOM_PROC:
+    case SQLCOM_ADMIN_PROC:
+    case SQLCOM_TRANS_PROC:
       assert(lex->m_sql_cmd != nullptr);
 
       res = lex->m_sql_cmd->execute(thd);

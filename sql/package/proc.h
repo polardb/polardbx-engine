@@ -65,6 +65,15 @@ class PT_item_list;
             2. check_access
             3. check_parameter
             4. prepare
+
+
+  Revision History:
+  =================
+  R1. Proc will be classified into two categories, administrator proc and
+      transactional proc. They has the same base class PROC interface, but
+      ADMIN_PROC and TRANS_PROC will have different SQL command, ADMIN_PROC will
+      trigger implicit commit, and TRANS_PROC will inherit the transaction state
+      context.
 */
 namespace im {
 
@@ -193,10 +202,13 @@ class Proc : public PSI_memory_base {
   Should implement pc_execute() function at least!
 */
 class Sql_cmd_proc : public Sql_cmd {
- public:
-  explicit Sql_cmd_proc(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
-      : m_thd(thd), m_list(list), m_proc(proc) {}
+ protected:
+  enum class Priv_type { PRIV_NONE_ACL = 0, PRIV_SUPER_ACL };
 
+ public:
+  explicit Sql_cmd_proc(THD *thd, mem_root_deque<Item *> *list, const Proc *proc,
+                        Priv_type priv_type)
+      : m_thd(thd), m_list(list), m_proc(proc), m_priv_type(priv_type) {}
   /**
     Interface of Proc execution body.
 
@@ -217,9 +229,9 @@ class Sql_cmd_proc : public Sql_cmd {
   virtual bool pc_execute(THD *thd) = 0;
 
   /**
-    All the proc has the uniform sql command code : SQLCOM_PROC
+    SQLCOM_ADMIN_PROC or SQLCOM_TRANS_PROC.
   */
-  virtual enum_sql_command sql_command_code() const override { return SQLCOM_PROC; }
+  virtual enum_sql_command sql_command_code() const override = 0;
 
   /**
     Send the ok or error packet defaultly,
@@ -248,6 +260,35 @@ class Sql_cmd_proc : public Sql_cmd {
   THD *m_thd;
   mem_root_deque<Item *> *m_list;
   const Proc *m_proc;
+  Priv_type m_priv_type;
+};
+
+/**
+  Base class for administrator procedure.
+
+  Require SUPER_ACL default.
+*/
+class Sql_cmd_admin_proc : public Sql_cmd_proc {
+ public:
+  explicit Sql_cmd_admin_proc(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+      : Sql_cmd_proc(thd, list, proc, Priv_type::PRIV_SUPER_ACL) {}
+
+  virtual enum_sql_command sql_command_code() const override {
+    return SQLCOM_ADMIN_PROC;
+  }
+};
+
+/**
+  Base class for transactional procedure.
+*/
+class Sql_cmd_trans_proc : public Sql_cmd_proc {
+ public:
+  explicit Sql_cmd_trans_proc(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+      : Sql_cmd_proc(thd, list, proc, Priv_type::PRIV_NONE_ACL) {}
+
+  virtual enum_sql_command sql_command_code() const override {
+    return SQLCOM_TRANS_PROC;
+  }
 };
 
 } /* namespace im */

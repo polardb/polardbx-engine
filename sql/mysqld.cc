@@ -4471,8 +4471,11 @@ SHOW_VAR com_status_vars[] = {
     {"xa_start",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_XA_START]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
-    {"native_proc",
-     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_PROC]),
+    {"native_admin_proc",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_ADMIN_PROC]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"native_trans_proc",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_TRANS_PROC]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
