@@ -703,6 +703,7 @@ SET(SQL_SHARED_SOURCES
   raft/channel.cc
   raft/raft0rpl_info_factory.cc
   raft/raft0rpl_info_handler.cc 
+  raft/raft0consensus.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)
