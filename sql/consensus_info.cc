@@ -27,7 +27,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/consensus_info.h"
 
-
 #ifdef HAVE_PSI_INTERFACE
 PSI_mutex_key key_consensus_info_lock;
 
@@ -83,7 +82,6 @@ Consensus_info::Consensus_info(
       cluster_recover_index(0) {
 }
 
-
 /**
 Creates or reads information from the repository, initializing the
 Consensus_info.
@@ -92,8 +90,7 @@ int Consensus_info::consensus_init_info() {
   DBUG_ENTER("Consensus_info::consensus_init_info");
   enum_return_check check_return = ERROR_CHECKING_REPOSITORY;
 
-  if (inited)
-    DBUG_RETURN(0);
+  if (inited) DBUG_RETURN(0);
 
   mysql_mutex_init(key_consensus_info_lock, &LOCK_consensus_info,
                    MY_MUTEX_INIT_FAST);
@@ -103,8 +100,7 @@ int Consensus_info::consensus_init_info() {
   if (handler->init_info()) goto err;
 
   if (check_return != REPOSITORY_DOES_NOT_EXIST) {
-    if (read_info(handler))
-      goto err;
+    if (read_info(handler)) goto err;
   }
 
   inited = 1;
@@ -114,9 +110,22 @@ int Consensus_info::consensus_init_info() {
 
 err:
   handler->end_info();
-  inited = 0;
+  inited = false;
   abort();
   DBUG_RETURN(1);
+}
+
+void Consensus_info::end_info() {
+  DBUG_ENTER("Consensus_info::end_info");
+
+  if (!inited) return;
+
+  mysql_mutex_destroy(&LOCK_consensus_info);
+  handler->end_info();
+
+  inited = false;
+
+  DBUG_VOID_RETURN;
 }
 
 int Consensus_info::flush_info(bool force, bool force_new_thd) {
@@ -229,4 +238,3 @@ void Consensus_info::set_nullable_fields(MY_BITMAP *nullable_fields) {
               Consensus_info::get_number_info_consensus_fields());
   bitmap_clear_all(nullable_fields);
 }
-

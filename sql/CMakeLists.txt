@@ -701,9 +701,11 @@ SET(SQL_SHARED_SOURCES
   sql_common_ext.cc
   raft/raft0err.cc
   raft/channel.cc
-  raft/raft0rpl_info_factory.cc
-  raft/raft0rpl_info_handler.cc 
   raft/raft0consensus.cc
+  raft/raft0rpl_info_factory.cc
+  raft/raft0rpl_info_handler.cc
+
+  consensus_log_index.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)
