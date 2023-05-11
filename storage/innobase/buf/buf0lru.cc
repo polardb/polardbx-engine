@@ -2018,6 +2018,10 @@ static bool buf_LRU_block_remove_hashed(buf_page_t *bpage, bool zip,
         ut_a(!zip || bpage->oldest_modification == 0);
         ut_ad(bpage->size.is_compressed());
 
+        if (ignore_content) {
+          break;
+        }
+
         switch (fil_page_get_type(page)) {
           case FIL_PAGE_TYPE_ALLOCATED:
           case FIL_PAGE_INODE:
