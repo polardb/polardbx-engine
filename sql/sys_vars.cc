@@ -1271,6 +1271,12 @@ static bool binlog_format_check(sys_var *self, THD *thd, set_var *var) {
   return false;
 }
 
+static bool binlog_checksum_unsettable_check(sys_var *, THD *thd, set_var *var) {
+  my_error(ER_OPERATION_NOT_SUPPORTED, MYF(0), 
+          "The system variable binlog_checksum is not settable on XDB.");
+  return true;
+}
+
 static bool fix_binlog_format_after_update(sys_var *, THD *thd,
                                            enum_var_type type) {
   if (type == OPT_SESSION) thd->reset_current_stmt_binlog_format_row();
@@ -4272,7 +4278,7 @@ static Sys_var_enum_binlog_checksum Binlog_checksum_enum(
     "default is CRC32.",
     GLOBAL_VAR(binlog_checksum_options), CMD_LINE(REQUIRED_ARG),
     binlog_checksum_type_names, DEFAULT(binary_log::BINLOG_CHECKSUM_ALG_CRC32),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_outside_trx));
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(binlog_checksum_unsettable_check));
 
 static Sys_var_bool Sys_master_verify_checksum(
     "master_verify_checksum",

@@ -1,0 +1,2 @@
+set @@global.binlog_checksum = CRC32;
+ERROR HY000: Operation is not supported. The system variable binlog_checksum is not settable on XDB.

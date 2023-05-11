@@ -1,0 +1,2 @@
+--error ER_OPERATION_NOT_SUPPORTED
+set @@global.binlog_checksum = CRC32;

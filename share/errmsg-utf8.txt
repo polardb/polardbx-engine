@@ -9389,6 +9389,9 @@ ER_XA_PROC_REPLAY_REGISTER_BINLOG_ERROR
 
 ER_XA_PROC_HEARTBEAT_FREEZE
   eng "Cannot do the operation because no heartbeat has been received for a long time. If you want to do the operation, please call dbms_xa.send_heartbeat()."
+
+ER_OPERATION_NOT_SUPPORTED
+  eng "Operation is not supported. %s"
 #
 #  End of RDS error message.
 #

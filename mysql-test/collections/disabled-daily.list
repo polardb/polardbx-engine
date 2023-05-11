@@ -31,6 +31,8 @@ large_tests.alter_table : BUG#000 Consume too much space
 rpl_gtid.rpl_wait_for_executed_gtid_set_no_timeout: BUG#000 unstable
 binlog.binlog_max_flush_queue_time_warn : BUG#000 unstable
 main.mysqlpump_extended : BUG#000 timeout
+binlog.binlog_checksum : BUG#000 binlog_checksum is read-only
+sys_vars.binlog_checksum_basic : BUG#000 binlog_checksum is read-only
 
 # issues with XEngine integrated
 main.log_buffered-big                               : BUG#000 JSON file is different, my_errno=175, with XEngine Log
