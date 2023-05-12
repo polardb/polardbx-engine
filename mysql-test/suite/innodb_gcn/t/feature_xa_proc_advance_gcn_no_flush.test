@@ -1,0 +1,11 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+--let $expect_gcn = `select @base_seq + 1000`
+--disable_query_log
+--eval call dbms_xa.advance_gcn_no_flush($expect_gcn)
+--enable_query_log
+
+--let $actual_gcn = query_get_value('show status like "Lizard_current_gcn"', Value, 1)
+--let assert_text=expect_gcn == actual_gcn
+--let $assert_cond=$expect_gcn = $actual_gcn
+--source include/assert.inc
