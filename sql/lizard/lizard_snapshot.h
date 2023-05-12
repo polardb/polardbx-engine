@@ -99,7 +99,7 @@ class Snapshot_hint {
     @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
     @retval 0 Success
    */
-  int evoke_vision(TABLE *table, my_scn_t scn, THD *thd);
+  virtual int evoke_vision(TABLE *table, THD *thd);
 
   /** Calculate number from hint item. */
   virtual bool val_int(uint64_t *value) = 0;
@@ -159,7 +159,11 @@ class Snapshot_time_hint : public Snapshot_hint {
 /** As of gcn hint */
 class Snapshot_gcn_hint : public Snapshot_hint {
  public:
-  explicit Snapshot_gcn_hint(Item *item) : Snapshot_hint(item) {}
+  explicit Snapshot_gcn_hint(Item *item)
+      : Snapshot_gcn_hint(item, MYSQL_CSR_ASSIGNED, MYSQL_SCN_NULL) {}
+
+  explicit Snapshot_gcn_hint(Item *item, my_csr_t csr, my_scn_t scn)
+      : Snapshot_hint(item), m_csr(csr), m_current_scn(scn) {}
 
   virtual Snapshot_type type() const override { return AS_OF_GCN; }
   /**
@@ -174,6 +178,22 @@ class Snapshot_gcn_hint : public Snapshot_hint {
 
   /** Calculate gcn from hint item. */
   virtual bool val_int(uint64_t *value) override;
+
+  /**
+    Evoke table snapshot vision.
+    My_error if failure.
+
+    @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
+    @retval 0 Success
+  */
+  virtual int evoke_vision(TABLE *table, THD *thd) override;
+
+  my_csr_t get_csr() const { return m_csr; }
+  my_scn_t get_current_scn() const { return m_current_scn; }
+
+ private:
+  my_csr_t m_csr;
+  my_scn_t m_current_scn;
 };
 
 /*------------------------------------------------------------------------------*/
@@ -329,11 +349,15 @@ class Snapshot_gcn_vision : public Snapshot_vision {
  public:
   Snapshot_gcn_vision()
       : m_gcn(MYSQL_GCN_NULL),
+        m_csr(MYSQL_CSR_NONE),
         m_current_scn(MYSQL_SCN_NULL),
         m_up_limit_tid(0) {}
 
   Snapshot_gcn_vision(my_gcn_t gcn, my_scn_t scn, my_trx_id_t tid)
-      : m_gcn(gcn), m_current_scn(scn), m_up_limit_tid(tid) {}
+      : m_gcn(gcn),
+        m_csr(MYSQL_CSR_NONE),
+        m_current_scn(scn),
+        m_up_limit_tid(tid) {}
 
   virtual ~Snapshot_gcn_vision() {}
 
@@ -342,6 +366,7 @@ class Snapshot_gcn_vision : public Snapshot_vision {
   Snapshot_gcn_vision &operator=(const Snapshot_gcn_vision &v) {
     if (this != &v) {
       m_gcn = v.m_gcn;
+      m_csr = v.m_csr;
       m_current_scn = v.m_current_scn;
       m_up_limit_tid = v.m_up_limit_tid;
     }
@@ -368,6 +393,10 @@ class Snapshot_gcn_vision : public Snapshot_vision {
 
   my_scn_t current_scn() const { return m_current_scn; }
 
+  void store_csr(my_csr_t csr) { m_csr = csr; }
+
+  my_csr_t csr() const { return m_csr; }
+
   virtual bool is_vision() const override { return true; }
 
   virtual bool too_old() const override;
@@ -387,7 +416,8 @@ class Snapshot_gcn_vision : public Snapshot_vision {
  private:
   my_gcn_t m_gcn;
 
-  /** Current scn must be acquire from innodb whatever vision. */
+  my_csr_t m_csr;
+
   my_scn_t m_current_scn;
 
   my_trx_id_t m_up_limit_tid;

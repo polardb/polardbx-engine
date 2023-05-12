@@ -277,7 +277,7 @@ bool Snapshot_time_hint::val_int(uint64_t *value) {
   @retval	true	Failure
   @retval	false	Success
  */
-int Snapshot_hint::evoke_vision(TABLE *table, my_scn_t scn, THD *thd) {
+int Snapshot_hint::evoke_vision(TABLE *table, THD *thd) {
   uint64_t value;
   bool error;
   if ((error = val_int(&value))) {
@@ -286,10 +286,6 @@ int Snapshot_hint::evoke_vision(TABLE *table, my_scn_t scn, THD *thd) {
 
   Snapshot_vision *vision = table->table_snapshot.get(type());
   vision->store_int(value);
-
-  if (type() == AS_OF_GCN) {
-    (dynamic_cast<Snapshot_gcn_vision *>(vision))->store_current_scn(scn);
-  }
 
   return table->table_snapshot.activate(vision, thd);
 }
@@ -355,6 +351,17 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
   return false;
 }
 
+
+int Snapshot_gcn_hint::evoke_vision(TABLE *table, THD *thd) {
+  Snapshot_gcn_vision *vision =
+      dynamic_cast<Snapshot_gcn_vision *>(table->table_snapshot.get(type()));
+
+  vision->store_csr(get_csr());
+  vision->store_current_scn(get_current_scn());
+
+  return Snapshot_hint::evoke_vision(table, thd);
+}
+
 /** Whether is it too old.
  *
  *  @retval	true	too old
@@ -381,13 +388,18 @@ void Snapshot_scn_vision::after_activate() {
  *  @retval	false	normal
  */
 bool Snapshot_gcn_vision::too_old() const {
-  assert(m_current_scn != MYSQL_SCN_NULL && m_gcn != MYSQL_GCN_NULL);
-
-  if (innodb_hton->ext.snapshot_scn_too_old(m_current_scn) ||
-      innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn)) {
-    return true;
+  switch (m_csr) {
+    case MYSQL_CSR_AUTOMATIC:
+      assert(m_current_scn != MYSQL_SCN_NULL && m_gcn != MYSQL_GCN_NULL);
+      return innodb_hton->ext.snapshot_scn_too_old(m_current_scn) ||
+             innodb_hton->ext.snapshot_automatic_gcn_too_old(m_gcn);
+    case MYSQL_CSR_ASSIGNED:
+      assert(m_current_scn == MYSQL_SCN_NULL && m_gcn != MYSQL_GCN_NULL);
+      return  innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn);
+    case MYSQL_CSR_NONE:
+      assert(0);
+      return true;
   }
-  return false;
 }
 
 void Snapshot_gcn_vision::after_activate() {
@@ -426,15 +438,13 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
   assert(thd->open_tables);
   assert(innodb_hton && innodb_hton->ext.load_scn());
 
-  my_scn_t current_scn = innodb_hton->ext.load_scn();
-
   for (TABLE *table = thd->open_tables; table; table = table->next) {
     assert(table->pos_in_table_list);
     assert(!table->table_snapshot.is_activated());
 
     Snapshot_hint *hint = table->pos_in_table_list->snapshot_hint;
     if (hint) {
-      error = hint->evoke_vision(table, current_scn, thd);
+      error = hint->evoke_vision(table, thd);
       if (error) {
         table->file->print_error(error, 0);
         return true;
@@ -452,20 +462,24 @@ Simulate asof syntax by adding Item onto Table_snapshot.
 */
 void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
   Item *item = nullptr;
-  ulonglong gcn = thd->variables.innodb_snapshot_gcn;
-
   assert(innodb_hton && innodb_hton->ext.load_gcn());
 
-  if (gcn == MYSQL_GCN_NULL && thd->variables.innodb_current_snapshot_gcn) {
-    gcn = innodb_hton->ext.load_gcn();
+  /** If setting innodb_current_snapshot_gcn, then a view is generated
+  internally */
+  if (thd->owned_vision_gcn.is_null() &&
+      thd->variables.innodb_current_snapshot_gcn) {
+    thd->owned_vision_gcn.set(MYSQL_CSR_AUTOMATIC, innodb_hton->ext.load_gcn(),
+                              innodb_hton->ext.load_scn());
   }
 
-  if (gcn != MYSQL_GCN_NULL) {
+  if (!thd->owned_vision_gcn.is_null()) {
     Table_ref *table;
     for (table = all_tables; table; table = table->next_global) {
       if (table->snapshot_hint == nullptr) {
-        item = new (thd->mem_root) Item_int(gcn);
-        Snapshot_hint *hint = new (thd->mem_root) Snapshot_gcn_hint(item);
+        item =
+            new (thd->mem_root) Item_int((ulonglong)thd->owned_vision_gcn.gcn);
+        Snapshot_hint *hint = new (thd->mem_root) Snapshot_gcn_hint(
+            item, thd->owned_vision_gcn.csr, thd->owned_vision_gcn.current_scn);
         table->snapshot_hint = hint;
       }
     }

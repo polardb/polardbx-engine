@@ -4808,12 +4808,15 @@ class THD : public MDL_context_owner,
  public:
   MyGCN owned_commit_gcn;
 
+  MyVisionGCN owned_vision_gcn;
+
   void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
     variables.innodb_current_snapshot_gcn = false;
 
     owned_commit_gcn.reset();
+    owned_vision_gcn.reset();
   }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }

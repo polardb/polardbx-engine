@@ -1,0 +1,144 @@
+set global innodb_undo_retention = 9000;
+
+--echo # conn1: write(0)
+--connect (conn1,localhost,root,,)
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+--echo # conn2: read
+--connect (conn2,localhost,root,,)
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+--echo # conn3: write(1)
+--connect (conn3,localhost,root,,)
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `balance` int NOT NULL,
+  PRIMARY KEY (`id`)
+);
+
+CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `balance` int NOT NULL,
+  PRIMARY KEY (`id`)
+);
+
+insert into t1 values (1, 1000);
+insert into t2 values (2, 1000);
+
+--echo ###################################
+--echo # local write + distributed read
+--echo ###################################
+--let $gcn = `select @base_seq + 1000`
+connection conn2;
+begin;
+--disable_query_log
+--eval set innodb_snapshot_seq = $gcn
+--enable_query_log
+select * from t1;
+select * from t2;
+commit;
+
+connection conn1;
+begin;
+update t1 set balance = balance + 1;
+update t2 set balance = balance + -1;
+commit;
+
+connection conn2;
+begin;
+--disable_query_log
+--eval set innodb_snapshot_seq = $gcn
+--enable_query_log
+select * from t1;
+select * from t2;
+commit;
+
+--echo ################################
+--echo # distributed write + local read
+--echo ################################
+--let $gcn = `select @base_seq + 1001`
+
+connection conn1;
+xa start '1';
+update t1 set balance = balance + 1;
+xa end '1';
+xa prepare '1';
+
+connection conn3;
+xa start '2';
+update t2 set balance = balance + -1;
+xa end '2';
+xa prepare '2';
+
+connection conn1;
+--disable_query_log
+--eval set innodb_commit_seq = $gcn
+--enable_query_log
+xa commit '1';
+
+connection conn3;
+--disable_query_log
+--eval set innodb_commit_seq = $gcn
+--enable_query_log
+
+connection conn2;
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+--send select * from t2
+
+connection conn3;
+xa commit '2';
+
+connection conn2;
+--reap
+commit;
+
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+select * from t2;
+commit;
+
+--echo ###############################
+--echo # local write + local read
+--echo ###############################
+connection conn1;
+begin;
+update t1 set balance = balance + 1;
+update t2 set balance = balance + -1;
+commit;
+
+--echo # read after write
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+select * from t2;
+commit;
+
+connection conn2;
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+select * from t2;
+commit;
+
+connection conn1;
+begin;
+update t1 set balance = balance + 1;
+update t2 set balance = balance + -1;
+commit;
+
+connection conn2;
+select * from t1;
+select * from t2;
+commit;
+
+--echo ###############################
+--echo # cleanup
+--echo ###############################
+set global innodb_undo_retention = default;
+drop table t1;
+drop table t2;

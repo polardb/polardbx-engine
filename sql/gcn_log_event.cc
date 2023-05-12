@@ -283,6 +283,11 @@ int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {
     thd->variables.innodb_commit_gcn = commit_gcn;
+
+    /** Set owned_commit_gcn in THD. */
+    thd->owned_commit_gcn.set(commit_gcn, (flags & FLAG_GCN_ASSIGNED)
+                                       ? MYSQL_CSR_ASSIGNED
+                                       : MYSQL_CSR_AUTOMATIC);
   }
 
   return 0;

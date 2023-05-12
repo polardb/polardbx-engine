@@ -87,10 +87,22 @@ static Sys_var_charptr Sys_client_endpoint_ip(
   IN_SYSTEM_CHARSET, DEFAULT(0),
   NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static bool set_owned_vision_gcn_on_update(sys_var *, THD *thd, enum_var_type) {
+  if (thd->variables.innodb_snapshot_gcn == MYSQL_GCN_NULL) {
+    thd->owned_vision_gcn.reset();
+  } else {
+    thd->owned_vision_gcn.set(
+        MYSQL_CSR_ASSIGNED, thd->variables.innodb_snapshot_gcn, MYSQL_SCN_NULL);
+  }
+  return false;
+}
+
 static Sys_var_ulonglong Sys_innodb_snapshot_seq(
     "innodb_snapshot_seq", "Innodb snapshot sequence.",
     HINT_UPDATEABLE SESSION_ONLY(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+    VALID_RANGE(MYSQL_GCN_MIN, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(set_owned_vision_gcn_on_update));
 
 static bool set_owned_commit_gcn_on_update(sys_var *, THD *thd, enum_var_type) {
   thd->owned_commit_gcn.set(thd->variables.innodb_commit_gcn,

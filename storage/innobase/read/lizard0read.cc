@@ -298,25 +298,54 @@ bool Snapshot_scn_vision::modification_visible(void *txn_rec) const {
               True if visible
 */
 bool Snapshot_gcn_vision::modification_visible(void *txn_rec) const {
-  csr_t csr;
+  csr_t rec_csr, vision_csr;
   txn_rec_t *rec = static_cast<txn_rec_t *>(txn_rec);
-  
+
   /** Promise committed trx and not myself. */
   ut_ad(rec->scn != SCN_NULL && rec->gcn != GCN_NULL);
   ut_ad(!undo_ptr_is_active(rec->undo_ptr));
 
-  csr = undo_ptr_get_csr(rec->undo_ptr);
+  switch (m_csr) {
+    case MYSQL_CSR_ASSIGNED:
+      vision_csr = csr_t::CSR_ASSIGNED;
+      break;
+    case MYSQL_CSR_AUTOMATIC:
+      vision_csr = csr_t::CSR_AUTOMATIC;
+      break;
+    default:
+      ut_error;
+  }
+
+  rec_csr = undo_ptr_get_csr(rec->undo_ptr);
 
   if (rec->gcn == m_gcn) {
-    /** 1. Assigned gcn can be see.*/
-    if (csr == CSR_ASSIGNED) {
-      return true;
+    if (vision_csr == CSR_ASSIGNED) {
+      if (rec_csr == CSR_ASSIGNED) {
+        /** Case 1: Usually, it is impossible for distributed writing and
+        distributed reading to have the same GCN. However, for the flashback
+        query, it might happen because the AS OF GCN might be converted by
+        timestamp.
+
+        In such a case, we think is's read-after-write. */
+        return true;
+      } else {
+        /** Case 2: If the record is generate by local trx, then it must happen
+        after the distribute reading. */
+        return false;
+      }
     } else {
-      /** 2. Automatic will changed to scn compare. */
-      return rec->scn <= m_current_scn;
+      if (rec_csr == CSR_ASSIGNED) {
+        /** Case 3: If the record is generate by distributed trx, then it must
+        happen before the local reading opened. */
+        return true;
+      } else {
+        /** Case 4: If the record is generate by local trx, the the visibility
+        judgment of the local read depends entirely on the local commit
+        number (SCN).*/
+        return rec->scn <= m_current_scn;
+      }
     }
   } else {
-    /** 3. compare directly if not equal.*/
     return rec->gcn < m_gcn;
   }
 }
