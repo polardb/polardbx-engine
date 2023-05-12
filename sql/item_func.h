@@ -3819,6 +3819,37 @@ class Item_func_version final : public Item_static_string_func {
   bool itemize(Parse_context *pc, Item **res) override;
 };
 
+class Item_func_alter_type : public Item_func {
+ public:
+  Item_func_alter_type(const POS &pos, Item *a) : Item_func(pos, a) {}
+  double val_real() {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return 0;
+  }
+  longlong val_int() {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return 0;
+  }
+  String *val_str(String *str) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    null_value = 1;
+    return nullptr;
+  }
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return true;
+  }
+  bool get_time(MYSQL_TIME *ltime) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return true;
+  }
+  const char *func_name() const { return "alter_type"; }
+  bool resolve_type(THD *thd) { return false; }
+
+ protected:
+  type_conversion_status save_in_field_inner(Field *to, bool no_conversions);
+};
+
 Item *get_system_var(Parse_context *pc, enum_var_type var_type, LEX_STRING name,
                      LEX_STRING component);
 extern bool check_reserved_words(const char *name);

@@ -1334,6 +1334,7 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"ADDTIME", SQL_FN(Item_func_add_time, 2)},
     {"AES_DECRYPT", SQL_FN_V(Item_func_aes_decrypt, 2, 3)},
     {"AES_ENCRYPT", SQL_FN_V(Item_func_aes_encrypt, 2, 3)},
+    {"ALTER_TYPE", SQL_FN(Item_func_alter_type, 1)},
     {"ANY_VALUE", SQL_FN(Item_func_any_value, 1)},
     {"ASIN", SQL_FN(Item_func_asin, 1)},
     {"ATAN", SQL_FN_V(Item_func_atan, 1, 2)},

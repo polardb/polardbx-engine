@@ -9091,3 +9091,18 @@ longlong Item_func_get_dd_index_sub_part_length::val_int() {
 
   return 0;
 }
+
+type_conversion_status
+Item_func_alter_type::save_in_field_inner(Field *to, bool no_conversions) {
+  Item_field *from_item = dynamic_cast<Item_field *>(args[0]);
+  if (nullptr == from_item) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return TYPE_OK;
+  }
+  Field *from = from_item->field;
+  Copy_field *copy = new Copy_field;
+  copy->set(to, from, 0);
+  copy->invoke_do_copy(copy);
+  delete copy;
+  return TYPE_OK;
+}

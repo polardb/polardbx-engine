@@ -1,0 +1,24 @@
+drop table if exists alter_type_test_tbl;
+drop table if exists alter_type_test_tbl_1;
+SET sql_mode = '';
+create table alter_type_test_tbl (a bigint, b float);
+insert into alter_type_test_tbl values (18446744073709551615, 18446744073709551615);
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
+update alter_type_test_tbl set a=alter_type(b);
+alter table alter_type_test_tbl modify column b bigint;
+select count(*) from alter_type_test_tbl where a=b;
+count(*)
+1
+create table alter_type_test_tbl_1 (a bigint, b float);
+insert into alter_type_test_tbl_1 values (18446744073709551615, 18446744073709551615);
+Warnings:
+Warning	1264	Out of range value for column 'a' at row 1
+alter table alter_type_test_tbl_1 modify column b bigint;
+alter table alter_type_test_tbl_1 add column c bigint as (alter_type(b));
+select count(*) from alter_type_test_tbl_1 where b=c;
+count(*)
+1
+SET sql_mode = default;
+drop table alter_type_test_tbl;
+drop table alter_type_test_tbl_1;
