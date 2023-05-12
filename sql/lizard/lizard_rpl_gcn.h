@@ -82,4 +82,46 @@ struct MyGCN {
 
 #define MyGCN_NULL (MyGCN{})
 
+struct MyVisionGCN {
+ public:
+  MyVisionGCN() { reset(); }
+
+  void reset() {
+    csr = MYSQL_CSR_NONE;
+    gcn = MYSQL_GCN_NULL;
+    current_scn = MYSQL_SCN_NULL;
+  }
+
+  void set(my_csr_t _csr, my_gcn_t _gcn, my_scn_t _scn) {
+    DBUG_ASSERT(_csr == MYSQL_CSR_AUTOMATIC || _csr == MYSQL_CSR_ASSIGNED);
+    if (_csr == MYSQL_CSR_ASSIGNED) {
+      DBUG_ASSERT(_scn == MYSQL_SCN_NULL);
+    } else {
+      DBUG_ASSERT(_scn != MYSQL_SCN_NULL);
+    }
+    csr = _csr;
+    gcn = _gcn;
+    current_scn = _scn;
+  }
+
+  bool is_null() {
+    if (csr == MYSQL_CSR_AUTOMATIC) {
+      DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
+      DBUG_ASSERT(current_scn != MYSQL_SCN_NULL);
+    } else if (csr == MYSQL_CSR_ASSIGNED) {
+      DBUG_ASSERT(gcn != MYSQL_GCN_NULL);
+      DBUG_ASSERT(current_scn == MYSQL_SCN_NULL);
+    } else {
+      DBUG_ASSERT(gcn == MYSQL_GCN_NULL);
+      DBUG_ASSERT(current_scn == MYSQL_SCN_NULL);
+    }
+
+    return csr == MYSQL_CSR_NONE;
+  }
+
+  my_csr_t csr;
+  my_gcn_t gcn;
+  my_scn_t current_scn;
+};
+
 #endif

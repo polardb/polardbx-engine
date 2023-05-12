@@ -2185,7 +2185,7 @@ inline xa_status_code binlog_xa_commit_or_rollback(THD *thd, XID *xid,
       error = mysql_bin_log.rollback(thd, true);
 
     if (error == TC_LOG::RESULT_SUCCESS) {
-      xid->set_commit_gcn(thd->owned_gcn);
+      xid->set_commit_gcn(thd->owned_commit_gcn);
     }
 
     if (cache_mngr) cache_mngr->has_logged_xid = false;

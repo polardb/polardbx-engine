@@ -38,8 +38,12 @@ bool innobase_snapshot_scn_too_old(my_scn_t scn) {
   return scn < purge_sys->purged_scn.load();
 }
 
-bool innobase_snapshot_gcn_too_old(my_gcn_t gcn) {
+bool innobase_snapshot_automatic_gcn_too_old(my_gcn_t gcn) {
   return gcn < purge_sys->purged_gcn.get();
+}
+
+bool innobase_snapshot_assigned_gcn_too_old(my_gcn_t gcn) {
+  return gcn <= purge_sys->purged_gcn.get();
 }
 
 /**
@@ -52,7 +56,10 @@ void innobase_init_ext(handlerton *innobase_hton) {
   innobase_hton->ext.load_scn = innobase_load_scn;
 
   innobase_hton->ext.snapshot_scn_too_old = innobase_snapshot_scn_too_old;
-  innobase_hton->ext.snapshot_gcn_too_old = innobase_snapshot_gcn_too_old;
+  innobase_hton->ext.snapshot_assigned_gcn_too_old =
+      innobase_snapshot_assigned_gcn_too_old;
+  innobase_hton->ext.snapshot_automatic_gcn_too_old =
+      innobase_snapshot_automatic_gcn_too_old;
 }
 
 /**

@@ -447,7 +447,9 @@ THD::THD(bool enable_plugins)
       ppi_statement_stat(new PPI_stat()),
       lex_returning(new im::Lex_returning(false)),
       ccl_comply(new im::Ccl_comply(this)),
-      is_recycle_command(false) {
+      is_recycle_command(false),
+      owned_commit_gcn(),
+      owned_vision_gcn() {
   main_lex->reset();
   set_psi(NULL);
   mdl_context.init(this);
@@ -576,8 +578,6 @@ THD::THD(bool enable_plugins)
   rds_audit_event_buf = NULL;
 
   recycle_state = new im::recycle_bin::Recycle_state();
-
-  owned_gcn.reset();
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {

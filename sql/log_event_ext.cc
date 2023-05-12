@@ -54,11 +54,11 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
   DBUG_TRACE;
   uchar *ptr_buffer = buffer;
 
-  if (!thd->owned_gcn.is_empty()) {
+  if (!thd->owned_commit_gcn.is_empty()) {
     flags |= FLAG_HAVE_COMMITTED_GCN;
-    commit_gcn = thd->owned_gcn.get_gcn();
+    commit_gcn = thd->owned_commit_gcn.get_gcn();
 
-    if (thd->owned_gcn.is_assigned()) {
+    if (thd->owned_commit_gcn.is_assigned()) {
       flags |= FLAG_GCN_ASSIGNED;
     }
   }
@@ -131,8 +131,8 @@ int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
 
     thd->variables.innodb_commit_gcn = commit_gcn;
 
-    /** Set owned_gcn in THD. */
-    thd->owned_gcn.set(commit_gcn, (flags & FLAG_GCN_ASSIGNED)
+    /** Set owned_commit_gcn in THD. */
+    thd->owned_commit_gcn.set(commit_gcn, (flags & FLAG_GCN_ASSIGNED)
                                        ? MYSQL_CSR_ASSIGNED
                                        : MYSQL_CSR_AUTOMATIC);
   }
@@ -154,7 +154,7 @@ Log_event::enum_skip_reason Gcn_log_event::do_shall_skip(Relay_log_info *rli) {
   Log_event::enum_skip_reason ret = Log_event::continue_group(rli);
 
   if (ret != EVENT_SKIP_NOT) {
-    thd->owned_gcn.reset();
+    thd->owned_commit_gcn.reset();
   }
 
   return ret;

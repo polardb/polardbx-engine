@@ -4345,7 +4345,6 @@ int mysql_execute_command(THD *thd, bool first_level) {
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
         thd->reset_gcn_variables();
-        thd->owned_gcn.reset();
         if (trans_begin(thd)) goto error;
       } else {
         /* Reset the isolation level and access mode if no chaining

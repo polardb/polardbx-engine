@@ -4308,12 +4308,17 @@ private:
   /** Hash table to save last CURRVAL value of sequence table */
   Sequence_last_value_hash *seq_thd_hash;
 
-  MyGCN owned_gcn;
+  MyGCN owned_commit_gcn;
+
+  MyVisionGCN owned_vision_gcn;
 
   void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
     variables.innodb_current_snapshot_gcn = false;
+
+    owned_commit_gcn.reset();
+    owned_vision_gcn.reset();
   }
 
   /** For polarx rpc/galaxy parallel thread pool. */

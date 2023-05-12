@@ -35,6 +35,8 @@ select * from t1;
 xa start 'x21';
 insert into t1 values (10021, 10021);
 xa end 'x21';
+# TODO : For one phase commit,
+# passing the GCN to the slave is forbidden by us because the XA bug
 xa commit 'x21' one phase;
 
 xa start 'x31';
@@ -93,7 +95,7 @@ select * from t1;
 xa end 'f2';
 xa commit 'f2' one phase;
 
-set innodb_snapshot_seq = @base_seq +  10030;
+set innodb_snapshot_seq = @base_seq +  10029;
 select * from t1;
 
 set innodb_snapshot_seq = @base_seq +  10040;
@@ -115,7 +117,7 @@ select * from t2;
 xa end 'f3';
 xa commit 'f3' one phase;
 
-set innodb_snapshot_seq = @base_seq +  20030;
+set innodb_snapshot_seq = @base_seq +  20029;
 select * from t2;
 
 set innodb_snapshot_seq = @base_seq +  20040;

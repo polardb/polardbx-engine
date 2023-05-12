@@ -36,7 +36,8 @@ struct handlerton_ext {
   load_gcn_t load_gcn;
   load_scn_t load_scn;
   snapshot_scn_too_old_t snapshot_scn_too_old;
-  snapshot_gcn_too_old_t snapshot_gcn_too_old;
+  snapshot_gcn_too_old_t snapshot_assigned_gcn_too_old;
+  snapshot_gcn_too_old_t snapshot_automatic_gcn_too_old;
 };
 
 #endif

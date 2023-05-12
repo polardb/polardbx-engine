@@ -51,8 +51,9 @@ bool Binlog_ext::assign_gcn_to_flush_group(THD *first_seen) {
   bool error = false;
 
   for (THD *head = first_seen; head; head = head->next_to_commit) {
-    if (head->owned_gcn.is_empty() && get_xa_opt(head) != XA_ONE_PHASE) {
-      head->owned_gcn.set(innodb_hton->ext.load_gcn(), MYSQL_CSR_AUTOMATIC);
+    if (head->owned_commit_gcn.is_empty() && get_xa_opt(head) != XA_ONE_PHASE) {
+      head->owned_commit_gcn.set(innodb_hton->ext.load_gcn(),
+                                 MYSQL_CSR_AUTOMATIC);
     }
   }
 
@@ -366,7 +367,7 @@ bool Binlog_recovery::apply_binlog() {
           if (skip_trx) {
             reader.seek(current_group_end);
             /*GCN_LOG_EVENT has been applied before GTID_LOG_EVENT*/
-            thd->owned_gcn.reset();
+            thd->owned_commit_gcn.reset();
             break;
           }
         }
@@ -383,7 +384,7 @@ bool Binlog_recovery::apply_binlog() {
               current_group_end > reader.event_start_pos()) {
             skip_counter--;
             reader.seek(current_group_end);
-            thd->owned_gcn.reset();
+            thd->owned_commit_gcn.reset();
 
             if (!current_gtid.is_empty()) {
               global_sid_lock->wrlock();

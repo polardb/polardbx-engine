@@ -1,0 +1,116 @@
+set global innodb_undo_retention = 9000;
+# conn1: write(0)
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+# conn2: read
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+# conn3: write(1)
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+CREATE TABLE `t1` (
+`id` int NOT NULL,
+`balance` int NOT NULL,
+PRIMARY KEY (`id`)
+);
+CREATE TABLE `t2` (
+`id` int NOT NULL,
+`balance` int NOT NULL,
+PRIMARY KEY (`id`)
+);
+insert into t1 values (1, 1000);
+insert into t2 values (2, 1000);
+###################################
+# local write + distributed read
+###################################
+begin;
+select * from t1;
+id	balance
+1	1000
+select * from t2;
+id	balance
+2	1000
+commit;
+begin;
+update t1 set balance = balance + 1;
+update t2 set balance = balance + -1;
+commit;
+begin;
+select * from t1;
+id	balance
+1	1000
+select * from t2;
+id	balance
+2	1000
+commit;
+################################
+# distributed write + local read
+################################
+xa start '1';
+update t1 set balance = balance + 1;
+xa end '1';
+xa prepare '1';
+xa start '2';
+update t2 set balance = balance + -1;
+xa end '2';
+xa prepare '2';
+xa commit '1';
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+id	balance
+1	1002
+select * from t2;
+xa commit '2';
+id	balance
+2	998
+commit;
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+id	balance
+1	1002
+select * from t2;
+id	balance
+2	998
+commit;
+###############################
+# local write + local read
+###############################
+begin;
+update t1 set balance = balance + 1;
+update t2 set balance = balance + -1;
+commit;
+# read after write
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+id	balance
+1	1003
+select * from t2;
+id	balance
+2	997
+commit;
+begin;
+set innodb_current_snapshot_seq = true;
+select * from t1;
+id	balance
+1	1003
+select * from t2;
+id	balance
+2	997
+commit;
+begin;
+update t1 set balance = balance + 1;
+update t2 set balance = balance + -1;
+commit;
+select * from t1;
+id	balance
+1	1004
+select * from t2;
+id	balance
+2	996
+commit;
+###############################
+# cleanup
+###############################
+set global innodb_undo_retention = default;
+drop table t1;
+drop table t2;

@@ -57,7 +57,7 @@ struct commit_mark_t {
   /** Current only represent gcn source. since utc and scn only be allowed to
    * generate automatically */
   csr_t csr;
-  /** Copy gcn state from owned_gcn. */
+  /** Copy gcn state from owned_commit_gcn. */
   void copy_my_gcn(const MyGCN *);
 };
 

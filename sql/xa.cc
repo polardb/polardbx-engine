@@ -786,7 +786,7 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
     1. set variable innodb_commit_gcn =
     2. sql_thread apply gcn event
   */
-  external_xid->set_commit_gcn(thd->owned_gcn);
+  external_xid->set_commit_gcn(thd->owned_commit_gcn);
 
 
   DBUG_EXECUTE_IF("crash_on_external_xa_commit", DBUG_SUICIDE(););

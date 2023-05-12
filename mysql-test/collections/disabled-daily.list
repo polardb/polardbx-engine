@@ -495,3 +495,4 @@ innodb.trx_id_future                   : WL#001 Lizard Row Format changed
 #binlog_gtid.binlog_gtid_mysqlbinlog_row_innodb              : WL#001 xpaxos do not allow reset master
 #binlog_gtid.binlog_gtid_mysqlbinlog_row_myisam              : WL#001 xpaxos do not allow reset master
 
+xcluster.feature_support_gcn                                 : WL#001 passing the GCN to the slave is forbidden by us because the XA bug
