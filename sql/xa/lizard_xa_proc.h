@@ -310,6 +310,74 @@ class Xa_proc_send_heartbeat : public Xa_proc_base {
   }
 };
 
+class Sql_cmd_xa_proc_advance_gcn_no_flush : public Sql_cmd_xa_proc_trans_base {
+ public:
+  explicit Sql_cmd_xa_proc_advance_gcn_no_flush(THD *thd,
+                                                mem_root_deque<Item *> *list,
+                                                const Proc *proc)
+      : Sql_cmd_xa_proc_trans_base(thd, list, proc) {}
+
+  /**
+    Implementation of Proc execution body.
+
+    @param[in]    THD           Thread context
+
+    @retval       true          Failure
+    @retval       false         Success
+  */
+  virtual bool pc_execute(THD *thd) override;
+
+  /* Inherit the default send_result */
+};
+
+class Xa_proc_advance_gcn_no_flush : public Xa_proc_base {
+  using Sql_cmd_type = Sql_cmd_xa_proc_advance_gcn_no_flush;
+
+  enum enum_parameter {
+    XA_PARAM_GCN = 0,
+    XA_PARAM_LAST
+  };
+
+  enum_field_types get_field_type(enum_parameter param) {
+    switch (param) {
+      case XA_PARAM_GCN:
+        return MYSQL_TYPE_LONGLONG;
+      case XA_PARAM_LAST:
+        assert(0);
+    }
+    return MYSQL_TYPE_LONGLONG;
+  }
+
+ public:
+  explicit Xa_proc_advance_gcn_no_flush(PSI_memory_key key)
+      : Xa_proc_base(key) {
+    /* 1. Init parameters */
+    for (size_t i = XA_PARAM_GCN; i < XA_PARAM_LAST; i++) {
+      m_parameters.assign_at(
+          i, get_field_type(static_cast<enum enum_parameter>(i)));
+    }
+
+    /* 2. Only OK or ERROR protocol packet */
+    m_result_type = Result_type::RESULT_OK;
+  }
+
+  /* Singleton instance for advance_gcn_no_flush */
+  static Proc *instance();
+
+  /**
+    Evoke the sql_cmd object for advance_gcn_no_flush() proc.
+  */
+  virtual Sql_cmd *evoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
+
+  virtual ~Xa_proc_advance_gcn_no_flush() {}
+
+  /* Proc name */
+  virtual const std::string str() const override {
+    return std::string("advance_gcn_no_flush");
+  }
+};
+
 }
 
 #endif

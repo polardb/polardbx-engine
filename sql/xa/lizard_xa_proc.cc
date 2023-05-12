@@ -290,4 +290,43 @@ bool cn_heartbeat_timeout_freeze_applying_event(THD *thd) {
     return false;
   }
 }
+
+/**
+  Parse the GCN from the parameter list
+
+  @param[in]  list    parameter list
+  @param[out] gcn     GCN
+
+  @retval     true if parsing error.
+*/
+bool parse_gcn_from_parameter_list(const mem_root_deque<Item *> *list,
+                                   my_gcn_t *gcn) {
+  /* GCN */
+  *gcn = (*list)[0]->val_uint();
+
+  return false;
+}
+
+bool Sql_cmd_xa_proc_advance_gcn_no_flush::pc_execute(THD *) {
+  DBUG_ENTER("Sql_cmd_xa_proc_advance_gcn_no_flush::pc_execute");
+  my_gcn_t gcn;
+  if (parse_gcn_from_parameter_list(m_list, &gcn)) {
+    /** Not possible. */
+    DBUG_ABORT();
+    DBUG_RETURN(true);
+  }
+
+  lizard::gcs_set_gcn_if_bigger(gcn);
+  DBUG_RETURN(false);
+}
+
+Proc *Xa_proc_advance_gcn_no_flush::instance() {
+  static Proc *proc = new Xa_proc_advance_gcn_no_flush(key_memory_xa_proc);
+  return proc;
+}
+
+Sql_cmd *Xa_proc_advance_gcn_no_flush::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
 }

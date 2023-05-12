@@ -461,6 +461,7 @@ Item *CRing<Item>::biggest_less_equal_than(const Item &lhs) {
     upper = m_head;
     lower = m_tail;
     ut_a(upper > lower);
+    mid = 0;
 
     while (upper >= lower) {
       mid = (upper + lower) / 2;
