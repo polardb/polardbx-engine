@@ -348,13 +348,20 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
 
 
 int Snapshot_gcn_hint::evoke_vision(TABLE *table, THD *thd) {
-  Snapshot_gcn_vision *vision =
-      dynamic_cast<Snapshot_gcn_vision *>(table->table_snapshot.get(type()));
+  int error;
+  my_gcn_t gcn;
+  Snapshot_gcn_vision *vision;
 
-  vision->store_csr(get_csr());
-  vision->store_current_scn(get_current_scn());
+  if ((error = val_int(&gcn))) {
+    return error;
+  }
 
-  return Snapshot_hint::evoke_vision(table, thd);
+  DBUG_ASSERT(type() == AS_OF_GCN);
+  vision = dynamic_cast<Snapshot_gcn_vision *>(table->table_snapshot.get(type()));
+
+  vision->store_snapshot(get_csr(), gcn, get_current_scn());
+
+  return table->table_snapshot.activate(vision, thd);
 }
 
 /** Whether is it too old.

@@ -353,11 +353,8 @@ class Snapshot_gcn_vision : public Snapshot_vision {
         m_current_scn(MYSQL_SCN_NULL),
         m_up_limit_tid(0) {}
 
-  Snapshot_gcn_vision(my_gcn_t gcn, my_scn_t scn, my_trx_id_t tid)
-      : m_gcn(gcn),
-        m_csr(MYSQL_CSR_NONE),
-        m_current_scn(scn),
-        m_up_limit_tid(tid) {}
+  Snapshot_gcn_vision(my_gcn_t gcn, my_scn_t scn, my_trx_id_t tid, my_csr_t csr)
+      : m_gcn(gcn), m_csr(csr), m_current_scn(scn), m_up_limit_tid(tid) {}
 
   virtual ~Snapshot_gcn_vision() {}
 
@@ -378,8 +375,8 @@ class Snapshot_gcn_vision : public Snapshot_vision {
   /*------------------------------------------------------------------------------*/
   virtual Snapshot_type type() const override { return AS_OF_GCN; }
 
-  virtual void store_int(uint64_t value) override {
-    m_gcn = static_cast<my_gcn_t>(value);
+  virtual void store_int(uint64_t) override {
+    DBUG_ASSERT(0);
   }
 
   /** Do pushup GCS gcn if come from outer. */
@@ -389,11 +386,13 @@ class Snapshot_gcn_vision : public Snapshot_vision {
     return static_cast<uint64_t>(m_gcn);
   }
 
-  void store_current_scn(my_scn_t scn) { m_current_scn = scn; }
+  void store_snapshot(my_csr_t csr, my_gcn_t gcn, my_scn_t current_scn) {
+    m_csr = csr;
+    m_gcn = gcn;
+    m_current_scn = current_scn;
+  }
 
   my_scn_t current_scn() const { return m_current_scn; }
-
-  void store_csr(my_csr_t csr) { m_csr = csr; }
 
   my_csr_t csr() const { return m_csr; }
 

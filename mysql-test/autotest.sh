@@ -73,3 +73,8 @@ $RUN_MTR &>all.normal
 RUN_MTR="$OPT --vardir=var_normal_ps"
 RUN_MTR="$RUN_MTR --ps-protocol"
 $RUN_MTR &>all.normal_ps
+
+# Test xcluster suite.
+RUNMTR="$OPT --vardir=var_xcluster --do-suite=xcluster"
+RUNMTR="$RUNMTR"
+$RUNMTR &>all.xcluster

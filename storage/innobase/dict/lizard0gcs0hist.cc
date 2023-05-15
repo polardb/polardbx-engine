@@ -592,7 +592,8 @@ void CSnapshot_buffer::push(const commit_snap_t &snap) {
   m_scn_buffer.add(scn_vision, snap.utc_sec);
 
   /** Add gcn snapshot. */
-  Snapshot_gcn_vision gcn_vision(snap.gcn, snap.scn, snap.up_limit_tid);
+  Snapshot_gcn_vision gcn_vision(snap.gcn, snap.scn, snap.up_limit_tid,
+                                 MYSQL_CSR_AUTOMATIC);
   m_gcn_buffer.add(gcn_vision, snap.utc_sec);
 }
 

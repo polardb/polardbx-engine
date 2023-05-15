@@ -8,7 +8,7 @@ set innodb_commit_seq = @base_seq +1000;
 insert into t1 (b) value (1000);
 set innodb_commit_seq = @base_seq +2000;
 insert into t1 (b) value (2000);
-set innodb_snapshot_seq = @base_seq +2000;
+set innodb_snapshot_seq = @base_seq +2001;
 select * from t1;
 a	b
 1	1000
@@ -40,7 +40,7 @@ set innodb_snapshot_seq = @base_seq +1000;
 select /*+ SET_VAR(innodb_current_snapshot_seq=ON ) */ * from t1;
 a	b
 1	1000
-select (@base_seq + 2000 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_current_gcn')) as result;
+select (@base_seq + 2001 = (select variable_value from performance_schema.global_status where variable_name = 'Lizard_current_gcn')) as result;
 result
 1
 set innodb_current_snapshot_seq = ON;
