@@ -1,0 +1,12 @@
+MACRO(IMPORT_EASY)
+  add_subdirectory(${DEPENDENCY_PATH}/easy/src)
+  set(EASY_INCLUDE
+    ${DEPENDENCY_PATH}/easy/src/io
+    ${DEPENDENCY_PATH}/easy/src/memory
+    ${DEPENDENCY_PATH}/easy/src/include
+    ${DEPENDENCY_PATH}/easy/src/packet
+    ${DEPENDENCY_PATH}/easy/src/thread
+    ${DEPENDENCY_PATH}/easy/src/util
+    )
+  include_directories(${EASY_INCLUDE})
+ENDMACRO(IMPORT_EASY)

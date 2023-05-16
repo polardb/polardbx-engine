@@ -1,0 +1,6 @@
+MACRO(IMPORT_PROTOBUF)
+  set(protobuf_BUILD_TESTS OFF)
+  set(protobuf_BUILD_PROTOC_BINARIES OFF)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependency/protobuf/cmake)
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/dependency/protobuf/src/)
+ENDMACRO(IMPORT_PROTOBUF)

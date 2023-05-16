@@ -2195,6 +2195,8 @@ ADD_SUBDIRECTORY(libservices)
 
 IF(NOT WITHOUT_SERVER)
   ADD_SUBDIRECTORY(testclients)
+  include(cmake/IS.cmake)
+  IMPORT_IS()
   ADD_SUBDIRECTORY(sql)
 ENDIF()
 

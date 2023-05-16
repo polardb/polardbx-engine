@@ -1,0 +1,3 @@
+MACRO(IMPORT_IS)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/extra/IS)
+ENDMACRO(IMPORT_IS)
