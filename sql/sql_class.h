@@ -114,7 +114,6 @@
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_interface.h"
 
-#include "sql_class_ext.h"
 #include "sql/lizard/lizard_rpl_gcn.h" // struct MyGCN...
 
 namespace im {
