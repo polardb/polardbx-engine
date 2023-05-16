@@ -12187,6 +12187,9 @@ ER_RAFT_RECOVERY
 ER_RAFT_FIFO
   eng "[FIFO] %s"
 
+ER_RAFT_PREFETCH
+  eng "[Prefetch] %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

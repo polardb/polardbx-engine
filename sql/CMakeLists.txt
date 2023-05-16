@@ -1107,6 +1107,7 @@ SET(BINLOG_SOURCE
   consensus_info.cc
   bl_consensus_log.cc
   consensus_fifo_cache_manager.cc
+  consensus_prefetch_manager.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
 TARGET_LINK_LIBRARIES(binlog binlogevents_static)

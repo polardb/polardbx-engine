@@ -104,3 +104,8 @@ uint64 Consensus_log_manager::get_exist_log_length() { return 0; }
 bool Consensus_log_manager::is_state_machine_ready() { return false; }
 
 void Consensus_log_manager::set_cache_index(uint64) {}
+
+int Consensus_log_manager::prefetch_log_directly(THD *, uint64,
+                                                 uint64) {
+  return 0;
+}

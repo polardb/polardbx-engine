@@ -91,6 +91,7 @@ class Consensus_log_manager {
                     uint64 *consensus_term, std::string &log_content,
                     bool *outer, uint *flag, uint64 *checksum, bool fast_fail);
   uint64_t get_left_log_size(uint64 start_log_index, uint64 max_packet_size);
+  int prefetch_log_directly(THD *thd, uint64 channel_id, uint64 consensus_index);
   int truncate_log(uint64 consensus_index);
 
   int purge_log(uint64 consensus_index);

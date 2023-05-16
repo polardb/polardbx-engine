@@ -987,6 +987,7 @@ MySQL clients support the protocol:
 #include "sql/consensus_log_index.h"
 #include "sql/consensus_recovery_manager.h"
 #include "sql/consensus_log_manager.h"
+#include "sql/consensus_prefetch_manager.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle.h"
@@ -11965,6 +11966,7 @@ static PSI_rwlock_info all_server_rwlocks[]=
 #endif // _WIN32
   { &key_rwlock_ConsensusLog_status_lock, "Consensus_log_manager::LOCK_consensuslog_status", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_ConsensusLog_log_cache_lock, "ConsensusLogManager::LOCK_consensuslog_cache", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_rwlock_ConsensusLog_prefetch_channels_hash, "ConsensusPreFetchManager::LOCK_prefetch_channels_hash", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
@@ -12075,6 +12077,7 @@ PSI_FLAG_USER | PSI_FLAG_NO_SEQNUM, 0, PSI_DOCUMENT_ME},
 
   // CONSENSUS
   { &key_thread_cleaner, "fifo_cleaner", "fifo_cleaner", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_thread_prefetch, "run_prefetch", "run_prefetch", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
