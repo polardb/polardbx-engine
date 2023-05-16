@@ -187,8 +187,6 @@ void VisionContainer::vision_open(trx_t *trx) {
   os_atomic_increment_ulint(&m_size, 1);
 
   vision->m_list_idx = idx;
-
-  vision_collect_trx_group_ids(trx, vision);
 }
 
 /**

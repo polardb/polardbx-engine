@@ -2387,6 +2387,9 @@ lizard::Vision *trx_assign_read_view(
     lizard::trx_vision_open(trx);
   }
 
+  /* NOTES: This may result in performance degradation. */
+  vision_collect_trx_group_ids(trx, &trx->vision);
+
   return (&trx->vision);
 }
 
