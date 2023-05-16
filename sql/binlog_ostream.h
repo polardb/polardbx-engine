@@ -136,6 +136,8 @@ class IO_CACHE_binlog_cache_storage : public Truncatable_ostream {
   bool flush() override { return false; }
   bool sync() override { return false; }
 
+  IO_CACHE *get_io_cache() override { return &m_io_cache; }
+
  private:
   IO_CACHE m_io_cache;
   my_off_t m_max_cache_size = 0;
@@ -292,6 +294,8 @@ class Binlog_encryption_ostream : public Truncatable_ostream {
     @return the encrypted file header size.
   */
   int get_header_size();
+
+  IO_CACHE *get_io_cache() override { return m_down_ostream->get_io_cache(); }
 
  private:
   std::unique_ptr<Truncatable_ostream> m_down_ostream;

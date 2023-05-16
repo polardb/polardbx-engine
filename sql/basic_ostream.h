@@ -87,6 +87,8 @@ class Truncatable_ostream : public Basic_ostream {
   virtual bool sync() = 0;
 
   ~Truncatable_ostream() override = default;
+
+  virtual IO_CACHE *get_io_cache() = 0;
 };
 
 /**
@@ -143,6 +145,8 @@ class IO_CACHE_ostream : public Truncatable_ostream {
      @retval true  Error
   */
   bool sync() override;
+
+  IO_CACHE *get_io_cache() override { return &m_io_cache; }
 
  private:
   IO_CACHE m_io_cache;

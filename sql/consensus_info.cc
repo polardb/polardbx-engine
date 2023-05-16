@@ -213,7 +213,7 @@ bool Consensus_info::read_info(Rpl_info_handler *from) {
 }
 
 bool Consensus_info::write_info(Rpl_info_handler *to) {
-  DBUG_ENTER("ConsensusLogManager::write_info");
+  DBUG_ENTER("Consensus_log_manager::write_info");
 
   if (to->prepare_info_for_write() ||
       to->set_info((int)get_number_info_consensus_fields()) ||

@@ -599,6 +599,9 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
   */
   void set_encrypted() { m_encrypted = true; }
 
+  // used for consensus
+  IO_CACHE *get_io_cache() { return m_pipeline_head->get_io_cache(); }
+
  private:
   my_off_t m_position = 0;
   int m_encrypted_header_size = 0;
@@ -11725,3 +11728,6 @@ int binlog_start_trans(THD *thd) {
 /*****************************************************************
 *                Lizard Binlog Extend End                       *
 *****************************************************************/
+
+#include "sql/lizard_binlog.cc"
+#include "consensus_log_manager.cc"

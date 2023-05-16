@@ -1104,10 +1104,12 @@ SET(BINLOG_SOURCE
   binlog/lizard0recovery.cc
   gcn_log_event.cc
   consensus_info.cc
+  bl_consensus_log.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
 TARGET_LINK_LIBRARIES(binlog binlogevents_static)
 TARGET_LINK_LIBRARIES(binlog rpl)
+TARGET_LINK_LIBRARIES(binlog aliconsensus)
 
 SET (RPL_SOURCE rpl_handler.cc rpl_tblmap.cc rpl_context.cc)
 ADD_DEPENDENCIES(binlog GenError)

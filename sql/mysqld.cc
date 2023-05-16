@@ -986,6 +986,7 @@ MySQL clients support the protocol:
 #include "sql/consensus_info.h"
 #include "sql/consensus_log_index.h"
 #include "sql/consensus_recovery_manager.h"
+#include "sql/consensus_log_manager.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle.h"
@@ -11913,6 +11914,12 @@ static PSI_mutex_info all_server_mutexes[]=
 	  0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_index, "ConsensusLogIndex::LOCK_consensuslog_index", 0, 0, PSI_DOCUMENT_ME },
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "ConsensusRecoveryManager::LOCK_consensus_log_recover_hash", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock, "Consensus_log_manager::LOCK_consensuslog_sequence_stage1", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock, "Consensus_log_manager::LOCK_consensus_log_term", 0, 0, PSI_DOCUMENT_ME },
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock, "Consensus_log_manager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock, "Consensus_log_manager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_Consensus_stage_change, "Consensus_log_manager::LOCK_consnesus_state_change", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_commit_pos, "Consensus_log_manager::LOCK_consensus_commit_pos", 0, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
@@ -11955,6 +11962,8 @@ static PSI_rwlock_info all_server_rwlocks[]=
      "This lock protects named pipe security attributes, preventing their "
      "simultaneous application and modification."},
 #endif // _WIN32
+  { &key_rwlock_ConsensusLog_status_lock, "Consensus_log_manager::LOCK_consensuslog_status", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_rwlock_ConsensusLog_log_cache_lock, "ConsensusLogManager::LOCK_consensuslog_cache", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
@@ -12032,7 +12041,9 @@ static PSI_cond_info all_server_conds[]=
   { &key_consensus_info_data_cond, "Consensus_info::data_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_start_cond, "Consensus_info::start_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_stop_cond, "Consensus_info::stop_cond", 0, 0, PSI_DOCUMENT_ME},
-  { &key_consensus_info_sleep_cond, "Consensus_info::sleep_cond", 0, 0, PSI_DOCUMENT_ME}
+  { &key_consensus_info_sleep_cond, "Consensus_info::sleep_cond", 0, 0, PSI_DOCUMENT_ME},
+
+  { &key_COND_ConsensusLog_catchup, "Consensus_log_manager::cond_consensuslog_catchup", 0, 0, PSI_DOCUMENT_ME},
 }; /* clang-format on */
 
 PSI_thread_key key_thread_bootstrap;
