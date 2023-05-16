@@ -29,6 +29,8 @@
 #include "mysql/psi/psi_memory.h"
 #include "template_utils.h"
 
+#include "sql/consensus_fifo_cache_manager.h"
+
 /*
   MAINTAINER: Please keep this list in order, to limit merge collisions.
 */
@@ -388,7 +390,10 @@ static PSI_memory_info all_server_memory[] = {
      "Memory allocated for in-memory maps for persisted variables"},
     {&key_memory_persisted_variables_unordered_set,
      "Persisted_variables::unordered_set", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
-     "Memory allocated for in-memory sets for persisted variables"}};
+     "Memory allocated for in-memory sets for persisted variables"},
+
+    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0, PSI_DOCUMENT_ME},
+};
 
 void register_server_memory_keys() {
   const char *category = "sql";

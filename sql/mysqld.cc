@@ -11920,6 +11920,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock, "Consensus_log_manager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_Consensus_stage_change, "Consensus_log_manager::LOCK_consnesus_state_change", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_commit_pos, "Consensus_log_manager::LOCK_consensus_commit_pos", 0, 0, PSI_DOCUMENT_ME},
+  { &key_fifo_cache_cleaner, "fifo_cache_cleaner", 0, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
@@ -12071,6 +12072,9 @@ PSI_FLAG_USER | PSI_FLAG_NO_SEQNUM, 0, PSI_DOCUMENT_ME},
   { &key_thread_compress_gtid_table, "compress_gtid_table", "gtid_zip", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_thread_parser_service, "parser_service", "parser_srv", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_thread_handle_con_admin_sockets, "admin_interface", "con_admin", PSI_FLAG_USER, 0, PSI_DOCUMENT_ME},
+
+  // CONSENSUS
+  { &key_thread_cleaner, "fifo_cleaner", "fifo_cleaner", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 

@@ -708,6 +708,7 @@ SET(SQL_SHARED_SOURCES
 
   consensus_log_index.cc
   consensus_recovery_manager.cpp
+  sys_vars_consensus.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)
@@ -1105,6 +1106,7 @@ SET(BINLOG_SOURCE
   gcn_log_event.cc
   consensus_info.cc
   bl_consensus_log.cc
+  consensus_fifo_cache_manager.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
 TARGET_LINK_LIBRARIES(binlog binlogevents_static)
