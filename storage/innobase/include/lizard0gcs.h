@@ -180,9 +180,6 @@ struct gcs_t {
    */
   bool persist_gcn();
 
-  /** Commit number recover. */
-  CRecover crecover;
-
   /** Commit number snapshot. */
   CSnapshot_mgr csnapshot_mgr;
   void new_snapshot(const commit_snap_t &snap);

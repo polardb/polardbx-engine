@@ -50,6 +50,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 class MetadataRecover;
 class PersistentTableMetadata;
 
+namespace lizard {
+class CRecover;
+}
+
 #ifdef UNIV_HOTBACKUP
 
 struct recv_addr_t;
@@ -584,6 +588,9 @@ struct recv_sys_t {
 
   /** Tablespace IDs that were explicitly deleted. */
   Missing_Ids deleted;
+
+  /** Commit number recover. */
+  lizard::CRecover *cn_recover;
 };
 
 /** The recovery system */
