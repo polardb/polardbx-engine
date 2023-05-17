@@ -181,9 +181,6 @@ struct gcs_t {
     @retval	true	if written
    */
   bool persist_gcn();
-
-  /** Commit number recover. */
-  CRecover crecover;
 };
 
 /** Initialize GCS system memory structure. */
