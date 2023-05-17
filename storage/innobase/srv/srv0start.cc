@@ -129,6 +129,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0sys.h"
 #include "lizard0txn.h"
 
+#include "srv0file.h"
+
 /** fil_space_t::flags for hard-coded tablespaces */
 extern uint32_t predefined_flags;
 
@@ -162,7 +164,9 @@ enum srv_start_state_t {
   /** Started purge thread(s) */
   SRV_START_STATE_PURGE = 2,
   /** Started bufdump + dict stat and FTS optimize thread. */
-  SRV_START_STATE_STAT = 4
+  SRV_START_STATE_STAT = 4,
+  /** Started file purge thread. */
+  SRV_START_STATE_FILE_PURGE = 8
 };
 
 /** Track server thrd starting phases */
@@ -1043,7 +1047,7 @@ dberr_t srv_undo_tablespaces_upgrade() {
 
     fil_space_close(undo_space.id());
 
-    auto err = fil_delete_tablespace(undo_space.id(), BUF_REMOVE_ALL_NO_WRITE);
+    auto err = fil_delete_tablespace(undo_space.id(), BUF_REMOVE_ALL_NO_WRITE, nullptr);
 
     if (err != DB_SUCCESS) {
       ib::warn(ER_IB_MSG_57_UNDO_SPACE_DELETE_FAIL, undo_space.space_name());
@@ -1421,6 +1425,11 @@ void srv_shutdown_exit_threads() {
         /* Wakeup purge threads. */
         srv_purge_wakeup();
       }
+    }
+
+    /* Wakeup file purge background thread */
+    if (srv_start_state_is_set(SRV_START_STATE_FILE_PURGE)) {
+      srv_wakeup_file_purge_thread();
     }
 
     if (srv_start_state_is_set(SRV_START_STATE_IO)) {
@@ -2462,6 +2471,14 @@ dberr_t srv_start(bool create_new_db) {
         os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
 
     srv_threads.m_monitor.start();
+
+    /* Create file purge thread */
+    srv_threads.m_file_purge =
+        os_thread_create(srv_file_purge_thread_key, 0, srv_file_purge_thread);
+
+    srv_threads.m_file_purge.start();
+
+    srv_start_state_set(SRV_START_STATE_FILE_PURGE);
   }
 
   srv_sys_tablespaces_open = true;

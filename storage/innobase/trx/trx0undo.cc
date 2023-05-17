@@ -2188,7 +2188,7 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
   if (space != nullptr) {
     is_encrypted = FSP_FLAGS_GET_ENCRYPTION(space->flags);
 
-    if (fil_delete_tablespace(old_space_id, BUF_REMOVE_NONE) != DB_SUCCESS) {
+    if (fil_delete_tablespace(old_space_id, BUF_REMOVE_NONE, nullptr) != DB_SUCCESS) {
       return false;
     }
   } else {

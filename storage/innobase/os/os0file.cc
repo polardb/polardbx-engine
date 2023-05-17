@@ -3433,6 +3433,8 @@ bool os_file_rename_func(const char *oldpath, const char *newpath) {
   ut_ad(os_file_exists(oldpath));
 #endif /* UNIV_DEBUG */
 
+  DBUG_EXECUTE_IF("Data_file_purge_rename_fail_2", return (false););
+
   int ret = rename(oldpath, newpath);
 
   if (ret != 0) {

@@ -253,6 +253,9 @@ SET(INNOBASE_SOURCES
   ut/ut0ut.cc
   ut/ut0vec.cc
   ut/ut0wqueue.cc
+  srv/srv0file.cc
+  fil/fil0purge.cc
+  handler/i_s_ext.cc
   trx/lizard0scn.cc
   trx/lizard0sys.cc
   dict/lizard0dict.cc

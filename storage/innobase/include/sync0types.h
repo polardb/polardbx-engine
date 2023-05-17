@@ -465,6 +465,7 @@ enum latch_id_t {
   /** Lizard mutex start */
   LATCH_ID_LIZARD_SCN,
   /** Lizard mutex end */
+  LATCH_ID_FILE_PURGE_LIST,
   LATCH_ID_TEST_MUTEX,
   LATCH_ID_MAX = LATCH_ID_TEST_MUTEX
 };

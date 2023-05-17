@@ -3714,7 +3714,7 @@ dberr_t row_drop_tablespace(space_id_t space_id, const char *filepath) {
     }
 
   } else {
-    err = fil_delete_tablespace(space_id, BUF_REMOVE_NONE);
+    err = fil_delete_tablespace(space_id, BUF_REMOVE_NONE, nullptr);
 
     if (err != DB_SUCCESS && err != DB_TABLESPACE_NOT_FOUND) {
       ib::error(ER_IB_MSG_991)

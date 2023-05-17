@@ -94,6 +94,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #endif /* !UNIV_HOTBACKUP */
 #include "ut0mem.h"
 
+#include "srv0file.h"
+
 #ifdef UNIV_HOTBACKUP
 #include "page0size.h"
 #else
@@ -1261,6 +1263,8 @@ void srv_free(void) {
   ut_d(os_event_destroy(srv_threads.m_shutdown_cleanup_dbg));
 
   srv_threads = {};
+
+  srv_file_purge_destroy();
 }
 
 /** Initializes the synchronization primitives, memory system, and the thread
@@ -1274,6 +1278,7 @@ static void srv_general_init() {
   que_init();
   row_mysql_init();
   undo_spaces_init();
+  srv_file_purge_init();
 }
 
 /** Boots the InnoDB server. */

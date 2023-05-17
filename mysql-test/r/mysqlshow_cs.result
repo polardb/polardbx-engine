@@ -116,6 +116,7 @@ Database: information_schema
 | INNODB_FT_INDEX_TABLE                 |
 | INNODB_INDEXES                        |
 | INNODB_METRICS                        |
+| INNODB_PURGE_FILES                    |
 | INNODB_SESSION_TEMP_TABLESPACES       |
 | INNODB_TABLES                         |
 | INNODB_TABLESPACES                    |
@@ -200,6 +201,7 @@ Database: INFORMATION_SCHEMA
 | INNODB_FT_INDEX_TABLE                 |
 | INNODB_INDEXES                        |
 | INNODB_METRICS                        |
+| INNODB_PURGE_FILES                    |
 | INNODB_SESSION_TEMP_TABLESPACES       |
 | INNODB_TABLES                         |
 | INNODB_TABLESPACES                    |

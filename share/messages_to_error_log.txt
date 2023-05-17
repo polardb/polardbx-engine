@@ -12097,6 +12097,15 @@ start-error-number 25000
 ER_LIZARD
   eng "%s"
 
+ER_IB_MSG_FILE_PURGE
+  eng "%s"
+
+ER_IB_MSG_FP_CLEANUP
+  eng "Data File Purge : cleanup tmp data files, still have %lu"
+
+ER_IB_MSG_FP_COMPLETE
+  eng "Data File Purge : complete cleanup"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

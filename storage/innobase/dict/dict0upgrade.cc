@@ -1423,7 +1423,7 @@ static void dd_upgrade_drop_57_backup_spaces() {
       continue;
     }
 
-    auto err = fil_delete_tablespace(space_id, BUF_REMOVE_NONE);
+    auto err = fil_delete_tablespace(space_id, BUF_REMOVE_NONE, nullptr);
 
     if (err != DB_SUCCESS) {
       ib::warn(ER_IB_MSG_57_STAT_SPACE_DELETE_FAIL, space_name);
