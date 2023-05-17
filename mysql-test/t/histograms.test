@@ -2275,7 +2275,7 @@ EXPLAIN SELECT * FROM ten WHERE x = -1;
 EXPLAIN SELECT * FROM hundred WHERE x = -1;
 # Lizard: Not sure why there are two possibilities, but both of them
 #         can be considered correct estimates (~=10000).
---replace_result 9840 {checked_valid} 9973 {checked_valid} 9774 {checked_valid} 10064 {checked_valid} 9932 {checked_valid}
+--replace_result 9840 {checked_valid} 9973 {checked_valid} 9774 {checked_valid} 10064 {checked_valid} 9932 {checked_valid} 9784 {checked_valid}
 EXPLAIN SELECT * FROM ten_thousand WHERE x = -1;
 
 # Build histograms on all tables and ensure statistics are up to date.
