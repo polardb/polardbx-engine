@@ -2783,7 +2783,9 @@ static ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
       new_ptr =
           lizard::mlog_parse_initial_gcn_log_record(ptr, end_ptr, type, &gcn);
 
-      recv_sys->cn_recover->recover_gcn(gcn);
+      if (new_ptr != nullptr) {
+        recv_sys->cn_recover->recover_gcn(gcn);
+      }
 
       return (new_ptr == nullptr ? 0 : new_ptr - ptr);
   }
