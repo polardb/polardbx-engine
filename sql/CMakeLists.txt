@@ -705,10 +705,12 @@ SET(SQL_SHARED_SOURCES
   raft/raft0rpl_info_factory.cc
   raft/raft0rpl_info_handler.cc
   raft/raft0xa.cc
+  raft/raft0rpl_rli.cc
 
   consensus_log_index.cc
   consensus_recovery_manager.cpp
   sys_vars_consensus.cc
+  consensus_binlog.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

@@ -684,6 +684,7 @@ class Relay_log_info : public Rpl_info {
     max_binlog_size.
   */
  protected:
+  std::atomic<ulonglong> consensus_apply_index;
   /**
      Event group means a group of events of a transaction. group_relay_log_name
      and group_relay_log_pos record the place before where all event groups
@@ -840,7 +841,7 @@ class Relay_log_info : public Rpl_info {
      @retval    true     It is invalid. In this case, *errmsg is set to point to
                          the error message.
 */
-  bool is_group_relay_log_name_invalid(const char **errmsg);
+  virtual bool is_group_relay_log_name_invalid(const char **errmsg);
   /**
      Reset group_relay_log_name and group_relay_log_pos to the start of the
      first relay log file. The caller must hold data_lock.
@@ -850,7 +851,7 @@ class Relay_log_info : public Rpl_info {
      @retval    false    Success
      @retval    true     Error
    */
-  bool reset_group_relay_log_pos(const char **errmsg);
+  virtual bool reset_group_relay_log_pos(const char **errmsg);
   /*
     Update the error number, message and timestamp fields. This function is
     different from va_report() as va_report() also logs the error message in the
@@ -2127,8 +2128,15 @@ class Relay_log_info : public Rpl_info {
     return m_b_events_before_gtid_mgr;
   }
 
- public:
   virtual Channel_style style() { return Channel_style::Tradition; }
+
+  /**
+   * Overwrite log name and index log name if needed.
+   *
+   * @param[in/out]	log name
+   * @param[in/out]	log index name
+   */
+  virtual void overwrite_log_name(const char **ln, const char **log_index_name);
 
  private:
   friend lizard::Begin_events_before_gtid_manager;

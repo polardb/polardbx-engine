@@ -2096,10 +2096,16 @@ bool start_slave_threads(bool need_lock_slave, bool wait_for_start,
     lock_cond_sql = &mi->rli->run_lock;
   }
 
-  if (thread_mask & SLAVE_IO)
+  if (thread_mask & SLAVE_IO) {
+    /** Has masked SLAVE IO */
+    assert(
+        !Multisource_info::is_raft_replication_channel_name(mi->get_channel()));
+    assert(mi->style() != Channel_style::Raft);
+
     is_error = start_slave_thread(key_thread_replica_io, handle_slave_io,
                                   lock_io, lock_cond_io, cond_io,
                                   &mi->slave_running, &mi->slave_run_id, mi);
+  }
 
   if (!is_error && (thread_mask & (SLAVE_IO | SLAVE_MONITOR)) &&
       mi->is_source_connection_auto_failover() &&
@@ -8808,6 +8814,15 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
 
   DBUG_TRACE;
 
+  /** Disable IO thread when raft channel.*/
+  if (mi->style() == Channel_style::Raft) {
+    assert(
+        Multisource_info::is_raft_replication_channel_name(mi->get_channel()));
+    thread_mask_input &= ~SLAVE_IO;
+  } else {
+    assert(
+        !Multisource_info::is_raft_replication_channel_name(mi->get_channel()));
+  }
   /*
     START SLAVE command should ignore 'read-only' and 'super_read_only'
     options so that it can update 'mysql.slave_master_info' and

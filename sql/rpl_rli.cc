@@ -1633,6 +1633,9 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
     } else
       log_index_name = nullptr;
 
+    /** Overwrite log name if raft log. */
+    overwrite_log_name(&ln, &log_index_name);
+
     if (relay_log.open_index_file(log_index_name, ln, true)) {
       LogErr(ERROR_LEVEL, ER_RPL_OPEN_INDEX_FILE_FAILED);
       return 1;
@@ -1688,14 +1691,31 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
     mysql_mutex_t *log_lock = relay_log.get_log_lock();
     mysql_mutex_lock(log_lock);
 
-    if (relay_log.open_binlog(
-            ln, nullptr,
-            (max_relay_log_size ? max_relay_log_size : max_binlog_size), true,
-            true /*need_lock_index=true*/, true /*need_sid_lock=true*/,
-            mi->get_mi_description_event())) {
-      mysql_mutex_unlock(log_lock);
-      LogErr(ERROR_LEVEL, ER_RPL_CANT_OPEN_LOG_IN_RLI_INIT_INFO);
-      return 1;
+    switch (Channel_style()) {
+      case Channel_style::Raft:
+        if (relay_log.open_exist_binlog(
+                ln, nullptr,
+                (max_relay_log_size ? max_relay_log_size : max_binlog_size),
+                true, true /*need_lock_index=true*/,
+                true /*need_sid_lock=true*/, mi->get_mi_description_event())) {
+          mysql_mutex_unlock(log_lock);
+          LogErr(ERROR_LEVEL, ER_RPL_CANT_OPEN_LOG_IN_RLI_INIT_INFO);
+          return 1;
+        }
+        break;
+      case Channel_style::Tradition:
+        if (relay_log.open_binlog(
+                ln, nullptr,
+                (max_relay_log_size ? max_relay_log_size : max_binlog_size),
+                true, true /*need_lock_index=true*/,
+                true /*need_sid_lock=true*/, mi->get_mi_description_event())) {
+          mysql_mutex_unlock(log_lock);
+          LogErr(ERROR_LEVEL, ER_RPL_CANT_OPEN_LOG_IN_RLI_INIT_INFO);
+          return 1;
+        }
+        break;
+      default:
+        assert(0);
     }
 
     mysql_mutex_unlock(log_lock);
@@ -1809,10 +1829,14 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
 
   inited = true;
   error_on_rli_init_info = false;
-  if (flush_info(RLI_FLUSH_IGNORE_SYNC_OPT | RLI_FLUSH_IGNORE_GTID_ONLY)) {
-    msg = "Error reading relay log configuration";
-    error = 1;
-    goto err;
+
+  /**TODO: */
+  if (style() == Channel_style::Tradition) {
+    if (flush_info(RLI_FLUSH_IGNORE_SYNC_OPT | RLI_FLUSH_IGNORE_GTID_ONLY)) {
+      msg = "Error reading relay log configuration";
+      error = 1;
+      goto err;
+    }
   }
 
   if (count_relay_log_space()) {

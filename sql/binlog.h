@@ -308,6 +308,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   /* This is relay log */
   bool is_relay_log;
 
+  bool is_raft_log;
+
   uint8 checksum_alg_reset;  // to contain a new value when binlog is rotated
   /*
     Holds the last seen in Relay-Log FD's checksum alg value.
@@ -995,7 +997,14 @@ class MYSQL_BIN_LOG : public TC_LOG {
   bool is_rotating_caused_by_incident;
 
  public:
+  bool open_exist_binlog(const char *log_name, const char *new_name,
+                         ulong max_size, bool null_created,
+                         bool need_lock_index, bool need_sid_lock,
+                         Format_description_log_event *extra_description_event);
+
+ private:
   std::unique_ptr<Gcn_manager> gcn_mgr;
+
 };
 
 struct LOAD_FILE_INFO {
