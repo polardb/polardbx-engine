@@ -4652,6 +4652,12 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
       prebuilt->select_lock_type == LOCK_NONE && index->is_clustered() &&
       (check_keys || prebuilt->trx->mysql_n_tables_locked == 0) &&
       !prebuilt->ins_sel_stmt) {
+
+    if (!check_keys && prebuilt->m_mysql_table &&
+        prebuilt->m_mysql_table->table_snapshot.is_vision()) {
+      goto skip_parallel_read;
+    }
+
     auto n_threads = Parallel_reader::available_threads(max_threads, false);
 
     if (n_threads > 1) {
@@ -4692,9 +4698,9 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
     }
   }
 
-#ifdef UNIV_DEBUG
+// #ifdef UNIV_DEBUG
 skip_parallel_read:
-#endif /* UNIV_DEBUG */
+// #endif /* UNIV_DEBUG */
 
   bool contains_null;
   rec_t *rec = nullptr;
@@ -4730,6 +4736,13 @@ loop:
     case DB_LOCK_TABLE_FULL:
     case DB_LOCK_WAIT_TIMEOUT:
     case DB_INTERRUPTED:
+    /** Flashback query error begin. */
+    case DB_SNAPSHOT_OUT_OF_RANGE:
+    case DB_AS_OF_INTERNAL:
+    case DB_AS_OF_TABLE_DEF_CHANGED:
+    case DB_SNAPSHOT_TOO_OLD:
+    case DB_GP_WAIT_TIMEOUT:
+    /** Flashback query error end. */
       goto func_exit;
     default: {
       const char *doing = check_keys ? "CHECK TABLE" : "COUNT(*)";

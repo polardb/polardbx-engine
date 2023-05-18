@@ -3501,7 +3501,10 @@ int report_handler_error(TABLE *table, int error) {
   */
   if (error != HA_ERR_LOCK_DEADLOCK && error != HA_ERR_LOCK_WAIT_TIMEOUT &&
       error != HA_ERR_TABLE_DEF_CHANGED && error != HA_ERR_NO_WAIT_LOCK &&
-      !current_thd->killed)
+      error != HA_ERR_SNAPSHOT_TOO_OLD && error != HA_ERR_AS_OF_INTERNAL &&
+      error != HA_ERR_SNAPSHOT_OUT_OF_RANGE &&
+      error != HA_ERR_AS_OF_TABLE_DEF_CHANGED &&
+      error != HA_ERR_GP_WAIT_TIMEOUT && !current_thd->killed)
     LogErr(ERROR_LEVEL, ER_READING_TABLE_FAILED, error, table->s->path.str);
   table->file->print_error(error, MYF(0));
   return 1;

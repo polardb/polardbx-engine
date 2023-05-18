@@ -504,8 +504,6 @@ struct System_variables {
 
   bool sequence_read_skip_cache;
 
-  ulonglong global_query_wait_timeout;
-
   /** Gcn to read a snapshot by asof select. */
   ulonglong innodb_snapshot_gcn;
 

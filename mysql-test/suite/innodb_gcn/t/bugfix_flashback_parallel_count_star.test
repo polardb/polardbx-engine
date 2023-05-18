@@ -1,0 +1,5 @@
+create table t1 (id int primary key, c1 int default null) PARTITION BY HASH (id) PARTITIONS 16;
+--source suite/innodb_gcn/t/flashback_parallel_count_star.inc
+
+create table t1 (id int primary key, c1 int default null);
+--source suite/innodb_gcn/t/flashback_parallel_count_star.inc

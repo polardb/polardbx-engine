@@ -1,0 +1,132 @@
+create table t1 (id int primary key, c1 int default null) PARTITION BY HASH (id) PARTITIONS 16;
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+insert into t1 values (1, 10);
+begin;
+insert into t1 values (2, 20);
+commit;
+#########################################
+#  Case 1
+#########################################
+begin;
+select count(0) from t1;
+ERROR HY000: Snapshot too old
+ERROR HY000: Snapshot too old
+commit;
+#########################################
+#  Case 2
+#########################################
+select count(0) from t1 as of timestamp date_add(now(), interval 3 second);
+ERROR HY000: The snapshot to find is out of range, please adjust scn history configuration
+select count(0) from t1 as of timestamp '2020-06-04 00:00:00';
+ERROR HY000: The snapshot to find is out of range, please adjust scn history configuration
+#########################################
+#  Case 3
+#########################################
+set global innodb_undo_retention = 900000;
+begin;
+insert into t1 values (3, 30);
+commit;
+begin;
+select count(0) from t1;
+count(0)
+3
+begin;
+insert into t1 values (4, 40);
+commit;
+select count(0) from t1;
+count(0)
+3
+commit;
+#########################################
+#  Case 4
+#########################################
+alter table t1 add column c2 int after id;
+begin;
+select count(0) from t1;
+ERROR HY000: The definition of the table required by the flashback query has changed
+commit;
+#########################################
+#  Case 5
+#########################################
+xa start '';
+insert into t1 values (5, 50, 50);
+xa end '';
+xa prepare '';
+begin;
+set innodb_global_query_wait_timeout = 1;
+select count(0) from t1;
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
+commit;
+xa commit '';
+#########################################
+#  Cleanup
+#########################################
+set global innodb_undo_retention = default;
+drop table t1;
+create table t1 (id int primary key, c1 int default null);
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+insert into t1 values (1, 10);
+begin;
+insert into t1 values (2, 20);
+commit;
+#########################################
+#  Case 1
+#########################################
+begin;
+select count(0) from t1;
+ERROR HY000: Snapshot too old
+ERROR HY000: Snapshot too old
+commit;
+#########################################
+#  Case 2
+#########################################
+select count(0) from t1 as of timestamp date_add(now(), interval 3 second);
+ERROR HY000: The snapshot to find is out of range, please adjust scn history configuration
+select count(0) from t1 as of timestamp '2020-06-04 00:00:00';
+ERROR HY000: The snapshot to find is out of range, please adjust scn history configuration
+#########################################
+#  Case 3
+#########################################
+set global innodb_undo_retention = 900000;
+begin;
+insert into t1 values (3, 30);
+commit;
+begin;
+select count(0) from t1;
+count(0)
+3
+begin;
+insert into t1 values (4, 40);
+commit;
+select count(0) from t1;
+count(0)
+3
+commit;
+#########################################
+#  Case 4
+#########################################
+alter table t1 add column c2 int after id;
+begin;
+select count(0) from t1;
+ERROR HY000: The definition of the table required by the flashback query has changed
+commit;
+#########################################
+#  Case 5
+#########################################
+xa start '';
+insert into t1 values (5, 50, 50);
+xa end '';
+xa prepare '';
+begin;
+set innodb_global_query_wait_timeout = 1;
+select count(0) from t1;
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
+commit;
+xa commit '';
+#########################################
+#  Cleanup
+#########################################
+set global innodb_undo_retention = default;
+drop table t1;
