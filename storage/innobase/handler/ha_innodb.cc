@@ -15885,6 +15885,13 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
     case DB_DEADLOCK:
     case DB_LOCK_TABLE_FULL:
     case DB_LOCK_WAIT_TIMEOUT:
+    /** Flashback query error begin. */
+    case DB_SNAPSHOT_OUT_OF_RANGE:
+    case DB_AS_OF_INTERNAL:
+    case DB_AS_OF_TABLE_DEF_CHANGED:
+    case DB_SNAPSHOT_TOO_OLD:
+    case DB_GP_WAIT_TIMEOUT:
+    /** Flashback query error end. */
       *num_rows = HA_POS_ERROR;
       return convert_error_code_to_mysql(ret, 0, m_user_thd);
     case DB_INTERRUPTED:

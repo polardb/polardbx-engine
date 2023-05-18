@@ -6819,13 +6819,6 @@ static Sys_var_charptr Sys_protocol_compression_algorithms(
     NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_set_protocol_compression_algorithms), ON_UPDATE(0));
 
-static Sys_var_ulong Sys_global_query_wait_timeout(
-    "global_query_wait_timeout",
-    "Timeout in seconds to wait for XA prepared  before returning an error.",
-    HINT_UPDATEABLE SESSION_VAR(global_query_wait_timeout),
-    CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, LONG_TIMEOUT), DEFAULT(LONG_TIMEOUT),
-    BLOCK_SIZE(1));
-
 static Sys_var_bool Sys_sequence_read_skip_cache(
     "sequence_read_skip_cache",
     "Skip sequence cache, read the based table directly.",
