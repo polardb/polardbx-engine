@@ -376,6 +376,9 @@ struct System_variables {
     'COLUMN_TYPE' field.
   */
   bool show_old_temporals;
+
+  bool opt_force_revise;
+
   // Used for replication delay and lag monitoring
   ulonglong original_commit_timestamp;
 

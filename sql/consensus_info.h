@@ -31,13 +31,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/components/services/psi_cond_service.h"
 #include "mysql/components/services/psi_mutex_service.h"
 #include "sql/rpl_info.h"
+#include "sql/sys_vars_consensus.h"
 
 #include <atomic>
 #include <string>
 
 #include "sql/raft/raft0err.h"
-
-extern bool opt_consensus_force_recovery;
 
 #ifdef HAVE_PSI_INTERFACE
 extern PSI_mutex_key key_consensus_info_lock;

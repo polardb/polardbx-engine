@@ -50,6 +50,7 @@
 #include "sql/tc_log.h"            // TC_LOG
 #include "sql/transaction_info.h"  // Transaction_ctx
 #include "thr_mutex.h"
+#include "binlog_reader.h"                         // Binlog_file_reader
 
 class Gcn_manager;
 
@@ -68,6 +69,7 @@ class Transaction_boundary_parser;
 class binlog_cache_data;
 class user_var_entry;
 class Binlog_cache_storage;
+struct ConsensusLogEntry;
 
 struct Gtid;
 
@@ -893,6 +895,30 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int get_current_log(LOG_INFO *linfo, bool need_lock_log = true);
   int raw_get_current_log(LOG_INFO *linfo);
   uint next_file_id();
+
+  int build_consensus_log_index() {};
+  int init_last_index_of_term(uint64 term) {};
+  int get_consensus_log_file_list(std::vector<std::string> & consensuslog_file_name_vector) {};
+  int find_log_by_consensus_index(uint64 consensus_index, std::string & file_name) {};
+  uint64 get_trx_end_index(uint64 firstIndex) {};
+
+  uint64 wait_xid_disappear() {};
+  int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader, uint64 start_pos, uint64 end_pos, Consensus_cluster_info_log_event *rci_ev, std::string& log_content) {};
+  int read_log_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, uint64 *checksum, bool need_content = true) {};
+  int prefetch_logs_of_file(THD *thd, uint64 channel_id, const char* file_name, uint64 start_index) {};
+  int find_pos_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *pos) {};
+  int truncate_files_after(std::string & file_name) {};
+  int truncate_single_file_by_consensus_index(const char* file_name, uint64 consensus_index) {};
+  int consensus_truncate_log(uint64 consensus_index, Relay_log_info *rli = NULL) {};
+  int consensus_get_log_position(uint64 consensus_index, char* file_name, uint64 *pos) {};
+  int consensus_get_log_entry(uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, uint64 *checksum, bool need_content = true) {};
+  int consensus_prefetch_log_entries(THD *thd, uint64 channel_id, uint64 consensus_index) {};
+
+  int append_consensus_log(ConsensusLogEntry &log, uint64* index, bool* rotate_var, Relay_log_info *rli, bool with_check=false) {};
+  int append_multi_consensus_logs(std::vector<ConsensusLogEntry> &logs, uint64* max_index, bool* rotate_var, Relay_log_info *rli) {};
+  int rotate_consensus_log() {};
+  bool reset_previous_gtids_logged(uint64 commit_index) {};
+
   /**
     Retrieves the contents of the index file associated with this log object
     into an `std::list<std::string>` object. The order held by the index file is

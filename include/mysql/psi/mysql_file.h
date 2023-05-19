@@ -62,6 +62,14 @@
 #define PSI_FILE_CALL(M) psi_file_service->M
 #endif
 
+// copy from 5.7 mysql_global.h
+#ifndef O_SHARE                 /* Probably not windows */
+#define O_SHARE         0       /* Flag to my_open for shared files */
+#endif
+#ifndef O_BINARY
+#define O_BINARY        0       /* Flag to my_open for binary files */
+#endif
+
 /**
   @defgroup psi_api_file File Instrumentation (API)
   @ingroup psi_api

@@ -438,6 +438,17 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
     return false;
   }
 
+  /*
+   open for use the io_cache
+  */
+  bool open() {
+    DBUG_ENTER("Binlog_ofile::open");
+    assert(m_pipeline_head == NULL);
+    std::unique_ptr<IO_CACHE_ostream> file_ostream(new IO_CACHE_ostream);
+    m_pipeline_head = std::move(file_ostream);
+    DBUG_RETURN(false);
+  }
+
   /**
     Opens an existing binlog file. It opens the lower layer storage reusing the
     existing file password if needed.

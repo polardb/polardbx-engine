@@ -28,6 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/rpl_mi.h"
 #include "sql/rpl_rli.h"
+#include "sql/consensus_log_manager.h"
 
 class Relay_log_info;
 
@@ -35,9 +36,7 @@ void raft_server_bind_rli(Relay_log_info *rli) {
   if (rli->style() == Channel_style::Raft) {
     assert(rli->mi != nullptr);
     assert(rli->mi->style() == Channel_style::Raft);
-    /** TODO:
-     * consensus_log_manager.set_relay_log_info(mi->rli);
-     */
+    consensus_log_manager.set_relay_log_info(rli);
   }
 
   return;

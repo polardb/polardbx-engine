@@ -34,11 +34,19 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "consensus_log_manager.h"
 
 #include "paxos_log.h"
+#include "paxos.h"
 
 namespace alisql {
 class AliSQLServer;
 class Paxos;
 }  // namespace alisql
+
+struct ConsensusStateChange
+{
+  alisql::Paxos::StateType state; 
+  uint64 term;
+  uint64 index;
+};
 
 class BLConsensusLog : public alisql::PaxosLog {
  public:
@@ -55,7 +63,7 @@ class BLConsensusLog : public alisql::PaxosLog {
   BLConsensusLog();
   ~BLConsensusLog() override;
   void init(uint64 fake_start_index_arg,
-            Consensus_log_manager *consensus_log_manager_arg);
+            ConsensusLogManager *consensus_log_manager_arg);
 
   int getEntry(uint64_t logIndex, alisql::LogEntry &entry, bool fastFail,
                uint64_t serverId) override;
@@ -89,7 +97,7 @@ class BLConsensusLog : public alisql::PaxosLog {
 
  private:
   uint64 mock_start_index;  // before this index, all log entry should be mocked
-  Consensus_log_manager *consensusLogManager_;  // ConsensusLog Operation detail
+  ConsensusLogManager *consensusLogManager_;  // ConsensusLog Operation detail
 };
 
 extern std::shared_ptr<BLConsensusLog> consensus_log;

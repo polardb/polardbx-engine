@@ -146,29 +146,32 @@ initialize()
   port = 3306
   basedir = $dest_dir
   datadir = $dest_dir/data
+  log_error_verbosity=3
+  log_error=$dest_dir/mysql-err.log
+
   sql_mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
-  default_authentication_plugin = 'mysql_native_password'  #更改加密方式
+  default_authentication_plugin = 'mysql_native_password'
 
   #gtid:
-  gtid_mode = on                  #开启gtid模式
-  enforce_gtid_consistency = on   #强制gtid一致性，开启后对于特定create table不被支持
+  gtid_mode = on
+  enforce_gtid_consistency = on
 
   #binlog
   log_bin = mysql-binlog
   log_slave_updates = on
-  binlog_format = row             #强烈建议，其他格式可能造成数据不一致
+  binlog_format = row
   binlog-ignore-db=sys
   binlog-ignore-db=mysql
   binlog-ignore-db=information_schema
   binlog-ignore-db=performance_schema
   binlog-do-db=test
 
-  server_id = 1                   #服务器id
+  server_id = 1
   " > $HOME/my.cnf
 
   rm -rf $dest_dir/data
   mkdir -p $dest_dir/data
-  ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize #--cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23456@1'
+  ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23456@1'
   nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf &
 }
 
@@ -335,6 +338,7 @@ fi
 make -j `getconf _NPROCESSORS_ONLN`
 
 if [ $with_initialize =  1 ]; then
+  make -j `getconf _NPROCESSORS_ONLN` install
   initialize
   echo "use follow cmd to login mysql:"
   echo "./runtime_output_directory/mysql -uroot -hlocalhost -P3306 -p"

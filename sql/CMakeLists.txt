@@ -1108,6 +1108,9 @@ SET(BINLOG_SOURCE
   gcn_log_event.cc
   consensus_info.cc
   bl_consensus_log.cc
+  appliedindex_checker.cc
+  replica_read_manager.cc
+  consensus_admin.cc
   consensus_fifo_cache_manager.cc
   consensus_prefetch_manager.cc
   )
@@ -1167,6 +1170,9 @@ SET (SLAVE_SOURCE
   udf_service_impl.cc
   udf_service_util.cc
   consensus_info.cc
+  appliedindex_checker.cc
+  replica_read_manager.cc
+  consensus_admin.cc
   )
 ADD_LIBRARY(slave STATIC ${SLAVE_SOURCE})
 ADD_DEPENDENCIES(slave GenError)

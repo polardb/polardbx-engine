@@ -259,3 +259,6 @@ extra/curl/curl-7.86.0/libcurl.pc
 
 mysql-test/var*
 .cache/clangd
+extra/IS/dependency/easy/src/libmyeasy.a
+extra/IS/src/libaliconsensus.a
+install_manifest.txt

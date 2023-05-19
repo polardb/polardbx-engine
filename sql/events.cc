@@ -960,6 +960,10 @@ bool Events::init(bool opt_noacl_or_bootstrap) {
     goto end;
   }
 
+  /* Leader will set opt_event_scheduler to ON later if opt_configured_event_scheduler is ON */
+  opt_configured_event_scheduler = opt_event_scheduler;
+  opt_event_scheduler = EVENTS_OFF;
+
   if (event_queue->init_queue() || load_events_from_db(thd, event_queue) ||
       (opt_event_scheduler == EVENTS_ON && scheduler->start(&err_no))) {
     LogErr(ERROR_LEVEL, ER_EVENT_SCHEDULER_ERROR_LOADING_FROM_DB);

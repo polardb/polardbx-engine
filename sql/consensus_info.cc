@@ -41,8 +41,6 @@ PSI_cond_key key_consensus_info_stop_cond;
 PSI_cond_key key_consensus_info_sleep_cond;
 #endif
 
-bool opt_consensus_force_recovery;
-
 const char *info_consensus_fields[] = {
     "number_of_lines",      "vote_for",         "current_term",
     "recover_status",       "last_leader_term", "start_apply_index",
@@ -213,7 +211,7 @@ bool Consensus_info::read_info(Rpl_info_handler *from) {
 }
 
 bool Consensus_info::write_info(Rpl_info_handler *to) {
-  DBUG_ENTER("Consensus_log_manager::write_info");
+  DBUG_ENTER("ConsensusLogManager::write_info");
 
   if (to->prepare_info_for_write() ||
       to->set_info((int)get_number_info_consensus_fields()) ||

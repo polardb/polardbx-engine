@@ -66,6 +66,7 @@
 #endif  // _WIN32
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"  // UUID_LENGTH
+#include "sql/sys_vars_consensus.h"
 
 class Rpl_global_filter;
 class Rpl_acf_configuration_handler;
@@ -426,6 +427,19 @@ extern PSI_file_key key_file_binlog_cache;
 extern PSI_file_key key_file_binlog_index_cache;
 
 #ifdef HAVE_PSI_INTERFACE
+
+extern PSI_rwlock_key key_rwlock_ConsensusLog_status_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_commit_pos;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_stage_change;
+extern PSI_cond_key key_COND_ConsensusLog_catchup;
+extern PSI_cond_key key_COND_Consensus_state_change;
+extern PSI_thread_key key_thread_consensus_stage_change;
+extern PSI_thread_key key_thread_consensus_commit_pos_watcher;
 
 extern PSI_mutex_key key_LOCK_tc;
 extern PSI_mutex_key key_hash_filo_lock;

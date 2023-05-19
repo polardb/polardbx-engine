@@ -65,6 +65,7 @@
 
 #include "sql/lizard_rpl_rli.h"
 #include "sql/raft/channel.h"
+#include "sql/rpl_applier_reader.h" // Rpl_applier_reader
 
 class Commit_order_manager;
 class Master_info;
@@ -1624,6 +1625,8 @@ class Relay_log_info : public Rpl_info {
     event_relay_log_number = number;
   }
 
+  inline ulonglong get_consensus_apply_index() { return consensus_apply_index; }
+
   /**
     Given the extension number of the relay log, gets the full
     relay log path. Currently used in Slave_worker::retry_transaction()
@@ -2011,6 +2014,8 @@ class Relay_log_info : public Rpl_info {
     in which case such update might be lost on recovery.
   */
   bool ddl_not_atomic;
+
+  std::unique_ptr<Rpl_applier_reader> applier_reader;
 
   void set_thd_tx_priority(int priority) { thd_tx_priority = priority; }
 

@@ -65,6 +65,8 @@
 #include "sql/system_variables.h"
 #include "sql/thd_raii.h"
 #include "sql/transaction_info.h"
+#include "consensus_log_manager.h"
+#include "consensus_info.h"
 
 namespace bootstrap {
 
@@ -282,6 +284,12 @@ static int process_iterator(THD *thd, Command_iterator *it,
            (saved_sql_log_bin == thd->variables.sql_log_bin));
   }
 
+  // bootstrap set consensus info meta info
+  Consensus_info *consensus_info = consensus_log_manager.get_consensus_info();
+  if (consensus_info->consensus_init_info())
+    abort();
+  consensus_info->flush_info(true, true);
+
   it->end();
 
   return (error ? 1 : 0);
@@ -317,6 +325,12 @@ static void *handle_bootstrap(void *arg) {
     // if the server is started with --transaction-read-only=true.
     thd->variables.transaction_read_only = false;
     thd->tx_read_only = false;
+
+    /* PolarDB-X Engine do not support execute SQL with binlog during bootstrap */
+    thd->variables.opt_force_revise = true;
+    thd->variables.sql_log_bin= false;
+    thd->variables.option_bits &= ~OPTION_BIN_LOG;
+
     ErrorHandlerFunctionPointer existing_hook = error_handler_hook;
     auto grd =
         create_scope_guard([&]() { error_handler_hook = existing_hook; });

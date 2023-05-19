@@ -64,11 +64,11 @@ enum ConsensusLogCacheResultCode {
 // Consensus fifo cache is a ring buffer to store log entries.
 // Because consensus library could ask for log entry by index,
 // the cache could answer the request without random IO on BINLOG file.
-class Consensus_fifo_cache_manager {
+class ConsensusFifoCacheManager {
  public:
-  Consensus_fifo_cache_manager()
+  ConsensusFifoCacheManager()
       : inited(false), reserve_list_size(RESERVE_LIST_SIZE) {}
-  ~Consensus_fifo_cache_manager() = default;
+  ~ConsensusFifoCacheManager() = default;
   int init(uint64 max_log_cache_size_arg);
   int cleanup();
   int add_log_to_cache(uint64 term, uint64 index, size_t buf_size,

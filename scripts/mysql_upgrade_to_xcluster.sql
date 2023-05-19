@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS mysql.consensus_info (
     cluster_info varchar(6000) COMMENT 'cluster config information', cluster_learner_info varchar(6000) COMMENT 'cluster learner config information',
     cluster_config_recover_index BIGINT UNSIGNED COMMENT 'cluster config recover index',
     PRIMARY KEY(number_of_lines)
-)engine=INNODB CHARACTER SET utf8mb4 comment="Normandy cluster consensus information";
+)engine=INNODB CHARACTER SET utf8mb4 comment="cluster consensus information table";
     
 ALTER TABLE mysql.slave_relay_log_info ADD Consensus_apply_index BIGINT UNSIGNED NOT  NULL COMMENT 'The consensus log applyed index in the consensus log';
 ALTER TABLE mysql.slave_worker_info ADD Checkpoint_consensus_apply_index BIGINT UNSIGNED NOT  NULL COMMENT 'Checkpoint index';

@@ -38,7 +38,7 @@ BLConsensusLog::BLConsensusLog()
 BLConsensusLog::~BLConsensusLog() = default;
 
 void BLConsensusLog::init(uint64 mock_start_index_arg,
-                          Consensus_log_manager *consensus_log_manager_arg) {
+                          ConsensusLogManager *consensus_log_manager_arg) {
   mock_start_index = mock_start_index_arg;
   consensusLogManager_ = consensus_log_manager_arg;
 }

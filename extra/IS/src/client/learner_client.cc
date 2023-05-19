@@ -18,7 +18,7 @@
 #include <cstdlib>
 #include <memory>
 // #include <my_global.h>
-#include <mysql/mysql.h>
+#include <mysql.h>
 #include "learner_client.h"
 #include "mem_paxos_log.h"
 #include "paxos_log.h"

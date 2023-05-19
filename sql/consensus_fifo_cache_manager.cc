@@ -36,7 +36,7 @@ PSI_mutex_key key_fifo_cache_cleaner;
 PSI_thread_key key_thread_cleaner;
 #endif
 
-int Consensus_fifo_cache_manager::init(uint64 max_log_cache_size_arg) {
+int ConsensusFifoCacheManager::init(uint64 max_log_cache_size_arg) {
   max_log_cache_size = max_log_cache_size_arg;
   fifo_cache_size = 0;
   lock_blob_index = 0;
@@ -53,14 +53,14 @@ int Consensus_fifo_cache_manager::init(uint64 max_log_cache_size_arg) {
   if (mysql_thread_create(key_thread_cleaner, &cleaner_handle, nullptr,
                           fifo_cleaner_wrapper, (void *)this)) {
     raft::error(ER_RAFT_FIFO) << "Thread filo_cleaner create failed at "
-                                 "Consensus_fifo_cache_manager::init";
+                                 "ConsensusFifoCacheManager::init";
     abort();
   }
   inited = true;
   return 0;
 }
 
-int Consensus_fifo_cache_manager::cleanup() {
+int ConsensusFifoCacheManager::cleanup() {
   if (inited) {
     is_running = false;
     mysql_cond_signal(&cleaner_cond);
@@ -77,7 +77,7 @@ int Consensus_fifo_cache_manager::cleanup() {
   return 0;
 }
 
-int Consensus_fifo_cache_manager::get_log_from_cache(uint64 index, uint64 *term,
+int ConsensusFifoCacheManager::get_log_from_cache(uint64 index, uint64 *term,
                                                   std::string &log_content,
                                                   bool *outer, uint *flag,
                                                   uint64 *checksum) {
@@ -94,7 +94,7 @@ int Consensus_fifo_cache_manager::get_log_from_cache(uint64 index, uint64 *term,
     raft::error(ER_RAFT_FIFO)
         << "Consensus fifo cache is out of range, max index = ["
         << log_cache_list[lasti].index << "], Required index = [" << index
-        << "] at Consensus_fifo_cache_manager::get_log_from_cache";
+        << "] at ConsensusFifoCacheManager::get_log_from_cache";
 
     mysql_rwlock_unlock(&LOCK_consensuslog_cache);
     return OUT_OF_RANGE;
@@ -111,7 +111,7 @@ int Consensus_fifo_cache_manager::get_log_from_cache(uint64 index, uint64 *term,
   return 0;
 }
 
-int Consensus_fifo_cache_manager::add_log_to_cache(uint64 term, uint64 index,
+int ConsensusFifoCacheManager::add_log_to_cache(uint64 term, uint64 index,
                                                 size_t buf_size, uchar *buffer,
                                                 bool outer, uint flag,
                                                 uint64 checksum,
@@ -137,7 +137,7 @@ int Consensus_fifo_cache_manager::add_log_to_cache(uint64 term, uint64 index,
   return 0;
 }
 
-int Consensus_fifo_cache_manager::trunc_log_from_cache(uint64 index) {
+int ConsensusFifoCacheManager::trunc_log_from_cache(uint64 index) {
   consensus_log_manager.set_cache_index(index - 1);
   mysql_rwlock_wrlock(&LOCK_consensuslog_cache);
   raft::info(ER_RAFT_FIFO) << "Truncate fifo before, first index = ["
@@ -175,7 +175,7 @@ int Consensus_fifo_cache_manager::trunc_log_from_cache(uint64 index) {
   return 0;
 }
 
-uint64 Consensus_fifo_cache_manager::get_log_size_from_cache(
+uint64 ConsensusFifoCacheManager::get_log_size_from_cache(
     uint64 begin_index, uint64 end_index, uint64 max_packet_size) {
   uint64 total_size = 0;
   mysql_rwlock_rdlock(&LOCK_consensuslog_cache);
@@ -194,7 +194,7 @@ uint64 Consensus_fifo_cache_manager::get_log_size_from_cache(
   return total_size;
 }
 
-uint64 Consensus_fifo_cache_manager::get_first_index_of_fifo_cache() {
+uint64 ConsensusFifoCacheManager::get_first_index_of_fifo_cache() {
   uint64 ret = 0;
   mysql_rwlock_rdlock(&LOCK_consensuslog_cache);
   ret = log_cache_list[rleft].index;
@@ -202,15 +202,15 @@ uint64 Consensus_fifo_cache_manager::get_first_index_of_fifo_cache() {
   return ret;
 }
 
-void Consensus_fifo_cache_manager::set_lock_blob_index(
+void ConsensusFifoCacheManager::set_lock_blob_index(
     uint64 lock_blob_index_arg) {
   raft::info(ER_RAFT_FIFO)
       << "Setting lock_lob_index = [" << lock_blob_index_arg
-      << "] at Consensus_fifo_cache_manager::set_lock_blob_index";
+      << "] at ConsensusFifoCacheManager::set_lock_blob_index";
   lock_blob_index = lock_blob_index_arg;
 }
 
-void Consensus_fifo_cache_manager::clean_consensus_fifo_cache() {
+void ConsensusFifoCacheManager::clean_consensus_fifo_cache() {
   mysql_mutex_lock(&cleaner_mutex);
   while (is_running.load()) {
     mysql_cond_wait(&cleaner_cond, &cleaner_mutex);
@@ -233,7 +233,7 @@ void Consensus_fifo_cache_manager::clean_consensus_fifo_cache() {
 }
 
 void *fifo_cleaner_wrapper(void *arg) {
-  auto *fifo = (Consensus_fifo_cache_manager *)arg;
+  auto *fifo = (ConsensusFifoCacheManager *)arg;
   fifo->clean_consensus_fifo_cache();
   return nullptr;
 }

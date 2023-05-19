@@ -2160,6 +2160,7 @@ static bool event_scheduler_update(sys_var *, THD *, enum_var_type) {
     Events::opt_event_scheduler = Events::EVENTS_OFF;
     my_error(ER_EVENT_SET_VAR_ERROR, MYF(0), err_no);
   }
+  opt_configured_event_scheduler = Events::opt_event_scheduler;
   return ret;
 }
 

@@ -83,6 +83,9 @@ class Rpl_applier_reader {
   */
   Log_event *read_next_event();
 
+  /* purge logs by xpaxos module and reset the log file index offset */
+  LOG_INFO *get_log_info() { return &m_linfo; }
+
  private:
   Relaylog_file_reader m_relaylog_file_reader;
   Relay_log_info *m_rli = nullptr;
