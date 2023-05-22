@@ -2964,6 +2964,11 @@ class Stdin_binlog_istream : public Basic_seekable_istream,
     assert(0);
     return 0;
   }
+
+  IO_CACHE *get_io_cache() override {
+    assert(0);
+    return nullptr;
+  }
   /* purecov: end */
 
  private:

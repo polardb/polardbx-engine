@@ -10131,6 +10131,14 @@ ER_CONSENSUS_CONFIG_BAD
 ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
   eng "Consensus follower is not allowed to to do current operation."
 
+ER_CONSENSUS_LEADERSHIP_CHANGE
+  eng "The cluster's leadership has already change, please relocate consensus leader and retry."
+
+ER_CONSENSUS_LOG_TOO_LARGE
+  eng "The consensus log is too large for cluster, please split the transcation to small ones."
+
+ER_CONSENSUS_OTHER_ERROR
+  eng "Other consensus problem, retry."
 
 ################################################################################
 # DO NOT add messages for the error-log to this file;

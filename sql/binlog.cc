@@ -140,6 +140,10 @@
 
 #include "sql/lizard_binlog.h"
 #include "sql/gcn_log_event.h"
+#include "sql/appliedindex_checker.h"
+#include "sql/consensus_log_manager.h"
+#include "sql/bl_consensus_log.h"
+#include "replica_read_manager.h"
 
 class Item;
 
@@ -610,6 +614,11 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
   */
   void set_encrypted() { m_encrypted = true; }
 
+  void set_binlog_name(const char *binlog_name) {
+    snprintf(m_binlog_name, FN_REFLEN, "%s", binlog_name);
+  }
+  const char *get_binlog_name() { return m_binlog_name; }
+
   // used for consensus
   IO_CACHE *get_io_cache() { return m_pipeline_head->get_io_cache(); }
 
@@ -618,6 +627,7 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
   int m_encrypted_header_size = 0;
   std::unique_ptr<Truncatable_ostream> m_pipeline_head;
   bool m_encrypted = false;
+  char m_binlog_name[FN_REFLEN];
 };
 
 /**
@@ -3546,6 +3556,7 @@ MYSQL_BIN_LOG::MYSQL_BIN_LOG(uint *sync_period, bool relay_log)
       sync_period_ptr(sync_period),
       sync_counter(0),
       is_relay_log(relay_log),
+      is_raft_log(0),
       checksum_alg_reset(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       relay_log_checksum_alg(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       previous_gtid_set_relaylog(nullptr),
@@ -3576,6 +3587,7 @@ void MYSQL_BIN_LOG::cleanup() {
     mysql_mutex_destroy(&LOCK_sync);
     mysql_mutex_destroy(&LOCK_binlog_end_pos);
     mysql_mutex_destroy(&LOCK_xids);
+    mysql_mutex_destroy(&LOCK_rotate);
     mysql_cond_destroy(&update_cond);
     mysql_cond_destroy(&m_prep_xids_cond);
     if (!is_relay_log) {
@@ -3598,6 +3610,7 @@ void MYSQL_BIN_LOG::init_pthread_objects() {
   mysql_mutex_init(m_key_LOCK_binlog_end_pos, &LOCK_binlog_end_pos,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(m_key_LOCK_xids, &LOCK_xids, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(m_key_LOCK_rotate, &LOCK_rotate, MY_MUTEX_INIT_FAST);
   mysql_cond_init(m_key_update_cond, &update_cond);
   mysql_cond_init(m_key_prep_xids_cond, &m_prep_xids_cond);
   if (!is_relay_log) {
@@ -4980,6 +4993,18 @@ bool MYSQL_BIN_LOG::open_binlog(
   /* Set LOG_EVENT_RELAY_LOG_F flag for relay log's FD */
   if (is_relay_log) s.set_relay_log_event();
   if (write_event_to_binlog(&s)) goto err;
+
+  // write previous consensus index event
+  if (is_raft_log) {
+    Previous_consensus_index_log_event prev_consensus_index_ev(consensus_log_manager.get_current_index());
+    if (opt_consensuslog_revise && is_relay_log)
+      prev_consensus_index_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
+    if (write_event_to_binlog(&prev_consensus_index_ev)) goto err;
+    std::string file_name(log_file_name);
+    consensus_log_manager.get_log_file_index()->add_to_index_list(consensus_log_manager.get_current_index(),
+                                            prev_consensus_index_ev.common_header->when.tv_sec, file_name);
+  }
+
   /*
     We need to revisit this code and improve it.
     See further comments in the mysqld.
@@ -8744,6 +8769,16 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     dec_prep_xids(thd);
   }
 
+  // FIXME: ordered commit need it
+  if (opt_enable_appliedindex_checker)
+    appliedindex_checker.commit(thd->consensus_index);
+  else {
+    uint64 commitIndex = consensus_ptr->getCommitIndex();
+    uint64 tmpi = opt_appliedindex_force_delay >= commitIndex? 0: commitIndex - opt_appliedindex_force_delay;
+    consensus_ptr->updateAppliedIndex(tmpi);
+    replica_read_manager.update_lsn(tmpi);
+  }
+
   // If the transaction was committed successfully, run the after_commit
   if (committed_low && (thd->commit_error != THD::CE_COMMIT_ERROR) &&
       thd->get_transaction()->m_flags.run_hooks) {
@@ -9022,6 +9057,25 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     }
   }
 
+  // protected by LOCK_sync
+  if (opt_enable_appliedindex_checker)
+  {
+    uint64 maxi= 0, mini= UINT64_MAX, size= 0;
+    for (THD *head = final_queue; head; head = head->next_to_commit)
+    {
+      if (head->consensus_index == 0)
+        continue;
+      maxi = max(head->consensus_index, maxi);
+      mini = min(head->consensus_index, mini);
+      size++;
+    }
+    if (maxi > 0)
+    {
+      intervalType inv {maxi, mini, size};
+      appliedindex_checker.prepare(inv);
+    }
+  }
+
   DEBUG_SYNC(thd, "bgc_after_sync_stage_before_commit_stage");
 
   leave_mutex_before_commit_stage = &LOCK_sync;
@@ -9133,20 +9187,41 @@ commit_stage:
       need the mutex. Otherwise causes various deadlocks.
     */
 
-    DEBUG_SYNC(thd, "ready_to_do_rotation");
-    bool check_purge = false;
-    mysql_mutex_lock(&LOCK_log);
-    /*
-      If rotate fails then depends on binlog_error_action variable
-      appropriate action will be taken inside rotate call.
-    */
-    int error = rotate(false, &check_purge);
-    mysql_mutex_unlock(&LOCK_log);
+    consensus_log_manager.lock_consensus(TRUE);
+    if (consensus_log_manager.get_status() == BINLOG_WORKING)
+    {
+      DEBUG_SYNC(thd, "ready_to_do_rotation");
+      bool check_purge = false;
+      bool need_real_rotate = false;
+      mysql_mutex_lock(&LOCK_rotate);
+      need_real_rotate = !rotating;
+      if (!rotating)
+        rotating = TRUE;
+      mysql_mutex_unlock(&LOCK_rotate);
 
-    if (error)
-      thd->commit_error = THD::CE_COMMIT_ERROR;
-    else if (check_purge)
-      auto_purge();
+      if (need_real_rotate)
+      {
+        mysql_mutex_lock(consensus_log_manager.get_sequence_stage1_lock());
+        wait_xid_disappear();
+        mysql_mutex_lock(&LOCK_log);
+        /*
+          If rotate fails then depends on binlog_error_action variable
+          appropriate action will be taken inside rotate call.
+        */
+        int error = rotate(false, &check_purge);
+        //    int error = 0;
+        mysql_mutex_unlock(&LOCK_log);
+        mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
+        if (error)
+          thd->commit_error = THD::CE_COMMIT_ERROR;
+        else if (check_purge)
+          auto_purge();
+        mysql_mutex_lock(&LOCK_rotate);
+        rotating = FALSE;
+        mysql_mutex_unlock(&LOCK_rotate);
+      }
+    }
+    consensus_log_manager.unlock_consensus();
   }
   /*
     flush or sync errors are handled above (using binlog_error_action).
@@ -11741,4 +11816,6 @@ int binlog_start_trans(THD *thd) {
 *****************************************************************/
 
 #include "sql/lizard_binlog.cc"
-#include "consensus_log_manager.cc"
+
+#include "sql/consensus_binlog.cc"
+#include "sql/consensus_log_manager.cc"

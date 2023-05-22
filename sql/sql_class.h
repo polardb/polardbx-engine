@@ -1939,6 +1939,21 @@ class THD : public MDL_context_owner,
     these positions instead of maintaining three different ones.
    */
   /**@{*/
+
+public:
+  uint64 consensus_index{0};
+  uint64 consensus_term{0};
+
+  enum Consensus_error
+  {
+    CSS_NONE= 0,
+    CSS_LEADERSHIP_CHANGE,
+    CSS_LOG_TOO_LARGE,
+    CSS_SHUTDOWN,
+    CSS_GU_ERROR,
+    CSS_OTHER
+  } consensus_error{CSS_NONE};
+
   const char *m_trans_log_file;
   char *m_trans_fixed_log_file;
   my_off_t m_trans_end_pos;

@@ -709,8 +709,6 @@ SET(SQL_SHARED_SOURCES
 
   consensus_log_index.cc
   consensus_recovery_manager.cpp
-  sys_vars_consensus.cc
-  consensus_binlog.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

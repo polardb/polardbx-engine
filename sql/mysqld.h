@@ -475,6 +475,7 @@ extern PSI_mutex_key key_RELAYLOG_LOCK_log;
 extern PSI_mutex_key key_RELAYLOG_LOCK_log_end_pos;
 extern PSI_mutex_key key_RELAYLOG_LOCK_sync;
 extern PSI_mutex_key key_RELAYLOG_LOCK_xids;
+extern PSI_mutex_key key_RELAYLOG_LOCK_rotate;
 extern PSI_mutex_key key_gtid_ensure_index_mutex;
 extern PSI_mutex_key key_mta_temp_table_LOCK;
 extern PSI_mutex_key key_mta_gaq_LOCK;

@@ -141,6 +141,8 @@ class Binlog_encryption_istream : public Basic_seekable_istream {
   bool seek(my_off_t offset) override;
   my_off_t length() override;
 
+  IO_CACHE *get_io_cache() override { return m_down_istream->get_io_cache(); }
+
  private:
   /* The decryptor cypher to decrypt the content read from down stream */
   std::unique_ptr<Stream_cipher> m_decryptor;
@@ -188,6 +190,8 @@ class Basic_binlog_ifile : public Basic_seekable_istream {
      raw binlog events.
   */
   my_off_t length() override;
+
+  IO_CACHE *get_io_cache() override { return m_istream->get_io_cache(); }
 
  protected:
   /**

@@ -7697,3 +7697,4 @@ static Sys_var_bool Sys_sequence_read_skip_cache(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
 
 #include "sys_vars_ext.cc"
+#include "sys_vars_consensus.cc"

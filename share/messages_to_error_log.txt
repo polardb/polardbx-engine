@@ -12193,6 +12193,9 @@ ER_RAFT_PREFETCH
 ER_RAFT_APPLIER
   eng "[Applier] %s"
 
+ER_RAFT_BLWRITE
+  eng "[BLWrite] %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

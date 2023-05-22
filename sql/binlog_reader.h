@@ -344,6 +344,7 @@ class Basic_binlog_file_reader {
   }
   const Format_description_event *format_description_event() { return &m_fde; }
   my_off_t event_start_pos() { return m_event_start_pos; }
+  IO_CACHE *get_io_cache() { return m_ifile.get_io_cache(); }
 
  private:
   Binlog_read_error m_error;

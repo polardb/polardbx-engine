@@ -183,6 +183,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   PSI_mutex_key m_key_LOCK_sync;
   /** The instrumentation key to use for @ LOCK_xids. */
   PSI_mutex_key m_key_LOCK_xids;
+  /** The instrumentation key to use for @ LOCK_rotate */
+  PSI_mutex_key m_key_LOCK_rotate;
   /** The instrumentation key to use for @ update_cond. */
   PSI_cond_key m_key_update_cond;
   /** The instrumentation key to use for @ prep_xids_cond. */
@@ -204,6 +206,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   mysql_mutex_t LOCK_sync;
   mysql_mutex_t LOCK_binlog_end_pos;
   mysql_mutex_t LOCK_xids;
+  mysql_mutex_t LOCK_rotate;
   mysql_cond_t update_cond;
 
   std::atomic<my_off_t> atomic_binlog_end_pos;
@@ -248,6 +251,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
 
   mysql_cond_t m_prep_xids_cond;
   std::atomic<int32> m_atomic_prep_xids{0};
+
+  bool rotating;
 
   /**
     Increment the prepared XID counter.
@@ -357,6 +362,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
       PSI_mutex_key key_LOCK_flush_queue, PSI_mutex_key key_LOCK_log,
       PSI_mutex_key key_LOCK_binlog_end_pos, PSI_mutex_key key_LOCK_sync,
       PSI_mutex_key key_LOCK_sync_queue, PSI_mutex_key key_LOCK_xids,
+      PSI_mutex_key key_LOCK_rotate,
       PSI_mutex_key key_LOCK_wait_for_group_turn, PSI_cond_key key_COND_done,
       PSI_cond_key key_COND_flush_queue, PSI_cond_key key_update_cond,
       PSI_cond_key key_prep_xids_cond,
@@ -377,6 +383,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
     m_key_LOCK_commit = key_LOCK_commit;
     m_key_LOCK_sync = key_LOCK_sync;
     m_key_LOCK_xids = key_LOCK_xids;
+    m_key_LOCK_rotate = key_LOCK_rotate;
     m_key_update_cond = key_update_cond;
     m_key_prep_xids_cond = key_prep_xids_cond;
     m_key_file_log = key_file_log;
@@ -833,6 +840,14 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int remove_logs_from_index(LOG_INFO *linfo, bool need_update_threads);
   int rotate(bool force_rotate, bool *check_purge);
 
+  bool write_consensus_log(uint flag, uint64 term, uint64 length, uint64 checksum = 0);
+  bool write_buf_to_log_file(uchar *buffer, size_t buf_size);
+  bool open_for_normandy(PSI_file_key log_file_key, const char *log_name, const char *new_name);
+  int truncate_logs_from_index(std::vector<std::string> & files_list, std::string last_file);
+  static void consensus_before_commit(THD *thd);
+  int recover_intergrity_for_normandy(Binlog_file_reader *binlog_file_reader, Format_description_log_event *fdle,
+                                      my_off_t *valid_pos);
+
   /**
     @brief This function runs automatic purge if the conditions to meet
     automatic purge are met. Such conditions are: log is open, instance is not
@@ -896,28 +911,27 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int raw_get_current_log(LOG_INFO *linfo);
   uint next_file_id();
 
-  int build_consensus_log_index() {};
-  int init_last_index_of_term(uint64 term) {};
-  int get_consensus_log_file_list(std::vector<std::string> & consensuslog_file_name_vector) {};
-  int find_log_by_consensus_index(uint64 consensus_index, std::string & file_name) {};
-  uint64 get_trx_end_index(uint64 firstIndex) {};
+  int build_consensus_log_index();
+  int init_last_index_of_term(uint64 term);
+  int get_consensus_log_file_list(std::vector<std::string> & consensuslog_file_name_vector);
+  int find_log_by_consensus_index(uint64 consensus_index, std::string & file_name);
+  uint64 get_trx_end_index(uint64 firstIndex);
 
-  uint64 wait_xid_disappear() {};
-  int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader, uint64 start_pos, uint64 end_pos, Consensus_cluster_info_log_event *rci_ev, std::string& log_content) {};
-  int read_log_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, uint64 *checksum, bool need_content = true) {};
-  int prefetch_logs_of_file(THD *thd, uint64 channel_id, const char* file_name, uint64 start_index) {};
-  int find_pos_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *pos) {};
-  int truncate_files_after(std::string & file_name) {};
-  int truncate_single_file_by_consensus_index(const char* file_name, uint64 consensus_index) {};
-  int consensus_truncate_log(uint64 consensus_index, Relay_log_info *rli = NULL) {};
-  int consensus_get_log_position(uint64 consensus_index, char* file_name, uint64 *pos) {};
-  int consensus_get_log_entry(uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, uint64 *checksum, bool need_content = true) {};
-  int consensus_prefetch_log_entries(THD *thd, uint64 channel_id, uint64 consensus_index) {};
+  uint64 wait_xid_disappear();
+  int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader, uint64 start_pos, uint64 end_pos, Consensus_cluster_info_log_event *rci_ev, std::string& log_content);
+  int read_log_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, uint64 *checksum, bool need_content = true);
+  int prefetch_logs_of_file(THD *thd, uint64 channel_id, const char* file_name, uint64 start_index);
+  int find_pos_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *pos);
+  int truncate_files_after(std::string & file_name);
+  int truncate_single_file_by_consensus_index(const char* file_name, uint64 consensus_index);
+  int consensus_truncate_log(uint64 consensus_index, Relay_log_info *rli = NULL);
+  int consensus_get_log_position(uint64 consensus_index, char* file_name, uint64 *pos);
+  int consensus_get_log_entry(uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, uint64 *checksum, bool need_content = true);
+  int consensus_prefetch_log_entries(THD *thd, uint64 channel_id, uint64 consensus_index);
 
-  int append_consensus_log(ConsensusLogEntry &log, uint64* index, bool* rotate_var, Relay_log_info *rli, bool with_check=false) {};
-  int append_multi_consensus_logs(std::vector<ConsensusLogEntry> &logs, uint64* max_index, bool* rotate_var, Relay_log_info *rli) {};
-  int rotate_consensus_log() {};
-  bool reset_previous_gtids_logged(uint64 commit_index) {};
+  int append_consensus_log(ConsensusLogEntry &log, uint64* index, bool* rotate_var, Relay_log_info *rli, bool with_check=false);
+  int append_multi_consensus_logs(std::vector<ConsensusLogEntry> &logs, uint64* max_index, bool* rotate_var, Relay_log_info *rli);
+  int rotate_consensus_log();
 
   /**
     Retrieves the contents of the index file associated with this log object

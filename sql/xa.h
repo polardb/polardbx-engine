@@ -66,6 +66,11 @@ static const int TC_HEURISTIC_RECOVER_COMMIT = 1;
 static const int TC_HEURISTIC_RECOVER_ROLLBACK = 2;
 
 typedef ulonglong my_xid;  // this line is the same as in log_event.h
+typedef ulonglong my_commit_gcn;
+
+// this line is the same as in sql_class.h
+const my_commit_gcn MYSQL_GCN_NULL = __UINT64_MAX__;
+const my_commit_gcn MYSQL_GCN_MIN = 1024;
 
 #define MYSQL_XID_PREFIX "MySQLXid"
 

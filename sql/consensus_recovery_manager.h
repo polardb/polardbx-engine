@@ -38,7 +38,7 @@ class ConsensusRecoveryManager {
   ConsensusRecoveryManager()
       : inited(false),
         key_LOCK_consensus_log_recover_hash(),
-        LOCK_consensus_log_recover_hash(),
+        LOCK_consensuslog_recover_hash(),
         last_leader_term_index(0),
         total_commit_trx_map(),
         consensus_commit_xid_map() {}
@@ -61,7 +61,7 @@ class ConsensusRecoveryManager {
                                    ulonglong gcn);
 
   int collect_commit_trx_to_hash(
-      malloc_unordered_map<my_xid, my_commit_gcn> &commit_list,
+      mem_root_unordered_map<my_xid, my_commit_gcn> &commit_list,
       MEM_ROOT *mem_root);
 
   void add_xid_to_commit_map(XID *xid);
@@ -77,7 +77,7 @@ class ConsensusRecoveryManager {
   bool inited;
   PSI_mutex_key key_LOCK_consensus_log_recover_hash;
   // used to protect commit hash map
-  mysql_mutex_t LOCK_consensus_log_recover_hash;
+  mysql_mutex_t LOCK_consensuslog_recover_hash;
   uint64 last_leader_term_index;
   //<xid, consensusIndex> for save relation between index and my_xid when
   // recovering
@@ -88,6 +88,7 @@ class ConsensusRecoveryManager {
  public:
   std::map<uint64, ulonglong> &get_xid_gcn_map() { return total_xid_gcn_map; }
   void clear_xid_gcn_map();
+  void clear_xid_gcn_and_gtid_xid_map();
 
  private:
   //<xid, gcn> for save relation between my_xid and gcn
