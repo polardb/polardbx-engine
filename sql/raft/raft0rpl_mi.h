@@ -60,6 +60,6 @@ class Raft_master_info : public Master_info {
   virtual ~Raft_master_info() {}
 
   /** Raft channel */
-  virtual Channel_style style() override { return Channel_style::Raft; }
+  virtual Channel_style style() const override { return Channel_style::Raft; }
 };
 #endif

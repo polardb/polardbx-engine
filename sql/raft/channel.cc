@@ -36,3 +36,12 @@ bool Multisource_info::is_raft_replication_channel_name(const char *channel) {
 
   return !strcmp(channel, default_channel) || !strcmp(channel, raft_channel);
 }
+
+/** Whether channel is raft replication according to master info. */
+bool Multisource_info::is_raft_channel(const Master_info *mi) {
+  return mi && mi->style() == Channel_style::Raft;
+}
+/** Whether channel is raft replication according to relay log info . */
+bool Multisource_info::is_raft_channel(const Relay_log_info *rli) {
+  return rli && rli->style() == Channel_style::Raft;
+}

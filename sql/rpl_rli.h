@@ -1703,6 +1703,8 @@ class Relay_log_info : public Rpl_info {
   */
   bool sql_thread_kill_accepted;
 
+  bool force_apply_queue_before_stop;
+
   time_t get_row_stmt_start_timestamp() { return row_stmt_start_timestamp; }
 
   time_t set_row_stmt_start_timestamp() {
@@ -2133,7 +2135,7 @@ class Relay_log_info : public Rpl_info {
     return m_b_events_before_gtid_mgr;
   }
 
-  virtual Channel_style style() { return Channel_style::Tradition; }
+  virtual Channel_style style() const { return Channel_style::Tradition; }
 
   /**
    * Overwrite log name and index log name if needed.

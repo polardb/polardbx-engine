@@ -10128,6 +10128,9 @@ ER_SAMPLE_WRONG_SEMANTIC
 ER_CONSENSUS_CONFIG_BAD
   eng "Bad Consensus configuration, name:%s, value:%llu"
 
+ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
+  eng "Consensus follower is not allowed to to do current operation."
+
 
 ################################################################################
 # DO NOT add messages for the error-log to this file;

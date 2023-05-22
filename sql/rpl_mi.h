@@ -815,7 +815,7 @@ class Master_info : public Rpl_info {
   bool m_is_receiver_position_info_invalid;
 
  public:
-  virtual Channel_style style() { return Channel_style::Tradition; }
+  virtual Channel_style style() const { return Channel_style::Tradition; }
 };
 
 #endif /* RPL_MI_H */

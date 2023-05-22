@@ -57,7 +57,7 @@ class Raft_relay_log_info : public Relay_log_info {
 
   virtual ~Raft_relay_log_info() {}
 
-  virtual Channel_style style() override { return Channel_style::Raft; }
+  virtual Channel_style style() const override { return Channel_style::Raft; }
 
   /**
    * Overwrite log name and index log name if needed.

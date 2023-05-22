@@ -4843,6 +4843,8 @@ class THD : public MDL_context_owner,
   /** Returning clause lex */
   std::unique_ptr<im::Lex_returning> lex_returning;
 
+  bool xpaxos_replication_channel;
+
   /** Get returning lex */
   im::Lex_returning *get_lex_returning() { return lex_returning.get(); }
 };

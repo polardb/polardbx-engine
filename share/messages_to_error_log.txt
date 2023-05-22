@@ -12190,6 +12190,9 @@ ER_RAFT_FIFO
 ER_RAFT_PREFETCH
   eng "[Prefetch] %s"
 
+ER_RAFT_APPLIER
+  eng "[Applier] %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

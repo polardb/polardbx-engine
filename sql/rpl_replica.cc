@@ -167,6 +167,9 @@
 
 #include "sql/xa/lizard_xa_trx.h"
 #include "sql/gcn_log_event.h"
+#include "sql/raft/raft0err.h"
+#include "sql/consensus_log_manager.h"
+#include "sql/rpl_msr.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;
@@ -1790,6 +1793,7 @@ int terminate_slave_threads(Master_info *mi, int thread_mask,
       });
     }
 
+    /**TODO: do it although raft channel didn't lanuch IO thread. */
     if ((error = terminate_slave_thread(
              mi->info_thd, io_lock, &mi->stop_cond, &mi->slave_running,
              &total_stop_wait_timeout, need_lock_term, force_io_stop)) &&
@@ -3750,7 +3754,8 @@ bool show_slave_status(THD *thd) {
     */
     io_gtid_set_buffer_array[idx] = nullptr;
 
-    if (Master_info::is_configured(mi)) {
+    if (Master_info::is_configured(mi) ||
+        Multisource_info::is_raft_channel(mi)) {
       const Gtid_set *io_gtid_set = mi->rli->get_gtid_set();
       mi->rli->get_sid_lock()->wrlock();
 
@@ -3801,7 +3806,8 @@ bool show_slave_status(THD *thd) {
        it++) {
     mi = it->second;
 
-    if (Master_info::is_configured(mi)) {
+    if (Master_info::is_configured(mi) ||
+        Multisource_info::is_raft_channel(mi)) {
       if (show_slave_status_send_data(thd, mi, io_gtid_set_buffer_array[idx],
                                       sql_gtid_set_buffer))
         goto err;
@@ -3879,7 +3885,7 @@ bool show_slave_status(THD *thd, Master_info *mi) {
     return true;
   }
 
-  if (Master_info::is_configured(mi)) {
+  if (Master_info::is_configured(mi) || Multisource_info::is_raft_channel(mi)) {
     if (show_slave_status_send_data(thd, mi, io_gtid_set_buffer,
                                     sql_gtid_set_buffer))
       return true;
@@ -6873,6 +6879,11 @@ extern "C" void *handle_slave_sql(void *arg) {
   my_off_t saved_skip = 0;
 
   Relay_log_info *rli = ((Master_info *)arg)->rli;
+
+  if (Multisource_info::is_raft_channel(rli)) {
+    consensus_log_manager.set_apply_ev_sequence(1);
+  }
+
   const char *errmsg;
   longlong slave_errno = 0;
   bool mts_inited = false;
@@ -6939,6 +6950,11 @@ extern "C" void *handle_slave_sql(void *arg) {
     rli->reported_unsafe_warning = false;
     rli->sql_thread_kill_accepted = false;
     rli->last_event_start_time = 0;
+
+    if (Multisource_info::is_raft_channel(rli)) {
+      rli->force_apply_queue_before_stop = false;
+      thd->xpaxos_replication_channel = true;
+    }
 
     if (init_replica_thread(thd, SLAVE_THD_SQL)) {
       /*
@@ -8494,6 +8510,14 @@ int rotate_relay_log(Master_info *mi, bool log_master_fd, bool need_lock,
     goto end;
   }
 
+  if (Multisource_info::is_raft_channel(mi) &&
+      !consensus_log_manager.get_enable_rotate()) {
+    raft::error(ER_RAFT_APPLIER) << "Didn't allowed to rotate when last "
+                                    "consensus log entry is in large trx";
+    my_error(ER_CONSENSUS_FOLLOWER_NOT_ALLOWED, MYF(0));
+    return 1;
+  }
+
   /* If the relay log is closed, new_file() will do nothing. */
   if (log_master_fd)
     error =
@@ -9212,6 +9236,12 @@ int reset_slave(THD *thd, Master_info *mi, bool reset_all) {
   bool is_default_channel =
       strcmp(mi->get_channel(), channel_map.get_default_channel()) == 0;
 
+  if (Multisource_info::is_raft_channel(mi)) {
+    raft::warn(ER_RAFT_APPLIER)
+        << "Reseting on raft channel goes through with nothing to do.";
+    return 0;
+  }
+
   /*
     RESET SLAVE command should ignore 'read-only' and 'super_read_only'
     options so that it can update 'mysql.slave_master_info' and
@@ -9335,6 +9365,13 @@ bool reset_slave_cmd(THD *thd) {
         channel_map.is_group_replication_channel_name(mi->get_channel(),
                                                       true) &&
         is_group_replication_running()) {
+      my_error(ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED, MYF(0),
+               "RESET SLAVE [ALL] FOR CHANNEL", mi->get_channel());
+      channel_map.unlock();
+      return true;
+    }
+     /** Raft channel didn't allowed to reset. */
+    if (Multisource_info::is_raft_channel(mi)) {
       my_error(ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED, MYF(0),
                "RESET SLAVE [ALL] FOR CHANNEL", mi->get_channel());
       channel_map.unlock();
@@ -11001,6 +11038,13 @@ bool change_master_cmd(THD *thd) {
   /* The slave must have been initialized to allow CHANGE MASTER statements */
   if (!is_slave_configured()) {
     my_error(ER_SLAVE_CONFIGURATION, MYF(0));
+    res = true;
+    goto err;
+  }
+
+  if (Multisource_info::is_raft_replication_channel_name(lex->mi.channel)) {
+    my_error(ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED, MYF(0),
+             "raft channel is not allowed", lex->mi.channel);
     res = true;
     goto err;
   }
