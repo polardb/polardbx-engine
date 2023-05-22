@@ -1,0 +1,25 @@
+# Stop DB server which was created by MTR default
+# create bootstrap file
+# Run the bootstrap command with page size 32k
+# Start the DB server with page size 32k
+# restart: --lower_case_table_names=1 --datadir=MYSQLD_DATADIR1
+create database Rds80DirectTestDb;
+create sequence Rds80DirectTestDb.gts_base cache 2 TIMESTAMP;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+call dbms_tso.get_timestamp('Rds80DirectTestDb', 'gts_base',1);
+Timestamp
+####
+call dbms_tso.get_timestamp('rds80directtestdb', 'GTS_BASE',1);
+Timestamp
+####
+drop database Rds80DirectTestDb;
+# restart
