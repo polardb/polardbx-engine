@@ -1,0 +1,59 @@
+--source include/not_valgrind.inc
+--source include/have_binlog_format_row.inc
+
+let $MYSQLD_BASEDIR= `select @@basedir`;
+
+# Create datadir path,rathan than mtr defaults path
+--mkdir $MYSQL_TMP_DIR/datadir1
+
+# Set different paths for --datadir
+let $MYSQLD_DATADIR1 = $MYSQL_TMP_DIR/datadir1/data;
+
+# Stop the MTR default datadir, as it was started with default 16k page size
+--echo # Stop DB server which was created by MTR default
+--source include/make_cluster_args.inc
+--source include/shutdown_mysqld.inc
+
+let BOOTSTRAP_SQL=$MYSQL_TMP_DIR/boot.sql;
+
+--echo # create bootstrap file
+write_file $BOOTSTRAP_SQL;
+CREATE DATABASE test DEFAULT CHARACTER SET latin1;
+EOF
+
+# Set the bootstrap parameter page size 32k for datadir1
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lower_case_table_names=1 --lc_messages_dir=$MYSQL_SHAREDIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $CLUSTER_ARGS </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+
+--echo # Run the bootstrap command with page size 32k
+--exec $NEW_CMD
+
+--echo # Start the DB server with page size 32k
+--replace_result $MYSQLD_DATADIR1 MYSQLD_DATADIR1
+--let $restart_parameters="restart: --lower_case_table_names=1 --datadir=$MYSQLD_DATADIR1"
+# Wait for 300 seconds instead of the default 100
+--let $wait_counter= 3000
+--source include/start_mysqld.inc
+
+create database Rds80DirectTestDb;
+
+create sequence Rds80DirectTestDb.gts_base cache 2 TIMESTAMP;
+
+--replace_column 1 ####
+call dbms_tso.get_timestamp('Rds80DirectTestDb', 'gts_base',1);
+
+--replace_column 1 ####
+call dbms_tso.get_timestamp('rds80directtestdb', 'GTS_BASE',1);
+
+drop database Rds80DirectTestDb;
+
+--let $restart_parameters=
+# Wait for 300 seconds instead of the default 100
+--let $wait_counter= 3000
+--source include/restart_mysqld.inc
+
+--disable_query_log
+--enable_query_log
+
+--remove_file $BOOTSTRAP_SQL
+--force-rmdir $MYSQL_TMP_DIR/datadir1
+--remove_file $MYSQLTEST_VARDIR/tmp/bootstrap.log

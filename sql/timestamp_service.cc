@@ -68,10 +68,24 @@ bool TimestampService::init() {
 
 bool TimestampService::open_base_table(thr_lock_type lock_type) {
   bool ret = false;
+  char db_name_buf[NAME_LEN + 1];
+  char table_name_buf[NAME_LEN + 1];
+  const char *db = m_db_name;
+  const char *table = m_table_name;
 
   DBUG_ASSERT(m_db_name && m_table_name);
 
-  TABLE_LIST tables(m_db_name, m_table_name, lock_type);
+  if (lower_case_table_names) {
+    snprintf(db_name_buf, sizeof(db_name_buf) - 1, "%s", m_db_name);
+    my_casedn_str(system_charset_info, db_name_buf);
+    db = db_name_buf;
+
+    snprintf(table_name_buf, sizeof(table_name_buf) - 1, "%s", m_table_name);
+    my_casedn_str(system_charset_info, table_name_buf);
+    table = table_name_buf;
+  }
+
+  TABLE_LIST tables(db, table, lock_type);
 
   tables.sequence_scan.set(Sequence_scan_mode::ITERATION_SCAN);
   tables.open_strategy = TABLE_LIST::OPEN_IF_EXISTS;
