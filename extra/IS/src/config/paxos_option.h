@@ -30,8 +30,8 @@ class RemoteServer;
 /* store extra information from upper module */
 class ExtraStore {
  public:
-  ExtraStore(){};
-  virtual ~ExtraStore(){};
+  ExtraStore() {}
+  virtual ~ExtraStore() {}
   /* remote info received from leader */
   virtual std::string getRemote() = 0;
   virtual void setRemote(const std::string &) = 0;
@@ -40,10 +40,10 @@ class ExtraStore {
 };
 
 class DefaultExtraStore : public ExtraStore {
-  virtual std::string getRemote() { return ""; }
-  virtual void setRemote(const std::string &) {}
+  std::string getRemote() override { return ""; }
+  void setRemote(const std::string &) override {}
   /* local info to send to others */
-  virtual std::string getLocal() { return ""; }
+  std::string getLocal() override { return ""; }
 };
 
 class PaxosOption {

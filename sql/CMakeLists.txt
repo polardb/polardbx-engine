@@ -706,6 +706,7 @@ SET(SQL_SHARED_SOURCES
   raft/raft0rpl_info_handler.cc
   raft/raft0xa.cc
   raft/raft0rpl_rli.cc
+  raft/raft0thd.cc
 
   consensus_log_index.cc
   consensus_recovery_manager.cpp

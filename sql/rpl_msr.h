@@ -453,7 +453,7 @@ class Multisource_info {
  public:
   static bool is_raft_replication_channel_name(const char *channel);
   static bool is_xpaxos_replication_channel_name(const char *channel)
-  { return is_raft_replication_channel_name(channel); };
+  { return is_raft_replication_channel_name(channel); }
 
   static bool is_raft_channel(const Master_info *mi);
   static bool is_raft_channel(const Relay_log_info *rli);

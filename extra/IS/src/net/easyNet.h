@@ -54,25 +54,24 @@ class EasyNet : public Net {
  public:
   EasyNet(uint64_t num = 2, const uint64_t sessionTimeout = 300,
           bool memory_usage_count = false);
-  virtual ~EasyNet(){};
+  virtual ~EasyNet() {}
 
-  virtual int init(void *ptr = NULL);
-  virtual int start(int port);
-  virtual int shutdown();
+  int init(void *ptr = nullptr) override;
+  int start(int port) override;
+  int shutdown() override;
   virtual int stop();
 
   /* TODO here we should use a general handler. */
-  virtual easy_addr_t createConnection(const std::string &addr,
-                                       NetServerRef server,
-                                       uint64_t timeout = 1000,
-                                       uint64_t index = 0);
-  virtual void disableConnection(easy_addr_t addr);
-  virtual int sendPacket(easy_addr_t addr, const char *buf, uint64_t len,
-                         uint64_t id = 0);
-  virtual int sendPacket(easy_addr_t addr, const std::string &buf,
-                         uint64_t id = 0);
+  easy_addr_t createConnection(const std::string &addr, NetServerRef server,
+                               uint64_t timeout = 1000,
+                               uint64_t index = 0) override;
+  void disableConnection(easy_addr_t addr) override;
+  int sendPacket(easy_addr_t addr, const char *buf, uint64_t len,
+                 uint64_t id = 0) override;
+  int sendPacket(easy_addr_t addr, const std::string &buf,
+                 uint64_t id = 0) override;
   virtual int resendPacket(easy_addr_t addr, void *ptr, uint64_t id = 0);
-  virtual int setRecvPacketCallback(void *handler);
+  int setRecvPacketCallback(void *handler) override;
 
   void setWorkPool(easy_thread_pool_t *tp) {
     std::lock_guard<std::mutex> lg(lock_);

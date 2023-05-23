@@ -34,7 +34,7 @@ template <typename TaskType>
 class SingleProcessQueue {
  public:
   SingleProcessQueue() : stop_(false) { onProcess_.store(false); }
-  virtual ~SingleProcessQueue(){};
+  virtual ~SingleProcessQueue() {}
   bool push(TaskType *task) {
     std::lock_guard<std::mutex> lg(lock_);
     if (!stop_) {

@@ -218,3 +218,12 @@ int easy_buf_list_len(easy_list_t *l)
     return len;
 }
 
+
+void easy_buf_string_append(easy_buf_string_t *s,
+                                          const char *value, int len)
+{
+    s->data = (char *)(value - s->len);
+    s->len += len;
+}
+
+const easy_buf_string_t easy_string_null = {(char *)"", 0};

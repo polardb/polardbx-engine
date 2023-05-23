@@ -194,12 +194,12 @@ static __inline__ void easy_spin_unlock(easy_spin_t *lock)
 
 static __inline__ void easy_clear_bit(unsigned long nr, volatile void *addr)
 {
-    int8_t                  *m = ((int8_t *) addr) + (nr >> 3);
+    volatile int8_t                  *m = ((volatile int8_t *) addr) + (nr >> 3);
     *m &= (int8_t)(~(1 << (nr & 7)));
 }
 static __inline__ void easy_set_bit(unsigned long nr, volatile void *addr)
 {
-    int8_t                  *m = ((int8_t *) addr) + (nr >> 3);
+    volatile int8_t                  *m = ((volatile int8_t *) addr) + (nr >> 3);
     *m |= (int8_t)(1 << (nr & 7));
 }
 

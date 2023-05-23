@@ -49,10 +49,11 @@ enum LogOperation {
  **/
 class PaxosLog {
  public:
-  PaxosLog() : currentTerm_(0){}
-  virtual ~PaxosLog()= default;
-  PaxosLog(const PaxosLog &other) = delete;                   // copy constructor
-  const PaxosLog &operator=(const PaxosLog &other) = delete;  // assignment operator
+  PaxosLog() : currentTerm_(0) {}
+  virtual ~PaxosLog() = default;
+  PaxosLog(const PaxosLog &other) = delete;  // copy constructor
+  const PaxosLog &operator=(const PaxosLog &other) =
+      delete;                                // assignment operator
 
   virtual int getEntry(uint64_t logIndex, LogEntry &entry, bool fastfail,
                        uint64_t /* serverId */) {
@@ -112,7 +113,7 @@ class PaxosLog {
   /* Truncate the log entry before (exclude!) lastIndex */
   virtual void truncateForward(uint64_t lastIndex) = 0;
   virtual void setPurgeLogFilter(
-      std::function<bool(const LogEntry &le)> /* cb */){}
+      std::function<bool(const LogEntry &le)> /* cb */) {}
   virtual int getMetaData(const std::string &key, uint64_t *value) = 0;
   virtual int setMetaData(const std::string &key, uint64_t value) = 0;
   virtual int getMetaData(const std::string &key, std::string &value) {

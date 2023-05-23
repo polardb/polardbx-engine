@@ -182,8 +182,8 @@ class ThreadTimer {
   double getTime() { return time_; }
   double getStageExtraTime() { return stageExtraTime_; }
   void setStageExtraTime(double baseTime);
-  void setRandWeight(uint64_t w) { randWeight_ = w % 10; };
-  uint64_t getCurrentStage() { return currentStage_.load(); };
+  void setRandWeight(uint64_t w) { randWeight_ = w % 10; }
+  uint64_t getCurrentStage() { return currentStage_.load(); }
   uint64_t getAndSetStage();
   std::shared_ptr<Service> &getService() { return srv_; }
   /* we use callBackPtr as arg to avoid CallbackType destruct.  */

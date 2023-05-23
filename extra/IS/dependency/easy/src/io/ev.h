@@ -179,12 +179,7 @@ struct                  ev_loop;
 # undef EV_EMBED_ENABLE
 #endif
 
-/* EV_INLINE is used for functions in header files */
-#if __STDC_VERSION__ >= 199901L || __GNUC__ >= 3
 # define EV_INLINE static inline
-#else
-# define EV_INLINE static
-#endif
 
 /* EV_PROTOTYPES can be sued to switch of prototype declarations */
 #ifndef EV_PROTOTYPES

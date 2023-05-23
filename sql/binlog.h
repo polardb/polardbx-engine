@@ -1045,6 +1045,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
  private:
   std::unique_ptr<Gcn_manager> gcn_mgr;
 
+  static mysql_mutex_t &LOCK_flush();
 };
 
 struct LOAD_FILE_INFO {
@@ -1139,5 +1140,9 @@ extern ulong rpl_read_size;
  */
 
 bool normalize_binlog_name(char *to, const char *from, bool is_relay_log);
+
+int flush_consensus_log(THD *thd, binlog_cache_data *binlog_cache,
+                        Binlog_event_writer *writer, bool &mark_as_rollback,
+                        my_off_t &bytes_in_cache);
 
 #endif /* BINLOG_H_INCLUDED */

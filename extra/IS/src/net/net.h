@@ -25,8 +25,8 @@ namespace alisql {
 
 class NetServer : public std::enable_shared_from_this<NetServer> {
  public:
-  NetServer() : c(nullptr){}
-  virtual ~NetServer(){}
+  NetServer() : c(nullptr) {}
+  virtual ~NetServer() {}
   std::string strAddr;
   void *c;
 };
@@ -40,8 +40,8 @@ typedef std::shared_ptr<NetServer> NetServerRef;
  **/
 class Net {
  public:
-  Net(){}
-  virtual ~Net(){}
+  Net() {}
+  virtual ~Net() {}
 
   /* TODO here we should use a general handler. */
   virtual easy_addr_t createConnection(const std::string &addr,

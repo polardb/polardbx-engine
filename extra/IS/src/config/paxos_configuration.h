@@ -34,8 +34,8 @@ class Paxos;
  **/
 class Configuration {
  public:
-  Configuration(){};
-  virtual ~Configuration(){};
+  Configuration() {}
+  virtual ~Configuration() {}
   typedef std::shared_ptr<Server> ServerRef;
   typedef std::function<bool(Server &)> Predicate;
   typedef std::function<uint64_t(Server &)> GetValue;
@@ -99,15 +99,15 @@ class Configuration {
  **/
 class StableConfiguration : public Configuration {
  public:
-  StableConfiguration() : serversNum(0){};
-  virtual ~StableConfiguration(){};
+  StableConfiguration() : serversNum(0) {}
+  virtual ~StableConfiguration() {}
 
-  virtual void forEach(const SideEffect &sideEffect, void *ptr);
-  virtual void forEachLearners(const SideEffect &sideEffect, void *ptr);
-  virtual bool quorumAll(const Predicate &predicate) const;
-  virtual uint64_t quorumMin(const GetValue &getValue) const;
-  virtual uint64_t forceMin(const GetValue &getValue) const;
-  virtual uint64_t allMin(const GetValue &getValue) const;
+  void forEach(const SideEffect &sideEffect, void *ptr) override;
+  void forEachLearners(const SideEffect &sideEffect, void *ptr) override;
+  bool quorumAll(const Predicate &predicate) const override;
+  uint64_t quorumMin(const GetValue &getValue) const override;
+  uint64_t forceMin(const GetValue &getValue) const override;
+  uint64_t allMin(const GetValue &getValue) const override;
 
   void installConfig(const std::vector<std::string> &strConfig,
                      uint64_t current, Paxos *paxos,
@@ -122,43 +122,43 @@ class StableConfiguration : public Configuration {
   static ServerRef addServer(std::vector<ServerRef> &servers,
                              ServerRef newServer, bool useAppend = false);
 
-  virtual ServerRef getServer(uint64_t serverId);
-  virtual ServerRef getLearnerByAddr(const std::string &addr);
-  virtual uint64_t getServerIdFromAddr(const std::string &addr);
-  virtual const std::vector<ServerRef> &getServers() { return servers; };
-  virtual const std::vector<ServerRef> &getLearners() { return learners; };
-  virtual uint64_t getServerNum() const;
-  virtual uint64_t getServerNumLockFree() const { return serversNum.load(); }
-  virtual uint64_t getLearnerNum() const;
-  virtual bool needWeightElection(uint64_t localWeight);
-  virtual uint64_t getMaxWeightServerId(uint64_t baseEpoch,
-                                        ServerRef localServer);
-  virtual int addMember(const std::string &strAddr, Paxos *paxos);
-  virtual int delMember(const std::string &strAddr, Paxos *paxos);
-  virtual int configureLearner(uint64_t serverId, uint64_t source,
-                               Paxos *paxos);
-  virtual int configureMember(const uint64_t serverId, bool forceSync,
-                              uint electionWeight, Paxos *paxos);
-  virtual void addLearners(const std::vector<std::string> &strConfig,
-                           Paxos *paxos, bool replaceAll = false);
-  virtual void delLearners(const std::vector<std::string> &strConfig,
-                           Paxos *paxos);
-  virtual void delAllLearners();
-  virtual void delAllRemoteServer(const std::string &localStrAddr,
-                                  Paxos *paxos);
-  virtual void mergeFollowerMeta(
+  ServerRef getServer(uint64_t serverId) override;
+  ServerRef getLearnerByAddr(const std::string &addr) override;
+  uint64_t getServerIdFromAddr(const std::string &addr) override;
+  const std::vector<ServerRef> &getServers() override { return servers; }
+  const std::vector<ServerRef> &getLearners() override { return learners; }
+  uint64_t getServerNum() const override;
+  uint64_t getServerNumLockFree() const override { return serversNum.load(); }
+  uint64_t getLearnerNum() const override;
+  bool needWeightElection(uint64_t localWeight) override;
+  uint64_t getMaxWeightServerId(uint64_t baseEpoch,
+                                ServerRef localServer) override;
+  int addMember(const std::string &strAddr, Paxos *paxos) override;
+  int delMember(const std::string &strAddr, Paxos *paxos) override;
+  int configureLearner(uint64_t serverId, uint64_t source,
+                       Paxos *paxos) override;
+  int configureMember(const uint64_t serverId, bool forceSync,
+                      uint electionWeight, Paxos *paxos) override;
+  void addLearners(const std::vector<std::string> &strConfig, Paxos *paxos,
+                   bool replaceAll = false) override;
+  void delLearners(const std::vector<std::string> &strConfig,
+                   Paxos *paxos) override;
+  void delAllLearners() override;
+  void delAllRemoteServer(const std::string &localStrAddr,
+                          Paxos *paxos) override;
+  void mergeFollowerMeta(
       const ::google::protobuf::RepeatedPtrField<::alisql::ClusterInfoEntry>
-          &ciEntries);
+          &ciEntries) override;
 
-  virtual std::string membersToString(const std::string &localAddr) {
+  std::string membersToString(const std::string &localAddr) override {
     return StableConfiguration::configToString(servers, localAddr);
-  };
-  virtual std::string membersToString() {
+  }
+  std::string membersToString() override {
     return StableConfiguration::configToString(servers, std::string(""), true);
-  };
-  virtual std::string learnersToString() {
+  }
+  std::string learnersToString() override {
     return StableConfiguration::configToString(learners, std::string(""));
-  };
+  }
   static void initServerFromString(ServerRef server, std::string str,
                                    bool isLearner = false);
   static void initServerDefault(ServerRef server);
@@ -167,8 +167,8 @@ class StableConfiguration : public Configuration {
                                const std::vector<std::string> &strConfig);
 
   /* append log flow control */
-  virtual void reset_flow_control();
-  virtual void set_flow_control(uint64_t serverId, int64_t fc);
+  void reset_flow_control() override;
+  void set_flow_control(uint64_t serverId, int64_t fc) override;
 
   std::atomic<uint64_t> serversNum;
   std::vector<ServerRef> servers;

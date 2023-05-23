@@ -18,7 +18,6 @@
 #ifndef cluster_paxos_INC
 #define cluster_paxos_INC
 
-#include <easy_log.h>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -40,15 +39,6 @@
 #include "single_process_queue.h"
 #include "thread_timer.h"
 
-#define PRINT_TIME()                                  \
-  do {                                                \
-    struct timeval tv;                                \
-    if (easy_log_level >= EASY_LOG_INFO) {            \
-      gettimeofday(&tv, NULL);                        \
-      printf("TS:%ld.%06ld ", tv.tv_sec, tv.tv_usec); \
-      std::cout << std::flush;                        \
-    }                                                 \
-  } while (0)
 namespace alisql {
 
 class ClientService;
@@ -68,7 +58,7 @@ class ConfigureChangeManager {
         needNotify(0),
         preparedIndex(0),
         autoChangeRet(0),
-        waitTimeout(0){};
+        waitTimeout(0) {}
   void clear() {
     prepared = applied = aborted = needNotify = preparedIndex = 0;
   }
@@ -98,7 +88,7 @@ class ConfigureChangeManager {
 class CommitDepRecoveryManager {
  public:
   CommitDepRecoveryManager()
-      : inRecovery(false), lastLogIndex(0), lastNonCommitDepIndex(0){};
+      : inRecovery(false), lastLogIndex(0), lastNonCommitDepIndex(0) {}
   void clear() {
     inRecovery = false;
     lastLogIndex = 0;
@@ -200,6 +190,19 @@ class Paxos : public Consensus {
           countReplicateLog(0),
           countLeaderTransfer(0),
           countTruncateBackward(0) {}
+    void reset() {
+      countMsgAppendLog = 0;
+      countMsgRequestVote = 0;
+      countHeartbeat = 0;
+      countLeaderCommand = 0;
+      countOnMsgAppendLog = 0;
+      countOnMsgRequestVote = 0;
+      countOnHeartbeat = 0;
+      countOnLeaderCommand = 0;
+      countReplicateLog = 0;
+      countLeaderTransfer = 0;
+      countTruncateBackward = 0;
+    }
   } StatsType;
 
   typedef struct MembershipChange {
@@ -265,8 +268,8 @@ class Paxos : public Consensus {
   typedef class ChangeStateArg {
    public:
     ChangeStateArg(StateType r, uint64_t t, uint64_t i, Paxos *ra)
-        : role(r), term(t), index(i), paxos(ra){};
-    ChangeStateArg(){};
+        : role(r), term(t), index(i), paxos(ra) {}
+    ChangeStateArg() {}
     StateType role;
     uint64_t term;
     uint64_t index;
@@ -275,7 +278,7 @@ class Paxos : public Consensus {
 
   typedef class purgeLogArg {
    public:
-    purgeLogArg(uint64_t i, Paxos *ra) : index(i), paxos(ra){};
+    purgeLogArg(uint64_t i, Paxos *ra) : index(i), paxos(ra) {}
     uint64_t index;
     Paxos *paxos;
   } purgeLogArgType;
@@ -283,18 +286,18 @@ class Paxos : public Consensus {
   typedef class commitDepArg {
    public:
     commitDepArg(uint64_t i, uint64_t t, Paxos *p)
-        : lastLogIndex(i), term(t), paxos(p){};
+        : lastLogIndex(i), term(t), paxos(p) {}
     uint64_t lastLogIndex;
     uint64_t term;
     Paxos *paxos;
   } commitDepArgType;
 
   /* FOLLOWER */
-  virtual int onAppendLog(PaxosMsg *msg, PaxosMsg *rsp);
-  virtual int onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp);
+  int onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) override;
+  int onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) override;
   /* CANDIDATE */
-  virtual int requestVote(bool force = true);
-  virtual int onRequestVoteResponce(PaxosMsg *msg);
+  int requestVote(bool force = true) override;
+  int onRequestVoteResponce(PaxosMsg *msg) override;
   /* LEADER */
   virtual int leaderTransfer(uint64_t targetId);
   virtual int leaderTransfer(
@@ -320,19 +323,19 @@ class Paxos : public Consensus {
   void forceFixMatchIndex(const std::string &addr,
                           uint64_t newIndex); /* support ip:port argument */
 
-  virtual uint64_t replicateLog(LogEntry &entry) {
+  uint64_t replicateLog(LogEntry &entry) override {
     return replicateLog_(entry, true);
-  };
-  virtual int appendLog(const bool needLock);
+  }
+  int appendLog(const bool needLock) override;
   virtual int appendLogToLearner(
       std::shared_ptr<RemoteServer> wserver = nullptr, bool needLock = false);
-  virtual int onAppendLogResponce(PaxosMsg *msg);
+  int onAppendLogResponce(PaxosMsg *msg) override;
   virtual int leaderCommand(LcTypeT type,
                             std::shared_ptr<RemoteServer> server = nullptr);
-  virtual int onLeaderCommandResponce(PaxosMsg *msg);
-  virtual int onClusterIdNotMatch(PaxosMsg *msg);
-  virtual int onMsgPreCheck(PaxosMsg *msg, PaxosMsg *rsp);
-  virtual int onMsgPreCheckFailed(PaxosMsg *msg);
+  int onLeaderCommandResponce(PaxosMsg *msg) override;
+  int onClusterIdNotMatch(PaxosMsg *msg) override;
+  int onMsgPreCheck(PaxosMsg *msg, PaxosMsg *rsp) override;
+  int onMsgPreCheckFailed(PaxosMsg *msg) override;
   virtual int forceSingleLeader();
   virtual int forceSingleLearner();
   virtual int forcePromote();
@@ -342,13 +345,13 @@ class Paxos : public Consensus {
                         bool needLock = true, bool force = false);
 
   /* ALL */
-  virtual int onRequestVote(PaxosMsg *msg, PaxosMsg *rsp);
+  int onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) override;
   virtual uint64_t waitCommitIndexUpdate(uint64_t baseIndex, uint64_t term = 0);
   virtual uint64_t checkCommitIndex(
       uint64_t baseIndex,
       uint64_t term = 0); /* A lock-free interface for follower */
-  virtual uint64_t getClusterId() { return clusterId_.load(); }
-  virtual int setClusterId(uint64_t ci);
+  uint64_t getClusterId() override { return clusterId_.load(); }
+  int setClusterId(uint64_t ci) override;
 
   int checkLeaderTransfer(uint64_t targetId, uint64_t term, uint64_t &logIndex,
                           uint64_t leftCnt);
@@ -367,7 +370,7 @@ class Paxos : public Consensus {
   void shutdown();
   void stop();
 
-  virtual int onAppendLogSendFail(PaxosMsg *msg, uint64_t *newId = nullptr);
+  int onAppendLogSendFail(PaxosMsg *msg, uint64_t *newId = nullptr) override;
   void setStateChangeCb(
       std::function<void(enum State, uint64_t, uint64_t)> cb) {
     stateChangeCb_ = cb;
@@ -445,7 +448,7 @@ class Paxos : public Consensus {
     return ret;
   }
   const PaxosLog::StatsType &getLogStats() { return log_->getStats(); }
-  void clearStats() { memset(&stats_, 0, sizeof(StatsType)); }
+  void clearStats() { stats_.reset(); }
   uint64_t getLastLogIndex() { return log_->getLastLogIndex(); }
   uint64_t getLastCachedLogIndex() { return log_->getLastCachedLogIndex(); }
   uint64_t getCurrentLeader() { return leaderId_.load(); }
@@ -466,7 +469,7 @@ class Paxos : public Consensus {
   void setPipeliningTimeout(uint64_t t) { pipeliningTimeout_ = t; }
   void setMaxDelayIndex(uint64_t size) { maxDelayIndex_ = size; }
   void setMinDelayIndex(uint64_t size) { minDelayIndex_ = size; }
-  bool isShutdown() { return shutdown_.load(); }
+  bool isShutdown() override { return shutdown_.load(); }
   int getLogCacheByteSize() { return logRecvCache_.getByteSize(); }
   void updateFollowerMetaNo() { followerMetaNo_.fetch_add(1); }
   void setSyncFollowerMetaInterval(uint64_t val) { syncMetaInterval_ = val; }
@@ -550,9 +553,7 @@ class Paxos : public Consensus {
   bool tryFillFollowerMeta_(
       ::google::protobuf::RepeatedPtrField<::alisql::ClusterInfoEntry>
           *ciEntries);
-  static void setAlertLogLevel(AlertLogLevelType level = LOG_WARN) {
-    easy_log_level = static_cast<easy_log_level_t>(level);
-  }
+  static void setAlertLogLevel(AlertLogLevelType level = LOG_WARN);
 
   /* append log flow control */
   void reset_flow_control();

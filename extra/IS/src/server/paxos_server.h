@@ -22,6 +22,7 @@
 #include <service.h>
 #include <stdint.h>
 #include <memory>
+#include <utility>
 #include "easyNet.h"
 #include "msg_compress.h"
 #include "paxos.pb.h"
@@ -49,8 +50,8 @@ class Server : public NetServer {
         electionWeight(5),
         learnerSource(0),
         sendByAppliedIndex(false),
-        flowControl(0){};
-  virtual ~Server(){};
+        flowControl(0) {}
+  virtual ~Server() {}
 
   virtual void beginRequestVote(void *) = 0;
   virtual void beginLeadership(void *) = 0;
@@ -64,7 +65,7 @@ class Server : public NetServer {
   virtual uint64_t getLastAckEpoch() const = 0;
   virtual void setLastAckEpoch(uint64_t epoch) = 0;
   virtual uint64_t getMatchIndex() const = 0;
-  virtual void resetMatchIndex(uint64_t /* matchIndex */){};
+  virtual void resetMatchIndex(uint64_t /* matchIndex */) {}
   virtual uint64_t getAppliedIndex() const = 0;
   virtual bool haveVote() const = 0;
   virtual void setMsgCompressOption(void *) = 0;
@@ -101,23 +102,23 @@ private:
 class LocalServer : public Server {
  public:
   LocalServer(uint64_t serverId);
-  virtual ~LocalServer(){};
+  virtual ~LocalServer() {}
 
-  virtual void beginRequestVote(void *){};
-  virtual void beginLeadership(void *);
-  virtual void stepDown(void *){};
-  virtual void stop(void *){};
-  virtual void sendMsg(void *);
-  virtual void connect(void *){};
-  virtual void disconnect(void *){};
-  virtual void fillInfo(void *);
-  virtual void fillFollowerMeta(void *);
-  virtual uint64_t getLastAckEpoch() const;
-  virtual void setLastAckEpoch(uint64_t){};
-  virtual uint64_t getMatchIndex() const { return lastSyncedIndex.load(); };
-  virtual uint64_t getAppliedIndex() const;
-  virtual bool haveVote() const;
-  virtual void setMsgCompressOption(void *){};
+  void beginRequestVote(void *) override {}
+  void beginLeadership(void *) override;
+  void stepDown(void *) override {}
+  void stop(void *) override {}
+  void sendMsg(void *) override;
+  void connect(void *) override {}
+  void disconnect(void *) override {}
+  void fillInfo(void *) override;
+  void fillFollowerMeta(void *) override;
+  uint64_t getLastAckEpoch() const override;
+  void setLastAckEpoch(uint64_t) override {}
+  uint64_t getMatchIndex() const override { return lastSyncedIndex.load(); }
+  uint64_t getAppliedIndex() const override;
+  bool haveVote() const override;
+  void setMsgCompressOption(void *) override {}
   /* TODO:
   virtual bool isCaughtUp() const;
   */
@@ -146,8 +147,8 @@ class LocalServer : public Server {
 class AliSQLServer : public LocalServer {
  public:
   AliSQLServer(uint64_t serverId) : LocalServer(serverId) {}
-  virtual ~AliSQLServer(){};
-  virtual uint64_t writeLogDone(uint64_t logIndex);
+  ~AliSQLServer() override = default;
+  uint64_t writeLogDone(uint64_t logIndex) override;
   void setLastNonCommitDepIndex(uint64_t logIndex);
 
 }; /* end of class LocalServer */
@@ -165,28 +166,28 @@ class RemoteServer : public Server {
   RemoteServer(uint64_t serverId);
   virtual ~RemoteServer();
 
-  virtual void beginRequestVote(void *);
-  virtual void beginLeadership(void *);
-  virtual void stepDown(void *);
-  virtual void stop(void *);
-  virtual void sendMsg(void *);
-  virtual void connect(void *);
-  virtual void disconnect(void *);
-  virtual void fillInfo(void *);
-  virtual void fillFollowerMeta(void *);
-  virtual uint64_t getLastAckEpoch() const { return lastAckEpoch.load(); }
-  virtual void setLastAckEpoch(uint64_t epoch) {
+  void beginRequestVote(void *) override;
+  void beginLeadership(void *) override;
+  void stepDown(void *) override;
+  void stop(void *) override;
+  void sendMsg(void *) override;
+  void connect(void *) override;
+  void disconnect(void *) override;
+  void fillInfo(void *) override;
+  void fillFollowerMeta(void *) override;
+  uint64_t getLastAckEpoch() const override { return lastAckEpoch.load(); }
+  void setLastAckEpoch(uint64_t epoch) override {
     lastAckEpoch.store(epoch);
     lostConnect.store(false);
-  };
-  virtual uint64_t getMatchIndex() const { return matchIndex; }
-  virtual uint64_t getAppliedIndex() const { return appliedIndex.load(); };
-  virtual void resetMatchIndex(uint64_t matchIndex_) {
+  }
+  uint64_t getMatchIndex() const override { return matchIndex; }
+  uint64_t getAppliedIndex() const override { return appliedIndex.load(); }
+  void resetMatchIndex(uint64_t matchIndex_) override {
     matchIndex.store(matchIndex_);
     hasMatched = false;
   }
-  virtual bool haveVote() const { return hasVote; }
-  virtual void setMsgCompressOption(void *);
+  bool haveVote() const override { return hasVote; }
+  void setMsgCompressOption(void *) override;
   /* TODO:
   virtual bool isCaughtUp() const;
   */
@@ -253,12 +254,12 @@ class SendMsgTask {
   std::shared_ptr<RemoteServer> server;
   bool force;
   SendMsgTask(PaxosMsg *m, std::shared_ptr<RemoteServer> s, bool f)
-      : msg(m), server(s), force(f){};
+      : msg(m), server(std::move(s)), force(f) {}
   ~SendMsgTask() {
     delete msg;
-    msg = NULL;
+    msg = nullptr;
   }
-  bool merge(const SendMsgTask *task) {
+  bool merge(const SendMsgTask *task) const {
     assert(server == task->server);
     // assert(msg->msgtype() == Paxos::AppendLog);
     // assert(task->msg->msgtype() == Paxos::AppendLog);

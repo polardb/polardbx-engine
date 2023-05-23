@@ -56,8 +56,8 @@ class Consensus {
     CCLeaderTransfer = 9
   } CCOpTypeT;
 
-  Consensus(){};
-  virtual ~Consensus(){};
+  Consensus() {}
+  virtual ~Consensus() {}
 
   virtual int onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) = 0;
   virtual int onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) = 0;

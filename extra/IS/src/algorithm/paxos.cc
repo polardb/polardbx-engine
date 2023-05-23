@@ -3689,6 +3689,10 @@ bool Paxos::tryFillFollowerMeta_(
   return ciEntries->size() != 0;
 }
 
+void Paxos::setAlertLogLevel(AlertLogLevelType level) {
+  easy_log_level = static_cast<easy_log_level_t>(level);
+}
+
 int Paxos::getClusterInfo(std::vector<ClusterInfoType> &cis) {
   cis.clear();
 

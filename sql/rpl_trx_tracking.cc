@@ -67,6 +67,12 @@ inline int64 Logical_clock::step() {
   return ++state;
 }
 
+inline int64 Logical_clock::step_down() {
+  static_assert(SEQ_UNINIT == 0, "");
+  DBUG_EXECUTE_IF("logical_clock_step_down_2", --state;);
+  return --state;
+}
+
 /**
   To try setting the clock *forward*.
   The clock does not change when the new value is in the past
@@ -175,6 +181,10 @@ void Commit_order_trx_dependency_tracker::get_dependency(THD *thd,
 
 int64 Commit_order_trx_dependency_tracker::step() {
   return m_transaction_counter.step();
+}
+
+int64 Commit_order_trx_dependency_tracker::step_down() {
+  return m_transaction_counter.step_down();
 }
 
 void Commit_order_trx_dependency_tracker::rotate() {
@@ -384,6 +394,8 @@ void Transaction_dependency_tracker::update_max_committed(THD *thd) {
 }
 
 int64 Transaction_dependency_tracker::step() { return m_commit_order.step(); }
+
+int64 Transaction_dependency_tracker::step_down() { return m_commit_order.step_down(); }
 
 void Transaction_dependency_tracker::rotate() {
   m_commit_order.rotate();

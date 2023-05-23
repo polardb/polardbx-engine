@@ -59,7 +59,7 @@ class Kill_all_conn : public Do_THD_Impl
 public:
   Kill_all_conn() {}
 
-  virtual void operator()(THD *thd_to_kill)
+  void operator()(THD *thd_to_kill) override
   {
     mysql_mutex_lock(&thd_to_kill->LOCK_thd_data);
 
@@ -85,7 +85,7 @@ class Kill_all_dump_conn : public Do_THD_Impl
 public:
   Kill_all_dump_conn() {}
 
-  virtual void operator()(THD *thd_to_kill)
+  void operator()(THD *thd_to_kill) override
   {
     mysql_mutex_lock(&thd_to_kill->LOCK_thd_data);
 

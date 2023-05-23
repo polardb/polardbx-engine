@@ -26,6 +26,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef RAFT_RAFT0ERR_H
 #define RAFT_RAFT0ERR_H
 
+#include <sstream>
+
 #include "my_loglevel.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
