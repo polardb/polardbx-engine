@@ -1,0 +1,29 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+show global variables like 'performance_point%';
+Variable_name	Value
+performance_point_dbug_enabled	OFF
+performance_point_enabled	ON
+performance_point_iostat_interval	2
+performance_point_iostat_volume_size	10000
+performance_point_lock_rwlock_enabled	ON
+show create table information_schema.io_statistics;
+Table	Create Table
+IO_STATISTICS	CREATE TEMPORARY TABLE `IO_STATISTICS` (
+  `TIME` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `DATA_READ` bigint NOT NULL DEFAULT '0',
+  `DATA_READ_TIME` bigint NOT NULL DEFAULT '0',
+  `DATA_READ_MAX_TIME` bigint NOT NULL DEFAULT '0',
+  `DATA_READ_BYTES` bigint NOT NULL DEFAULT '0',
+  `DATA_WRITE` bigint NOT NULL DEFAULT '0',
+  `DATA_WRITE_TIME` bigint NOT NULL DEFAULT '0',
+  `DATA_WRITE_MAX_TIME` bigint NOT NULL DEFAULT '0',
+  `DATA_WRITE_BYTES` bigint NOT NULL DEFAULT '0'
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb3
+select count(*) from information_schema.io_statistics;
+count(*)
+10000
+include/rpl_end.inc

@@ -138,6 +138,7 @@
 #include "sql/xa.h"
 #include "template_utils.h"  // pointer_cast
 #include "thr_lock.h"
+#include "sys_vars_ext.h"
 #ifdef _WIN32
 #include "sql/named_pipe.h"
 #endif
@@ -7687,3 +7688,6 @@ static Sys_var_enum Sys_explain_format(
     SESSION_VAR(explain_format), CMD_LINE(OPT_ARG), explain_format_names,
     DEFAULT(static_cast<ulong>(Explain_format_type::TRADITIONAL)),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+#include "sys_vars_ext.cc"
+

@@ -21,8 +21,10 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/current_thd.h"
+#include "ppi/ppi_disable.h"
 
 thread_local THD *current_thd = nullptr;
+thread_local Disable_ppi_iface *ppi_current_disable = nullptr;
 
 #if defined(_WIN32)
 extern "C" THD *_current_thd_noinline(void) { return current_thd; }

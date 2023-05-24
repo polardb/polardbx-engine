@@ -395,6 +395,7 @@ void PFS_statements_digest_stat::reset_data(unsigned char *token_array,
   m_lock.set_dirty(&dirty_state);
   m_digest_storage.reset(token_array, token_array_length);
   m_stat.reset();
+  m_ppi_stat.reset();
   m_first_seen = 0;
   m_last_seen = 0;
   m_query_sample = query_sample_array;

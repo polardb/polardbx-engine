@@ -152,6 +152,20 @@ def	information_schema	FILES	CHECK_TIME	35	NULL	YES	binary	0	0	NULL	NULL	NULL	NU
 def	information_schema	FILES	CHECKSUM	36	NULL	YES	binary	0	0	NULL	NULL	NULL	NULL	NULL	binary(0)			select			NULL
 def	information_schema	FILES	STATUS	37	NULL	YES	varchar	256	768	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(256)			select			NULL
 def	information_schema	FILES	EXTRA	38	NULL	YES	varchar	256	768	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(256)			select			NULL
+def	information_schema	INDEX_STATISTICS	TABLE_SCHEMA	1		NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(192)			select			NULL
+def	information_schema	INDEX_STATISTICS	TABLE_NAME	2		NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(192)			select			NULL
+def	information_schema	INDEX_STATISTICS	INDEX_NAME	3		NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(192)			select			NULL
+def	information_schema	INDEX_STATISTICS	ROWS_READ	4		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	INDEX_STATISTICS	SCAN_USED	5		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	IO_STATISTICS	TIME	1		NO	datetime	NULL	NULL	NULL	NULL	NULL	NULL	NULL	datetime			select			NULL
+def	information_schema	IO_STATISTICS	DATA_READ	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	IO_STATISTICS	DATA_READ_TIME	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	IO_STATISTICS	DATA_READ_MAX_TIME	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	IO_STATISTICS	DATA_READ_BYTES	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	IO_STATISTICS	DATA_WRITE	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	IO_STATISTICS	DATA_WRITE_TIME	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	IO_STATISTICS	DATA_WRITE_MAX_TIME	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	IO_STATISTICS	DATA_WRITE_BYTES	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
 def	information_schema	KEYWORDS	WORD	1	NULL	YES	varchar	128	512	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(128)			select			NULL
 def	information_schema	KEYWORDS	RESERVED	2	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int			select			NULL
 def	information_schema	KEY_COLUMN_USAGE	CONSTRAINT_CATALOG	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
@@ -413,6 +427,15 @@ def	information_schema	TABLE_PRIVILEGES	TABLE_SCHEMA	3		NO	varchar	21	64	NULL	NU
 def	information_schema	TABLE_PRIVILEGES	TABLE_NAME	4		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	TABLE_PRIVILEGES	PRIVILEGE_TYPE	5		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	TABLE_PRIVILEGES	IS_GRANTABLE	6		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	TABLE_STATISTICS	TABLE_SCHEMA	1		NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(192)			select			NULL
+def	information_schema	TABLE_STATISTICS	TABLE_NAME	2		NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(192)			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_READ	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_CHANGED	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_CHANGED_X_INDEXES	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_INSERTED	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_DELETED	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_UPDATED	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	TABLE_STATISTICS	ROWS_READ_DELETE_MARK	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
 def	information_schema	TRIGGERS	TRIGGER_CATALOG	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	TRIGGERS	TRIGGER_SCHEMA	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	TRIGGERS	TRIGGER_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
@@ -696,6 +719,20 @@ NULL	information_schema	FILES	CHECK_TIME	binary	0	0	NULL	NULL	binary(0)
 NULL	information_schema	FILES	CHECKSUM	binary	0	0	NULL	NULL	binary(0)
 3.0000	information_schema	FILES	STATUS	varchar	256	768	utf8mb3	utf8mb3_general_ci	varchar(256)
 3.0000	information_schema	FILES	EXTRA	varchar	256	768	utf8mb3	utf8mb3_general_ci	varchar(256)
+3.0000	information_schema	INDEX_STATISTICS	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(192)
+3.0000	information_schema	INDEX_STATISTICS	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(192)
+3.0000	information_schema	INDEX_STATISTICS	INDEX_NAME	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(192)
+NULL	information_schema	INDEX_STATISTICS	ROWS_READ	int	NULL	NULL	NULL	NULL	int
+NULL	information_schema	INDEX_STATISTICS	SCAN_USED	int	NULL	NULL	NULL	NULL	int
+NULL	information_schema	IO_STATISTICS	TIME	datetime	NULL	NULL	NULL	NULL	datetime
+NULL	information_schema	IO_STATISTICS	DATA_READ	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	IO_STATISTICS	DATA_READ_TIME	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	IO_STATISTICS	DATA_READ_MAX_TIME	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	IO_STATISTICS	DATA_READ_BYTES	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	IO_STATISTICS	DATA_WRITE	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	IO_STATISTICS	DATA_WRITE_TIME	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	IO_STATISTICS	DATA_WRITE_MAX_TIME	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	IO_STATISTICS	DATA_WRITE_BYTES	bigint	NULL	NULL	NULL	NULL	bigint
 4.0000	information_schema	KEYWORDS	WORD	varchar	128	512	utf8mb4	utf8mb4_0900_ai_ci	varchar(128)
 NULL	information_schema	KEYWORDS	RESERVED	int	NULL	NULL	NULL	NULL	int
 3.0000	information_schema	KEY_COLUMN_USAGE	CONSTRAINT_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
@@ -957,6 +994,15 @@ NULL	information_schema	TABLE_CONSTRAINTS_EXTENSIONS	SECONDARY_ENGINE_ATTRIBUTE	
 3.0476	information_schema	TABLE_PRIVILEGES	TABLE_NAME	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
 3.0476	information_schema	TABLE_PRIVILEGES	PRIVILEGE_TYPE	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
 3.0000	information_schema	TABLE_PRIVILEGES	IS_GRANTABLE	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	TABLE_STATISTICS	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(192)
+3.0000	information_schema	TABLE_STATISTICS	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(192)
+NULL	information_schema	TABLE_STATISTICS	ROWS_READ	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	TABLE_STATISTICS	ROWS_CHANGED	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	TABLE_STATISTICS	ROWS_CHANGED_X_INDEXES	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	TABLE_STATISTICS	ROWS_INSERTED	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	TABLE_STATISTICS	ROWS_DELETED	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	TABLE_STATISTICS	ROWS_UPDATED	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	TABLE_STATISTICS	ROWS_READ_DELETE_MARK	bigint	NULL	NULL	NULL	NULL	bigint
 3.0000	information_schema	TRIGGERS	TRIGGER_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	TRIGGERS	TRIGGER_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	TRIGGERS	TRIGGER_NAME	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(64)

@@ -24,6 +24,7 @@
 #define CURRENT_THD_INCLUDED
 
 class THD;
+class Disable_ppi_iface;
 
 #if defined(MYSQL_DYNAMIC_PLUGIN) && defined(_WIN32)
 extern "C" THD *_current_thd_noinline();
@@ -31,6 +32,7 @@ static inline THD *inline_current_thd(void) { return _current_thd_noinline(); }
 #define current_thd _current_thd_noinline()
 #else
 extern thread_local THD *current_thd;
+extern thread_local Disable_ppi_iface *ppi_current_disable;
 #endif
 
 #endif  // CURRENT_THD_INCLUDED

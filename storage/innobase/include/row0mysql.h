@@ -421,10 +421,11 @@ dberr_t row_drop_database_for_mysql(const char *name, trx_t *trx, ulint *found);
 @param[in]  indexes             Indexes to scan.
 @param[in]  max_threads         Maximum number of threads to use.
 @param[out] n_rows              Number of rows seen.
+@param[out] n_del_mark          Number of rows read with delete marked.
 @return DB_SUCCESS or error code. */
 dberr_t row_mysql_parallel_select_count_star(
     trx_t *trx, std::vector<dict_index_t *> &indexes, size_t max_threads,
-    ulint *n_rows);
+    ulint *n_rows, ulonglong *n_del_mark = nullptr);
 
 /** Scans an index for either COUNT(*) or CHECK TABLE.
 If CHECK TABLE; Checks that the index contains entries in an ascending order,
@@ -663,6 +664,24 @@ struct row_prebuilt_t {
   }
 
   byte row_id[DATA_ROW_ID_LEN];
+
+  ulonglong rds_rows_read_del_mark = 0; /*!< A record of rows read with delete
+                        mark when searching b-tree for each table. It can help
+                        measure the useless work in scanning process.
+
+                        It can be increase in 3 positions.
+
+                        1. In row_search_mvcc, if the rec is delete marked,
+                        increase the record.
+
+                        2. In row_search_mvcc, if the index is not clust_index
+                        and need to access clustered, engine will search
+                        clustered record in btree again. If it is delete marked,
+                        increase the record.
+
+                        3. In Parallel scan (row_scan_index_for_mysql), count
+                        all recs which are delete marked. */
+
   /*!< if the clustered index was
   generated, the row id of the
   last row fetched is stored

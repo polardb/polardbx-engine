@@ -1,0 +1,23 @@
+# Test the index read times record feature.
+
+USE test;
+
+CREATE TABLE t1 (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `k` int unsigned NOT NULL DEFAULT '0',
+  `c` char(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `k_1` (`k`)
+);
+
+INSERT INTO t1 VALUES (1, 1, 'first'), (2, 1, 'second'), (3, 2, 'thrid');
+
+SELECT * FROM t1;
+
+SELECT * FROM t1 WHERE id = 1;
+
+SELECT * FROM t1 WHERE k = 1;
+
+SELECT * FROM information_schema.INDEX_STATISTICS WHERE TABLE_NAME = 't1' order by INDEX_NAME;
+
+DROP TABLE t1;

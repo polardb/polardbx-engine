@@ -1791,6 +1791,16 @@ static handler *innobase_create_handler(handlerton *hton, TABLE_SHARE *table,
   return (new (mem_root) ha_innobase(hton, table));
 }
 
+/** Function to increase the record of rows read delete mark in TABLE_STATISTICS
+ and EVENTS_STATEMENTS_SUMMARY_BY_DIGEST_SUPPLEMENT.
+@param[in]	rows	number of rows read with delete mark */
+static inline void inc_rows_read_del_mark_record(Stats_data& stats_data,
+                                                 ulonglong rows) {
+  /* increase the record of rows read with delete mark in statistic tables. */
+  stats_data.rds_rows_read_del_mark += rows;
+  PPI_STATEMENT_CALL(inc_rows_read_delete_mark)(rows);
+}
+
 /* General functions */
 
 /** Returns true if the thread is the replication thread on the slave
@@ -9142,6 +9152,11 @@ int ha_innobase::write_row(uchar *record) /*!< in: a row in MySQL format */
 
   DEBUG_SYNC(m_user_thd, "ib_after_row_insert");
 
+  if (error == DB_SUCCESS) {
+    stats_data.rows_changed++;
+    stats_data.rows_inserted++;
+  }
+
   /* Handling of errors related to auto-increment. */
   if (auto_inc_used) {
     ulonglong auto_inc;
@@ -9879,6 +9894,11 @@ int ha_innobase::update_row(const uchar *old_row, uchar *new_row) {
 
   error = row_update_for_mysql((byte *)old_row, m_prebuilt);
 
+  if (error == DB_SUCCESS) {
+    stats_data.rows_changed++;
+    stats_data.rows_updated++;
+  }
+
   if (dict_table_has_autoinc_col(m_prebuilt->table)) {
     new_counter = row_upd_get_new_autoinc_counter(
         uvect, m_prebuilt->table->autoinc_field_no);
@@ -9998,6 +10018,9 @@ int ha_innobase::delete_row(
   if (error == DB_SUCCESS) {
     error = row_update_for_mysql((byte *)record, m_prebuilt);
     innobase_srv_conc_exit_innodb(m_prebuilt);
+
+    stats_data.rows_changed++;
+    stats_data.rows_deleted++;
   }
 
   /* Tell the InnoDB server that there might be work for
@@ -10367,6 +10390,9 @@ int ha_innobase::index_read(
   switch (ret) {
     case DB_SUCCESS:
       error = 0;
+      stats_data.rows_read++;
+      if (active_index < MAX_KEY) stats_data.index_rows_read[active_index]++;
+
       if (m_prebuilt->table->is_system_table) {
         srv_stats.n_system_rows_read.add(
             thd_get_thread_id(m_prebuilt->trx->mysql_thd), 1);
@@ -10616,6 +10642,9 @@ int ha_innobase::general_fetch(
   switch (ret) {
     case DB_SUCCESS:
       error = 0;
+      stats_data.rows_read++;
+      if (active_index < MAX_KEY) stats_data.index_rows_read[active_index]++;
+
       if (m_prebuilt->table->is_system_table) {
         srv_stats.n_system_rows_read.add(
             thd_get_thread_id(m_prebuilt->trx->mysql_thd), 1);
@@ -16743,6 +16772,9 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
   reset_template();
   switch (ret) {
     case DB_SUCCESS:
+      stats_data.rows_read += n_rows;
+      if (table_share->primary_key < MAX_KEY)
+        stats_data.index_rows_read[table_share->primary_key] += n_rows;
       break;
     case DB_DEADLOCK:
     case DB_LOCK_TABLE_FULL:
@@ -18527,6 +18559,14 @@ int ha_innobase::end_stmt() {
 
   m_prebuilt->no_read_locking = false;
   m_prebuilt->no_autoinc_locking = false;
+
+  if (m_prebuilt->rds_rows_read_del_mark != 0) {
+    inc_rows_read_del_mark_record(stats_data,
+                                  m_prebuilt->rds_rows_read_del_mark);
+
+    /* Reset the rds_rows_read_del_mark counter to 0 for next row search. */
+    m_prebuilt->rds_rows_read_del_mark = 0;
+  }
 
   /* This transaction had called ha_innobase::start_stmt() */
   trx_t *trx = m_prebuilt->trx;

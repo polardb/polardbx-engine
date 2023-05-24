@@ -44,6 +44,8 @@
 #include "sql/sql_class.h"  // THD
 #include "violite.h"
 
+#include "ppi/ppi_statement.h"
+
 #ifdef HAVE_PSI_STATEMENT_INTERFACE  // TODO: << nonconformance with
                                      // HAVE_PSI_INTERFACE
 PSI_statement_info stmt_info_new_packet;
@@ -95,6 +97,10 @@ static void net_after_header_psi(NET *net [[maybe_unused]], void *user_data,
       thd->m_statement_psi = MYSQL_START_STATEMENT(
           &thd->m_statement_state, stmt_info_new_packet.m_key, thd->db().str,
           thd->db().length, thd->charset(), nullptr);
+
+      /* */
+      PPI_STATEMENT_CALL(start_statement)
+      (thd->ppi_thread, thd->ppi_statement_stat.get());
 
       /*
         Starts a new stage in performance schema, if compiled in and enabled.

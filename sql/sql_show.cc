@@ -140,6 +140,9 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 
+#include "sql/ppi/ppi_table_iostat.h"
+#include "sql/sql_statistics_common.h"
+
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
                                     std::function<bool(const char *)> action);
@@ -5044,7 +5047,13 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_tmp_table_columns_format, get_schema_tmp_table_columns_record, true},
     {"TMP_TABLE_KEYS", tmp_table_keys_fields_info, show_temporary_tables,
      make_old_format, get_schema_tmp_table_keys_record, true},
-    {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
+    {"TABLE_STATISTICS", table_stats_fields_info, fill_schema_table_stats,
+     make_old_format, nullptr, false},
+    {"INDEX_STATISTICS", index_stats_fields_info, fill_schema_index_stats,
+     make_old_format, nullptr, false},
+    {"IO_STATISTICS", table_iostat_fields_info, fill_schema_table_iostat,
+     make_old_format, nullptr, false},
+     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {
   ST_SCHEMA_TABLE *schema_table;

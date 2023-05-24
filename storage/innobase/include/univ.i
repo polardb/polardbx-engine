@@ -41,6 +41,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef univ_i
 #define univ_i
 
+
+#include "ppi/ppi_statement.h"
+
 #ifdef UNIV_HOTBACKUP
 #include "hb_univ.i"
 #endif /* UNIV_HOTBACKUP */

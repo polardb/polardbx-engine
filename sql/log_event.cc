@@ -175,6 +175,8 @@ Error_log_throttle slave_ignored_err_throttle(
 #include "sql/rpl_utility.h"
 #include "sql/xa_aux.h"
 
+#include "ppi/ppi_statement.h"
+
 struct mysql_mutex_t;
 
 PSI_memory_key key_memory_log_event;
@@ -4788,6 +4790,10 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
         thd->m_statement_psi = MYSQL_START_STATEMENT(
             &thd->m_statement_state, stmt_info_rpl.m_key, thd->db().str,
             thd->db().length, thd->charset(), nullptr);
+
+        PPI_STATEMENT_CALL(start_statement)
+        (thd->ppi_thread, thd->ppi_statement_stat.get());
+
         THD_STAGE_INFO(thd, stage_starting);
 
         if (thd->m_digest != nullptr)
@@ -5083,6 +5089,9 @@ end:
   thd->reset_query();
   thd->lex->sql_command = SQLCOM_END;
   DBUG_PRINT("info", ("end: query= 0"));
+
+  PPI_STATEMENT_CALL(end_statement)
+  (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
   /* Mark the statement completed. */
   MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());

@@ -61,6 +61,7 @@
 #include "sql/sql_parse.h"             // do_command
 #include "sql/sql_thd_internal_api.h"  // thd_set_thread_stack
 #include "thr_mutex.h"
+#include "ppi/ppi_thread.h"
 
 // Initialize static members
 ulong Per_thread_connection_handler::blocked_pthread_count = 0;
@@ -283,6 +284,10 @@ static void *handle_connection(void *arg) {
     }
 #endif
 
+    thd->ppi_thread = PPI_THREAD_CALL(create_thread)();
+    thd->ppi_transaction =
+        PPI_THREAD_CALL(get_transaction_context)(thd->ppi_thread);
+
 #ifdef HAVE_PSI_THREAD_INTERFACE
     /* Find the instrumented thread */
     PSI_thread *psi = PSI_THREAD_CALL(get_thread)();
@@ -320,6 +325,10 @@ static void *handle_connection(void *arg) {
     thd->set_psi(nullptr);
     mysql_thread_set_psi_THD(nullptr);
 #endif /* HAVE_PSI_THREAD_INTERFACE */
+
+    PPI_THREAD_CALL(destroy_thread)(thd->ppi_thread);
+    thd->ppi_thread = nullptr;
+    thd->ppi_transaction = nullptr;
 
     delete thd;
 

@@ -267,6 +267,7 @@ our @DEFAULT_SUITES = qw(
   test_services
   x
   component_keyring_file
+  galaxy_sql
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;

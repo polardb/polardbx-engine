@@ -78,6 +78,8 @@
 #include "sql/system_variables.h"
 #include "thr_mutex.h"
 
+#include "ppi/ppi_statement.h"
+
 struct decimal_t;
 
 /**
@@ -1159,6 +1161,10 @@ int Srv_session::execute_command(enum enum_server_command command,
   /* For per-query performance counters with log_slow_statement */
   struct System_status_var query_start_status;
   m_thd->clear_copy_status_var();
+
+  PPI_STATEMENT_CALL(start_statement)
+  (m_thd->ppi_thread, m_thd->ppi_statement_stat.get());
+
   if (opt_log_slow_extra) {
     m_thd->copy_status_var(&query_start_status);
   }

@@ -183,6 +183,8 @@
 #include "sql/debug_lock_order.h"
 #endif /* WITH_LOCK_ORDER */
 
+#include "ppi/ppi_statement.h"
+
 namespace resourcegroups {
 class Resource_group;
 }  // namespace resourcegroups
@@ -1401,6 +1403,9 @@ bool do_command(THD *thd) {
     assert(thd->is_error());
     thd->send_statement_status();
 
+    PPI_STATEMENT_CALL(end_statement)
+    (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
+
     /* Mark the statement completed. */
     MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
     thd->m_statement_psi = nullptr;
@@ -1560,6 +1565,9 @@ static void check_secondary_engine_statement(THD *thd,
   // query.
   thd->clear_error();
 
+  PPI_STATEMENT_CALL(end_statement)
+  (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
+
   // Tell performance schema that the statement is restarted.
   MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
 
@@ -1573,6 +1581,9 @@ static void check_secondary_engine_statement(THD *thd,
                                        use_secondary_engine);
 
   DEBUG_SYNC(thd, "retry_secondary_engine");
+
+  PPI_STATEMENT_CALL(start_statement)
+  (thd->ppi_thread, thd->ppi_statement_stat.get());
 
   // Reset the statement digest state.
   thd->m_digest = &thd->m_digest_state;
@@ -2084,6 +2095,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
           length--;
         }
 
+        PPI_STATEMENT_CALL(end_statement)
+        (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
+
         /* PSI end */
         MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
         thd->m_statement_psi = nullptr;
@@ -2109,6 +2123,10 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         thd->m_statement_psi = MYSQL_START_STATEMENT(
             &thd->m_statement_state, com_statement_info[command].m_key,
             thd->db().str, thd->db().length, thd->charset(), nullptr);
+
+        PPI_STATEMENT_CALL(start_statement)
+        (thd->ppi_thread, thd->ppi_statement_stat.get());
+
         THD_STAGE_INFO(thd, stage_starting);
 
         thd->set_query(beginning_of_next_stmt, length);
@@ -2464,6 +2482,9 @@ done:
   thd->set_command(COM_SLEEP);
   thd->set_proc_info(nullptr);
   thd->lex->sql_command = SQLCOM_END;
+
+  PPI_STATEMENT_CALL(end_statement)
+  (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
   /* Performance Schema Interface instrumentation, end */
   MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());

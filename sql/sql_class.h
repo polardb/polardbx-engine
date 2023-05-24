@@ -111,6 +111,8 @@
 #include "thr_lock.h"
 #include "violite.h"
 
+#include "ppi/ppi_statement.h"
+
 enum enum_check_fields : int;
 enum enum_tx_isolation : int;
 enum ha_notification_type : int;
@@ -157,6 +159,10 @@ struct LOG_INFO;
 
 typedef struct user_conn USER_CONN;
 struct MYSQL_LOCK;
+
+struct PPI_thread;
+struct PPI_transaction;
+struct PPI_stat;
 
 extern "C" void thd_enter_cond(void *opaque_thd, mysql_cond_t *cond,
                                mysql_mutex_t *mutex,
@@ -1977,6 +1983,8 @@ class THD : public MDL_context_owner,
       transaction.
     */
     bool m_transaction_rollback_request;
+
+    PPI_transaction *m_ppi_transaction;
   };
 
  public:
@@ -4595,6 +4603,10 @@ class THD : public MDL_context_owner,
   void set_secondary_engine_optimization(Secondary_engine_optimization state) {
     m_secondary_engine_optimization = state;
   }
+
+  PPI_thread *ppi_thread;
+  PPI_transaction *ppi_transaction;
+  std::unique_ptr<PPI_stat> ppi_statement_stat;
 
   /**
     Can secondary storage engines be used for query execution in

@@ -1,0 +1,74 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+"test all performance_point variables.
+show global variables like '%performance_point%';
+Variable_name	Value
+performance_point_dbug_enabled	OFF
+performance_point_enabled	ON
+performance_point_iostat_interval	2
+performance_point_iostat_volume_size	10000
+performance_point_lock_rwlock_enabled	ON
+"test performance_point table
+show create table performance_schema.events_statements_summary_by_digest_supplement;
+Table	Create Table
+events_statements_summary_by_digest_supplement	CREATE TABLE `events_statements_summary_by_digest_supplement` (
+  `SCHEMA_NAME` varchar(64) DEFAULT NULL,
+  `DIGEST` varchar(64) DEFAULT NULL,
+  `DIGEST_TEXT` longtext,
+  `ELAPSED_TIME` bigint unsigned NOT NULL,
+  `CPU_TIME` bigint unsigned NOT NULL,
+  `SERVER_LOCK_TIME` bigint unsigned NOT NULL,
+  `TRANSACTION_LOCK_TIME` bigint unsigned NOT NULL,
+  `MUTEX_SPINS` bigint unsigned NOT NULL,
+  `MUTEX_WAITS` bigint unsigned NOT NULL,
+  `RWLOCK_SPIN_WAITS` bigint unsigned NOT NULL,
+  `RWLOCK_SPIN_ROUNDS` bigint unsigned NOT NULL,
+  `RWLOCK_OS_WAITS` bigint unsigned NOT NULL,
+  `DATA_READS` bigint unsigned NOT NULL,
+  `DATA_READ_TIME` bigint unsigned NOT NULL,
+  `DATA_WRITES` bigint unsigned NOT NULL,
+  `DATA_WRITE_TIME` bigint unsigned NOT NULL,
+  `REDO_WRITES` bigint unsigned NOT NULL,
+  `REDO_WRITE_TIME` bigint unsigned NOT NULL,
+  `LOGICAL_READS` bigint unsigned NOT NULL,
+  `PHYSICAL_READS` bigint unsigned NOT NULL,
+  `PHYSICAL_ASYNC_READS` bigint unsigned NOT NULL,
+  `ROWS_READ_DELETE_MARK` bigint unsigned NOT NULL,
+  UNIQUE KEY `SCHEMA_NAME` (`SCHEMA_NAME`,`DIGEST`)
+) ENGINE=PERFORMANCE_SCHEMA DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+create database pps_db;
+use pps_db;
+create table pps_0_table(id int, col1
+varchar(100));
+create table pps_0_extra(id int, col1
+varchar(100));
+insert into pps_0_table(id, col1) values(1, 'xpchild');
+commit;
+select count(*) from pps_0_table;
+count(*)
+1
+"test proc"
+create procedure pps_0_proc()
+begin
+insert into pps_0_table(id, col1) values(2, 'xpchild');
+commit;
+end//
+call pps_0_proc();
+CREATE TRIGGER pps_0_triggier
+before INSERT ON pps_0_table FOR EACH ROW
+BEGIN
+INSERT INTO pps_0_extra(id, col1) values(1, 'xpchild');
+END//
+insert into pps_0_table(id, col1) values(3, 'xpchild');
+commit;
+select count(*) from pps_0_extra;
+count(*)
+1
+drop table pps_0_table;
+drop table pps_0_extra;
+drop procedure pps_0_proc;
+drop database pps_db;
+include/rpl_end.inc

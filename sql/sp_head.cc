@@ -96,6 +96,8 @@
 #include "template_utils.h"  // pointer_cast
 #include "thr_lock.h"
 
+#include "ppi/ppi_statement.h"
+
 /**
   @page stored_programs Stored Programs
 
@@ -2211,6 +2213,9 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
         thd->charset(), this->m_sp_share);
 #endif
 
+    PPI_STATEMENT_CALL(start_statement)
+    (thd->ppi_thread, thd->ppi_statement_stat.get());
+
     /*
       For now, we're mostly concerned with sp_instr_stmt, but that's
       likely to change in the future, so we'll do it right from the
@@ -2219,6 +2224,9 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
     if (thd->rewritten_query().length()) thd->reset_rewritten_query();
 
     err_status = i->execute(thd, &ip);
+
+    PPI_STATEMENT_CALL(end_statement)
+    (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
     MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());

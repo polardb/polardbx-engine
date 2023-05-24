@@ -56,6 +56,8 @@
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
 
+#include "ppi/ppi_transaction.h"
+
 /**
   Helper: Tell tracker (if any) that transaction ended.
 */
@@ -211,6 +213,8 @@ bool trans_begin(THD *thd, uint flags) {
     gtid_set_performance_schema_values(thd);
   }
 #endif
+
+  PPI_TRANSACTION_CALL(start_transaction)(thd->ppi_transaction);
 
   return res;
 }

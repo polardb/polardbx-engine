@@ -145,6 +145,12 @@ ulint buf_read_page_low(dberr_t *err, bool sync, ulint type, ulint mode,
     }
   }
 
+  if (sync) {
+    PPI_STATEMENT_CALL(inc_statement_physical_read)(1);
+  } else {
+    PPI_STATEMENT_CALL(inc_statement_physical_async_read)(1);
+  }
+
   return (1);
 }
 

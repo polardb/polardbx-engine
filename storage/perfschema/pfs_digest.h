@@ -41,6 +41,8 @@
 #include "storage/perfschema/pfs_name.h"
 #include "storage/perfschema/pfs_stat.h"
 
+#include "ppi/ppi_statement.h"
+
 extern bool flag_statements_digest;
 extern size_t digest_max;
 extern ulong digest_lost;
@@ -121,6 +123,8 @@ struct PFS_ALIGNED PFS_statements_digest_stat {
     /* Return value prior to decrement. */
     return (uint)m_query_sample_refs.fetch_sub(1);
   }
+
+  PPI_stat m_ppi_stat;
 };
 
 int init_digest(const PFS_global_param *param);

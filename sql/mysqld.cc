@@ -884,6 +884,7 @@ MySQL clients support the protocol:
 #include "my_openssl_fips.h"  // OPENSSL_ERROR_LENGTH, set_fips_mode
 
 #include "sql/package/package_interface.h"
+#include "plugin/performance_point/pps_server.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -2689,6 +2690,9 @@ static void clean_up(bool print_message) {
   persisted_variables_cache.cleanup();
 
   udf_deinit_globals();
+
+  object_statistics_context_destroy();
+  destroy_performance_point();
   /*
     The following lines may never be executed as the main thread may have
     killed us
@@ -7496,6 +7500,8 @@ int mysqld_main(int argc, char **argv)
   /* Initialize Package context. */
   im::package_context_init();
 
+  object_statistics_context_init();
+
   /*
     Now that some instrumentation is in place,
     recreate objects which were initialised early,
@@ -7618,6 +7624,8 @@ int mysqld_main(int argc, char **argv)
 
   keyring_lockable_init();
 
+  pre_init_performance_point();
+  
   my_init_signals();
   /*
     Install server's my_abort routine to assure my_aborts prints signal info

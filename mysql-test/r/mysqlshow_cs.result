@@ -93,6 +93,7 @@ Database: information_schema
 | ENGINES                               |
 | EVENTS                                |
 | FILES                                 |
+| INDEX_STATISTICS                      |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |
 | INNODB_BUFFER_POOL_STATS              |
@@ -125,6 +126,7 @@ Database: information_schema
 | INNODB_TEMP_TABLE_INFO                |
 | INNODB_TRX                            |
 | INNODB_VIRTUAL                        |
+| IO_STATISTICS                         |
 | KEYWORDS                              |
 | KEY_COLUMN_USAGE                      |
 | OPTIMIZER_TRACE                       |
@@ -153,6 +155,7 @@ Database: information_schema
 | TABLE_CONSTRAINTS                     |
 | TABLE_CONSTRAINTS_EXTENSIONS          |
 | TABLE_PRIVILEGES                      |
+| TABLE_STATISTICS                      |
 | TRIGGERS                              |
 | USER_ATTRIBUTES                       |
 | USER_PRIVILEGES                       |
@@ -178,6 +181,7 @@ Database: INFORMATION_SCHEMA
 | ENGINES                               |
 | EVENTS                                |
 | FILES                                 |
+| INDEX_STATISTICS                      |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |
 | INNODB_BUFFER_POOL_STATS              |
@@ -210,6 +214,7 @@ Database: INFORMATION_SCHEMA
 | INNODB_TEMP_TABLE_INFO                |
 | INNODB_TRX                            |
 | INNODB_VIRTUAL                        |
+| IO_STATISTICS                         |
 | KEYWORDS                              |
 | KEY_COLUMN_USAGE                      |
 | OPTIMIZER_TRACE                       |
@@ -238,6 +243,7 @@ Database: INFORMATION_SCHEMA
 | TABLE_CONSTRAINTS                     |
 | TABLE_CONSTRAINTS_EXTENSIONS          |
 | TABLE_PRIVILEGES                      |
+| TABLE_STATISTICS                      |
 | TRIGGERS                              |
 | USER_ATTRIBUTES                       |
 | USER_PRIVILEGES                       |

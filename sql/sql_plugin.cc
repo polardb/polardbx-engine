@@ -355,7 +355,8 @@ const LEX_CSTRING plugin_type_names[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     {STRING_WITH_LEN("VALIDATE PASSWORD")},
     {STRING_WITH_LEN("GROUP REPLICATION")},
     {STRING_WITH_LEN("KEYRING")},
-    {STRING_WITH_LEN("CLONE")}};
+    {STRING_WITH_LEN("CLONE")},
+    {STRING_WITH_LEN("PERFORMANCE POINT")}};
 
 extern int initialize_schema_table(st_plugin_int *plugin);
 extern int finalize_schema_table(st_plugin_int *plugin);

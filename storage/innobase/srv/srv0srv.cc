@@ -51,7 +51,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <time.h>
 
 #include <chrono>
-
+#include "my_systime.h"
 #include "btr0sea.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
@@ -3126,6 +3126,9 @@ void srv_purge_coordinator_thread() {
       ut_a(!slot->suspended);
       break;
     }
+
+    DBUG_EXECUTE_IF("simualte_purge_retention_situation",
+                    my_sleep(5 * 1000 * 1000););
 
     n_total_purged = 0;
 

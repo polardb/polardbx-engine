@@ -843,4 +843,6 @@ extern Deployed_components *g_deployed_components;
 extern bool opt_persist_sensitive_variables_in_plaintext;
 
 void persisted_variables_refresh_keyring_support();
+
+extern bool opt_performance_point_enabled;
 #endif /* MYSQLD_INCLUDED */

@@ -131,6 +131,8 @@
 #include "uniques.h"  // Unique_on_insert
 #include "varlen_sort.h"
 
+#include "ppi/ppi_transaction.h"
+
 /**
   @def MYSQL_TABLE_IO_WAIT
   Instrumentation helper for table io_waits.
@@ -1350,6 +1352,9 @@ void trans_register_ha(THD *thd, bool all, handlerton *ht_arg,
     gtid_set_performance_schema_values(thd);
   }
 #endif
+  if (ht_arg->db_type != DB_TYPE_BINLOG) {
+    PPI_TRANSACTION_CALL(start_transaction)(thd->ppi_transaction);
+  }
 }
 
 /**
@@ -1755,6 +1760,9 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock) {
     thd->m_transaction_psi = nullptr;
   }
 #endif
+  if (is_real_trans) {
+    PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
+  }
   DBUG_EXECUTE_IF("crash_commit_after",
                   if (!thd->is_operating_gtid_table_implicitly)
                       DBUG_SUICIDE(););
@@ -2049,6 +2057,10 @@ int ha_rollback_trans(THD *thd, bool all) {
   }
 #endif
 
+  if (all || !thd->in_active_multi_stmt_transaction()) {
+    PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
+  }
+
   /* Always cleanup. Even if nht==0. There may be savepoints. */
   if (is_real_trans) {
     trn_ctx->cleanup();
@@ -2141,6 +2153,9 @@ int ha_commit_attachable(THD *thd) {
     thd->m_transaction_psi = nullptr;
   }
 #endif
+
+  assert(thd->ppi_transaction == nullptr);
+  PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
 
   /* Free resources and perform other cleanup even for 'empty' transactions. */
   trn_ctx->cleanup();

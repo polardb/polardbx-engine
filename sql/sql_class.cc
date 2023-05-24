@@ -112,6 +112,8 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+#include "ppi/ppi_statement.h"
+#include "ppi/ppi_transaction.h"
 
 class Parse_tree_root;
 
@@ -367,6 +369,8 @@ void THD::Transaction_state::backup(THD *thd) {
   this->m_in_lock_tables = thd->in_lock_tables;
   this->m_time_zone_used = thd->time_zone_used;
   this->m_transaction_rollback_request = thd->transaction_rollback_request;
+
+  this->m_ppi_transaction = thd->ppi_transaction;
 }
 
 void THD::Transaction_state::restore(THD *thd) {
@@ -385,6 +389,8 @@ void THD::Transaction_state::restore(THD *thd) {
   thd->in_lock_tables = this->m_in_lock_tables;
   thd->time_zone_used = this->m_time_zone_used;
   thd->transaction_rollback_request = this->m_transaction_rollback_request;
+
+  thd->ppi_transaction = this->m_ppi_transaction;
 }
 
 THD::Attachable_trx::Attachable_trx(THD *thd, Attachable_trx *prev_trx)
@@ -480,6 +486,10 @@ THD::Attachable_trx::Attachable_trx(THD *thd, Attachable_trx *prev_trx)
     influencing attachable transaction we are initiating.
   */
   m_thd->transaction_rollback_request = false;
+
+  m_thd->ppi_transaction = nullptr;
+
+  PPI_TRANSACTION_CALL(backup_transaction)(m_thd->ppi_thread);
 }
 
 THD::Attachable_trx::~Attachable_trx() {
@@ -524,6 +534,8 @@ THD::Attachable_trx::~Attachable_trx() {
     m_thd->lex->restore_backup_query_tables_list(
         m_trx_state.m_query_tables_list);
   }
+
+  PPI_TRANSACTION_CALL(restore_transaction)(m_thd->ppi_thread);
 }
 
 THD::Attachable_trx_rw::Attachable_trx_rw(THD *thd)
@@ -710,6 +722,9 @@ THD::THD(bool enable_plugins)
       duplicate_slave_id(false),
       is_a_srv_session_thd(false),
       m_is_plugin_fake_ddl(false),
+      ppi_thread(nullptr),
+      ppi_transaction(nullptr),
+      ppi_statement_stat(new PPI_stat()),
       m_inside_system_variable_global_update(false),
       bind_parameter_values(nullptr),
       bind_parameter_values_count(0) {

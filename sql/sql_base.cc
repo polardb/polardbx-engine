@@ -152,6 +152,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+#include "sql/sql_statistics.h"
 
 using std::equal_to;
 using std::hash;
@@ -461,6 +462,8 @@ void Table_share_deleter::operator()(TABLE_SHARE *share) const {
     *share->prev = share->next;
     share->next->prev = share->prev;
   }
+  Object_stats_cache::instance()->update_table_stats(share);
+  Object_stats_cache::instance()->update_index_stats(share);
   free_table_share(share);
 }
 
@@ -1349,6 +1352,8 @@ void mark_tmp_table_for_reuse(TABLE *table) {
   assert(table->file);
   table->file->ha_extra(HA_EXTRA_DETACH_CHILDREN);
 
+  table->file->update_statistics();
+
   /*
     Reset temporary table lock type to it's default value (TL_WRITE).
 
@@ -1765,6 +1770,8 @@ void close_thread_table(THD *thd, TABLE **table_ptr) {
 
   /* Do this *before* entering the LOCK_open critical section. */
   if (table->file != nullptr) table->file->unbind_psi();
+
+  if (table->file != NULL) table->file->update_statistics();
 
   release_or_close_table(thd, table);
 }
@@ -2410,6 +2417,8 @@ void close_temporary(THD *thd, TABLE *table, bool free_share,
   }
 
   if (free_share) {
+    Object_stats_cache::instance()->update_table_stats(table->s);
+    Object_stats_cache::instance()->update_index_stats(table->s);
     free_table_share(table->s);
     destroy(table);
     my_free(table);

@@ -1,0 +1,12 @@
+--source include/master-slave.inc
+
+connection master;
+
+show global variables like 'performance_point%';
+
+show create table information_schema.io_statistics;
+
+select count(*) from information_schema.io_statistics;
+
+sync_slave_with_master;
+--source include/rpl_end.inc

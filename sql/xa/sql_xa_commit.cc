@@ -33,6 +33,7 @@
 #include "sql/tc_log.h"                   // tc_log
 #include "sql/transaction.h"  // trans_reset_one_shot_chistics, trans_track_end_trx
 #include "sql/transaction_info.h"  // Transaction_ctx
+#include "ppi/ppi_transaction.h"
 
 namespace {
 /**
@@ -168,6 +169,7 @@ bool Sql_cmd_xa_commit::process_attached_xa_commit(THD *thd) const {
 
       thd->m_transaction_psi = nullptr;
 #endif
+      PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
     }
   } else {
     my_error(ER_XAER_RMFAIL, MYF(0), xid_state->state_name());

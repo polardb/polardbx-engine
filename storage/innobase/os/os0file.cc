@@ -5145,8 +5145,15 @@ NUM_RETRIES_ON_PARTIAL_IO times to read/write the complete data.
   os_n_pending_writes.fetch_add(1);
   MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_WRITES);
 
+  PPI_IO_data data;
+  ppi_io_request_conversion(&data, type);
+  PPI_statement *ppi_statement =
+      PPI_STATEMENT_CALL(start_statement_IO_operation)(&data);
+
   ssize_t n_bytes =
       os_file_io(type, file, (void *)buf, n, offset, err, e_block);
+
+  PPI_STATEMENT_CALL(end_statement_IO_operation)(ppi_statement, &data, 1, n);
 
   os_n_pending_writes.fetch_sub(1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_WRITES);
@@ -5228,8 +5235,15 @@ NUM_RETRIES_ON_PARTIAL_IO times to read/write the complete data.
   os_n_pending_reads.fetch_add(1);
   MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_READS);
 
+  PPI_IO_data data;
+  ppi_io_request_conversion(&data, type);
+  PPI_statement *ppi_statement =
+      PPI_STATEMENT_CALL(start_statement_IO_operation)(&data);
+
   ssize_t n_bytes = os_file_io(type, file, buf, n, offset, err, nullptr);
 
+  PPI_STATEMENT_CALL(end_statement_IO_operation)(ppi_statement, &data, 1, n);
+  
   os_n_pending_reads.fetch_sub(1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_READS);
 

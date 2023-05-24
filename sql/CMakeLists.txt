@@ -606,6 +606,7 @@ SET(SQL_SHARED_SOURCES
   stateless_allocator.cc
   strfunc.cc
   sys_vars.cc
+  sys_vars_ext.cc
   sys_vars_resource_mgr.cc
   system_variables.cc
   table.cc
@@ -641,7 +642,11 @@ SET(SQL_SHARED_SOURCES
   package/package_parse.cc
   package/proc_dummy.cc
   daemon_proxy_keyring/daemon_proxy_keyring.cc
-  )
+  sql_statistics.cc
+  ppi/ppi.cc
+  ppi/ppi_noop.cc
+  ppi/ppi_table_iostat.cc
+)
 
 IF(BUILD_IS_SINGLE_CONFIG)
   GET_PROPERTY(CWD_DEFINITIONS DIRECTORY PROPERTY COMPILE_DEFINITIONS)
@@ -1116,6 +1121,10 @@ TARGET_LINK_LIBRARIES(sql_main rpl master slave binlog)
 IF(WITH_ICU STREQUAL "bundled")
   TARGET_LINK_LIBRARIES(sql_main ${ICU_LIBRARIES})
 ENDIF()
+
+# build as static library
+SET (PPI_SOURCE ppi/ppi.cc ppi/ppi_noop.cc)
+ADD_CONVENIENCE_LIBRARY(ppi ${PPI_SOURCE})
 
 IF(WIN32)
   SET(MYSQLD_SOURCE

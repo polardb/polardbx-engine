@@ -785,6 +785,12 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
+ --opt-indexstat     When this option is enabled,it will accumulate the index
+ statistics
+ (Defaults to on; use --skip-opt-indexstat to disable.)
+ --opt-tablestat     When this option is enabled,it will accumulate the table
+ statistics
+ (Defaults to on; use --skip-opt-tablestat to disable.)
  --optimizer-max-subgraph-pairs=# 
  Maximum depth of subgraph pairs a query can have before
  the hypergraph join optimizer starts reducing the search
@@ -853,6 +859,19 @@ The following options may be given as the first argument:
  The minimum number of days that need to pass before a
  password can be reused. Set to 0 (the default) to turn
  the checks off
+ --performance-point-dbug-enabled 
+ Enable Performance Point debug mode
+ --performance-point-enabled 
+ whether open the performance point system plugin
+ (Defaults to on; use --skip-performance-point-enabled to disable.)
+ --performance-point-iostat-interval=# 
+ The time interval every iostat aggregation (second time)
+ --performance-point-iostat-volume-size=# 
+ The max iostat records that keeped in memory
+ --performance-point-lock-rwlock-enabled 
+ Enable Performance Point statement level rwlock
+ aggregation(enabled by default)
+ (Defaults to on; use --skip-performance-point-lock-rwlock-enabled to disable.)
  --performance-schema 
  Enable the performance schema.
  (Defaults to on; use --skip-performance-schema to disable.)
@@ -1854,6 +1873,8 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
+opt-indexstat TRUE
+opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000
 optimizer-prune-level 1
 optimizer-search-depth 62
@@ -1868,6 +1889,11 @@ partial-revokes ####
 password-history 0
 password-require-current FALSE
 password-reuse-interval 0
+performance-point-dbug-enabled FALSE
+performance-point-enabled TRUE
+performance-point-iostat-interval 2
+performance-point-iostat-volume-size 10000
+performance-point-lock-rwlock-enabled TRUE
 performance-schema TRUE
 performance-schema-accounts-size -1
 performance-schema-consumer-events-stages-current FALSE

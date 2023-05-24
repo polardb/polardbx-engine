@@ -6441,6 +6441,17 @@ void pfs_set_statement_secondary_engine_vc(PSI_statement_locker *locker,
   return;
 }
 
+static PPI_stat *pfs_get_ppi_statement_stat() {
+  THD *thd = nullptr;
+  PFS_thread *thread = my_thread_get_THR_PFS();
+
+  if (thread) thd = thread->m_thd;
+
+  if (thd) return thd->ppi_statement_stat.get();
+
+  return nullptr;
+}
+
 void pfs_end_statement_vc(PSI_statement_locker *locker, void *stmt_da) {
   PSI_statement_locker_state *state =
       reinterpret_cast<PSI_statement_locker_state *>(locker);
@@ -6712,6 +6723,9 @@ void pfs_end_statement_vc(PSI_statement_locker *locker, void *stmt_da) {
     if (flags & STATE_FLAG_SECONDARY) {
       digest_stat->m_stat.m_count_secondary++;
     }
+
+    digest_stat->m_ppi_stat.aggregate(pfs_get_ppi_statement_stat());
+
   } else {
     if (flags & STATE_FLAG_TIMED) {
       time_normalizer *normalizer = time_normalizer::get_statement();

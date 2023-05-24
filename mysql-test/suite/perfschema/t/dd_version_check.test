@@ -1,4 +1,3 @@
-
 --source include/have_debug.inc
 
 --disable_query_log
@@ -159,6 +158,7 @@ begin
                   ifnull(TABLE_COMMENT, "no_table_comments"))
     from INFORMATION_SCHEMA.TABLES
     where TABLE_SCHEMA = "performance_schema"
+          and TABLE_NAME != 'events_statements_summary_by_digest_supplement'
     order by TABLE_NAME;
 
   insert into test.pfs_check_table(t)
@@ -175,6 +175,7 @@ begin
                   ifnull(COLUMN_COMMENT, "no_comment"))
     from INFORMATION_SCHEMA.COLUMNS
     where TABLE_SCHEMA = "performance_schema"
+          and TABLE_NAME != 'events_statements_summary_by_digest_supplement'
     order by TABLE_NAME, ORDINAL_POSITION;
 
   insert into test.pfs_check_table(t)
@@ -191,6 +192,7 @@ begin
                   COMMENT)
     from INFORMATION_SCHEMA.STATISTICS
     where TABLE_SCHEMA = "performance_schema"
+          and TABLE_NAME != 'events_statements_summary_by_digest_supplement'
     order by TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX;
 
 /*

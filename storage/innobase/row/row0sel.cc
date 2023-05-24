@@ -5354,6 +5354,7 @@ rec_loop:
 
   if (rec_get_deleted_flag(rec, comp)) {
     /* The record is delete-marked: we can skip it */
+    if (!prebuilt->table->is_temporary()) prebuilt->rds_rows_read_del_mark++;
 
     /* No need to keep a lock on a delete-marked record in lower isolation
     levels - it's similar to when Server sees the WHERE condition doesn't match
@@ -5449,6 +5450,8 @@ rec_loop:
 
     if (rec_get_deleted_flag(clust_rec, comp)) {
       /* The record is delete marked: we can skip it */
+
+      if (!prebuilt->table->is_temporary()) prebuilt->rds_rows_read_del_mark++;
 
       /* No need to keep a lock on a delete-marked record in lower isolation
       levels - it's similar to when Server sees the WHERE condition doesn't

@@ -61,6 +61,9 @@
 #include "sql/sql_sort.h"  // Sort_result
 #include "thr_lock.h"
 #include "typelib.h"
+#include "sql/mem_root_array.h"
+
+#include "sql/sql_statistics_common.h"  // Stats_data
 
 class Field;
 class Field_longlong;
@@ -1039,6 +1042,8 @@ struct TABLE_SHARE {
   */
   enum class Schema_read_only { NOT_SET, RO_OFF, RO_ON };
   Schema_read_only schema_read_only{Schema_read_only::NOT_SET};
+
+  Stats_data stats_data;
 
   /**
     Set share's table cache key and update its db and table name appropriately.

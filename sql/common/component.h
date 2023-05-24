@@ -29,7 +29,7 @@
 #include "mysql/components/services/bits/psi_memory_bits.h"
 #include "mysql/psi/psi_memory.h"
 
-namespace im  {
+namespace im {
 
 /**
   PSI memory detect interface;
@@ -48,6 +48,39 @@ class PSI_memory_base {
 
  private:
   PSI_memory_key m_key;
+};
+
+/* Allocate the object */
+template <typename T, typename... Args>
+T *allocate_object(PSI_memory_key key, Args &&...args) {
+  void *ptr = nullptr;
+  T *obj = nullptr;
+
+  ptr = my_malloc(key, sizeof(T), MYF(MY_WME | ME_FATALERROR));
+
+  if (ptr) obj = new (ptr) T(std::forward<Args>(args)...);
+  return obj;
+}
+
+/* Dellocate the object */
+template <typename T>
+void destroy_object(T *obj) {
+  if (obj) {
+    obj->~T();
+    my_free(obj);
+  }
+}
+
+/* Disable the copy and assign construct */
+class Disable_copy_base {
+ public:
+  Disable_copy_base() {}
+  virtual ~Disable_copy_base() {}
+
+ private:
+  Disable_copy_base(const Disable_copy_base &);
+  Disable_copy_base(const Disable_copy_base &&);
+  Disable_copy_base &operator=(const Disable_copy_base &);
 };
 
 /*
@@ -75,6 +108,37 @@ class Pair_key_unordered_map
                              Pair_key_comparator<F, S>>(key) {}
 };
 
+
+/**
+  Pls inherit this class and make sure explicitly call effect()
+  within DEBUG mode, in order to avoid unnamed objects with
+  custom construction and destruction. */
+class Disable_unnamed_object {
+ public:
+  Disable_unnamed_object() {
+#ifndef DBUG_OFF
+    m_effected = false;
+#endif
+  }
+
+  virtual ~Disable_unnamed_object() {
+#ifndef DBUG_OFF
+    assert(m_effected == true);
+#endif
+  }
+
+#ifndef DBUG_OFF
+ private:
+  bool m_effected;
+
+ public:
+  virtual bool effect() {
+    m_effected = true;
+    return true;
+  }
+#endif
+};
+
 } /* namespace im */
 
 namespace std {
@@ -88,6 +152,5 @@ struct hash<im::Pair_key_type<F, S>> {
 };
 
 } /* namespace std */
-
 
 #endif

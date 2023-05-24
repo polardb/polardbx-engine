@@ -167,6 +167,8 @@ ENABLED_ROLES
 ENGINES
 EVENTS
 FILES
+INDEX_STATISTICS
+IO_STATISTICS
 KEYWORDS
 KEY_COLUMN_USAGE
 OPTIMIZER_TRACE
@@ -195,6 +197,7 @@ TABLES_EXTENSIONS
 TABLE_CONSTRAINTS
 TABLE_CONSTRAINTS_EXTENSIONS
 TABLE_PRIVILEGES
+TABLE_STATISTICS
 TRIGGERS
 USER_ATTRIBUTES
 USER_PRIVILEGES
@@ -212,10 +215,10 @@ WHERE TABLE_NAME LIKE 'no_such_table';
 TABLE_NAME
 # 4. Names collate differently. On trunk, the queries below returns
 #    the same result set.
-SELECT count(*) = IF(@@lower_case_table_names = 0, 7, 12)
+SELECT count(*) = IF(@@lower_case_table_names = 0, 8, 12)
 FROM information_schema.tables
 WHERE table_name LIKE 'TAB%';
-count(*) = IF(@@lower_case_table_names = 0, 7, 12)
+count(*) = IF(@@lower_case_table_names = 0, 8, 12)
 1
 SELECT count(*) = IF(@@lower_case_table_names = 0, 5, 12)
 FROM information_schema.tables
