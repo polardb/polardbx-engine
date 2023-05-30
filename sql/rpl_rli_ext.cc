@@ -145,7 +145,7 @@ inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
   assert(index <= m_tail.load() + m_capacity);
   assert(index > m_tail.load());
 
-  sql_print_error("add index %u", index);
+  sql_print_information("add index %u", index);
 
   auto slot_index = get_slot_index(index);
   auto &slot = m_indexes[slot_index];
@@ -167,7 +167,7 @@ inline uint64 Index_link_buf::advance_tail() {
   }
 
   unlock();
-  sql_print_error("advance to tail %u", m_tail.load());
+  sql_print_information("advance to tail %u", m_tail.load());
   return m_tail;
 }
 
