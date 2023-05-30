@@ -28,6 +28,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/mysqld.h"
 #include "sql/rpl_replica.h"
+#include "sql/consensus_log_manager.h"
+#include "sql/bl_consensus_log.h"
+#include "sql/rpl_rli_pdb.h"
 
 /**
  * Overwrite log name and index log name if needed.
@@ -58,6 +61,64 @@ void Raft_relay_log_info::overwrite_log_name(const char **ln,
 
   relay_log.is_raft_log = true;
   return;
+}
+
+
+LOG_POS_COORD Relay_log_info::get_log_pos_coord() {
+  return {get_group_master_log_name(), get_group_master_log_pos(), 0};
+}
+
+LOG_POS_COORD Raft_relay_log_info::get_log_pos_coord() {
+  return { get_group_relay_log_name(), get_group_relay_log_pos(), get_consensus_apply_index() };
+}
+
+int Relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)
+{
+  if (relay_log.find_log_pos(linfo, get_group_relay_log_name(), 1)) {
+      LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG,
+        get_group_relay_log_name());
+    return 1;
+  }
+  log_position = get_group_relay_log_pos();
+  return 0;
+}
+
+int Raft_relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)
+{
+  uint64 log_pos = 0;
+  char log_name[FN_REFLEN];
+  uint64 next_index = consensus_log_manager.get_next_trx_index(get_consensus_apply_index());
+  if (consensus_log_manager.get_log_position(next_index , FALSE, log_name, &log_pos)) {
+    sql_print_error("Mts recover cannot find start index %llu.", next_index);
+    return 1;
+  }
+  if (relay_log.find_log_pos(linfo, log_name, 1)) {
+    LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG,
+      log_name);
+    return 1;
+  }
+  log_position = log_pos;
+  return 0;
+}
+
+void Raft_relay_log_info::set_raft_relay_log_info()
+{
+  consensus_log_manager.set_relay_log_info(this);
+}
+
+void Raft_relay_log_info::set_raft_apply_ev_sequence()
+{
+  consensus_log_manager.set_apply_ev_sequence(1);
+}
+
+void Raft_relay_log_info::update_raft_applied_index()
+{
+  ulonglong rli_appliedindex = 0;
+  set_consensus_apply_index(gaq->lwm.consensus_index);
+  rli_appliedindex = get_consensus_apply_index();
+  rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex? 0 :
+                      rli_appliedindex - opt_appliedindex_force_delay;
+  consensus_ptr->updateAppliedIndex(rli_appliedindex);
 }
 
 /**
@@ -91,4 +152,10 @@ bool Raft_relay_log_info::is_group_relay_log_name_invalid(
     const char **)  {
   /** Didn't confirm it. */
   return false;
+}
+
+void Raft_relay_log_info::relay_log_number_to_name(uint number,
+                                              char name[FN_REFLEN + 1]) {
+  char *str = strmake(name, log_bin_basename, FN_REFLEN + 1);
+  sprintf(str, ".%06u", number);
 }

@@ -142,6 +142,7 @@
 
 #include "sql/ppi/ppi_table_iostat.h"
 #include "sql/sql_statistics_common.h"
+#include "sql/consensus_admin.h"
 
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
@@ -311,6 +312,24 @@ bool Sql_cmd_show_binlogs::check_privileges(THD *thd) {
 }
 
 bool Sql_cmd_show_binlogs::execute_inner(THD *thd) { return show_binlogs(thd); }
+
+
+bool Sql_cmd_show_consensus_logs::check_privileges(THD *thd) {
+  return check_global_access(thd, SUPER_ACL | REPL_CLIENT_ACL);
+}
+
+bool Sql_cmd_show_consensus_logs::execute_inner(THD *thd) {
+  return show_consensus_logs(thd);
+}
+
+bool Sql_cmd_show_consensuslog_events::check_privileges(THD *thd) {
+  return check_global_access(thd, REPL_SLAVE_ACL);
+}
+
+bool Sql_cmd_show_consensuslog_events::execute_inner(THD *thd) {
+  return mysql_show_consensuslog_events(thd, consensus_index);
+}
+
 
 bool Sql_cmd_show_create_database::check_privileges(THD *) { return false; }
 

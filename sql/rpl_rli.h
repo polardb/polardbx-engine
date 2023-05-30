@@ -685,6 +685,7 @@ class Relay_log_info : public Rpl_info {
     max_binlog_size.
   */
  protected:
+  //TODO @yanhua, unnecessary atomic
   std::atomic<ulonglong> consensus_apply_index;
   /**
      Event group means a group of events of a transaction. group_relay_log_name
@@ -1419,7 +1420,7 @@ class Relay_log_info : public Rpl_info {
     relay log info and used to produce information for <code>SHOW
     SLAVE STATUS</code>.
   */
-  int stmt_done(my_off_t event_log_pos);
+  int stmt_done(my_off_t event_log_pos, uint64_t event_consensus_index);
 
   /**
      Set the value of a replication state flag.
@@ -1625,7 +1626,13 @@ class Relay_log_info : public Rpl_info {
     event_relay_log_number = number;
   }
 
-  inline ulonglong get_consensus_apply_index() { return consensus_apply_index; }
+
+  inline ulonglong get_consensus_apply_index() const { return consensus_apply_index; }
+
+  inline void set_consensus_apply_index(ulonglong log_index)
+  {
+    consensus_apply_index = log_index;
+  }
 
   /**
     Given the extension number of the relay log, gets the full
@@ -1635,7 +1642,7 @@ class Relay_log_info : public Rpl_info {
     @param[in, out] name      The full path of the relay log (per-channel)
                               to be read by the slave worker.
   */
-  void relay_log_number_to_name(uint number, char name[FN_REFLEN + 1]);
+  virtual void relay_log_number_to_name(uint number, char name[FN_REFLEN + 1]);
   uint relay_log_name_to_number(const char *name);
 
   void set_event_start_pos(my_off_t pos) { event_start_pos = pos; }
@@ -1923,12 +1930,18 @@ class Relay_log_info : public Rpl_info {
   static const int
       LINES_IN_RELAY_LOG_INFO_WITH_ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS_VALUE =
           14;
+
+  /*
+    Add Consensus log apply index in the slave relay log info
+  */
+  static const int LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX = 15;
+
   /*
     Total lines in relay_log.info.
     This has to be updated every time a member is added or removed.
   */
   static const int MAXIMUM_LINES_IN_RELAY_LOG_INFO_FILE =
-      LINES_IN_RELAY_LOG_INFO_WITH_ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS_VALUE;
+      LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX;
 
   bool read_info(Rpl_info_handler *from) override;
   bool write_info(Rpl_info_handler *to) override;
@@ -2144,6 +2157,12 @@ class Relay_log_info : public Rpl_info {
    * @param[in/out]	log index name
    */
   virtual void overwrite_log_name(const char **ln, const char **log_index_name);
+
+  virtual LOG_POS_COORD get_log_pos_coord();
+  virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position);
+  virtual void set_raft_relay_log_info() {}
+  virtual void set_raft_apply_ev_sequence() {}
+  virtual void update_raft_applied_index() {}
 
  private:
   friend lizard::Begin_events_before_gtid_manager;

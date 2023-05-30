@@ -54,7 +54,7 @@ get_key_value()
 usage()
 {
 cat <<EOF
-Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan|ubsan|valg] [-i] [-r]
+Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan|ubsan|valg] [-i none|master|raft] [-r]
        Or
        $0 [-h | --help]
   -t                      Select the build type.
@@ -103,8 +103,11 @@ parse_options()
       enable_gcov=`get_key_value "$1"`;;
     -l)
       enable_lizard_dbg=1;;
+    -i=*)
+      initialize_type=`get_key_value "$1"`;;
     -i)
-      with_initialize=1;;
+      shift
+      initialize_type=`get_key_value "$1"`;;
     -r)
       with_rebuild=1;;
     -h | --help)
@@ -146,6 +149,7 @@ initialize()
   port = 3306
   basedir = $dest_dir
   datadir = $dest_dir/data
+  socket = $dest_dir/mysql.sock
   log_error_verbosity=3
   log_error=$dest_dir/mysql-err.log
 
@@ -161,7 +165,6 @@ initialize()
   log_slave_updates = on
   binlog_format = row
   binlog-ignore-db=sys
-  binlog-ignore-db=mysql
   binlog-ignore-db=information_schema
   binlog-ignore-db=performance_schema
   binlog-do-db=test
@@ -169,10 +172,37 @@ initialize()
   server_id = 1
   " > $HOME/my.cnf
 
-  rm -rf $dest_dir/data
-  mkdir -p $dest_dir/data
-  ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23456@1'
-  nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf &
+  cat $HOME/my.cnf > $HOME/my2.cnf
+  echo "
+  port = 3307
+  datadir = $dest_dir/data2
+  socket = $dest_dir/mysql2.sock
+  log_error=$dest_dir/mysql-err2.log
+  " >> $HOME/my2.cnf
+
+  cat $HOME/my.cnf > $HOME/my3.cnf
+  echo "
+  port = 3308
+  datadir = $dest_dir/data3
+  socket = $dest_dir/mysql3.sock
+  log_error=$dest_dir/mysql-err3.log
+  " >> $HOME/my3.cnf
+
+  if [ x$initialize_type == x"master" ]; then
+    rm -rf $dest_dir/data
+    mkdir -p $dest_dir/data
+    ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451@1'
+    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf &
+  else
+    rm -rf $dest_dir/data $dest_dir/data2 $dest_dir/data3
+    mkdir -p $dest_dir/data  $dest_dir/data2  $dest_dir/data3
+    ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@1'
+    ./runtime_output_directory/mysqld --defaults-file=$HOME/my2.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@2'
+    ./runtime_output_directory/mysqld --defaults-file=$HOME/my3.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@3'
+    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf &
+    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my2.cnf &
+    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my3.cnf &
+  fi
 }
 
 if test ! -f sql/mysqld.cc
@@ -192,7 +222,7 @@ valg=0
 gcov=0
 enable_gcov=0
 enable_lizard_dbg=0
-with_initialize=0
+initialize_type="none"
 with_rebuild=0
 
 parse_options "$@"
@@ -301,6 +331,7 @@ else
       -DSYSCONFDIR="$dest_dir"           \
       -DCMAKE_INSTALL_PREFIX="$dest_dir" \
       -DMYSQL_DATADIR="$dest_dir/data"   \
+      -DMYSQL_UNIX_ADDR="$dest_dir/mysql.sock"   \
       -DWITH_DEBUG=$debug                \
       -DENABLE_GCOV=$gcov                \
       -DINSTALL_LAYOUT=STANDALONE        \
@@ -337,7 +368,7 @@ fi
 
 make -j `getconf _NPROCESSORS_ONLN`
 
-if [ $with_initialize =  1 ]; then
+if [ x$initialize_type != x"none" ]; then
   make -j `getconf _NPROCESSORS_ONLN` install
   initialize
   echo "use follow cmd to login mysql:"

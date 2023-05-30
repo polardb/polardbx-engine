@@ -171,6 +171,10 @@
 #include "sql/consensus_log_manager.h"
 #include "sql/rpl_msr.h"
 
+#include "consensus.h"
+#include "sql/bl_consensus_log.h"
+#include "sql/consensus_admin.h"
+
 struct mysql_cond_t;
 struct mysql_mutex_t;
 
@@ -325,6 +329,7 @@ static int terminate_slave_thread(THD *thd, mysql_mutex_t *term_lock,
                                   bool force = false);
 static bool check_io_slave_killed(THD *thd, Master_info *mi, const char *info);
 static int mts_event_coord_cmp(LOG_POS_COORD *id1, LOG_POS_COORD *id2);
+static int mts_event_coord_cmp_for_xpaxos_channel(LOG_POS_COORD *id1, LOG_POS_COORD *id2);
 
 static int check_slave_sql_config_conflict(const Relay_log_info *rli);
 static void group_replication_cleanup_after_clone();
@@ -491,7 +496,8 @@ void ReplicaInitializer::print_channel_info() const {
 }
 
 void ReplicaInitializer::start_replication_threads(bool skip_replica_start) {
-  if (!m_opt_skip_replica_start && !skip_replica_start) {
+  /* Do not start non-xpaxos channel before consensus module is inited if log_slave_updates is set to ON. */
+  if (!m_opt_skip_replica_start && !skip_replica_start && !opt_log_replica_updates) {
     start_threads();
   }
 }
@@ -505,7 +511,8 @@ void ReplicaInitializer::start_threads() {
     Master_info *mi = it->second;
 
     /* If server id is not set, start_slave_thread() will say it */
-    if (Master_info::is_configured(mi) && mi->rli->inited) {
+    if (Master_info::is_configured(mi) && mi->rli->inited
+        && !Multisource_info::is_raft_channel(mi)) {
       /* same as in start_slave() cache the global var values into rli's
        * members */
       mi->rli->opt_replica_parallel_workers = opt_mts_replica_parallel_workers;
@@ -614,11 +621,13 @@ bool start_slave(THD *thd) {
   DBUG_TRACE;
   Master_info *mi;
   bool channel_configured, error = false;
+  const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_START_XPAXOS_REPLICATION;
 
   if (channel_map.get_num_instances() == 1) {
     mi = channel_map.get_default_channel_mi();
     assert(mi);
-    if (start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
+    if (is_raft_replication_cmd == Multisource_info::is_raft_channel(mi) 
+        && start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
                     thd->lex->slave_thd_opt, mi, true))
       return true;
   } else {
@@ -642,7 +651,8 @@ bool start_slave(THD *thd) {
       channel_configured =
           mi &&                      // Master_info exists
           (mi->inited || mi->reset)  // It is inited or was reset
-          && mi->host[0];            // host is set
+          && mi->host[0]            // host is set
+          && (is_raft_replication_cmd == Multisource_info::is_raft_channel(mi));
 
       if (channel_configured) {
         if (start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
@@ -677,20 +687,22 @@ int stop_slave(THD *thd) {
   bool push_temp_table_warning = true;
   Master_info *mi = nullptr;
   int error = 0;
+  const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
 
   if (channel_map.get_num_instances() == 1) {
     mi = channel_map.get_default_channel_mi();
 
     assert(!strcmp(mi->get_channel(), channel_map.get_default_channel()));
-
-    error = stop_slave(thd, mi, true, false /*for_one_channel*/,
-                       &push_temp_table_warning);
+    if (is_raft_replication_cmd == Multisource_info::is_raft_channel(mi))
+      error = stop_slave(thd, mi, true, false /*for_one_channel*/,
+                        &push_temp_table_warning);
   } else {
     for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
          it++) {
       mi = it->second;
 
-      if (Master_info::is_configured(mi)) {
+      if (Master_info::is_configured(mi)
+          && is_raft_replication_cmd == Multisource_info::is_raft_channel(mi)) {
         if (stop_slave(thd, mi, true, false /*for_one_channel*/,
                        &push_temp_table_warning)) {
           LogErr(ERROR_LEVEL, ER_RPL_SLAVE_CANT_STOP_SLAVE_FOR_CHANNEL,
@@ -794,16 +806,24 @@ bool start_slave_cmd(THD *thd) {
       goto err;
     }
 
-    if (mi)
+    const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
+
+    if (mi && is_raft_replication_cmd == Multisource_info::is_raft_channel(mi))
       res = start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
                         thd->lex->slave_thd_opt, mi, true);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel))
+    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
+             strcmp(channel_map.get_raft_channel(), lex->mi.channel))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
 
     if (!res) my_ok(thd);
   }
 err:
   channel_map.unlock();
+
+  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+                        thd->m_main_security_ctx.user().str,
+                        thd->m_main_security_ctx.host_or_ip().str,
+                        thd->query().str, res);
   return res;
 }
 
@@ -894,10 +914,13 @@ bool stop_slave_cmd(THD *thd) {
       return true;
     }
 
-    if (mi)
+    const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_START_XPAXOS_REPLICATION;
+
+    if (mi && is_raft_replication_cmd == Multisource_info::is_raft_channel(mi))
       res = stop_slave(thd, mi, true /*net report */, true /*for_one_channel*/,
                        &push_temp_table_warning);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel))
+    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
+             strcmp(channel_map.get_raft_channel(), lex->mi.channel))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
   }
 
@@ -1348,6 +1371,9 @@ int load_mi_and_rli_from_repositories(Master_info *mi, bool ignore_if_no_info,
     }
   }
 
+  // bind relay log info to global consensuslog
+  mi->rli->set_raft_relay_log_info();
+
   DBUG_EXECUTE_IF("enable_mta_worker_failure_init",
                   { DBUG_SET("+d,mta_worker_thread_init_fails"); });
 end:
@@ -1722,7 +1748,8 @@ int terminate_slave_threads(Master_info *mi, int thread_mask,
 
     DEBUG_SYNC(current_thd, "terminate_slave_threads_after_set_abort_slave");
 
-    if ((error = terminate_slave_thread(
+    if (!Multisource_info::is_raft_channel(mi) &&
+        (error = terminate_slave_thread(
              mi->rli->info_thd, sql_lock, &mi->rli->stop_cond,
              &mi->rli->slave_running, &total_stop_wait_timeout,
              need_lock_term)) &&
@@ -1792,9 +1819,9 @@ int terminate_slave_threads(Master_info *mi, int thread_mask,
         rpl_replica_debug_point(DBUG_RPL_S_IO_WAIT_FOR_SPACE);
       });
     }
-
     /**TODO: do it although raft channel didn't lanuch IO thread. */
-    if ((error = terminate_slave_thread(
+    if (!Multisource_info::is_raft_channel(mi) &&
+        (error = terminate_slave_thread(
              mi->info_thd, io_lock, &mi->stop_cond, &mi->slave_running,
              &total_stop_wait_timeout, need_lock_term, force_io_stop)) &&
         !force_all) {
@@ -2104,7 +2131,7 @@ bool start_slave_threads(bool need_lock_slave, bool wait_for_start,
     /** Has masked SLAVE IO */
     assert(
         !Multisource_info::is_raft_replication_channel_name(mi->get_channel()));
-    assert(mi->style() != Channel_style::Raft);
+    assert(!Multisource_info::is_raft_channel(mi));
 
     is_error = start_slave_thread(key_thread_replica_io, handle_slave_io,
                                   lock_io, lock_cond_io, cond_io,
@@ -2117,9 +2144,13 @@ bool start_slave_threads(bool need_lock_slave, bool wait_for_start,
     is_error = Source_IO_monitor::get_instance()->launch_monitoring_process(
         key_thread_replica_monitor_io);
 
-    if (is_error)
+    if (is_error) {
       terminate_slave_threads(mi, thread_mask & (SLAVE_IO | SLAVE_MONITOR),
                               rpl_stop_replica_timeout, need_lock_slave);
+
+      if (opt_recover_snapshot)
+        raft::info(ER_RAFT_APPLIER) << "start slave threads to get the consensus point failed";
+    }
   }
 
   if (!is_error && (thread_mask & SLAVE_SQL)) {
@@ -2164,6 +2195,8 @@ void end_slave() {
     returns, then we terminate them here.
   */
   channel_map.wrlock();
+
+  channel_map.reset_default_channel_mi();
 
   /* traverse through the map and terminate the threads */
   for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
@@ -3573,7 +3606,9 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
        condition1: compare the log positions and
        condition2: compare the file names (to handle rotation case)
     */
-    if ((mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()) &&
+   /* GalaxyEngine does not maintain master log info currently. */
+    if (!Multisource_info::is_raft_channel(mi->rli) &&
+        (mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()) &&
         (!strcmp(mi->get_master_log_name(),
                  mi->rli->get_group_master_log_name()))) {
       if (mi->slave_running == MYSQL_SLAVE_RUN_CONNECT)
@@ -3969,7 +4004,7 @@ void set_slave_thread_options(THD *thd) {
      only for client threads.
   */
   ulonglong options = thd->variables.option_bits | OPTION_BIG_SELECTS;
-  if (opt_log_replica_updates)
+  if (opt_log_replica_updates && !thd->raft_replication_channel)
     options |= OPTION_BIN_LOG;
   else
     options &= ~OPTION_BIN_LOG;
@@ -4698,7 +4733,11 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
     if (!error && rli->is_mts_recovery() &&
         ev->get_type_code() != binary_log::ROTATE_EVENT &&
         ev->get_type_code() != binary_log::FORMAT_DESCRIPTION_EVENT &&
-        ev->get_type_code() != binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
+        ev->get_type_code() != binary_log::PREVIOUS_GTIDS_LOG_EVENT &&
+        ev->get_type_code() != binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT &&
+        ev->get_type_code() != binary_log::CONSENSUS_LOG_EVENT &&
+        ev->get_type_code() != binary_log::CONSENSUS_CLUSTER_INFO_EVENT &&
+        ev->get_type_code() != binary_log::CONSENSUS_EMPTY_EVENT) {
       if (ev->starts_group()) {
         rli->mts_recovery_group_seen_begin = true;
       } else if ((ev->ends_group() || !rli->mts_recovery_group_seen_begin) &&
@@ -4872,6 +4911,9 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
                                 Log_event *in) {
   DBUG_TRACE;
 
+  if (!check_exec_consensus_log_end_condition(rli, Multisource_info::is_raft_channel(rli)))
+    return 1;
+
   /*
      We acquire this mutex since we need it for all operations except
      event execution. But we will release it in places where we will
@@ -4937,8 +4979,9 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
       event to be executed in parallel.
     */
     if ((!rli->is_parallel_exec() || rli->last_master_timestamp == 0) &&
-        !(ev->is_artificial_event() || ev->is_relay_log_event() ||
+        !(ev->is_artificial_event() || (!Multisource_info::is_raft_channel(rli) && ev->is_relay_log_event()) ||
           ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT ||
+          (Multisource_info::is_raft_channel(rli) && ev->is_local_event()) ||
           ev->server_id == 0)) {
       rli->last_master_timestamp =
           ev->common_header->when.tv_sec + (time_t)ev->exec_time;
@@ -4996,6 +5039,8 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
         */
         return 1;
     }
+
+    update_consensus_apply_pos(rli, ev, Multisource_info::is_raft_channel(rli));
 
     /* ptr_ev can change to NULL indicating MTS coorinator passed to a Worker */
     exec_res = apply_event_and_update_pos(ptr_ev, thd, rli);
@@ -5907,6 +5952,8 @@ static void *handle_slave_worker(void *arg) {
 #endif
   mysql_thread_set_psi_THD(thd);
 
+  thd->raft_replication_channel = Multisource_info::is_raft_channel(rli->mi);
+
   if (init_replica_thread(thd, SLAVE_THD_WORKER)) {
     // todo make SQL thread killed
     LogErr(ERROR_LEVEL, ER_RPL_SLAVE_CANT_INITIALIZE_SLAVE_WORKER,
@@ -6097,6 +6144,11 @@ int mts_event_coord_cmp(LOG_POS_COORD *id1, LOG_POS_COORD *id2) {
               : (filecmp > 0 ? 1 : (poscmp < 0 ? -1 : (poscmp > 0 ? 1 : 0))));
 }
 
+int mts_event_coord_cmp_for_xpaxos_channel(LOG_POS_COORD *id1, LOG_POS_COORD *id2) {
+  return id1->consensus_index < id2->consensus_index ?
+          -1 : (id1->consensus_index == id2->consensus_index ? 0 : 1);
+}
+
 bool mts_recovery_groups(Relay_log_info *rli) {
   Log_event *ev = nullptr;
   bool is_error = false;
@@ -6111,6 +6163,8 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   my_off_t offset = 0;
   MY_BITMAP *groups = &rli->recovery_groups;
   THD *thd = current_thd;
+  uint64 consensus_index = 0;
+  const bool is_raft_channel = Multisource_info::is_raft_channel(rli->mi);
 
   DBUG_TRACE;
 
@@ -6142,8 +6196,7 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   /*
     Save relay log position to compare with worker's position.
   */
-  LOG_POS_COORD cp = {const_cast<char *>(rli->get_group_master_log_name()),
-                      rli->get_group_master_log_pos()};
+  LOG_POS_COORD cp = rli->get_log_pos_coord();
 
   /*
     Gathers information on valuable workers and stores it in
@@ -6169,10 +6222,9 @@ bool mts_recovery_groups(Relay_log_info *rli) {
       goto err;
     }
 
-    LOG_POS_COORD w_last = {
-        const_cast<char *>(worker->get_group_master_log_name()),
-        worker->get_group_master_log_pos()};
-    if (mts_event_coord_cmp(&w_last, &cp) > 0) {
+    LOG_POS_COORD w_last = worker->get_log_pos_coord();
+
+    if (!is_raft_channel && mts_event_coord_cmp(&w_last, &cp) > 0) {
       /*
         Inserts information into a dynamic array for further processing.
         The jobs/workers are ordered by the last checkpoint positions
@@ -6181,7 +6233,11 @@ bool mts_recovery_groups(Relay_log_info *rli) {
       job_worker.worker = worker;
       job_worker.checkpoint_log_pos = worker->checkpoint_master_log_pos;
       job_worker.checkpoint_log_name = worker->checkpoint_master_log_name;
-
+      above_lwm_jobs.push_back(job_worker);
+    } else if ((is_raft_channel && mts_event_coord_cmp_for_xpaxos_channel(&w_last, &cp) > 0)) {
+      job_worker.worker = worker;
+      job_worker.checkpoint_log_pos= worker->checkpoint_relay_log_pos;
+      job_worker.checkpoint_log_name= worker->checkpoint_relay_log_name;
       above_lwm_jobs.push_back(job_worker);
     } else {
       /*
@@ -6228,23 +6284,20 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   for (Slave_job_group *jg = above_lwm_jobs.begin(); jg != above_lwm_jobs.end();
        ++jg) {
     Slave_worker *w = jg->worker;
-    LOG_POS_COORD w_last = {const_cast<char *>(w->get_group_master_log_name()),
-                            w->get_group_master_log_pos()};
+    LOG_POS_COORD w_last = w->get_log_pos_coord();
 
     LogErr(INFORMATION_LEVEL,
            ER_RPL_MTS_GROUP_RECOVERY_RELAY_LOG_INFO_FOR_WORKER, w->id,
            w->get_group_relay_log_name(), w->get_group_relay_log_pos(),
-           w->get_group_master_log_name(), w->get_group_master_log_pos());
+           w->get_group_master_log_name(), w->get_group_master_log_pos(),
+           w->get_consensus_apply_index());
 
     recovery_group_cnt = 0;
     not_reached_commit = true;
-    if (rli->relay_log.find_log_pos(&linfo, rli->get_group_relay_log_name(),
-                                    true)) {
-      LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG,
-             rli->get_group_relay_log_name());
+
+    if (rli->get_log_position(&linfo, offset)) {
       goto err;
     }
-    offset = rli->get_group_relay_log_pos();
 
     Relaylog_file_reader relaylog_file_reader(opt_replica_sql_verify_checksum);
 
@@ -6255,13 +6308,32 @@ bool mts_recovery_groups(Relay_log_info *rli) {
         goto err;
       }
 
+      bool in_large_trx = false;
       while (not_reached_commit &&
              (ev = relaylog_file_reader.read_event_object())) {
         assert(ev->is_valid());
 
+        size_t event_log_pos = my_b_tell(relaylog_file_reader.get_io_cache());
         if (ev->get_type_code() == binary_log::ROTATE_EVENT ||
             ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT ||
-            ev->get_type_code() == binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
+            ev->get_type_code() == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
+            ev->get_type_code() == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
+            ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT ||
+            ev->get_type_code() == binary_log::CONSENSUS_CLUSTER_INFO_EVENT ||
+            ev->get_type_code() == binary_log::CONSENSUS_EMPTY_EVENT) {
+          if (ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT) {
+            Consensus_log_event * r_ev = (Consensus_log_event*)ev;
+            if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX) {
+              if (!in_large_trx) {
+                consensus_index = r_ev->get_index();
+                in_large_trx = true;
+              }
+            } else if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
+              in_large_trx = false;
+            } else {
+              consensus_index = r_ev->get_index();
+            }
+          }
           delete ev;
           ev = nullptr;
           continue;
@@ -6280,16 +6352,22 @@ bool mts_recovery_groups(Relay_log_info *rli) {
                    !is_gtid_event(ev) &&
                    !lizard::is_b_events_before_gtid(ev)) {
           int ret = 0;
-          LOG_POS_COORD ev_coord = {
-              const_cast<char *>(rli->get_group_master_log_name()),
-              ev->common_header->log_pos};
+          LOG_POS_COORD ev_coord;
+          if (is_raft_channel)
+            ev_coord= { linfo.log_file_name, event_log_pos, consensus_index };
+          else
+            ev_coord= { rli->get_group_master_log_name(), ev->common_header->log_pos, 0 };
+
           flag_group_seen_begin = false;
           recovery_group_cnt++;
 
           LogErr(INFORMATION_LEVEL, ER_RPL_MTS_GROUP_RECOVERY_RELAY_LOG_INFO,
                  rli->get_group_master_log_name_info(),
                  ev->common_header->log_pos);
-          if ((ret = mts_event_coord_cmp(&ev_coord, &w_last)) == 0) {
+          ret = (is_raft_channel 
+                ? mts_event_coord_cmp_for_xpaxos_channel(&ev_coord, &w_last)
+                : mts_event_coord_cmp(&ev_coord, &w_last));
+          if (ret == 0) {
 #ifndef NDEBUG
             for (uint i = 0; i <= w->worker_checkpoint_seqno; i++) {
               if (bitmap_is_set(&w->group_executed, i))
@@ -6356,7 +6434,6 @@ bool mta_checkpoint_routine(Relay_log_info *rli, bool force) {
   ulong cnt;
   bool error = false;
   time_t ts = 0;
-
   DBUG_TRACE;
 
 #ifndef NDEBUG
@@ -6419,6 +6496,7 @@ bool mta_checkpoint_routine(Relay_log_info *rli, bool force) {
     to contain all but rli->group_master_log_name which
     is altered solely by Coordinator at special checkpoints.
   */
+  rli->update_raft_applied_index();
   rli->set_group_master_log_pos(rli->gaq->lwm.group_master_log_pos);
   rli->set_group_relay_log_pos(rli->gaq->lwm.group_relay_log_pos);
   DBUG_PRINT(
@@ -6879,17 +6957,14 @@ extern "C" void *handle_slave_sql(void *arg) {
   my_off_t saved_skip = 0;
 
   Relay_log_info *rli = ((Master_info *)arg)->rli;
-
-  if (Multisource_info::is_raft_channel(rli)) {
-    consensus_log_manager.set_apply_ev_sequence(1);
-  }
+  rli->set_raft_apply_ev_sequence();
 
   const char *errmsg;
   longlong slave_errno = 0;
   bool mts_inited = false;
   Global_THD_manager *thd_manager = Global_THD_manager::get_instance();
   Commit_order_manager *commit_order_mngr = nullptr;
-  Rpl_applier_reader applier_reader(rli);
+  rli->applier_reader.reset(new Rpl_applier_reader(rli));
   Relay_log_info::enum_priv_checks_status priv_check_status =
       Relay_log_info::enum_priv_checks_status::SUCCESS;
 
@@ -6925,7 +7000,7 @@ extern "C" void *handle_slave_sql(void *arg) {
 
     // Only use replica preserve commit order if more than 1 worker exists
     if (opt_replica_preserve_commit_order && !rli->is_parallel_exec() &&
-        rli->opt_replica_parallel_workers > 1)
+        rli->opt_replica_parallel_workers > 1 && !Multisource_info::is_raft_channel(rli))
       commit_order_mngr =
           new Commit_order_manager(rli->opt_replica_parallel_workers);
 
@@ -6951,10 +7026,8 @@ extern "C" void *handle_slave_sql(void *arg) {
     rli->sql_thread_kill_accepted = false;
     rli->last_event_start_time = 0;
 
-    if (Multisource_info::is_raft_channel(rli)) {
-      rli->force_apply_queue_before_stop = false;
-      thd->xpaxos_replication_channel = true;
-    }
+    rli->force_apply_queue_before_stop = !Multisource_info::is_raft_channel(rli);
+    thd->raft_replication_channel = Multisource_info::is_raft_channel(rli);
 
     if (init_replica_thread(thd, SLAVE_THD_SQL)) {
       /*
@@ -7075,6 +7148,13 @@ extern "C" void *handle_slave_sql(void *arg) {
           "the relay "
           "log info will be consistent");
 
+    if (calculate_consensus_apply_start_pos(rli, Multisource_info::is_raft_channel(rli))) {
+      if (!opt_recover_snapshot)
+        mysql_cond_broadcast(&rli->start_cond);
+      mysql_mutex_unlock(&rli->run_lock);
+      goto err;
+    }
+
     mysql_cond_broadcast(&rli->start_cond);
     mysql_mutex_unlock(&rli->run_lock);
 
@@ -7088,7 +7168,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     rli->trans_retries = 0;  // start from "no error"
     DBUG_PRINT("info", ("rli->trans_retries: %lu", rli->trans_retries));
 
-    if (applier_reader.open(&errmsg)) {
+    if (rli->applier_reader->open(&errmsg)) {
       rli->report(ERROR_LEVEL, ER_SLAVE_FATAL_ERROR, "%s", errmsg);
       goto err;
     }
@@ -7195,7 +7275,7 @@ extern "C" void *handle_slave_sql(void *arg) {
 
       // read next event
       mysql_mutex_lock(&rli->data_lock);
-      ev = applier_reader.read_next_event();
+      ev = rli->applier_reader->read_next_event();
       mysql_mutex_unlock(&rli->data_lock);
 
       // set additional context as needed by the scheduler before execution
@@ -7205,7 +7285,7 @@ extern "C" void *handle_slave_sql(void *arg) {
         rli->current_mts_submode->set_multi_threaded_applier_context(*rli, *ev);
 
       // try to execute the event
-      switch (exec_relay_log_event(thd, rli, &applier_reader, ev)) {
+      switch (exec_relay_log_event(thd, rli, rli->applier_reader.get(), ev)) {
         case SLAVE_APPLY_EVENT_AND_UPDATE_POS_OK:
           /** success, we read the next event. */
           /** fall through */
@@ -7286,7 +7366,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     mysql_mutex_lock(&rli->run_lock);
     /* We need data_lock, at least to wake up any waiting source_pos_wait() */
     mysql_mutex_lock(&rli->data_lock);
-    applier_reader.close();
+    rli->applier_reader->close();
     assert(rli->slave_running == 1);  // tracking buffer overrun
     /* When source_pos_wait() wakes up it will check this and terminate */
     rli->slave_running = 0;
@@ -8839,7 +8919,7 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
   DBUG_TRACE;
 
   /** Disable IO thread when raft channel.*/
-  if (mi->style() == Channel_style::Raft) {
+  if (Multisource_info::is_raft_channel(mi)) {
     assert(
         Multisource_info::is_raft_replication_channel_name(mi->get_channel()));
     thread_mask_input &= ~SLAVE_IO;
@@ -9145,11 +9225,14 @@ int reset_slave(THD *thd) {
   if (thd->lex->reset_slave_info.all) {
     /* First do reset_slave for default channel */
     mi = channel_map.get_default_channel_mi();
-    if (mi && reset_slave(thd, mi, thd->lex->reset_slave_info.all)) return 1;
+    if (mi
+        && !Multisource_info::is_raft_channel(mi)
+        && reset_slave(thd, mi, thd->lex->reset_slave_info.all)) return 1;
     /* Do while iteration for rest of the channels */
     it = channel_map.begin();
     while (it != channel_map.end()) {
-      if (!it->first.compare(channel_map.get_default_channel())) {
+      if (!it->first.compare(channel_map.get_default_channel()) ||
+          !it->first.compare(channel_map.get_raft_channel())) {
         it++;
         continue;
       }
@@ -9362,16 +9445,10 @@ bool reset_slave_cmd(THD *thd) {
       command.
     */
     if (mi &&
-        channel_map.is_group_replication_channel_name(mi->get_channel(),
+        ((channel_map.is_group_replication_channel_name(mi->get_channel(),
                                                       true) &&
-        is_group_replication_running()) {
-      my_error(ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED, MYF(0),
-               "RESET SLAVE [ALL] FOR CHANNEL", mi->get_channel());
-      channel_map.unlock();
-      return true;
-    }
-     /** Raft channel didn't allowed to reset. */
-    if (Multisource_info::is_raft_channel(mi)) {
+        is_group_replication_running())
+        || Multisource_info::is_raft_channel(mi))) {
       my_error(ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED, MYF(0),
                "RESET SLAVE [ALL] FOR CHANNEL", mi->get_channel());
       channel_map.unlock();
@@ -9380,7 +9457,8 @@ bool reset_slave_cmd(THD *thd) {
 
     if (mi)
       res = reset_slave(thd, mi, thd->lex->reset_slave_info.all);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel))
+    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
+             strcmp(channel_map.get_raft_channel(), lex->mi.channel))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
   }
 

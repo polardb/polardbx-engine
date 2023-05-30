@@ -1360,6 +1360,8 @@ static bool is_show_status(enum_sql_command sql_command) {
     case SQLCOM_SHOW_CHARSETS:
     case SQLCOM_SHOW_COLLATIONS:
     case SQLCOM_SHOW_BINLOGS:
+    case SQLCOM_SHOW_CONSENSUSLOGS:
+    case SQLCOM_SHOW_CONSENSUSLOG_EVENTS:
     case SQLCOM_SHOW_OPEN_TABLES:
     case SQLCOM_SHOW_SLAVE_HOSTS:
     case SQLCOM_SHOW_BINLOG_EVENTS:

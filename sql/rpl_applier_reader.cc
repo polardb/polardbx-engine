@@ -124,7 +124,7 @@ bool Rpl_applier_reader::open(const char **errmsg) {
     rli->set_group_relay_log_name(m_linfo.log_file_name);
     rli->set_event_relay_log_pos(rli->get_group_relay_log_pos());
     rli->set_event_relay_log_name(rli->get_group_relay_log_name());
-    if (relay_log_purge == 0 && rli->log_space_limit > 0) {
+    if ((relay_log_purge == 0 || rli->relay_log.is_raft_log) && rli->log_space_limit > 0) {
       rli->log_space_limit = 0;
       LogErr(WARNING_LEVEL, ER_RELAY_LOG_SPACE_LIMIT_DISABLED);
     }
@@ -164,6 +164,10 @@ Log_event *Rpl_applier_reader::read_next_event() {
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   });
   DBUG_EXECUTE_IF("force_sql_thread_error", return nullptr;);
+
+  if (m_reading_active_log) {
+    reopen_log_reader_if_needed();
+  }
 
   if (m_reading_active_log &&
       m_relaylog_file_reader.position() >= m_log_end_pos) {
@@ -237,6 +241,12 @@ Log_event *Rpl_applier_reader::read_next_event() {
   if (m_relaylog_file_reader.get_error_type() == Binlog_read_error::READ_EOF &&
       !m_reading_active_log) {
     if (!move_to_next_log()) return read_next_event();
+  }
+
+  if (m_relaylog_file_reader.get_error_type() == Binlog_read_error::READ_EOF &&
+      m_reading_active_log) {
+    read_active_log_end_pos();
+    return read_next_event();
   }
 
   LogErr(ERROR_LEVEL, ER_RPL_SLAVE_ERROR_READING_RELAY_LOG_EVENTS,
@@ -336,7 +346,8 @@ bool Rpl_applier_reader::reopen_log_reader_if_needed() {
 
     my_off_t pos = m_relaylog_file_reader.position();
     m_relaylog_file_reader.close();
-    if (m_relaylog_file_reader.open(m_linfo.log_file_name) ||
+    // pass the pos to open and read the Format_description_event
+    if (m_relaylog_file_reader.open(m_linfo.log_file_name, pos) ||
         m_relaylog_file_reader.seek(pos))
       return true;
   }
@@ -402,6 +413,9 @@ bool Rpl_applier_reader::purge_applied_logs() {
   mysql_mutex_assert_owner(&m_rli->data_lock);
 
   if (!relay_log_purge) return false;
+
+  // X-Paxos log don't purge either
+  if (m_rli->relay_log.is_raft_log) return false;
 
   Is_instance_backup_locked_result is_instance_locked =
       is_instance_backup_locked(m_rli->info_thd);

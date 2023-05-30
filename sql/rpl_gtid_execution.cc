@@ -42,6 +42,8 @@
 #include "sql/sql_parse.h"  // stmt_causes_implicit_commit
 #include "sql/system_variables.h"
 
+#include "sql/raft/raft0err.h"
+
 bool set_gtid_next(THD *thd, const Gtid_specification &spec) {
   DBUG_TRACE;
 
@@ -310,8 +312,16 @@ bool is_already_logged_transaction(const THD *thd) {
 
   if (gtid_next_list == nullptr) {
     if (gtid_next->type == ASSIGNED_GTID) {
-      if (thd->owned_gtid.sidno == 0)
-        return true;
+      if (thd->owned_gtid.sidno == 0) {
+        if (thd->raft_replication_channel) {
+          raft::warn(ER_RAFT_APPLIER) << "the gtid(" << gtid_next->gtid.sidno
+                                      << ", " << gtid_next->gtid.gno
+                                      << ") is already logged in paxos channel";
+          return false;
+        }
+        else
+          return true;
+      }
       else
         assert(thd->owned_gtid.equals(gtid_next->gtid));
     } else
@@ -321,7 +331,15 @@ bool is_already_logged_transaction(const THD *thd) {
 #ifdef HAVE_GTID_NEXT_LIST
     if (gtid_next->type == ASSIGNED_GTID) {
       assert(gtid_next_list->contains_gtid(gtid_next->gtid));
-      if (!thd->owned_gtid_set.contains_gtid(gtid_next->gtid)) return true;
+      if (!thd->owned_gtid_set.contains_gtid(gtid_next->gtid))
+        if (thd->raft_replication_channel) {
+          raft::warn(ER_RAFT_APPLIER) << "the gtid(" << gtid_next->gtid.sidno
+                                      << ", " << gtid_next->gtid.gno
+                                      << ") is already logged in paxos channel";
+          return false;
+        }
+        else
+          return true;
     }
 #else
     assert(0); /*NOTREACHED*/

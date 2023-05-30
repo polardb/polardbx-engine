@@ -1193,7 +1193,6 @@ bool Rpl_info_factory::create_slave_info_objects(
     }
 
     if (!channel_error) {
-      raft_server_bind_rli(mi->rli);
       error = configure_channel_replication_filters(mi->rli, cname);
       invalidate_repository_position(mi);
       // With GTID ONLY the worker info is not needed

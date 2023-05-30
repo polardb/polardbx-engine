@@ -193,6 +193,9 @@
 #include "sql/recycle_bin/recycle_parse.h"
 #include "sql/outline/outline_digest.h"
 #include "sql/outline/outline_interface.h"
+#include "sql/consensus_admin.h"
+#include "bl_consensus_log.h"
+#include "consensus_log_manager.h"
 
 namespace resourcegroups {
 class Resource_group;
@@ -725,6 +728,8 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SHOW_COLLATIONS] =
       CF_STATUS_COMMAND | CF_HAS_RESULT_SET | CF_REEXECUTION_FRAGILE;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] = CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOGS]= CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_SLAVE_HOSTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_BINLOG_EVENTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_STORAGE_ENGINES] = CF_STATUS_COMMAND;
@@ -883,6 +888,8 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SLAVE_START] = CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_SLAVE_STOP] = CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_STOP_GROUP_REPLICATION] = CF_IMPLICIT_COMMIT_END;
+  sql_command_flags[SQLCOM_START_XPAXOS_REPLICATION] = CF_IMPLICIT_COMMIT_END;
+  sql_command_flags[SQLCOM_STOP_XPAXOS_REPLICATION] = CF_IMPLICIT_COMMIT_END;
   sql_command_flags[SQLCOM_ALTER_TABLESPACE] |= CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_CREATE_SRS] |= CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_DROP_SRS] |= CF_AUTO_COMMIT_TRANS;
@@ -1061,6 +1068,8 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SLAVE_STOP] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_START_GROUP_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_STOP_GROUP_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_START_XPAXOS_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_STOP_XPAXOS_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_BEGIN] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CHANGE_MASTER] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CHANGE_REPLICATION_FILTER] |=
@@ -1070,6 +1079,8 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_PURGE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_PURGE_BEFORE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOGS]= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS] = CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_OPEN_TABLES] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_HA_OPEN] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_HA_CLOSE] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -3190,6 +3201,10 @@ int mysql_execute_command(THD *thd, bool first_level) {
     push_warning(thd, ER_WARN_DEPRECATED_CLIENT_NO_SCHEMA_OPTION);
   }
 
+  if (consensus_command_limit(thd)) {
+    return 1;
+  }
+
   if (unlikely(thd->slave_thread)) {
     if (!check_database_filters(thd, thd->db().str, lex->sql_command)) {
       binlog_gtid_end_transaction(thd);
@@ -3568,7 +3583,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
                  "SUPER or REPLICATION_SLAVE_ADMIN");
         goto error;
       }
+      consensus_log_manager.lock_consensus(TRUE);
       res = change_master_cmd(thd);
+      consensus_log_manager.unlock_consensus();
       break;
     }
     case SQLCOM_START_GROUP_REPLICATION: {
@@ -3727,6 +3744,51 @@ int mysql_execute_command(THD *thd, bool first_level) {
       thd->set_skip_readonly_check();
       my_ok(thd);
       res = 0;
+      break;
+    }
+
+    case SQLCOM_START_XPAXOS_REPLICATION: {
+      consensus_log_manager.lock_consensus(TRUE);
+      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
+        res = start_slave_cmd(thd);
+      else
+        my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+      consensus_log_manager.unlock_consensus();
+      break;
+    }
+
+    case SQLCOM_STOP_XPAXOS_REPLICATION: {
+      /*
+        If the client thread has locked tables, a deadlock is possible.
+        Assume that
+        - the client thread does LOCK TABLE t READ.
+        - then the master updates t.
+        - then the SQL slave thread wants to update t,
+          so it waits for the client thread because t is locked by it.
+        - then the client thread does SLAVE STOP.
+          SLAVE STOP waits for the SQL slave thread to terminate its
+          update t, which waits for the client thread because t is locked by it.
+        To prevent that, refuse SLAVE STOP if the
+        client thread has locked tables
+      */
+      if (thd->locked_tables_mode || thd->in_active_multi_stmt_transaction() ||
+          thd->global_read_lock.is_acquired()) {
+        my_error(ER_LOCK_OR_ACTIVE_TRANSACTION, MYF(0));
+        goto error;
+      }
+
+      consensus_log_manager.lock_consensus(TRUE);
+      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
+      {
+        res= stop_slave_cmd(thd);
+        LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+                          thd->m_main_security_ctx.user().str,
+                          thd->m_main_security_ctx.host_or_ip().str,
+                          thd->query().str, res);
+      }
+      else
+        my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+      consensus_log_manager.unlock_consensus();
       break;
     }
 
@@ -4801,6 +4863,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_ALTER_USER_DEFAULT_ROLE:
     case SQLCOM_SHOW_BINLOG_EVENTS:
     case SQLCOM_SHOW_BINLOGS:
+    case SQLCOM_SHOW_CONSENSUSLOGS:
+    case SQLCOM_SHOW_CONSENSUSLOG_EVENTS:
     case SQLCOM_SHOW_CHARSETS:
     case SQLCOM_SHOW_COLLATIONS:
     case SQLCOM_SHOW_CREATE_DB:
@@ -5321,6 +5385,10 @@ void THD::reset_for_next_command() {
   thd->reset_current_stmt_binlog_format_row();
   thd->binlog_unsafe_warning_flags = 0;
   thd->binlog_need_explicit_defaults_ts = false;
+
+  thd->consensus_index = 0;
+  thd->consensus_term = 0;
+  thd->consensus_error = THD::CSS_NONE;
 
   thd->commit_error = THD::CE_NONE;
   thd->durability_property = HA_REGULAR_DURABILITY;

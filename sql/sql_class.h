@@ -352,8 +352,16 @@ class Thd_mem_cnt {
   is resettable. Also the crashed master can be replaced with some other.
 */
 typedef struct rpl_event_coordinates {
+  rpl_event_coordinates() = default;
+  rpl_event_coordinates(const char *tmp_file_name, my_off_t tmp_pos, uint64_t tmp_consensus_index = 0)
+    : file_name(const_cast<char *>(tmp_file_name)), pos(tmp_pos), consensus_index(tmp_consensus_index)
+  {}
+
   char *file_name;  // binlog file name (directories stripped)
   my_off_t pos;     // event's position in the binlog file
+
+  uint64_t consensus_index; // log index
+
 } LOG_POS_COORD;
 
 #define THD_SENTRY_MAGIC 0xfeedd1ff
@@ -1941,9 +1949,6 @@ class THD : public MDL_context_owner,
   /**@{*/
 
 public:
-  uint64 consensus_index{0};
-  uint64 consensus_term{0};
-
   enum Consensus_error
   {
     CSS_NONE= 0,
@@ -1952,7 +1957,11 @@ public:
     CSS_SHUTDOWN,
     CSS_GU_ERROR,
     CSS_OTHER
-  } consensus_error{CSS_NONE};
+  };
+
+  uint64 consensus_index{0};
+  uint64 consensus_term{0};
+  Consensus_error consensus_error{CSS_NONE};
 
   const char *m_trans_log_file;
   char *m_trans_fixed_log_file;
@@ -4801,6 +4810,7 @@ public:
   PS_PARAM *bind_parameter_values;
   /** the number of elements in parameters */
   unsigned long bind_parameter_values_count;
+  bool raft_replication_channel;
 
  public:
   /**

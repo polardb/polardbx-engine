@@ -353,7 +353,8 @@ static const char *HA_ERR(int i) {
 static void inline slave_rows_error_report(enum loglevel level, int ha_error,
                                            Relay_log_info const *rli, THD *thd,
                                            TABLE *table, const char *type,
-                                           const char *log_name, ulong pos) {
+                                           const char *log_name, ulong pos,
+                                           ulonglong index, ulonglong seq) {
   const char *handler_error = (ha_error ? HA_ERR(ha_error) : nullptr);
   bool is_group_replication_applier_channel =
       channel_map.is_group_replication_channel_name(
@@ -395,18 +396,18 @@ static void inline slave_rows_error_report(enum loglevel level, int ha_error,
                                   : ER_UNKNOWN_ERROR,
                   "Could not execute %s event on table %s.%s;"
                   "%s handler error %s; "
-                  "the event's master log %s, end_log_pos %lu",
+                  "the event's master log %s, end_log_pos %lu, consensus_index %llu, seq %llu",
                   type, table->s->db.str, table->s->table_name.str, buff,
                   handler_error == nullptr ? "<unknown>" : handler_error,
-                  log_name, pos);
+                  log_name, pos, index, seq);
     } else {
       rli->report(level,
                   thd->is_error() ? thd->get_stmt_da()->mysql_errno()
                                   : ER_UNKNOWN_ERROR,
                   "Could not execute %s event on table %s.%s;"
-                  "%s the event's master log %s, end_log_pos %lu",
+                  "%s the event's master log %s, end_log_pos %lu, consensus_index %llu, seq %llu",
                   type, table->s->db.str, table->s->table_name.str, buff,
-                  log_name, pos);
+                  log_name, pos, index, seq);
     }
   }
 }
@@ -854,6 +855,13 @@ static void print_set_option(IO_CACHE *file, uint32 bits_changed, uint32 option,
 #ifdef MYSQL_SERVER
 
 time_t Log_event::get_time() {
+  if (opt_consensuslog_revise && consensus_extra_time && is_control_event()) {
+    if (!common_header->when.tv_sec && !common_header->when.tv_usec) {
+      common_header->when.tv_sec= le32toh(consensus_extra_time);
+      common_header->when.tv_usec= 0;
+    }
+    return (time_t) common_header->when.tv_sec;
+  }
   /* Not previously initialized */
   if (!common_header->when.tv_sec && !common_header->when.tv_usec) {
     THD *tmp_thd = thd ? thd : current_thd;
@@ -939,6 +947,14 @@ const char *Log_event::get_type_str(Log_event_type type) {
       return "Transaction_payload";
     case binary_log::GCN_LOG_EVENT:
       return "Gcn";
+    case binary_log::CONSENSUS_LOG_EVENT:
+      return "Consensus_log";
+    case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
+      return "Previous_consensus_index";
+    case binary_log::CONSENSUS_CLUSTER_INFO_EVENT:
+      return "Consensus_cluster_info";
+    case binary_log::CONSENSUS_EMPTY_EVENT:
+      return "Consensus_empty";
     default:
       return "Unknown"; /* impossible */
   }
@@ -971,6 +987,7 @@ Log_event::Log_event(THD *thd_arg, uint16 flags_arg,
   common_header->when = thd->start_time;
   common_header->log_pos = 0;
   common_header->flags = flags_arg;
+  consensus_extra_time = 0;
 }
 
 /**
@@ -994,6 +1011,7 @@ Log_event::Log_event(Log_event_header *header, Log_event_footer *footer,
       thd(nullptr) {
   server_id = ::server_id;
   common_header->unmasked_server_id = server_id;
+  consensus_extra_time = 0;
 }
 #endif /* MYSQL_SERVER */
 
@@ -1017,6 +1035,7 @@ Log_event::Log_event(Log_event_header *header, Log_event_footer *footer)
      Mask out any irrelevant parts of the server_id
   */
   server_id = common_header->unmasked_server_id & opt_server_id_mask;
+  consensus_extra_time= 0;
 }
 
 /*
@@ -1046,7 +1065,7 @@ int Log_event::do_update_pos(Relay_log_info *rli) {
   int error = 0;
   assert(!rli->belongs_to_client());
 
-  if (rli) error = rli->stmt_done(common_header->log_pos);
+  if (rli) error = rli->stmt_done(common_header->log_pos, consensus_index);
   return error;
 }
 
@@ -1209,6 +1228,11 @@ bool Log_event::need_checksum() {
               which IO thread instantiates via queue_binlog_ver_3_event.
            */
            get_type_code() == binary_log::ROTATE_EVENT ||
+          /*
+            The previous event has its checksum option defined
+            according to the format description event.
+          */
+          get_type_code() == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
            /*
               The previous event has its checksum option defined
               according to the format description event.
@@ -5715,7 +5739,7 @@ int Rotate_log_event::do_update_pos(Relay_log_info *rli) {
                       : rli->is_in_group();
 
   if ((server_id != ::server_id || rli->replicate_same_server_id) &&
-      !is_relay_log_event() && !in_group) {
+      !is_relay_log_event() && !Multisource_info::is_raft_channel(rli) && !in_group) {
     if (!is_mts_db_partitioned(rli) &&
         (server_id != ::server_id || rli->replicate_same_server_id)) {
       // force the coordinator to start a new binlog segment.
@@ -6227,11 +6251,13 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   char saved_group_relay_log_name[FN_REFLEN];
   volatile my_off_t saved_group_master_log_pos;
   volatile my_off_t saved_group_relay_log_pos;
+  volatile uint64 saved_consensus_apply_index;
 
   char new_group_master_log_name[FN_REFLEN];
   char new_group_relay_log_name[FN_REFLEN];
   volatile my_off_t new_group_master_log_pos;
   volatile my_off_t new_group_relay_log_pos;
+  volatile uint64 new_consensus_apply_index;
 
   lex_start(thd);
   mysql_reset_thd_for_next_command(thd);
@@ -6262,6 +6288,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   strmake(saved_group_relay_log_name, rli_ptr->get_group_relay_log_name(),
           FN_REFLEN - 1);
   saved_group_relay_log_pos = rli_ptr->get_group_relay_log_pos();
+  saved_consensus_apply_index = rli_ptr->get_consensus_apply_index();
 
   DBUG_PRINT(
       "info",
@@ -6281,6 +6308,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   rli_ptr->inc_event_relay_log_pos();
   rli_ptr->set_group_relay_log_pos(rli_ptr->get_event_relay_log_pos());
   rli_ptr->set_group_relay_log_name(rli_ptr->get_event_relay_log_name());
+  rli_ptr->set_consensus_apply_index(consensus_index);
 
   if (common_header->log_pos)  // 3.23 binlogs don't have log_posx
     rli_ptr->set_group_master_log_pos(common_header->log_pos);
@@ -6331,6 +6359,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   strmake(new_group_relay_log_name, rli_ptr->get_group_relay_log_name(),
           FN_REFLEN - 1);
   new_group_relay_log_pos = rli_ptr->get_group_relay_log_pos();
+  new_consensus_apply_index = rli_ptr->get_consensus_apply_index();
   /*
     Rollback positions in memory just before commit. Position values will be
     reset to their new values only on successful commit operation.
@@ -6340,6 +6369,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   rli_ptr->notify_group_master_log_name_update();
   rli_ptr->set_group_relay_log_name(saved_group_relay_log_name);
   rli_ptr->set_group_relay_log_pos(saved_group_relay_log_pos);
+  rli_ptr->set_consensus_apply_index(saved_consensus_apply_index);
 
   DBUG_PRINT("info", ("Rolling back to group master %s %llu  group relay %s"
                       " %llu\n",
@@ -6366,6 +6396,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
     rli_ptr->notify_group_master_log_name_update();
     rli_ptr->set_group_relay_log_name(new_group_relay_log_name);
     rli_ptr->set_group_relay_log_pos(new_group_relay_log_pos);
+    rli_ptr->set_consensus_apply_index(new_consensus_apply_index);
 
     DBUG_PRINT("info", ("Updating positions on succesful commit to group master"
                         " %s %llu  group relay %s %llu\n",
@@ -8807,7 +8838,7 @@ int Rows_log_event::handle_idempotent_and_ignored_errors(
       slave_rows_error_report(
           ll, error, rli, thd, m_table, get_type_str(),
           const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-          (ulong)common_header->log_pos);
+          (ulong)common_header->log_pos, consensus_index, consensus_sequence);
       thd->get_stmt_da()->reset_condition_info(thd);
       clear_all_errors(thd, const_cast<Relay_log_info *>(rli));
       *err = 0;
@@ -10185,7 +10216,7 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
       slave_rows_error_report(
           INFORMATION_LEVEL, error, rli, thd, table, get_type_str(),
           const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-          (ulong)common_header->log_pos);
+          (ulong)common_header->log_pos, consensus_index, consensus_sequence);
       thd->get_stmt_da()->reset_condition_info(thd);
       clear_all_errors(thd, const_cast<Relay_log_info *>(rli));
       error = 0;
@@ -10199,7 +10230,7 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
     slave_rows_error_report(
         ERROR_LEVEL, error, rli, thd, table, get_type_str(),
         const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-        (ulong)common_header->log_pos);
+        (ulong)common_header->log_pos, consensus_index, consensus_sequence);
     /*
       @todo We should probably not call
       reset_current_stmt_binlog_format_row() from here.
@@ -10218,7 +10249,7 @@ end:
             ERROR_LEVEL, thd->is_error() ? 0 : error, rli, thd, table,
             get_type_str(),
             const_cast<Relay_log_info *>(rli)->get_rpl_log_name(),
-            (ulong)common_header->log_pos);
+            (ulong)common_header->log_pos, consensus_index, consensus_sequence);
       else {
         rli->report(
             ERROR_LEVEL,
@@ -10366,7 +10397,7 @@ int Rows_log_event::do_update_pos(Relay_log_info *rli) {
       Step the group log position if we are not in a transaction,
       otherwise increase the event log position.
     */
-    error = rli->stmt_done(common_header->log_pos);
+    error = rli->stmt_done(common_header->log_pos, consensus_index);
   } else {
     rli->inc_event_relay_log_pos();
   }

@@ -210,6 +210,12 @@ class Multisource_info {
     return default_channel_mi;
   }
 
+
+  void reset_default_channel_mi() {
+    m_channel_map_lock->assert_some_lock();
+    default_channel_mi = NULL;
+  }
+
   /**
     Remove the entry corresponding to the channel, from the
     replication_channel_map and sets index in the  multisource_mi to 0;
@@ -231,6 +237,8 @@ class Multisource_info {
     Get the default channel for this multisourced_slave;
   */
   inline const char *get_default_channel() { return default_channel; }
+
+  inline const char *get_raft_channel() { return raft_channel; }
 
   /**
     Get the number of instances of Master_info in the map.
@@ -452,6 +460,7 @@ class Multisource_info {
 
  public:
   static bool is_raft_replication_channel_name(const char *channel);
+  //TODO @yanhua, need refactor to no use it
   static bool is_xpaxos_replication_channel_name(const char *channel)
   { return is_raft_replication_channel_name(channel); }
 

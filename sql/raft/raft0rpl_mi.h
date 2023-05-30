@@ -30,7 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/raft/channel.h"
 #include "sql/rpl_mi.h"
 
-class Raft_master_info : public Master_info {
+class Raft_master_info final : public Master_info {
  public:
   Raft_master_info(
 #ifdef HAVE_PSI_INTERFACE

@@ -3135,6 +3135,28 @@ class PT_show_binlogs final : public PT_show_base {
   Sql_cmd_show_binlogs m_sql_cmd;
 };
 
+class PT_show_consensus_logs final : public PT_show_base {
+ public:
+  PT_show_consensus_logs(const POS &pos)
+      : PT_show_base(pos, SQLCOM_SHOW_CONSENSUSLOGS) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_consensus_logs m_sql_cmd;
+};
+
+class PT_show_consensuslog_events final : public PT_show_base {
+ public:
+  PT_show_consensuslog_events(const POS &pos, unsigned long long log_index)
+      : PT_show_base(pos, SQLCOM_SHOW_CONSENSUSLOG_EVENTS), m_sql_cmd(log_index) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_consensuslog_events m_sql_cmd;
+};
+
 /// Parse tree node for SHOW CHARACTER SET statement
 
 class PT_show_charsets final : public PT_show_filter_base {

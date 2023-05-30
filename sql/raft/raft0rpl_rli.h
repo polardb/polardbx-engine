@@ -30,7 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/rpl_rli.h"
 #include "sql/raft/channel.h"
 
-class Raft_relay_log_info : public Relay_log_info {
+class Raft_relay_log_info final : public Relay_log_info {
  public:
   Raft_relay_log_info(bool is_slave_recovery,
 #ifdef HAVE_PSI_INTERFACE
@@ -88,6 +88,22 @@ class Raft_relay_log_info : public Relay_log_info {
                          the error message.
 */
   virtual bool is_group_relay_log_name_invalid(const char **errmsg) override;
+
+  /**
+    Given the extension number of the relay log, gets the full
+    relay log path. Currently used in Slave_worker::retry_transaction()
+
+    @param [in]   number      extension number of relay log
+    @param[in, out] name      The full path of the relay log (per-channel)
+                              to be read by the slave worker.
+  */
+  virtual void relay_log_number_to_name(uint number, char name[FN_REFLEN + 1]) override;
+
+  virtual LOG_POS_COORD get_log_pos_coord() override;
+  virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position) override;
+  virtual void set_raft_relay_log_info() override;
+  virtual void set_raft_apply_ev_sequence() override;
+  virtual void update_raft_applied_index() override;
 };
 
 #endif

@@ -125,6 +125,9 @@ class Binlog_sender {
   const char *m_last_file;
   my_off_t m_last_pos;
 
+  // current MYSQL_BIN_LOG being processed
+  MYSQL_BIN_LOG *consensus_log;
+
   /*
     Needed to be able to evaluate if buffer needs to be resized (shrunk).
   */
@@ -499,11 +502,28 @@ class Binlog_sender {
   */
   void calc_shrink_buffer_size(size_t current_size);
 
+  /**
+    It travels the binlog file and find the first user event's timestamp
+     @param[in] log_cache  IO_CACHE of the binlog will be sent
+     @param[in] end_pos    Only the events before end_pos are sent
+     @return It returns 0 if failed.
+  */
+  uint32 find_first_user_event_timestamp(File_reader *reader, my_off_t end_pos);
+
+  int wait_commit_index_update(my_off_t log_pos, uint64_t index);
+ 
+  /**
+    Because of the design of binlog-relaylog combination,
+    X-Cluster revises each event before sending it to slave.
+  */
+  void revise_event(uchar *event_ptr, size_t event_len, uint32 fake_ctime, my_off_t log_pos);
+
  public:
   friend class lizard::Delay_binlog_sender;
 
  private:
   lizard::Delay_binlog_sender m_delay_sender;
+
 };
 
 #endif  // DEFINED_RPL_BINLOG_SENDER

@@ -77,6 +77,22 @@
 #include "thr_mutex.h"
 #include "typelib.h"
 
+#include "my_macros.h"
+#include "scope_guard.h"
+#include "sql/consensus_log_manager.h" // ConsensusLogManager
+
+#define READ_CONSENSUS_LOG()  \
+  consensus_log_manager.lock_consensus(TRUE);\
+  MYSQL_BIN_LOG *consensus_log = \
+    (consensus_log_manager.get_status() == BINLOG_WORKING \
+    ? &mysql_bin_log \
+    : &consensus_log_manager.get_relay_log_info()->relay_log);\
+  \
+  auto consensus_guard = create_scope_guard([&] {\
+    consensus_log_manager.unlock_consensus();\
+  });
+
+
 int max_binlog_dump_events = 0;  // unlimited
 bool opt_sporadic_binlog_dump_fail = false;
 
@@ -1236,9 +1252,11 @@ bool show_master_status(THD *thd) {
   }
   protocol->start_row();
 
-  if (mysql_bin_log.is_open()) {
+  READ_CONSENSUS_LOG();
+
+  if (consensus_log->is_open()) {
     LOG_INFO li;
-    mysql_bin_log.get_current_log(&li);
+    consensus_log->get_current_log(&li);
     size_t dir_len = dirname_length(li.log_file_name);
     protocol->store(li.log_file_name + dir_len, &my_charset_bin);
     protocol->store((ulonglong)li.pos);
@@ -1250,6 +1268,7 @@ bool show_master_status(THD *thd) {
       return true;
     }
   }
+  consensus_guard.rollback();
   my_eof(thd);
   my_free(gtid_set_buffer);
   return false;
@@ -1274,7 +1293,9 @@ bool show_binlogs(THD *thd) {
   Protocol *protocol = thd->get_protocol();
   DBUG_TRACE;
 
-  if (!mysql_bin_log.is_open()) {
+  READ_CONSENSUS_LOG();
+
+  if (!consensus_log->is_open()) {
     my_error(ER_NO_BINARY_LOGGING, MYF(0));
     return true;
   }
@@ -1288,13 +1309,13 @@ bool show_binlogs(THD *thd) {
                                 Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     return true;
 
-  mysql_mutex_lock(mysql_bin_log.get_log_lock());
+  mysql_mutex_lock(consensus_log->get_log_lock());
   DEBUG_SYNC(thd, "show_binlogs_after_lock_log_before_lock_index");
-  mysql_bin_log.lock_index();
-  index_file = mysql_bin_log.get_index_file();
+  consensus_log->lock_index();
+  index_file = consensus_log->get_index_file();
 
-  mysql_bin_log.raw_get_current_log(&cur);           // dont take mutex
-  mysql_mutex_unlock(mysql_bin_log.get_log_lock());  // lockdep, OK
+  consensus_log->raw_get_current_log(&cur);           // dont take mutex
+  mysql_mutex_unlock(consensus_log->get_log_lock());  // lockdep, OK
 
   cur_dir_len = dirname_length(cur.log_file_name);
 
@@ -1343,11 +1364,11 @@ bool show_binlogs(THD *thd) {
     }
   }
   if (index_file->error == -1) goto err;
-  mysql_bin_log.unlock_index();
+  consensus_log->unlock_index();
+  consensus_guard.rollback();
   my_eof(thd);
   return false;
 
 err:
-  mysql_bin_log.unlock_index();
   return true;
 }

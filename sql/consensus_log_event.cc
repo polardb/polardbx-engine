@@ -459,7 +459,7 @@ Log_event::enum_skip_reason Stop_log_event::do_shall_skip(Relay_log_info *rli) {
    Events from ourself should be skipped, but they should not
    decrease the slave skip counter.
   */
-  if (rli->style() == Channel_style::Raft) {
+  if (Multisource_info::is_raft_channel(rli)) {
 #ifndef DBUG_OFF
     bool is_raft =
         Multisource_info::is_raft_replication_channel_name(rli->get_channel());

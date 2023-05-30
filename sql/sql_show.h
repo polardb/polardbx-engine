@@ -252,6 +252,30 @@ class Sql_cmd_show_binlogs : public Sql_cmd_show_noplan {
   bool execute_inner(THD *thd) override;
 };
 
+/// Represents SHOW CONSENSUS LOGS statement.
+
+class Sql_cmd_show_consensus_logs : public Sql_cmd_show_noplan {
+ public:
+  Sql_cmd_show_consensus_logs() : Sql_cmd_show_noplan(SQLCOM_SHOW_CONSENSUSLOGS) {}
+  bool check_privileges(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+};
+
+/// Represents SHOW CONSENSUS LOG EVENTS statement.
+
+class Sql_cmd_show_consensuslog_events : public Sql_cmd_show_noplan {
+ public:
+  Sql_cmd_show_consensuslog_events(unsigned long long log_index)
+    : Sql_cmd_show_noplan(SQLCOM_SHOW_CONSENSUSLOG_EVENTS),
+      consensus_index(log_index)
+    {}
+  bool check_privileges(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+
+  unsigned long long consensus_index;
+};
+
+
 /// Represents SHOW CHARACTER SET statement.
 
 class Sql_cmd_show_charsets : public Sql_cmd_show {

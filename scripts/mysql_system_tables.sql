@@ -383,6 +383,7 @@ SET @cmd="CREATE TABLE IF NOT EXISTS slave_relay_log_info (
   Require_table_primary_key_check ENUM('STREAM','ON','OFF','GENERATE') NOT NULL DEFAULT 'STREAM' COMMENT 'Indicates what is the channel policy regarding tables without primary keys on create and alter table queries',
   Assign_gtids_to_anonymous_transactions_type ENUM('OFF', 'LOCAL', 'UUID')  NOT NULL DEFAULT 'OFF' COMMENT 'Indicates whether the channel will generate a new GTID for anonymous transactions. OFF means that anonymous transactions will remain anonymous. LOCAL means that anonymous transactions will be assigned a newly generated GTID based on server_uuid. UUID indicates that anonymous transactions will be assigned a newly generated GTID based on Assign_gtids_to_anonymous_transactions_value',
   Assign_gtids_to_anonymous_transactions_value TEXT CHARACTER SET utf8mb3 COLLATE utf8mb3_bin  COMMENT 'Indicates the UUID used while generating GTIDs for anonymous transactions',
+  Consensus_apply_index BIGINT UNSIGNED NOT  NULL COMMENT 'The consensus log applyed index in the consensus log',
   PRIMARY KEY(Channel_name)) DEFAULT CHARSET=utf8mb3 STATS_PERSISTENT=0 COMMENT 'Relay Log Information'";
 
 SET @str=IF(@have_innodb <> 0, CONCAT(@cmd, ' ENGINE= INNODB ROW_FORMAT=DYNAMIC TABLESPACE=mysql ENCRYPTION=\'', @is_mysql_encrypted,'\''), CONCAT(@cmd, ' ENGINE= MYISAM'));
@@ -445,8 +446,23 @@ SET @cmd= "CREATE TABLE IF NOT EXISTS slave_worker_info (
   Checkpoint_group_size INTEGER UNSIGNED NOT NULL,
   Checkpoint_group_bitmap BLOB NOT NULL,
   Channel_name VARCHAR(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL COMMENT 'The channel on which the replica is connected to a source. Used in Multisource Replication',
+  Checkpoint_consensus_apply_index BIGINT UNSIGNED NOT  NULL COMMENT 'Checkpoint index',
+  Consensus_apply_index BIGINT UNSIGNED NOT  NULL COMMENT 'The consensus log applyed index in the consensus log',
   PRIMARY KEY(Channel_name, Id)) DEFAULT CHARSET=utf8mb3 STATS_PERSISTENT=0 COMMENT 'Worker Information'";
 
+SET @str=IF(@have_innodb <> 0, CONCAT(@cmd, ' ENGINE= INNODB ROW_FORMAT=DYNAMIC TABLESPACE=mysql ENCRYPTION=\'', @is_mysql_encrypted,'\''), CONCAT(@cmd, ' ENGINE= MYISAM'));
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
+SET @cmd= "CREATE TABLE IF NOT EXISTS consensus_info (
+  number_of_lines INTEGER UNSIGNED NOT NULL COMMENT 'Number of lines in the file or rows in the table. Used to version table definitions.',
+  vote_for BIGINT UNSIGNED COMMENT 'current vote for', current_term BIGINT UNSIGNED COMMENT 'current term',
+  recover_status BIGINT UNSIGNED COMMENT 'recover status', last_leader_term BIGINT UNSIGNED COMMENT 'last leader term',
+  start_apply_index BIGINT UNSIGNED COMMENT 'start apply index', cluster_id BIGINT UNSIGNED COMMENT 'cluster identifier',
+  cluster_info varchar(6000) COMMENT 'cluster config information', cluster_learner_info varchar(6000) COMMENT 'cluster learner config information',
+  cluster_config_recover_index BIGINT UNSIGNED COMMENT 'cluster config recover index',
+  PRIMARY KEY(number_of_lines)) DEFAULT CHARSET=utf8 COMMENT 'Normandy cluster consensus information'";
 SET @str=IF(@have_innodb <> 0, CONCAT(@cmd, ' ENGINE= INNODB ROW_FORMAT=DYNAMIC TABLESPACE=mysql ENCRYPTION=\'', @is_mysql_encrypted,'\''), CONCAT(@cmd, ' ENGINE= MYISAM'));
 PREPARE stmt FROM @str;
 EXECUTE stmt;

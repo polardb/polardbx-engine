@@ -214,6 +214,7 @@ class Binlog_event_object_istream {
 
     event->register_temp_buf(reinterpret_cast<char *>(data),
                              ALLOCATOR::DELEGATE_MEMORY_TO_EVENT_OBJECT);
+    event->buf_len = length;
     return event;
   }
 

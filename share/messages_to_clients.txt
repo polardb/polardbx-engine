@@ -10140,6 +10140,31 @@ ER_CONSENSUS_LOG_TOO_LARGE
 ER_CONSENSUS_OTHER_ERROR
   eng "Other consensus problem, retry."
 
+
+ER_CONSENSUS_COMMAND_ERROR
+  eng "The consensus membership change failed, error code is %d, error msg: %s"
+
+ER_CONSENSUS_LEADER_NOT_ALLOWED
+  eng "The consensus leader is not allowed to do current operation."
+
+ER_CONSENSUS_SERVER_NOT_READY
+  eng "The server is not allowed to do current operation."
+
+ER_CONSENSUS_NOT_SUPPORT
+  eng "Cluster not support this operation."
+
+ER_CONSENSUS_TOO_MANY_NODE
+  eng "The cluster has too many nodes."
+
+ER_CONSENSUS_IP_PORT_FORMAT
+  eng "The consensus node ip:port format is incorrect."
+
+ER_CONSENSUS_LOG_TYPE_NODE
+  eng "The consensus node is logger, which is not allowed to to do current operation."
+
+ER_CONSENSUS_CMD_LOG
+  eng "user:%s  host:%s sql:%s result:%d!!!"
+
 ################################################################################
 # DO NOT add messages for the error-log to this file;
 # they go in messages_to_error_log.txt in the same

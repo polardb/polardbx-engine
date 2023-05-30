@@ -77,6 +77,8 @@
 #include "sql_string.h"
 #include "thr_mutex.h"
 
+#include "sql/consensus_log_manager.h"      // ConsensusLogManager
+
 class Item;
 
 using std::max;
@@ -102,7 +104,8 @@ const char *info_rli_fields[] = {
     "require_row_format",
     "require_table_primary_key_check",
     "assign_gtids_to_anonymous_transactions_type",
-    "assign_gtids_to_anonymous_transactions_value"};
+    "assign_gtids_to_anonymous_transactions_value",
+    "consensus_apply_index"};
 
 Relay_log_info::Relay_log_info(bool is_slave_recovery,
 #ifdef HAVE_PSI_INTERFACE
@@ -133,6 +136,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       error_on_rli_init_info(false),
       transaction_parser(
           Transaction_boundary_parser::TRX_BOUNDARY_PARSER_APPLIER),
+      consensus_apply_index(0),
       group_relay_log_pos(0),
       event_relay_log_number(0),
       event_relay_log_pos(0),
@@ -257,6 +261,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
   do_server_version_split(::server_version, slave_version_split);
   until_option = nullptr;
   rpl_filter = nullptr;
+  applier_reader = nullptr;
 }
 
 /**
@@ -1228,7 +1233,7 @@ bool Relay_log_info::cached_charset_compare(char *charset) const {
   return false;
 }
 
-int Relay_log_info::stmt_done(my_off_t event_master_log_pos) {
+int Relay_log_info::stmt_done(my_off_t event_master_log_pos, uint64_t event_consensus_index) {
   clear_flag(IN_STMT);
 
   assert(!belongs_to_client());
@@ -1269,6 +1274,7 @@ int Relay_log_info::stmt_done(my_off_t event_master_log_pos) {
       mts_group_status != MTS_NOT_IN_GROUP) {
     inc_event_relay_log_pos();
   } else {
+    set_consensus_apply_index(event_consensus_index);
     return inc_group_relay_log_pos(event_master_log_pos,
                                    true /*need_data_lock*/);
   }
@@ -1819,7 +1825,8 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
       set_group_relay_log_pos(BIN_LOG_HEADER_SIZE);
     }
 
-    if (!mi->is_gtid_only_mode() && is_group_relay_log_name_invalid(&msg)) {
+    if (!Multisource_info::is_raft_channel(mi) &&
+        !mi->is_gtid_only_mode() && is_group_relay_log_name_invalid(&msg)) {
       LogErr(ERROR_LEVEL, ER_RPL_MTS_RECOVERY_CANT_OPEN_RELAY_LOG,
              group_relay_log_name, std::to_string(group_relay_log_pos).c_str());
       error = 1;
@@ -1831,7 +1838,7 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
   error_on_rli_init_info = false;
 
   /**TODO: */
-  if (style() == Channel_style::Tradition) {
+  if (!Multisource_info::is_raft_channel(mi)) {
     if (flush_info(RLI_FLUSH_IGNORE_SYNC_OPT | RLI_FLUSH_IGNORE_GTID_ONLY)) {
       msg = "Error reading relay log configuration";
       error = 1;
@@ -2086,6 +2093,7 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
   ulong temp_require_table_primary_key_check = Relay_log_info::PK_CHECK_STREAM;
   Rpl_info_handler::enum_field_get_status status{
       Rpl_info_handler::enum_field_get_status::FAILURE};
+  ulong temp_consensus_apply_index = 0;
 
   DBUG_TRACE;
 
@@ -2279,6 +2287,12 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
              temp_assign_gtids_to_anonymous_transactions_value);
       return true;
     }
+  }
+  
+  if (lines >= LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX)
+  {
+    if (!!from->get_info(&temp_consensus_apply_index, 0UL))
+      return true;
   } else {
     // If the file contains the TYPE, then the VALUE is mandatory.
     if (lines >=
@@ -2290,6 +2304,7 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
   group_master_log_pos = temp_group_master_log_pos;
   sql_delay = (int32)temp_sql_delay;
   internal_id = (uint)temp_internal_id;
+  set_consensus_apply_index(temp_consensus_apply_index);
 
   DBUG_EXECUTE_IF("simulate_priv_check_username_above_limit", {
     strcpy(temp_privilege_checks_username,
@@ -2384,6 +2399,9 @@ bool Relay_log_info::write_info(Rpl_info_handler *to) {
           m_assign_gtids_to_anonymous_transactions_info.get_value().c_str())) {
     return true; /* purecov: inspected */
   }
+
+  if (to->set_info((ulong)consensus_apply_index)) return true;
+
   return false;
 }
 

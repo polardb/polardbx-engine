@@ -52,7 +52,7 @@ extern PSI_cond_key key_consensus_info_stop_cond;
 extern PSI_cond_key key_consensus_info_sleep_cond;
 #endif
 
-class Consensus_info : public Rpl_info {
+class Consensus_info final : public Rpl_info {
   friend class Rpl_info_factory;
 
  public:

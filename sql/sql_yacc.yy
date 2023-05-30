@@ -1390,6 +1390,9 @@ void warn_about_deprecated_binary(THD *thd)
 %token<lexer.keyword> BULK_SYM                   1201  /* MYSQL */
 %token<lexer.keyword> URL_SYM                    1202   /* MYSQL */
 %token<lexer.keyword> GENERATE_SYM               1203   /* MYSQL */
+%token<lexer.keyword> CONSENSUS_SYM              1204   /* MYSQL */
+%token<lexer.keyword> CONSENSUSLOG_SYM           1205   /* MYSQL */
+%token<lexer.keyword> XPAXOS_REPLICATION         1206   /* MYSQL */
 
 /*
   Precedence rules used to resolve the ambiguity when using keywords as idents
@@ -1518,6 +1521,7 @@ void warn_about_deprecated_binary(THD *thd)
         view_check_option
         signed_num
         opt_ignore_unknown_user
+        opt_consensus_log_index
 
 
 %type <order_direction>
@@ -1929,6 +1933,8 @@ void warn_about_deprecated_binary(THD *thd)
         show_create_trigger_stmt
         show_create_user_stmt
         show_create_view_stmt
+        show_consensus_logs_stmt
+        show_consensuslog_events_stmt
         show_databases_stmt
         show_engine_logs_stmt
         show_engine_mutex_stmt
@@ -2428,6 +2434,8 @@ simple_statement:
         | show_create_trigger_stmt
         | show_create_user_stmt
         | show_create_view_stmt
+        | show_consensus_logs_stmt
+        | show_consensuslog_events_stmt
         | show_databases_stmt
         | show_engine_logs_stmt
         | show_engine_mutex_stmt
@@ -2468,6 +2476,7 @@ simple_statement:
         | update_stmt
         | use                           { $$= nullptr; }
         | xa                            { $$= nullptr; }
+        | xpaxos_replication            { $$= nullptr; }
         ;
 
 deallocate:
@@ -9358,6 +9367,25 @@ group_replication_plugin_auth:
           }
         ;
 
+xpaxos_replication:
+          START_SYM XPAXOS_REPLICATION
+          {
+            Lex->sql_command = SQLCOM_START_XPAXOS_REPLICATION;
+            Lex->type= 0;
+            Lex->slave_thd_opt= 0;
+            Lex->mi.channel= "";
+            Lex->mi.for_channel= false;
+          }
+        | STOP_SYM XPAXOS_REPLICATION
+          {
+            Lex->sql_command = SQLCOM_STOP_XPAXOS_REPLICATION;
+            Lex->type= 0;
+            Lex->slave_thd_opt= 0;
+            Lex->mi.channel= "";
+            Lex->mi.for_channel= false;
+          }
+        ;
+
 replica:
         SLAVE { Lex->set_replication_deprecated_syntax_used(); }
       | REPLICA_SYM
@@ -13945,11 +13973,30 @@ show_create_view_stmt:
           }
         ;
 
+show_consensus_logs_stmt:
+          SHOW CONSENSUS_SYM LOGS_SYM
+          {
+            $$ = NEW_PTN PT_show_consensus_logs(@$);
+          }
+        ;
+
+show_consensuslog_events_stmt:
+          SHOW CONSENSUSLOG_SYM EVENTS_SYM FROM opt_consensus_log_index
+          {
+            $$ = NEW_PTN PT_show_consensuslog_events(@$, $5);
+          }
+        ;
+
 show_master_status_stmt:
           SHOW MASTER_SYM STATUS_SYM
           {
             $$ = NEW_PTN PT_show_master_status(@$);
           }
+        ;
+
+opt_consensus_log_index:
+          /* empty */        { $$ = 2; }
+        | ulonglong_num      { $$ = $1; }
         ;
 
 show_replica_status_stmt:
@@ -15796,6 +15843,7 @@ ident_keywords_unambiguous:
         | X509_SYM
         | XID_SYM
         | XML_SYM
+        | XPAXOS_REPLICATION
         | YEAR_SYM
         | ZONE_SYM
         ;

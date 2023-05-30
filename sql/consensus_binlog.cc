@@ -2326,7 +2326,6 @@ int flush_consensus_log(THD *thd, binlog_cache_data *binlog_cache,
     // clear the cache
     reinit_io_cache(consensus_log_manager.get_cache(), WRITE_CACHE, 0, 0, 1);
     // rollback logical clock
-    //TODO @yanhua
     mysql_bin_log.m_dependency_tracker.step_down();
     goto end;
   }
