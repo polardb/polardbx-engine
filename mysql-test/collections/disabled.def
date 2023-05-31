@@ -286,3 +286,5 @@ galaxy_sql.feature_record_row_read_delete_mark    : WL#000 System variable 'inno
 
 # trx_sys_t::max_trx_id
 innodb.max_trx_id                                 : WL#000 Transaction commit no longer pushes up next_trx_id_or_no.
+
+galaxy_sql.rdsaudit_log                           : WL#000 System variable 'maintain_user_list' is not supported yet

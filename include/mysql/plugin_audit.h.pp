@@ -357,6 +357,8 @@ typedef struct {
     long long num;
   } value;
 } mysql_event_message_key_value_t;
+LEX_STRING *thd_get_rds_audit_event_buf(void * thd);
+void thd_set_rds_audit_event_buf(void * thd, LEX_STRING *event_buf);
 typedef enum {
   MYSQL_AUDIT_GENERAL_CLASS = 0,
   MYSQL_AUDIT_CONNECTION_CLASS = 1,
@@ -371,6 +373,8 @@ typedef enum {
   MYSQL_AUDIT_STORED_PROGRAM_CLASS = 10,
   MYSQL_AUDIT_AUTHENTICATION_CLASS = 11,
   MYSQL_AUDIT_MESSAGE_CLASS = 12,
+  MYSQL_AUDIT_RDS_CONNECTION_CLASS = 13,
+  MYSQL_AUDIT_RDS_QUERY_CLASS = 14,
   MYSQL_AUDIT_CLASS_MASK_SIZE
 } mysql_event_class_t;
 struct st_mysql_audit {
@@ -564,4 +568,65 @@ struct mysql_event_message {
   MYSQL_LEX_CSTRING message;
   mysql_event_message_key_value_t *key_value_map;
   size_t key_value_map_length;
+};
+typedef enum {
+  MYSQL_AUDIT_RDS_CONNECTION_CONNECT = 1 << 0,
+  MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT = 1 << 1
+} mysql_event_rds_connection_subclass_t;
+struct mysql_event_rds_connection {
+  mysql_event_rds_connection_subclass_t event_subclass;
+  int error_code;
+  unsigned long thread_id;
+  bool is_super;
+  MYSQL_LEX_CSTRING user;
+  MYSQL_LEX_CSTRING host;
+  MYSQL_LEX_CSTRING ip;
+  MYSQL_LEX_CSTRING db;
+  int connection_type;
+  unsigned long long start_utime;
+  unsigned long long cost_utime;
+  MYSQL_LEX_CSTRING message;
+  MYSQL_LEX_CSTRING endpoint_ip;
+};
+typedef enum {
+  MYSQL_AUDIT_RDS_QUERY_RESULT = 1 << 0,
+} mysql_event_rds_query_subclass_t;
+struct mysql_event_rds_query {
+  mysql_event_rds_query_subclass_t event_subclass;
+  int error_code;
+  unsigned long thread_id;
+  bool is_super;
+  MYSQL_LEX_CSTRING user;
+  MYSQL_LEX_CSTRING external_user;
+  MYSQL_LEX_CSTRING ip;
+  MYSQL_LEX_CSTRING host;
+  MYSQL_LEX_CSTRING db;
+  enum enum_server_command command;
+  MYSQL_LEX_CSTRING command_name;
+  unsigned long long start_utime;
+  enum_sql_command sql_command;
+  MYSQL_LEX_CSTRING sql_command_name;
+  MYSQL_LEX_CSTRING query;
+  CHARSET_INFO *query_charset;
+  unsigned long long lock_utime;
+  unsigned long long server_lock_wait;
+  unsigned long long engine_lock_wait;
+  unsigned long long cost_utime;
+  unsigned long long trx_utime;
+  unsigned long long examined_rows;
+  unsigned long long updated_rows;
+  unsigned long long sent_rows;
+  unsigned long long memory_used;
+  unsigned long long query_memory_used;
+  unsigned long long logical_reads;
+  unsigned long long physical_sync_reads;
+  unsigned long long physical_async_reads;
+  unsigned long long rw_spin_waits;
+  unsigned long long rw_spin_rounds;
+  unsigned long long rw_os_waits;
+  unsigned long long temp_user_table_size;
+  unsigned long long temp_sort_table_size;
+  unsigned long long temp_sort_file_size;
+  MYSQL_LEX_CSTRING endpoint_ip;
+  unsigned long long trx_id;
 };

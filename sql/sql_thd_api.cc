@@ -591,6 +591,13 @@ void thd_mark_transaction_to_rollback(MYSQL_THD thd, int all) {
   thd->mark_transaction_to_rollback((all != 0));
 }
 
+LEX_STRING *thd_get_rds_audit_event_buf(MYSQL_THD thd) {
+  return thd->get_rds_audit_event_buf();
+}
+void thd_set_rds_audit_event_buf(MYSQL_THD thd, LEX_STRING *event_buf) {
+  thd->set_rds_audit_event_buf(event_buf);
+}
+
 //////////////////////////////////////////////////////////
 //
 //  Definitions of functions declared in service_thd_alloc.h

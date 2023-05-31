@@ -925,6 +925,45 @@ class Transactional_ddl_context {
 struct PS_PARAM;
 
 /**
+  @class AUDIT_trx_ctx
+  used in AUDIT LOG plugin
+*/
+class AUDIT_trx_ctx {
+public:
+  typedef enum {
+    AUDIT_TRX_NONE,
+    AUDIT_TRX_ACTIVE,
+    AUDIT_TRX_IDLE,
+  } AUDIT_TRX_STATE;
+
+  AUDIT_TRX_STATE state;
+  unsigned long long start_time;
+  unsigned long long trx_id;
+
+public:
+  AUDIT_trx_ctx() {
+    state = AUDIT_TRX_IDLE;
+    start_time = 0;
+    trx_id = 0;
+  }
+
+  void start_transaction() {
+    if (state != AUDIT_TRX_ACTIVE) {
+      state = AUDIT_TRX_ACTIVE;
+      start_time = my_micro_time();
+    }
+  }
+
+  void end_transaction() {
+    state = AUDIT_TRX_IDLE;
+  }
+
+  void set_trx_id(unsigned long long id) {
+    trx_id = id;
+  }
+};
+
+/**
   @class THD
   For each client connection we create a separate thread with THD serving as
   a thread/connection descriptor
@@ -4608,6 +4647,8 @@ class THD : public MDL_context_owner,
   PPI_transaction *ppi_transaction;
   std::unique_ptr<PPI_stat> ppi_statement_stat;
 
+  AUDIT_trx_ctx audit_trx_ctx;
+
   /**
     Can secondary storage engines be used for query execution in
     this session?
@@ -4624,6 +4665,19 @@ class THD : public MDL_context_owner,
     session, or false otherwise
   */
   bool is_secondary_storage_engine_eligible() const;
+
+  LEX_STRING *get_rds_audit_event_buf() {
+    return rds_audit_event_buf;
+  }
+
+  void set_rds_audit_event_buf(LEX_STRING *event_buf) {
+    rds_audit_event_buf = event_buf;
+  }
+
+  void set_client_endpoint_ip(char* endpoint_ip, size_t len) {
+    session_sysvar_res_mgr.update(&variables.client_endpoint_ip,
+                                  endpoint_ip, len);
+  }
 
  private:
   /**
@@ -4650,6 +4704,12 @@ class THD : public MDL_context_owner,
 
   bool is_connection_admin();
   void set_connection_admin(bool connection_admin_flag);
+
+  /* This member point to the buffer which is used to serialized rds audit
+  event, the buffer is allocated and freed by rds audit log plugin.
+  TODO This is a temporary workaround fix for memory leak, we don't want
+  expose the detail of rds audit log plugin to THD, or vice versa.*/
+  LEX_STRING *rds_audit_event_buf;
 
  public:
   Transactional_ddl_context m_transactional_ddl{this};

@@ -170,6 +170,7 @@ bool Sql_cmd_xa_commit::process_attached_xa_commit(THD *thd) const {
       thd->m_transaction_psi = nullptr;
 #endif
       PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
+      thd->audit_trx_ctx.end_transaction();
     }
   } else {
     my_error(ER_XAER_RMFAIL, MYF(0), xid_state->state_name());

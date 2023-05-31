@@ -1,0 +1,28 @@
+set global rds_audit_log_enabled = ON;
+let $file1= `show status like 'rds_audit_log_filename'`;
+set global rds_audit_log_flush = on;
+let $file2 = `show status like 'rds_audit_log_filename'`;
+if ($file1 != $file2)
+{
+    --echo "switch file"
+}
+
+create user 'xx1'@'%';
+grant usage on *.* to 'xx1'@'%';
+
+connect (normal_conn, localhost, xx1,,);
+connection normal_conn;
+
+let $file1 = `show status like 'rds_audit_log_filename'`;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+set global rds_audit_log_flush = on;
+let $file2 = `show status like 'rds_audit_log_filename'`;
+if ($file1 == $file2)
+{
+    --echo "not switch file"
+}
+
+
+connection default;
+set global rds_audit_log_enabled = default;
+drop user 'xx1'@'%';

@@ -3046,6 +3046,9 @@ void plugin_thdvar_init(THD *thd, bool enable_plugins) {
 
   // @@session.session_track_system_variables
   thd->session_sysvar_res_mgr.init(&thd->variables.track_sysvars_ptr);
+
+  // @@session.client_endpoint_ip
+  thd->session_sysvar_res_mgr.init(&thd->variables.client_endpoint_ip);
 }
 
 /*
@@ -3072,6 +3075,8 @@ static void cleanup_variables(THD *thd, struct System_variables *vars) {
     plugin_var_memalloc_free(&thd->variables);
     /* Remove references to session_sysvar_res_mgr memory before freeing it. */
     thd->variables.track_sysvars_ptr = nullptr;
+    /* Remove references to client_endpoint_ip memory before freeing it. */
+    thd->variables.client_endpoint_ip = nullptr;
     thd->session_sysvar_res_mgr.deinit();
   }
   assert(vars->table_plugin == nullptr);

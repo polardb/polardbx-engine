@@ -69,6 +69,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 #include "mysql/plugin.h"
 #include "sql/clone_handler.h"
+#include "sql/sql_class.h"
 
 #include "mysql/service_thd_wait.h"
 
@@ -558,6 +559,14 @@ trx_t *trx_allocate_for_mysql(void) {
   trx_sys_mutex_exit();
 
   return (trx);
+}
+
+/** record trx id in audit trx ctx of mysql thd.
+@param[in,out]	trx	transaction object to set trx_id */
+static void trx_set_trx_id_for_audit_trx_ctx(trx_t *trx) {
+  if (trx->mysql_thd) {
+    trx->mysql_thd->audit_trx_ctx.set_trx_id(static_cast<unsigned long long>(trx->id));
+  }
 }
 
 /** Check state of transaction before freeing it.
@@ -1322,6 +1331,8 @@ void trx_assign_rseg_temp(trx_t *trx) {
 
     trx_sys_rw_trx_add(trx);
   }
+
+  trx_set_trx_id_for_audit_trx_ctx(trx);
 }
 
 /** Starts a transaction. */
@@ -1447,6 +1458,7 @@ static void trx_start_low(
 
     trx_sys_rw_trx_add(trx);
 
+    trx_set_trx_id_for_audit_trx_ctx(trx);
   } else {
     trx->id = 0;
 
@@ -1467,6 +1479,8 @@ static void trx_start_low(
         // trx_sys->rw_trx_ids.push_back(trx->id);
 
         trx_sys_mutex_exit();
+
+        trx_set_trx_id_for_audit_trx_ctx(trx);
 
         trx_sys_rw_trx_add(trx);
 
@@ -3567,6 +3581,8 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
   trx_sys_mutex_exit();
 
   trx_sys_rw_trx_add(trx);
+  
+  trx_set_trx_id_for_audit_trx_ctx(trx);
 }
 
 void trx_kill_blocking(trx_t *trx) {

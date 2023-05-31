@@ -44,6 +44,7 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+#include "sql/auth/auth_acls.h"
 #include "sql/auto_thd.h"  // Auto_THD
 #include "sql/current_thd.h"
 #include "sql/error_handler.h"  // Internal_error_handler
@@ -998,6 +999,162 @@ int mysql_audit_notify(THD *thd, mysql_event_message_subclass_t subclass,
 
   return event_class_dispatch_error(thd, MYSQL_AUDIT_MESSAGE_CLASS,
                                     subclass_name, &event);
+}
+
+int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
+                       const char *subclass_name) {
+
+  /* Skip rds audit for bootstrap */
+  if (opt_initialize)
+    return 0;
+
+  mysql_event_rds_connection event;
+  char user_buff[USERNAME_LENGTH + 1] = "";
+  ulonglong current_utime;
+  Security_context *sctx;
+
+  assert(thd);
+
+  if (mysql_audit_acquire_plugins(thd, MYSQL_AUDIT_RDS_CONNECTION_CLASS,
+                                  static_cast<unsigned long>(subclass)))
+    return 0;
+
+  current_utime = my_micro_time();
+  event.event_subclass = subclass;
+  event.error_code =
+    thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
+  event.thread_id = thd->thread_id();
+  sctx = thd->security_context();
+  event.is_super = sctx->check_access(SUPER_ACL);
+  event.user.str = user_buff;
+  event.user.length = snprintf(user_buff, USERNAME_LENGTH, "%s",
+                               sctx->user().str ? sctx->user().str : "");
+  assert(event.user.length <= USERNAME_LENGTH);
+  event.host = sctx->host();
+  event.ip = sctx->ip();
+  event.db = thd->db();
+  event.connection_type = thd->get_vio_type();
+  event.start_utime = thd->start_utime;
+  event.cost_utime = (current_utime - thd->start_utime);
+
+  event.endpoint_ip.str = thd->variables.client_endpoint_ip;
+  event.endpoint_ip.length = thd->variables.client_endpoint_ip ?
+    strlen(thd->variables.client_endpoint_ip) : 0;
+
+  if (subclass == MYSQL_AUDIT_RDS_CONNECTION_CONNECT) {
+    if (event.error_code == 0) {
+      event.message = { C_STRING_WITH_LEN("login success!") };
+    } else {
+      event.message = { C_STRING_WITH_LEN("login failed!") };
+    }
+  } else if (subclass == MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT) {
+    event.message = { C_STRING_WITH_LEN("logout!") };
+  }
+
+  Ignore_event_error_handler handler(thd, subclass_name);
+
+  return handler.get_result(event_class_dispatch_error(
+      thd, MYSQL_AUDIT_RDS_CONNECTION_CLASS, subclass_name, &event));
+}
+
+int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
+                       const char *subclass_name) {
+  /* Skip rds audit for bootstrap */
+  if (opt_initialize)
+    return 0;
+  /* Skip rds audit for dd upgrade */
+  if (thd->is_server_upgrade_thread())
+    return 0;
+
+  mysql_event_rds_query event;
+  char user_buff[USERNAME_LENGTH + 1] = "";
+  ulonglong current_utime;
+  Security_context *sctx;
+
+  assert(thd);
+
+  if (mysql_audit_acquire_plugins(thd, MYSQL_AUDIT_RDS_QUERY_CLASS,
+                                  static_cast<unsigned long>(subclass)))
+    return 0;
+
+  current_utime = my_micro_time();
+  event.event_subclass = subclass;
+  event.error_code =
+    thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
+  event.thread_id = thd->thread_id();
+
+  sctx = thd->security_context();
+  event.is_super = sctx->check_access(SUPER_ACL);
+
+  event.user.str = user_buff;
+  event.user.length = snprintf(user_buff, USERNAME_LENGTH, "%s",
+                               sctx->user().str ? sctx->user().str : "");
+  assert(event.user.length <= USERNAME_LENGTH);
+  event.external_user = sctx->external_user();
+  event.ip = sctx->ip();
+  event.host = sctx->host();
+  event.db = thd->db();
+  event.command = thd->get_command();
+  event.start_utime = thd->start_utime;
+  event.sql_command = thd->lex->sql_command;
+  event.sql_command_name = sql_statement_names[thd->lex->sql_command];
+
+  thd_get_audit_query(thd, &event.query);
+
+  event.lock_utime = (thd->get_lock_usec() - thd->start_utime);
+  event.cost_utime = (current_utime - thd->start_utime);
+  event.examined_rows = (ulonglong) thd->get_examined_row_count();
+
+  event.endpoint_ip.str = thd->variables.client_endpoint_ip;
+  event.endpoint_ip.length = thd->variables.client_endpoint_ip ?
+    strlen(thd->variables.client_endpoint_ip) : 0;
+
+  /*
+    This could be -1 under some circumstances, check comments for
+    THD::get_row_count_func().
+  */
+  longlong updated_rows = thd->get_row_count_func();
+  event.updated_rows = updated_rows < 0 ? 0 : updated_rows;
+  event.sent_rows = (ulonglong) thd->get_sent_row_count();
+
+  if (thd->audit_trx_ctx.state == AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
+    event.trx_utime = my_micro_time() - thd->audit_trx_ctx.start_time;
+  } else {
+    event.trx_utime = 0;
+  }
+
+  event.memory_used = 0;
+  event.query_memory_used = 0;
+  event.trx_id = thd->audit_trx_ctx.trx_id;
+
+  /*
+    reset trx_id for a thd in PPS_transaction when a tx ends.
+    We have to reset trx_id after it had been recorded in the event,
+    otherwise trx_id would be not 0 for select SQL in audit log.
+  */
+  if (thd->audit_trx_ctx.trx_id != 0 && 
+    thd->audit_trx_ctx.state != AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
+    thd->audit_trx_ctx.set_trx_id(0);
+  }
+
+  struct PPI_stat *ppi_stat = thd->ppi_statement_stat.get();
+  event.logical_reads = ppi_stat->logical_reads;
+  event.physical_sync_reads = ppi_stat->physical_reads;
+  event.physical_async_reads = ppi_stat->physical_async_reads;
+  event.temp_user_table_size = 0;
+  event.temp_sort_table_size = 0;
+  event.temp_sort_file_size = 0;
+
+  event.server_lock_wait = ppi_stat->server_lock_time;
+  event.engine_lock_wait = ppi_stat->transaction_lock_time;
+  event.rw_spin_waits = ppi_stat->rw_spin_waits;
+  event.rw_spin_rounds = ppi_stat->rw_spin_rounds;
+  event.rw_os_waits = ppi_stat->rw_os_waits;
+
+  Ignore_event_error_handler handler(thd, subclass_name);
+
+  return handler.get_result(event_class_dispatch_error(
+      thd, MYSQL_AUDIT_RDS_QUERY_CLASS, subclass_name, &event));
 }
 
 /**

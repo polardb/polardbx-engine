@@ -57,6 +57,7 @@
 #include "sql/xa.h"
 
 #include "ppi/ppi_transaction.h"
+#include "mysql/plugin_audit.h"
 
 /**
   Helper: Tell tracker (if any) that transaction ended.
@@ -215,6 +216,7 @@ bool trans_begin(THD *thd, uint flags) {
 #endif
 
   PPI_TRANSACTION_CALL(start_transaction)(thd->ppi_transaction);
+  thd->audit_trx_ctx.start_transaction();
 
   return res;
 }

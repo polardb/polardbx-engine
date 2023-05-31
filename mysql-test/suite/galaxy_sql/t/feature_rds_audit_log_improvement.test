@@ -1,0 +1,54 @@
+--source include/not_windows.inc
+CREATE USER 'test'@'localhost';
+GRANT SELECT ON *.* TO 'test'@'localhost';
+connect(test_conn,localhost,test,,,);
+
+## check rds audit log initialized sucessful
+connection test_conn;
+
+SHOW VARIABLES LIKE 'rds_audit_log_enabled';
+
+# when opt_rds_audit_log_enabled is set in my.cnf, an audit log should
+# be created on startup, and make sure queries are loged indeed.
+let $logname = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`;
+
+# Make sure all audit logs have been flushed to disk.
+connection default;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+connection test_conn;
+
+if($logname)
+{
+  echo there is an audit log generated;
+  --exec echo totally `cat $logname | wc -l | tr -d ' \t'` queries are loged.
+}
+if(!$logname)
+{
+  echo there is no audit log generated;
+}
+
+## now rds_audit_row_limit is reached, audit log should not increase anymore
+select 1;
+select 1;
+select 1;
+
+connection default;
+set global rds_audit_log_flush = on;
+
+# Make sure all audit logs have been flushed to disk.
+connection default;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+
+if($logname)
+{
+  --exec echo there are `grep test_conn_host_incorrect $logname | wc -l | sed 's/^[[:space:]]*//g'` records of test_conn_host_incorrect
+}
+
+## clean up
+connection default;
+# for RDS_AUDIT_LAST_LOG_ROW variables check
+set global rds_audit_log_flush = on;
+set global rds_audit_log_enabled = default;
+DROP USER 'test'@'localhost';

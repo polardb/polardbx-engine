@@ -2643,6 +2643,8 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
     MYSQL_SET_PS_TEXT(m_prepared_stmt, thd->query().str, thd->query().length);
   }
 
+  mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
+
   cleanup_stmt(thd);
   stmt_backup.restore_thd(thd, this);
   thd->stmt_arena = old_stmt_arena;

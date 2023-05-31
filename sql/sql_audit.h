@@ -330,4 +330,28 @@ int mysql_audit_notify(THD *thd, mysql_event_message_subclass_t subclass,
                        mysql_event_message_key_value_t *key_value_map,
                        size_t key_value_map_length);
 
+/**
+  Call audit plugins of RDS_QUERY audit class.
+
+  @param[in] thd              Current thread data.
+  @param[in] subclass         Type of general detail audit event.
+  @param[in] subclass_name    Subclass name.
+
+  @return Value returned is not taken into consideration by the server.
+*/
+int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
+                       const char *subclass_name);
+
+/**
+  Call audit plugins of RDS_CONNECTION audit class.
+
+  @param[in] thd              Current thread data.
+  @param[in] subclass         Type of general detail audit event.
+  @param[in] subclass_name    Subclass name.
+
+  @return Value returned is not taken into consideration by the server.
+*/
+int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
+                       const char *subclass_name);
+
 #endif /* SQL_AUDIT_INCLUDED */

@@ -1,0 +1,77 @@
+CREATE USER test@localhost;
+GRANT SELECT ON *.* to test@localhost;
+show variables like '%rds_audit%';
+Variable_name	Value
+rds_audit_log_buffer_size	#
+rds_audit_log_connection_policy	#
+rds_audit_log_dir	#
+rds_audit_log_enabled	#
+rds_audit_log_event_buffer_size	#
+rds_audit_log_flush	#
+rds_audit_log_format	#
+rds_audit_log_policy	#
+rds_audit_log_row_limit	#
+rds_audit_log_skip	#
+rds_audit_log_statement_policy	#
+rds_audit_log_strategy	#
+rds_audit_log_version	#
+show variables like '%rds_audit%';
+Variable_name	Value
+rds_audit_log_buffer_size	#
+rds_audit_log_connection_policy	#
+rds_audit_log_dir	#
+rds_audit_log_enabled	#
+rds_audit_log_event_buffer_size	#
+rds_audit_log_flush	#
+rds_audit_log_format	#
+rds_audit_log_policy	#
+rds_audit_log_row_limit	#
+rds_audit_log_skip	#
+rds_audit_log_statement_policy	#
+rds_audit_log_strategy	#
+rds_audit_log_version	#
+set global rds_audit_log_enabled= on;
+set global rds_audit_log_row_limit = 3;
+ERROR HY000: Variable 'rds_audit_log_dir' is a read only variable
+create user xx1@localhost;
+grant select on  *.* to  xx1@localhost;
+select 1;
+1
+1
+select 2;
+2
+2
+select 3;
+3
+3
+select 4;
+4
+4
+set global rds_audit_log_flush = on;
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'RDS_AUDIT_CURRENT_LOG_ROW';
+VARIABLE_VALUE > 0
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+select 100;
+100
+100
+set global rds_audit_log_flush = on;
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'RDS_AUDIT_CURRENT_LOG_ROW';
+VARIABLE_VALUE > 0
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+select 5;
+5
+5
+select 6;
+6
+6
+set global rds_audit_log_flush = on;
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'RDS_AUDIT_CURRENT_LOG_ROW';
+VARIABLE_VALUE > 0
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+drop user test@localhost;
+drop user xx1@localhost;
+set global rds_audit_log_row_limit = default;
+set global rds_audit_log_enabled = default;

@@ -237,6 +237,7 @@ innodb/log_flusher_thread	BACKGROUND
 innodb/log_write_notifier_thread	BACKGROUND
 innodb/log_writer_thread	BACKGROUND
 innodb/page_flush_coordinator_thread	BACKGROUND
+rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
 sql/event_scheduler	FOREGROUND
@@ -289,6 +290,7 @@ innodb/log_flusher_thread	BACKGROUND
 innodb/log_write_notifier_thread	BACKGROUND
 innodb/log_writer_thread	BACKGROUND
 innodb/page_flush_coordinator_thread	BACKGROUND
+rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
 sql/event_scheduler	FOREGROUND

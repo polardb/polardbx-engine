@@ -269,6 +269,8 @@ The following options may be given as the first argument:
  proxy user mapping should be done according to GRANT
  PROXY privilege definition.
  -r, --chroot=name   Chroot mysqld daemon during startup.
+ --client-endpoint-ip=name 
+ The endpoint ip that client use to connect.
  --collation-server=name 
  Set the default collation.
  --completion-type=name 
@@ -1119,6 +1121,46 @@ The following options may be given as the first argument:
  optimization of a query, index range scan will not be
  considered for this query. A value of 0 means range
  optimizer does not have any cap on memory. 
+ --rds-audit-log-buffer-size=# 
+ Buffer size for log buffer.
+ --rds-audit-log-connection-policy=name 
+ The policy controlling how the audit log plugin writes
+ connection events to its log file. Supported values are
+ 'ALL' (default), 'ERRORS' and 'NONE'.
+ --rds-audit-log-dir=name 
+ Path to store RDS audit logs. Logs will be put under
+ tmpdir is not specified.
+ --rds-audit-log-enabled 
+ The option to enable or disable audit log.
+ --rds-audit-log-event-buffer-size=# 
+ Buffer size for event buffer.
+ --rds-audit-log-flush 
+ When set to enabled, the current log file will be closed,
+ and a new log file will be created.
+ --rds-audit-log-format=name 
+ The format of audit log, currently only support PLAIN
+ (compatible with MySQL_V1 in RDS MySQL 5.6), JSON will be
+ supported soon.
+ --rds-audit-log-policy=name 
+ The policy controlling how the audit log plugin writes
+ events to its log file. Supported values are 'ALL'
+ (default), 'LOGINS', 'QUERIES' and 'NONE'.
+ --rds-audit-log-row-limit=# 
+ Max number of rows in each audit log file. Log records
+ will be discarded above this number.
+ --rds-audit-log-skip 
+ Whether to skip log recording for current session.
+ --rds-audit-log-statement-policy=name 
+ The policy controlling how the audit log plugin writes
+ query events to its log file. Supported values are 'ALL'
+ (default), 'UPDATES', 'UPDATES_OR_ERRORS', 'ERRORS' and
+ 'NONE'.
+ --rds-audit-log-strategy=name 
+ The audit log strategy, currently support ASYNCHRONOUS,
+ PERFORMANCE, SEMISYNCHRONOUS and SYNCHRONOUS.
+ --rds-audit-log-version=name 
+ The version of audit log, currently support MYSQL_V1 and
+ MYSQL_V3.
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
  buffer of this size for each table it scans. If you do
@@ -1720,6 +1762,7 @@ character-set-server utf8mb4
 character-sets-dir MYSQL_CHARSETSDIR/
 check-proxy-users FALSE
 chroot (No default value)
+client-endpoint-ip (No default value)
 collation-server utf8mb4_0900_ai_ci
 completion-type NO_CHAIN
 concurrent-insert AUTO
@@ -1969,6 +2012,19 @@ query-alloc-block-size 8192
 query-prealloc-size 8192
 range-alloc-block-size 4096
 range-optimizer-max-mem-size 8388608
+rds-audit-log-buffer-size 8388608
+rds-audit-log-connection-policy ALL
+rds-audit-log-dir (No default value)
+rds-audit-log-enabled FALSE
+rds-audit-log-event-buffer-size 2048
+rds-audit-log-flush FALSE
+rds-audit-log-format PLAIN
+rds-audit-log-policy ALL
+rds-audit-log-row-limit 100000
+rds-audit-log-skip FALSE
+rds-audit-log-statement-policy ALL
+rds-audit-log-strategy ASYNCHRONOUS
+rds-audit-log-version MYSQL_V1
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144

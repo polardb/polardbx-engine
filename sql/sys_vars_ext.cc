@@ -78,3 +78,11 @@ static Sys_var_bool Sys_opt_performance_point_dbug_enabled(
     "performance_point_dbug_enabled", "Enable Performance Point debug mode",
     GLOBAL_VAR(opt_performance_point_dbug_enabled), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_charptr Sys_client_endpoint_ip(
+  "client_endpoint_ip",
+  "The endpoint ip that client use to connect.",
+  SESSION_VAR(client_endpoint_ip),
+  CMD_LINE(REQUIRED_ARG),
+  IN_SYSTEM_CHARSET, DEFAULT(0),
+  NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));

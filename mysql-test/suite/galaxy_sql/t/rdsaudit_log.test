@@ -1,0 +1,108 @@
+--source include/have_binlog_format_row.inc
+call mtr.add_suppression("can not open rds audit log");
+--replace_column 2 #
+show variables like 'rds_audit%';
+--replace_column 2 #
+show status like '%audit%';
+
+set global rds_audit_log_buffer_size = 128*1024*1024;
+set global local_infile = on;
+create user xx1@localhost;
+grant create, select, update, drop on  *.* to  xx1@localhost;
+
+--echo
+--echo default audit log file located in tmpdir
+--echo
+
+set global rds_audit_log_enabled=on;
+#set on when it is on, do not reopen new audit log
+set global rds_audit_log_enabled= on;
+let $file= `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'rds_audit_log_filename'`;
+
+create table r(v varchar(1280));
+insert into r select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'rds_audit_log_filename';
+
+# Make sure all audit logs have been flushed to disk.
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+
+connect(conn1, localhost, xx1);
+
+--disable_query_log
+eval select count(*) from r where v like '$MYSQL_TMP_DIR%';
+eval load data local infile '$file' into table r FIELDS TERMINATED BY ',';
+--enable_query_log
+
+#change log dir
+--disable_query_log
+connection default;
+let $MYSQLD_DATADIR= `select @@datadir`;
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+eval set global rds_audit_log_dir='$MYSQLD_DATADIR';
+
+set global rds_audit_log_flush = on;
+insert into r select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'rds_audit_log_filename';
+eval select count(*) from r where v like '$MYSQLD_DATADIR%';
+--enable_query_log
+
+#check row limit
+set global rds_audit_log_row_limit = 100;
+let $file= `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'rds_audit_log_filename'`;
+
+--connection conn1
+
+select count(*) > 0 from r;
+set rds_audit_log_skip=1;
+select @@rds_audit_log_skip;
+select "I will skip audit" as a;
+set rds_audit_log_skip=0;
+select "I will audit" as a;
+prepare stmt from "select 1";
+execute stmt;
+
+--disable_query_log
+--disable_warnings
+select 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as a;
+let $1=110;
+while ($1)
+{
+  eval select 1 into @a;
+  dec $1;
+}
+
+# Make sure all audit logs have been flushed to disk.
+connection default;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+connection conn1;
+
+eval load data local infile '$file' into table r FIELDS TERMINATED BY ',';
+--enable_warnings
+--enable_query_log
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+set global rds_audit_log_flush = on;
+change_user xx1;
+use test;
+--echo (should be 0)
+select count(*) from r where v like '%I will skip audit%';
+--echo (should be 1)
+select count(*) > 0 from r where v like '%I will audit%';
+
+connection default;
+set global maintain_user_list='xx1';
+
+disconnect conn1;
+connect(conn1, localhost, xx1);
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'rds_audit_log_curr_row';
+set global rds_audit_log_flush = on;
+set global maintain_user_list='';
+
+connection default;
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'rds_audit_log_curr_row';
+set global rds_audit_log_flush = on;
+set global rds_audit_log_enabled=off;
+drop user xx1@localhost;
+drop table r;
+set global rds_audit_log_row_limit= default;
+set global rds_audit_log_buffer_size= default;
+set global local_infile = default;

@@ -654,6 +654,11 @@ static int check_connection(THD *thd) {
     return 1;
   }
 
+  if (mysql_audit_notify(thd,
+                         AUDIT_EVENT(MYSQL_AUDIT_RDS_CONNECTION_CONNECT))) {
+    return 1;
+  }
+
 #ifdef HAVE_PSI_THREAD_INTERFACE
   PSI_THREAD_CALL(notify_session_connect)(thd->get_psi());
 #endif /* HAVE_PSI_THREAD_INTERFACE */
@@ -731,6 +736,7 @@ void end_connection(THD *thd) {
   NET *net = thd->get_protocol_classic()->get_net();
 
   mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_DISCONNECT), 0);
+  mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT));
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
   PSI_THREAD_CALL(notify_session_disconnect)(thd->get_psi());
@@ -914,6 +920,8 @@ void close_connection(THD *thd, uint sql_errno, bool server_shutdown,
   if (generate_event) {
     mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_DISCONNECT),
                        sql_errno);
+    mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT));
+
 #ifdef HAVE_PSI_THREAD_INTERFACE
     PSI_THREAD_CALL(notify_session_disconnect)(thd->get_psi());
 #endif /* HAVE_PSI_THREAD_INTERFACE */

@@ -1,0 +1,379 @@
+SET GLOBAL rds_audit_log_enabled = ON;
+SET GLOBAL rds_audit_log_dir = '/tmp';
+ERROR HY000: Variable 'rds_audit_log_dir' is a read only variable
+SET GLOBAL rds_audit_log_buffer_size = 16*1024*1024;
+SET GLOBAL rds_audit_log_policy = 'LOGINS';
+SET GLOBAL rds_audit_log_connection_policy = 'ERRORS';
+SET GLOBAL rds_audit_log_statement_policy = 'UPDATES_OR_ERRORS';
+SET GLOBAL rds_audit_log_event_buffer_size = 1024*1024;
+SET GLOBAL rds_audit_log_flush = on;
+SET GLOBAL rds_audit_log_format = 'PLAIN';
+SET GLOBAL rds_audit_log_row_limit = 100000;
+SET rds_audit_log_skip = off;
+SET GLOBAL rds_audit_log_strategy = 'PERFORMANCE';
+## ASYNCHRONOUS strategy
+SET GLOBAL rds_audit_log_strategy = 'ASYNCHRONOUS';
+CREATE TABLE alog(rec varchar(4096));
+SET GLOBAL local_infile = ON;
+SET GLOBAL rds_audit_log_flush = ON;
+set rds_audit_log_skip = on;
+select "You can not see me in audit log";
+You can not see me in audit log
+You can not see me in audit log
+set rds_audit_log_skip = off;
+create user test_pass@'%' identified by 'I_am_a_secret_password';
+drop user test_pass@'%';
+set global rds_audit_log_row_limit = 0;
+select 'Audit log is full';
+Audit log is full
+Audit log is full
+set global rds_audit_log_row_limit = 100000;
+SET GLOBAL rds_audit_log_policy = "LOGINS";
+select 'I am query and should not be logged';
+I am query and should not be logged
+I am query and should not be logged
+SET GLOBAL rds_audit_log_policy = "ALL";
+SET GLOBAL rds_audit_log_statement_policy = "UPDATES";
+select 'I am select query and should not be logged';
+I am select query and should not be logged
+I am select query and should not be logged
+insert into non_exist_table values('I am update query and should be logged');
+ERROR 42S02: Table 'test.non_exist_table' doesn't exist
+SET GLOBAL rds_audit_log_policy = ALL;
+SET GLOBAL rds_audit_log_statement_policy = ALL;
+create table event_test (id int) engine = innodb;
+drop event if exists event1;
+Warnings:
+Note	1305	Event event1 does not exist
+set rds_audit_log_skip = on;
+create event event1 on schedule every 1 second starts now() ends date_add(now(), interval 5 hour) DO insert into event_test values(1);
+set rds_audit_log_skip = off;
+drop table event_test;
+drop event event1;
+set rds_audit_log_skip = on;
+create table proc_test(id int) engine = innodb;
+CREATE PROCEDURE proc1()
+BEGIN
+insert into proc_test values(1);
+END
+//
+set rds_audit_log_skip = off;
+call proc1();
+drop procedure proc1;
+drop table proc_test;
+prepare stmt1 from 'select "I am sql_com prepare stmt"';
+execute stmt1;
+I am sql_com prepare stmt
+I am sql_com prepare stmt
+deallocate prepare stmt1;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+select count(*) = 0 from alog where rec like '%You can not see me in audit log%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I_am_a_secret_password%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%Audit log is full%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am query and should not be logged%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am select query and should not be logged%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am update query and should be logged%';
+count(*) != 0
+1
+select count(*) = 0 from alog where rec like '%insert into event_test values%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%insert into proc_test values%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am sql_com prepare stmt%';
+count(*) != 0
+1
+select count(*) != 0 from alog where rec like '%INSERT INTO t1 (c1%';
+count(*) != 0
+1
+DROP TABLE alog;
+SET GLOBAL local_infile = OFF;
+## PERFORMANCE strategy
+SET GLOBAL rds_audit_log_strategy = 'PERFORMANCE';
+CREATE TABLE alog(rec varchar(4096));
+SET GLOBAL local_infile = ON;
+SET GLOBAL rds_audit_log_flush = ON;
+set rds_audit_log_skip = on;
+select "You can not see me in audit log";
+You can not see me in audit log
+You can not see me in audit log
+set rds_audit_log_skip = off;
+create user test_pass@'%' identified by 'I_am_a_secret_password';
+drop user test_pass@'%';
+set global rds_audit_log_row_limit = 0;
+select 'Audit log is full';
+Audit log is full
+Audit log is full
+set global rds_audit_log_row_limit = 100000;
+SET GLOBAL rds_audit_log_policy = "LOGINS";
+select 'I am query and should not be logged';
+I am query and should not be logged
+I am query and should not be logged
+SET GLOBAL rds_audit_log_policy = "ALL";
+SET GLOBAL rds_audit_log_statement_policy = "UPDATES";
+select 'I am select query and should not be logged';
+I am select query and should not be logged
+I am select query and should not be logged
+insert into non_exist_table values('I am update query and should be logged');
+ERROR 42S02: Table 'test.non_exist_table' doesn't exist
+SET GLOBAL rds_audit_log_policy = ALL;
+SET GLOBAL rds_audit_log_statement_policy = ALL;
+create table event_test (id int) engine = innodb;
+drop event if exists event1;
+Warnings:
+Note	1305	Event event1 does not exist
+set rds_audit_log_skip = on;
+create event event1 on schedule every 1 second starts now() ends date_add(now(), interval 5 hour) DO insert into event_test values(1);
+set rds_audit_log_skip = off;
+drop table event_test;
+drop event event1;
+set rds_audit_log_skip = on;
+create table proc_test(id int) engine = innodb;
+CREATE PROCEDURE proc1()
+BEGIN
+insert into proc_test values(1);
+END
+//
+set rds_audit_log_skip = off;
+call proc1();
+drop procedure proc1;
+drop table proc_test;
+prepare stmt1 from 'select "I am sql_com prepare stmt"';
+execute stmt1;
+I am sql_com prepare stmt
+I am sql_com prepare stmt
+deallocate prepare stmt1;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+select count(*) = 0 from alog where rec like '%You can not see me in audit log%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I_am_a_secret_password%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%Audit log is full%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am query and should not be logged%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am select query and should not be logged%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am update query and should be logged%';
+count(*) != 0
+1
+select count(*) = 0 from alog where rec like '%insert into event_test values%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%insert into proc_test values%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am sql_com prepare stmt%';
+count(*) != 0
+1
+select count(*) != 0 from alog where rec like '%INSERT INTO t1 (c1%';
+count(*) != 0
+1
+DROP TABLE alog;
+SET GLOBAL local_infile = OFF;
+## SEMISYNCHRONOUS strategy
+SET GLOBAL rds_audit_log_strategy = 'SEMISYNCHRONOUS';
+CREATE TABLE alog(rec varchar(4096));
+SET GLOBAL local_infile = ON;
+SET GLOBAL rds_audit_log_flush = ON;
+set rds_audit_log_skip = on;
+select "You can not see me in audit log";
+You can not see me in audit log
+You can not see me in audit log
+set rds_audit_log_skip = off;
+create user test_pass@'%' identified by 'I_am_a_secret_password';
+drop user test_pass@'%';
+set global rds_audit_log_row_limit = 0;
+select 'Audit log is full';
+Audit log is full
+Audit log is full
+set global rds_audit_log_row_limit = 100000;
+SET GLOBAL rds_audit_log_policy = "LOGINS";
+select 'I am query and should not be logged';
+I am query and should not be logged
+I am query and should not be logged
+SET GLOBAL rds_audit_log_policy = "ALL";
+SET GLOBAL rds_audit_log_statement_policy = "UPDATES";
+select 'I am select query and should not be logged';
+I am select query and should not be logged
+I am select query and should not be logged
+insert into non_exist_table values('I am update query and should be logged');
+ERROR 42S02: Table 'test.non_exist_table' doesn't exist
+SET GLOBAL rds_audit_log_policy = ALL;
+SET GLOBAL rds_audit_log_statement_policy = ALL;
+create table event_test (id int) engine = innodb;
+drop event if exists event1;
+Warnings:
+Note	1305	Event event1 does not exist
+set rds_audit_log_skip = on;
+create event event1 on schedule every 1 second starts now() ends date_add(now(), interval 5 hour) DO insert into event_test values(1);
+set rds_audit_log_skip = off;
+drop table event_test;
+drop event event1;
+set rds_audit_log_skip = on;
+create table proc_test(id int) engine = innodb;
+CREATE PROCEDURE proc1()
+BEGIN
+insert into proc_test values(1);
+END
+//
+set rds_audit_log_skip = off;
+call proc1();
+drop procedure proc1;
+drop table proc_test;
+prepare stmt1 from 'select "I am sql_com prepare stmt"';
+execute stmt1;
+I am sql_com prepare stmt
+I am sql_com prepare stmt
+deallocate prepare stmt1;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+select count(*) = 0 from alog where rec like '%You can not see me in audit log%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I_am_a_secret_password%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%Audit log is full%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am query and should not be logged%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am select query and should not be logged%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am update query and should be logged%';
+count(*) != 0
+1
+select count(*) = 0 from alog where rec like '%insert into event_test values%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%insert into proc_test values%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am sql_com prepare stmt%';
+count(*) != 0
+1
+select count(*) != 0 from alog where rec like '%INSERT INTO t1 (c1%';
+count(*) != 0
+1
+DROP TABLE alog;
+SET GLOBAL local_infile = OFF;
+## SYNCHRONOUS strategy
+SET GLOBAL rds_audit_log_strategy = 'SYNCHRONOUS';
+CREATE TABLE alog(rec varchar(4096));
+SET GLOBAL local_infile = ON;
+SET GLOBAL rds_audit_log_flush = ON;
+set rds_audit_log_skip = on;
+select "You can not see me in audit log";
+You can not see me in audit log
+You can not see me in audit log
+set rds_audit_log_skip = off;
+create user test_pass@'%' identified by 'I_am_a_secret_password';
+drop user test_pass@'%';
+set global rds_audit_log_row_limit = 0;
+select 'Audit log is full';
+Audit log is full
+Audit log is full
+set global rds_audit_log_row_limit = 100000;
+SET GLOBAL rds_audit_log_policy = "LOGINS";
+select 'I am query and should not be logged';
+I am query and should not be logged
+I am query and should not be logged
+SET GLOBAL rds_audit_log_policy = "ALL";
+SET GLOBAL rds_audit_log_statement_policy = "UPDATES";
+select 'I am select query and should not be logged';
+I am select query and should not be logged
+I am select query and should not be logged
+insert into non_exist_table values('I am update query and should be logged');
+ERROR 42S02: Table 'test.non_exist_table' doesn't exist
+SET GLOBAL rds_audit_log_policy = ALL;
+SET GLOBAL rds_audit_log_statement_policy = ALL;
+create table event_test (id int) engine = innodb;
+drop event if exists event1;
+Warnings:
+Note	1305	Event event1 does not exist
+set rds_audit_log_skip = on;
+create event event1 on schedule every 1 second starts now() ends date_add(now(), interval 5 hour) DO insert into event_test values(1);
+set rds_audit_log_skip = off;
+drop table event_test;
+drop event event1;
+set rds_audit_log_skip = on;
+create table proc_test(id int) engine = innodb;
+CREATE PROCEDURE proc1()
+BEGIN
+insert into proc_test values(1);
+END
+//
+set rds_audit_log_skip = off;
+call proc1();
+drop procedure proc1;
+drop table proc_test;
+prepare stmt1 from 'select "I am sql_com prepare stmt"';
+execute stmt1;
+I am sql_com prepare stmt
+I am sql_com prepare stmt
+deallocate prepare stmt1;
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+select count(*) = 0 from alog where rec like '%You can not see me in audit log%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I_am_a_secret_password%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%Audit log is full%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am query and should not be logged%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%I am select query and should not be logged%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am update query and should be logged%';
+count(*) != 0
+1
+select count(*) = 0 from alog where rec like '%insert into event_test values%';
+count(*) = 0
+1
+select count(*) = 0 from alog where rec like '%insert into proc_test values%';
+count(*) = 0
+1
+select count(*) != 0 from alog where rec like '%I am sql_com prepare stmt%';
+count(*) != 0
+1
+select count(*) != 0 from alog where rec like '%INSERT INTO t1 (c1%';
+count(*) != 0
+1
+DROP TABLE alog;
+SET GLOBAL local_infile = OFF;
+SET GLOBAL rds_audit_log_buffer_size = default;
+SET GLOBAL rds_audit_log_policy = default;
+SET GLOBAL rds_audit_log_connection_policy = default;
+SET GLOBAL rds_audit_log_statement_policy = default;
+SET GLOBAL rds_audit_log_event_buffer_size = default;
+SET GLOBAL rds_audit_log_format = default;
+SET GLOBAL rds_audit_log_row_limit = default;
+SET rds_audit_log_skip = default;
+SET GLOBAL rds_audit_log_strategy = default;
+SET GLOBAL rds_audit_log_enabled = OFF;

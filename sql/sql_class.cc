@@ -857,6 +857,8 @@ THD::THD(bool enable_plugins)
   set_system_user(false);
   set_connection_admin(false);
   m_mem_cnt.set_thd(this);
+
+  rds_audit_event_buf = nullptr;
 }
 
 void THD::copy_table_access_properties(THD *thd) {

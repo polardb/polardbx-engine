@@ -1,0 +1,104 @@
+call mtr.add_suppression("can not open rds audit log");
+show variables like 'rds_audit%';
+Variable_name	Value
+rds_audit_log_buffer_size	#
+rds_audit_log_connection_policy	#
+rds_audit_log_dir	#
+rds_audit_log_enabled	#
+rds_audit_log_event_buffer_size	#
+rds_audit_log_flush	#
+rds_audit_log_format	#
+rds_audit_log_policy	#
+rds_audit_log_row_limit	#
+rds_audit_log_skip	#
+rds_audit_log_statement_policy	#
+rds_audit_log_strategy	#
+rds_audit_log_version	#
+show status like '%audit%';
+Variable_name	Value
+rds_audit_log_buffer_flushed_pos	#
+rds_audit_log_buffer_written_pos	#
+rds_audit_log_curr_row	#
+rds_audit_log_current_size	#
+rds_audit_log_event_max_drop_size	#
+rds_audit_log_events	#
+rds_audit_log_events_filtered	#
+rds_audit_log_events_lost	#
+rds_audit_log_events_written	#
+rds_audit_log_file_pos	#
+rds_audit_log_file_syncs	#
+rds_audit_log_file_writes	#
+rds_audit_log_filename	#
+rds_audit_log_last_row	#
+rds_audit_log_lost_row_by_buf_full	#
+rds_audit_log_lost_row_by_buf_full_total	#
+rds_audit_log_lost_row_by_row_limit	#
+rds_audit_log_lost_row_by_row_limit_total	#
+rds_audit_log_total_size	#
+rds_audit_log_write_waits	#
+set global rds_audit_log_buffer_size = 128*1024*1024;
+set global local_infile = on;
+create user xx1@localhost;
+grant create, select, update, drop on  *.* to  xx1@localhost;
+
+default audit log file located in tmpdir
+
+set global rds_audit_log_enabled=on;
+set global rds_audit_log_enabled= on;
+create table r(v varchar(1280));
+insert into r select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'rds_audit_log_filename';
+set global rds_audit_log_enabled = off;
+set global rds_audit_log_enabled = on;
+count(*)
+1
+ERROR HY000: Variable 'rds_audit_log_dir' is a read only variable
+count(*)
+0
+set global rds_audit_log_row_limit = 100;
+select count(*) > 0 from r;
+count(*) > 0
+1
+set rds_audit_log_skip=1;
+select @@rds_audit_log_skip;
+@@rds_audit_log_skip
+1
+select "I will skip audit" as a;
+a
+I will skip audit
+set rds_audit_log_skip=0;
+select "I will audit" as a;
+a
+I will audit
+prepare stmt from "select 1";
+execute stmt;
+1
+1
+a
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+set global rds_audit_log_flush = on;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+use test;
+(should be 0)
+select count(*) from r where v like '%I will skip audit%';
+count(*)
+0
+(should be 1)
+select count(*) > 0 from r where v like '%I will audit%';
+count(*) > 0
+1
+set global maintain_user_list='xx1';
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'rds_audit_log_curr_row';
+VARIABLE_VALUE > 0
+1
+set global rds_audit_log_flush = on;
+set global maintain_user_list='';
+select VARIABLE_VALUE > 0 from performance_schema.global_status where variable_name = 'rds_audit_log_curr_row';
+VARIABLE_VALUE > 0
+1
+set global rds_audit_log_flush = on;
+set global rds_audit_log_enabled=off;
+drop user xx1@localhost;
+drop table r;
+set global rds_audit_log_row_limit= default;
+set global rds_audit_log_buffer_size= default;
+set global local_infile = default;

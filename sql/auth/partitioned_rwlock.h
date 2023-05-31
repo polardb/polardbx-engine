@@ -89,6 +89,13 @@ class Partitioned_rwlock {
     mysql_rwlock_unlock(&m_locks_array[thread_id % m_parts]);
   }
 
+  void wrlock_and_unlock() {
+    for (uint i = 0; i < m_parts; ++i) {
+      mysql_rwlock_wrlock(&m_locks_array[i]);
+      mysql_rwlock_unlock(&m_locks_array[i]);
+    }
+  }
+
  private:
   mysql_rwlock_t *m_locks_array;
   uint m_parts;

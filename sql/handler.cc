@@ -1354,6 +1354,7 @@ void trans_register_ha(THD *thd, bool all, handlerton *ht_arg,
 #endif
   if (ht_arg->db_type != DB_TYPE_BINLOG) {
     PPI_TRANSACTION_CALL(start_transaction)(thd->ppi_transaction);
+    thd->audit_trx_ctx.start_transaction();
   }
 }
 
@@ -1762,6 +1763,7 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock) {
 #endif
   if (is_real_trans) {
     PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
+    thd->audit_trx_ctx.end_transaction();
   }
   DBUG_EXECUTE_IF("crash_commit_after",
                   if (!thd->is_operating_gtid_table_implicitly)
@@ -2059,6 +2061,7 @@ int ha_rollback_trans(THD *thd, bool all) {
 
   if (all || !thd->in_active_multi_stmt_transaction()) {
     PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
+    thd->audit_trx_ctx.end_transaction();
   }
 
   /* Always cleanup. Even if nht==0. There may be savepoints. */
@@ -2156,6 +2159,7 @@ int ha_commit_attachable(THD *thd) {
 
   assert(thd->ppi_transaction == nullptr);
   PPI_TRANSACTION_CALL(end_transaction)(thd->ppi_transaction);
+  thd->audit_trx_ctx.end_transaction();
 
   /* Free resources and perform other cleanup even for 'empty' transactions. */
   trn_ctx->cleanup();

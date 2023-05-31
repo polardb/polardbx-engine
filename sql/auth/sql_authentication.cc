@@ -2244,6 +2244,31 @@ static bool read_client_connect_attrs(THD *thd, char **ptr,
 
   /* impose an artificial length limit of 64k */
   if (length > 65535) return true;
+  
+  // parse endpoint
+  {
+    uchar *attributes = (uchar *)*ptr;
+    const uchar *save = attributes;
+
+    while ((size_t)(attributes - save) < length) {
+      size_t key_length = net_field_length((uchar**)&attributes);
+      const uchar *key = attributes;
+      
+      if ((size_t)(key - save + key_length) > length) break;
+      attributes += key_length;
+
+      size_t val_length = net_field_length((uchar **)&attributes);
+      uchar *val = attributes;
+
+      if ((size_t)(val - save + val_length) > length) break;
+      attributes += val_length;
+
+      if (key_length == 12 && memcmp(key, "_endpoint_ip", key_length) == 0) {
+        thd->set_client_endpoint_ip((char*)val, val_length);
+        break;
+      }
+    }
+  }
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
   MYSQL_SERVER_AUTH_INFO *auth_info = &mpvio->auth_info;

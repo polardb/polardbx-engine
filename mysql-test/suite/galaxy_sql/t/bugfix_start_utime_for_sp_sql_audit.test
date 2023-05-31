@@ -1,0 +1,65 @@
+set global event_scheduler=on;
+set global rds_audit_log_enabled = on;
+set global local_infile = on;
+
+create user test_a@'%';
+grant all on test.* to test_a@'%';
+connect (conn1,localhost,test_a,,);
+connection conn1;
+let $rds_audit_file = `select VARIABLE_VALUE from performance_schema.global_status where variable_name = 'RDS_AUDIT_LOG_FILENAME'`;
+
+## create a simple table to store audit log, so we can checking
+## result using SQLs.
+create table auditlog(v varchar(1280));
+
+## create a store pocedure
+delimiter //;
+create procedure test.sp1()
+begin
+  declare v_id bigint default 3;
+  while v_id > 0 do
+    select 1;
+    select sleep(1);
+    set v_id = v_id - 1;
+  end while;
+end//
+delimiter ;//
+
+## invoke store procedure and suppress result(we don't care)
+--disable_result_log
+call sp1();
+--enable_result_log
+
+## create a event
+delimiter //;
+create event event1 on schedule every 1 second starts now() ends date_add(now(), interval 2 second)
+on completion preserve
+do begin
+select sleep(1);
+select 2;
+end //
+delimiter ;//
+
+## make sure event1 invoked more than once
+sleep 3;
+
+## load audit log into to table
+--disable_warnings
+--disable_query_log
+eval load data local infile '$rds_audit_file' into table auditlog FIELDS TERMINATED BY ',';
+--enable_query_log
+--enable_warnings
+
+## check reuslt
+select count(*) > 1 start_utime_count from auditlog where v like '%test_a%' and v like '%select 1%';
+select count(*) > 1 start_utime_count from auditlog where v like '%test_a%' and v like '%select 2%';
+
+## cleanup
+connection default;
+drop user test_a@'%';
+drop procedure test.sp1;
+drop event test.event1;
+drop table auditlog;
+set global event_scheduler=default;
+set global rds_audit_log_enabled = default;
+set global local_infile = default;

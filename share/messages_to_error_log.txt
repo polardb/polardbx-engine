@@ -12106,6 +12106,51 @@ ER_IB_MSG_FP_CLEANUP
 ER_IB_MSG_FP_COMPLETE
   eng "Data File Purge : complete cleanup"
 
+ER_AUDIT_LOG_INIT_LOG_BUF
+  eng "Allocated %lluMB memory for audit log buffer."
+
+ER_AUDIT_LOG_RESIZE_LOG_BUF
+  eng "Resizing log buffer from %lluMB to %lluMB."
+
+ER_AUDIT_LOG_FAILED_TO_WRITE_TO_FILE
+  eng "Error writing %u bytes to file \'%-.200s\' at offset %llu. (errno: %d - %s)."
+
+ER_AUDIT_LOG_FAILED_TO_CREATE_FILE
+  eng "Could not create '%s' file for audit logging (errno: %d - %s)."
+
+ER_AUDIT_LOG_AUDIT_LOG_TOO_LONG
+  eng "Audit log too long or RDS_AUDIT_FLUSH_MAX_LEN too small, some audit logs may lost."
+
+ER_AUDIT_LOG_INIT_FLUSH_THREAD
+  eng "Log flushing thread created successfully."
+
+ER_AUDIT_LOG_FAILED_TO_INIT_FLUSH_THREAD
+  eng "Failed to create log flushing thread."
+
+ER_AUDIT_LOG_DEINIT_FLUSH_THREAD
+  eng "Log flushing thread exited successfully."
+
+ER_AUDIT_LOG_FAILED_TO_DEINIT_FLUSH_THREAD
+  eng "Log flushing thread exited unsuccessfully, some audit logs may be lost."
+
+ER_AUDIT_LOG_BEGIN_LOST_LOG
+   eng "Some audit logs have lost before this timestamp."
+
+ER_AUDIT_LOG_END_LOST_LOG
+   eng "Some audit logs are lost because audit log buffer is full."
+
+ER_AUDIT_LOG_SWITCH_LOG_STRATEGY
+  eng "Log strategy switched from %s to %s."
+
+ER_AUDIT_LOG_SWITCH_LOG_POLICY
+  eng "Log strategy switched from [%s] connection [%s] query [%s] to [%s] connection [%s] query [%s]."
+
+ER_AUDIT_LOG_ENABLE_OR_DISABLE
+  eng "Audit log is %s."
+
+ER_AUDIT_LOG_SWITCH_LOG_VERSION
+  eng "Log version switched from %s to %s."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

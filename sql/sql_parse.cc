@@ -2098,6 +2098,8 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         PPI_STATEMENT_CALL(end_statement)
         (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
+        mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
+
         /* PSI end */
         MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
         thd->m_statement_psi = nullptr;
@@ -2474,6 +2476,14 @@ done:
   mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_COMMAND_END), command,
                      cn.c_str());
 
+  PPI_STATEMENT_CALL(end_statement)
+        (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
+
+  /* COM_STMT_PREPARE is handled in sql_prepare.cc .  */
+  if (command == COM_QUERY || command == COM_STMT_EXECUTE) {
+    mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
+  }
+
   log_slow_statement(thd);
 
   THD_STAGE_INFO(thd, stage_cleaning_up);
@@ -2482,9 +2492,6 @@ done:
   thd->set_command(COM_SLEEP);
   thd->set_proc_info(nullptr);
   thd->lex->sql_command = SQLCOM_END;
-
-  PPI_STATEMENT_CALL(end_statement)
-  (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
   /* Performance Schema Interface instrumentation, end */
   MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
@@ -5277,7 +5284,7 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
       If rewriting does not happen here, thd->m_rewritten_query is still
       empty from being reset in alloc_query().
     */
-    if (thd->rewritten_query().length() == 0) mysql_rewrite_query(thd);
+    if (thd->rewritten_query().length() == 0) mysql_rewrite_query(thd); 
 
     if (thd->rewritten_query().length()) {
       lex->safe_to_cache_query = false;  // see comments below
@@ -5355,6 +5362,15 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
             mgr_ptr->release_shared_mdl_for_resource_group(thd, ticket);
           if (cur_ticket != nullptr)
             mgr_ptr->release_shared_mdl_for_resource_group(thd, cur_ticket);
+
+          /*
+            Try rewrite the query for logging and for the Performance Schema
+            statement tables again before thd->lex has been cleaned up.
+            In some situations, the flag thd->lex->rewrite_required has not been
+            set yet at the begining, so the rewritten_query is empty after the
+            first mysql_rewrite_query has been called.
+          */
+          if (thd->rewritten_query().length() == 0) mysql_rewrite_query(thd);
         }
       }
     }

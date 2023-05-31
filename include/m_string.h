@@ -312,6 +312,7 @@ static inline char *ullstr(longlong value, char *buff) {
 }
 
 #define STRING_WITH_LEN(X) (X), ((sizeof(X) - 1))
+#define C_STRING_WITH_LEN(X) ((const char *)(X)), ((sizeof(X) - 1))
 
 /**
   Skip trailing space (ASCII spaces only).

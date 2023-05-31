@@ -1,0 +1,38 @@
+set global event_scheduler=on;
+set global rds_audit_log_enabled = on;
+set global local_infile = on;
+create user test_a@'%';
+grant all on test.* to test_a@'%';
+create table auditlog(v varchar(1280));
+create procedure test.sp1()
+begin
+declare v_id bigint default 3;
+while v_id > 0 do
+select 1;
+select sleep(1);
+set v_id = v_id - 1;
+end while;
+end//
+call sp1();
+create event event1 on schedule every 1 second starts now() ends date_add(now(), interval 2 second)
+on completion preserve
+do begin
+select sleep(1);
+select 2;
+end //
+select count(*) > 1 start_utime_count from auditlog where v like '%test_a%' and v like '%select 1%';
+start_utime_count
+0
+select count(*) > 1 start_utime_count from auditlog where v like '%test_a%' and v like '%select 2%';
+start_utime_count
+0
+drop user test_a@'%';
+Warnings:
+Warning	4005	User 'test_a'@'%' is referenced as a definer account in an event.
+Warning	4005	User 'test_a'@'%' is referenced as a definer account in a stored routine.
+drop procedure test.sp1;
+drop event test.event1;
+drop table auditlog;
+set global event_scheduler=default;
+set global rds_audit_log_enabled = default;
+set global local_infile = default;
