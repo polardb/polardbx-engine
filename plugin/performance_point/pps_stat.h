@@ -537,7 +537,7 @@ class PPS_thread {
         m_main_transaction(),
         m_transaction(nullptr) {}
 
-  virtual ~PPS_thread(){};
+  virtual ~PPS_thread(){}
 
   void begin_statement();
   void end_statement();

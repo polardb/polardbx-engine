@@ -70,7 +70,7 @@ struct hash<String_stats_type> {
 class Object_stats {
  public:
   Object_stats() {}
-  virtual ~Object_stats(){};
+  virtual ~Object_stats(){}
 
   /**
     Accumulate the data from Stats_data;
@@ -94,7 +94,7 @@ class Table_stats : public Object_stats {
  public:
   Table_stats();
 
-  virtual ~Table_stats(){};
+  virtual ~Table_stats(){}
 
   /**
     Accumulate the data from Stats_data;
@@ -102,7 +102,7 @@ class Table_stats : public Object_stats {
     @param[in]      data        Stats_data
     @param[in]      key_number  How many keys
   */
-  virtual void accumulate(Stats_data &data, size_t key_number);
+  virtual void accumulate(Stats_data &data, size_t key_number) override;
 
  public:
   ulonglong rows_read;
@@ -121,7 +121,7 @@ class Index_stats : public Object_stats {
  public:
   Index_stats();
 
-  virtual ~Index_stats(){};
+  virtual ~Index_stats(){}
 
   /**
     Accumulate the data from Stats_data;
@@ -129,7 +129,7 @@ class Index_stats : public Object_stats {
     @param[in]      data        Stats_data
     @param[in]      key_number  Which key
   */
-  virtual void accumulate(Stats_data &data, size_t key_number);
+  virtual void accumulate(Stats_data &data, size_t key_number) override;
 
  public:
   ulonglong rows_read;

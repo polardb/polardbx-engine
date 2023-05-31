@@ -124,6 +124,7 @@ plugin/x/generated/
 plugin/x/libmysqlx.a
 plugin/x/protocol/protobuf/libmysqlxmessages.a
 plugin/x/protocol/protobuf/libmysqlxmessages_lite.a
+plugin/performance_point/libperformance_point.a
 plugin_output_directory/
 router/include/
 router/router_config.h

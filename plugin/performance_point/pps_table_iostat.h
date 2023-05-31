@@ -144,7 +144,7 @@ struct PPS_row_iostat {
 
   void init_time(uint32 time) { end_time = time; }
 
-  uint32 get_time() { return end_time; };
+  uint32 get_time() { return end_time; }
 
   /* Copy data into the PPI_iostat_data structure */
   void copy_statistics_to(PPI_iostat_data *stat) {
