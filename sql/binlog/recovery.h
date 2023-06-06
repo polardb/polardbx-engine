@@ -23,6 +23,7 @@
 #ifndef BINLOG_RECOVERY_H_INCLUDED
 #define BINLOG_RECOVERY_H_INCLUDED
 
+#include <memory>
 #include "sql/binlog/global.h"
 #include "sql/binlog_ostream.h"  // binlog::tools::Iterator
 #include "sql/binlog_reader.h"   // Binlog_file_reader
@@ -96,7 +97,7 @@ class Binlog_recovery {
     @return true if the recovery process ended with errors, false
             otherwise.
    */
-  bool has_failures() const;
+  virtual bool has_failures() const;
   /**
     Retrieves whether or not the binary log was correctly processed in
     full.
@@ -151,9 +152,9 @@ class Binlog_recovery {
 
     @return This instance's reference, for chaining purposes.
    */
-  Binlog_recovery &recover();
+  virtual Binlog_recovery &recover();
 
- private:
+ protected:
   /** File reader for the last available binary log file */
   Binlog_file_reader &m_reader;
   /** Position of the last binlog event that ended a transaction */
@@ -177,6 +178,27 @@ class Binlog_recovery {
   /** List of XA transactions and states that appear in the binary log */
   Xa_state_list::list m_external_xids;
 
+  template <typename T>
+  class Process_hook {
+   protected:
+    std::function<void(const T&)> m_before_process;
+    std::function<void(const T&)> m_after_process;
+    const T &m_arg;
+
+   public:
+    Process_hook(const T &arg, std::function<void(const T&)> before_process, std::function<void(const T&)> after_process):m_before_process(before_process), m_after_process(after_process), m_arg(arg) {
+      if (m_before_process != nullptr) {
+        m_before_process(m_arg);
+      }
+    }
+
+    ~Process_hook() {
+      if (m_after_process != nullptr) {
+        m_after_process(m_arg);
+      }
+    }
+  };
+
   /**
     Invoked when a `Query_log_event` is read from the binary log file
     reader. The underlying query string is inspected to determine if the
@@ -194,7 +216,11 @@ class Binlog_recovery {
 
     @param ev The `Query_log_event` to process
    */
-  void process_query_event(Query_log_event const &ev);
+  virtual void process_query_event(Query_log_event const &ev);
+  virtual std::unique_ptr<Process_hook<Query_log_event>>
+  create_process_query_event_hook(Query_log_event const &) {
+    return {};
+  }
   /**
     Invoked when a `Xid_log_event` is read from the binary log file
     reader.
@@ -211,7 +237,11 @@ class Binlog_recovery {
 
     @param ev The `Xid_log_event` to process
    */
-  void process_xid_event(Xid_log_event const &ev);
+  virtual void process_xid_event(Xid_log_event const &ev);
+  virtual std::unique_ptr<Process_hook<Xid_log_event>>
+  create_process_xid_event_hook(Xid_log_event const &) {
+    return {};
+  }
   /**
     Invoked when a `XA_prepare_log_event` is read from the binary log file
     reader.
@@ -231,7 +261,11 @@ class Binlog_recovery {
 
     @param ev The `XA_prepare_log_event` to process
    */
-  void process_xa_prepare_event(XA_prepare_log_event const &ev);
+  virtual void process_xa_prepare_event(XA_prepare_log_event const &ev);
+  virtual std::unique_ptr<Process_hook<XA_prepare_log_event>>
+  create_process_xa_prepare_event_hook(XA_prepare_log_event const &) {
+    return {};
+  }
   /**
     Invoked when a `BEGIN` or an `XA START' is found in a
     `Query_log_event`.
@@ -295,6 +329,10 @@ class Binlog_recovery {
     @param query The query string to process
    */
   void process_xa_commit(std::string const &query);
+  virtual std::unique_ptr<Process_hook<std::string>>
+  create_process_xa_commit_hook(std::string const &) {
+    return nullptr;
+  }
   /**
     Invoked when an `XA ROLLBACK` is found in a `Query_log_event`.
 
@@ -313,6 +351,10 @@ class Binlog_recovery {
     @param query The query string to process
    */
   void process_xa_rollback(std::string const &query);
+  virtual std::unique_ptr<Process_hook<std::string>>
+  create_process_xa_rollback_hook(std::string const &) {
+    return nullptr;
+  }
   /**
     Parses the provided string for an XID and adds it to the externally
     coordinated transactions map, along side the provided state.

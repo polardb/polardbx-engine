@@ -35,6 +35,8 @@ struct xarecover_st {
   Xa_state_list *xa_list;
   XA_spec_list *spec_list;
   bool dry_run;
+
+  Xa_state_list *xa_list_in_ht;
 };
 
 namespace xa {

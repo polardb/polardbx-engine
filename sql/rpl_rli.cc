@@ -1698,7 +1698,7 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
     mysql_mutex_t *log_lock = relay_log.get_log_lock();
     mysql_mutex_lock(log_lock);
 
-    switch (Channel_style()) {
+    switch (style()) {
       case Channel_style::Raft:
         if (relay_log.open_exist_binlog(
                 ln, nullptr,

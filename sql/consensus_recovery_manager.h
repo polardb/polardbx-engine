@@ -20,58 +20,112 @@
 
 // #include "my_global.h"
 #include "binlog.h"
+#include "handler.h"
 #include "hash.h"
-#include "raft/raft0xa.h"
 #include "xa.h"
 
 #include <atomic>
 #include <map>
+#include <tuple>
 #include <vector>
-
 
 #ifdef HAVE_PSI_INTERFACE
 extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
 #endif
 
-class ConsensusRecoveryManager {
+/*
+ *
+ * Internal_xid: PREPARE_IN_SE ---recover--> COMMITTED
+ *                             ---withdraw--> NOT_FOUND
+ *
+ * External_xid: PREPARE_IN_SE ---recover-->
+ * PREPARE_IN_TC/COMMITTED_WITH_ONEPHASE
+ *                             ---withdraw--> NOT_FOUND
+ *               PREPARE_IN_TC ---recover--> COMMITTED/ROLLBACK
+ *                             ---withdraw--> PREPARE_IN_TC
+ */
+class Pending_recovering_trx {
  public:
-  ConsensusRecoveryManager()
+  enum class xid_type {
+    INTERNAL,
+    EXTERNAL,
+  };
+
+  Pending_recovering_trx(handlerton &ht, xid_type type,
+                         enum_ha_recover_xa_state current_state,
+                         enum_ha_recover_xa_state next_state, XID *xid,
+                         uint64 consensus_index);
+
+  ~Pending_recovering_trx();
+
+  Pending_recovering_trx(const Pending_recovering_trx &other) = delete;
+  Pending_recovering_trx &operator=(const Pending_recovering_trx &other) =
+      delete;
+  Pending_recovering_trx(Pending_recovering_trx &&other) = delete;
+  Pending_recovering_trx &operator=(Pending_recovering_trx &&other) = delete;
+
+  [[nodiscard]] std::string name() const { return xid->get_data(); }
+
+  int withdraw();
+
+  int recover();
+
+ private:
+  bool is_state_legal();
+
+ private:
+  bool immutable;
+
+  handlerton &ht;
+  const xid_type type;
+  const enum_ha_recover_xa_state current_state;
+  const enum_ha_recover_xa_state next_state;
+  XID *xid;
+  const uint64 consensus_index;
+};
+
+class Consensus_recovery_manager {
+ public:
+  Consensus_recovery_manager()
       : inited(false),
         key_LOCK_consensus_log_recover_hash(),
         LOCK_consensuslog_recover_hash(),
         last_leader_term_index(0),
-        total_commit_trx_map(),
-        consensus_commit_xid_map() {}
-  ~ConsensusRecoveryManager() = default;
+        internal_xids_in_binlog(),
+        Pending_Recovering_trxs() {}
+  ~Consensus_recovery_manager() = default;
 
   int init();
   int cleanup();
 
-  std::map<uint64, XID *> &get_commit_index_map() {
-    return consensus_commit_xid_map;
+  [[nodiscard]] uint64 get_last_leader_term_index() const {
+    return last_leader_term_index;
   }
-  uint64 get_last_leader_term_index() const { return last_leader_term_index; }
 
   void set_last_leader_term_index(uint64 last_leader_term_index_arg) {
     last_leader_term_index = last_leader_term_index_arg;
   }
 
   // for recover
-  void add_trx_to_total_commit_map(uint64 consensus_index, uint64 xid,
-                                   ulonglong gcn);
+  void add_trx_in_binlog(uint64 consensus_index, uint64 xid);
 
-  int collect_commit_trx_to_hash(
-      mem_root_unordered_map<my_xid, my_commit_gcn> &commit_list,
-      MEM_ROOT *mem_root);
+  void add_trx_in_binlog(uint64 consensus_index, const XID &xid);
 
-  void add_xid_to_commit_map(XID *xid);
-  void clear_total_xid_map();
-  void clear_all_map();
-  uint64 get_max_consensus_index_from_recover_trx_hash();
-  int truncate_commit_xid_map(uint64 consensus_index);
-  bool is_recovering_trx_empty();
+  template <Pending_recovering_trx::xid_type XID_TYPE>
+  void add_pending_recovering_trx(handlerton &ht,
+                                  enum_ha_recover_xa_state current_state,
+                                  enum_ha_recover_xa_state next_state,
+                                  const XID &xid);
+
+  void clear();
+  uint64 get_max_consensus_index_from_pending_recovering_trxs();
+  int truncate_pending_recovering_trxs(uint64 consensus_index);
+  bool is_pending_recovering_trx_empty();
   // truncate the continuous prepared xids from the map
-  int truncate_not_confirmed_xids_from_map(uint64 max_index_in_binlog_file);
+  int truncate_not_confirmed_pending_recovering_trxs(
+      uint64 max_index_in_binlog_file);
+
+  int commit_by_start_apply_index();
 
  private:
   bool inited;
@@ -81,19 +135,21 @@ class ConsensusRecoveryManager {
   uint64 last_leader_term_index;
   //<xid, consensusIndex> for save relation between index and my_xid when
   // recovering
-  std::map<uint64, uint64> total_commit_trx_map;
-  // <consensusIndex, xid> used to commit trx when recovering
-  std::map<uint64, XID *> consensus_commit_xid_map;
+  std::map<uint64, uint64> internal_xids_in_binlog;
+  std::map<XID, uint64> external_xids_in_binlog;
+
+  std::map<uint64, std::unique_ptr<Pending_recovering_trx>>
+      Pending_Recovering_trxs;
 
  public:
-  std::map<uint64, ulonglong> &get_xid_gcn_map() { return total_xid_gcn_map; }
-  void clear_xid_gcn_map();
-  void clear_xid_gcn_and_gtid_xid_map();
+  void clear_trx_in_binlog();
 
  private:
-  //<xid, gcn> for save relation between my_xid and gcn
-  // when recovering
-  std::map<uint64, ulonglong> total_xid_gcn_map;
+  void add_pending_recovering_trx(handlerton &ht,
+                                  Pending_recovering_trx::xid_type type,
+                                  enum_ha_recover_xa_state prepare_state,
+                                  enum_ha_recover_xa_state committed_state,
+                                  const XID &xid, uint64 consensus_index);
 };
 
 #endif

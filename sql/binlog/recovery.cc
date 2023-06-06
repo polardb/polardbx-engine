@@ -132,6 +132,8 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
 }
 
 void binlog::Binlog_recovery::process_query_event(Query_log_event const &ev) {
+  auto hook = create_process_query_event_hook(ev);
+
   std::string query{ev.query};
 
   if (query == "BEGIN" || query.find("XA START") == 0)
@@ -155,6 +157,7 @@ void binlog::Binlog_recovery::process_query_event(Query_log_event const &ev) {
 
 void binlog::Binlog_recovery::process_xid_event(Xid_log_event const &ev) {
   Commit_binlog_xa_specification guard(&m_xa_spec);
+  auto hook = create_process_xid_event_hook(ev);
 
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed) {
@@ -177,6 +180,8 @@ void binlog::Binlog_recovery::process_xid_event(Xid_log_event const &ev) {
 void binlog::Binlog_recovery::process_xa_prepare_event(
     XA_prepare_log_event const &ev) {
   Commit_binlog_xa_specification guard(&m_xa_spec);
+
+  auto hook = create_process_xa_prepare_event_hook(ev);
 
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed) {
@@ -268,6 +273,8 @@ void binlog::Binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
 void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
   Commit_binlog_xa_specification guard(&m_xa_spec);
 
+  auto hook = create_process_xa_commit_hook(query);
+
   this->m_is_malformed = this->m_in_transaction;
   this->m_in_transaction = false;
   if (this->m_is_malformed) {
@@ -286,6 +293,8 @@ void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
 
 void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
   Commit_binlog_xa_specification guard(&m_xa_spec);
+
+  auto hook = create_process_xa_rollback_hook(query);
 
   this->m_is_malformed = this->m_in_transaction;
   this->m_in_transaction = false;

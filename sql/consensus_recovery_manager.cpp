@@ -17,19 +17,22 @@
 
 #include "consensus_recovery_manager.h"
 
-#include "log.h"
-#include "log_event.h"
+#include "consensus_log_manager.h"
+#include "handler.h"
+#include "mysql/components/services/mysql_mutex_service.h"
+#include "mysql/plugin.h"
+#include "mysql/service_mysql_alloc.h"
 #include "mysql/thread_pool_priv.h"
 #include "mysqld.h"
+#include "psi_memory_key.h"
 #include "raft/raft0err.h"
-#include "raft/raft0xa.h"
-#include "sql_parse.h"
+#include "sql_plugin.h"
 
 #ifdef HAVE_PSI_INTERFACE
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
 #endif
 
-int ConsensusRecoveryManager::init() {
+int Consensus_recovery_manager::init() {
   key_LOCK_consensus_log_recover_hash =
       key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
   mysql_mutex_init(key_LOCK_consensus_log_recover_hash,
@@ -39,140 +42,144 @@ int ConsensusRecoveryManager::init() {
   return 0;
 }
 
-int ConsensusRecoveryManager::cleanup() {
+int Consensus_recovery_manager::cleanup() {
   if (inited) {
-    clear_all_map();
+    clear();
     mysql_mutex_destroy(&LOCK_consensuslog_recover_hash);
   }
   return 0;
 }
 
-void ConsensusRecoveryManager::add_trx_to_total_commit_map(
-    uint64 consensus_index, uint64 xid, ulonglong gcn) {
+void Consensus_recovery_manager::add_trx_in_binlog(uint64 consensus_index,
+                                                   uint64 xid) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  total_commit_trx_map[xid] = consensus_index;
-  total_xid_gcn_map[xid] = gcn;
+  internal_xids_in_binlog[xid] = consensus_index;
 
   raft::system(ER_RAFT_RECOVERY)
-      << "XID = [" << xid << "] GCN = [" << gcn << "] Index = ["
-      << consensus_index
-      << " was added at ConsensusRecoveryManager::add_trx_to_total_commit_map";
+      << "XID = [" << xid << "]"
+      << " Index = [" << consensus_index
+      << " ] was added at "
+         "Consensus_recovery_manager::add_trx_in_binlog";
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
-// int ConsensusRecoveryManager::collect_commit_trx_to_hash(HASH *xid_hash,
-// MEM_ROOT* mem_root)
-int ConsensusRecoveryManager::collect_commit_trx_to_hash(
-    mem_root_unordered_map<my_xid, my_commit_gcn> &commit_list,
-    MEM_ROOT *mem_root __attribute__((unused))) {
+void Consensus_recovery_manager::add_trx_in_binlog(uint64 consensus_index,
+                                                   const XID &xid) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  for (auto &iter : total_commit_trx_map) {
-    // uint64 xid = iter->first;
-    //  uchar *x = (uchar *)memdup_root(mem_root, (uchar*)&xid,
-    // sizeof(xid));
+  external_xids_in_binlog[xid] = consensus_index;
 
-    // if (!x || my_hash_insert(xid_hash, x))
-    my_xid xid = iter.first;
-    ulonglong gcn = total_xid_gcn_map.at(xid);
-
-    if (!commit_list.insert({xid, gcn}).second) {
-      mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
-      return 1;
-    }
-    raft::system(ER_RAFT_RECOVERY)
-        << "XID = [" << xid << "] GCN = [" << gcn << "]"
-        << " was added into commit list "
-           "ConsensusRecoveryManager::collect_commit_trx_to_hash";
-  }
+  raft::system(ER_RAFT_RECOVERY)
+      << "XID = [" << xid.key() << "]"
+      << " Index = [" << consensus_index
+      << " ] was added at "
+         "Consensus_recovery_manager::add_trx_in_binlog";
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
-  return 0;
 }
 
-void ConsensusRecoveryManager::add_xid_to_commit_map(XID *xid) {
+template <>
+void Consensus_recovery_manager::add_pending_recovering_trx<
+    Pending_recovering_trx::xid_type::INTERNAL>(
+    handlerton &ht, enum_ha_recover_xa_state current_state,
+    enum_ha_recover_xa_state next_state, const XID &xid) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  auto iter1 = total_commit_trx_map.find(xid->get_my_xid());
-  if (iter1 != total_commit_trx_map.end()) {
-    uint64 consensus_index = iter1->second;
+  auto iter = internal_xids_in_binlog.find(xid.get_my_xid());
+  if (iter != internal_xids_in_binlog.end()) {
+    uint64 consensus_index = iter->second;
     raft::system(ER_RAFT_RECOVERY)
-        << "XID = [" << xid->get_my_xid() << "] Index = [" << consensus_index
+        << "XID = [" << xid.get_my_xid() << "] Index = [" << consensus_index
         << "]"
         << " was added into commit map at "
-           "ConsensusRecoveryManager::add_xid_to_commit_map";
-    consensus_commit_xid_map[consensus_index] = xid;
+           "Consensus_recovery_manager::add_xid_to_commit_map";
+    add_pending_recovering_trx(ht, Pending_recovering_trx::xid_type::INTERNAL,
+                               current_state, next_state, xid, consensus_index);
+  }
+  mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
+}
+
+template <>
+void Consensus_recovery_manager::add_pending_recovering_trx<
+    Pending_recovering_trx::xid_type::EXTERNAL>(
+    handlerton &ht, enum_ha_recover_xa_state current_state,
+    enum_ha_recover_xa_state next_state, const XID &xid) {
+  mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
+  auto iter = external_xids_in_binlog.find(xid);
+  if (iter != external_xids_in_binlog.end()) {
+    uint64 consensus_index = iter->second;
+    raft::system(ER_RAFT_RECOVERY)
+        << "XID = [" << xid.key() << "] Index = [" << consensus_index << "]"
+        << " was added into commit map at "
+           "Consensus_recovery_manager::nladd_xid_to_commit_map";
+    add_pending_recovering_trx(ht, Pending_recovering_trx::xid_type::EXTERNAL,
+                               current_state, next_state, xid, consensus_index);
   } else {
-    raft::error(ER_RAFT_RECOVERY)
-        << "XID = [" << xid->get_my_xid() << "] "
-        << "was not found at ConsensusRecoveryManager::add_xid_to_commit_map";
+    raft::warn(ER_RAFT_RECOVERY)
+        << "XID = [" << xid.key() << "] "
+        << "was not found at Consensus_recovery_manager::add_xid_to_commit_map";
+    assert(current_state == enum_ha_recover_xa_state::PREPARED_IN_TC);
   }
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
-void ConsensusRecoveryManager::clear_total_xid_map() {
+void Consensus_recovery_manager::add_pending_recovering_trx(
+    handlerton &ht, Pending_recovering_trx::xid_type type,
+    enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
+    const XID &xid, uint64 consensus_index) {
+  XID *dup_xid = (XID *)my_memdup(key_memory_xa_transaction_contexts, &xid,
+                                  sizeof(XID), MYF(0));
+  Pending_Recovering_trxs[consensus_index] =
+      std::make_unique<Pending_recovering_trx>(
+          ht, type, current_state, next_state, dup_xid, consensus_index);
+}
+
+void Consensus_recovery_manager::clear_trx_in_binlog() {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  total_commit_trx_map.clear();
+  internal_xids_in_binlog.clear();
+  external_xids_in_binlog.clear();
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
-void ConsensusRecoveryManager::clear_xid_gcn_map() {
+void Consensus_recovery_manager::clear() {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  total_xid_gcn_map.clear();
+  internal_xids_in_binlog.clear();
+  external_xids_in_binlog.clear();
+  Pending_Recovering_trxs.clear();
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
-void ConsensusRecoveryManager::clear_xid_gcn_and_gtid_xid_map()
-{
-  mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  total_commit_trx_map.clear();
-  total_xid_gcn_map.clear();
-  //TODO @yanhua  recovery @xiedao
-  //total_xid_gtid_map.clear();
-  mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
-}
-
-void ConsensusRecoveryManager::clear_all_map() {
-  mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  total_commit_trx_map.clear();
-  for (auto &iter : consensus_commit_xid_map) {
-    my_free(iter.second);
-  }
-  consensus_commit_xid_map.clear();
-  total_xid_gcn_map.clear();
-  mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
-}
-
-uint64
-ConsensusRecoveryManager::get_max_consensus_index_from_recover_trx_hash() {
+uint64 Consensus_recovery_manager::
+    get_max_consensus_index_from_pending_recovering_trxs() {
   uint64 max_consensus_index;
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  auto iter = consensus_commit_xid_map.rbegin();
-  if (iter == consensus_commit_xid_map.rend())
+  auto iter = Pending_Recovering_trxs.rbegin();
+  if (iter == Pending_Recovering_trxs.rend()) {
     max_consensus_index = 0;
-  else
+  } else {
     max_consensus_index = iter->first;
+  }
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 
   raft::system(ER_RAFT_RECOVERY)
       << "Found max consensus index = [" << max_consensus_index << "]"
       << "at "
-         "ConsensusRecoveryManager::get_max_consensus_index_from_recover_trx_"
+         "Consensus_recovery_manager::get_max_consensus_index_from_recover_trx_"
          "hash";
   return max_consensus_index;
 }
 
-int ConsensusRecoveryManager::truncate_commit_xid_map(uint64 consensus_index) {
+int Consensus_recovery_manager::truncate_pending_recovering_trxs(
+    uint64 consensus_index) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  for (auto iter = consensus_commit_xid_map.begin();
-       iter != consensus_commit_xid_map.end();) {
+  for (auto iter = Pending_Recovering_trxs.begin();
+       iter != Pending_Recovering_trxs.end();) {
     if (iter->first >= consensus_index) {
       raft::system(ER_RAFT_RECOVERY)
-          << "XID = [" << iter->second->get_my_xid() << "] Index = ["
-          << iter->first << "]"
+          << "XID = [" << iter->second->name() << "] Index = [" << iter->first
+          << "]"
           << " is rollback since index large than " << consensus_index
-          << " at ConsensusRecoveryManager::truncate_commit_xid_map";
+          << " at Consensus_recovery_manager::truncate_pending_recovering_trxs";
 
-      ha_rollback_xids(iter->second);
-      my_free(iter->second);
-      consensus_commit_xid_map.erase(iter++);
+      iter->second->withdraw();
+      Pending_Recovering_trxs.erase(iter++);
     } else {
       iter++;
     }
@@ -181,21 +188,21 @@ int ConsensusRecoveryManager::truncate_commit_xid_map(uint64 consensus_index) {
   return 0;
 }
 
-bool ConsensusRecoveryManager::is_recovering_trx_empty() {
+bool Consensus_recovery_manager::is_pending_recovering_trx_empty() {
   bool empty = FALSE;
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  empty = consensus_commit_xid_map.empty();
+  empty = Pending_Recovering_trxs.empty();
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
   return empty;
 }
 
 // truncate the continuous xids of the prepared xids
-int ConsensusRecoveryManager::truncate_not_confirmed_xids_from_map(
+int Consensus_recovery_manager::truncate_not_confirmed_pending_recovering_trxs(
     uint64 max_index_in_binlog_file) {
-  auto iter = consensus_commit_xid_map.rbegin();
+  auto iter = Pending_Recovering_trxs.rbegin();
   uint64 index = max_index_in_binlog_file;
 
-  while (iter != consensus_commit_xid_map.rend() && iter->first == index) {
+  while (iter != Pending_Recovering_trxs.rend() && iter->first == index) {
     iter++;
     index--;
   }
@@ -205,13 +212,130 @@ int ConsensusRecoveryManager::truncate_not_confirmed_xids_from_map(
     raft::system(ER_RAFT_RECOVERY)
         << "Last leader term index to = [" << index - 1 << "] but max index = ["
         << max_index_in_binlog_file << "] in binlog file at "
-        << "ConsensusRecoveryManager::truncate_not_confirmed_xids_from_map ";
-  } else {
-    raft::error(ER_RAFT_RECOVERY)
-        << "Last leader term index to = [" << index - 1 << "] but max index = ["
-        << max_index_in_binlog_file << "] in binlog file at "
-        << "ConsensusRecoveryManager::truncate_not_confirmed_xids_from_map ";
+        << "Consensus_recovery_manager::truncate_not_confirmed_pending_"
+           "recovering_trxs ";
+    truncate_pending_recovering_trxs(index);
+    set_last_leader_term_index(index - 1);
   }
 
   return 0;
+}
+
+int Consensus_recovery_manager::commit_by_start_apply_index() {
+  DBUG_ENTER("commit_by_start_apply_index");
+  uint64 recover_start_apply_index =
+      consensus_log_manager.get_consensus_info()->get_start_apply_index();
+
+  if (opt_recover_snapshot && recover_start_apply_index) {
+    truncate_not_confirmed_pending_recovering_trxs(
+        get_last_leader_term_index());
+  }
+
+  for (auto &iter : Pending_Recovering_trxs) {
+    if (recover_start_apply_index == 0 ||
+        iter.first <= recover_start_apply_index) {
+      iter.second->recover();
+    } else {
+      iter.second->withdraw();
+    }
+  }
+
+  return 0;
+}
+
+int Pending_recovering_trx::withdraw() {
+  int ret = 0;
+  if (immutable) {
+    raft::error(ER_RAFT_RECOVERY)
+        << "XID = [" << xid->get_my_xid() << "] "
+        << "is immutable at Pending_recovering_trx::rollback";
+  }
+  immutable = true;
+
+  assert(is_state_legal());
+
+  if (type == xid_type::INTERNAL) {
+    ret = ht.rollback_by_xid(&ht, xid);
+  } else if (type == xid_type::EXTERNAL) {
+    if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
+      ret = ht.rollback_by_xid(&ht, xid);
+    } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+      // do nothing
+    }
+  }
+
+  return ret;
+}
+
+int Pending_recovering_trx::recover() {
+  int ret = 0;
+  if (immutable) {
+    raft::error(ER_RAFT_RECOVERY)
+        << "XID = [" << xid->get_my_xid() << "] "
+        << "is immutable at Pending_recovering_trx::commit";
+  }
+  immutable = true;
+
+  assert(is_state_legal());
+
+  if (type == xid_type::INTERNAL) {
+    ret = ht.commit_by_xid(&ht, xid);
+  } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
+    if (next_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+      ret = ht.set_prepared_in_tc_by_xid(&ht, xid);
+    } else if (next_state ==
+               enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE) {
+      ret = ht.commit_by_xid(&ht, xid);
+    }
+  } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+    if (next_state == enum_ha_recover_xa_state::COMMITTED) {
+      ret = ht.commit_by_xid(&ht, xid);
+    } else if (next_state == enum_ha_recover_xa_state::ROLLEDBACK) {
+      ret = ht.rollback_by_xid(&ht, xid);
+    }
+  }
+  return ret;
+}
+
+Pending_recovering_trx::Pending_recovering_trx(
+    handlerton &ht, Pending_recovering_trx::xid_type type,
+    enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
+    XID *xid, uint64 consensus_index)
+    : immutable(false),
+      ht(ht),
+      type(type),
+      current_state(current_state),
+      next_state(next_state),
+      xid(xid),
+      consensus_index(consensus_index) {}
+
+Pending_recovering_trx::~Pending_recovering_trx() {
+  if (xid != nullptr) {
+    my_free(xid);
+  }
+}
+
+bool Pending_recovering_trx::is_state_legal() {
+  bool ret = true;
+  if (type == xid_type::INTERNAL) {
+    if (current_state != enum_ha_recover_xa_state::PREPARED_IN_SE ||
+        next_state != enum_ha_recover_xa_state::COMMITTED) {
+      ret = false;
+    }
+  } else if (type == xid_type::EXTERNAL) {
+    if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
+      if (next_state != enum_ha_recover_xa_state::PREPARED_IN_TC &&
+          next_state != enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE) {
+        ret = false;
+      }
+    } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+      if (next_state != enum_ha_recover_xa_state::COMMITTED &&
+          next_state != enum_ha_recover_xa_state::ROLLEDBACK) {
+        ret = false;
+      }
+    } else {
+      ret = false;
+    }
+  }
+  return ret;
 }

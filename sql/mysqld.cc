@@ -686,6 +686,7 @@ MySQL clients support the protocol:
 */
 /* clang-format on */
 
+#include <memory>
 #define LOG_SUBSYSTEM_TAG "Server"
 
 #include "sql/mysqld.h"
@@ -983,6 +984,7 @@ MySQL clients support the protocol:
 
 #include "sql/binlog/lizard0recovery.h"
 #include "sql/raft/raft0err.h"
+#include "sql/raft/raft0recovery.h"
 #include "sql/consensus_info.h"
 #include "sql/consensus_log_index.h"
 #include "sql/consensus_recovery_manager.h"
@@ -6380,7 +6382,7 @@ static int init_server_components() {
       name would be used in following call path,
         Relay_log_info::rli_init_info() -> MYSQL_BIN_LOG::open_index_file()
     */
-#if 0
+#ifndef RAFT_RECOVERY_HIDDEN
     if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
         log_bin_index) {
       strmake(default_binlog_index_name,
@@ -6938,7 +6940,7 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
-  if (opt_initialize) {
+  if (!raft::Recovery_manager::instance().is_raft_instance_recovering()) {
     if (ha_recover(0)) {
       unireg_abort(MYSQLD_ABORT_EXIT);
     }
@@ -8003,7 +8005,8 @@ int mysqld_main(int argc, char **argv)
         "Gtid_in_table");
   }
 
-  if (opt_bin_log && opt_initialize) {
+  if (opt_bin_log &&
+      !raft::Recovery_manager::instance().is_raft_instance_recovering()) {
     /*
       Initialize GLOBAL.GTID_EXECUTED and GLOBAL.GTID_PURGED from
       gtid_executed table and binlog files during server startup.
@@ -10172,7 +10175,7 @@ SHOW_VAR status_vars[] = {
       SHOW_SCOPE_GLOBAL},
     {"appliedindex_checker_queue", (char*) &show_appliedindex_checker_queue, SHOW_FUNC, 
       SHOW_SCOPE_GLOBAL},
-    {"consensus_easy_pool_size", (char*) &alisql::easy_pool_alloc_byte, SHOW_LONG, 
+    {"consensus_easy_pool_size", reinterpret_cast<char*>(const_cast<long int*>(&alisql::easy_pool_alloc_byte)), SHOW_LONG,
       SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
@@ -12086,7 +12089,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_consensus_info_lock, "consensus_info::lock", 
 	  0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_index, "ConsensusLogIndex::LOCK_consensuslog_index", 0, 0, PSI_DOCUMENT_ME },
-  { &key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "ConsensusRecoveryManager::LOCK_consensuslog_recover_hash", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "Consensus_recovery_manager::LOCK_consensuslog_recover_hash", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock, "ConsensusLogManager::LOCK_consensuslog_sequence_stage1", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock, "ConsensusLogManager::LOCK_consensuslog_sequence_stage2", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock, "ConsensusLogManager::LOCK_consensus_log_term", 0, 0, PSI_DOCUMENT_ME },

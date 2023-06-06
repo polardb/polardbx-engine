@@ -31,6 +31,7 @@
 #include "m_ctype.h"
 #include "m_string.h"
 #include "map_helpers.h"
+#include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_loglevel.h"
 #include "my_macros.h"
@@ -287,6 +288,14 @@ int ha_recover(Xid_commit_list *commit_list, Xa_state_list *xa_list,
     xa_list = external_xids.get();
   }
   info.xa_list = xa_list;
+
+  std::unique_ptr<MEM_ROOT> mem_root_in_ht{nullptr};
+  std::unique_ptr<Xa_state_list::allocator> map_alloc_in_ht{nullptr};
+  std::unique_ptr<Xa_state_list::list> xid_map_in_ht{nullptr};
+  std::unique_ptr<Xa_state_list> xids_in_ht{nullptr};
+  std::tie(mem_root_in_ht, map_alloc_in_ht, xid_map_in_ht, xids_in_ht) =
+      Xa_state_list::new_instance();
+  info.xa_list_in_ht = xids_in_ht.get();
 
   /* commit_list and tc_heuristic_recover cannot be set both */
   assert(info.commit_list == nullptr ||

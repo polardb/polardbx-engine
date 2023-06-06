@@ -144,6 +144,7 @@
 #include "sql/consensus_log_manager.h"
 #include "sql/bl_consensus_log.h"
 #include "replica_read_manager.h"
+#include "sql/raft/raft0recovery.h"
 
 class Item;
 
@@ -8049,14 +8050,17 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
       total_ha_2pc == 1, to find the last valid group of events written.
       Later we will take this value and truncate the log if need be.
     */
-   //TODO @yanhua @xiedao recovery
+    // comment LOG_EVENT_BINLOG_IN_USE_F because we don't use this flag when
+    // RELAY_LOG_WORKING
     if ((ev = binlog_file_reader.read_event_object()) &&
         ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT &&
-        (ev->common_header->flags & LOG_EVENT_BINLOG_IN_USE_F ||
+        (/*ev->common_header->flags & LOG_EVENT_BINLOG_IN_USE_F*/ true ||
          DBUG_EVALUATE_IF("eval_force_bin_log_recovery", true, false))) {
       LogErr(INFORMATION_LEVEL, ER_BINLOG_RECOVERING_AFTER_CRASH_USING,
              opt_name);
-      binlog::Binlog_recovery bl_recovery{binlog_file_reader};
+      // binlog::Binlog_recovery bl_recovery{binlog_file_reader};
+      auto bl_recovery_ptr = raft::Recovery_manager::instance().create_recovery(binlog_file_reader);
+      auto &bl_recovery = *bl_recovery_ptr;
       error = bl_recovery     //
                   .recover()  //
                   .has_failures();

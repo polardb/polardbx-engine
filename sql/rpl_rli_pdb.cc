@@ -227,6 +227,7 @@ const char *info_slave_worker_fields[] = {
     */
     "channel_name",
 
+    // used by consensus
     "checkpoint_consensus_apply_index",
     "consensus_apply_index"
     };

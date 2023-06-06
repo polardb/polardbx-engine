@@ -705,12 +705,12 @@ SET(SQL_SHARED_SOURCES
   raft/raft0consensus.cc
   raft/raft0rpl_info_factory.cc
   raft/raft0rpl_info_handler.cc
-  raft/raft0xa.cc
   raft/raft0rpl_rli.cc
   raft/raft0thd.cc
+  raft/raft0recovery.cc
+
   consensus/consensus_common.cc
   consensus/consensus_proc.cc
-
   consensus_log_index.cc
   consensus_recovery_manager.cpp
   )

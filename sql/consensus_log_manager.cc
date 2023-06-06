@@ -28,6 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "consensus_log_manager.h"
 #include "log.h"
 #include "log_event.h"
+#include "rpl_gtid.h"
 #include "sql_parse.h"
 #include "mysql/thread_pool_priv.h"
 #include "rpl_info_factory.h"
@@ -39,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "consensus_recovery_manager.h"
 #include "events.h"
 #include "bl_consensus_log.h"
+#include "sys_vars_consensus.h"
 
 #define LOG_PREFIX	"ML"
 
@@ -86,7 +88,7 @@ void wait_commit_index_in_recovery() {
   auto mgr = consensus_log_manager.get_recovery_manager();
 
   while (consensus_ptr->getCommitIndex() <
-         mgr->get_max_consensus_index_from_recover_trx_hash()) {
+         mgr->get_max_consensus_index_from_pending_recovering_trxs()) {
     my_sleep(500);
   }
 
@@ -181,7 +183,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
   mysql_mutex_init(key_CONSENSUSLOG_LOCK_commit_pos, &LOCK_consensus_commit_pos, MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_COND_consensuslog_catchup, &COND_consensuslog_catchup);
   mysql_cond_init(key_COND_consensus_state_change, &COND_consensus_state_change);
-  recovery_manager = new ConsensusRecoveryManager();
+  recovery_manager = new Consensus_recovery_manager();
   recovery_manager->init();
 
   fifo_cache_manager = new ConsensusFifoCacheManager();
@@ -354,10 +356,11 @@ int ConsensusLogManager::init_service() {
         raft::error(ER_RAFT_0) << "can't get consensus index of snapshot with logger mode ";
         return -1;
       }
-      //TODO @yanhua recovery @xiedao
-	    // if(ha_commit_xids_by_recover_map(&consensus_log_manager))
-      //   return -1;
-      recovery_manager->clear_all_map();
+      if (consensus_log_manager.get_recovery_manager()
+              ->commit_by_start_apply_index()) {
+        return -1;
+      }
+      recovery_manager->clear();
       if (start_consensus_apply_threads())
         return -1;
 
@@ -434,8 +437,9 @@ int ConsensusLogManager::init_service() {
                             opt_consensus_easy_pool_size,
                             opt_consensus_heartbeat_thread_cnt);
 
-	    if (opt_cluster_log_type_instance)
-	      consensus_ptr->setAsLogType(true);
+        if (opt_cluster_log_type_instance) {
+          consensus_ptr->setAsLogType(true);
+        }
       } else {
         // startup as learner node, config string arg pass empty
         consensus_ptr->initAsLearner(empty_str, NULL, opt_consensus_io_thread_cnt,
@@ -458,15 +462,15 @@ int ConsensusLogManager::init_service() {
       wait_commit_index_in_recovery();
 
       if (!opt_cluster_log_type_instance) {
-        //TODO @yanhua  recovery @xiedao
-        // if (ha_commit_xids_by_recover_map(this)) {
-        //   return -1;
-        // }
-        get_recovery_manager()->clear_all_map();
+         if (consensus_log_manager.get_recovery_manager()
+                ->commit_by_start_apply_index()) {
+           return -1;
+         }
+         get_recovery_manager()->clear();
 
-  	    start_consensus_apply_threads();
+        start_consensus_apply_threads();
       } else {
-        assert(get_recovery_manager()->get_commit_index_map().empty());
+        assert(get_recovery_manager()->is_pending_recovering_trx_empty());
       }
     } // end of opt_consensus_force_recovery
   } else {//opt_initialize
@@ -636,7 +640,7 @@ int ConsensusLogManager::write_log_entry(ConsensusLogEntry &log, uint64* consens
       goto end;
     }
     assert(*consensus_index != 0);
-    if (do_rotate && recovery_manager->is_recovering_trx_empty() && enable_rotate)
+    if (do_rotate && recovery_manager->is_pending_recovering_trx_empty() && enable_rotate)
     {
       if ((error = rotate_relay_log(rli_info->mi)))
       {
@@ -668,7 +672,7 @@ int ConsensusLogManager::write_log_entries(std::vector<ConsensusLogEntry> &logs,
   {
     goto end;
   }
-  if (do_rotate && recovery_manager->is_recovering_trx_empty() && enable_rotate)
+  if (do_rotate && recovery_manager->is_pending_recovering_trx_empty() && enable_rotate)
   {
     if (status == BINLOG_WORKING)
     {
@@ -859,7 +863,7 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
   if (status == RELAY_LOG_WORKING && recovery_manager->get_last_leader_term_index() >= consensus_index)
     recovery_manager->set_last_leader_term_index(consensus_index - 1);
   // truncate commit map
-  recovery_manager->truncate_commit_xid_map(consensus_index);
+  recovery_manager->truncate_pending_recovering_trxs(consensus_index);
 
   // truncate cache
   fifo_cache_manager->trunc_log_from_cache(consensus_index);
@@ -1165,7 +1169,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   }
 
   // wait recover trx all finished
-  while (!(recovery_manager->is_recovering_trx_empty()))
+  while (!(recovery_manager->is_pending_recovering_trx_empty()))
   {
     my_sleep(1000);
   }

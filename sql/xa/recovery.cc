@@ -24,6 +24,10 @@
 
 #include "my_loglevel.h"
 #include "mysql/components/services/log_builtins.h"
+#include "sql/bl_consensus_log.h"
+#include "sql/consensus_log_manager.h"
+#include "sql/consensus_recovery_manager.h"
+#include "sql/handler.h"
 #include "sql/mysqld.h"  // tc_heuristic_recover
 
 namespace {  // Compilation unit local types and functions
@@ -182,7 +186,8 @@ bool xa::recovery::recover_prepared_in_tc_one_ht(THD *, plugin_ref plugin,
 
   if (ht->state == SHOW_OPTION_YES && ht->recover_prepared_in_tc) {
     assert(info->xa_list != nullptr);
-    return ht->recover_prepared_in_tc(ht, *info->xa_list);
+    return ht->recover_prepared_in_tc(ht, *info->xa_list) ||
+           ht->recover_prepared_in_tc(ht, *info->xa_list_in_ht);
   }
   return false;
 }
@@ -251,9 +256,18 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
 
     if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
       exec_status = ::generate_xa_recovery_error();
-    else
-      exec_status =
-          ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+    // else
+    //   exec_status =
+    //       ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+    else {
+      exec_status = XA_OK;
+      //exec_status = ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id));
+      consensus_log_manager.get_recovery_manager()
+          ->add_pending_recovering_trx<
+              Pending_recovering_trx::xid_type::INTERNAL>(
+              ht, enum_ha_recover_xa_state::PREPARED_IN_SE,
+              enum_ha_recover_xa_state::COMMITTED, xa_trx.id);
+    }
 
     if (exec_status == XA_OK)
       ::add_to_stats<STATS_SUCCESS, STATS_COMMITTED>(stats);
@@ -296,6 +310,12 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
   XA_specification *xa_spec =
       (info.spec_list ? info.spec_list->find(xa_trx.id) : nullptr);
 
+  bool collect_pending_recovering_trx = false;
+  auto state_in_ht{enum_ha_recover_xa_state::NOT_FOUND};
+  if (info.xa_list_in_ht != nullptr) {
+    state_in_ht = info.xa_list_in_ht->find(xa_trx.id);
+  }
+
   switch (state) {
     case enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE:
     case enum_ha_recover_xa_state::COMMITTED: {
@@ -303,9 +323,13 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
         enum xa_status_code exec_status;
         if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
           exec_status = ::generate_xa_recovery_error();
-        else
-          exec_status =
-              ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+          // exec_status =
+          //     ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+        else {
+          exec_status = XA_OK;
+          //exec_status = ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id));
+          collect_pending_recovering_trx = true;
+        }
 
         if (exec_status == XA_OK) {
           ::add_to_stats<STATS_SUCCESS, STATS_COMMITTED>(stats);
@@ -325,10 +349,15 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
         enum xa_status_code exec_status;
         if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
           exec_status = ::generate_xa_recovery_error();
-        else
-          exec_status =
-              ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
-
+        // else
+          // exec_status =
+          //     ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+        else if (state == enum_ha_recover_xa_state::ROLLEDBACK) {
+          exec_status = XA_OK;
+          collect_pending_recovering_trx = true;
+        } else {
+          exec_status = ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id));
+        }
         if (exec_status == XA_OK) {
           ::add_to_stats<STATS_SUCCESS, STATS_ROLLEDBACK>(stats);
           break;
@@ -347,9 +376,14 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
           enum xa_status_code exec_status;
           if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
             exec_status = ::generate_xa_recovery_error();
-          else
-            exec_status = ht.set_prepared_in_tc_by_xid(
-                &ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+          else {
+            exec_status = XA_OK;
+//            exec_status = ht.set_prepared_in_tc_by_xid(
+//                &ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+            if (state_in_ht == enum_ha_recover_xa_state::PREPARED_IN_SE) {
+              collect_pending_recovering_trx = true;
+            }
+          }
 
           if (exec_status == XA_OK) {
             ::add_to_stats<STATS_SUCCESS, STATS_PREPARED>(stats);
@@ -363,6 +397,15 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
       ::add_to_stats<STATS_FAILURE, STATS_PREPARED>(stats);
       break;
     }
+  }
+
+  // some trx in engine should forward it status by tc_log,
+  // so we need to collect it and forward it after consensus log recovery
+  if (collect_pending_recovering_trx) {
+    consensus_log_manager.get_recovery_manager()
+        ->add_pending_recovering_trx<
+            Pending_recovering_trx::xid_type::EXTERNAL>(
+            ht, state_in_ht, state, xa_trx.id);
   }
 }
 

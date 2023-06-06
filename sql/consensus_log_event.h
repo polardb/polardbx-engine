@@ -98,11 +98,11 @@ class Consensus_log_event final : public binary_log::Consensus_event,
   }
 #endif
 
-  uint64 get_flag() { return flag; }
-  uint64 get_term() { return term; }
-  uint64 get_index() { return index; }
-  uint64 get_length() { return length; }
-  uint64 get_reserve() { return reserve; }
+  uint64 get_flag() const { return flag; }
+  uint64 get_term() const { return term; }
+  uint64 get_index() const { return index; }
+  uint64 get_length() const { return length; }
+  uint64 get_reserve() const { return reserve; }
   void set_reserve(uint64 arg) { reserve = arg; }
 
   static const char *SET_STRING_FLAG;
@@ -170,7 +170,7 @@ class Previous_consensus_index_log_event final
   int do_update_pos(Relay_log_info *rli) override;
 #endif
 
-  uint64 get_index() { return index; }
+  uint64 get_index() const { return index; }
 
   static const char *SET_STRING_PREFIX;
 

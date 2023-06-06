@@ -47,7 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define CLUSTER_INFO_EXTRA_LENGTH  27 // LOG_EVENT_HEADER_LEN + POST_HEADER_LENGTH + BINLOG_CHECKSUM_LEN
 
 class MYSQL_BIN_LOG;
-class ConsensusRecoveryManager;
+class Consensus_recovery_manager;
 
 enum Consensus_Log_System_Status
 {
@@ -110,7 +110,7 @@ public:
   bool get_enable_rotate() { return enable_rotate; }
 
   Consensus_info* get_consensus_info() { return consensus_info; }
-  ConsensusRecoveryManager* get_recovery_manager() { return recovery_manager; }
+  Consensus_recovery_manager * get_recovery_manager() { return recovery_manager; }
   ConsensusFifoCacheManager* get_fifo_cache_manager() { return fifo_cache_manager; }
   ConsensusPreFetchManager* get_prefetch_manager() { return prefetch_manager; }
   ConsensusLogIndex* get_log_file_index() {return log_file_index; }
@@ -243,7 +243,7 @@ private:
   std::atomic<bool>                         in_large_trx;
   std::atomic<bool>                         enable_rotate;  // do not rotate if last log is in middle of large trx
 
-  ConsensusRecoveryManager                  *recovery_manager;       // recovery module
+  Consensus_recovery_manager *recovery_manager;       // recovery module
   ConsensusPreFetchManager                  *prefetch_manager;       // prefetch module
   ConsensusFifoCacheManager                 *fifo_cache_manager;      // fifo cache module
 
