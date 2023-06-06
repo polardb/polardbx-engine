@@ -234,7 +234,7 @@ c1
                 "is_virtual": false,
                 "hID
                 "ordinal_position": 5,
-                "char_length": 7,
+                "char_length": 8,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,
@@ -553,7 +553,7 @@ c1
                 "is_virtual": false,
                 "hID
                 "ordinal_position": 5,
-                "char_length": 7,
+                "char_length": 8,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,
@@ -998,7 +998,7 @@ c1
                 "is_virtual": false,
                 "hID
                 "ordinal_position": 6,
-                "char_length": 7,
+                "char_length": 8,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,
@@ -1605,7 +1605,7 @@ c1
                 "is_virtual": false,
                 "hID
                 "ordinal_position": 5,
-                "char_length": 7,
+                "char_length": 8,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,
@@ -1924,7 +1924,7 @@ c1
                 "is_virtual": false,
                 "hID
                 "ordinal_position": 5,
-                "char_length": 7,
+                "char_length": 8,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,
@@ -2368,7 +2368,7 @@ c1
                 "is_virtual": false,
                 "hID
                 "ordinal_position": 6,
-                "char_length": 7,
+                "char_length": 8,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,

@@ -902,7 +902,7 @@ ANALYZE TABLE t1;
 # Lizard: Not sure why there are two possibilities:
 #         {(cost=722.95 rows=7172), (cost=737.05 rows=7313)}, but both of them
 #         can be considered correct estimates.
---replace_result 737.05 {checked_valid} 7313 {checked_valid} 722.95 {checked_valid} 7172 {checked_valid}
+--replace_result 737.05 {checked_valid} 7313 {checked_valid} 722.95 {checked_valid} 7172 {checked_valid} 752.60 {checked_valid} 7466 {checked_valid}
 EXPLAIN FORMAT=tree SELECT DISTINCT COUNT(*) AS num FROM t1 GROUP BY f HAVING num=1;
 SELECT DISTINCT COUNT(*) AS num FROM t1 GROUP BY f HAVING num=1;
 
