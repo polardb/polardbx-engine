@@ -1308,7 +1308,7 @@ static void store_gtid_for_xpaxos(const char *buf, Relay_log_info *rli) {
   fd_ev.footer()->checksum_alg =
       static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
 
-  //TODO @yanhua
+  //TODO @yanhua gcn
   // if (event_type == binary_log::GCN_LOG_EVENT) {
   //   buf = buf + Gcn_log_event::get_event_length(fd_ev.footer()->checksum_alg);
   //   event_type = (Log_event_type)buf[EVENT_TYPE_OFFSET];
@@ -1828,7 +1828,7 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
         }
       } 
       
-      //TODO @yanhua
+      //TODO @yanhua gcn
       // if (ev->get_type_code() == binary_log::GCN_LOG_EVENT) {
       //   Gcn_log_event *gcn_ev = (Gcn_log_event *)ev;
       //   if (gcn_ev->have_commit_gcn())
@@ -1877,7 +1877,7 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
       }
 
       if (!in_transaction && !is_gtid_event(ev) && !is_gcn_event(ev)) {
-        //TODO @yanhua
+        //TODO @yanhua gtid
         // Binlog_recovery::instance()->add_gtid(gtid, ev_start_pos,
         //                                       current_index);
         gtid.clear();
@@ -1984,9 +1984,9 @@ int MYSQL_BIN_LOG::recover_intergrity_for_normandy(Binlog_file_reader *binlog_fi
   if (consensus_log_manager.get_recovery_manager()->collect_commit_trx_to_hash(xids, &mem_root))
     goto err2;
 
-  //TODO @yanhua
+  //TODO @yanhua  recovery @xiedao
   // if (total_ha_2pc > 1 && ha_recover(&xids))
-  //   goto err2;
+  //    goto err2;
 
   // free_root(&mem_root, MYF(0));
   // my_hash_free(&xids);
@@ -2291,8 +2291,8 @@ bool MYSQL_BIN_LOG::write_buf_to_log_file(uchar *buffer, size_t buf_size) {
   return ret;
 }
 
-int flush_consensus_log(THD *thd, binlog_cache_data *binlog_cache,
-                        Binlog_event_writer *writer, bool &mark_as_rollback,
+int flush_consensus_log(THD *thd, binlog_cache_data *,
+                        Binlog_event_writer *, bool &mark_as_rollback,
                         my_off_t &bytes_in_cache) {
   int error = 0;
   ulonglong buf_size;
@@ -2300,7 +2300,8 @@ int flush_consensus_log(THD *thd, binlog_cache_data *binlog_cache,
   uint flag = 0;
   bool is_large_trx = false;
   // alloc the buffer
-  error = mysql_bin_log.write_cache(thd, binlog_cache, writer);
+  //TODO @yanhua, already write in MYSQL_BIN_LOG::write_transaction
+  // error = mysql_bin_log.write_cache(thd, binlog_cache, writer);
   buf_size = my_b_tell(consensus_log_manager.get_cache());
   // determine whether log is too large
   if (buf_size > opt_consensus_max_log_size) is_large_trx = TRUE;

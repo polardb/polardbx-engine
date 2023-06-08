@@ -51,6 +51,8 @@
 #include "sql/sql_class.h"
 #include "sql/system_variables.h"
 
+#include "rpl_rli_ext.h"
+
 class Rpl_info_handler;
 class Slave_worker;
 struct TABLE;
@@ -207,7 +209,9 @@ struct Slave_job_group {
   longlong last_committed;   // commit parent timestamp
   longlong sequence_number;  // transaction's logical timestamp
 
+  //TODO @yanhua, unused
   uint64_t checkpoint_consensus_index;
+
   uint64_t consensus_index;   // group's consensus index
   /*
     After Coordinator has seen a new FD event, it sets this member to
@@ -599,6 +603,7 @@ class Slave_worker final : public Relay_log_info {
   /* Initial value of FD-for-execution version until it's gets known. */
   ulong server_version;
 
+  //TODO @yanhua, unused
   ulonglong checkpoint_consensus_apply_index;
 
   enum en_running_state {

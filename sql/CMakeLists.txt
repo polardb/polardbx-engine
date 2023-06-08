@@ -586,6 +586,7 @@ SET(SQL_SHARED_SOURCES
   sql_select.cc
   sql_servers.cc
   sql_show.cc
+  sql_show_consensus.cc
   sql_show_status.cc
   sql_show_processlist.cc
   sql_signal.cc

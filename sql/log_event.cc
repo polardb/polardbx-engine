@@ -988,6 +988,7 @@ Log_event::Log_event(THD *thd_arg, uint16 flags_arg,
   common_header->log_pos = 0;
   common_header->flags = flags_arg;
   consensus_extra_time = 0;
+  consensus_index_end_pos = 0;
 }
 
 /**
@@ -1012,6 +1013,7 @@ Log_event::Log_event(Log_event_header *header, Log_event_footer *footer,
   server_id = ::server_id;
   common_header->unmasked_server_id = server_id;
   consensus_extra_time = 0;
+  consensus_index_end_pos = 0;
 }
 #endif /* MYSQL_SERVER */
 
@@ -1036,6 +1038,7 @@ Log_event::Log_event(Log_event_header *header, Log_event_footer *footer)
   */
   server_id = common_header->unmasked_server_id & opt_server_id_mask;
   consensus_extra_time= 0;
+  consensus_index_end_pos = 0;
 }
 
 /*
@@ -3139,6 +3142,13 @@ int Log_event::apply_event(Relay_log_info *rli) {
       return 0;
     } else {
       int error = do_apply_event(rli);
+      if (error == 0) {
+        /** 
+         * update consensus apply index if   
+         *  coordinator apply event; 
+        */
+        update_consensus_apply_index(rli, this);
+      }
       if (rli->is_processing_trx()) {
         // needed to identify DDL's; uses the same logic as in
         // get_slave_worker()

@@ -4323,7 +4323,7 @@ SHOW_VAR com_status_vars[] = {
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_consensus_logs",
      (char *)offsetof(System_status_var,
-                      com_stat[(uint)SQLCOM_SHOW_CONSENSUSLOGS]),
+                      com_stat[(uint)SQLCOM_SHOW_CONSENSUS_LOGS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_consensuslog_events",
      (char *)offsetof(System_status_var,
@@ -6925,7 +6925,7 @@ static int init_server_components() {
   if (consensus_log_manager.init(opt_consensus_log_cache_size, opt_consensus_prefetch_cache_size, opt_consensus_start_index))
     unireg_abort(MYSQLD_ABORT_EXIT);
   consensus_log_manager.set_binlog(&mysql_bin_log);
-  mysql_bin_log.is_raft_log= true;
+  mysql_bin_log.is_raft_log = true;
 
   if (Recovered_xa_transactions::init()) {
     LogErr(ERROR_LEVEL, ER_OOM);
@@ -7023,6 +7023,10 @@ static int init_server_components() {
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--binlog-expire-logs-seconds");
     if (expire_logs_days_supplied)
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--expire_logs_days");
+  }
+
+  if (opt_bin_log && !opt_initialize) {
+    mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
   }
 
   if (opt_myisam_log) (void)mi_log(1);
@@ -10160,6 +10164,16 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"Reload_slave", (char *)im::reload_entry_status, SHOW_ARRAY,
      SHOW_SCOPE_ALL},
+    {"consensus_fifo_cache_used_size", (char*) &show_fifo_cache_size, SHOW_FUNC,
+      SHOW_SCOPE_GLOBAL},
+    {"first_index_in_consensus_fifo_cache", (char*) &show_first_index_in_fifo_cache, SHOW_FUNC,
+      SHOW_SCOPE_GLOBAL},
+    {"consensus_fifo_cache_log_count", (char*) &show_log_count_in_fifo_cache, SHOW_FUNC,
+      SHOW_SCOPE_GLOBAL},
+    {"appliedindex_checker_queue", (char*) &show_appliedindex_checker_queue, SHOW_FUNC, 
+      SHOW_SCOPE_GLOBAL},
+    {"consensus_easy_pool_size", (char*) &alisql::easy_pool_alloc_byte, SHOW_LONG, 
+      SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {
@@ -10173,6 +10187,7 @@ static void print_server_version(void) {
   set_server_version();
 
   print_explicit_version(server_version);
+  print_polardbx_engine_version();
 }
 
 /** Compares two options' names, treats - and _ the same */

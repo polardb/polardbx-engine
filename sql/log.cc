@@ -2371,3 +2371,24 @@ int my_plugin_log_message(MYSQL_PLUGIN *plugin_ptr, plugin_log_level level,
 
   return 0;
 }
+
+
+#include <execinfo.h>
+char *get_backtrace_str()
+{
+#define LOCAL_BUF_LEN  1024
+  static __thread char buf[LOCAL_BUF_LEN];
+  static __thread void* addrs[100];
+  int size = backtrace(addrs, sizeof(addrs)/sizeof(addrs[0]));
+  int i = 0;
+  int pos = 0;
+  for (i = 0; i < size && pos < LOCAL_BUF_LEN; i++)
+    pos += snprintf(buf + pos, LOCAL_BUF_LEN - pos, " %p", addrs[i]);
+  if (pos >= LOCAL_BUF_LEN)
+  {
+    pos = LOCAL_BUF_LEN - 1;
+    buf[pos] = '\0';
+  }
+#undef LOCAL_BUF_LEN
+  return buf;
+}

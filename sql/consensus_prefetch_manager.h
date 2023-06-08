@@ -122,7 +122,6 @@ class ConsensusPreFetchChannel
   PSI_cond_key                      key_COND_prefetch_request_cond;
 
   PSI_mutex_key                     key_LOCK_prefetch_request_queue;
-  PSI_cond_key                      key_COND_prefetch_reuqest_cond;
 
   mysql_mutex_t                     LOCK_prefetch_channel;  // used to protect prefetch
   mysql_mutex_t                     LOCK_prefetch_request;

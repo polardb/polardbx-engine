@@ -354,7 +354,7 @@ int ConsensusLogManager::init_service() {
         raft::error(ER_RAFT_0) << "can't get consensus index of snapshot with logger mode ";
         return -1;
       }
-      //TODO @yanhua
+      //TODO @yanhua recovery @xiedao
 	    // if(ha_commit_xids_by_recover_map(&consensus_log_manager))
       //   return -1;
       recovery_manager->clear_all_map();
@@ -458,7 +458,7 @@ int ConsensusLogManager::init_service() {
       wait_commit_index_in_recovery();
 
       if (!opt_cluster_log_type_instance) {
-        //TODO @yanhua
+        //TODO @yanhua  recovery @xiedao
         // if (ha_commit_xids_by_recover_map(this)) {
         //   return -1;
         // }
@@ -868,7 +868,7 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
 
   mysql_mutex_lock(&rli_info->data_lock);
   // reset the previous_gtid_set_of_relaylog after truncate log
-  //TODO @yanhua
+  //TODO @yanhua  recovery @xiedao
   // if (!error) {
   //   error = rli_info->reset_previous_gtid_set_of_relaylog();
   // }
@@ -1109,7 +1109,7 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index)
   // log type instance do not to recover start index
   if (!opt_cluster_log_type_instance) {
     consensus_info->set_start_apply_index(index);
-    //TODO @yanhua
+    //TODO @yanhua  recovery @xiedao
     // /* XCLUSTER_RESOLVE : GTID related stuff, may need review later */
     // // leader to follower need save the gtids of the binlog to table
     // if (gtid_state->save_gtids_of_last_binlog_into_table() ||
@@ -1234,7 +1234,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
       Actually in xdb cluster, binlog previous gtid set are always equivalent to
       executed gtid set, we disable adjusting temporarily.
     */
-   //TODO @yanhua
+   //TODO @yanhua  recovery @xiedao
     //if (index > 0 && binlog->reset_previous_gtids_logged(index)) {
     //  raft::error(ER_RAFT_0) << "Failed to reset previous gtids logged.";
     //}

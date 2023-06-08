@@ -31,6 +31,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/events.h"
 #include "sql/appliedindex_checker.h"         // AppliedIndexChecker
 
+#include "sql/replica_read_manager.h"
+
 bool opt_old_show_timestamp = 0;
 bool opt_enable_consensus_leader = 0;
 ulonglong opt_truncate_consensus_log = 0;
@@ -717,6 +719,21 @@ static Sys_var_ulong Sys_thread_stack_warning(
     GLOBAL_VAR(thread_stack_warning), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(1*1024, ULONG_MAX), DEFAULT(DEFAULT_THREAD_STACK),
     BLOCK_SIZE(1024));
+
+static bool update_session_track_index(sys_var *, THD *thd,
+                                              enum_var_type) {
+  DBUG_ENTER("update_session_track_index");
+  DBUG_RETURN(thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->update(thd));
+}
+
+static Sys_var_bool Sys_session_track_index(
+    "session_track_index",
+    "Track current index for non-select request.",
+    SESSION_VAR(session_track_index),
+    CMD_LINE(OPT_ARG), DEFAULT(FALSE),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0),
+    ON_UPDATE(update_session_track_index));
 
 static bool handle_consensus_force_promote(sys_var *, THD *, enum_var_type) {
     DBUG_ENTER("handle_reset_consensus_prefetch_cache");

@@ -312,6 +312,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
                             char *buff);
   bool is_open() const { return atomic_log_state != LOG_CLOSED; }
 
+  bool is_closed() { return atomic_log_state != LOG_OPENED; }
+
   /* This is relay log */
   bool is_relay_log;
 
@@ -584,8 +586,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
 
     @return Pointer to the first session of the BINLOG_FLUSH_STAGE stage queue.
   */
-  THD *fetch_and_process_flush_stage_queue(
-      const bool check_and_skip_flush_logs = false);
+  THD *fetch_and_process_flush_stage_queue(const bool no_process,
+      const bool check_and_skip_flush_logs);
 
   /**
     Execute the flush stage.

@@ -237,7 +237,8 @@ namespace {
   @param run_after_commit In the case of a commit being issued, whether or
                           not to run the `after_commit` hook.
  */
-void finish_transaction_in_engines(THD *thd, bool all, bool run_after_commit);
+void finish_transaction_in_engines(THD *thd, bool all, bool run_after_commit,
+                                   bool need_check_transaction_rollback_request = false);
 }  // namespace
 
 bool normalize_binlog_name(char *to, const char *from, bool is_relay_log) {
@@ -438,7 +439,7 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
       m_encrypted_header_size = encrypted_ostream->get_header_size();
       m_pipeline_head = std::move(encrypted_ostream);
     }
-
+    set_binlog_name(binlog_name);
     return false;
   }
 
@@ -511,6 +512,7 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
       ret_ofile->m_pipeline_head = std::move(encrypted_ostream);
       ret_ofile->set_encrypted();
     }
+    ret_ofile->set_binlog_name(binlog_name);
     return ret_ofile;
   }
 
@@ -1421,6 +1423,8 @@ class Binlog_event_writer : public Basic_ostream {
         initial_checksum(my_checksum(0L, nullptr, 0)),
         checksum(initial_checksum),
         end_log_pos(binlog_file->position()) {
+    // revise position(), cache_log of consensus log manager is just a wapper of io_cache
+    end_log_pos = my_b_safe_tell(binlog_file->get_io_cache());
     // Simulate checksum error
     if (DBUG_EVALUATE_IF("fault_injection_crc_value", 1, 0)) checksum--;
   }
@@ -1819,7 +1823,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
   if (thd->owned_gtid.sidno > 0) {
     assert(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
-    if (!opt_bin_log || (thd->slave_thread && !opt_log_replica_updates)) {
+    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || thd->raft_replication_channel))) {
       /*
         If the binary log is disabled for this thread (either by
         log_bin=0 or sql_log_bin=0 or by log_replica_updates=0 for a
@@ -2190,6 +2194,16 @@ int binlog_cache_data::finalize(THD *thd, Log_event *end_event, XID_STATE *xs) {
   return finalize(thd, end_event);
 }
 
+static void correct_binlog_writer_log_pos(Binlog_event_writer *writer)
+{
+  if (!opt_consensuslog_revise)
+    return;
+  writer->inc_end_log_pos(mysql_bin_log.get_binlog_file()->position());
+  writer->inc_end_log_pos(Consensus_log_event::MAX_EVENT_LENGTH);
+  if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
+    writer->inc_end_log_pos(4); // checksum length
+}
+
 /**
   Flush caches to the binary log.
 
@@ -2257,6 +2271,9 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
     */
     // Binlog_event_writer writer(mysql_bin_log.get_binlog_file());
     Binlog_event_writer writer(consensus_log_manager.get_log_file());
+    /* correct the log_pos temporarily stored in IO_CACHE of consensus_log_manager */
+    correct_binlog_writer_log_pos(&writer);
+
     if (opt_consensuslog_revise) {
       writer.inc_end_log_pos(mysql_bin_log.get_binlog_file()->position());
       writer.inc_end_log_pos(Consensus_log_event::MAX_EVENT_LENGTH);
@@ -4384,7 +4401,7 @@ static enum_read_gtids_from_binlog_status read_gtids_from_binlog(
       }
       case binary_log::CONSENSUS_LOG_EVENT:
       {
-        //TODO @yanhua
+        //TODO @yanhua unused from gtid
         // if (last_term != 0) {
         //   Consensus_log_event * r_ev = (Consensus_log_event*)ev;
         //   uint64 consensus_term = r_ev->get_term();
@@ -5055,7 +5072,7 @@ bool MYSQL_BIN_LOG::open_binlog(
   /* Set LOG_EVENT_RELAY_LOG_F flag for relay log's FD */
   if (is_relay_log && !is_raft_log) s.set_relay_log_event();
 
- if (opt_consensuslog_revise && is_raft_log && is_relay_log)
+ if (opt_consensuslog_revise && is_relay_log && is_raft_log)
     s.consensus_extra_time = consensus_log_manager.get_event_timestamp();
 
   if (write_event_to_binlog(&s)) goto err;
@@ -5111,7 +5128,7 @@ bool MYSQL_BIN_LOG::open_binlog(
     Previous_gtids_log_event prev_gtids_ev(previous_logged_gtids);
     if (is_relay_log && !is_raft_log) prev_gtids_ev.set_relay_log_event();
     if (need_sid_lock) sid_lock->unlock();
-    if (opt_consensuslog_revise && is_raft_log && is_relay_log)
+    if (opt_consensuslog_revise && is_relay_log && is_raft_log)
       prev_gtids_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
     if (write_event_to_binlog(&prev_gtids_ev)) goto err;
   } else  // !(current_thd)
@@ -5152,7 +5169,7 @@ bool MYSQL_BIN_LOG::open_binlog(
 
       if (need_sid_lock) sid_lock->unlock();
 
-      if (opt_consensuslog_revise && is_raft_log && is_relay_log)
+      if (opt_consensuslog_revise && is_relay_log && is_raft_log)
         prev_gtids_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
 
       if (write_event_to_binlog(&prev_gtids_ev)) goto err;
@@ -6142,7 +6159,7 @@ int MYSQL_BIN_LOG::purge_logs(const char *to_log, bool included,
   consensus_log_manager.get_log_file_index()->truncate_before(file_name);
 
   // Update gtid_state->lost_gtids
-  if (!is_relay_log && !is_raft_log) {
+  if (!is_relay_log || is_raft_log) {
     global_sid_lock->wrlock();
     error = init_gtid_sets(
         nullptr, const_cast<Gtid_set *>(gtid_state->get_lost_gtids()),
@@ -6739,7 +6756,7 @@ int MYSQL_BIN_LOG::new_file_impl(
     Rotate_log_event r(new_name + dirname_length(new_name), 0, LOG_EVENT_OFFSET,
                        (is_relay_log && !is_raft_log) ? Rotate_log_event::RELAY_LOG : 0);
 
-    if (opt_consensuslog_revise && is_raft_log && is_relay_log)
+    if (opt_consensuslog_revise && is_relay_log && is_raft_log)
       r.consensus_extra_time = consensus_log_manager.get_event_timestamp();
 
     if (DBUG_EVALUATE_IF("fault_injection_new_file_rotate_event", (error = 1),
@@ -8574,7 +8591,7 @@ void MYSQL_BIN_LOG::init_thd_variables(THD *thd, bool all, bool skip_commit) {
 }
 
 THD *MYSQL_BIN_LOG::fetch_and_process_flush_stage_queue(
-    const bool check_and_skip_flush_logs) {
+    const bool no_process, const bool check_and_skip_flush_logs) {
   /*
     Fetch the entire flush queue and empty it, so that the next batch
     has a leader. We must do this before invoking ha_flush_logs(...)
@@ -8588,6 +8605,12 @@ THD *MYSQL_BIN_LOG::fetch_and_process_flush_stage_queue(
       Commit_stage_manager::get_instance().fetch_queue_skip_acquire_lock(
           Commit_stage_manager::BINLOG_FLUSH_STAGE);
   assert(first_seen != nullptr);
+
+  if (no_process) {
+    Commit_stage_manager::get_instance().unlock_queue(
+      Commit_stage_manager::BINLOG_FLUSH_STAGE);
+    return first_seen;
+  }
 
   THD *commit_order_thd =
       Commit_stage_manager::get_instance().fetch_queue_skip_acquire_lock(
@@ -8640,9 +8663,7 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     term = log_entry.term();
   }
 
-  THD *first_seen = fetch_and_process_flush_stage_queue();
-  DBUG_EXECUTE_IF("crash_after_flush_engine_log", DBUG_SUICIDE(););
-  CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_write_binlog");
+  THD *first_seen = fetch_and_process_flush_stage_queue(true, false);
 
   mysql_mutex_lock(&LOCK_log);
   mysql_mutex_lock(consensus_log_manager.get_term_lock());
@@ -8666,6 +8687,15 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     return 0;
   }
 
+  /*
+    We flush prepared records of transactions to the log of storage
+    engine (for example, InnoDB redo log) in a group right before
+    flushing them to binary log.
+  */
+  ha_flush_logs(true);
+  DBUG_EXECUTE_IF("crash_after_flush_engine_log", DBUG_SUICIDE(););
+  CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_write_binlog");
+
   assign_automatic_gtids_to_flush_group(first_seen);
   /** Prepare gcn. */
   gcn_mgr->assign_gcn_to_flush_group(first_seen);
@@ -8673,8 +8703,10 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   /* Flush thread caches to binary log. */
   for (THD *head = first_seen; head; head = head->next_to_commit) {
     Thd_backup_and_restore switch_thd(current_thd, head);
-    std::pair<int, my_off_t> result = flush_thread_caches(head);
+
     head->consensus_term = term;
+
+    std::pair<int, my_off_t> result = flush_thread_caches(head);
     // stmt or trx cache flush will generate a consensus index and set thd's consensus_index
     total_bytes += result.second;
     if (flush_error == 1) flush_error = result.first;
@@ -8760,7 +8792,7 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
 
     assert(!head->get_transaction()->m_flags.commit_low ||
            head->get_transaction()->m_flags.ready_preempt);
-    ::finish_transaction_in_engines(head, all, false);
+    ::finish_transaction_in_engines(head, all, false, true);
     DBUG_PRINT("debug", ("commit_error: %d, commit_pending: %s",
                          head->commit_error, YESNO(head->tx_commit_pending)));
   }
@@ -8842,6 +8874,8 @@ bool MYSQL_BIN_LOG::change_stage(THD *thd [[maybe_unused]],
   if (!Commit_stage_manager::get_instance().enroll_for(
           stage, queue, leave_mutex, enter_mutex)) {
     assert(!thd_get_cache_mngr(thd)->dbug_any_finalized());
+    // follower unlock status lock
+    consensus_log_manager.unlock_consensus();
     return true;
   }
 
@@ -8974,6 +9008,9 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     consensus_ptr->updateAppliedIndex(tmpi);
     replica_read_manager.update_lsn(tmpi);
   }
+
+  if (thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->is_enabled())
+    thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->mark_as_changed(thd, {});
 
   // If the transaction was committed successfully, run the after_commit
   if (committed_low && (thd->commit_error != THD::CE_COMMIT_ERROR) &&
@@ -9163,7 +9200,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   my_off_t flush_end_pos = 0;
   bool update_binlog_end_pos_after_sync;
   if (unlikely(!is_open())) {
-    final_queue = fetch_and_process_flush_stage_queue(true);
+    final_queue = fetch_and_process_flush_stage_queue(false, true);
     leave_mutex_before_commit_stage = consensus_log_manager.get_sequence_stage1_lock();
     /*
       binary log is closed, flush stage and sync stage should be
@@ -9424,17 +9461,16 @@ commit_stage:
   if (DBUG_EVALUATE_IF("force_rotate", 1, 0) ||
       (do_rotate && thd->commit_error == THD::CE_NONE &&
        !is_rotating_caused_by_incident)) {
-    /*
-      Do not force the rotate as several consecutive groups may
-      request unnecessary rotations.
-
-      NOTE: Run purge_logs wo/ holding LOCK_log because it does not
-      need the mutex. Otherwise causes various deadlocks.
-    */
-
     consensus_log_manager.lock_consensus(TRUE);
     if (consensus_log_manager.get_status() == BINLOG_WORKING)
     {
+      /*
+        Do not force the rotate as several consecutive groups may
+        request unnecessary rotations.
+
+        NOTE: Run purge_logs wo/ holding LOCK_log because it does not
+        need the mutex. Otherwise causes various deadlocks.
+      */
       DEBUG_SYNC(thd, "ready_to_do_rotation");
       bool check_purge = false;
       bool need_real_rotate = false;
@@ -11923,9 +11959,10 @@ int THD::binlog_query(THD::enum_binlog_query_type qtype, const char *query_arg,
 }
 
 namespace {
-void finish_transaction_in_engines(THD *thd, bool all, bool run_after_commit) {
+void finish_transaction_in_engines(THD *thd, bool all, bool run_after_commit,
+  bool need_check_transaction_rollback_request) {
   if (thd->get_transaction()->m_flags.commit_low) {
-    if (!thd->transaction_rollback_request &&
+    if ((!need_check_transaction_rollback_request || !thd->transaction_rollback_request) &&
         trx_coordinator::commit_in_engines(thd, all, run_after_commit))
       thd->commit_error = THD::CE_COMMIT_ERROR;
   } else if (is_xa_rollback(thd)) {

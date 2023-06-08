@@ -155,6 +155,7 @@ initialize()
 
   sql_mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
   default_authentication_plugin = 'mysql_native_password'
+  #debug=+d,query,info,error,enter,exit:t:i:A,$dest_dir/mysqld.trace
 
   #gtid:
   gtid_mode = on
@@ -168,6 +169,8 @@ initialize()
   binlog-ignore-db=information_schema
   binlog-ignore-db=performance_schema
   binlog-do-db=test
+
+  consensus_log_level=1
 
   server_id = 1
   " > $HOME/my.cnf
@@ -188,12 +191,7 @@ initialize()
   log_error=$dest_dir/mysql-err3.log
   " >> $HOME/my3.cnf
 
-  if [ x$initialize_type == x"master" ]; then
-    rm -rf $dest_dir/data
-    mkdir -p $dest_dir/data
-    ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451@1'
-    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf &
-  else
+  if [ x$initialize_type == x"raft" ]; then
     rm -rf $dest_dir/data $dest_dir/data2 $dest_dir/data3
     mkdir -p $dest_dir/data  $dest_dir/data2  $dest_dir/data3
     ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@1'
@@ -202,6 +200,11 @@ initialize()
     nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf &
     nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my2.cnf &
     nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my3.cnf &
+  else
+    rm -rf $dest_dir/data
+    mkdir -p $dest_dir/data
+    ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451@1'
+    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf & #--debug='+d,query,info,error,enter,exit:t:i:A,/home/mysql/tmp_run/mysqld.trace'
   fi
 }
 
@@ -372,7 +375,7 @@ if [ x$initialize_type != x"none" ]; then
   make -j `getconf _NPROCESSORS_ONLN` install
   initialize
   echo "use follow cmd to login mysql:"
-  echo "./runtime_output_directory/mysql -uroot -hlocalhost -P3306 -p"
+  echo "./runtime_output_directory/mysql -uroot -S /home/mysql/tmp_run/mysql.sock -p"
   echo ""
   echo "use follow sql to modify password:"
   echo "alter user 'root'@'localhost' identified WITH mysql_native_password by '';"

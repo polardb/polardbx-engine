@@ -143,6 +143,7 @@
 #include "sql/ppi/ppi_table_iostat.h"
 #include "sql/sql_statistics_common.h"
 #include "sql/consensus_admin.h"
+#include "sql_show_consensus.h"
 
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
@@ -5072,7 +5073,24 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_old_format, nullptr, false},
     {"IO_STATISTICS", table_iostat_fields_info, fill_schema_table_iostat,
      make_old_format, nullptr, false},
-     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
+     {nullptr, nullptr, nullptr, nullptr, nullptr, false},
+    {"ALISQL_CLUSTER_GLOBAL", alisql_cluster_global_fields_info,
+     fill_alisql_cluster_global, nullptr, nullptr, false},
+    {"ALISQL_CLUSTER_LOCAL", alisql_cluster_local_fields_info,
+     fill_alisql_cluster_local, nullptr, nullptr, false},
+    {"ALISQL_CLUSTER_HEALTH", alisql_cluster_health_fields_info,
+     fill_alisql_cluster_health, nullptr, nullptr, false},
+    {"ALISQL_CLUSTER_LEARNER_SOURCE", alisql_cluster_learner_source_fields_info,
+     fill_alisql_cluster_learner_source, nullptr, nullptr, false},
+    {"ALISQL_CLUSTER_PREFETCH_CHANNEL", alisql_cluster_prefetch_channel_info,
+     fill_alisql_cluster_prefetch_channel, nullptr, nullptr, false},
+    {"ALISQL_CLUSTER_CONSENSUS_STATUS", alisql_cluster_consensus_status_fields_info,
+     fill_alisql_cluster_consensus_status, nullptr, nullptr, false},
+    {"ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE", alisql_cluster_consensus_membership_change_fields_info,
+     fill_alisql_cluster_consensus_membership_change, nullptr, nullptr, false},
+    {"CONSENSUS_COMMIT_POSITION", consensus_commit_pos_info,
+     fill_consensus_commit_pos, nullptr, nullptr, false},
+    {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {
   ST_SCHEMA_TABLE *schema_table;

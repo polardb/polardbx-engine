@@ -118,7 +118,7 @@ void Raft_relay_log_info::update_raft_applied_index()
   rli_appliedindex = get_consensus_apply_index();
   rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex? 0 :
                       rli_appliedindex - opt_appliedindex_force_delay;
-  consensus_ptr->updateAppliedIndex(rli_appliedindex);
+  mts_force_consensus_apply_index(this, rli_appliedindex);
 }
 
 /**

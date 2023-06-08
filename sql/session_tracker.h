@@ -50,9 +50,11 @@ enum enum_session_tracker {
     between client and server.
   */
   TRACK_TRANSACTION_STATE,
+  SESSION_INDEX_TRACKER
 };
 
-#define SESSION_TRACKER_END TRACK_TRANSACTION_STATE
+#define SESSION_TRACKER_END_ORACLE TRACK_TRANSACTION_STATE
+#define SESSION_TRACKER_END SESSION_INDEX_TRACKER
 
 #define TX_TRACKER_GET(a)                                            \
   Transaction_state_tracker *a =                                     \
@@ -163,7 +165,9 @@ class Session_tracker {
   */
   void store(THD *thd, String &main_buf);
   void deinit() {
-    for (int i = 0; i <= SESSION_TRACKER_END; i++) delete m_trackers[i];
+    for (int i = 0; i <= SESSION_TRACKER_END; i++) {
+      if (m_trackers[i]) delete m_trackers[i];
+    }
   }
 
   void claim_memory_ownership(bool claim);

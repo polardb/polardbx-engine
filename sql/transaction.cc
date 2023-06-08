@@ -472,6 +472,8 @@ bool trans_rollback_implicit(THD *thd) {
       ~(SERVER_STATUS_IN_TRANS | SERVER_STATUS_IN_TRANS_READONLY);
   DBUG_PRINT("info", ("clearing SERVER_STATUS_IN_TRANS"));
   res = ha_rollback_trans(thd, true);
+  //TODO @yanhua, maybe not need now, with Sql_cmd_xa_prepare::trans_xa_prepare(
+  //if (thd->get_transaction()->xid_state()->has_state(XID_STATE::XA_NOTR))
   thd->variables.option_bits &= ~OPTION_BEGIN;
   thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::SESSION);
 

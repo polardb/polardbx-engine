@@ -3138,7 +3138,7 @@ class PT_show_binlogs final : public PT_show_base {
 class PT_show_consensus_logs final : public PT_show_base {
  public:
   PT_show_consensus_logs(const POS &pos)
-      : PT_show_base(pos, SQLCOM_SHOW_CONSENSUSLOGS) {}
+      : PT_show_base(pos, SQLCOM_SHOW_CONSENSUS_LOGS) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 

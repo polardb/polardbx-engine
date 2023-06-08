@@ -728,7 +728,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SHOW_COLLATIONS] =
       CF_STATUS_COMMAND | CF_HAS_RESULT_SET | CF_REEXECUTION_FRAGILE;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] = CF_STATUS_COMMAND;
-  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOGS]= CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUS_LOGS]= CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_SLAVE_HOSTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_BINLOG_EVENTS] = CF_STATUS_COMMAND;
@@ -1079,7 +1079,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_PURGE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_PURGE_BEFORE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] |= CF_ALLOW_PROTOCOL_PLUGIN;
-  sql_command_flags[SQLCOM_SHOW_CONSENSUSLOGS]= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUS_LOGS]= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS] = CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_OPEN_TABLES] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_HA_OPEN] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -2724,6 +2724,10 @@ int prepare_schema_table(THD *thd, LEX *lex, Table_ident *table_ident,
   DBUG_TRACE;
 
   switch (schema_table_idx) {
+    case SCH_ALISQL_CLUSTER_GLOBAL:
+    case SCH_ALISQL_CLUSTER_LOCAL:
+    case SCH_ALISQL_CLUSTER_LEARNER_SOURCE:
+    case SCH_ALISQL_CONSENSUS_STATUS:
     case SCH_TMP_TABLE_COLUMNS:
     case SCH_TMP_TABLE_KEYS: {
       assert(table_ident);
@@ -4863,7 +4867,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_ALTER_USER_DEFAULT_ROLE:
     case SQLCOM_SHOW_BINLOG_EVENTS:
     case SQLCOM_SHOW_BINLOGS:
-    case SQLCOM_SHOW_CONSENSUSLOGS:
+    case SQLCOM_SHOW_CONSENSUS_LOGS:
     case SQLCOM_SHOW_CONSENSUSLOG_EVENTS:
     case SQLCOM_SHOW_CHARSETS:
     case SQLCOM_SHOW_COLLATIONS:

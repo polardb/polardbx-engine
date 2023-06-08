@@ -124,7 +124,7 @@ void ConsensusRecoveryManager::clear_xid_gcn_and_gtid_xid_map()
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   total_commit_trx_map.clear();
   total_xid_gcn_map.clear();
-  //TODO @yanhua
+  //TODO @yanhua  recovery @xiedao
   //total_xid_gtid_map.clear();
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }

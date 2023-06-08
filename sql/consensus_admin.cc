@@ -282,7 +282,7 @@ bool show_consensus_logs(THD* thd)
   size_t length;
   size_t cur_dir_len;
   Protocol *protocol= thd->get_protocol();
-  DBUG_ENTER("show_consensuslogs");
+  DBUG_ENTER("show_consensus_logs");
 
   consensus_log_manager.lock_consensus(TRUE);
   MYSQL_BIN_LOG *log = consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;

@@ -174,6 +174,8 @@
 #include "consensus.h"
 #include "sql/bl_consensus_log.h"
 #include "sql/consensus_admin.h"
+#include "sql/replica_read_manager.h"
+# include "sql/rpl_rli_ext.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;
@@ -453,7 +455,7 @@ ReplicaInitializer::ReplicaInitializer(bool opt_initialize,
       init_replica() must be called after the thread keys are created.
     */
 
-    if (server_id != 0) {
+    if (server_id != 0 && !opt_consensus_force_recovery) {
       m_init_code = init_replica();
     }
 
@@ -471,7 +473,9 @@ ReplicaInitializer::ReplicaInitializer(bool opt_initialize,
       'group_replication_applier' which is disallowed, then the
       per-channel replication filter is discarded with a warning.
     */
-    filters.discard_all_unattached_filters();
+    if (!opt_consensus_force_recovery) {
+      filters.discard_all_unattached_filters();
+    }
   }
 }
 
@@ -2151,6 +2155,10 @@ bool start_slave_threads(bool need_lock_slave, bool wait_for_start,
       if (opt_recover_snapshot)
         raft::info(ER_RAFT_APPLIER) << "start slave threads to get the consensus point failed";
     }
+  } else if (opt_recover_snapshot) {
+    mysql_mutex_lock(&mi->rli->run_lock);
+    mysql_cond_wait(&mi->rli->stop_cond, &mi->rli->run_lock);
+    mysql_mutex_unlock(&mi->rli->run_lock);
   }
 
   if (!is_error && (thread_mask & SLAVE_SQL)) {
@@ -4634,8 +4642,14 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
         }
       }
     }
-  } else
+  } else {
     mysql_mutex_unlock(&rli->data_lock);
+    /** 
+     * update consensus apply index for
+     *  EVENT_SKIP_COUNT and EVENT_SKIP_IGNORE
+    */
+    update_consensus_apply_index(rli, ev);
+  }
 
   set_timespec_nsec(&rli->ts_exec[1], 0);
   rli->stats_exec_time += diff_timespec(&rli->ts_exec[1], &rli->ts_exec[0]);
@@ -4767,6 +4781,7 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
           if ((error = rli->mts_finalize_recovery())) {
             (void)Rpl_info_factory::reset_workers(rli);
           }
+          mts_init_consensus_apply_index(rli, rli->get_consensus_apply_index());
         }
         rli->mts_recovery_group_seen_begin = false;
         if (!error)
@@ -4911,7 +4926,8 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
                                 Log_event *in) {
   DBUG_TRACE;
 
-  if (!check_exec_consensus_log_end_condition(rli, Multisource_info::is_raft_channel(rli)))
+  assert(thd->raft_replication_channel == Multisource_info::is_raft_channel(rli));
+  if (1 == check_exec_consensus_log_end_condition(rli, Multisource_info::is_raft_channel(rli)))
     return 1;
 
   /*
@@ -6669,6 +6685,12 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
   rli->gaq = new Slave_committed_queue(rli->checkpoint_group, n);
   if (!rli->gaq->inited) return 1;
 
+  if(opt_consensus_index_buf_enabled && rli->info_thd->raft_replication_channel) {
+    rli->m_consensus_index_buf = new Index_link_buf(rli->checkpoint_group * 2);
+    if(!rli->m_consensus_index_buf)
+      return 1;
+  }
+
   // length of WQ is actually constant though can be made configurable
   rli->mts_slave_worker_queue_len_max = mts_slave_worker_queue_len_max;
   rli->mts_pending_jobs_size = 0;
@@ -6861,6 +6883,11 @@ end:
   destroy_hash_workers(rli);
   delete rli->gaq;
 
+  if(rli->m_consensus_index_buf) {
+    delete rli->m_consensus_index_buf;
+    rli->m_consensus_index_buf = nullptr;
+  }
+
   // Destroy buffered events of the current group prior to exit.
   for (uint i = 0; i < rli->curr_group_da.size(); i++)
     delete rli->curr_group_da[i].data;
@@ -6998,6 +7025,10 @@ extern "C" void *handle_slave_sql(void *arg) {
     else
       rli->current_mts_submode = new Mts_submode_database();
 
+    //TODO @yanhua, need is_raft_channel?
+    // if (opt_slave_preserve_commit_order &&
+    // rli->opt_slave_parallel_workers > 0 && opt_bin_log &&
+    // (opt_log_slave_updates && !is_xpaxos_channel))
     // Only use replica preserve commit order if more than 1 worker exists
     if (opt_replica_preserve_commit_order && !rli->is_parallel_exec() &&
         rli->opt_replica_parallel_workers > 1 && !Multisource_info::is_raft_channel(rli))
@@ -7251,6 +7282,8 @@ extern "C" void *handle_slave_sql(void *arg) {
       goto err;
     }
     mysql_mutex_unlock(&rli->data_lock);
+
+    mts_init_consensus_apply_index(rli, rli->get_consensus_apply_index());
 
     /* Read queries from the IO/THREAD until this thread is killed */
 
@@ -9263,6 +9296,12 @@ int reset_slave(THD *thd) {
   } else {
     it = channel_map.begin();
     while (it != channel_map.end()) {
+      if (!it->first.compare(channel_map.get_default_channel()) ||
+          !it->first.compare(channel_map.get_raft_channel()))
+      {
+        it++;
+        continue;
+      }
       mi = it->second;
       assert(mi);
       if ((result = reset_slave(thd, mi, thd->lex->reset_slave_info.all)))

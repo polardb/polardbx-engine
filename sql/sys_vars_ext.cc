@@ -452,3 +452,48 @@ static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
                                        DEFAULT(FALSE), NO_MUTEX_GUARD,
                                        NOT_IN_BINLOG, ON_CHECK(0),
                                        ON_UPDATE(0));
+
+static Sys_var_ulonglong Sys_replica_read_timeout(
+      "replica_read_timeout",
+      "Maximum wait period (milliseconds) when performing replica consistent reads",
+      GLOBAL_VAR(opt_replica_read_timeout),
+      CMD_LINE(REQUIRED_ARG),
+      VALID_RANGE(1, 3600000),
+      DEFAULT(DEFAULT_REPLICA_READ_TIMEOUT),
+      BLOCK_SIZE(1),
+      NO_MUTEX_GUARD, NOT_IN_BINLOG,
+      ON_CHECK(NULL),
+      ON_UPDATE(NULL));
+
+static bool check_read_lsn(sys_var *, THD *, set_var *var)
+{
+	ulonglong read_lsn = var->save_result.ulonglong_value;
+	return !replica_read_manager.wait_for_lsn(read_lsn);
+}
+
+static Sys_var_ulonglong Sys_read_lsn(
+      "read_lsn",
+      "Minimun log applied index required for replica consistent reads",
+      SESSION_VAR(opt_read_lsn),
+      CMD_LINE(REQUIRED_ARG),
+      VALID_RANGE(0, LONG_LONG_MAX),
+      DEFAULT(0),
+      BLOCK_SIZE(1),
+      NO_MUTEX_GUARD, NOT_IN_BINLOG,
+      ON_CHECK(check_read_lsn),
+      ON_UPDATE(NULL));
+
+extern bool opt_consensus_index_buf_enabled;
+static Sys_var_bool Sys_mts_consensus_index_buf_enabled(
+       "consensus_index_buf_enabled",
+       "Whether to enable Relay_log_info::consensus_index_buf",
+       GLOBAL_VAR(opt_consensus_index_buf_enabled), CMD_LINE(OPT_ARG),
+       DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+extern bool opt_disable_wait_commitindex;
+static Sys_var_bool Sys_disable_wait_commitindex(
+       "disable_wait_commitindex",
+       "Whether to wait commitdex when applying binlog in follower, "
+       "it may detory the cluster data if some crash happen",
+       GLOBAL_VAR(opt_disable_wait_commitindex), CMD_LINE(OPT_ARG),
+       DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));

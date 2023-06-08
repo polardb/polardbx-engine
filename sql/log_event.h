@@ -102,6 +102,9 @@ class Basic_ostream;
 #include "mysql/psi/mysql_stage.h"
 #endif
 
+#include "rpl_rli_ext.h"
+
+
 #ifndef MYSQL_SERVER
 class Format_description_log_event;
 #endif

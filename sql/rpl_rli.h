@@ -66,6 +66,7 @@
 #include "sql/lizard_rpl_rli.h"
 #include "sql/raft/channel.h"
 #include "sql/rpl_applier_reader.h" // Rpl_applier_reader
+#include "replica_read_manager.h"
 
 class Commit_order_manager;
 class Master_info;
@@ -76,6 +77,7 @@ class Slave_worker;
 class String;
 struct LEX_MASTER_INFO;
 struct db_worker_hash_entry;
+class Index_link_buf;
 
 extern uint sql_replica_skip_counter;
 
@@ -353,6 +355,8 @@ class Relay_log_info : public Rpl_info {
 
   /* number of temporary tables open in this channel */
   std::atomic<int32> atomic_channel_open_temp_tables{0};
+
+  Index_link_buf *m_consensus_index_buf{nullptr};
 
   /** the status of the commit timestamps for the relay log */
   enum {

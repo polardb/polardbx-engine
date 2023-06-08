@@ -262,6 +262,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
   until_option = nullptr;
   rpl_filter = nullptr;
   applier_reader = nullptr;
+  m_consensus_index_buf = nullptr;
 }
 
 /**
@@ -3559,3 +3560,5 @@ void Applier_security_context_guard::extract_columns_to_check(
     }
   }
 }
+
+#include "rpl_rli_ext.cc"

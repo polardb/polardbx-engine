@@ -390,6 +390,7 @@ void Transaction_dependency_tracker::update_max_committed(THD *thd) {
 
   assert(trn_ctx->last_committed == SEQ_UNINIT ||
          thd->commit_error == THD::CE_FLUSH_ERROR ||
+         thd->commit_error == THD::CE_COMMIT_ERROR ||
          thd->commit_error == THD::CE_FLUSH_GNO_EXHAUSTED_ERROR);
 }
 

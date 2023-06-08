@@ -148,7 +148,7 @@ bool handle_slave_worker_stop(Slave_worker *worker, Slave_job_item *job_item) {
     return (true);
   } else if (rli->exit_counter == rli->replica_parallel_workers) {
     // over steppers should exit with accepting STOP
-    bool need_check = !Multisource_info::is_raft_channel(rli) || !rli->force_apply_queue_before_stop;
+    bool need_check = (!Multisource_info::is_raft_channel(rli) || !rli->force_apply_queue_before_stop);
     if (group_index > rli->max_updated_index && need_check) {
       raft::info(ER_RAFT_APPLIER) << "group_index(" << group_index
                                   << ") > rli->max_updated_index(" << rli->max_updated_index
@@ -225,7 +225,8 @@ const char *info_slave_worker_fields[] = {
     /*
       Channel on which this workers are acting
     */
-    "channel_name"
+    "channel_name",
+
     "checkpoint_consensus_apply_index",
     "consensus_apply_index"
     };
@@ -609,7 +610,7 @@ bool Slave_worker::write_info(Rpl_info_handler *to) {
       to->set_info(worker_checkpoint_seqno) || to->set_info(nbytes) ||
       to->set_info(buffer, (size_t)nbytes) || to->set_info(channel) ||
       to->set_info((ulong)checkpoint_consensus_apply_index) ||
-      to->set_info((ulong)consensus_apply_index)
+      to->set_info((ulong)(consensus_apply_index.load()))
       )
     return true;
 
@@ -2505,6 +2506,10 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
            lizard::is_b_events_before_gtid(ev) ||
            ev->get_type_code() == binary_log::QUERY_EVENT ||
            is_mts_db_partitioned(rli) || worker->id == 0 || seen_gtid);
+
+    if (error == 0) {
+      mts_advance_consensus_apply_index(rli, ev);
+    }
 
     if (ev->ends_group() || (!seen_begin && !is_gtid_event(ev) &&
                              !lizard::is_b_events_before_gtid(ev) &&

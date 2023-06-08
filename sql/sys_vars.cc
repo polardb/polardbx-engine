@@ -153,6 +153,12 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
 
+#include "sql/bl_consensus_log.h"            // ConsensusLogManager and alisql::Paxos
+#include "sql/appliedindex_checker.h"         // AppliedIndexChecker
+#include "sql/rpl_replica.h"              // rotate_relay_log
+#include "sql/consensus_log_manager.h"
+
+
 static constexpr const unsigned long DEFAULT_ERROR_COUNT{1024};
 static constexpr const unsigned long DEFAULT_SORT_MEMORY{256UL * 1024UL};
 static constexpr const unsigned HOST_CACHE_SIZE{128};
@@ -1610,6 +1616,17 @@ static bool repository_check(sys_var *self, THD *thd, set_var *var,
   }
 
   mi = channel_map.get_default_channel_mi();
+
+  mysql_mutex_lock(&mi->rli->data_lock);
+  if (!mi->rli->inited && thread_mask == SLAVE_THD_SQL)
+  {
+    mysql_mutex_unlock(&mi->rli->data_lock);
+    msg= "relay_log_info is not inited";
+    my_error(ER_CHANGE_RPL_INFO_REPOSITORY_FAILURE, MYF(0), msg);
+    channel_map.unlock();
+    return TRUE;
+  }
+  mysql_mutex_unlock(&mi->rli->data_lock);
 
   if (mi != nullptr) {
     mi->channel_wrlock();
@@ -4461,6 +4478,10 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
   }
 
   channel_map.wrlock();
+
+  mysql_mutex_lock(consensus_log_manager.get_sequence_stage1_lock());
+  mysql_bin_log.wait_xid_disappear();
+
   mysql_mutex_lock(mysql_bin_log.get_log_lock());
   global_sid_lock->wrlock();
   int lock_count = 4;
@@ -4696,8 +4717,30 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
 
   // Rotate
   {
-    bool dont_care = false;
-    if (mysql_bin_log.rotate(true, &dont_care)) goto err;
+    consensus_log_manager.lock_consensus(true);
+      uint64 binlog_status = consensus_log_manager.get_status();
+      if (binlog_status == BINLOG_WORKING) {
+        bool dont_care= false;
+        if (mysql_bin_log.rotate(true, &dont_care)) {
+          consensus_log_manager.unlock_consensus();
+          goto err;
+        }
+      } else {
+        Relay_log_info *rli_info = consensus_log_manager.get_relay_log_info();
+        Master_info *mi = rli_info->mi;
+        mysql_mutex_lock(&mi->data_lock);
+        if (rotate_relay_log(rli_info->mi))
+        {
+          mysql_mutex_unlock(&mi->data_lock);
+          consensus_log_manager.unlock_consensus();
+          my_error(ER_CANT_SET_GTID_MODE, MYF(0),
+               Gtid_mode::to_string(new_gtid_mode),
+               "rotate relay log failed.");
+          goto err;
+        }
+        mysql_mutex_unlock(&mi->data_lock);
+      }
+      consensus_log_manager.unlock_consensus();
   }
 
 end:
@@ -4710,6 +4753,7 @@ err:
   assert(lock_count <= 4);
   if (lock_count == 4) global_sid_lock->unlock();
   mysql_mutex_unlock(mysql_bin_log.get_log_lock());
+  mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
   channel_map.unlock();
   Gtid_mode::lock.unlock();
   return ret;
