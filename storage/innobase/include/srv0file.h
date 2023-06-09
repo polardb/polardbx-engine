@@ -72,7 +72,13 @@ extern void srv_file_purge_thread(void);
 /** Wakeup the background thread when shutdown */
 extern void srv_wakeup_file_purge_thread(void);
 
+/** Shutdown the background file purge thread */
+extern void srv_file_purge_shutown(void);
+
 /** Os event for purge thread */
 extern os_event_t file_purge_event;
+
+/** Os event for purge thread when server shutting down */
+extern os_event_t file_purge_shutdown_event;
 
 #endif

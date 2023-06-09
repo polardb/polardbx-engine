@@ -62,7 +62,8 @@ enum srv_shutdown_t {
   are allowed then. List of threads being stopped within this phase:
     - dict_stats thread,
     - fts_optimize thread,
-    - ts_alter_encrypt thread.
+    - ts_alter_encrypt thread,
+    - file_purge thread.
   The master thread exits its main loop and finishes its first phase
   of shutdown (in which it was allowed to touch DD objects). */
   SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS,

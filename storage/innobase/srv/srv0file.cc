@@ -68,13 +68,17 @@ bool srv_print_data_file_purge_process = false;
 static bool file_purge_system_inited = false;
 
 /** Purge thread event condition */
-os_event_t file_purge_event;
+os_event_t file_purge_event = nullptr;
+
+/** Purge thread event condition when server shutting down */
+os_event_t file_purge_shutdown_event = nullptr;
 
 /** Data file purge system initialize when InnoDB server boots */
 void srv_file_purge_init() {
   file_purge_sys = ut::new_<File_purge>(Global_THD_manager::reserved_thread_id,
                                         server_start_time);
   file_purge_event = os_event_create();
+  file_purge_shutdown_event = os_event_create();
 
   /** If not setting special directory, inherit MySQL datadir directly. */
   if (srv_data_file_purge_dir) {
@@ -105,12 +109,16 @@ void srv_file_purge_init() {
 void srv_file_purge_destroy() {
   ut::delete_(file_purge_sys);
   os_event_destroy(file_purge_event);
+  os_event_destroy(file_purge_shutdown_event);
+  file_purge_event = nullptr;
+  file_purge_shutdown_event = nullptr;
   file_purge_system_inited = false;
 }
 
 /* Data file purge thread runtime */
 void srv_file_purge_thread(void) {
   int64_t sig_count;
+  int64_t sig_count_shutdown;
   ut_a(file_purge_sys);
   int truncated = 0;
   ulint truncated_size = 0;
@@ -133,13 +141,15 @@ loop:
     truncated_size = 0;
   } else if (truncated > 0) {
     if (truncated_size >= max_size) {
-      std::this_thread::sleep_for(
-          std::chrono::milliseconds{srv_data_file_purge_interval} * 1000);
+      sig_count_shutdown = os_event_reset(file_purge_shutdown_event);
+      auto t = std::chrono::milliseconds{srv_data_file_purge_interval} * 1000;
+      os_event_wait_time_low(file_purge_shutdown_event, t, sig_count_shutdown);
+      
       truncated_size = 0;
     }
   }
 
-  if (srv_shutdown_state.load() >= SRV_SHUTDOWN_CLEANUP) goto exit_func;
+  if (srv_shutdown_state.load() >= SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS) goto exit_func;
 
   goto loop;
 
@@ -159,5 +169,13 @@ exit_func:
   }
 }
 
-/** Wakeup the background thread when shutdown */
-void srv_wakeup_file_purge_thread() { os_event_set(file_purge_event); }
+/** Wakeup the background thread if new file added to purge list */
+void srv_wakeup_file_purge_thread() { os_event_set(file_purge_event);}
+
+void srv_file_purge_shutown() {
+  ut_ad(!srv_read_only_mode);
+  /** Wakeup the background thread when shutdown */
+  os_event_set(file_purge_event);
+  os_event_set(file_purge_shutdown_event); 
+  srv_threads.m_file_purge.join();
+}

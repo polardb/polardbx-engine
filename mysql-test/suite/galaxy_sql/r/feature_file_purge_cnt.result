@@ -6,7 +6,7 @@ SET @@global.innodb_data_file_purge = ON;
 SET @old_innodb_data_file_purge_max_size = @@global.innodb_data_file_purge_max_size;
 SET @@global.innodb_data_file_purge_max_size = 16;
 SET @old_innodb_data_file_purge_interval = @@global.innodb_data_file_purge_interval;
-SET @@global.innodb_data_file_purge_interval = 10000;
+SET @@global.innodb_data_file_purge_interval = 0;
 create database db_x;
 use db_x;
 create table t(id int, col1 varchar(8192))engine = innodb;

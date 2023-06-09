@@ -9,7 +9,7 @@ SET @old_innodb_data_file_purge_max_size = @@global.innodb_data_file_purge_max_s
 SET @@global.innodb_data_file_purge_max_size = 16;
 
 SET @old_innodb_data_file_purge_interval = @@global.innodb_data_file_purge_interval;
-SET @@global.innodb_data_file_purge_interval = 10000;
+SET @@global.innodb_data_file_purge_interval = 0;
 
 create database db_x;
 use db_x;
@@ -24,6 +24,8 @@ select count(*) from t;
 drop table t;
 
 select count(*) from information_schema.innodb_purge_files;
+
+--sleep 20
 
 drop database db_x;
 

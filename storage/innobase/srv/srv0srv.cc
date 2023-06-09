@@ -1281,7 +1281,6 @@ static void srv_general_init() {
   que_init();
   row_mysql_init();
   undo_spaces_init();
-  srv_file_purge_init();
   lizard::txn_undo_hash_init();
 }
 

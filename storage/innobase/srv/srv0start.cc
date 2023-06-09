@@ -1433,11 +1433,6 @@ void srv_shutdown_exit_threads() {
       }
     }
 
-    /* Wakeup file purge background thread */
-    if (srv_start_state_is_set(SRV_START_STATE_FILE_PURGE)) {
-      srv_wakeup_file_purge_thread();
-    }
-
     if (srv_start_state_is_set(SRV_START_STATE_IO)) {
       /* Exit the i/o threads */
       if (!srv_read_only_mode) {
@@ -2481,14 +2476,6 @@ dberr_t srv_start(bool create_new_db) {
         os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
 
     srv_threads.m_monitor.start();
-
-    /* Create file purge thread */
-    srv_threads.m_file_purge =
-        os_thread_create(srv_file_purge_thread_key, 0, srv_file_purge_thread);
-
-    srv_threads.m_file_purge.start();
-
-    srv_start_state_set(SRV_START_STATE_FILE_PURGE);
   }
 
   srv_sys_tablespaces_open = true;
@@ -2762,6 +2749,16 @@ void srv_start_threads(bool bootstrap) {
   fts_optimize_init();
 
   srv_start_state_set(SRV_START_STATE_STAT);
+
+  /* Create file purge thread */
+  srv_threads.m_file_purge =
+      os_thread_create(srv_file_purge_thread_key, 0, srv_file_purge_thread);
+
+  srv_file_purge_init();
+
+  srv_threads.m_file_purge.start();
+
+  srv_start_state_set(SRV_START_STATE_FILE_PURGE);
 }
 
 void srv_start_threads_after_ddl_recovery() {
@@ -2873,6 +2870,7 @@ void srv_pre_dd_shutdown() {
     ut_a(!srv_thread_is_active(srv_threads.m_dict_stats));
     ut_a(!srv_thread_is_active(srv_threads.m_fts_optimize));
     ut_a(!srv_thread_is_active(srv_threads.m_ts_alter_encrypt));
+    ut_a(!srv_thread_is_active(srv_threads.m_file_purge));
 
     /* In read-only mode, there is no master thread. */
     ut_a(!srv_thread_is_active(srv_threads.m_master));
@@ -2931,6 +2929,11 @@ void srv_pre_dd_shutdown() {
   }
   ut_a(!srv_thread_is_active(srv_threads.m_fts_optimize));
   ut_a(!srv_thread_is_active(srv_threads.m_dict_stats));
+
+  if (srv_start_state_is_set(SRV_START_STATE_FILE_PURGE)) {
+    srv_file_purge_shutown();
+  }
+  ut_a(!srv_thread_is_active(srv_threads.m_file_purge));
 
   for (uint32_t count = 1; srv_thread_is_active(srv_threads.m_ts_alter_encrypt);
        ++count) {
@@ -3227,6 +3230,7 @@ void srv_shutdown() {
       std::cref(srv_threads.m_fts_optimize),
       std::cref(srv_threads.m_recv_writer),
       std::cref(srv_threads.m_dict_stats),
+      std::cref(srv_threads.m_file_purge),
       std::cref(srv_threads.m_scn_hist)};
 
   for (const auto &thread : threads_stopped_before_shutdown) {
