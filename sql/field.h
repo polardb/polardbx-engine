@@ -1322,6 +1322,31 @@ class Field {
      sort keys based off of Items, not Fields.
   */
   virtual size_t make_sort_key(uchar *buff, size_t length) const = 0;
+
+  /**
+    Writes a copy of the current value in the record buffer, suitable for
+    sorting using byte-by-byte comparison. Integers are always in big-endian
+    regardless of hardware architecture. At most length bytes are written
+    into the buffer. Field_string, Field_varstring and Field_blob classes
+    are truncated after pos number of characters.
+
+    @param buff The buffer, assumed to be at least length bytes.
+
+    @param length Number of bytes to write.
+
+    @param trunc_pos Number of characters which should be included before
+    truncation.
+
+    @retval The number of bytes actually written.
+
+    @note This is now only used by replication; filesort makes its own
+          sort keys based off of Items, not Fields.
+  */
+  virtual size_t make_sort_key(uchar *buff, size_t length,
+                               size_t trunc_pos [[maybe_unused]]) const {
+    return make_sort_key(buff, length);
+  }
+
   /**
     Whether this field can be used for index range scans when in
     the given keypart of the given index.
@@ -1905,6 +1930,7 @@ class Create_field_wrapper final : public Field {
     return -1;
   }
   void sql_type(String &) const final { assert(false); }
+  using Field::make_sort_key;
   size_t make_sort_key(uchar *, size_t) const final {
     assert(false);
     return 0;
@@ -2080,6 +2106,7 @@ class Field_decimal final : public Field_real {
   longlong val_int() const final;
   String *val_str(String *, String *) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_real::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   void overflow(bool negative);
   bool zero_pack() const final { return false; }
@@ -2149,6 +2176,7 @@ class Field_new_decimal : public Field_num {
   bool get_time(MYSQL_TIME *ltime) const final;
   String *val_str(String *, String *) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_num::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   bool zero_pack() const final { return false; }
   void sql_type(String &str) const final;
@@ -2194,6 +2222,7 @@ class Field_tiny : public Field_num {
   String *val_str(String *, String *) const override;
   bool send_to_protocol(Protocol *protocol) const override;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_num::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return 1; }
   void sql_type(String &str) const override;
@@ -2246,6 +2275,7 @@ class Field_short final : public Field_num {
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_num::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return 2; }
   void sql_type(String &str) const final;
@@ -2294,6 +2324,7 @@ class Field_medium final : public Field_num {
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_num::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return 3; }
   void sql_type(String &str) const final;
@@ -2335,6 +2366,7 @@ class Field_long : public Field_num {
   bool send_to_protocol(Protocol *protocol) const final;
   String *val_str(String *, String *) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_num::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return PACK_LENGTH; }
   void sql_type(String &str) const final;
@@ -2386,6 +2418,7 @@ class Field_longlong : public Field_num {
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_num::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return PACK_LENGTH; }
   void sql_type(String &str) const final;
@@ -2432,6 +2465,7 @@ class Field_float final : public Field_real {
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_real::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return sizeof(float); }
   void sql_type(String &str) const final;
@@ -2487,6 +2521,7 @@ class Field_double final : public Field_real {
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_real::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return sizeof(double); }
   void sql_type(String &str) const final;
@@ -2534,6 +2569,7 @@ class Field_null final : public Field_str {
     return value2;
   }
   int cmp(const uchar *, const uchar *) const final { return 0; }
+  using Field_str::make_sort_key;
   size_t make_sort_key(uchar *, size_t len) const final { return len; }
   uint32 pack_length() const final { return 0; }
   void sql_type(String &str) const final;
@@ -2904,6 +2940,7 @@ class Field_temporal_with_date_and_timef
 
   uint decimals() const final { return dec; }
   const CHARSET_INFO *sort_charset() const final { return &my_charset_bin; }
+  using Field_temporal_with_date_and_time::make_sort_key;
   size_t make_sort_key(uchar *to, size_t length) const final {
     memcpy(to, ptr, length);
     return length;
@@ -2941,6 +2978,7 @@ class Field_timestamp : public Field_temporal_with_date_and_time {
   type_conversion_status store_packed(longlong nr) final;
   longlong val_int() const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_temporal_with_date_and_time::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return PACK_LENGTH; }
   void sql_type(String &str) const final;
@@ -3104,6 +3142,7 @@ class Field_newdate : public Field_temporal_with_date {
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_temporal_with_date::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return PACK_LENGTH; }
   void sql_type(String &str) const final;
@@ -3193,6 +3232,7 @@ class Field_time final : public Field_time_common {
   longlong val_time_temporal() const final;
   bool get_time(MYSQL_TIME *ltime) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_time_common::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return 3; }
   void sql_type(String &str) const final;
@@ -3266,6 +3306,7 @@ class Field_timef final : public Field_time_common {
   void sql_type(String &str) const final;
   bool zero_pack() const final { return true; }
   const CHARSET_INFO *sort_charset() const final { return &my_charset_bin; }
+  using Field_time_common::make_sort_key;
   size_t make_sort_key(uchar *to, size_t length) const final {
     memcpy(to, ptr, length);
     return length;
@@ -3317,6 +3358,7 @@ class Field_datetime : public Field_temporal_with_date_and_time {
   longlong val_int() const final;
   String *val_str(String *, String *) const final;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_temporal_with_date_and_time::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return PACK_LENGTH; }
   void sql_type(String &str) const final;
@@ -3440,6 +3482,7 @@ class Field_string : public Field_longstr {
   my_decimal *val_decimal(my_decimal *) const final;
   int cmp(const uchar *, const uchar *) const final;
   size_t make_sort_key(uchar *buff, size_t length) const final;
+  size_t make_sort_key(uchar *to, size_t length, size_t trunc_pos) const final;
   void sql_type(String &str) const final;
   uchar *pack(uchar *to, const uchar *from, size_t max_length) const final;
   const uchar *unpack(uchar *to, const uchar *from, uint param_data) final;
@@ -3501,6 +3544,7 @@ class Field_varstring : public Field_longstr {
     return cmp_max(a, b, ~0U);
   }
   size_t make_sort_key(uchar *buff, size_t length) const final;
+  size_t make_sort_key(uchar *to, size_t length, size_t trunc_pos) const final;
   size_t get_key_image(uchar *buff, size_t length, imagetype type) const final;
   void set_key_image(const uchar *buff, size_t length) final;
   void sql_type(String &str) const final;
@@ -3687,6 +3731,7 @@ class Field_blob : public Field_longstr {
   int key_cmp(const uchar *str, uint length) const override;
   uint32 key_length() const override { return 0; }
   size_t make_sort_key(uchar *buff, size_t length) const override;
+  size_t make_sort_key(uchar *to, size_t length, size_t trunc_pos) const final;
   uint32 pack_length() const final {
     return (uint32)(packlength + portable_sizeof_char_ptr);
   }
@@ -4060,6 +4105,7 @@ class Field_json : public Field_blob {
   Item_result cast_to_int_type() const final { return INT_RESULT; }
   int cmp_binary(const uchar *a, const uchar *b,
                  uint32 max_length = ~0L) const final;
+  using Field_blob::make_sort_key;
   size_t make_sort_key(uchar *to, size_t length) const override;
 
   /**
@@ -4223,6 +4269,7 @@ class Field_typed_array final : public Field_json {
     assert(m_elt_type == MYSQL_TYPE_VARCHAR);
     return field_length > 255 ? 2 : 1;
   }
+  using Field_json::make_sort_key;
   size_t make_sort_key(uchar *to, size_t max_len) const override {
     // Not supported yet
     assert(false);
@@ -4300,6 +4347,7 @@ class Field_enum : public Field_str {
   longlong val_int() const final;
   String *val_str(String *, String *) const override;
   int cmp(const uchar *, const uchar *) const final;
+  using Field_str::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final;
   uint32 pack_length() const final { return (uint32)packlength; }
   void store_type(ulonglong value);
@@ -4435,6 +4483,7 @@ class Field_bit : public Field {
   void set_key_image(const uchar *buff, size_t length) final {
     Field_bit::store(pointer_cast<const char *>(buff), length, &my_charset_bin);
   }
+  using Field::make_sort_key;
   size_t make_sort_key(uchar *buff, size_t length) const final {
     get_key_image(buff, length, itRAW);
     return length;
