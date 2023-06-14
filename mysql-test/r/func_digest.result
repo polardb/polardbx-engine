@@ -1985,7 +1985,7 @@ statement_digest_text(CONVERT(@v USING latin1))
 SELECT ? AS `Ã…`
 SELECT statement_digest(CONVERT(@v USING latin1));
 statement_digest(CONVERT(@v USING latin1))
-be576e203f79a71eac779d4b244c62ceefb9f3ee99481dffa74fe70f833c4919
+0ccda2949946c24efb22d29e2daf034b2835b25ad2689011f810ab515fa36ca9
 # Angstrom sign is 0xC385 in UTF-8.
 SELECT substr(hex(statement_digest_text(CONVERT(@v USING latin1))), -6, 4);
 substr(hex(statement_digest_text(CONVERT(@v USING latin1))), -6, 4)
@@ -1999,7 +1999,7 @@ statement_digest_text(CONVERT(@v USING latin1))
 SELECT ? AS `Å`
 SELECT statement_digest(CONVERT(@v USING latin1));
 statement_digest(CONVERT(@v USING latin1))
-be576e203f79a71eac779d4b244c62ceefb9f3ee99481dffa74fe70f833c4919
+0ccda2949946c24efb22d29e2daf034b2835b25ad2689011f810ab515fa36ca9
 # Angstrom sign is 0xC385 in UTF-8.
 SELECT substr(hex(statement_digest_text(CONVERT(@v USING latin1))), -6, 4);
 substr(hex(statement_digest_text(CONVERT(@v USING latin1))), -6, 4)

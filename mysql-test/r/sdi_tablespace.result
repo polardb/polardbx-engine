@@ -288,7 +288,7 @@ c1
                 "ordinal_position": 1,
                 "comment": "",
                 "options": "flags=0;",
-                "se_private_data": "ID
+                "se_private_data": "gcn=18446744073709551615;ID
                 "type": 1,
                 "algorithm": 2,
                 "is_algorithm_explicit": false,
@@ -679,7 +679,7 @@ c1
                 "indexes": [
                     {
                         "options": "",
-                        "se_private_data": "ID
+                        "se_private_data": "gcn=18446744073709551615;ID
                         "index_opx": 0,
                         "tablespace_ref": "test/pt1#p#p1"
                     }
@@ -708,7 +708,7 @@ c1
                 "indexes": [
                     {
                         "options": "",
-                        "se_private_data": "ID
+                        "se_private_data": "gcn=18446744073709551615;ID
                         "index_opx": 0,
                         "tablespace_ref": "test/pt1#p#p2"
                     }
@@ -737,7 +737,7 @@ c1
                 "indexes": [
                     {
                         "options": "",
-                        "se_private_data": "ID
+                        "se_private_data": "gcn=18446744073709551615;ID
                         "index_opx": 0,
                         "tablespace_ref": "test/pt1#p#p3"
                     }
@@ -1172,7 +1172,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "src/src_t2#p#p0#sp#p0sp0"
                             }
@@ -1193,7 +1193,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "src/src_t2#p#p0#sp#p0sp1"
                             }
@@ -1214,7 +1214,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "src/src_t2#p#p0#sp#p0sp2"
                             }
@@ -1286,7 +1286,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "src/src_t2#p#p1#sp#p1sp0"
                             }
@@ -1307,7 +1307,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "src/src_t2#p#p1#sp#p1sp1"
                             }
@@ -1328,7 +1328,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "src/src_t2#p#p1#sp#p1sp2"
                             }
@@ -1659,7 +1659,7 @@ c1
                 "ordinal_position": 1,
                 "comment": "",
                 "options": "flags=0;",
-                "se_private_data": "ID
+                "se_private_data": "gcn=18446744073709551615;ID
                 "type": 1,
                 "algorithm": 2,
                 "is_algorithm_explicit": false,
@@ -2050,7 +2050,7 @@ c1
                 "indexes": [
                     {
                         "options": "",
-                        "se_private_data": "ID
+                        "se_private_data": "gcn=18446744073709551615;ID
                         "index_opx": 0,
                         "tablespace_ref": "test/pt1#p#p1"
                     }
@@ -2079,7 +2079,7 @@ c1
                 "indexes": [
                     {
                         "options": "",
-                        "se_private_data": "ID
+                        "se_private_data": "gcn=18446744073709551615;ID
                         "index_opx": 0,
                         "tablespace_ref": "test/pt1#p#p2"
                     }
@@ -2108,7 +2108,7 @@ c1
                 "indexes": [
                     {
                         "options": "",
-                        "se_private_data": "ID
+                        "se_private_data": "gcn=18446744073709551615;ID
                         "index_opx": 0,
                         "tablespace_ref": "test/pt1#p#p3"
                     }
@@ -2542,7 +2542,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "dst/dst_t2#p#p0#sp#p0sp0"
                             }
@@ -2563,7 +2563,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "dst/dst_t2#p#p0#sp#p0sp1"
                             }
@@ -2584,7 +2584,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "dst/dst_t2#p#p0#sp#p0sp2"
                             }
@@ -2656,7 +2656,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "dst/dst_t2#p#p1#sp#p1sp0"
                             }
@@ -2677,7 +2677,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "dst/dst_t2#p#p1#sp#p1sp1"
                             }
@@ -2698,7 +2698,7 @@ c1
                         "indexes": [
                             {
                                 "options": "",
-                                "se_private_data": "ID
+                                "se_private_data": "gcn=18446744073709551615;ID
                                 "index_opx": 0,
                                 "tablespace_ref": "dst/dst_t2#p#p1#sp#p1sp2"
                             }

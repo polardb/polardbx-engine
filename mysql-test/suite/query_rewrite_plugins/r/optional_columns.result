@@ -21,7 +21,7 @@ id	pattern	pattern_database	replacement	enabled	message	pattern_digest	normalize
 CALL query_rewrite.flush_rewrite_rules();
 SELECT * FROM query_rewrite.rewrite_rules;
 id	pattern	pattern_database	replacement	enabled	message	pattern_digest	normalized_pattern
-1	SELECT ?	NULL	SELECT "literal"	YES	NULL	f1ea6cee1b4090c784ccd0e75f7a9775104fe39bfb43145466867e56b7d469e7	select ?
+1	SELECT ?	NULL	SELECT "literal"	YES	NULL	d1b44b0c19af710b5a679907e284acd2ddc285201794bc69a2389d77baedddae	select ?
 SELECT NULL;
 literal
 literal
@@ -76,11 +76,11 @@ id	pattern	pattern_database	replacement	enabled	message	pattern_digest	normalize
 CALL query_rewrite.flush_rewrite_rules();
 SELECT * FROM query_rewrite.rewrite_rules;
 id	pattern	pattern_database	replacement	enabled	message	pattern_digest	normalized_pattern
-2	SELECT * FROM test.t1 WHERE ( a = ? AND TRUE ) OR b = ?	NULL	SELECT a FROM test.t1 WHERE a = ?	YES	NULL	ef8564911c7169abd9f303424ccaaa1a3aa7e8488d1468a2a044c125e85bca99	select `*` from `test`.`t1` where (((`a` = ?) and true) or (`b` = ?))
-3	SELECT a FROM test.t1	NULL	SELECT * FROM test.t1 WHERE a = 'abc'	YES	NULL	7c39c64e14e0f3a25abc71f32279432f05da697f248e8d82d7854c68470478c1	select `a` from `test`.`t1`
-4	SELECT a FROM test.t1 WHERE b = ?	NULL	SELECT * FROM test.t1 WHERE b = ?	YES	NULL	7413ff2ffaba988de84f5d7d361eeae2df827aa3f091cd518dfd57ea6164a965	select `a` from `test`.`t1` where (`b` = ?)
-5	SELECT * FROM test.t2	NULL	SELECT * FROM test.t1 JOIN test.t2 ON t1.a = t2.a	YES	NULL	884ac51a7452a8d827905d492c376c57166a8e4f50be34167d573bb0411a9abf	select `*` from `test`.`t2`
-6	SELECT * FROM test.t1 WHERE a = ? OR b = ?	NULL	SELECT * FROM test.t1 WHERE b = ? OR a = ?	YES	NULL	4d973ae20c094322c00503502d627487ec9ffa81dc510c2e7c3b1ee537414620	select `*` from `test`.`t1` where ((`a` = ?) or (`b` = ?))
+2	SELECT * FROM test.t1 WHERE ( a = ? AND TRUE ) OR b = ?	NULL	SELECT a FROM test.t1 WHERE a = ?	YES	NULL	013244d601fea8fdb057f1a6fcf1222b6fe0214597fe5ef4aaf96aeabe09069f	select `*` from `test`.`t1` where (((`a` = ?) and true) or (`b` = ?))
+3	SELECT a FROM test.t1	NULL	SELECT * FROM test.t1 WHERE a = 'abc'	YES	NULL	28939802f16d07e5b5ba42bded44d5bab1108022d2541e345a29040a323b01c8	select `a` from `test`.`t1`
+4	SELECT a FROM test.t1 WHERE b = ?	NULL	SELECT * FROM test.t1 WHERE b = ?	YES	NULL	07f316122bd78ef48f419a40d301b7ade32dda8162ba40a11711ca428d16a02b	select `a` from `test`.`t1` where (`b` = ?)
+5	SELECT * FROM test.t2	NULL	SELECT * FROM test.t1 JOIN test.t2 ON t1.a = t2.a	YES	NULL	666794284a40552eef7ab3173f130f1eec095c1fd1d5412c2d63dbc3a9f3a0b1	select `*` from `test`.`t2`
+6	SELECT * FROM test.t1 WHERE a = ? OR b = ?	NULL	SELECT * FROM test.t1 WHERE b = ? OR a = ?	YES	NULL	9e2f0e4b7156eda97bdab476e09da81907bde37c25ebd8e1ada5b4a1b39db71e	select `*` from `test`.`t1` where ((`a` = ?) or (`b` = ?))
 # Check a query that doesn't have a rewrite rule doesn't get rewritten.
 SELECT b FROM test.t1;
 b
@@ -181,9 +181,9 @@ id	pattern	pattern_database	replacement	enabled	message	pattern_digest	normalize
 CALL query_rewrite.flush_rewrite_rules();
 SELECT * FROM query_rewrite.rewrite_rules;
 id	pattern	pattern_database	replacement	enabled	message	pattern_digest	normalized_pattern
-7	SELECT 1, ?	NULL	SELECT "rewritten w/rule 1"	YES	NULL	e3877e22e388a2adadc61a082fb14f50c1c8d7f81341d82195f4a606c15b58f3	select ?,?
-8	SELECT 2, ?	NULL	SELECT "rewritten w/rule 2"	YES	NULL	e3877e22e388a2adadc61a082fb14f50c1c8d7f81341d82195f4a606c15b58f3	select ?,?
-9	SELECT "The_original_query"	NULL	SELECT "The_rewritten_query"	YES	NULL	f1ea6cee1b4090c784ccd0e75f7a9775104fe39bfb43145466867e56b7d469e7	select ?
+7	SELECT 1, ?	NULL	SELECT "rewritten w/rule 1"	YES	NULL	efb26d6aca0766da4a6d37f3e3aa5332542ff42893ff98fbb393da4e8cbd6a10	select ?,?
+8	SELECT 2, ?	NULL	SELECT "rewritten w/rule 2"	YES	NULL	efb26d6aca0766da4a6d37f3e3aa5332542ff42893ff98fbb393da4e8cbd6a10	select ?,?
+9	SELECT "The_original_query"	NULL	SELECT "The_rewritten_query"	YES	NULL	d1b44b0c19af710b5a679907e284acd2ddc285201794bc69a2389d77baedddae	select ?
 SELECT 1, 1;
 rewritten w/rule 1
 rewritten w/rule 1
