@@ -162,6 +162,9 @@ bool Gtid_table_access_context::init(THD **thd, TABLE **table, bool is_write) {
             XID_STATE::XA_PREPARED));
 
     (*thd)->begin_attachable_rw_transaction();
+
+    DBUG_ASSERT(!m_attached_rw_trans);
+    m_attached_rw_trans = true;
   }
 
   (*thd)->is_operating_gtid_table_implicitly = true;
@@ -198,8 +201,11 @@ bool Gtid_table_access_context::deinit(THD *thd, TABLE *table, bool error,
     as the only vulnerable part there relates to gtid (and is blocked
     from recursive invocation).
   */
-  if (thd->is_attachable_rw_transaction_active())
+  if (m_attached_rw_trans) {
+    DBUG_ASSERT(thd->is_attachable_rw_transaction_active());
     thd->end_attachable_transaction();
+    m_attached_rw_trans = false;
+  }
 
   thd->is_operating_gtid_table_implicitly = false;
   /* Reenable binlog */
