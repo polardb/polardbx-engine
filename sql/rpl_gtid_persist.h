@@ -108,6 +108,8 @@ class Gtid_table_access_context : public System_table_access {
   /* Whether or not `THD::set_skip_readonly_check` was invoked during `THD`
      initialization */
   bool m_skip_readonly_set{false};
+  /* Whether or not begin_attachable_rw_transaction called. */
+  bool m_attached_rw_trans{false};
 
   /* Prevent user from invoking default assignment function. */
   Gtid_table_access_context &operator=(const Gtid_table_access_context &info);

@@ -8908,6 +8908,9 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   flush_error =
       process_flush_stage_queue(&total_bytes, &do_rotate, &wait_queue);
 
+  /* Testing for sequence autonomous_rw_transaction */
+  DBUG_EXECUTE_IF("force_rotate_binlog", { do_rotate = true; });
+
   if (flush_error == 0 && total_bytes > 0)
     flush_error = flush_cache_to_file(&flush_end_pos);
   DBUG_EXECUTE_IF("crash_after_flush_binlog", DBUG_SUICIDE(););

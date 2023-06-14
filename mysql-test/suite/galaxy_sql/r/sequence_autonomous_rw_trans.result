@@ -1,0 +1,24 @@
+use test;
+create sequence s1 cache 1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+select nextval(s1);
+nextval(s1)
+1
+set session debug='+d,force_rotate_binlog';
+select nextval(s1);
+nextval(s1)
+2
+select nextval(s1);
+nextval(s1)
+3
+set session debug='-d,force_rotate_binlog';
+drop sequence s1;

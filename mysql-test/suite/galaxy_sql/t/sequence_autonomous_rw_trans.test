@@ -1,0 +1,16 @@
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+use test;
+
+create sequence s1 cache 1;
+
+select nextval(s1);
+
+set session debug='+d,force_rotate_binlog';
+select nextval(s1);
+select nextval(s1);
+set session debug='-d,force_rotate_binlog';
+
+drop sequence s1;
+
