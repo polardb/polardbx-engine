@@ -1,0 +1,71 @@
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+create database db_tc;
+create table db_tc.t(id int);
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+begin;
+insert into db_tc.t values(1);
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+begin;
+update db_tc.t set id = 2;
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'xx';
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa start 'xx';
+update db_tc.t set id = 2;
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'xx';
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa start 'xx';
+update db_tc.t set id = 2;
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa start 'xx';
+update db_tc.t set id = 2;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa start 'xx';
+insert into db_tc.t values(1);
+update db_tc.t set id = 2;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+drop table db_tc.t;
+drop database db_tc;

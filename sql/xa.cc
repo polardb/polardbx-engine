@@ -82,6 +82,8 @@
 #include "template_utils.h"
 #include "thr_mutex.h"
 
+#include "sql/lizard0handler.h"
+
 const char *XID_STATE::xa_state_names[] = {"NON-EXISTING", "ACTIVE", "IDLE",
                                            "PREPARED", "ROLLBACK ONLY"};
 
@@ -264,13 +266,15 @@ bool Recovered_xa_transactions::recover_prepared_xa_transactions() {
   return ret;
 }
 
-int ha_recover(Xid_commit_list *commit_list, Xa_state_list *xa_list) {
+int ha_recover(Xid_commit_list *commit_list, Xa_state_list *xa_list,
+               XA_spec_list *spec_list) {
   xarecover_st info;
   DBUG_TRACE;
   info.found_foreign_xids = info.found_my_xids = 0;
   info.commit_list = commit_list;
   info.dry_run = (info.commit_list == nullptr &&
                   tc_heuristic_recover == TC_HEURISTIC_NOT_USED);
+  info.spec_list = spec_list;
   info.list = nullptr;
 
   std::unique_ptr<MEM_ROOT> mem_root{nullptr};

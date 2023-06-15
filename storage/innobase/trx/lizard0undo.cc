@@ -2155,4 +2155,89 @@ void undo_retention_init() {
   Undo_retention::instance()->refresh_stat_data();
 }
 
+/**
+ * Judge if has gtid when recovery trx.
+ *
+ * @retval	true
+ * @retval	false
+ */
+bool XA_specification_strategy::has_gtid() {
+  if (m_xa_spec && m_xa_spec->has_gtid()) {
+    return true;
+  }
+
+  return false;
+}
+/**
+ * Judge storage way for gtid according to gtid source.
+ */
+trx_undo_t::Gtid_storage XA_specification_strategy::decide_gtid_storage() {
+  trx_undo_t::Gtid_storage storage = trx_undo_t::Gtid_storage::NONE;
+  ut_ad(has_gtid());
+  ut_ad(m_xa_spec->is_legal_source());
+
+  switch (m_xa_spec->source()) {
+    case binlog::Binlog_xa_specification::Source::NONE:
+      ut_a(0);
+      break;
+    case binlog::Binlog_xa_specification::Source::COMMIT:
+      storage = trx_undo_t::Gtid_storage::COMMIT;
+      break;
+    case binlog::Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE:
+    case binlog::Binlog_xa_specification::Source::XA_PREPARE:
+    case binlog::Binlog_xa_specification::Source::XA_COMMIT:
+    case binlog::Binlog_xa_specification::Source::XA_ROLLBACK:
+      storage = trx_undo_t::Gtid_storage::PREPARE_AND_COMMIT;
+      break;
+  }
+  return storage;
+}
+
+/**
+ * Overwrite gtid storage type of trx_undo_t when recovery.
+ */
+void XA_specification_strategy::overwrite_gtid_storage(trx_t *trx) {
+  trx_undo_t *undo{nullptr};
+  ut_ad(trx == m_trx);
+  ut_ad(has_gtid());
+
+  if (trx->rsegs.m_redo.rseg !=nullptr && trx_is_redo_rseg_updated(trx)) {
+    undo = trx->rsegs.m_redo.update_undo;
+    if (undo) {
+      undo->m_gtid_storage = decide_gtid_storage();
+    }
+  }
+}
+
+/** Fill gtid info from xa spec. */
+void XA_specification_strategy::get_gtid_info(Gtid_desc &gtid_desc) {
+  ut_ad(has_gtid());
+
+  gtid_desc.m_version = GTID_VERSION;
+
+  auto &gtid = m_xa_spec->m_gtid;
+  auto &sid = m_xa_spec->m_sid;
+
+  gtid_desc.m_info.fill(0);
+  auto char_buf = reinterpret_cast<char *>(&gtid_desc.m_info[0]);
+  auto len = gtid.to_string(sid, char_buf);
+  ut_a((size_t) len <= GTID_INFO_SIZE);
+  gtid_desc.m_is_set = true;
+}
+
+Guard_xa_specification::Guard_xa_specification(trx_t *trx,
+                                               XA_specification *xa_spec)
+    : m_trx(trx), m_xa_spec(xa_spec) {
+  ut_ad(trx);
+
+  trx->xa_spec = dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+  XA_specification_strategy xss(trx);
+
+  if (xss.has_gtid()) {
+    xss.overwrite_gtid_storage(trx);
+  }
+}
+
+Guard_xa_specification::~Guard_xa_specification() { m_trx->xa_spec = nullptr; }
+
 }  // namespace lizard

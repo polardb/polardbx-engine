@@ -38,6 +38,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
 
+#include "lizard0undo.h"
+
 /* To get current session thread default THD */
 THD *thd_get_current_thd();
 
@@ -85,6 +87,11 @@ void Clone_persist_gtid::add(const Gtid_desc &gtid_desc) {
 
 trx_undo_t::Gtid_storage Clone_persist_gtid::persists_gtid(const trx_t *trx) {
   auto thd = trx->mysql_thd;
+
+  lizard::XA_specification_strategy xss(trx);
+  if (xss.has_gtid()) {
+    return xss.decide_gtid_storage();
+  }
 
   if (thd == nullptr) {
     thd = thd_get_current_thd();
@@ -334,6 +341,13 @@ bool Clone_persist_gtid::has_gtid(trx_t *trx, THD *&thd, bool &passed_check) {
 
 void Clone_persist_gtid::get_gtid_info(trx_t *trx, Gtid_desc &gtid_desc) {
   gtid_desc.m_is_set = false;
+
+  lizard::XA_specification_strategy xss(trx);
+  if (xss.has_gtid()) {
+    xss.get_gtid_info(gtid_desc);
+    return;
+  }
+
   /* Check if transaction has GTID */
   if (!trx->persists_gtid) {
     return;

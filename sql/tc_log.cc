@@ -186,7 +186,8 @@ bool commit_one_ht(THD *, plugin_ref plugin, void *arg) {
   auto ht = plugin_data<handlerton *>(plugin);
   if (ht->commit_by_xid != nullptr && ht->state == SHOW_OPTION_YES &&
       ht->recover != nullptr) {
-    xa_status_code ret = ht->commit_by_xid(ht, static_cast<XID *>(arg));
+    xa_status_code ret =
+        ht->commit_by_xid(ht, static_cast<XID *>(arg), nullptr);
 
     if (ret != XA_OK &&
         ret != XAER_NOTA  // XAER_NOTA is an expected result since it's not
@@ -206,7 +207,8 @@ bool rollback_one_ht(THD *, plugin_ref plugin, void *arg) {
   auto ht = plugin_data<handlerton *>(plugin);
   if (ht->rollback_by_xid != nullptr && ht->state == SHOW_OPTION_YES &&
       ht->recover != nullptr) {
-    xa_status_code ret = ht->rollback_by_xid(ht, static_cast<XID *>(arg));
+    xa_status_code ret =
+        ht->rollback_by_xid(ht, static_cast<XID *>(arg), nullptr);
 
     if (ret != XA_OK &&
         ret != XAER_NOTA  // XAER_NOTA is an expected result since it's not

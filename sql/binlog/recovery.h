@@ -29,6 +29,12 @@
 #include "sql/log_event.h"       // Log_event
 #include "sql/xa.h"              // XID
 
+#include "sql/binlog/lizard0recovery.h"
+
+namespace binlog {
+class Group_specification_recovery;
+}  // namespace binlog
+
 namespace binlog {
 /**
   Recovers from last crashed binlog at server start.
@@ -314,7 +320,22 @@ class Binlog_recovery {
     @param state The state to add to the map, along side the XID
    */
   void add_external_xid(std::string const &query,
-                        enum_ha_recover_xa_state state);
+                        enum_ha_recover_xa_state state,
+                        Binlog_xa_specification::Source xa_spec_source);
+
+  void process_gtid_event(Gtid_log_event &ev);
+
+  void process_format_event(const Format_description_event &ev);
+
+ public:
+  void gather_internal_xa_spec(const my_xid xid, const Binlog_xa_specification &spec);
+  void gather_external_xa_spec(const XID &xid, const Binlog_xa_specification &spec);
+
+ private:
+  Binlog_xa_specification m_xa_spec;
+  std::unique_ptr<XA_spec_recovery> m_xa_spec_recovery;
+
+  uint32_t m_server_version;
 };
 }  // namespace binlog
 

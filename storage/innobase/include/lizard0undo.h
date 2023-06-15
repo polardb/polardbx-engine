@@ -36,12 +36,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fut0lst.h"
 #include "trx0types.h"
 #include "trx0undo.h"
+#include "clone0repl.h"
 
 #include "lizard0dbg.h"
 #include "lizard0scn.h"
 #include "lizard0undo0types.h"
 #include "lizard0ut.h"
 #include "ut0dbg.h"
+
+#include "sql/binlog/binlog_xa_specification.h"
 
 #include <atomic>
 #include <queue>
@@ -722,6 +725,51 @@ class Undo_retention {
 
 /* Init undo_retention */
 void undo_retention_init();
+
+/** Design transaction strategy for recovering if has xa specification. */
+class XA_specification_strategy {
+ public:
+  XA_specification_strategy(const trx_t *trx)
+      : m_trx(trx), m_xa_spec(trx->xa_spec) {}
+
+  virtual ~XA_specification_strategy() {}
+
+  /**
+   * Judge if has gtid when recovery trx.
+   *
+   * @retval	true
+   * @retval	false
+   */
+  bool has_gtid();
+
+  /**
+   * Judge storage way for gtid according to gtid source.
+   */
+  trx_undo_t::Gtid_storage decide_gtid_storage();
+
+  /**
+   * Overwrite gtid storage type of trx_undo_t when recovery.
+   */
+  void overwrite_gtid_storage(trx_t *trx);
+
+  /** Fill gtid info from xa spec. */
+  void get_gtid_info(Gtid_desc &gtid_desc);
+
+ private:
+  const trx_t *m_trx;
+  binlog::Binlog_xa_specification *m_xa_spec;
+};
+
+class Guard_xa_specification {
+ public:
+  Guard_xa_specification(trx_t *trx, XA_specification *xa_spec);
+
+  virtual ~Guard_xa_specification();
+
+ private:
+  trx_t *m_trx;
+  XA_specification *m_xa_spec;
+};
 
 }  // namespace lizard
 

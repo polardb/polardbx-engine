@@ -227,6 +227,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0xa.h"
 #include "lizard0tcn.h"
 
+#include "sql/xa_specification.h"
+
 #ifndef UNIV_HOTBACKUP
 
 namespace innobase {
@@ -1565,16 +1567,18 @@ static int innobase_xa_recover_prepared_in_tc(handlerton *hton,
  which is in the prepared state
  @return 0 or error number */
 static xa_status_code innobase_commit_by_xid(
-    handlerton *hton, /*!< in: InnoDB handlerton */
-    XID *xid);        /*!< in: X/Open XA transaction
-                      identification */
+    handlerton *hton,           /*!< in: InnoDB handlerton */
+    XID *xid,                   /*!< in: X/Open XA transaction
+                                 identification */
+    XA_specification *xa_spec); /*!< in: XA specification */
 /** This function is used to rollback one X/Open XA distributed transaction
  which is in the prepared state
  @return 0 or error number */
 static xa_status_code innobase_rollback_by_xid(
-    handlerton *hton, /*!< in: InnoDB handlerton */
-    XID *xid);        /*!< in: X/Open XA transaction
-                      identification */
+    handlerton *hton,           /*!< in: InnoDB handlerton */
+    XID *xid,                   /*!< in: X/Open XA transaction
+                                 identification */
+    XA_specification *xa_spec); /*!< in: XA specification */
 /** This function is used to write mark an X/Open XA distributed transaction
 as been prepared in the server transaction coordinator
 @param[in]     hton InnoDB handlerton
@@ -1588,8 +1592,10 @@ as been prepared in the server transaction coordinator
 @param[in]     xid  X/Open XA transaction identification the MySQL thread of the
                     user whosefo the XA transaction that should be prepared
 @return XA_OK or error number */
-static xa_status_code innobase_set_prepared_in_tc_by_xid(handlerton *hton,
-                                                         XID *xid);
+static xa_status_code innobase_set_prepared_in_tc_by_xid(
+    handlerton *hton,           /*!< in: InnoDB handlerton */
+    XID *xid,                   /*!< in: X/Open XA transaction identification */
+    XA_specification *xa_spec); /*!< in: XA specification */
 /** Checks if the file name is reserved in InnoDB. Currently
 redo log file names from the old redo format (ib_logfile*)
 are reserved. There is no need to reserve file names from the
@@ -20333,7 +20339,9 @@ static int innobase_xa_recover_prepared_in_tc(handlerton *hton,
  which is in the prepared state
  @return 0 or error number */
 static xa_status_code innobase_commit_by_xid(
-    handlerton *hton, XID *xid) /*!< in: X/Open XA transaction identification */
+    handlerton *hton,          /*!< in: handlerton*/
+    XID *xid,                  /*!< in: X/Open XA transaction identification */
+    XA_specification *xa_spec) /*!< in: XA specification */
 {
   assert(hton == innodb_hton_ptr);
 
@@ -20341,6 +20349,8 @@ static xa_status_code innobase_commit_by_xid(
 
   if (trx != nullptr) {
     TrxInInnoDB trx_in_innodb(trx);
+
+    lizard::Guard_xa_specification guard(trx, xa_spec);
 
     innobase_commit_low(trx);
     ut_ad(trx->mysql_thd == nullptr);
@@ -20359,9 +20369,9 @@ static xa_status_code innobase_commit_by_xid(
  which is in the prepared state
  @return 0 or error number */
 static xa_status_code innobase_rollback_by_xid(
-    handlerton *hton, /*!< in: InnoDB handlerton */
-    XID *xid)         /*!< in: X/Open XA transaction
-                      identification */
+    handlerton *hton,          /*!< in: InnoDB handlerton */
+    XID *xid,                  /*!< in: X/Open XA transaction identification */
+    XA_specification *xa_spec) /*!< in: XA specification */
 {
   assert(hton == innodb_hton_ptr);
 
@@ -20369,6 +20379,8 @@ static xa_status_code innobase_rollback_by_xid(
 
   if (trx != nullptr) {
     TrxInInnoDB trx_in_innodb(trx);
+
+    lizard::Guard_xa_specification guard(trx, xa_spec);
 
     int ret = innobase_rollback_trx(trx);
 
@@ -20401,8 +20413,11 @@ static int innobase_set_prepared_in_tc(handlerton *hton, THD *thd) {
   return convert_error_code_to_mysql(err, 0, thd);
 }
 
-static xa_status_code innobase_set_prepared_in_tc_by_xid(handlerton *hton,
-                                                         XID *xid) {
+static xa_status_code innobase_set_prepared_in_tc_by_xid(
+    handlerton *hton,          /*!< in: InnoDB handlerton */
+    XID *xid,                  /*!< in: X/Open XA transaction identification */
+    XA_specification *xa_spec) /*!< in: XA specification */
+{
   assert(hton == innodb_hton_ptr);
   assert(xid != nullptr);
 
@@ -20417,6 +20432,8 @@ static xa_status_code innobase_set_prepared_in_tc_by_xid(handlerton *hton,
     }
 
     innobase_srv_conc_force_exit_innodb(trx);
+
+    lizard::Guard_xa_specification guard(trx, xa_spec);
 
     dberr_t err = trx_set_prepared_in_tc_for_mysql(trx);
 
@@ -23450,6 +23467,7 @@ static MYSQL_SYSVAR_BOOL(
     cleanout_disable, lizard::opt_cleanout_disable, PLUGIN_VAR_OPCMDARG,
     "Whether to disable cleanout when read (off by default)", NULL, NULL,
     false);
+
 
 static MYSQL_SYSVAR_ENUM(cleanout_mode, lizard::cleanout_mode,
                          PLUGIN_VAR_RQCMDARG, " Cleanout mode, default(cursor)",

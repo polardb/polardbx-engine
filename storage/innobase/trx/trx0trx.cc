@@ -262,6 +262,8 @@ static void trx_init(trx_t *trx) {
 
   trx->xad.reset();
 
+  trx->xa_spec = nullptr;
+
   ++trx->version;
 }
 
@@ -687,6 +689,7 @@ void trx_free_prepared_or_active_recovered(trx_t *trx) {
   trx->state.store(TRX_STATE_NOT_STARTED, std::memory_order_relaxed);
   trx->will_lock = 0;
   trx->txn_desc = TXN_DESC_NULL;
+  trx->xa_spec = nullptr;
 
   trx_free(trx);
 }
@@ -2424,6 +2427,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
   ut_ad(!trx->in_rw_trx_list);
   ut_ad(!trx->in_mysql_trx_list);
   trx->txn_desc = TXN_DESC_NULL;
+  trx->xa_spec = nullptr;
 
   trx->state.store(TRX_STATE_NOT_STARTED, std::memory_order_relaxed);
 }

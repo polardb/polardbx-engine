@@ -65,6 +65,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0sys.h"
 #include "lizard0cleanout.h"
 
+#include "sql/binlog/binlog_xa_specification.h"
+
 /* How should the old versions in the history list be managed?
    ----------------------------------------------------------
 If each transaction is given a whole page for its update undo log, file
@@ -617,6 +619,12 @@ dberr_t trx_undo_gtid_add_update_undo(trx_t *trx, bool prepare, bool rollback) {
   bool alloc =
       gtid_persistor.trx_check_set(trx, prepare, rollback, gtid_explicit);
 
+  lizard::XA_specification_strategy xss(trx);
+  /** Override alloc if has xa_spec when recover */
+  if (xss.has_gtid()) {
+    alloc = true;
+  }
+
   auto undo_ptr = &trx->rsegs.m_redo;
 
   /* If update undo is already allocated, nothing to do. */
@@ -673,7 +681,9 @@ void trx_undo_gtid_set(trx_t *trx, trx_undo_t *undo, bool is_xa_prepare) {
   /* Reset GTID flag */
   undo->flag &= ~gtid_flag;
 
-  if (!trx->persists_gtid) {
+  lizard::XA_specification_strategy xss(trx);
+
+  if (!trx->persists_gtid && !xss.has_gtid()) {
     return;
   }
 

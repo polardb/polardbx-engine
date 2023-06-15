@@ -142,6 +142,9 @@ Note	MY-013911	Server
 Note	MY-013911	Server
 Note	MY-012487	InnoDB
 Note	MY-012488	InnoDB
+System	MY-025022	Server
+System	MY-025022	Server
+System	MY-025022	Server
 Note	MY-010303	Server
 Warning	MY-010068	Server
 Note	MY-010310	Server
@@ -166,6 +169,9 @@ ORDER BY logged;
 prio	error_code	subsystem	data
 System	MY-013576	InnoDB	InnoDB initialization has started.
 System	MY-013577	InnoDB	InnoDB initialization has ended.
+System	MY-025022	Server	Gtid_in_table : 
+System	MY-025022	Server	Gtid_in_binlog : 
+System	MY-025022	Server	Gtid_in_binlog_not_in_table : 
 
 # FR-1.4.1 Show the log-error-verbosity applies
 # We passed --log-error-verbosity=3 at start-up. Show that we have Notes.

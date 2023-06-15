@@ -31,7 +31,6 @@
 */
 #include "plugin/performance_point/pps_server.h"
 
-
 static Sys_var_bool Sys_opt_tablestat("opt_tablestat",
                                       "When this option is enabled,"
                                       "it will accumulate the table statistics",

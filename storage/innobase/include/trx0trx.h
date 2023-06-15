@@ -65,6 +65,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0tcn.h"
 
 
+namespace binlog {
+class Binlog_xa_specification;
+}  // namespace binlog
+   //
 // Forward declaration
 struct mtr_t;
 
@@ -1177,6 +1181,9 @@ struct trx_t {
 
   /** Cache tcn information. */
   lizard::Cache_tcn *session_tcn;
+
+  /** XA specification interpreted from TC log when recovery. */
+  binlog::Binlog_xa_specification *xa_spec;
 };
 
 #ifndef UNIV_HOTBACKUP

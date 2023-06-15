@@ -25,6 +25,10 @@
 #include "sql/binlog/tools/iterators.h"  // binlog::tools::Iterator
 #include "sql/raii/sentry.h"             // raii::Sentry<>
 #include "sql/xa/xid_extract.h"          // xa::XID_extractor
+	
+#include "mysql/components/services/log_builtins.h"
+
+#include "sql/binlog/lizard0recovery.h"
 
 binlog::Binlog_recovery::Binlog_recovery(Binlog_file_reader &binlog_file_reader)
     : m_reader{binlog_file_reader},
@@ -33,7 +37,10 @@ binlog::Binlog_recovery::Binlog_recovery(Binlog_file_reader &binlog_file_reader)
       m_set_alloc{&m_mem_root},
       m_map_alloc{&m_mem_root},
       m_internal_xids{m_set_alloc},
-      m_external_xids{m_map_alloc} {}
+      m_external_xids{m_map_alloc},
+      m_xa_spec(),
+      m_xa_spec_recovery(new XA_spec_recovery()),
+      m_server_version(0) {}
 
 my_off_t binlog::Binlog_recovery::get_valid_pos() const {
   return this->m_valid_pos;
@@ -60,6 +67,8 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
   it.set_copy_event_buffer();
   this->m_valid_pos = this->m_reader.position();
 
+  this->process_format_event(*this->m_reader.format_description_event());
+
   for (Log_event *ev = it.begin(); ev != it.end(); ev = it.next()) {
     switch (ev->get_type_code()) {
       case binary_log::QUERY_EVENT: {
@@ -73,6 +82,10 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
       case binary_log::XA_PREPARE_LOG_EVENT: {
         this->process_xa_prepare_event(
             dynamic_cast<XA_prepare_log_event &>(*ev));
+        break;
+      }
+      case binary_log::GTID_LOG_EVENT: {
+        this->process_gtid_event(dynamic_cast<Gtid_log_event &>(*ev));
         break;
       }
       default: {
@@ -94,7 +107,17 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
 
   if (!this->m_is_malformed && total_ha_2pc > 1) {
     Xa_state_list xa_list{this->m_external_xids};
-    this->m_no_engine_recovery = ha_recover(&this->m_internal_xids, &xa_list);
+    XA_spec_list *spec_list = nullptr;
+
+    if (m_server_version < XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED) {
+      LogErr(WARNING_LEVEL, ER_XA_SPEC_VERSION_NOT_MATCH, m_server_version,
+             XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED);
+    } else {
+      spec_list = m_xa_spec_recovery->xa_spec_list();
+    }
+
+    this->m_no_engine_recovery =
+        ha_recover(&this->m_internal_xids, &xa_list, spec_list);
     if (this->m_no_engine_recovery) {
       this->m_failure_message.assign("Recovery failed in storage engines");
     }
@@ -138,6 +161,10 @@ void binlog::Binlog_recovery::process_xid_event(Xid_log_event const &ev) {
     this->m_is_malformed = true;
     this->m_failure_message.assign("Xid_log_event holds an invalid XID");
   }
+
+  m_xa_spec.m_source = Binlog_xa_specification::Source::COMMIT;
+  gather_internal_xa_spec(ev.xid, m_xa_spec);
+  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_xa_prepare_event(
@@ -170,6 +197,12 @@ void binlog::Binlog_recovery::process_xa_prepare_event(
   this->m_external_xids[xid] =
       ev.is_one_phase() ? enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE
                         : enum_ha_recover_xa_state::PREPARED_IN_TC;
+
+  m_xa_spec.m_source =
+      ev.is_one_phase() ? Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE
+                        : Binlog_xa_specification::Source::XA_PREPARE;
+  gather_external_xa_spec(xid, m_xa_spec);
+  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_start() {
@@ -188,6 +221,8 @@ void binlog::Binlog_recovery::process_commit() {
         "Query_log_event containing `COMMIT` outside the boundary of a "
         "sequence of events representing an active transaction");
   this->m_in_transaction = false;
+
+  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_rollback() {
@@ -197,6 +232,7 @@ void binlog::Binlog_recovery::process_rollback() {
         "Query_log_event containing `ROLLBACK` outside the boundary of a "
         "sequence of events representing an active transaction");
   this->m_in_transaction = false;
+  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
@@ -211,7 +247,12 @@ void binlog::Binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
     this->m_is_malformed = true;
     this->m_failure_message.assign(
         "Query_log_event containing a DDL holds an invalid XID");
+    return;
   }
+
+  m_xa_spec.m_source = Binlog_xa_specification::Source::COMMIT;
+  gather_internal_xa_spec(ev.ddl_xid, m_xa_spec);
+  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
@@ -224,10 +265,12 @@ void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
         "state");
     return;
   }
-  this->add_external_xid(query, enum_ha_recover_xa_state::COMMITTED);
+  this->add_external_xid(query, enum_ha_recover_xa_state::COMMITTED,
+                         Binlog_xa_specification::Source::XA_COMMIT);
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA COMMIT` holds an invalid XID");
+  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
@@ -240,14 +283,18 @@ void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
         "state");
     return;
   }
-  this->add_external_xid(query, enum_ha_recover_xa_state::ROLLEDBACK);
+  this->add_external_xid(query, enum_ha_recover_xa_state::ROLLEDBACK,
+                         Binlog_xa_specification::Source::XA_ROLLBACK);
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA ROLLBACK` holds an invalid XID");
+
+  m_xa_spec.mark_end();
 }
 
-void binlog::Binlog_recovery::add_external_xid(std::string const &query,
-                                               enum_ha_recover_xa_state state) {
+void binlog::Binlog_recovery::add_external_xid(
+    std::string const &query, enum_ha_recover_xa_state state,
+    Binlog_xa_specification::Source xa_spec_source) {
   xa::XID_extractor tokenizer{query, 1};
   if (tokenizer.size() == 0) {
     this->m_is_malformed = true;
@@ -265,4 +312,7 @@ void binlog::Binlog_recovery::add_external_xid(std::string const &query,
   }
 
   this->m_external_xids[tokenizer[0]] = state;
+
+  m_xa_spec.m_source = xa_spec_source;
+  gather_external_xa_spec(tokenizer[0], m_xa_spec);
 }

@@ -974,6 +974,8 @@ MySQL clients support the protocol:
 #include "sql/server_component/persistent_dynamic_loader_imp.h"
 #include "sql/srv_session.h"
 
+#include "sql/binlog/lizard0recovery.h"
+
 using std::max;
 using std::min;
 using std::vector;
@@ -7847,6 +7849,10 @@ int mysqld_main(int argc, char **argv)
   if (!opt_initialize && !opt_initialize_insecure) {
     // Initialize executed_gtids from mysql.gtid_executed table.
     if (gtid_state->read_gtid_executed_from_table() == -1) unireg_abort(1);
+
+    binlog::log_gtid_set(
+        const_cast<Gtid_set *>(gtid_state->get_executed_gtids()), true,
+        "Gtid_in_table");
   }
 
   if (opt_bin_log) {
@@ -7903,6 +7909,10 @@ int mysqld_main(int argc, char **argv)
       }
       executed_gtids->add_gtid_set(&gtids_in_binlog_not_in_table);
     }
+
+    binlog::log_gtid_set(&gtids_in_binlog, false, "Gtid_in_binlog");
+    binlog::log_gtid_set(&gtids_in_binlog_not_in_table, false,
+                         "Gtid_in_binlog_not_in_table");
 
     /* gtids_only_in_table= executed_gtids - gtids_in_binlog */
     if (gtids_only_in_table->add_gtid_set(executed_gtids) != RETURN_STATUS_OK) {

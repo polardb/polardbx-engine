@@ -26,12 +26,14 @@
 #include "sql/handler.h"    // XA_recover_txn
 #include "sql/sql_class.h"  // THD
 #include "sql/xa.h"         // Xid_commit_list, Xa_state_list, XID, ...
+#include "sql/lizard0handler.h"	
 
 struct xarecover_st {
   int len, found_foreign_xids, found_my_xids;
   XA_recover_txn *list;
   Xid_commit_list const *commit_list;
   Xa_state_list *xa_list;
+  XA_spec_list *spec_list;
   bool dry_run;
 };
 

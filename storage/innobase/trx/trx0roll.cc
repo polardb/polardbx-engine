@@ -57,6 +57,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "usr0sess.h"
 
+#include "log0sys.h"
+#include "log0write.h"
+
 #include "current_thd.h"
 
 #include "lizard0mtr.h"
@@ -195,6 +198,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
   ut_ad(trx_can_be_handled_by_current_thread_or_is_hp_victim(trx));
 
   mtr_t mtr;
+  lsn_t lsn;
   lizard::Mtr_wrapper mtr_wrapper(&mtr);
 
   switch (trx->state.load(std::memory_order_relaxed)) {
@@ -258,7 +262,13 @@ static dberr_t trx_rollback_low(trx_t *trx) {
         // mtr.commit();
         // ut_ad(mtr.commit_lsn() > 0 || !mtr_t::s_logging.is_enabled());
       }
-      mtr_wrapper.commit();
+      lsn = mtr_wrapper.commit();
+
+      /** Debug crash. */
+      DBUG_EXECUTE_IF("simulate_crash_when_xa_rollback_in_innodb", {
+        log_write_up_to(*log_sys, lsn, true);
+        ut_ad(0);
+      };);
 
 #ifdef ENABLED_DEBUG_SYNC
       if (trx->mysql_thd == nullptr) {

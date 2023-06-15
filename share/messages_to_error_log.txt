@@ -12160,6 +12160,12 @@ ER_STOP_SCN_HOSTORY_THREAD
 ER_ROLL_FORWARD_SCN
   eng "%s"
 
+ER_LIZARD_GTID
+  eng "%s : %s"
+
+ER_XA_SPEC_VERSION_NOT_MATCH
+  eng "Binlog file version %d is lower than XA specification recovery version %d"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
