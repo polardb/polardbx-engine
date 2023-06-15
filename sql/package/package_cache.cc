@@ -37,6 +37,8 @@
 #include "sql/recycle_bin/recycle_proc.h"
 #include "sql/trans_proc/implicit_savepoint.h"
 
+#include "sql/consensus/consensus_proc.h"
+
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
 #endif
@@ -123,6 +125,9 @@ void package_context_init() {
   init_package_psi_key();
 #endif
 
+  /* The schema of dummy and dummy_2 proc */
+  LEX_CSTRING PROC_DUMMY_SCHEMA = {C_STRING_WITH_LEN("mysql")};
+
   package_inited = true;
 
 #ifndef DBUG_OFF
@@ -193,6 +198,27 @@ void package_context_init() {
 
   /* dbms_trans.rollback_to_implicit_savepoint() */
   register_package<Proc, Trans_proc_implicit_savepoint>(TRANS_PROC_SCHEMA);
+
+  /* dbms_consensus */
+  register_package<Proc, Consensus_proc_change_leader>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_add_learner>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_add_follower>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_drop_learner>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_upgrade_learner>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_downgrade_follower>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_refresh_learner_meta>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_configure_follower>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_configure_learner>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_force_single_mode>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_fix_cluster_id>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_fix_matchindex>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_show_global>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_show_local>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_show_logs>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_purge_log>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_local_purge_log>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_force_purge_log>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_drop_prefetch_channel>(CONSENSUS_PROC_SCHEMA);
 }
 
 } /* namespace im */

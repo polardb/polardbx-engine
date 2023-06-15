@@ -21,8 +21,13 @@ include/mysqlbinlog.inc
 /*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
 DELIMITER /*!*/;
 ROLLBACK/*!*/;
+##PREV_CONSENSUS_INDEX: ##'/*!*/;
 # [empty]
+<<<<<<< HEAD
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] support mtr and consensus_proc pl
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)

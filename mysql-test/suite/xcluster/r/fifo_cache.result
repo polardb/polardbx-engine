@@ -1,0 +1,18 @@
+set global consensus_log_cache_size = 20 * 1024 * 1024;
+use test;
+create table t1 (data longblob);
+set global consensus_log_cache_size = 1;
+show global status like "consensus_fifo_cache%";
+Variable_name	Value
+consensus_fifo_cache_log_count	1
+consensus_fifo_cache_used_size	1330
+set global consensus_log_cache_size = 1024*1024*1024;
+show global status like "consensus_fifo_cache%";
+Variable_name	Value
+consensus_fifo_cache_log_count	1026
+consensus_fifo_cache_used_size	316005
+select count(distinct(match_index)) from information_schema.alisql_cluster_global;
+count(distinct(match_index))
+1
+drop table t1;
+set global consensus_log_cache_size = 64 * 1024 * 1024;

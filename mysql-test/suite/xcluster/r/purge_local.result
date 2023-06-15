@@ -1,0 +1,29 @@
+flush local logs;
+flush local logs;
+create table t1(id int);
+flush local logs;
+insert into t1 values (1);
+call dbms_consensus.purge_log(100000000);
+insert into t1 values (1);
+call dbms_consensus.purge_log(100000000);
+ERROR HY000: The consensus membership change failed, error code is -1, error msg: Some error happens, please check the error log.
+call dbms_consensus.force_purge_log(100000000);
+call dbms_consensus.purge_log(100000000);
+ERROR HY000: The consensus membership change failed, error code is -1, error msg: Some error happens, please check the error log.
+call dbms_consensus.force_purge_log(100000000);
+flush local logs;
+flush local logs;
+flush local logs;
+insert into t1 values (1);
+call dbms_consensus.add_learner("127.0.0.1:24000");
+call dbms_consensus.configure_learner("127.0.0.1:24000", "127.0.0.1:PAXOS_PORT_2");
+insert into t1 values (1);
+call dbms_consensus.local_purge_log(100000000);
+call dbms_consensus.force_purge_log(100000000);
+# for f1: purge local should fail
+call dbms_consensus.local_purge_log(100000000);
+call dbms_consensus.force_purge_log(100000000);
+# for f2: purge local should success
+call dbms_consensus.local_purge_log(100000000);
+call dbms_consensus.drop_learner("127.0.0.1:24000");
+drop table t1;

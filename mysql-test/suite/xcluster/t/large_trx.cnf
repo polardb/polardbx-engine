@@ -1,0 +1,6 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+consensus_large_trx=ON
+consensus_check_large_event=ON
+slave_parallel_workers=0

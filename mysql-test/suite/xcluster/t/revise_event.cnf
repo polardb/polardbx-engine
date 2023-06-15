@@ -1,0 +1,16 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+consensus_large_event_limit=5M
+consensus_max_log_size=1M
+consensus_large_trx_split_size=300k
+consensus_large_event_split_size=300k
+
+[mysqld.1]
+consensuslog_revise=ON
+
+[mysqld.2]
+consensuslog_revise=ON
+
+[mysqld.3]
+consensuslog_revise=ON

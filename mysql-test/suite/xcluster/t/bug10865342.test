@@ -1,0 +1,35 @@
+--disable_query_log
+call mtr.add_suppression('\\[Warning\\] .*');
+--enable_query_log
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+
+--connection conn1
+create table ttt (id int);
+insert into ttt values(1);
+insert into ttt values(2);
+insert into ttt values(3);
+--connection conn2
+flush local logs;
+--connection conn1
+insert into ttt values(1);
+insert into ttt values(2);
+insert into ttt values(3);
+--connection conn2
+flush local logs;
+--connection conn1
+insert into ttt values(1);
+insert into ttt values(2);
+insert into ttt values(3);
+--connection conn2
+flush local logs;
+--connection conn1
+insert into ttt values(1);
+insert into ttt values(2);
+insert into ttt values(3);
+--connection conn2
+flush local logs;
+--connection conn1
+drop table ttt;

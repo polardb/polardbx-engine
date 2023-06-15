@@ -1,0 +1,6 @@
+--force-restart
+--gtid-mode=ON
+--enforce-gtid-consistency=ON
+--recovery-apply-binlog=1
+--sync-binlog=1
+--innodb_flush_log_at_trx_commit=1

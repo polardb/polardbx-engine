@@ -1,0 +1,17 @@
+# start a new learner
+# connect leader
+call dbms_consensus.add_learner(learner_cluster_info);
+# start a new learner
+# connect leader
+call dbms_consensus.add_learner(learner_cluster_info);
+call dbms_consensus.configure_learner(learner_cluster_info_100, "127.0.0.1:PAXOS_PORT_2");
+call dbms_consensus.configure_learner(learner_cluster_info, learner_cluster_info_100);
+select server_id, role, learner_source from information_schema.alisql_cluster_global;
+server_id	role	learner_source
+1	Leader	0
+2	Follower	0
+3	Follower	0
+100	Learner	2
+101	Learner	100
+call dbms_consensus.drop_learner(learner_cluster_info_100);
+call dbms_consensus.drop_learner(learner_cluster_info);

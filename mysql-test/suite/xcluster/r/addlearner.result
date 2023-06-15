@@ -1,0 +1,27 @@
+# start a new learner
+# connect leader
+call dbms_consensus.add_learner(learner_cluster_info);
+select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
+count(*)
+1
+create database aaa;
+use aaa;
+create table t (id int);
+insert into t values(1);
+show databases like '%aaa%';
+Database (%aaa%)
+aaa
+drop database aaa;
+call dbms_consensus.drop_learner(learner_cluster_info);
+# start a new learner
+call dbms_consensus.add_follower(learner_cluster_info);
+select count(*) from information_schema.alisql_cluster_global where role='FOLLOWER';
+count(*)
+3
+create database aaa;
+show databases like '%aaa%';
+Database (%aaa%)
+aaa
+drop database aaa;
+call dbms_consensus.downgrade_follower(learner_cluster_info);
+call dbms_consensus.drop_learner(learner_cluster_info);

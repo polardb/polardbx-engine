@@ -1,0 +1,4 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+performance_schema=1

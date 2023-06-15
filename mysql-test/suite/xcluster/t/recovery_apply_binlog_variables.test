@@ -1,0 +1,53 @@
+--source include/have_debug.inc
+--source include/have_log_bin.inc
+
+--echo # variables 
+connection default;
+
+show variables like "gtid_mode";
+show variables like "recovery_apply_binlog";
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+set global recovery_apply_binlog=OFF;
+
+--let $restart_parameters = restart: --gtid_mode=on --enforce_gtid_consistency=ON
+--let $wait_counter=10000
+--source include/restart_mysqld.inc
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+show variables like "recovery_apply_binlog";
+flush logs;
+
+create table t (a int);
+
+--let $restart_parameters = restart: --gtid_mode=on --enforce_gtid_consistency=ON
+--source include/restart_mysqld.inc
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+show variables like "recovery_apply_binlog";
+
+--let $restart_parameters = restart: --gtid_mode=off
+--let $wait_counter=10000
+--source include/restart_mysqld.inc
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+show variables like "recovery_apply_binlog";
+
+--let $restart_parameters = restart
+--let $wait_counter=10000
+--source include/restart_mysqld.inc
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+drop table t;

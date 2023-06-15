@@ -1,0 +1,32 @@
+#
+# use 'mysqlbinlog --read-from-remote-server'
+# to test mysql binlog dump
+#
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+flush local logs;
+--let $master_binlog2= query_get_value(SHOW MASTER STATUS, File, 1)
+
+--connection default
+flush local logs;
+--let $master_binlog1= query_get_value(SHOW MASTER STATUS, File, 1)
+
+use test;
+create table t1 (a int);
+insert into t1 values(1), (2), (3);
+#add consensus_learner "127.0.0.1:22345";
+call dbms_consensus.add_learner("127.0.0.1:22345");
+#drop consensus_learner "127.0.0.1:22345";
+call dbms_consensus.drop_learner("127.0.0.1:22345");
+# just show linenumbers in result to make sure mysqlbinlog receive all binlog events successfully
+
+# not always pass, WTF?
+
+# from leader
+--exec $MYSQL_BINLOG --read-from-remote-server --user=root --host=127.0.0.1 --port=$MYPORT_1 $master_binlog1 | wc -l
+
+# from follower
+--exec $MYSQL_BINLOG --read-from-remote-server --user=root --host=127.0.0.1 --port=$MYPORT_2 $master_binlog2 | wc -l
+
+--connection default
+drop table t1;

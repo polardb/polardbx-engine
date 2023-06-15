@@ -1,0 +1,6 @@
+use test;
+create table t1 (data longblob);
+select count(distinct(match_index)) from information_schema.alisql_cluster_global;
+count(distinct(match_index))
+1
+drop table t1;

@@ -12072,6 +12072,9 @@ ER_IB_INDEX_LOADER_DONE
 ER_IB_INDEX_BUILDER_DONE
    eng "Builder::finish(): Completed building index=%s of table=%s, err=%zu."
 
+ER_CONSENSUS_CMD_LOG
+  eng "user:%s  host:%s sql:%s result:%d!!!"
+
 # DO NOT add server-to-client messages here;
 # they go in messages_to_clients.txt
 # in the same directory as this file.

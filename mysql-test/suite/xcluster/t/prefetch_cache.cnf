@@ -1,0 +1,11 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+consensus_large_trx=ON
+consensus_check_large_event=ON
+max_allowed_packet=1G
+slave_pending_jobs_size_max=1G
+slave_max_allowed_packet=1G
+consensus_large_event_limit=1G
+consensus_prefetch_fast_fetch=ON
+consensus_disable_fifo_cache=ON

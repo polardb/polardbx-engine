@@ -1,0 +1,14 @@
+--source include/have_debug.inc
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+
+connection conn1;
+stop xpaxos_replication;
+
+connection conn2;
+set debug_sync= "start_slave_after_channel_map_wrlock WAIT_FOR run";
+send start xpaxos_replication;
+
+connection conn1;
+set debug_sync= "show_status_after_lock_status SIGNAL run";
+show status like "aaa";

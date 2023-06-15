@@ -1,0 +1,117 @@
+create table test.t1(a int primary key);
+create table test.t2(a int primary key)engine=myisam;
+
+flush binary logs;
+#flush des_key_file;
+flush engine logs;
+flush error logs;
+flush general logs;
+flush hosts;
+flush logs;
+flush privileges;
+flush optimizer_costs;
+#flush query cache;
+flush relay logs;
+flush status;
+flush user_resources;
+#flush rds_audit logs;
+
+flush tables;
+unlock tables;
+flush tables test.t1;
+unlock tables;
+flush tables with read lock;
+unlock tables;
+flush tables test.t1 with read lock;
+unlock tables;
+flush tables test.t1 for export;
+unlock tables;
+
+repair table test.t2;
+analyze table test.t1;
+optimize table test.t1;
+
+--connect (foll,127.0.0.1,root,,test,$MYPORT_2)
+flush binary logs;
+#--error ER_CONSENSUS_SERVER_NOT_READY
+#flush des_key_file;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush engine logs;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush error logs;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush general logs;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush hosts;
+flush logs;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush privileges;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush optimizer_costs;
+#--error ER_CONSENSUS_SERVER_NOT_READY
+#flush query cache;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush relay logs;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush status;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush user_resources;
+#flush rds_audit logs;
+
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush tables;
+unlock tables;
+--error ER_CONSENSUS_SERVER_NOT_READY
+flush tables test.t1;
+unlock tables;
+flush tables with read lock;
+unlock tables;
+flush tables test.t1 with read lock;
+unlock tables;
+flush tables test.t1 for export;
+unlock tables;
+
+--error ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
+repair table test.t2;
+--error ER_CONSENSUS_SERVER_NOT_READY
+analyze table test.t1;
+--error ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
+optimize table test.t1;
+--error ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
+truncate table test.t1;
+
+set sql_log_bin=0;
+
+flush binary logs;
+#flush des_key_file;
+flush engine logs;
+flush error logs;
+flush general logs;
+flush hosts;
+flush logs;
+flush privileges;
+flush optimizer_costs;
+#flush query cache;
+flush relay logs;
+flush status;
+flush user_resources;
+#flush rds_audit logs;
+
+flush tables;
+unlock tables;
+flush tables test.t1;
+unlock tables;
+flush tables with read lock;
+unlock tables;
+flush tables test.t1 with read lock;
+unlock tables;
+flush tables test.t1 for export;
+unlock tables;
+
+repair table test.t2;
+analyze table test.t1;
+optimize table test.t1;
+truncate table test.t1;
+
+connection default;
+drop table t1, t2;

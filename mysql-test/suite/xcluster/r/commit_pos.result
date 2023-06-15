@@ -1,0 +1,33 @@
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+	0	0
+flush local logs;
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+	0	0
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+master-bin.000001	#	#
+flush local logs;
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+master-bin.000002	#	#
+create table t (id int);
+insert into t values (1);
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+master-bin.000002	#	#
+flush local logs;
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+master-bin.000003	#	#
+insert into t values (2);
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+master-bin.000003	#	#
+flush local logs;
+flush local logs;
+select * from information_schema.consensus_commit_position;
+LOGNAME	POSITION	INDEX
+master-bin.000005	#	#
+drop table t;

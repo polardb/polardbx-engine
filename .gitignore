@@ -262,3 +262,6 @@ mysql-test/var*
 extra/IS/dependency/easy/src/libmyeasy.a
 extra/IS/src/libaliconsensus.a
 install_manifest.txt
+
+mysql-test/run_query.log
+mysql-test/run_query.error

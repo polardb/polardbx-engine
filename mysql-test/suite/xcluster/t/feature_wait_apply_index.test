@@ -1,0 +1,123 @@
+--source include/paxos.inc
+
+--connect (c1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (c2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (c22,127.0.0.1,root,,test,$MYPORT_2)
+
+
+#
+# 0 . init 
+#
+connection c1;
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (
+	id INT NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
+insert into t1 () values ();
+
+#
+# 1. wait in leader
+#
+
+connection c1;
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_consensus.wait_apply_index(1);
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_consensus.wait_apply_index(1, 5, 5);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_consensus.wait_apply_index(-1, 5);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_consensus.wait_apply_index(1, "aaaaa");
+
+--error ER_WAIT_APPLY_INDEX_ERROR
+call dbms_consensus.wait_apply_index(5, 5);
+
+--error ER_WAIT_APPLY_INDEX_ERROR
+call dbms_consensus.wait_apply_index(99999, 5);
+ 
+#
+# 1. wait in follower
+#
+
+connection c2;
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_consensus.wait_apply_index(1);
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_consensus.wait_apply_index(1, 5, 5);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_consensus.wait_apply_index(-1, 5);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_consensus.wait_apply_index(1, "aaaaa");
+
+call dbms_consensus.wait_apply_index(1, 30);
+
+--error ER_WAIT_APPLY_INDEX_TIMEOUT
+--eval call dbms_consensus.wait_apply_index(99999, 3);
+
+connection c2;
+send call dbms_consensus.wait_apply_index(99999, 30);
+
+connection c22;
+STOP XPAXOS_REPLICATION;
+
+connection c2;
+--error ER_WAIT_APPLY_INDEX_ERROR
+reap;
+
+connection c22;
+START XPAXOS_REPLICATION;
+
+connection c2;
+send call dbms_consensus.wait_apply_index(99999, 30);
+
+connection c1;
+let $MYPORT_CONSENSUS_2 = query_get_value("select $MYPORT_2+40 as c1", c1, 1);
+--disable_query_log
+--eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_2")
+--enable_query_log
+
+# I don't know why the follower node was killed by signal 9
+--sleep 5
+connection c2;
+--error ER_WAIT_APPLY_INDEX_ERROR
+reap;
+
+--source include/wait_apply_catchup.inc
+
+let $MYPORT_CONSENSUS_1 = query_get_value("select $MYPORT_1+40 as c1", c1, 1);
+--disable_query_log
+--eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_1")
+--enable_query_log
+
+# I don't know why the follower node was killed by signal 9
+--sleep 5
+connection c1;
+--enable_reconnect
+let $wait_condition= select role='Leader' from information_schema.alisql_cluster_local;
+--source include/wait_condition.inc
+
+#
+# n. cleanup
+#
+connection default;
+--enable_reconnect
+
+drop table t1;
+
+disconnect c1;
+disconnect c2;
+disconnect c22;

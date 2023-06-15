@@ -1,0 +1,12 @@
+set global consensus_replicate_with_cache_log=ON;
+use test;
+create table t1 (id int);
+insert into t1 values (1);
+set global debug="+d,crash_before_flush_binlog";
+insert into t1 values (2);
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+insert into t1 values (3);
+consistent!
+drop table t1;
+set global debug="";

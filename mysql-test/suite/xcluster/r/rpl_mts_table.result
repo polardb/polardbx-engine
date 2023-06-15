@@ -1,0 +1,21 @@
+CREATE DATABASE db_1;
+CREATE TABLE db_1.test_1 (id INTEGER) engine=Innodb;
+CREATE TABLE db_1.test_2 (id INTEGER) engine=Innodb;
+stop xpaxos_replication;
+set @save.debug= @@global.debug;
+show variables like 'slave_parallel_workers';
+Variable_name	Value
+slave_parallel_workers	2
+start xpaxos_replication;
+INSERT INTO db_1.test_1 VALUES(0);
+SET GLOBAL debug="d,mts_debug_concurrent_access";
+BEGIN;
+INSERT INTO db_1.test_1 VALUES(1);
+BEGIN;
+INSERT INTO db_1.test_2 VALUES(1);
+COMMIT;
+COMMIT;
+drop table db_1.test_1;
+drop table db_1.test_2;
+DROP DATABASE db_1;
+SET @@global.debug= "";

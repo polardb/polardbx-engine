@@ -1,0 +1,4 @@
+set global consensus_msg_compress_option="*:* 1 4096 1";
+set global consensus_msg_compress_option="127.0.0.1:24001 1 8192 0;127.0.0.1:24002 2 4096 1";
+set global consensus_msg_compress_option=";;;";
+set global consensus_msg_compress_option="";

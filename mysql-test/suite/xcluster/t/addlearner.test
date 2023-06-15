@@ -1,0 +1,68 @@
+--disable_query_log
+call mtr.add_suppression('\\[Warning\\] .*');
+--enable_query_log
+
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
+--source include/start_new_learner.inc
+
+--echo # connect leader
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+#eval add consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.add_learner($learner_cluster_info);
+# wait learner get log
+--sleep 5
+select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
+create database aaa;
+use aaa;
+create table t (id int);
+insert into t values(1);
+
+--connect (learner,127.0.0.1,root,,test,$learner_port)
+--connection learner
+--source include/wait_apply_catchup.inc
+
+show databases like '%aaa%';
+
+# clean up
+--connection leader
+drop database aaa;
+#eval drop consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info); 
+
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
+--source include/start_new_learner.inc
+
+--connection leader
+#eval add consensus_follower $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.add_follower($learner_cluster_info);
+# wait learner get log
+--sleep 5
+select count(*) from information_schema.alisql_cluster_global where role='FOLLOWER';
+create database aaa;
+
+--connect (newfollower,127.0.0.1,root,,test,$learner_port)
+--connection newfollower
+--source include/wait_apply_catchup.inc
+
+show databases like '%aaa%';
+
+# clean up
+--connection leader
+drop database aaa;
+#eval drop consensus_follower $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.downgrade_follower($learner_cluster_info);
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info);
+
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
+--source include/stop_new_learner.inc
+
+let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
+--source include/stop_new_learner.inc
+
+

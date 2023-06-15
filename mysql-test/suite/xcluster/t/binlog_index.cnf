@@ -1,0 +1,5 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+log-bin=aaaa
+log-bin-index=bbbb

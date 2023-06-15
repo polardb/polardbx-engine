@@ -10162,9 +10162,6 @@ ER_CONSENSUS_IP_PORT_FORMAT
 ER_CONSENSUS_LOG_TYPE_NODE
   eng "The consensus node is logger, which is not allowed to to do current operation."
 
-ER_CONSENSUS_CMD_LOG
-  eng "user:%s  host:%s sql:%s result:%d!!!"
-
 ################################################################################
 # DO NOT add messages for the error-log to this file;
 # they go in messages_to_error_log.txt in the same

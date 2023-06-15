@@ -113,6 +113,16 @@ if (!$mysqlbinlog_skip_replace)
     /SET @@session.immediate_server_version=[0-9]*/SET @@session.immediate_server_version= IMMEDIATE_SERVER_VERSION/
     /SET @@session.innodb_commit_seq=[0-9]*/SET @@session.innodb_commit_seq=##/
     /SET @@SESSION.GTID_NEXT= '.*'/SET @@SESSION.GTID_NEXT= '#'/
+    /innodb_commit_seq=[0-9]*/innodb_commit_seq=#/
+    /Previous Consensus index=[0-9]*/Previous Consensus index=#/
+    /Consensus flag=[0-9]*/Consensus flag=#/
+    /term=[0-9]*/term=#/
+    /index=[0-9]*/index=#/
+    /PREV_CONSENSUS_INDEX: [0-9]*/PREV_CONSENSUS_INDEX: #/
+    /CONSENSUS FLAG: [0-9]*/CONSENSUS FLAG: #/
+    /TERM: [0-9]*/TERM: #/
+    /INDEX: [0-9]*/INDEX: #/
+    /LENGTH: [0-9]*/LENGTH: #/
     /CRC32 0x[0-9a-f]{8}/CRC32 #/
     /# [a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}:/# #:/;
 }
