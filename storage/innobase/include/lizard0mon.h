@@ -88,6 +88,12 @@ struct lizard_var_t {
   ulint cleanout_cursor_collect;
 
   ulint cleanout_cursor_restore_failed;
+
+  /* Commit gcn for next transition. */
+  ulint commit_gcn;
+
+  /* Max purged gcn, snapshot gcn before that is too old to asof select. */
+  ulint purged_gcn;
 };
 
 struct lizard_stats_t {

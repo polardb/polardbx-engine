@@ -113,6 +113,8 @@
 
 #include "ppi/ppi_statement.h"
 
+#include "lizard_iface.h" // my_gcn_t, MYSQL_GCN_NULL
+
 enum enum_check_fields : int;
 enum enum_tx_isolation : int;
 enum ha_notification_type : int;
@@ -4770,7 +4772,30 @@ class THD : public MDL_context_owner,
              get_stmt_da()->mysql_errno() == ER_DA_CONN_LIMIT));
   }
 #endif
+
+ public:
+
+  void reset_gcn() {
+    variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
+    variables.innodb_commit_gcn = MYSQL_GCN_NULL;
+  }
+
+  ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
+
+  ulonglong get_commit_gcn() { return variables.innodb_commit_gcn; }
 };
+
+inline ulonglong thd_get_snapshot_gcn(THD *thd) {
+  if (thd) return thd->get_snapshot_gcn();
+
+  return MYSQL_GCN_NULL;
+}
+
+inline ulonglong thd_get_commit_gcn(THD *thd) {
+  if (thd) return thd->get_commit_gcn();
+
+  return MYSQL_GCN_NULL;
+}
 
 /**
    Return lock_tables_mode for secondary engine.

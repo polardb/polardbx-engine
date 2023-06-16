@@ -92,6 +92,19 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt);
 */
 dberr_t reset_prebuilt_flashback_query_ctx(row_prebuilt_t *prebuilt);
 
+/**
+  Try get gcn from the variable(innodb_commit_seq). The **thd** might be:
+  * trx->mysql_thd. Usually a commit of an ordinary transaction.
+  * current_thd. Commit of external XA transactions.
+
+  TODO: This code is just a temporary solution, and will be refactored.
+
+  @params[in]    trx     the transaction
+
+  @return        gcn_t   GCN_NULL if hasn't the gcn
+*/
+gcn_t trx_mysql_has_gcn(const trx_t *trx);
+
 }
 
 #endif

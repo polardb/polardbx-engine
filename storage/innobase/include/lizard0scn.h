@@ -166,6 +166,8 @@ class SCN {
   @return     m_scn */
   scn_t acquire_scn(bool mutex_hold = false);
 
+  gcn_t get_gcn();
+
   scn_t get_scn();
 
   /** lock mutex */

@@ -80,6 +80,9 @@ void trans_reset_one_shot_chistics(THD *thd) {
 
   thd->tx_isolation = (enum_tx_isolation)thd->variables.transaction_isolation;
   thd->tx_read_only = thd->variables.transaction_read_only;
+
+  /* Reset commit and snapshot gcn when transition end. */
+  thd->reset_gcn();
 }
 
 /**
@@ -217,6 +220,9 @@ bool trans_begin(THD *thd, uint flags) {
 
   PPI_TRANSACTION_CALL(start_transaction)(thd->ppi_transaction);
   thd->audit_trx_ctx.start_transaction();
+
+  /* This is a defensive action, reset gcn when explicit transaction begin. */
+  thd->reset_gcn();
 
   return res;
 }

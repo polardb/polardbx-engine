@@ -45,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 #include "lizard0mon.h"
 #include "lizard0cleanout.h"
+#include "lizard0mysql.h"
 
 /**
   SCN generation strategy:
@@ -1055,9 +1056,23 @@ commit_scn_t trx_commit_scn(trx_t *trx, commit_scn_t *cmmt_ptr,
   if (cmmt_ptr == nullptr) {
     lizard_sys_scn_mutex_enter();
 
+    /** Fetch commit gcn */
+    gcn_t gcn = GCN_NULL;
+
+    /* If have set commit_gcn on trx, just use it. */
+    if (trx->txn_desc.cmmt.gcn != GCN_NULL) {
+      ut_ad(!trx->mysql_thd);
+      gcn = trx->txn_desc.cmmt.gcn;
+      trx->txn_desc.cmmt.gcn = GCN_NULL;
+    } else {
+      gcn = trx_mysql_has_gcn(trx);
+    }
+
+    DBUG_EXECUTE_IF("crash_before_gcn_commit", ut_ad(gcn != GCN_NULL ? 0 : 1););
+
     /** Generate a new scn */
     std::pair<commit_scn_t, bool> cmmt_result =
-        lizard_sys->scn.new_commit_scn(GCN_NULL);
+        lizard_sys->scn.new_commit_scn(gcn);
 
     cmmt = cmmt_result.first;
     ut_a(!cmmt_result.second);

@@ -1,0 +1,26 @@
+set global innodb_undo_retention = 1000;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+id INT NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+xa start '1';
+set innodb_snapshot_seq = @base_seq + 102;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end '1';
+xa prepare '1';
+set innodb_commit_seq = @base_seq + 104;
+xa commit '1';
+set innodb_snapshot_seq = @base_seq + 103;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+DROP TABLE t1;
+set global innodb_undo_retention = default;

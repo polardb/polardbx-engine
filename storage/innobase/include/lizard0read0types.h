@@ -191,6 +191,8 @@ class Vision {
 
   bool is_asof_gcn() const { return m_is_asof_gcn; }
 
+  gcn_t get_asof_gcn() const { return m_asof_gcn; }
+
   bool is_asof() const { return m_is_asof_scn || m_is_asof_gcn; }
 
 #ifdef UNIV_DEBUG

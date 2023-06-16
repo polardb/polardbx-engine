@@ -86,3 +86,14 @@ static Sys_var_charptr Sys_client_endpoint_ip(
   CMD_LINE(REQUIRED_ARG),
   IN_SYSTEM_CHARSET, DEFAULT(0),
   NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_ulonglong Sys_innodb_snapshot_seq(
+    "innodb_snapshot_seq", "Innodb snapshot sequence.",
+    HINT_UPDATEABLE SESSION_ONLY(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+
+static Sys_var_ulonglong Sys_innodb_commit_seq(
+    "innodb_commit_seq", "Innodb commit sequence",
+    HINT_UPDATEABLE SESSION_ONLY(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+

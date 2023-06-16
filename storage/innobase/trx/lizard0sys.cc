@@ -202,6 +202,12 @@ scn_t lizard_sys_get_scn() {
   return lizard_sys->scn.get_scn();
 }
 
+/** Get current GCN number */
+gcn_t lizard_sys_get_gcn() {
+  ut_a(lizard_sys);
+  return lizard_sys->scn.get_gcn();
+}
+
 /**
   Modify the min active trx id
 

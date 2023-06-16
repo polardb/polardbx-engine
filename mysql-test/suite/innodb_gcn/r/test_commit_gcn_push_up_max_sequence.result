@@ -1,0 +1,3 @@
+# Restart completed
+include/assert.inc [max_sequence should be incremented after reboot]
+DROP TABLE tmp_max_seq_test;

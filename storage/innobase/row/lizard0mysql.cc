@@ -6,6 +6,10 @@
 #include "lizard0mysql.h"
 #include "lizard0scn0hist.h"
 #include "lizard0sys.h"
+#include "sql/sql_class.h"
+
+/* To get current session thread default THD */
+THD *thd_get_current_thd();
 
 namespace lizard {
 
@@ -82,6 +86,7 @@ convert_flashback_query_timestamp_to_scn(row_prebuilt_t *prebuilt,
 */
 dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   TABLE *table;
+  trx_t *trx;
   dict_index_t *clust_index;
   scn_t fbq_scn = SCN_NULL;
   gcn_t fbq_gcn = GCN_NULL;
@@ -89,6 +94,7 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   ut_ad(prebuilt);
 
   table = prebuilt->m_mysql_table;
+  trx = prebuilt->trx;
 
   /* forbid as-of query */
   if (!srv_scn_valid_enabled) return DB_SUCCESS;
@@ -96,9 +102,18 @@ dberr_t convert_fbq_ctx_to_innobase(row_prebuilt_t *prebuilt) {
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_set()) return DB_SUCCESS;
 
-    /* If testing as-of query, we turn all non-as-of search to as-of search in
-    row_search_mvcc */
-#if defined UNIV_DEBUG && defined TURN_MVCC_SEARCH_TO_AS_OF
+  if (trx) {
+    /* Change gcn on vision to current snapshot gcn. */
+    gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
+    if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
+    /* Set gcn on m_asof_query if exist. */
+    if (trx->vision.is_asof_gcn()) {
+      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
+      return DB_SUCCESS;
+    }
+  }
+
+#if defined TURN_MVCC_SEARCH_TO_AS_OF
 
   if (!table || !table->snapshot.valid()) {
     ut_ad(prebuilt->trx->vision.is_active());
@@ -209,6 +224,35 @@ dberr_t reset_prebuilt_flashback_query_ctx(row_prebuilt_t *prebuilt) {
   DBUG_EXECUTE_IF("required_scn_purged_before_reset",
                   err = DB_SNAPSHOT_TOO_OLD;);
   return err;
+}
+
+/**
+  Try get gcn from the variable(innodb_commit_seq). The **thd** might be:
+  * trx->mysql_thd. Usually a commit of an ordinary transaction.
+  * current_thd. Commit of external XA transactions.
+
+  TODO: This code is just a temporary solution, and will be refactored.
+
+  @params[in]    trx     the transaction
+
+  @return        gcn_t   GCN_NULL if hasn't the gcn
+*/
+gcn_t trx_mysql_has_gcn(const trx_t *trx) {
+  THD *thd = trx->mysql_thd;
+  if (trx->state.load(std::memory_order_relaxed) == TRX_STATE_PREPARED &&
+      thd == nullptr) {
+    thd = thd_get_current_thd();
+  }
+
+  if (thd == nullptr) {
+    return GCN_NULL;
+  }
+
+  if (trx->internal) {
+    return GCN_NULL;
+  }
+
+  return thd_get_commit_gcn(thd);
 }
 
 }  // namespace lizard

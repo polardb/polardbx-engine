@@ -1,0 +1,314 @@
+set global innodb_undo_retention=1800;
+set global innodb_undo_space_reserved_size=1024;
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (
+	id INT NOT NULL,
+	value VARCHAR(50) NOT NULL,
+	PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connect (conn1,localhost,root,,);
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+connect (conn2,localhost,root,,);
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+--echo *** TEST: read with timestamp should see transaction or not
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+begin; 
+set innodb_snapshot_seq = @base_seq + 101;
+select * from t1;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+set innodb_commit_seq = @base_seq + 103;
+commit;
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+connection conn2;
+begin;
+set innodb_snapshot_seq = @base_seq + 102;
+select * from t1;
+rollback;
+
+begin;
+set innodb_snapshot_seq = @base_seq + 104;
+select * from t1;
+rollback;
+
+--echo *** TEST: Read prepared data should block - not visible
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 201;
+select * from t1;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+
+connection conn2;
+begin;
+set innodb_snapshot_seq = @base_seq + 203;
+send select * from t1;
+
+connection conn1;
+set innodb_commit_seq = @base_seq + 204; # commit with ts > read ts
+xa commit 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+connection conn2;
+reap;
+
+--echo *** TEST: Read prepared data should block - visible
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 301;
+select * from t1;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+
+connection conn2;
+begin;
+set innodb_snapshot_seq = @base_seq + 303;
+send select * from t1;
+
+connection conn1;
+set innodb_commit_seq = @base_seq + 302; # commit with ts < read ts
+xa commit 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+connection conn2;
+reap;
+
+
+--echo *** TEST: Read prepared data should block - rollbacked
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 401;
+select * from t1;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+
+connection conn2;
+begin;
+set innodb_snapshot_seq = @base_seq + 403;
+send select * from t1;
+
+connection conn1;
+xa rollback 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+connection conn2;
+reap;
+
+
+--echo *** TEST: read with timestamp should never see running transaction
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+begin; 
+set innodb_snapshot_seq = @base_seq + 501;
+select * from t1;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+
+connection conn2;
+begin;
+set innodb_snapshot_seq = @base_seq + 502;
+select * from t1; # should not block
+rollback;
+
+connection conn1;
+set innodb_commit_seq = @base_seq + 503;
+commit;
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+
+if (!$enable_reconnect) { # FIXME: XA bug (XAER_RMERR)
+
+--echo *** TEST: XA commit read-only transaction
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 601;
+select * from t1;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+set innodb_commit_seq = @base_seq + 604;
+xa commit 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+
+--echo *** TEST: XA commit empty transaction
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 701;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+set innodb_commit_seq = @base_seq + 704;
+xa commit 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+
+--echo *** TEST: XA rollback read-only transaction
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 801;
+select * from t1;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+xa rollback 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+
+--echo *** TEST: XA rollback empty transaction
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 901;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+xa rollback 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+} # FIXME: XA bug (XAER_RMERR)
+
+--echo *** TEST: Read prepared data but timeout
+
+# clear
+connection default;
+REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq +  1001;
+select * from t1;
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+
+connection conn2;
+set session innodb_global_query_wait_timeout=2;
+begin;
+set innodb_snapshot_seq = @base_seq +  1003;
+send select * from t1;
+
+connection conn1;
+set innodb_commit_seq = @base_seq +  1004;
+--sleep 5
+xa commit 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+connection conn2;
+--error ER_LOCK_WAIT_TIMEOUT
+reap;
+select * from t1;
+rollback;
+
+set session innodb_global_query_wait_timeout=default;
+
+--echo *** TEST: Distributed read using secondary index prepared timeout
+
+connection default;
+
+CREATE TABLE t2 (
+	id INT NOT NULL,
+	sec INT NOT NULL,
+	value VARCHAR(50) NOT NULL,
+	PRIMARY KEY (id),
+	KEY sec(sec)
+) ENGINE=InnoDB;
+
+INSERT INTO t2 VALUES (0, 0, 'zero'), (1, 1, 'one'), (2, 2, 'two'), (3, 3, 'three');
+
+connection conn1;
+xa begin 't';
+set innodb_snapshot_seq = @base_seq + 1501;
+select * from t2;
+update t2 set value = 'UPDATED!' where sec = 2;
+xa end 't';
+xa prepare 't';
+--source suite/innodb_gcn/include/reconnect_conn1_if_enabled.inc
+
+connection conn2;
+set session innodb_global_query_wait_timeout=2;
+begin;
+set innodb_snapshot_seq = @base_seq + 1503;
+send select * from t2 force index(sec) where sec = 2;
+
+connection conn1;
+set innodb_commit_seq = @base_seq + 1504;
+--sleep 5
+xa commit 't';
+--source suite/innodb_gcn/include/assert_session_seq_cleared.inc
+
+connection conn2;
+--error ER_LOCK_WAIT_TIMEOUT
+reap;
+select * from t2;
+rollback;
+
+#
+# Cleanup
+#
+disconnect conn1;
+disconnect conn2;
+
+connection default;
+DROP TABLE t1;
+DROP TABLE t2;
+
+set global innodb_undo_space_reserved_size=default;
+set global innodb_undo_retention = default;

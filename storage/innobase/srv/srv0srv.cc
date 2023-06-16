@@ -1731,6 +1731,8 @@ void srv_export_innodb_status(void) {
   }
   undo::spaces->s_unlock();
 
+  export_vars.commit_gcn = lizard::lizard_sys_get_gcn();
+
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 

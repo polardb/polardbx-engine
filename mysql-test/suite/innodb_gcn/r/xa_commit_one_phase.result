@@ -1,0 +1,30 @@
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+id INT NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+xa start '1';
+set innodb_snapshot_seq = @base_seq + 102;
+set innodb_snapshot_seq = @base_seq + 110;
+select * from t1;
+id	value
+0	zero
+1	one
+2	two
+3	three
+update t1 set value = 'UPDATED!' where id % 2 = 0;
+xa end '1';
+xa commit '1' one phase;
+set innodb_snapshot_seq = @base_seq + 120;
+select * from t1;
+id	value
+0	UPDATED!
+1	one
+2	UPDATED!
+3	three
+DROP TABLE t1;
