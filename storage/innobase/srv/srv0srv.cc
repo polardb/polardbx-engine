@@ -89,6 +89,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0crc32.h"
 #endif /* !UNIV_HOTBACKUP */
 #include "ut0mem.h"
+#include "sql/sql_class.h"
 
 #include "srv0file.h"
 
@@ -2995,6 +2996,8 @@ void srv_purge_coordinator_thread() {
   THD *thd = create_thd(false, true, true, 0);
 #endif
 
+  thd->set_skip_readonly_check();
+
   ulint n_total_purged = ULINT_UNDEFINED;
 
   ut_ad(!srv_read_only_mode);
@@ -3102,6 +3105,8 @@ void srv_purge_coordinator_thread() {
   /* This is just for test scenarios. Do not pass thd here.
   For explanation look at comment for similar usage above. */
   srv_thread_delay_cleanup_if_needed(false);
+
+  thd->reset_skip_readonly_check();
 
   destroy_thd(thd);
 }

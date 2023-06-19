@@ -4542,7 +4542,11 @@ void fsp_init_resume_alter_encrypt_tablespace() {
   THD *thd = create_thd(false, true, true, 0);
 #endif
 
+  thd->set_skip_readonly_check();
+
   resume_alter_encrypt_tablespace(thd);
+
+  thd->reset_skip_readonly_check();
 
   destroy_thd(thd);
 }
