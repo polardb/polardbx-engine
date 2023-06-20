@@ -149,6 +149,8 @@ void binlog::Binlog_recovery::process_query_event(Query_log_event const &ev) {
 }
 
 void binlog::Binlog_recovery::process_xid_event(Xid_log_event const &ev) {
+  Commit_binlog_xa_specification guard(&m_xa_spec);
+
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed) {
     this->m_failure_message.assign(
@@ -160,15 +162,17 @@ void binlog::Binlog_recovery::process_xid_event(Xid_log_event const &ev) {
   if (!this->m_internal_xids.insert(ev.xid).second) {
     this->m_is_malformed = true;
     this->m_failure_message.assign("Xid_log_event holds an invalid XID");
+    return;
   }
 
   m_xa_spec.m_source = Binlog_xa_specification::Source::COMMIT;
   gather_internal_xa_spec(ev.xid, m_xa_spec);
-  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_xa_prepare_event(
     XA_prepare_log_event const &ev) {
+  Commit_binlog_xa_specification guard(&m_xa_spec);
+
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed) {
     this->m_failure_message.assign(
@@ -202,7 +206,6 @@ void binlog::Binlog_recovery::process_xa_prepare_event(
       ev.is_one_phase() ? Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE
                         : Binlog_xa_specification::Source::XA_PREPARE;
   gather_external_xa_spec(xid, m_xa_spec);
-  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_start() {
@@ -215,27 +218,30 @@ void binlog::Binlog_recovery::process_start() {
 }
 
 void binlog::Binlog_recovery::process_commit() {
+  Commit_binlog_xa_specification guard(&m_xa_spec);
+
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `COMMIT` outside the boundary of a "
         "sequence of events representing an active transaction");
   this->m_in_transaction = false;
-
-  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_rollback() {
+  Commit_binlog_xa_specification guard(&m_xa_spec);
+
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `ROLLBACK` outside the boundary of a "
         "sequence of events representing an active transaction");
   this->m_in_transaction = false;
-  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
+  Commit_binlog_xa_specification guard(&m_xa_spec);
+
   this->m_is_malformed = this->m_in_transaction;
   if (this->m_is_malformed) {
     this->m_failure_message.assign(
@@ -252,10 +258,11 @@ void binlog::Binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
 
   m_xa_spec.m_source = Binlog_xa_specification::Source::COMMIT;
   gather_internal_xa_spec(ev.ddl_xid, m_xa_spec);
-  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
+  Commit_binlog_xa_specification guard(&m_xa_spec);
+
   this->m_is_malformed = this->m_in_transaction;
   this->m_in_transaction = false;
   if (this->m_is_malformed) {
@@ -270,10 +277,11 @@ void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA COMMIT` holds an invalid XID");
-  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
+  Commit_binlog_xa_specification guard(&m_xa_spec);
+
   this->m_is_malformed = this->m_in_transaction;
   this->m_in_transaction = false;
   if (this->m_is_malformed) {
@@ -288,8 +296,6 @@ void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA ROLLBACK` holds an invalid XID");
-
-  m_xa_spec.mark_end();
 }
 
 void binlog::Binlog_recovery::add_external_xid(

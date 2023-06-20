@@ -109,5 +109,15 @@ class Binlog_xa_specification : public XA_specification {
   rpl_sid m_sid;
 };
 
+class Commit_binlog_xa_specification {
+ public:
+  Commit_binlog_xa_specification(Binlog_xa_specification *spec) : m_spec(spec) {}
+
+  ~Commit_binlog_xa_specification() { m_spec->mark_end(); }
+
+ private:
+  Binlog_xa_specification *m_spec;
+};
+
 }  // namespace binlog
 #endif

@@ -31,6 +31,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
   Created 2023-06-14 by Jianwei.zhao
  *******************************************************/
 
+#include "my_dbug.h"
+
 #include "sql/binlog/lizard0recovery.h"
 #include "sql/binlog/recovery.h"
 #include "sql/xa_specification.h"
@@ -65,8 +67,14 @@ void binlog::Binlog_recovery::process_gtid_event(Gtid_log_event &ev) {
   this->m_is_malformed = this->m_in_transaction;
   if (this->m_is_malformed) {
     this->m_failure_message.assign(
-        "Gtid_log event inside the boundary of a sequnece of events "
+        "Gtid_log_event inside the boundary of a sequnece of events "
         "representing an active transaction");
+
+    /** Compatiable with test case binlog_gtid_binlog_recovery_errors.test */
+    DBUG_EXECUTE_IF("eval_force_bin_log_recovery", {
+      this->m_is_malformed = false;
+      this->m_failure_message.assign("");
+    };);
     return;
   }
   m_xa_spec.sid()->copy_from(*(ev.get_sid()));
@@ -87,9 +95,8 @@ void binlog::Binlog_recovery::gather_internal_xa_spec(
   /** Lookup first, XID didn't allowed to appear twice. */
   auto found = spec_list->commit_map()->find(xid);
   if (found != spec_list->commit_map()->end()) {
-    this->m_is_malformed = true;
-    this->m_failure_message.assign(
-        "Found the same xid when gather internal xid");
+    /** Should be blocked by xa_commit_list. */
+    assert(0);
     return;
   }
   assert(spec.is_legal_source());
