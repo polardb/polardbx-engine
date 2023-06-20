@@ -346,8 +346,8 @@ no_txn:
 ulint decide_txn_undo_state_at_finish(ulint free_limit) {
   // 275 undo record + 100 safty margin.
   // why 100 ? In trx_undo_header_create:
-  // ut_a(free + TRX_UNDO_LOG_HDR_SIZE < UNIV_PAGE_SIZE - 100);
-  static const ulint min_reserve = TXN_UNDO_LOG_EXT_HDR_SIZE + 100;
+  // ut_a(free + TRX_UNDO_LOG_GTID_XA_HDR_SIZE < UNIV_PAGE_SIZE - 100);
+  static const ulint min_reserve = TRX_UNDO_LOG_GTID_XA_HDR_SIZE + 100;
 
   ulint reuse_limit = txn_undo_page_reuse_max_percent * UNIV_PAGE_SIZE / 100;
 
