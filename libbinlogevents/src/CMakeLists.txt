@@ -44,6 +44,8 @@ SET(REPLICATION_SOURCES
   statement_events.cpp
   trx_boundary_parser.cpp
   uuid.cpp
+
+  gcn_event.cpp
   )
 
 MY_CHECK_CXX_COMPILER_WARNING("-Wmissing-profile" HAS_MISSING_PROFILE)

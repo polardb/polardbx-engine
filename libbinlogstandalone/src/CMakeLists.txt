@@ -38,6 +38,8 @@ SET(REPLICATION_SOURCES
   ${CMAKE_SOURCE_DIR}/libbinlogevents/src/statement_events.cpp
   ${CMAKE_SOURCE_DIR}/libbinlogevents/src/trx_boundary_parser.cpp
   ${CMAKE_SOURCE_DIR}/libbinlogevents/src/uuid.cpp
+
+  ${CMAKE_SOURCE_DIR}/libbinlogevents/src/gcn_event.cpp
   )
 
 # Configure for building static library

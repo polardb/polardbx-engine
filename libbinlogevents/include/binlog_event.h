@@ -361,6 +361,9 @@ enum Log_event_type {
     Add new events here - right above this comment!
     Existing events (except ENUM_END_EVENT) should never change their numbers
   */
+
+  GCN_LOG_EVENT = 105,
+
   ENUM_END_EVENT /* end marker */
 };
 

@@ -51,6 +51,8 @@
 #include "sql/transaction_info.h"  // Transaction_ctx
 #include "thr_mutex.h"
 
+class Gcn_manager;
+
 class Format_description_log_event;
 class Gtid_monitoring_info;
 class Gtid_set;
@@ -991,6 +993,9 @@ class MYSQL_BIN_LOG : public TC_LOG {
     True while rotating binlog, which is caused by logging Incident_log_event.
   */
   bool is_rotating_caused_by_incident;
+
+ private:
+  std::unique_ptr<Gcn_manager> gcn_mgr;
 };
 
 struct LOAD_FILE_INFO {

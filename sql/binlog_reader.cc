@@ -24,6 +24,8 @@
 #include "my_byteorder.h"
 #include "sql/log_event.h"
 
+#include "sql/gcn_log_event.h"
+
 unsigned char *Default_binlog_event_allocator::allocate(size_t size) {
   DBUG_EXECUTE_IF("simulate_allocate_failure", return nullptr;);
   return static_cast<unsigned char *>(
@@ -292,6 +294,9 @@ Binlog_read_error::Error_type binlog_event_deserialize(
       break;
     case binary_log::TRANSACTION_PAYLOAD_EVENT:
       ev = new Transaction_payload_log_event(buf, fde);
+      break;
+    case binary_log::GCN_LOG_EVENT:
+      ev = new Gcn_log_event(buf, fde);
       break;
     default:
       /*

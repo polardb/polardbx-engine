@@ -138,6 +138,9 @@
 #include "ppi/ppi_transaction.h"
 #include "sql/sys_vars_ext.h"
 
+#include "sql/lizard_binlog.h"
+#include "sql/gcn_log_event.h"
+
 class Item;
 
 using binary_log::checksum_crc32;
@@ -1740,6 +1743,11 @@ bool MYSQL_BIN_LOG::write_transaction(THD *thd, binlog_cache_data *cache_data,
 
   bool ret = gtid_event.write(writer);
   if (ret) goto end;
+
+  /*TODO:
+  ret = gcn_mgr->write_gcn(thd, writer);
+  if (ret) goto end;
+  */
 
   /*
     finally write the transaction data, if it was not compressed
@@ -3528,7 +3536,8 @@ MYSQL_BIN_LOG::MYSQL_BIN_LOG(uint *sync_period, bool relay_log)
       checksum_alg_reset(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       relay_log_checksum_alg(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       previous_gtid_set_relaylog(nullptr),
-      is_rotating_caused_by_incident(false) {
+      is_rotating_caused_by_incident(false),
+      gcn_mgr(new Gcn_manager()) {
   /*
     We don't want to initialize locks here as such initialization depends on
     safe_mutex (when using safe_mutex) which depends on MY_INIT(), which is
@@ -8440,6 +8449,9 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   DBUG_EXECUTE_IF("crash_after_flush_engine_log", DBUG_SUICIDE(););
   CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_write_binlog");
   assign_automatic_gtids_to_flush_group(first_seen);
+  /** Prepare gcn. */
+  gcn_mgr->assign_gcn_to_flush_group(first_seen);
+
   /* Flush thread caches to binary log. */
   for (THD *head = first_seen; head; head = head->next_to_commit) {
     Thd_backup_and_restore switch_thd(current_thd, head);
@@ -11595,3 +11607,9 @@ mysql_declare_plugin(binlog){
     nullptr, /* config options                  */
     0,
 } mysql_declare_plugin_end;
+
+/**/
+bool Gcn_manager::write_gcn(THD *thd, Binlog_event_writer *writer) {
+  Gcn_log_event gcn_evt(thd);
+  return gcn_evt.write(writer);
+}

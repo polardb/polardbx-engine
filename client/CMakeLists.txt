@@ -227,6 +227,8 @@ SET(MYSQLBINLOG_SOURCES
   ${CMAKE_SOURCE_DIR}/sql/stream_cipher.cc
   ${CMAKE_SOURCE_DIR}/sql/rpl_log_encryption.cc
   ${CMAKE_SOURCE_DIR}/libbinlogevents/src/trx_boundary_parser.cpp
+
+  ${CMAKE_SOURCE_DIR}/sql/gcn_log_event.cc
   )
 
 SET(MYSQLBINLOG_LIBRARIES
