@@ -39,6 +39,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/xa.h"
 #include "trx0sys.h"
 
+#include "sql/sql_class.h"
+
 /** Bqual format: 'xxx@nnnn' */
 static unsigned int XID_GROUP_SUFFIX_SIZE = 5;
 
@@ -93,7 +95,9 @@ void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
   ut_ad(vision->group_ids.m_size == 0);
   ut_ad(vision->group_ids.m_ids.empty());
 
+  /** Restrict only user client thread */
   if (my_trx->mysql_thd == nullptr ||
+      my_trx->mysql_thd->system_thread != NON_SYSTEM_THREAD ||
       !thd_get_transaction_group(my_trx->mysql_thd))
     return;
 
