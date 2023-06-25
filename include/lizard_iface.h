@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <numeric>
 
 typedef uint64_t my_gcn_t;
+typedef uint64_t my_scn_t;
 
 constexpr my_gcn_t MYSQL_GCN_NULL = std::numeric_limits<my_gcn_t>::max();
 

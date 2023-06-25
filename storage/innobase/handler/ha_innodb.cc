@@ -120,7 +120,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fts0priv.h"
 #include "fts0types.h"
 #include "ha_innodb.h"
-#include "ha_innodb_ext.h"
 #include "ha_innopart.h"
 #include "ha_prototypes.h"
 #include "i_s.h"
@@ -227,6 +226,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0file.h"
 #include "lizard0xa.h"
 #include "lizard0tcn.h"
+#include "lizard0ha_innodb.h"
 
 #include "sql/xa_specification.h"
 
@@ -5201,28 +5201,6 @@ static void innobase_post_ddl(THD *thd) {
   }
 }
 
-/**
-  Copy server XA attributes into innobase.
-
-  @param[in]      thd       connection handler.
-*/
-static void innobase_register_xa_attributes(THD *thd) {
-  trx_t *&trx = thd_to_trx(thd);
-  ut_ad(trx != nullptr);
-
-  if (!trx_is_registered_for_2pc(trx)) {
-    /** Note: Other session will compare trx group when assign readview. */
-    trx_mutex_enter(trx);
-
-    thd_get_xid(thd, (MYSQL_XID *)trx->xad.my_xid());
-    trx->xad.build_group();
-
-    ut_ad(!trx->xad.is_null());
-
-    trx_mutex_exit(trx);
-  }
-}
-
 /** Initialize the InnoDB storage engine plugin.
 @param[in,out]  p       InnoDB handlerton
 @return error code
@@ -5364,7 +5342,7 @@ static int innodb_init(void *p) {
       innobase_page_track_get_num_page_ids;
   innobase_hton->page_track.get_status = innobase_page_track_get_status;
 
-  innobase_hton->register_xa_attributes = innobase_register_xa_attributes;
+  innobase_init_ext(innobase_hton);
 
   static_assert(DATA_MYSQL_TRUE_VARCHAR == (ulint)MYSQL_TYPE_VARCHAR);
 

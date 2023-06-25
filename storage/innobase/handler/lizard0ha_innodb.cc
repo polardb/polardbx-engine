@@ -20,23 +20,17 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/**
-  @file
-
-  The code for alisql
-*/
-
-#include "ha_innodb_ext.h"
 #include <cstdio>
 #include "mach0data.h"
 #include "mtr0mtr.h"
 #include "trx0sys.h"
 #include "trx0types.h"
 
-#include "lizard0xa.h"
-#include "lizard0undo.h"
 #include "ha_innodb.h"
+#include "lizard0ha_innodb.h"
 #include "lizard0sys.h"
+#include "lizard0undo.h"
+#include "lizard0xa.h"
 
 #include <sql_class.h>
 
@@ -67,4 +61,41 @@ bool xa_compare_xid_between_thd_and_trx(const THD *thd, const trx_t *trx) {
   }
 
   return true;
+}
+
+/**
+  Copy server XA attributes into innobase.
+
+  @param[in]      thd       connection handler.
+*/
+static void innobase_register_xa_attributes(THD *thd) {
+  trx_t *&trx = thd_to_trx(thd);
+  ut_ad(trx != nullptr);
+
+  if (!trx_is_registered_for_2pc(trx)) {
+    /** Note: Other session will compare trx group when assign readview. */
+    trx_mutex_enter(trx);
+
+    thd_get_xid(thd, (MYSQL_XID *)trx->xad.my_xid());
+    trx->xad.build_group();
+
+    ut_ad(!trx->xad.is_null());
+
+    trx_mutex_exit(trx);
+  }
+}
+
+my_gcn_t innobase_load_gcn() { return lizard::lizard_sys_get_gcn(); }
+
+my_scn_t innobase_load_scn() { return lizard::lizard_sys_get_scn(); }
+
+/**
+  Initialize innobase extension.
+
+  param[in]  innobase_hton  handlerton of innobase.
+*/
+void innobase_init_ext(handlerton *innobase_hton) {
+  innobase_hton->ext.register_xa_attributes = innobase_register_xa_attributes;
+  innobase_hton->ext.load_gcn = innobase_load_gcn;
+  innobase_hton->ext.load_scn = innobase_load_scn;
 }

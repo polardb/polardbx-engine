@@ -35,7 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 */
 void register_xa_attributes(THD *thd, handlerton *ht_arg) {
   if (thd->get_transaction()->xid_state()->check_in_xa(false) &&
-      ht_arg->register_xa_attributes != nullptr) {
-    ht_arg->register_xa_attributes(thd);
+      ht_arg->ext.register_xa_attributes != nullptr) {
+    ht_arg->ext.register_xa_attributes(thd);
   }
 }

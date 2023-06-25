@@ -2591,8 +2591,6 @@ struct Page_track_t {
   page_track_get_status_t get_status;
 };
 
-typedef void (*register_xa_attributes_t)(THD *thd);
-
 /**
   handlerton is a singleton structure - one instance per storage engine -
   to provide access to storage engine functionality that works on the
@@ -2605,6 +2603,8 @@ typedef void (*register_xa_attributes_t)(THD *thd);
   savepoint_*, prepare, recover, and *_by_xid pointers can be 0.
 */
 struct handlerton {
+  /** Extension interface */
+  handlerton_ext ext;
   /**
     Historical marker for if the engine is available or not.
   */
@@ -2825,8 +2825,6 @@ struct handlerton {
 
   /** Page tracking interface */
   Page_track_t page_track;
-
-  register_xa_attributes_t register_xa_attributes;
 };
 
 /* Possible flags of a handlerton (there can be 32 of them) */

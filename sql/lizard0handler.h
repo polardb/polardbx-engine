@@ -38,6 +38,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/xa.h"
 
 #include "sql/xa_specification.h"
+#include "lizard_iface.h"
+
+class THD;
 
 class XA_spec_list {
  public:
@@ -91,5 +94,22 @@ class XA_spec_list {
 
   Mem_root_allocator<State_pair> m_state_alloc;
   State_map m_state_map;
+};
+
+/**------------------------------------------------------------*/
+/** Extension interface of handler singleton. */
+/**------------------------------------------------------------*/
+
+typedef void (*register_xa_attributes_t)(THD *thd);
+
+typedef my_gcn_t (*load_gcn_t)();
+
+typedef my_scn_t (*load_scn_t)();
+
+/** Extension structure of handlerton */
+struct handlerton_ext {
+  register_xa_attributes_t register_xa_attributes;
+  load_gcn_t load_gcn;
+  load_scn_t load_scn;
 };
 #endif

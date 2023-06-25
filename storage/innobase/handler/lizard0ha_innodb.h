@@ -28,3 +28,9 @@ struct trx_t;
 extern bool xa_compare_xid_between_thd_and_trx(const THD *thd,
                                                const trx_t *trx);
 
+/**
+  Initialize innobase extension.
+
+  param[in]  innobase_hton  handlerton of innobase.
+*/
+void innobase_init_ext(handlerton *innobase_hton);
