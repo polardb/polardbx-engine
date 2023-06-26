@@ -258,7 +258,7 @@ SET(INNOBASE_SOURCES
   fil/fil0purge.cc
   handler/i_s_ext.cc
   trx/lizard0scn.cc
-  trx/lizard0sys.cc
+  trx/lizard0gcs.cc
   dict/lizard0dict.cc
   fil/lizard0fil.cc
   fsp/lizard0fsp.cc

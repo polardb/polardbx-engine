@@ -28,7 +28,7 @@
 
 #include "ha_innodb.h"
 #include "lizard0ha_innodb.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0undo.h"
 #include "lizard0xa.h"
 
@@ -85,9 +85,9 @@ static void innobase_register_xa_attributes(THD *thd) {
   }
 }
 
-my_gcn_t innobase_load_gcn() { return lizard::lizard_sys_get_gcn(); }
+uint64 innobase_load_gcn() { return lizard::gcs_acquire_gcn(); }
 
-my_scn_t innobase_load_scn() { return lizard::lizard_sys_get_scn(); }
+uint64 innobase_load_scn() { return lizard::gcs_load_scn(); }
 
 /**
   Initialize innobase extension.

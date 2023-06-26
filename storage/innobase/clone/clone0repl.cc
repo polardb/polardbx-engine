@@ -31,7 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0repl.h"
 #include "clone0api.h"
 #include "clone0clone.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "sql/field.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_gtid_persist.h"
@@ -509,7 +509,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
   /* Get oldest scn that is yet to be committed. Any transaction
   with lower transaction number is committed and is added to GTID list. */
 
-  scn_t oldest_trx_scn = lizard::lizard_sys_get_min_safe_scn();
+  scn_t oldest_trx_scn = lizard::gcs_load_min_safe_scn();
 
   bool compress_recovery = false;
   /* Check and write if any GTID is accumulated. */

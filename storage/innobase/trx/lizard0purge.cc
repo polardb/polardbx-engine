@@ -32,7 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0purge.h"
 #include "lizard0scn.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0dbg.h"
 
 #include "mtr0log.h"
@@ -155,16 +155,16 @@ template <typename XCN, unsigned long long POS>
 XCN Purged_cnum<XCN, POS>::read() {
   XCN num;
   ut_ad(sizeof(XCN) == 8);
-  lizard_sysf_t *lzd_hdr;
+  gcs_sysf_t *hdr;
   mtr_t mtr;
 
   mtr_start(&mtr);
-  lzd_hdr = lizard_sysf_get(&mtr);
+  hdr = gcs_sysf_get(&mtr);
 
-  num = mach_read_from_8(lzd_hdr + POS);
+  num = mach_read_from_8(hdr + POS);
 
   /** If lizard version is low, purge_gcn has not been saved. */
-  if (num == 0 && POS == LIZARD_SYS_PURGE_GCN) {
+  if (num == 0 && POS == GCS_DATA_PURGE_GCN) {
     num = GCN_INITIAL;
   } else {
     ut_a(num >= GCN_INITIAL);
@@ -178,12 +178,12 @@ XCN Purged_cnum<XCN, POS>::read() {
 template <typename XCN, unsigned long long POS>
 void Purged_cnum<XCN, POS>::write(XCN num) {
   ut_ad(m_inited == true);
-  lizard_sysf_t *lzd_hdr;
+  gcs_sysf_t *hdr;
   mtr_t mtr;
 
   mtr_start(&mtr);
-  lzd_hdr = lizard_sysf_get(&mtr);
-  mlog_write_ull(lzd_hdr + POS, num, &mtr);
+  hdr = gcs_sysf_get(&mtr);
+  mlog_write_ull(hdr + POS, num, &mtr);
   mtr_commit(&mtr);
 }
 
@@ -213,11 +213,11 @@ void Purged_cnum<XCN, POS>::flush(XCN num) {
     write(m_purged_xcn);
   }
 }
-template void Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::init();
-template void Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::flush(gcn_t num);
-template gcn_t Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::read();
-template gcn_t Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::get();
-template void Purged_cnum<gcn_t, LIZARD_SYS_PURGE_GCN>::write(gcn_t num);
+template void Purged_cnum<gcn_t, GCS_DATA_PURGE_GCN>::init();
+template void Purged_cnum<gcn_t, GCS_DATA_PURGE_GCN>::flush(gcn_t num);
+template gcn_t Purged_cnum<gcn_t, GCS_DATA_PURGE_GCN>::read();
+template gcn_t Purged_cnum<gcn_t, GCS_DATA_PURGE_GCN>::get();
+template void Purged_cnum<gcn_t, GCS_DATA_PURGE_GCN>::write(gcn_t num);
 
 /**
   Initialize / reload purged_scn from purge_sys->purge_heap
@@ -236,10 +236,10 @@ scn_t trx_purge_reload_purged_scn() {
   ut_ad(purge_sys);
 
   if (purge_sys->purge_heap->empty()) {
-    min_history_scn = lizard_sys_get_scn();
+    min_history_scn = gcs_load_scn();
   } else {
     min_history_scn = purge_sys->purge_heap->top().get_scn();
-    ut_ad(min_history_scn < lizard_sys_get_scn());
+    ut_ad(min_history_scn < gcs_load_scn());
   }
 
   return min_history_scn;
@@ -300,7 +300,7 @@ bool purged_scn_validation() {
     top_scn = purge_sys->purge_heap->top().get_scn();
     ret = (purge_sys->purged_scn <= top_scn);
   } else {
-    ret = (purge_sys->purged_scn.load() <= lizard_sys_get_min_safe_scn());
+    ret = (purge_sys->purged_scn.load() <= gcs_load_min_safe_scn());
   }
   ut_ad(ret);
 

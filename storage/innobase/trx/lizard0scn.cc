@@ -36,7 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0ut.h"
 #include "lizard0scn.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 
 #ifdef UNIV_PFS_MUTEX
 /* Lizard scn mutex PFS key */
@@ -62,20 +62,20 @@ void SCN::init() {
   ut_ad(!m_inited);
   ut_ad(m_scn == SCN_NULL);
 
-  lizard_sysf_t *lzd_hdr;
+  gcs_sysf_t *hdr;
   mtr_t mtr;
   mtr.start();
 
-  lzd_hdr = lizard_sysf_get(&mtr);
+  hdr = gcs_sysf_get(&mtr);
 
   m_scn = 2 * LIZARD_SCN_NUMBER_MAGIN +
-          ut_uint64_align_up(mach_read_from_8(lzd_hdr + LIZARD_SYS_SCN),
+          ut_uint64_align_up(mach_read_from_8(hdr + GCS_DATA_SCN),
                              LIZARD_SCN_NUMBER_MAGIN);
 
-  m_gcn = mach_read_from_8(lzd_hdr + LIZARD_SYS_GCN);
+  m_gcn = mach_read_from_8(hdr + GCS_DATA_GCN);
   m_snapshot_gcn = m_gcn.load();
 
-  lizard_sys->min_safe_scn = m_scn.load();
+  gcs->min_safe_scn = m_scn.load();
 
   ut_a(m_scn > 0 && m_scn < SCN_NULL);
   mtr.commit();
@@ -86,7 +86,7 @@ void SCN::init() {
 
 /** Flush the scn number to tablepace every ZEUS_SCN_NUMBER_MAGIN */
 void SCN::flush_scn() {
-  lizard_sysf_t *lzd_hdr;
+  gcs_sysf_t *hdr;
   mtr_t mtr;
 
   ut_ad(m_mutex.is_owned());
@@ -94,14 +94,14 @@ void SCN::flush_scn() {
   ut_ad(m_scn != SCN_NULL);
 
   mtr_start(&mtr);
-  lzd_hdr = lizard_sysf_get(&mtr);
-  mlog_write_ull(lzd_hdr + LIZARD_SYS_SCN, m_scn, &mtr);
+  hdr = gcs_sysf_get(&mtr);
+  mlog_write_ull(hdr + GCS_DATA_SCN, m_scn, &mtr);
   mtr_commit(&mtr);
 }
 
 /** Flush the global commit number to system tablepace */
 void SCN::flush_gcn() {
-  lizard_sysf_t *lzd_hdr;
+  gcs_sysf_t *hdr;
   mtr_t mtr;
 
   ut_ad(m_mutex.is_owned());
@@ -109,8 +109,8 @@ void SCN::flush_gcn() {
   ut_ad(m_gcn != SCN_NULL);
 
   mtr_start(&mtr);
-  lzd_hdr = lizard_sysf_get(&mtr);
-  mlog_write_ull(lzd_hdr + LIZARD_SYS_GCN, m_gcn, &mtr);
+  hdr = gcs_sysf_get(&mtr);
+  mlog_write_ull(hdr + GCS_DATA_GCN, m_gcn, &mtr);
   mtr_commit(&mtr);
 }
 
@@ -154,36 +154,35 @@ std::pair<commit_scn_t, bool> SCN::new_commit_scn(gcn_t gcn) {
 /** Get current scn which is committed.
 @param[in]  true if m_mutex is hold
 @return     m_scn */
-scn_t SCN::acquire_scn(bool mutex_hold) {
-  scn_t ret;
-  if (!mutex_hold) {
+gcn_t SCN::acquire_gcn(bool mutex_held) {
+  gcn_t ret;
+  if (!mutex_held) {
     mutex_enter(&m_mutex);
   }
 
-  ret = m_scn.load();
+  ret = m_gcn > m_snapshot_gcn ? m_gcn.load() : m_snapshot_gcn.load();
 
-  if (!mutex_hold) {
+  if (!mutex_held) {
     mutex_exit(&m_mutex);
   }
   return ret;
 }
 
-scn_t SCN::get_scn() { return m_scn.load(); }
+scn_t SCN::load_scn() { return m_scn.load(); }
 
-gcn_t SCN::get_gcn() { return m_gcn.load(); }
+gcn_t SCN::load_gcn() { return m_gcn.load(); }
 
-void SCN::set_snapshot_gcn(gcn_t gcn, bool mutex_hold) {
-  if(gcn == GCN_NULL || gcn == GCN_INITIAL) 
-    return;
+void SCN::set_snapshot_gcn(gcn_t gcn, bool mutex_held) {
+  if (gcn == GCN_NULL || gcn == GCN_INITIAL) return;
 
-  if (!mutex_hold) {
+  if (!mutex_held) {
     mutex_enter(&m_mutex);
   }
 
   if( gcn > m_snapshot_gcn )
     m_snapshot_gcn = gcn;
 
-  if (!mutex_hold) {
+  if (!mutex_held) {
     mutex_exit(&m_mutex);
   }
 }

@@ -4152,6 +4152,7 @@ void TABLE::init(THD *thd, Table_ref *tl) {
   */
   sequence_scan = tl->sequence_scan;
 
+  /** Reset snapshot */
   lizard::init_table_snapshot(this, thd);
 }
 

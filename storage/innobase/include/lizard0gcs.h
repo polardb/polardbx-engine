@@ -24,13 +24,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0sys.h
- Lizard system implementation.
+/** @file include/lizard0gcs.h
+ Global Change System implementation.
 
  Created 2020-03-23 by Jianwei.zhao
  *******************************************************/
-#ifndef lizard0sys_h
-#define lizard0sys_h
+#ifndef lizard0gcs_h
+#define lizard0gcs_h
 
 #include "fsp0types.h"
 #include "lizard0scn.h"
@@ -39,30 +39,26 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 struct mtr_t;
 
-/** Lizard system file segment header */
-typedef byte lizard_sys_fseg_t;
+/** Global Change System file segment header */
+typedef byte gcs_sysf_t;
 
-/** Lizard system header:
-    it begins from LIZARD_SYS, and includes file segment header. */
-typedef byte lizard_sysf_t;
-
-/** Lizard system header */
+/** GCS system header */
 /**-----------------------------------------------------------------------*/
 
-/** The offset of lizard system header on the file segment page */
-#define LIZARD_SYS FSEG_PAGE_DATA
+/** The offset of GCS system header on the file segment page */
+#define GCS_DATA FSEG_PAGE_DATA
 
 /** The scn number which is stored here, it occupied 8 bytes */
-#define LIZARD_SYS_SCN 0
+#define GCS_DATA_SCN 0
 
 /** The global commit number which is stored here. */
-#define LIZARD_SYS_GCN (LIZARD_SYS_SCN + 8)
+#define GCS_DATA_GCN (GCS_DATA_SCN + 8)
 
 /** The purge scn number which is stored here, it occupied 8 bytes */
-#define LIZARD_SYS_PURGE_SCN (LIZARD_SYS_GCN + 8)
+#define GCS_DATA_PURGE_SCN (GCS_DATA_GCN + 8)
 
 /** The offset of file segment header */
-#define LIZARD_SYS_FSEG_HEADER (LIZARD_SYS_PURGE_SCN + 8)
+#define GCS_DATA_FSEG_HEADER (GCS_DATA_PURGE_SCN + 8)
 
 /**
    Revision history:
@@ -70,27 +66,27 @@ typedef byte lizard_sysf_t;
    1. Add purged_gcn
 */
 
-#define LIZARD_SYS_PURGE_GCN (LIZARD_SYS_FSEG_HEADER + FSEG_HEADER_SIZE)
+#define GCS_DATA_PURGE_GCN (GCS_DATA_FSEG_HEADER + FSEG_HEADER_SIZE)
 
 /** The start of not used */
-#define LIZARD_SYS_NOT_USED (LIZARD_SYS_PURGE_GCN + 8)
+#define GCS_DATA_NOT_USED (GCS_DATA_PURGE_GCN + 8)
 /**-----------------------------------------------------------------------*/
 
-/** The page number of lizard system header in lizard tablespace */
-#define LIZARD_SYS_PAGE_NO 3
+/** The page number of GCS system header in lizard tablespace */
+#define GCS_DATA_PAGE_NO 3
 
 /** Initial value of min_active_trx_id */
-#define LIZARD_SYS_MTX_ID_NULL 0
+#define GCS_DATA_MTX_ID_NULL 0
+
 
 #ifdef UNIV_PFS_MUTEX
-/* min active trx_id mutex PFS key */
-extern mysql_pfs_key_t lizard_sys_mtx_id_mutex_key;
+
 #endif
 
 namespace lizard {
 
-/** The memory structure of lizard system */
-struct lizard_sys_t {
+/** The memory structure of GCS system */
+struct gcs_t {
   /** The global scn number which is total order. */
   SCN scn;
 
@@ -114,41 +110,44 @@ struct lizard_sys_t {
   UT_LIST_BASE_NODE_T(trx_t, scn_list) serialisation_list_scn;
 };
 
-/** Create lizard system structure. */
-void lizard_sys_create();
+/** Create GCS system structure. */
+void gcs_create();
 
-/** Close lizard system structure. */
-void lizard_sys_close();
+/** Close GCS system structure. */
+void gcs_close();
 
-/** Init the elements of lizard system */
-void lizard_sys_init();
+/** Init the elements of GCS system */
+void gcs_init();
 
-/** Get the address of lizard system header */
-extern lizard_sysf_t *lizard_sysf_get(mtr_t *mtr);
+/** Get the address of GCS system header */
+extern gcs_sysf_t *gcs_sysf_get(mtr_t *mtr);
 
-/** Create lizard system pages within lizard tablespace */
-extern void lizard_create_sys_pages();
+/** Create GCS system pages within lizard tablespace */
+extern void gcs_create_sys_pages();
 
-/** GLobal lizard system */
-extern lizard_sys_t *lizard_sys;
+/** GLobal GCS system */
+extern gcs_t *gcs;
 
 /** Get current SCN number */
-extern scn_t lizard_sys_get_scn();
+extern scn_t gcs_load_scn();
 
-/** Get current GCN number */
-extern gcn_t lizard_sys_get_gcn();
+/** Get current persisted GCN number */
+extern gcn_t gcs_load_gcn();
+
+/** Get max snapshot GCN number */
+extern gcn_t gcs_get_snapshot_gcn();
 
 /**
   Modify the min active trx id
 
   @param[in]      the add/removed trx */
-void lizard_sys_mod_min_active_trx_id(trx_t *trx);
+void gcs_mod_min_active_trx_id(trx_t *trx);
 
 /**
   Get the min active trx id
 
   @retval         the min active id in trx_sys. */
-trx_id_t lizard_sys_get_min_active_trx_id();
+trx_id_t gcs_load_min_active_trx_id();
 
 /**
   In MySQL 8.0:
@@ -179,16 +178,22 @@ trx_id_t lizard_sys_get_min_active_trx_id();
 
   @retval         the min safe commited scn in current lizard sys
 */
-scn_t lizard_sys_get_min_safe_scn();
+scn_t gcs_load_min_safe_scn();
 
 /** Erase trx in serialisation_list_scn, and update min_safe_scn
 @param[in]      trx      trx to be removed */
-void lizard_sys_erase_lists(trx_t *trx);
+void gcs_erase_lists(trx_t *trx);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /** Check if min_safe_scn is valid */
 void min_safe_scn_valid();
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
+
+/**
+  Get the max gcn between snapshot gcn and m_gcn
+
+  @retval         the valid gcn. */
+gcn_t gcs_acquire_gcn();
 
 }  // namespace lizard
 
@@ -204,4 +209,4 @@ void min_safe_scn_valid();
 
 #endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
-#endif  // lizard0sys_h define
+#endif  // lizard0gcs_h define

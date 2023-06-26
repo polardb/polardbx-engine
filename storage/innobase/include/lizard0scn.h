@@ -168,15 +168,13 @@ class SCN {
   @return   <SCN, UTC, GCN, Error> */
   std::pair<commit_scn_t, bool> new_commit_scn(gcn_t gcn);
 
-  /** Get m_scn
-  @return     m_scn */
-  scn_t acquire_scn(bool mutex_hold = false);
+  gcn_t acquire_gcn(bool mutex_held = false);
 
-  gcn_t get_gcn();
+  scn_t load_scn();
 
-  scn_t get_scn();
+  gcn_t load_gcn();
 
-  void set_snapshot_gcn(gcn_t gcn, bool mutex_hold = false);
+  void set_snapshot_gcn(gcn_t gcn, bool mutex_held = false);
 
   gcn_t get_snapshot_gcn();
 
@@ -254,23 +252,23 @@ inline bool commit_scn_is_uninitial(commit_scn_t &cmmt) {
   return false;
 }
 
-#define lizard_sys_scn_mutex_enter()      \
+#define gcs_scn_mutex_enter()      \
   do {                                    \
-    ut_ad(lizard::lizard_sys != nullptr); \
-    lizard::lizard_sys->scn.lock();       \
+    ut_ad(lizard::gcs != nullptr); \
+    lizard::gcs->scn.lock();       \
   } while (0)
 
-#define lizard_sys_scn_mutex_exit()       \
+#define gcs_scn_mutex_exit()       \
   do {                                    \
-    ut_ad(lizard::lizard_sys != nullptr); \
-    lizard::lizard_sys->scn.unlock();     \
+    ut_ad(lizard::gcs != nullptr); \
+    lizard::gcs->scn.unlock();     \
   } while (0)
 
 /*--------------------------------------------------------------------*/
 /* DEBUG */
 /*--------------------------------------------------------------------*/
 #ifdef UNIV_DEBUG
-#define lizard_sys_scn_mutex_own() lizard::lizard_sys->scn.own_lock()
+#define gcs_scn_mutex_own() lizard::gcs->scn.own_lock()
 #endif
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG

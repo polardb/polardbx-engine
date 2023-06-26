@@ -127,7 +127,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0cleanout.h"
 #include "lizard0fsp.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0txn.h"
 #include "lizard0undo0types.h"
 #include "lizard0scn0hist.h"
@@ -1810,7 +1810,7 @@ dberr_t srv_start(bool create_new_db) {
   trx_sys_create();
   lock_sys_create(srv_lock_table_size);
 
-  lizard::lizard_sys_create();
+  lizard::gcs_create();
   lizard::gp_sys_create();
 
   /* Create i/o-handler threads: */
@@ -1956,8 +1956,8 @@ dberr_t srv_start(bool create_new_db) {
     if (!lizard::fsp_header_init_for_lizard(sum_of_lizard_sizes))
       return (srv_init_abort(DB_ERROR));
 
-    lizard::lizard_create_sys_pages();
-    lizard::lizard_sys_init();
+    lizard::gcs_create_sys_pages();
+    lizard::gcs_init();
 
     /* To maintain backward compatibility we create only
     the first rollback segment before the double write buffer.
@@ -2371,7 +2371,7 @@ dberr_t srv_start(bool create_new_db) {
       return (srv_init_abort(err));
     }
 
-    lizard::lizard_sys_init();
+    lizard::gcs_init();
 
     trx_purge_sys_mem_create();
 
@@ -3342,7 +3342,7 @@ void srv_shutdown() {
 
   lizard::Undo_retention::destroy();
   lizard::txn_undo_hash_close();
-  lizard::lizard_sys_close();
+  lizard::gcs_close();
   lizard::gp_sys_destroy();
   dict_close();
   dict_persist_close();

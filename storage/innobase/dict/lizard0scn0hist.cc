@@ -38,7 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/types/object_table_definition.h"
 
 #include "lizard0scn.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "pars0pars.h"
 #include "que0que.h"
 #include "srv0srv.h"
@@ -214,9 +214,9 @@ static dberr_t roll_forward_scn() {
   scn_t scn;
   trx_t *trx;
 
-  lizard_sys_scn_mutex_enter();
-  scn = lizard_sys->scn.new_commit_scn(GCN_NULL).first.scn;
-  lizard_sys_scn_mutex_exit();
+  gcs_scn_mutex_enter();
+  scn = gcs->scn.new_commit_scn(GCN_NULL).first.scn;
+  gcs_scn_mutex_exit();
 
   utc = ut_time_system_us() / 1000000;
 

@@ -378,18 +378,18 @@ void txn_lookup_stat(txn_lookup_entry entry);
 
 #endif
 
-#define LIZARD_MONITOR_INC_TXN_CACHED(NUMBER)                             \
-  do {                                                                    \
-    if (lizard::lizard_sys != nullptr) {                                  \
-      lizard::lizard_sys->txn_undo_log_cached.fetch_add((NUMBER));        \
-    }                                                                     \
+#define LIZARD_MONITOR_INC_TXN_CACHED(NUMBER)             \
+  do {                                                    \
+    if (lizard::gcs != nullptr) {                         \
+      lizard::gcs->txn_undo_log_cached.fetch_add(NUMBER); \
+    }                                                     \
   } while (0)
 
-#define LIZARD_MONITOR_DEC_TXN_CACHED(NUMBER)                             \
-  do {                                                                    \
-    if (lizard::lizard_sys != nullptr) {                                  \
-      lizard::lizard_sys->txn_undo_log_cached.fetch_sub((NUMBER));        \
-    }                                                                     \
+#define LIZARD_MONITOR_DEC_TXN_CACHED(NUMBER)             \
+  do {                                                    \
+    if (lizard::gcs != nullptr) {                         \
+      lizard::gcs->txn_undo_log_cached.fetch_sub(NUMBER); \
+    }                                                     \
   } while (0)
 
 #endif  // lizard0mon_h

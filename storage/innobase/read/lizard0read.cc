@@ -38,7 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0read.h"
 #include "lizard0read0types.h"
 #include "lizard0scn.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 #include "lizard0undo.h"
 
 #ifdef UNIV_PFS_MUTEX
@@ -102,13 +102,13 @@ Vision *VisionContainer::VisionList::new_element() {
     return nullptr;
   }
 
-  vision->m_up_limit_id = lizard_sys_get_min_active_trx_id();
+  vision->m_up_limit_id = gcs_load_min_active_trx_id();
 
   ut_ad(!m_mutex.is_owned());
 
   mutex_enter(&m_mutex);
   UT_LIST_ADD_LAST(m_vision_list, vision);
-  vision->m_snapshot_scn = lizard_sys_get_scn();
+  vision->m_snapshot_scn = gcs_load_scn();
   vision->m_active = true;
   mutex_exit(&m_mutex);
 
@@ -126,7 +126,7 @@ void VisionContainer::VisionList::add_element(Vision *vision) {
 
   mutex_enter(&m_mutex);
   UT_LIST_ADD_LAST(m_vision_list, vision);
-  vision->m_snapshot_scn = lizard_sys_get_scn();
+  vision->m_snapshot_scn = gcs_load_scn();
   vision->m_active = true;
   mutex_exit(&m_mutex);
 }
@@ -182,7 +182,7 @@ void VisionContainer::vision_open(trx_t *trx) {
 
   auto vision = &trx->vision;
   vision->m_creator_trx_id = trx->id;
-  vision->m_up_limit_id = lizard_sys_get_min_active_trx_id();
+  vision->m_up_limit_id = gcs_load_min_active_trx_id();
 
   ulint idx = m_counter.fetch_add(1);
   idx %= m_n_lists;
@@ -221,7 +221,7 @@ void VisionContainer::clone_oldest_vision(Vision *vision) {
   ut_ad(vision && vision->m_list_idx == VISION_LIST_IDX_NULL);
   ut_ad(vision->m_active == false);
 
-  scn_t oldest_scn = lizard_sys_get_min_safe_scn();
+  scn_t oldest_scn = gcs_load_min_safe_scn();
 
   for (ulint i = 0; i < m_n_lists; i++) {
     scn_t first_scn = m_lists[i].first_element_scn();
@@ -236,7 +236,7 @@ void VisionContainer::clone_oldest_vision(Vision *vision) {
   oldest_scn = std::min(oldest_scn, gtid_oldest_trxscn);
 
   vision->m_snapshot_scn = oldest_scn;
-  ut_ad(vision->m_snapshot_scn <= lizard_sys_get_scn());
+  ut_ad(vision->m_snapshot_scn <= gcs_load_scn());
 
   /** This vision didn't put into list */
   vision->m_list_idx = VISION_LIST_IDX_NULL;

@@ -637,7 +637,7 @@ bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
       modification when commit, so it's later than txn undo header
       modification.
   */
-  if (lizard_sys_get_min_active_trx_id() > trx_id) {
+  if (gcs_load_min_active_trx_id() > trx_id) {
     return true;
   }
 

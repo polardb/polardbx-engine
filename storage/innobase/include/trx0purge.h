@@ -76,7 +76,7 @@ void trx_purge_sys_initialize(uint32_t n_purge_threads,
 void trx_purge_sys_close(void);
 
 /** Get current purged GCN number */
-gcn_t lizard_sys_get_purged_gcn();
+gcn_t gcs_get_purged_gcn();
 
 /************************************************************************
 Adds the update undo log as the first log in the history list. Removes the

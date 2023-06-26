@@ -114,7 +114,7 @@ bool srv_upgrade_old_undo_found = false;
 #endif /* INNODB_DD_TABLE */
 
 #include "lizard0cleanout.h"
-#include "lizard0sys.h"
+#include "lizard0gcs.h"
 
 /* Revert to old partition file name if upgrade fails. */
 bool srv_downgrade_partition_files = false;
@@ -1731,7 +1731,7 @@ void srv_export_innodb_status(void) {
   }
   undo::spaces->s_unlock();
 
-  export_vars.commit_gcn = lizard::lizard_sys_get_gcn();
+  export_vars.commit_gcn = lizard::gcs_load_gcn();
 
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
@@ -1748,7 +1748,7 @@ void srv_export_innodb_status(void) {
   rw_lock_s_unlock(&purge_sys->latch);
 
   /* Maximum transaction number added to history list for purge. */
-  scn_t max_trx_scn = lizard::lizard_sys->min_safe_scn.load();
+  scn_t max_trx_scn = lizard::gcs->min_safe_scn.load();
 
   if (done_trx_scn == 0 || max_trx_scn < done_trx_scn) {
     export_vars.innodb_purge_trx_scn_age = 0;
