@@ -876,9 +876,22 @@ class XA_specification_strategy {
   /** Fill gtid info from xa spec. */
   void get_gtid_info(Gtid_desc &gtid_desc);
 
+  /**
+   * Judge if has gcn when commit detached XA
+   *
+   * @retval  true
+   * @retval  false
+   */
+  bool has_gcn() const;
+
+  /**
+   * Overwrite commit gcn in trx when commit detached XA
+   */
+  void overwrite_gcn(trx_t *trx) const;
+
  private:
   const trx_t *m_trx;
-  binlog::Binlog_xa_specification *m_xa_spec;
+  XA_specification *m_xa_spec;
 };
 
 class Guard_xa_specification {

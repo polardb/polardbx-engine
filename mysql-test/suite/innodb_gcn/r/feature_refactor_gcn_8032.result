@@ -1,0 +1,109 @@
+###############################
+# close binlog
+###############################
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+create table tt (id int);
+###############################
+# Case 1: commit detached XA
+###############################
+set xa_detach_on_prepare = on;
+xa start '1';
+insert into tt values (1);
+xa end '1';
+xa prepare '1';
+xa commit '1';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# Case 2: rollback detached XA
+###############################
+set xa_detach_on_prepare = on;
+xa start '2';
+insert into tt values (2);
+xa end '2';
+xa prepare '2';
+xa rollback '2';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# Case 3: commit attached XA
+###############################
+set xa_detach_on_prepare = off;
+xa start '3';
+insert into tt values (3);
+xa end '3';
+xa prepare '3';
+xa commit '3';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# Case 4: rollback attached XA
+###############################
+set xa_detach_on_prepare = off;
+xa start '4';
+insert into tt values (4);
+xa end '4';
+xa prepare '4';
+xa rollback '4';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# cleanup
+###############################
+drop table tt;
+set xa_detach_on_prepare = default;
+###############################
+# open binlog
+###############################
+# restart:--log-bin=binlog
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+create table tt (id int);
+###############################
+# Case 1: commit detached XA
+###############################
+set xa_detach_on_prepare = on;
+xa start '1';
+insert into tt values (1);
+xa end '1';
+xa prepare '1';
+xa commit '1';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# Case 2: rollback detached XA
+###############################
+set xa_detach_on_prepare = on;
+xa start '2';
+insert into tt values (2);
+xa end '2';
+xa prepare '2';
+xa rollback '2';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# Case 3: commit attached XA
+###############################
+set xa_detach_on_prepare = off;
+xa start '3';
+insert into tt values (3);
+xa end '3';
+xa prepare '3';
+xa commit '3';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# Case 4: rollback attached XA
+###############################
+set xa_detach_on_prepare = off;
+xa start '4';
+insert into tt values (4);
+xa end '4';
+xa prepare '4';
+xa rollback '4';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# cleanup
+###############################
+drop table tt;
+set xa_detach_on_prepare = default;

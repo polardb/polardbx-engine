@@ -51,10 +51,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
   @internal
   The inheritance structure is as follows:
 
-Binary_log_event  
-                   \       
+Binary_log_event
+             \
          Gcn_event    Log_event
-                    \         /
+                \         /
                 Gcn_log_event
   @endinternal
 */

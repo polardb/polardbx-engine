@@ -92,10 +92,18 @@ static Sys_var_ulonglong Sys_innodb_snapshot_seq(
     HINT_UPDATEABLE SESSION_ONLY(innodb_snapshot_gcn), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
 
+static bool set_owned_commit_gcn_on_update(sys_var *, THD *thd, enum_var_type) {
+  thd->owned_commit_gcn.set(thd->variables.innodb_commit_gcn,
+                            MYSQL_CSR_ASSIGNED);
+  return false;
+}
+
 static Sys_var_ulonglong Sys_innodb_commit_seq(
     "innodb_commit_seq", "Innodb commit sequence",
     HINT_UPDATEABLE SESSION_ONLY(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1024, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL), BLOCK_SIZE(1));
+    VALID_RANGE(MYSQL_GCN_MIN, MYSQL_GCN_NULL), DEFAULT(MYSQL_GCN_NULL),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(set_owned_commit_gcn_on_update));
 
 static Sys_var_bool Sys_only_report_warning_when_skip(
     "only_report_warning_when_skip_sequence",
@@ -106,7 +114,7 @@ static Sys_var_bool Sys_only_report_warning_when_skip(
 
 static Sys_var_bool Sys_innodb_current_snapshot_gcn(
     "innodb_current_snapshot_seq",
-    "Get snapshot_seq from innodb," 
+    "Get snapshot_seq from innodb,"
     "the value is current max snapshot sequence and plus one",
     HINT_UPDATEABLE SESSION_ONLY(innodb_current_snapshot_gcn), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));

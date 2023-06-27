@@ -213,16 +213,20 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
   DBUG_TRACE;
   uchar *ptr_buffer = buffer;
 
-  if (thd && thd->get_commit_gcn() != MYSQL_GCN_NULL) {
+  if (!thd->owned_commit_gcn.is_empty()) {
     flags |= FLAG_HAVE_COMMITTED_GCN;
-    commit_gcn = thd->get_commit_gcn();
+    commit_gcn = thd->owned_commit_gcn.get_gcn();
+
+    if (thd->owned_commit_gcn.is_assigned()) {
+      flags |= FLAG_GCN_ASSIGNED;
+    }
   }
 
-  if (thd != nullptr && thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
+  if (thd->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
     flags |= FLAG_HAVE_COMMITTED_SEQ;
   }
 
-  if (thd != nullptr && thd->variables.innodb_snapshot_gcn != MYSQL_GCN_NULL) {
+  if (thd->variables.innodb_snapshot_gcn != MYSQL_GCN_NULL) {
     flags |= FLAG_HAVE_SNAPSHOT_SEQ;
   }
 

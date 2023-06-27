@@ -73,6 +73,10 @@ class Gcn_event : public Binary_log_event {
   static const unsigned char FLAG_HAVE_SNAPSHOT_SEQ = 0x02;
   /** Whether there is committed seq passed external */
   static const unsigned char FLAG_HAVE_COMMITTED_SEQ = 0x04;
+  /** If the source of the commit_gcn is assigned, the flag will be set.
+  If the source of the commit_gcn is automatic, the flag will not be set.
+  This flag is only meaningful when FLAG_HAVE_COMMITTED_GCN was set. */
+  static const unsigned char FLAG_GCN_ASSIGNED = 0x08;
 
   static const int FLAGS_LENGTH = 1;
   static const int COMMITTED_GCN_LENGTH = 8;

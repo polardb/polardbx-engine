@@ -113,7 +113,7 @@
 
 #include "ppi/ppi_statement.h"
 
-#include "lizard_iface.h" // my_gcn_t, MYSQL_GCN_NULL
+#include "sql/lizard/lizard_rpl_gcn.h" // my_gcn_t, struct MyGCN...
 
 enum enum_check_fields : int;
 enum enum_tx_isolation : int;
@@ -4806,26 +4806,21 @@ class THD : public MDL_context_owner,
 #endif
 
  public:
+  MyGCN owned_commit_gcn;
 
-  void reset_gcn() {
+  void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;
     variables.innodb_commit_gcn = MYSQL_GCN_NULL;
     variables.innodb_current_snapshot_gcn = false;
+
+    owned_commit_gcn.reset();
   }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
-
-  ulonglong get_commit_gcn() { return variables.innodb_commit_gcn; }
 };
 
 inline ulonglong thd_get_snapshot_gcn(THD *thd) {
   if (thd) return thd->get_snapshot_gcn();
-
-  return MYSQL_GCN_NULL;
-}
-
-inline ulonglong thd_get_commit_gcn(THD *thd) {
-  if (thd) return thd->get_commit_gcn();
 
   return MYSQL_GCN_NULL;
 }

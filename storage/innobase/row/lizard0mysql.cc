@@ -194,33 +194,4 @@ dberr_t reset_prebuilt_flashback_query_ctx(row_prebuilt_t *prebuilt) {
   return err;
 }
 
-/**
-  Try get gcn from the variable(innodb_commit_seq). The **thd** might be:
-  * trx->mysql_thd. Usually a commit of an ordinary transaction.
-  * current_thd. Commit of external XA transactions.
-
-  TODO: This code is just a temporary solution, and will be refactored.
-
-  @params[in]    trx     the transaction
-
-  @return        gcn_t   GCN_NULL if hasn't the gcn
-*/
-gcn_t trx_mysql_has_gcn(const trx_t *trx) {
-  THD *thd = trx->mysql_thd;
-  if (trx->state.load(std::memory_order_relaxed) == TRX_STATE_PREPARED &&
-      thd == nullptr) {
-    thd = thd_get_current_thd();
-  }
-
-  if (thd == nullptr) {
-    return GCN_NULL;
-  }
-
-  if (trx->internal) {
-    return GCN_NULL;
-  }
-
-  return thd_get_commit_gcn(thd);
-}
-
 }  // namespace lizard

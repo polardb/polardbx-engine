@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define SQL_XA_SPECIFICATION_H
 
 #include "sql/xa.h"
+#include "sql/lizard/lizard_rpl_gcn.h" // MyGCN...
 
 /**
  * Transaction coordinator should write log to complete XA,
@@ -47,10 +48,20 @@ this program; if not, write to the Free Software Foundation, Inc.,
  */
 class XA_specification {
  public:
-  XA_specification() {}
+  XA_specification() : m_gcn() {}
 
   virtual ~XA_specification() {}
 
-  virtual std::string print() = 0;
+  virtual std::string print() {
+    return m_gcn.print();
+  }
+
+  void set_gcn(const MyGCN &gcn) { m_gcn = gcn; }
+  const MyGCN& gcn() const { return m_gcn; }
+
+ private:
+  /** All TC_LOGs can have GCN. */
+  MyGCN m_gcn;
 };
+
 #endif

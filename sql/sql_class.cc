@@ -730,7 +730,8 @@ THD::THD(bool enable_plugins)
       ppi_statement_stat(new PPI_stat()),
       m_inside_system_variable_global_update(false),
       bind_parameter_values(nullptr),
-      bind_parameter_values_count(0) {
+      bind_parameter_values_count(0),
+      owned_commit_gcn() {
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);

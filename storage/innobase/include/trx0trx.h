@@ -1184,7 +1184,7 @@ struct trx_t {
   XAD xad;
 
   /** XA specification interpreted from TC log when recovery. */
-  binlog::Binlog_xa_specification *xa_spec;
+  XA_specification *xa_spec;
 
   /** Commit cleanout cursors */
   lizard::Cleanout_cursors *cleanout_cursors;

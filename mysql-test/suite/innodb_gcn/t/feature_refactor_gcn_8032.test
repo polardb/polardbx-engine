@@ -1,0 +1,11 @@
+--echo ###############################
+--echo # close binlog
+--echo ###############################
+--source suite/innodb_gcn/t/feature_refactor_gcn_8032.inc
+
+--echo ###############################
+--echo # open binlog
+--echo ###############################
+--let $restart_parameters = restart:--log-bin=binlog
+--source include/restart_mysqld.inc
+--source suite/innodb_gcn/t/feature_refactor_gcn_8032.inc

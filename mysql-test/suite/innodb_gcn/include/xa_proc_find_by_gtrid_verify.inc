@@ -3,8 +3,9 @@
 
 # ==== Usage ====
 # --let $expect_gcn=10000
-# --let $expect_state=COMMIT
+# --let $expect_state= COMMIT
 # --let $gtrid='1'
+# --let $expect_csr= ASSIGNED_GCN
 # --source suite/rds/include/xa_proc_find_by_gtrid_verify.inc
 
 # Parameters
@@ -14,6 +15,8 @@
 #   If set, gcn is checked to see if it is as expected.
 # $expect_state
 #   if set, state(commit/rollback) is checked to see if it is as expected.
+# $expect_csr
+#   if set, CSR(AUTOMATIC_GCN/ASSIGNED_GCN) is checked to see if it is as expected.
 # $gtrid
 #   gtrid in XID.
 
@@ -41,11 +44,20 @@ if ($actual_gcn != 'No such row') {
     --let $assert_cond="$expect_state" = "$actual_state"
     --source include/assert.inc
   }
+
+  if ($expect_csr) {
+    --let $actual_csr = query_get_value("call dbms_xa.find_by_gtrid($gtrid)", CSR, 1)
+    --let $assert_text=expect_csr == actual_csr
+    --let $assert_cond="$expect_csr" = "$actual_csr"
+    --source include/assert.inc
+  }
 }
 
 --let $actual_gcn=
 --let $actual_state=
+--let $actual_csr=
 --let $expect_gcn=
 --let $expect_state=
+--let $expect_csr=
 --let $gtrid=
 --let $expect_none=

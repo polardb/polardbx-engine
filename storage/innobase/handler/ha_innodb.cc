@@ -6005,6 +6005,12 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
       trx_start_if_not_started(trx, true, UT_LOCATION_HERE);
     }
 
+    assert_trx_commit_mark_initial(trx);
+    if (trx_is_started(trx)) {
+      ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
+      trx->txn_desc.cmmt.copy_my_gcn(&thd->owned_commit_gcn);
+    }
+
     innobase_commit_low(trx);
 
     if (!read_only) {
@@ -6102,6 +6108,13 @@ static int innobase_rollback(handlerton *hton, /*!< in: InnoDB handlerton */
 
   if (rollback_trx ||
       !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
+
+    assert_trx_commit_mark_initial(trx);
+    if (trx_is_started(trx)) {
+      ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
+      trx->txn_desc.cmmt.copy_my_gcn(&thd->owned_commit_gcn);
+    }
+
     error = trx_rollback_for_mysql(trx);
 
     ut_ad(trx_can_be_handled_by_current_thread_or_is_hp_victim(trx));

@@ -31,30 +31,21 @@ this program; if not, write to the Free Software Foundation, Inc.,
   Created 2023-06-20 by Jianwei.zhao
  *******************************************************/
 #include "sql/binlog.h"
+#include "sql/mysqld.h" //innodb_hton
 
 #include "lizard_iface.h"
 #include "sql/gcn_log_event.h"
 #include "sql/lizard_binlog.h"
+#include "sql/lizard0handler.h" // load_gcn...
 
 bool Gcn_manager::assign_gcn_to_flush_group(THD *first_seen) {
-  // my_gcn_t gcn = MYSQL_GCN_NULL;
   bool err = false;
 
   for (THD *head = first_seen; head; head = head->next_to_commit) {
-    /*
-    if (head->variables.innodb_commit_gcn != MYSQL_GCN_NULL) {
-      gcn = head->variables.innodb_commit_gcn;
-    } else if (get_xa_opt(head) != XA_ONE_PHASE) {
-      err = ha_acquire_gcn(&gcn);
-      assert(err || gcn != MYSQL_GCN_NULL);
-    } else {
-      gcn = MYSQL_GCN_NULL;
-      assert(head->get_transaction()->m_flags.real_commit);
-      assert(!head->get_transaction()->m_flags.commit_low);
+    if (head->owned_commit_gcn.is_empty()) {
+      head->owned_commit_gcn.set(innodb_hton->ext.load_gcn(),
+                                 MYSQL_CSR_AUTOMATIC);
     }
-    head->m_extra_desc.m_commit_gcn = gcn;
-
-    */
   }
   return err;
 }

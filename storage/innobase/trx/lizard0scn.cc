@@ -38,6 +38,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn.h"
 #include "lizard0gcs.h"
 
+#include "sql/lizard/lizard_rpl_gcn.h" // MyGCN...
+
 namespace lizard {
 
 /**
@@ -353,3 +355,17 @@ enum scn_state_t commit_mark_state(const commit_mark_t &cmmt) {
 }
 
 }  // namespace lizard
+
+/*****************************************
+*              commit_scn_t             *
+*****************************************/
+void commit_mark_t::copy_my_gcn(const MyGCN *my_gcn) {
+  if (!my_gcn->is_empty()) {
+    gcn = my_gcn->get_gcn();
+    csr = my_gcn->is_assigned() ? CSR_ASSIGNED : CSR_AUTOMATIC;
+  } else {
+    /** Automatic GCN. */
+    gcn = lizard::GCN_NULL;
+    csr = CSR_AUTOMATIC;
+  }
+}

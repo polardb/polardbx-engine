@@ -2634,7 +2634,10 @@ void undo_retention_init() {
  * @retval	false
  */
 bool XA_specification_strategy::has_gtid() {
-  if (m_xa_spec && m_xa_spec->has_gtid()) {
+  auto binlog_xa_spec =
+      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+
+  if (binlog_xa_spec && binlog_xa_spec->has_gtid()) {
     return true;
   }
 
@@ -2645,10 +2648,12 @@ bool XA_specification_strategy::has_gtid() {
  */
 trx_undo_t::Gtid_storage XA_specification_strategy::decide_gtid_storage() {
   trx_undo_t::Gtid_storage storage = trx_undo_t::Gtid_storage::NONE;
+  auto binlog_xa_spec =
+      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
   ut_ad(has_gtid());
-  ut_ad(m_xa_spec->is_legal_source());
+  ut_ad(binlog_xa_spec->is_legal_source());
 
-  switch (m_xa_spec->source()) {
+  switch (binlog_xa_spec->source()) {
     case binlog::Binlog_xa_specification::Source::NONE:
       ut_a(0);
       break;
@@ -2683,12 +2688,14 @@ void XA_specification_strategy::overwrite_gtid_storage(trx_t *trx) {
 
 /** Fill gtid info from xa spec. */
 void XA_specification_strategy::get_gtid_info(Gtid_desc &gtid_desc) {
+  auto binlog_xa_spec =
+      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
   ut_ad(has_gtid());
 
   gtid_desc.m_version = GTID_VERSION;
 
-  auto &gtid = m_xa_spec->m_gtid;
-  auto &sid = m_xa_spec->m_sid;
+  auto &gtid = binlog_xa_spec->m_gtid;
+  auto &sid = binlog_xa_spec->m_sid;
 
   gtid_desc.m_info.fill(0);
   auto char_buf = reinterpret_cast<char *>(&gtid_desc.m_info[0]);
@@ -2697,16 +2704,42 @@ void XA_specification_strategy::get_gtid_info(Gtid_desc &gtid_desc) {
   gtid_desc.m_is_set = true;
 }
 
+/**
+ * Judge if has gcn when commit detached XA
+ *
+ * @retval  true
+ * @retval  false
+ */
+bool XA_specification_strategy::has_gcn() const {
+  return m_xa_spec && !m_xa_spec->gcn().is_empty();
+}
+
+/**
+ * Overwrite commit gcn in trx when commit detached XA
+ */
+void XA_specification_strategy::overwrite_gcn(trx_t *trx) const {
+  ut_ad(has_gcn());
+
+  if (trx_is_started(trx)) {
+    ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
+    trx->txn_desc.cmmt.copy_my_gcn(&(m_xa_spec->gcn()));
+  }
+}
+
 Guard_xa_specification::Guard_xa_specification(trx_t *trx,
                                                XA_specification *xa_spec)
     : m_trx(trx), m_xa_spec(xa_spec) {
   ut_ad(trx);
 
-  trx->xa_spec = dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+  trx->xa_spec = m_xa_spec;
   XA_specification_strategy xss(trx);
 
   if (xss.has_gtid()) {
     xss.overwrite_gtid_storage(trx);
+  }
+
+  if (xss.has_gcn()) {
+    xss.overwrite_gcn(trx);
   }
 }
 

@@ -41,7 +41,11 @@ typedef uint64_t my_utc_t;
 class THD;
 
 /** Commit number source type. */
-enum my_csr_t { MYSQL_CSR_NONE = -1, MYSQL_CSR_INNER = 0, MYSQL_CSR_OUTER = 1 };
+enum my_csr_t {
+  MYSQL_CSR_NONE = -1,
+  MYSQL_CSR_AUTOMATIC = 0,
+  MYSQL_CSR_ASSIGNED = 1
+};
 
 constexpr my_scn_t MYSQL_SCN_NULL = std::numeric_limits<my_scn_t>::max();
 

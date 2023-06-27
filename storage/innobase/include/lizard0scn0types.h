@@ -34,6 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "univ.i"
 
+struct MyGCN;
+
 /** Scn number type was defined unsigned long long */
 typedef uint64_t scn_t;
 
@@ -61,6 +63,8 @@ struct commit_mark_t {
   /** Current only represent gcn source. since utc and scn only be allowed to
    * generate automatically */
   csr_t csr;
+  /** Copy gcn state from owned_commit_gcn. */
+  void copy_my_gcn(const MyGCN *);
 };
 
 /** Compare function */
