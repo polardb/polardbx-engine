@@ -1681,6 +1681,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
   trx->rsegs.m_txn.xid_for_hash.null();
 
   undo_addr.state = false;
+  undo_addr.csr = CSR_AUTOMATIC;
   undo_addr.space_id = undo->space;
   undo_addr.page_no = undo->hdr_page_no;
   undo_addr.offset = undo->hdr_offset;

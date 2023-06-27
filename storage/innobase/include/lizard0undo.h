@@ -189,43 +189,43 @@ constexpr undo_ptr_t UNDO_PTR_TEMP_TAB_REC =
     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_TEMP_TAB_REC;
 
 /** Temporary table txn description */
-constexpr txn_desc_t TXN_DESC_TEMP = {
-    UNDO_PTR_TEMP_TAB_REC,
-    {SCN_TEMP_TAB_REC, UTC_TEMP_TAB_REC, GCN_TEMP_TAB_REC, CSR_AUTOMATIC}};
+ constexpr txn_desc_t TXN_DESC_TEMP = {
+     UNDO_PTR_TEMP_TAB_REC,
+     {SCN_TEMP_TAB_REC, UTC_TEMP_TAB_REC, GCN_TEMP_TAB_REC, CSR_AUTOMATIC}};
 
-/** Temporary table record UBA */
-constexpr undo_ptr_t UNDO_PTR_DYNAMIC_METADATA =
-    (undo_ptr_t)1 << UBA_POS_STATE |
-    (undo_ptr_t)UNDO_PTR_OFFSET_DYNAMIC_METADATA;
+ /** Temporary table record UBA */
+ constexpr undo_ptr_t UNDO_PTR_DYNAMIC_METADATA =
+     (undo_ptr_t)1 << UBA_POS_STATE |
+     (undo_ptr_t)UNDO_PTR_OFFSET_DYNAMIC_METADATA;
 
-/** Dynamic metadata table txn description */
-constexpr txn_desc_t TXN_DESC_DM = {UNDO_PTR_DYNAMIC_METADATA,
-                                    {SCN_DYNAMIC_METADATA, UTC_DYNAMIC_METADATA,
-                                     GCN_DYNAMIC_METADATA, CSR_AUTOMATIC}};
+ /** Dynamic metadata table txn description */
+ constexpr txn_desc_t TXN_DESC_DM = {
+     UNDO_PTR_DYNAMIC_METADATA,
+     {SCN_DYNAMIC_METADATA, UTC_DYNAMIC_METADATA, GCN_DYNAMIC_METADATA,
+      CSR_AUTOMATIC}};
 
-/** Log_ddl record UBA */
-constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
-    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_LOG_DDL;
+ /** Log_ddl record UBA */
+ constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
+     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_LOG_DDL;
 
-/** Log ddl table txn description */
-constexpr txn_desc_t TXN_DESC_LD = {
-    UNDO_PTR_LOG_DDL, {SCN_LOG_DDL, UTC_LOG_DDL, GCN_LOG_DDL, CSR_AUTOMATIC}};
+ /** Log ddl table txn description */
+ constexpr txn_desc_t TXN_DESC_LD = {
+     UNDO_PTR_LOG_DDL, {SCN_LOG_DDL, UTC_LOG_DDL, GCN_LOG_DDL, CSR_AUTOMATIC}};
 
-/** Index UBA */
-constexpr undo_ptr_t UNDO_PTR_DICT_REC =
-    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
+ /** Index UBA */
+ constexpr undo_ptr_t UNDO_PTR_DICT_REC =
+     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
 
-/** UBA in undo log hdr */
-constexpr undo_ptr_t UNDO_PTR_UNDO_HDR =
-    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_UNDO_HDR;
+ /** UBA in undo log hdr */
+ constexpr undo_ptr_t UNDO_PTR_UNDO_HDR =
+     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_UNDO_HDR;
 
-/** Index UBA that upgraded from old version. */
-constexpr undo_ptr_t UNDO_PTR_INDEX_UPGRADE =
-    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_INDEX_UPGRADE;
+ /** Index UBA that upgraded from old version. */
+ constexpr undo_ptr_t UNDO_PTR_INDEX_UPGRADE =
+     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_INDEX_UPGRADE;
 
-
-/* Lizard transaction undo header operation */
-/*-----------------------------------------------------------------------------*/
+ /* Lizard transaction undo header operation */
+ /*-----------------------------------------------------------------------------*/
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /** Check the UBA validation */
 bool undo_addr_validate(const undo_addr_t *undo_addr,
