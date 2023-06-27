@@ -160,76 +160,179 @@ extern ulint srv_txn_cached_list_keep_size;
   ((TXN_UNDO_PAGE_REUSE_LIMIT * 100) / UNIV_PAGE_SIZE)
 
 /**------------------------------------------------------------------------*/
-/** Initial value of undo ptr  */
+/** NULL value of slot ptr  */
 constexpr undo_ptr_t UNDO_PTR_NULL = std::numeric_limits<undo_ptr_t>::min();
 
-/** UBA OFFSET:: Temporary table record */
-constexpr ulint UNDO_PTR_OFFSET_TEMP_TAB_REC = (ulint)0xFFFF;
+/** SLOT OFFSET:: Temporary table record */
+constexpr ulint SLOT_OFFSET_TEMP_TAB_REC = (ulint)0xFFFF;
 
-/** UBA OFFSET:: Dynamic metadata table record */
-constexpr ulint UNDO_PTR_OFFSET_DYNAMIC_METADATA = (ulint)0xFFFF - 1;
+/** SLOT OFFSET:: Dynamic metadata table record */
+constexpr ulint SLOT_OFFSET_DYNAMIC_METADATA = (ulint)0xFFFF - 1;
 
-/** UBA OFFSET:: Log_ddl table record */
-constexpr ulint UNDO_PTR_OFFSET_LOG_DDL = (ulint)0xFFFF - 2;
+/** SLOT OFFSET:: Log_ddl table record */
+constexpr ulint SLOT_OFFSET_LOG_DDL = (ulint)0xFFFF - 2;
 
-/** UBA OFFSET:: Index record */
-constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
+/** SLOT OFFSET:: Index record */
+constexpr ulint SLOT_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
 
-/** UBA OFFSET:: UBA offset for no_redo insert/update undo. */
-constexpr ulint UNDO_PTR_OFFSET_UNDO_HDR = (ulint)0xFFFF - 4;
+/** SLOT OFFSET:: UBA offset for no_redo insert/update undo. */
+constexpr ulint SLOT_OFFSET_NO_REDO = (ulint)0xFFFF - 4;
 
-/** UBA OFFSET:: Index UBA that upgraded from old version. */
-constexpr ulint UNDO_PTR_OFFSET_INDEX_UPGRADE = (ulint)0xFFFF - 5;
+/** SLOT OFFSET:: Index UBA that upgraded from old version. */
+constexpr ulint SLOT_OFFSET_INDEX_UPGRADE = (ulint)0xFFFF - 5;
 
 /** Lowest offset for all special cases. */
-constexpr ulint UNDO_PTR_OFFSET_LIMIT = UNDO_PTR_OFFSET_INDEX_UPGRADE;
+constexpr ulint SLOT_OFFSET_LIMIT = SLOT_OFFSET_INDEX_UPGRADE;
 
-/** Temporary table record UBA */
-constexpr undo_ptr_t UNDO_PTR_TEMP_TAB_REC =
-    (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_TEMP_TAB_REC;
+/** Please update limit value to minval from 0xFFFF. */
+static_assert(SLOT_OFFSET_LIMIT + 5 == SLOT_OFFSET_TEMP_TAB_REC,
+              "Please update limit.");
 
-/** Temporary table txn description */
- constexpr txn_desc_t TXN_DESC_TEMP = {
-     UNDO_PTR_TEMP_TAB_REC,
-     {SCN_TEMP_TAB_REC, UTC_TEMP_TAB_REC, GCN_TEMP_TAB_REC, CSR_AUTOMATIC}};
+/** Special simulate page no for slot address. */
+constexpr ulint SLOT_PAGE_NO_FAKE = 0;
 
- /** Temporary table record UBA */
- constexpr undo_ptr_t UNDO_PTR_DYNAMIC_METADATA =
-     (undo_ptr_t)1 << UBA_POS_STATE |
-     (undo_ptr_t)UNDO_PTR_OFFSET_DYNAMIC_METADATA;
+/** Special simulate space id for slot address. */
+constexpr ulint SLOT_SPACE_ID_FAKE = 0;
 
- /** Dynamic metadata table txn description */
- constexpr txn_desc_t TXN_DESC_DM = {
-     UNDO_PTR_DYNAMIC_METADATA,
-     {SCN_DYNAMIC_METADATA, UTC_DYNAMIC_METADATA, GCN_DYNAMIC_METADATA,
-      CSR_AUTOMATIC}};
+/**
+  Encode UBA into undo_ptr that need to copy into record
+  @param[in]      undo addr
+  @param[out]     undo ptr
+*/
+extern void undo_encode_undo_addr(const undo_addr_t &undo_addr,
+                                  undo_ptr_t *undo_ptr);
 
- /** Log_ddl record UBA */
- constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
-     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_LOG_DDL;
+/** Prepare some special transaction description. */
+struct txn_sys_t {
+ public:
+  static slot_addr_t SLOT_ADDR_NO_REDO;
+  static slot_addr_t SLOT_ADDR_NULL;
 
- /** Log ddl table txn description */
- constexpr txn_desc_t TXN_DESC_LD = {
-     UNDO_PTR_LOG_DDL, {SCN_LOG_DDL, UTC_LOG_DDL, GCN_LOG_DDL, CSR_AUTOMATIC}};
+ private:
+  txn_sys_t() { assemble_txn_desc(); }
 
- /** Index UBA */
- constexpr undo_ptr_t UNDO_PTR_DICT_REC =
-     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
+  void assemble_txn_desc() {
+    /** Temporary table didn't have real UBA and scn. */
+    slot_addr_t slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
+                             SLOT_OFFSET_TEMP_TAB_REC};
 
- /** UBA in undo log hdr */
- constexpr undo_ptr_t UNDO_PTR_UNDO_HDR =
-     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_UNDO_HDR;
+    commit_mark_t cmmt = {SCN_TEMP_TAB_REC, US_TEMP_TAB_REC, GCN_TEMP_TAB_REC,
+                          CSR_AUTOMATIC};
+    txn_desc_temp.assemble(cmmt, slot_addr);
 
- /** Index UBA that upgraded from old version. */
- constexpr undo_ptr_t UNDO_PTR_INDEX_UPGRADE =
-     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_INDEX_UPGRADE;
+    /** Dynamic metadata table txn description */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
+                 SLOT_OFFSET_DYNAMIC_METADATA};
+    cmmt = {SCN_DYNAMIC_METADATA, US_DYNAMIC_METADATA, GCN_DYNAMIC_METADATA,
+            CSR_AUTOMATIC};
+    txn_desc_dm.assemble(cmmt, slot_addr);
 
- /* Lizard transaction undo header operation */
- /*-----------------------------------------------------------------------------*/
+    /** Log ddl table txn description */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE, SLOT_OFFSET_LOG_DDL};
+
+    cmmt = {SCN_LOG_DDL, US_LOG_DDL, GCN_LOG_DDL, CSR_AUTOMATIC};
+    txn_desc_ld.assemble(cmmt, slot_addr);
+
+    /** dd index txn for dd table. */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE, SLOT_OFFSET_DICT_REC};
+    cmmt = {SCN_DICT_REC, US_DICT_REC, GCN_DICT_REC, CSR_AUTOMATIC};
+    txn_desc_dd.assemble(cmmt, slot_addr);
+
+    /** dd index txn for dd table upgrade */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
+                 SLOT_OFFSET_INDEX_UPGRADE};
+    cmmt = {SCN_INDEX_UPGRADE, US_INDEX_UPGRADE, GCN_INDEX_UPGRADE,
+            CSR_AUTOMATIC};
+    txn_desc_dd_upgrade.assemble(cmmt, slot_addr);
+  }
+
+ public:
+  static struct txn_sys_t *instance() {
+    static txn_sys_t txn_sys;
+    return &txn_sys;
+  }
+
+  /** Whether scn and undo_ptr come from special temporary transaction
+   * description.*/
+  bool is_temporary(scn_t scn, undo_ptr_t undo_ptr) {
+    if (scn == txn_desc_temp.cmmt.scn && undo_ptr == txn_desc_temp.undo_ptr)
+      return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for dm */
+  bool is_dynamic_metadata(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_dm.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for temporary */
+  bool is_temporary(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_temp.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for log ddl */
+  bool is_log_ddl(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_ld.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for dd index of dd table. */
+  bool is_dd_index_of_dd(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_dd.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for dd index of dd table. */
+  bool is_dd_index_of_dd_upgrade(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_dd_upgrade.undo_ptr) return true;
+
+    return false;
+  }
+
+  bool is_special(const undo_addr_t &undo_addr) {
+    return is_temporary(undo_addr) || is_log_ddl(undo_addr) ||
+           is_dynamic_metadata(undo_addr) || is_dd_index_of_dd(undo_addr) ||
+           is_dd_index_of_dd_upgrade(undo_addr);
+  }
+
+ public:
+  /** Special for temporary table record. */
+  txn_desc_t txn_desc_temp;
+  /** Special for dynamic metadata table record. */
+  txn_desc_t txn_desc_dm;
+  /** Special for log ddl table record. */
+  txn_desc_t txn_desc_ld;
+  /** Sepcial for dd index for dd table. */
+  txn_desc_t txn_desc_dd;
+  /** Sepcial for dd index for dd table from upgrade */
+  txn_desc_t txn_desc_dd_upgrade;
+};
+
+/* Lizard transaction undo header operation */
+/*-----------------------------------------------------------------------------*/
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /** Check the UBA validation */
 bool undo_addr_validate(const undo_addr_t *undo_addr,
                         const dict_index_t *index);
+
+bool slot_addr_validate(const slot_addr_t &slot_addr);
 /**
   Validate the page is undo page
 
@@ -241,7 +344,7 @@ bool trx_undo_page_validate(const page_t *page);
 /** Confirm the consistent of scn, undo type, undo state. */
 bool undo_commit_mark_validate(const trx_undo_t *undo);
 
-bool trx_undo_hdr_uba_validate(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+bool trx_undo_hdr_slot_validate(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 
 /** Check if an update undo log has been marked as purged.
 @param[in]  rseg txn rseg
@@ -251,6 +354,8 @@ bool txn_undo_log_has_purged(const trx_rseg_t *rseg, const page_size_t &page_siz
 
 #endif  // UNIV_DEBUG || LIZARD_DEBUG
 
+bool undo_slot_addr_equal(const slot_addr_t &slot_addr,
+                          const undo_ptr_t undo_ptr);
 /**
   Get txn undo state at trx finish.
 
@@ -281,28 +386,30 @@ extern void trx_undo_hdr_init_cmmt(trx_ulogf_t *log_hdr, mtr_t *mtr);
 extern void trx_undo_hdr_write_cmmt(trx_ulogf_t *log_hdr,
                                     commit_mark_t &cmmt_scn, mtr_t *mtr);
 /**
-  Read UBA.
+  Read Slot address.
 
   @param[in]      log_hdr       undo log header
+  @param[out]     slot addr	decode from slot ptr.
   @param[in]      mtr           current mtr context
 */
-undo_ptr_t trx_undo_hdr_read_uba(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+slot_ptr_t trx_undo_hdr_read_slot(const trx_ulogf_t *log_hdr,
+                                  slot_addr_t *slot_addr, mtr_t *mtr);
 /**
-  Write the UBA address into undo log header
+  Write the slot address into undo log header
   @param[in]      undo log header
-  @param[in]      UBA
+  @param[in]      slot
   @param[in]      mtr
 */
-extern void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr,
-                                   const undo_addr_t &undo_addr, mtr_t *mtr);
+extern void trx_undo_hdr_write_slot(trx_ulogf_t *log_hdr,
+                                    const slot_addr_t &slot_addr, mtr_t *mtr);
 /**
-  Write the UBA address into undo log header
+  Write the slot address into undo log header
   @param[in]      undo log header
   @param[in]      trx
   @param[in]      mtr
 */
-extern void trx_undo_hdr_write_uba(trx_ulogf_t *log_hdr, const trx_t *trx,
-                                   mtr_t *mtr);
+extern slot_addr_t trx_undo_hdr_write_slot(trx_ulogf_t *log_hdr,
+                                           const trx_t *trx, mtr_t *mtr);
 /**
   Read the scn and utc.
 
@@ -445,6 +552,20 @@ void undo_decode_undo_ptr(undo_ptr_t undo_ptr, undo_addr_t *undo_addr);
 */
 void undo_encode_undo_addr(const undo_addr_t &undo_addr,
                            undo_ptr_t *undo_ptr);
+
+/**
+  Decode the slot_ptr into addr
+  @param[in]      slot ptr
+  @param[out]     slot addr
+ */
+void undo_decode_slot_ptr(slot_ptr_t slot_ptr, slot_addr_t *slot_addr);
+
+/**
+  Encode addr into slot_ptr that need to write undo header.
+  @param[in]      slot addr
+  @param[out]     slot ptr
+*/
+void undo_encode_slot_addr(const slot_addr_t &slot_addr, slot_ptr_t *slot_ptr);
 
 /*-----------------------------------------------------------------------------*/
 
@@ -642,9 +763,9 @@ inline bool txn_rec_real_state_by_misc(txn_rec_t *txn_rec,
   bool cache_hit = false;
   /** If record is not active, the trx must be committed. */
   if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
-    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
-      /** The record has been cleaned out already. */
+    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
+    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
+    /** The record has been cleaned out already. */
     if (cleanout) *cleanout = false;
 
     return false;
@@ -654,8 +775,8 @@ inline bool txn_rec_real_state_by_misc(txn_rec_t *txn_rec,
   cache_hit = trx_search_tcn(txn_rec, nullptr, nullptr);
   if (cache_hit) {
     ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
-    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn < GCN_MAX);
+    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
+    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
     if (cleanout) *cleanout = true;
     return false;
   }
@@ -948,9 +1069,9 @@ void txn_undo_write_xid(const XID *xid, trx_undo_t *undo);
   @params[in] mtr         mini transaction for write
 */
 void trx_undo_mem_init_for_txn(trx_rseg_t *rseg, trx_undo_t *undo,
-                               page_t *undo_page, trx_ulogf_t *undo_header,
-                               ulint type, uint32_t flag, ulint state,
-                               mtr_t *mtr);
+                               page_t *undo_page,
+                               const trx_ulogf_t *undo_header, ulint type,
+                               uint32_t flag, ulint state, mtr_t *mtr);
 
 }  // namespace lizard
 
@@ -970,7 +1091,8 @@ void trx_resurrect_update_in_prepared_state(trx_t *trx, const trx_undo_t *undo);
 
 trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
                                 trx_id_t trx_id, const XID *xid,
-                                page_no_t page_no, ulint offset);
+                                page_no_t page_no, ulint offset,
+                                const slot_addr_t &slot_addr);
 
 void trx_undo_page_init(page_t *undo_page, /*!< in: undo log segment page */
                         ulint type,        /*!< in: undo log segment type */
@@ -1005,9 +1127,6 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
                                        trx_undo_t::Gtid_storage gtid_storage);
 
 /*=============================================================================*/
-
-#define TXN_DESC_NULL \
-  { lizard::UNDO_PTR_NULL, COMMIT_MARK_NULL }
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
@@ -1048,9 +1167,9 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
     ut_a(lizard::trx_undo_page_validate(page)); \
   } while (0)
 
-#define trx_undo_hdr_uba_validation(undo_hdr, mtr)          \
+#define trx_undo_hdr_slot_validation(undo_hdr, mtr)          \
   do {                                                      \
-    ut_a(lizard::trx_undo_hdr_uba_validate(undo_hdr, mtr)); \
+    ut_a(lizard::trx_undo_hdr_slot_validate(undo_hdr, mtr)); \
   } while (0)
 
 #define trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)                \
@@ -1096,7 +1215,7 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
 #define undo_commit_mark_validation(undo)
 #define assert_trx_in_recovery(trx)
 #define txn_undo_free_list_validation(rseg_hdr, undo_page, mtr)
-#define trx_undo_hdr_uba_validation(undo_hdr, mtr)
+#define trx_undo_hdr_slot_validation(undo_hdr, mtr)
 
 #endif
 

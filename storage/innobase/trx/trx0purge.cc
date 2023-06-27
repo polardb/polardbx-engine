@@ -265,7 +265,7 @@ void trx_purge_add_update_undo_to_history(
 
   undo_header = undo_page + undo->hdr_offset;
 
-  trx_undo_hdr_uba_validation(undo_header, mtr);
+  trx_undo_hdr_slot_validation(undo_header, mtr);
 
   if (undo->state != TRX_UNDO_CACHED) {
     ulint hist_size;

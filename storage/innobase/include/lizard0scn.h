@@ -165,25 +165,34 @@ constexpr scn_t SCN_LOG_DDL = SCN_MAX;
 /**------------------------------------------------------------------------*/
 
 /** Invalid time 1970-01-01 00:00:00 +0000 (UTC) */
-constexpr utc_t UTC_NULL = std::numeric_limits<utc_t>::min();
+constexpr utc_t US_NULL = std::numeric_limits<utc_t>::min();
 
 /** utc for undo corrupted:  {2020/1/1 00:00:01} */
-constexpr utc_t UTC_UNDO_CORRUPTED = 1577808000 * 1000000ULL + 1;
+constexpr utc_t US_UNDO_CORRUPTED = 1577808000 * 1000000ULL + 1;
 
 /** Initialized utc in txn header */
-constexpr utc_t UTC_UNDO_LOST = 1577808000 * 1000000ULL + 2;
+constexpr utc_t US_UNDO_LOST = 1577808000 * 1000000ULL + 2;
 
 /** Temporary table utc {2020/1/1 00:00:00} */
-constexpr utc_t UTC_TEMP_TAB_REC = 1577808000 * 1000000ULL + 3;
+constexpr utc_t US_TEMP_TAB_REC = 1577808000 * 1000000ULL + 3;
 
 /** The max local time is less than 2038 year */
-constexpr utc_t UTC_MAX = std::numeric_limits<std::int32_t>::max() * 1000000ULL;
+constexpr utc_t US_MAX = std::numeric_limits<std::int32_t>::max() * 1000000ULL;
 
 /** The utc for innodb dynamic metadata */
-constexpr utc_t UTC_DYNAMIC_METADATA = UTC_MAX;
+constexpr utc_t US_DYNAMIC_METADATA = US_MAX;
 
 /** The utc for innodb log ddl */
-constexpr utc_t UTC_LOG_DDL = UTC_MAX;
+constexpr utc_t US_LOG_DDL = US_MAX;
+
+/** The utc for dd index for dd table. */
+constexpr utc_t US_DICT_REC = US_MAX;
+
+/** The utc for dd index for dd table upgrade. */
+constexpr utc_t US_INDEX_UPGRADE = US_MAX;
+
+/** UTC null value include <US, CSR>*/
+#define UTC_NULL encode_utc(US_NULL, CSR_AUTOMATIC)
 
 /**------------------------------------------------------------------------*/
 /** Predefined GCN */
@@ -408,16 +417,16 @@ enum scn_state_t commit_mark_state(const commit_mark_t &cmmt);
 
 /** Commit scn initial value */
 #define COMMIT_MARK_NULL \
-  { lizard::SCN_NULL, lizard::UTC_NULL, lizard::GCN_NULL, CSR_AUTOMATIC }
+  { lizard::SCN_NULL, lizard::US_NULL, lizard::GCN_NULL, CSR_AUTOMATIC }
 
 #define COMMIT_MARK_LOST                                                  \
   {                                                                      \
-    lizard::SCN_UNDO_LOST, lizard::UTC_UNDO_LOST, lizard::GCN_UNDO_LOST, \
+    lizard::SCN_UNDO_LOST, lizard::US_UNDO_LOST, lizard::GCN_UNDO_LOST, \
         CSR_AUTOMATIC                                                    \
   }
 
 inline bool commit_mark_is_lost(commit_mark_t &cmmt) {
-  if (cmmt.scn == lizard::SCN_UNDO_LOST && cmmt.us == lizard::UTC_UNDO_LOST &&
+  if (cmmt.scn == lizard::SCN_UNDO_LOST && cmmt.us == lizard::US_UNDO_LOST &&
       cmmt.gcn == lizard::GCN_UNDO_LOST) {
     return true;
   }

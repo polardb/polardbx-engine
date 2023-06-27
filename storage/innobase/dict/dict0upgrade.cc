@@ -661,15 +661,16 @@ static void dd_upgrade_process_index(Index dd_index, dict_index_t *index,
                                      uint64_t *read_auto_inc) {
   dd_index->set_tablespace_id(dd_space_id);
   dd::Properties &p = dd_index->se_private_data();
+  txn_desc_t *txn_desc = &lizard::txn_sys_t::instance()->txn_desc_dd_upgrade;
 
   p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page);
   p.set(dd_index_key_strings[DD_INDEX_SPACE_ID], index->space);
   p.set(dd_index_key_strings[DD_INDEX_ID], index->id);
   p.set(dd_index_key_strings[DD_TABLE_ID], index->table->id);
   p.set(dd_index_key_strings[DD_INDEX_TRX_ID], 0);
-  p.set(dd_index_key_strings[DD_INDEX_UBA], lizard::UNDO_PTR_INDEX_UPGRADE);
-  p.set(dd_index_key_strings[DD_INDEX_SCN], lizard::SCN_INDEX_UPGRADE);
-  p.set(dd_index_key_strings[DD_INDEX_GCN], lizard::GCN_INDEX_UPGRADE);
+  p.set(dd_index_key_strings[DD_INDEX_UBA], txn_desc->undo_ptr);
+  p.set(dd_index_key_strings[DD_INDEX_SCN], txn_desc->cmmt.scn);
+  p.set(dd_index_key_strings[DD_INDEX_GCN], txn_desc->cmmt.gcn);
 
   if (has_auto_inc) {
     ut_ad(auto_inc_index_name != nullptr);

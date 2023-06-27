@@ -88,6 +88,75 @@ struct trx_undo_t;
 #define UNDO_ADDR_T_COMMITED 1
 /*-------------------------------------------------------------*/
 
+/**
+ * Transaction slot address:
+ */
+struct slot_addr_t {
+  /* undo tablespace id */
+  space_id_t space_id;
+  /* undo log header page */
+  page_no_t page_no;
+  /* offset of undo log header */
+  ulint offset;
+
+ public:
+  slot_addr_t() : space_id(0), page_no(0), offset(0) {}
+
+  slot_addr_t(space_id_t space_id_arg, page_no_t page_no_arg, ulint offset_arg)
+      : space_id(space_id_arg), page_no(page_no_arg), offset(offset_arg) {}
+
+  bool is_null() const;
+  /** Normal txn undo allocated from txn undo space. */
+  bool is_redo() const;
+  /** Special fake address if didn't allocate txn undo */
+  bool is_no_redo() const;
+
+  bool is_equal(space_id_t space_id_arg, page_no_t page_no_arg,
+                ulint offset_arg) {
+    if (space_id == space_id_arg && page_no == page_no_arg &&
+        offset == offset_arg)
+      return true;
+    return false;
+  }
+};
+
+typedef struct slot_addr_t slot_addr_t;
+
+/** Slot ptr in undo header. */
+typedef ib_id_t slot_ptr_t;
+
+/** Compare function */
+inline bool operator==(const slot_addr_t &lhs, const slot_addr_t &rhs) {
+  if (lhs.offset == rhs.offset && lhs.page_no == rhs.page_no &&
+      lhs.space_id == rhs.space_id)
+    return true;
+
+  return false;
+}
+
+/**
+  Format of transaction slot address:
+
+   2  bit     has been used since of UBA.
+   7  bit     reserved unused
+   7  bit     undo space number (1-127)
+   32 bit     page no (4 bytes)
+   16 bit     Offset of undo log header (2 bytes)
+*/
+
+#define SLOT_POS_OFFSET 0
+#define SLOT_WIDTH_OFFSET 16
+
+#define SLOT_POS_PAGE_NO (SLOT_POS_OFFSET + SLOT_WIDTH_OFFSET)
+#define SLOT_WIDTH_PAGE_NO 32
+
+#define SLOT_POS_SPACE_ID (SLOT_POS_PAGE_NO + SLOT_WIDTH_PAGE_NO)
+#define SLOT_WIDTH_SPACE_ID 7
+
+#define SLOT_POS_UNUSED (SLOT_POS_SPACE_ID + SLOT_WIDTH_SPACE_ID)
+#define SLOT_WIDTH_UNUSED 7
+
+
 /** Undo block address (UBA) */
 struct undo_addr_t {
   /* undo tablespace id */
@@ -100,6 +169,17 @@ struct undo_addr_t {
   bool state;
   /** Commit number source for gcn */
   csr_t csr;
+
+ public:
+  undo_addr_t(const slot_addr_t &slot_addr, bool state_arg, csr_t csr_arg)
+      : space_id(slot_addr.space_id),
+        page_no(slot_addr.page_no),
+        offset(slot_addr.offset),
+        state(state_arg),
+        csr(csr_arg) {}
+
+  undo_addr_t()
+      : space_id(0), page_no(0), offset(0), state(false), csr(CSR_AUTOMATIC) {}
 };
 
 typedef struct undo_addr_t undo_addr_t;
@@ -167,10 +247,22 @@ typedef scn_t scn_id_t;
   header, and never change until transaction commit or rollback.
 */
 struct txn_desc_t {
+ public:
   /** undo log header address */
   undo_ptr_t undo_ptr;
   /** scn number */
   commit_mark_t cmmt;
+
+ public:
+  txn_desc_t();
+
+  void reset();
+
+  /** assemble cmmt and undo ptr */
+  void assemble(const commit_mark_t &mark, const slot_addr_t &slot_addr);
+
+  /** assemble undo ptr */
+  void assemble_undo_ptr(const slot_addr_t &slot_addr);
 };
 
 /**
@@ -289,8 +381,8 @@ enum txn_state_t {
 struct txn_undo_hdr_t {
   /** commit image in txn undo header */
   commit_mark_t image;
-  /** undo log header address */
-  undo_ptr_t undo_ptr;
+  /** slot address */
+  slot_ptr_t slot_ptr;
   /** current trx who own the txn header */
   trx_id_t trx_id;
   /** A magic number, check if the page is corrupt */
@@ -324,7 +416,7 @@ struct txn_lookup_t {
 
     If the txn is unexpectedly lost:
       * real_state: [TXN_STATE_UNDO_CORRUPTED]
-      * real_image == {SCN_UNDO_CORRUPTED, UTC_UNDO_CORRUPTED}
+      * real_image == {SCN_UNDO_CORRUPTED, US_UNDO_CORRUPTED}
   */
   commit_mark_t real_image;
   txn_state_t real_state;

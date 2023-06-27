@@ -123,7 +123,7 @@ void row_upd_index_entry_lizard_field(que_thr_t *thr, dtuple_t *entry,
   ut_ad(!index->table->is_intrinsic());
 
   if (index->table->is_temporary()) {
-    txn_desc = &TXN_DESC_TEMP;
+    txn_desc = &txn_sys_t::instance()->txn_desc_temp;
   } else {
     trx_t *trx = thr_get_trx(thr);
     assert_txn_desc_allocated(trx);
@@ -254,7 +254,7 @@ void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
   ut_ad(!index->table->is_intrinsic());
 
   if (index->table->is_temporary()) {
-    txn_desc = &TXN_DESC_TEMP;
+    txn_desc = &txn_sys_t::instance()->txn_desc_temp;
   } else {
     txn_desc = txn;
     assert_undo_ptr_allocated(txn_desc->undo_ptr);

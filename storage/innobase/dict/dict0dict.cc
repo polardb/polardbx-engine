@@ -5107,6 +5107,7 @@ void DDTableBuffer::create_tuples() {
   byte *undo_buf;
   byte *scn_buf;
   byte *gcn_buf;
+  txn_desc_t *txn_desc = &lizard::txn_sys_t::instance()->txn_desc_dm;
 
   id_buf = static_cast<byte *>(mem_heap_alloc(m_heap, 8));
   memset(id_buf, 0, sizeof *id_buf);
@@ -5145,21 +5146,21 @@ void DDTableBuffer::create_tuples() {
 
   /** SCN ID: TXN_DESC_DM */
   scn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_SCN_ID_LEN));
-  lizard::trx_write_scn(scn_buf, &lizard::TXN_DESC_DM);
+  lizard::trx_write_scn(scn_buf, txn_desc);
   col = m_index->table->get_sys_col(DATA_SCN_ID);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, scn_buf, DATA_SCN_ID_LEN);
 
   /** UNDO_PTR: always TXN_DESC_DM */
   undo_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_UNDO_PTR_LEN));
-  lizard::trx_write_undo_ptr(undo_buf, &lizard::TXN_DESC_DM);
+  lizard::trx_write_undo_ptr(undo_buf, txn_desc);
   col = m_index->table->get_sys_col(DATA_UNDO_PTR);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, undo_buf, DATA_UNDO_PTR_LEN);
 
   /** GCN ID: always TXN_DESC_DM */
   gcn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_GCN_ID_LEN));
-  lizard::trx_write_gcn(gcn_buf, &lizard::TXN_DESC_DM);
+  lizard::trx_write_gcn(gcn_buf, txn_desc);
   col = m_index->table->get_sys_col(DATA_GCN_ID);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, gcn_buf, DATA_GCN_ID_LEN);

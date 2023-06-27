@@ -15261,6 +15261,8 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
                                      n_tables);
   }
 
+  txn_desc_t *txn_desc = &lizard::txn_sys_t::instance()->txn_desc_dd;
+
   for (dd::Index *i : *dd_table->indexes()) {
     i->set_tablespace_id(dict_sys_t::s_dd_dict_space_id);
 
@@ -15280,9 +15282,9 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
     /** For data dict tables, it's always visible, and
     dict_index_t::is_usable return true if it found DD_INDEX_TRX_ID == 0.
     Here we give it a fake number. */
-    p.set(dd_index_key_strings[DD_INDEX_UBA], lizard::UNDO_PTR_DICT_REC);
-    p.set(dd_index_key_strings[DD_INDEX_SCN], lizard::SCN_DICT_REC);
-    p.set(dd_index_key_strings[DD_INDEX_GCN], lizard::GCN_DICT_REC);
+    p.set(dd_index_key_strings[DD_INDEX_UBA], txn_desc->undo_ptr);
+    p.set(dd_index_key_strings[DD_INDEX_SCN], txn_desc->cmmt.scn);
+    p.set(dd_index_key_strings[DD_INDEX_GCN], txn_desc->cmmt.gcn);
   }
 
   assert(n_indexes - n_indexes_old == data.n_indexes);

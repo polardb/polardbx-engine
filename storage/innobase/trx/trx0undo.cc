@@ -142,7 +142,8 @@ void trx_undo_page_init(
 @return own: the undo log memory object */
 trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
                                 trx_id_t trx_id, const XID *xid,
-                                page_no_t page_no, ulint offset);
+                                page_no_t page_no, ulint offset,
+                                const slot_addr_t &slot_addr);
 #endif /* !UNIV_HOTBACKUP */
 /** Initializes a cached insert undo log header page for new use. NOTE that this
  function has its own log record type MLOG_UNDO_HDR_REUSE. You must NOT change
@@ -792,7 +793,7 @@ void trx_undo_gtid_write(trx_t *trx, trx_ulogf_t *undo_header, trx_undo_t *undo,
 
 /** Read X/Open XA Transaction Identification (XID) from undo log header */
 void trx_undo_read_xid(
-    trx_ulogf_t *log_hdr, /*!< in: undo log header */
+    const trx_ulogf_t *log_hdr, /*!< in: undo log header */
     XID *xid)             /*!< out: X/Open XA Transaction Identification */
 {
   xid->set_format_id(
@@ -1342,6 +1343,7 @@ static trx_undo_t *trx_undo_mem_init(
   page_t *last_page;
   trx_undo_rec_t *rec;
   XID xid;
+  slot_addr_t slot_addr;
 
   ut_a(id < TRX_RSEG_N_SLOTS);
 
@@ -1364,7 +1366,8 @@ static trx_undo_t *trx_undo_mem_init(
 
     xid.reset();
 
-    undo = trx_undo_mem_create(rseg, id, type, 0, &xid, page_no, offset);
+    undo = trx_undo_mem_create(rseg, id, type, 0, &xid, page_no, offset,
+                               slot_addr);
     undo->empty = true;
     undo->state = state;
     undo->size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST);
@@ -1395,7 +1398,10 @@ static trx_undo_t *trx_undo_mem_init(
     trx_undo_read_xid(undo_header, &xid);
   }
 
-  undo = trx_undo_mem_create(rseg, id, type, trx_id, &xid, page_no, offset);
+  lizard::trx_undo_hdr_read_slot(undo_header, &slot_addr, mtr);
+
+  undo = trx_undo_mem_create(rseg, id, type, trx_id, &xid, page_no, offset,
+                             slot_addr);
 
   undo->dict_operation =
       mtr_read_ulint(undo_header + TRX_UNDO_DICT_TRANS, MLOG_1BYTE, mtr);
@@ -1535,7 +1541,8 @@ ulint trx_undo_lists_init(
 @return own: the undo log memory object */
 trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
                                 trx_id_t trx_id, const XID *xid,
-                                page_no_t page_no, ulint offset) {
+                                page_no_t page_no, ulint offset,
+                                const slot_addr_t &slot_addr) {
   trx_undo_t *undo;
 
   ut_a(id < TRX_RSEG_N_SLOTS);
@@ -1571,6 +1578,8 @@ trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
   undo->top_page_no = page_no;
   undo->guess_block = nullptr;
 
+  undo->slot_addr = slot_addr;
+
   /** Lizard: init undo scn */
   undo->cmmt = COMMIT_MARK_NULL;
   undo->prev_image = COMMIT_MARK_NULL;
@@ -1586,7 +1595,8 @@ static void trx_undo_mem_init_for_reuse(
     trx_id_t trx_id,  /*!< in: id of the trx for which the undo log
                       is created */
     const XID *xid,   /*!< in: X/Open XA transaction identification*/
-    ulint offset)     /*!< in: undo log header byte offset on page */
+    ulint offset,     /*!< in: undo log header byte offset on page */
+    const slot_addr_t &slot_addr) /*!< in: txn undo slot address. */
 {
   ut_ad(mutex_own(&((undo->rseg)->mutex)));
 
@@ -1603,6 +1613,8 @@ static void trx_undo_mem_init_for_reuse(
 
   undo->hdr_offset = offset;
   undo->empty = true;
+
+  undo->slot_addr = slot_addr;
 
   /** Lizard: init undo scn */
   undo->cmmt = COMMIT_MARK_NULL;
@@ -1641,6 +1653,7 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
   ulint id;
   page_t *undo_page;
   commit_mark_t prev_image = COMMIT_MARK_LOST;
+  slot_addr_t slot_addr;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1678,18 +1691,18 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
     /** Follow the XA will be txn extension information  */
     lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
 
-    /** Lizard: add UBA into undo log header */
-    undo_addr_t undo_addr = {rseg->space_id, page_no, offset, true,
-                           CSR_AUTOMATIC};
+    /** Lizard: add slot into undo log header */
+    slot_addr = {rseg->space_id, page_no, offset};
 
     /** Current undo log hdr is UBA */
-    lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, mtr);
+    lizard::trx_undo_hdr_write_slot(undo_page + offset, slot_addr, mtr);
   } else {
-    /** UBA is come from trx->txn_desc */
-    lizard::trx_undo_hdr_write_uba(undo_page + offset, trx, mtr);
+    /** Slot is come from txn undo */
+    slot_addr = lizard::trx_undo_hdr_write_slot(undo_page + offset, trx, mtr);
   }
 
-  *undo = trx_undo_mem_create(rseg, id, type, trx_id, xid, page_no, offset);
+  *undo = trx_undo_mem_create(rseg, id, type, trx_id, xid, page_no, offset,
+                              slot_addr);
 
   /** Lizard: Already use txn extension, so set TRX_UNDO_FLAG_TXN in advance. */
   if (type == TRX_UNDO_TXN) {
@@ -1726,6 +1739,7 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
                                   mtr_t *mtr) {
   trx_undo_t *undo;
   commit_mark_t prev_image = COMMIT_MARK_LOST;
+  slot_addr_t slot_addr;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1777,8 +1791,8 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       gtid_storage);
 
-    /** UBA is come from trx->txn_desc */
-    lizard::trx_undo_hdr_write_uba(undo_page + offset, trx, mtr);
+    /** Slot is come from txn_undo */
+    slot_addr = lizard::trx_undo_hdr_write_slot(undo_page + offset, trx, mtr);
   } else if (type == TRX_UNDO_UPDATE) {
     ut_a(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
          TRX_UNDO_UPDATE);
@@ -1788,8 +1802,8 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       gtid_storage);
 
-    /** UBA is come from trx->txn_desc */
-    lizard::trx_undo_hdr_write_uba(undo_page + offset, trx, mtr);
+    /** Slot is come from txn_undo */
+    slot_addr = lizard::trx_undo_hdr_write_slot(undo_page + offset, trx, mtr);
   } else {
     ut_a(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
          TRX_UNDO_TXN);
@@ -1799,18 +1813,18 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       gtid_storage);
     /* Lizard: special for txn undo log header */
-    /** Lizard: add UBA into undo log header */
-    undo_addr_t undo_addr = {undo->space, undo->hdr_page_no, offset, true,
-                             CSR_AUTOMATIC};
+    /** Lizard: add slot into undo log header */
 
-    /** Current undo log hdr is UBA */
-    lizard::trx_undo_hdr_write_uba(undo_page + offset, undo_addr, mtr);
+    slot_addr = {undo->space, undo->hdr_page_no, offset};
+
+    /** Current undo log hdr is slot */
+    lizard::trx_undo_hdr_write_slot(undo_page + offset, slot_addr, mtr);
 
     /** Follow the XA will be txn extension information  */
     lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
   }
 
-  trx_undo_mem_init_for_reuse(undo, trx_id, xid, offset);
+  trx_undo_mem_init_for_reuse(undo, trx_id, xid, offset, slot_addr);
 
   undo->m_gtid_storage = gtid_storage;
 
@@ -1984,7 +1998,7 @@ page_t *trx_undo_set_state_at_finish(
   seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
   page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
 
-  trx_undo_hdr_uba_validation(undo_page + undo->hdr_offset, mtr);
+  trx_undo_hdr_slot_validation(undo_page + undo->hdr_offset, mtr);
 
   free_offset = mach_read_from_2(page_hdr + TRX_UNDO_PAGE_FREE);
 
@@ -2031,7 +2045,7 @@ page_t *trx_undo_set_state_at_prepare(trx_t *trx, trx_undo_t *undo,
   offset = mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG);
   undo_header = undo_page + offset;
 
-  trx_undo_hdr_uba_validation(undo_header, mtr);
+  trx_undo_hdr_slot_validation(undo_header, mtr);
 
   if (rollback) {
     ut_ad(undo->is_prepared());

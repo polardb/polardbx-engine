@@ -85,7 +85,7 @@ bool trx_search_tcn(txn_rec_t *txn_rec, btr_pcur_t *pcur,
       ut_a(txn_rec->scn != SCN_NULL);
       ut_a(txn_rec->gcn != GCN_NULL);
       if (txn_lookup) {
-        txn_lookup->real_image = {tcn.scn, UTC_UNDO_LOST, tcn.gcn, tcn.csr};
+        txn_lookup->real_image = {tcn.scn, US_UNDO_LOST, tcn.gcn, tcn.csr};
         txn_lookup->real_state = TXN_STATE_COMMITTED;
       }
 

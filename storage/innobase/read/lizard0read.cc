@@ -323,8 +323,8 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
     if (check_consistent) {
       /** If modification from myself, then they should be seen,
       unless it's a temp table */
-      lizard_ut_ad((txn_rec->scn == SCN_TEMP_TAB_REC &&
-                    txn_rec->undo_ptr == UNDO_PTR_TEMP_TAB_REC) ||
+      lizard_ut_ad(txn_sys_t::instance()->is_temporary(txn_rec->scn,
+                                                       txn_rec->undo_ptr) ||
                    undo_ptr_is_active(txn_rec->undo_ptr));
     }
     return true;

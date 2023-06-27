@@ -76,8 +76,8 @@ inline bool operator==(const commit_mark_t &lhs, const commit_mark_t &rhs) {
 
 /** Commit scn state */
 enum scn_state_t {
-  SCN_STATE_INITIAL,   /** {SCN_NULL, UTC_NULL}*/
-  SCN_STATE_ALLOCATED, /** 0 < scn < SCN_MAX, 0 < utc < UTC_MAX */
+  SCN_STATE_INITIAL,   /** {SCN_NULL, US_NULL}*/
+  SCN_STATE_ALLOCATED, /** 0 < scn < SCN_MAX, 0 < utc < US_MAX */
   SCN_STATE_INVALID    /** NONE of initial or allocated */
 };
 
