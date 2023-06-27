@@ -239,15 +239,15 @@ bool trx_undo_page_validate(const page_t *page) {
 
 /** Confirm the consistent of scn, undo type, undo state. */
 bool undo_commit_mark_validate(const trx_undo_t *undo) {
-  commit_mark_t scn = undo->cmmt;
+  commit_mark_t cmmt = undo->cmmt;
   ulint type = undo->type;
   ulint state = undo->state;
 
   if (type == TRX_UNDO_INSERT) {
     if (state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_FREE) {
-      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
-    } else if (state == TRX_UNDO_ACTIVE || state == TRX_UNDO_PREPARED) {
-      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
+      ut_a(commit_mark_state(cmmt) == SCN_STATE_INITIAL);
+    } else if (state == TRX_UNDO_ACTIVE || undo->is_prepared()) {
+      ut_a(commit_mark_state(cmmt) == SCN_STATE_INITIAL);
     } else {
       ut_a(0);
     }
@@ -255,10 +255,10 @@ bool undo_commit_mark_validate(const trx_undo_t *undo) {
     if (state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_PURGE) {
       /** The update undo log has put into history,
           so commit scn must be valid */
-      ut_a(commit_mark_state(scn) == SCN_STATE_ALLOCATED);
-    } else if (state == TRX_UNDO_ACTIVE || state == TRX_UNDO_PREPARED) {
+      ut_a(commit_mark_state(cmmt) == SCN_STATE_ALLOCATED);
+    } else if (state == TRX_UNDO_ACTIVE || undo->is_prepared()) {
       /** The transaction still be active or has been prepared, */
-      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
+      ut_a(commit_mark_state(cmmt) == SCN_STATE_INITIAL);
     } else if (state == TRX_UNDO_TO_FREE) {
       /** It's impossible to be FREE for update undo log */
       ut_a(0);
@@ -269,10 +269,10 @@ bool undo_commit_mark_validate(const trx_undo_t *undo) {
     if (state == TRX_UNDO_CACHED || state == TRX_UNDO_TO_PURGE) {
       /** The txn undo log has put into history,
           so commit scn must be valid */
-      ut_a(commit_mark_state(scn) == SCN_STATE_ALLOCATED);
-    } else if (state == TRX_UNDO_ACTIVE || state == TRX_UNDO_PREPARED) {
+      ut_a(commit_mark_state(cmmt) == SCN_STATE_ALLOCATED);
+    } else if (state == TRX_UNDO_ACTIVE || undo->is_prepared()) {
       /** The transaction still be active or has been prepared, */
-      ut_a(commit_mark_state(scn) == SCN_STATE_INITIAL);
+      ut_a(commit_mark_state(cmmt) == SCN_STATE_INITIAL);
     } else if (state == TRX_UNDO_TO_FREE) {
       /** It's impossible to be FREE for update undo log */
       ut_a(0);
@@ -2138,10 +2138,7 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
     for temporary table.
   */
   if (rseg_id == 0) {
-    lizard_ut_ad(undo_addr->offset == UNDO_PTR_OFFSET_TEMP_TAB_REC ||
-                 undo_addr->offset == UNDO_PTR_OFFSET_DYNAMIC_METADATA ||
-                 undo_addr->offset == UNDO_PTR_OFFSET_LOG_DDL ||
-                 undo_addr->offset == UNDO_PTR_OFFSET_UNDO_HDR);
+    lizard_ut_ad(undo_addr->offset >= UNDO_PTR_OFFSET_LIMIT);
   }
   /** It's always redo txn undo log */
   undo_addr->space_id = trx_rseg_id_to_space_id(rseg_id, false);

@@ -2181,9 +2181,11 @@ dberr_t srv_start(bool create_new_db) {
     }
 
     /** Persist if needed. */
-    lizard::gcs_persist_gcn();
-    /* Flush logs to persist the changes. */
-    log_buffer_flush_to_disk(*log_sys);
+    if (lizard::gcs_persist_gcn()) {
+      ut_a(redo_writes_allowed);
+      /* Flush logs to persist the changes. */
+      log_buffer_flush_to_disk(*log_sys);
+    }
 
     RECOVERY_CRASH(4);
 

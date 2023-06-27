@@ -163,11 +163,26 @@ extern ulint srv_txn_cached_list_keep_size;
 /** Initial value of undo ptr  */
 constexpr undo_ptr_t UNDO_PTR_NULL = std::numeric_limits<undo_ptr_t>::min();
 
-/** Fake UBA for internal table */
-constexpr undo_ptr_t UNDO_PTR_FAKE = (undo_ptr_t)1 << UBA_POS_STATE;
-
-/** Temporary table record UBA offset */
+/** UBA OFFSET:: Temporary table record */
 constexpr ulint UNDO_PTR_OFFSET_TEMP_TAB_REC = (ulint)0xFFFF;
+
+/** UBA OFFSET:: Dynamic metadata table record */
+constexpr ulint UNDO_PTR_OFFSET_DYNAMIC_METADATA = (ulint)0xFFFF - 1;
+
+/** UBA OFFSET:: Log_ddl table record */
+constexpr ulint UNDO_PTR_OFFSET_LOG_DDL = (ulint)0xFFFF - 2;
+
+/** UBA OFFSET:: Index record */
+constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
+
+/** UBA OFFSET:: UBA offset for no_redo insert/update undo. */
+constexpr ulint UNDO_PTR_OFFSET_UNDO_HDR = (ulint)0xFFFF - 4;
+
+/** UBA OFFSET:: Index UBA that upgraded from old version. */
+constexpr ulint UNDO_PTR_OFFSET_INDEX_UPGRADE = (ulint)0xFFFF - 5;
+
+/** Lowest offset for all special cases. */
+constexpr ulint UNDO_PTR_OFFSET_LIMIT = UNDO_PTR_OFFSET_INDEX_UPGRADE;
 
 /** Temporary table record UBA */
 constexpr undo_ptr_t UNDO_PTR_TEMP_TAB_REC =
@@ -177,9 +192,6 @@ constexpr undo_ptr_t UNDO_PTR_TEMP_TAB_REC =
 constexpr txn_desc_t TXN_DESC_TEMP = {
     UNDO_PTR_TEMP_TAB_REC,
     {SCN_TEMP_TAB_REC, UTC_TEMP_TAB_REC, GCN_TEMP_TAB_REC, CSR_AUTOMATIC}};
-
-/** Dynamic metadata table record UBA offset */
-constexpr ulint UNDO_PTR_OFFSET_DYNAMIC_METADATA = (ulint)0xFFFF - 1;
 
 /** Temporary table record UBA */
 constexpr undo_ptr_t UNDO_PTR_DYNAMIC_METADATA =
@@ -191,9 +203,6 @@ constexpr txn_desc_t TXN_DESC_DM = {UNDO_PTR_DYNAMIC_METADATA,
                                     {SCN_DYNAMIC_METADATA, UTC_DYNAMIC_METADATA,
                                      GCN_DYNAMIC_METADATA, CSR_AUTOMATIC}};
 
-/** Log_ddl table record UBA offset */
-constexpr ulint UNDO_PTR_OFFSET_LOG_DDL = (ulint)0xFFFF - 2;
-
 /** Log_ddl record UBA */
 constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_LOG_DDL;
@@ -202,26 +211,18 @@ constexpr undo_ptr_t UNDO_PTR_LOG_DDL =
 constexpr txn_desc_t TXN_DESC_LD = {
     UNDO_PTR_LOG_DDL, {SCN_LOG_DDL, UTC_LOG_DDL, GCN_LOG_DDL, CSR_AUTOMATIC}};
 
-/** Index UBA offset */
-constexpr ulint UNDO_PTR_OFFSET_DICT_REC = (ulint)0xFFFF - 3;
-
 /** Index UBA */
 constexpr undo_ptr_t UNDO_PTR_DICT_REC =
     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_DICT_REC;
-
-/** UBA offset in undo log hdr */
-constexpr ulint UNDO_PTR_OFFSET_UNDO_HDR = (ulint)0xFFFF - 4;
 
 /** UBA in undo log hdr */
 constexpr undo_ptr_t UNDO_PTR_UNDO_HDR =
     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_UNDO_HDR;
 
 /** Index UBA that upgraded from old version. */
-constexpr ulint UNDO_PTR_OFFSET_INDEX_UPGRADE = (ulint)0xFFFF - 5;
-
-/** Index UBA that upgraded from old version. */
 constexpr undo_ptr_t UNDO_PTR_INDEX_UPGRADE =
     (undo_ptr_t)1 << UBA_POS_STATE | (undo_ptr_t)UNDO_PTR_OFFSET_INDEX_UPGRADE;
+
 
 /* Lizard transaction undo header operation */
 /*-----------------------------------------------------------------------------*/
