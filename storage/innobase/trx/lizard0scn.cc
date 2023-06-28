@@ -208,7 +208,8 @@ void GcnPersister::read(PersistentGcsData *metadata) {
 }
 
 /** Constructor of SCN */
-SCN::SCN() : m_scn(SCN_NULL), m_inited(false) {}
+SCN::SCN(Persister *persister)
+    : m_scn(SCN_NULL), m_persister(persister), m_inited(false) {}
 
 /** Destructor of SCN */
 SCN::~SCN() { m_inited = false; }
@@ -220,7 +221,7 @@ void SCN::boot() {
 
   PersistentGcsData meta;
 
-  gcs->persisters.scn_persister()->read(&meta);
+  m_persister->read(&meta);
   m_scn = meta.get_scn();
   ut_a(m_scn > 0 && m_scn < SCN_NULL);
 
@@ -240,7 +241,7 @@ scn_t SCN::new_scn() {
   if (!(m_scn % GCS_SCN_NUMBER_MAGIN)) {
     PersistentGcsData meta;
     meta.set_scn(m_scn.load());
-    gcs->persisters.scn_persister()->write(&meta);
+    m_persister->write(&meta);
   }
 
   num = ++m_scn;
@@ -251,7 +252,8 @@ scn_t SCN::new_scn() {
 }
 
 /** GCN constructor. */
-GCN::GCN() : m_gcn(GCN_NULL), m_inited(false) {}
+GCN::GCN(Persister *persister)
+    : m_gcn(GCN_NULL), m_persister(persister), m_inited(false) {}
 
 /** Boot GCN module, read gcn value from tablespace,
  */
@@ -260,7 +262,7 @@ void GCN::boot() {
   ut_ad(m_gcn.load() == GCN_NULL);
 
   PersistentGcsData meta;
-  gcs->persisters.gcn_persister()->read(&meta);
+  m_persister->read(&meta);
 
   m_gcn.store(meta.get_gcn());
 
@@ -309,7 +311,7 @@ std::pair<gcn_t, csr_t> GCN::new_gcn(const gcn_t gcn, const csr_t csr,
 
   PersistentGcsData meta;
   meta.set_gcn(cmmt);
-  gcs->persisters.gcn_persister()->write_log(&meta, mtr);
+  m_persister->write_log(&meta, mtr);
   return std::make_pair(cmmt, csr);
 }
 

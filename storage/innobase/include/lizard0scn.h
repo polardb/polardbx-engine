@@ -303,7 +303,7 @@ class ScnPersister : public Persister {
 /* The structure of scn number generation */
 class SCN {
  public:
-  SCN();
+  SCN(Persister *persister);
   virtual ~SCN();
 
   /** Assign the init value by reading from tablespace */
@@ -326,13 +326,14 @@ class SCN {
 
  private:
   std::atomic<scn_t> m_scn;
+  Persister *m_persister;
   bool m_inited;
 };
 
 /* The structure of gcn number generation */
 class GCN {
  public:
-  GCN();
+  GCN(Persister *persister);
   virtual ~GCN() { m_inited = false; }
 
   void boot();
@@ -371,9 +372,9 @@ class GCN {
   GCN &operator=(const GCN &) = delete;
 
  private:
-  std::atomic<scn_t> m_scn;
   std::atomic<gcn_t> m_gcn;
 
+  Persister *m_persister;
   bool m_inited;
 };
 

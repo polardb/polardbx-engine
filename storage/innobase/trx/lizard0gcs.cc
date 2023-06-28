@@ -71,12 +71,12 @@ void gcs_init() {
 
   gcs = static_cast<gcs_t *>(ut::zalloc(sizeof(*gcs)));
 
-  /** Placement new SCN object  */
-  new (&(gcs->scn)) SCN();
-  /** Placement new GCN object  */
-  new (&(gcs->gcn)) GCN();
-
   new (&(gcs->persisters)) Persisters();
+
+  /** Placement new SCN object  */
+  new (&(gcs->scn)) SCN(gcs->persisters.scn_persister());
+  /** Placement new GCN object  */
+  new (&(gcs->gcn)) GCN(gcs->persisters.gcn_persister());
 
   new (&(gcs->csnapshot_mgr))
       CSnapshot_mgr(commit_snapshot_mem_key, srv_commit_snapshot_partition,
