@@ -24,9 +24,6 @@
 #include <algorithm>  // std::min() for Windows
 #include "event_reader_macros.h"
 
-// this line is the same as in xa.h
-static const unsigned long long MYSQL_GCN_NULL = __UINT64_MAX__;
-
 namespace binary_log {
 
 /******************************************************************************
