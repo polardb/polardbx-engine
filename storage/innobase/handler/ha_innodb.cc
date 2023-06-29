@@ -23609,20 +23609,6 @@ static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
                           "max list size of txn_cached_list", NULL, NULL, 0, 0,
                           512, 0);
 
-static MYSQL_SYSVAR_BOOL(
-    freeze_db_if_no_cn_heartbeat_enable, lizard::xa::srv_no_heartbeat_freeze,
-    PLUGIN_VAR_OPCMDARG,
-    "If set to true, will freeze purge sys and updating "
-    "if there is no heartbeat.",
-    nullptr, lizard::xa::freeze_db_if_no_cn_heartbeat_enable_on_update, false);
-
-static MYSQL_SYSVAR_ULONG(freeze_db_if_no_cn_heartbeat_timeout_sec,
-                          lizard::xa::srv_no_heartbeat_freeze_timeout,
-                          PLUGIN_VAR_OPCMDARG,
-                          "If the heartbeat has not been received after the "
-                          "timeout, freezing the purge sys and updating.",
-                          NULL, NULL, 10, 1, UINT_MAX32, 0);
-
 static MYSQL_SYSVAR_BOOL(commit_snapshot_search_enabled,
                          lizard::srv_commit_snapshot_search_enabled,
                          PLUGIN_VAR_OPCMDARG,
@@ -23887,8 +23873,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(txn_cached_list_keep_size),
-    MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_enable),
-    MYSQL_SYSVAR(freeze_db_if_no_cn_heartbeat_timeout_sec),
     MYSQL_SYSVAR(commit_snapshot_search_enabled),
     MYSQL_SYSVAR(vision_use_commit_snapshot_debug),
     nullptr};

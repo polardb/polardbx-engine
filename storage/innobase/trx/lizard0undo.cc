@@ -962,12 +962,16 @@ bool txn_check_gtrid_rseg_mapping(const XID *xid,
   return match;
 }
 
-dberr_t txn_undo_xid_add_txn_undo(THD *thd, trx_t *trx) {
-  dberr_t err;
-
-  err = DB_SUCCESS;
-
-  ut_ad(thd);
+/** Allocate txn undo and return transaction slot address.
+ *
+ * @param[in]	trx
+ * @param[out]	Slot address
+ *
+ * @retval	DB_SUCCESS
+ * @retval	DB_ERROR
+ **/
+dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr) {
+  dberr_t err = DB_SUCCESS;
 
   ut_ad(trx_is_registered_for_2pc(trx) && trx_is_started(trx) && trx->id != 0 &&
         !trx->read_only && !trx->internal);
@@ -981,6 +985,10 @@ dberr_t txn_undo_xid_add_txn_undo(THD *thd, trx_t *trx) {
     mutex_exit(&trx->undo_mutex);
   }
 
+  if (err == DB_SUCCESS && slot_ptr) {
+    ut_ad(undo_ptr->txn_undo);
+    undo_encode_slot_addr(undo_ptr->txn_undo->slot_addr, slot_ptr);
+  }
   return err;
 }
 

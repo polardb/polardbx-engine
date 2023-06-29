@@ -11100,6 +11100,7 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
   read_only = super_read_only ? super_read_only : read_only;
   opt_readonly = read_only;
 
+  lizard::xa::opt_no_heartbeat_freeze = lizard::xa::no_heartbeat_freeze;
   return 0;
 }
 

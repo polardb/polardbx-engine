@@ -7152,7 +7152,7 @@ extern "C" void *handle_slave_sql(void *arg) {
       assert(rli->info_thd == thd);
       THD_CHECK_SENTRY(thd);
 
-      if (im::cn_heartbeat_timeout_freeze_applying_event(thd)) continue;
+      if (lizard::xa::cn_heartbeat_timeout_freeze_applying_event(thd)) continue;
 
       if (saved_skip && rli->slave_skip_counter == 0) {
         LogErr(INFORMATION_LEVEL, ER_RPL_SLAVE_SKIP_COUNTER_EXECUTED,

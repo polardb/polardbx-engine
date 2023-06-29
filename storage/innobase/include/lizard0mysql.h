@@ -90,5 +90,7 @@ dberr_t prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt);
   @return           dberr_t     DB_SUCCESS, or DB_SNAPSHOT_OUT_OF_RANGE.
 */
 dberr_t prebuilt_unbind_flashback_query(row_prebuilt_t *prebuilt);
+
+extern int convert_timestamp_to_scn(THD *thd, utc_t utc, scn_t *scn);
 }
 #endif

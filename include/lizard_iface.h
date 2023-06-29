@@ -39,7 +39,8 @@ typedef uint64_t my_gcn_t;
 typedef uint64_t my_utc_t;
 typedef uint64_t my_trx_id_t;
 
-class THD;
+/** Transaction slot address */
+typedef uint64_t my_slot_ptr_t;
 
 /** Commit number source type. */
 enum my_csr_t {
@@ -55,16 +56,22 @@ constexpr my_gcn_t MYSQL_GCN_NULL = std::numeric_limits<my_gcn_t>::max();
 constexpr my_gcn_t MYSQL_GCN_MIN = 1024;
 
 namespace lizard {
+namespace xa {
 
-/** Convert timestamp to SCN. */
-int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn);
+enum Transaction_state {
+  TRANS_STATE_COMMITTED = 0,
+  TRANS_STATE_ROLLBACK = 1,
+  TRANS_STATE_UNKNOWN = 2,
+};
 
-/** Push up memory gcn if bigger. */
-void gcs_set_gcn_if_bigger(my_gcn_t gcn);
+struct Transaction_info {
+  Transaction_state state;
+  my_gcn_t gcn;
+};
 
-template <typename T>
-extern my_trx_id_t gcs_search_up_limit_tid(const T &lhs);
+extern bool hb_freezer_determine_freeze();
 
+}  // namespace xa
 }  // namespace lizard
 
 #endif

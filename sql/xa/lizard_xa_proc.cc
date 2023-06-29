@@ -20,17 +20,14 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "storage/innobase/include/lizard0xa0iface.h"
-#include "storage/innobase/include/lizard0ut.h"
-
-#include "sql/mysqld.h"     // server_uuid_ptr...
+#include "sql/mysqld.h"  // server_uuid_ptr...
 #include "sql/protocol.h"
 #include "sql/sql_parse.h"  // sql_command_flags...
 #include "sql/xa/sql_xa_prepare.h"
 
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/xa/lizard_xa_trx.h"
-#include "sql/binlog_ext.h"
+#include "sql/lizard_binlog.h"
 
 namespace im {
 /* All concurrency control system memory usage */
@@ -38,6 +35,10 @@ PSI_memory_key key_memory_xa_proc;
 
 /* The uniform schema name for xa */
 const LEX_CSTRING XA_PROC_SCHEMA = {C_STRING_WITH_LEN("dbms_xa")};
+
+const LEX_CSTRING transaction_state_str[] = {{STRING_WITH_LEN("COMMIT")},
+                                             {STRING_WITH_LEN("ROLLBACK")},
+                                             {STRING_WITH_LEN("UNKNOWN")}};
 
 /* Singleton instance for find_by_gtrid */
 Proc *Xa_proc_find_by_gtrid::instance() {
@@ -127,6 +128,8 @@ bool Sql_cmd_xa_proc_find_by_gtrid::pc_execute(THD *) {
 
 void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
   DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::send_result");
+  handlerton *ttse = innodb_hton;
+  assert(ttse);
 
   Protocol *protocol;
   XID xid;
@@ -149,15 +152,13 @@ void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
 
   if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
 
-  found =
-      lizard::xa::trx_slot_get_trx_info_by_gtrid(gtrid, gtrid_length, &info);
-
+  found = ttse->ext.search_trx_by_gtrid(gtrid, gtrid_length, &info);
   if (found) {
     protocol->start_row();
     protocol->store((ulonglong)info.gcn);
-
-    const char *state = lizard::xa::trx_slot_trx_state_to_str(info.state);
-    protocol->store_string(state, strlen(state), system_charset_info);
+    protocol->store_string(transaction_state_str[info.state].str,
+                           transaction_state_str[info.state].length,
+                           system_charset_info);
 
     if (protocol->end_row()) DBUG_VOID_RETURN;
   }
@@ -198,7 +199,7 @@ bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
   }
 
   /** 3. Assign transaction slot. */
-  if (lizard::xa::transaction_slot_assign(thd, &xid, &m_tsa)) {
+  if (lizard::xa::apply_trx_for_xa(thd, &xid, &m_slot_ptr)) {
     DBUG_RETURN(true);
   }
 
@@ -229,7 +230,7 @@ void Sql_cmd_xa_proc_prepare_with_trx_slot::send_result(THD *thd, bool error) {
   assert(strlen(server_uuid_ptr) <= 256);
   protocol->store_string(server_uuid_ptr, strlen(server_uuid_ptr),
                          system_charset_info);
-  protocol->store((ulonglong)m_tsa);
+  protocol->store((ulonglong)m_slot_ptr);
   if (protocol->end_row()) DBUG_VOID_RETURN;
 
   my_eof(thd);
@@ -253,44 +254,6 @@ Sql_cmd *Xa_proc_send_heartbeat::evoke_cmd(THD *thd,
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
-bool cn_heartbeat_timeout_freeze_updating(LEX *const lex) {
-  DBUG_EXECUTE_IF("hb_timeout_do_not_freeze_operation", { return false; });
-  switch (lex->sql_command) {
-    case SQLCOM_ADMIN_PROC:
-      break;
-
-    default:
-      if ((sql_command_flags[lex->sql_command] & CF_CHANGES_DATA) &&
-          lizard::xa::hb_freezer_is_freeze() && likely(mysqld_server_started)) {
-        my_error(ER_XA_PROC_HEARTBEAT_FREEZE, MYF(0));
-        return true;
-      }
-  }
-
-  return false;
-}
-
-bool cn_heartbeat_timeout_freeze_applying_event(THD *thd) {
-  static lizard::Lazy_printer printer(60);
-
-  if (lizard::xa::hb_freezer_is_freeze()) {
-    THD_STAGE_INFO(thd, stage_wait_for_cn_heartbeat);
-
-    printer.print(
-        "Applying event is blocked because no heartbeat has been received "
-        "for a long time. If you want to advance it, please call "
-        "dbms_xa.send_heartbeat() (or set global innodb_cn_no_heartbeat_freeze "
-        "= 0).");
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    return true;
-  } else {
-    printer.reset();
-    return false;
-  }
-}
-
 /**
   Parse the GCN from the parameter list
 
@@ -309,6 +272,7 @@ bool parse_gcn_from_parameter_list(const mem_root_deque<Item *> *list,
 
 bool Sql_cmd_xa_proc_advance_gcn_no_flush::pc_execute(THD *) {
   DBUG_ENTER("Sql_cmd_xa_proc_advance_gcn_no_flush::pc_execute");
+  handlerton *ttse = innodb_hton;
   my_gcn_t gcn;
   if (parse_gcn_from_parameter_list(m_list, &gcn)) {
     /** Not possible. */
@@ -316,7 +280,7 @@ bool Sql_cmd_xa_proc_advance_gcn_no_flush::pc_execute(THD *) {
     DBUG_RETURN(true);
   }
 
-  lizard::gcs_set_gcn_if_bigger(gcn);
+  ttse->ext.set_gcn_if_bigger(gcn);
   DBUG_RETURN(false);
 }
 

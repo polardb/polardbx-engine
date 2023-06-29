@@ -27,12 +27,13 @@
 #include "trx0types.h"
 
 #include "ha_innodb.h"
-#include "lizard0ha_innodb.h"
 #include "lizard0gcs.h"
+#include "lizard0ha_innodb.h"
 #include "lizard0undo.h"
 #include "lizard0xa.h"
 
 #include <sql_class.h>
+#include "sql/xa/lizard_xa_trx.h"
 
 /**
   Compare whether the xid in thd is the same as the xid in trx (and aslo in
@@ -61,6 +62,64 @@ bool xa_compare_xid_between_thd_and_trx(const THD *thd, const trx_t *trx) {
 
   return true;
 }
+
+/**
+  1. start trx in innodb
+  2. register hton as a participants
+
+  return true if error.
+*/
+static bool innobase_start_trx_for_xa(handlerton *hton, THD *thd, bool rw) {
+  trx_t *trx = check_trx_exists(thd);
+
+  /** check_trx_exists will create trx if no trx. */
+  ut_ad(trx);
+
+  trx_start_if_not_started(trx, rw, UT_LOCATION_HERE);
+
+  innobase_register_trx_only_trans(hton, thd, trx);
+
+  thd->get_ha_data(hton->slot)->ha_info[1].set_trx_read_write();
+
+  return false;
+}
+
+bool innobase_assign_slot_for_xa(THD *thd, my_slot_ptr_t *slot_ptr_arg) {
+  slot_ptr_t *slot_ptr = static_cast<my_slot_ptr_t *>(slot_ptr_arg);
+  trx_t *trx = check_trx_exists(thd);
+
+  /** check_trx_exists will create trx if no trx. */
+  ut_ad(trx);
+
+  /** The trx must have been started as rw mode. */
+  if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) ||
+      trx->id == 0 || trx->read_only) {
+    return true;
+  }
+
+  ut_ad(!trx->internal);
+
+  /** Force to assign a TXN. */
+  if (lizard::trx_assign_txn_undo(trx, slot_ptr) != DB_SUCCESS) {
+    return true;
+  }
+
+  return false;
+}
+
+static bool innobase_search_trx_by_gtrid(const char *gtrid, unsigned len,
+                                         lizard::xa::Transaction_info *info) {
+  return lizard::xa::trx_search_by_gtrid(gtrid, len, info);
+}
+template <typename T>
+static my_trx_id_t innobase_search_up_limit_tid(const T &lhs) {
+  return static_cast<my_trx_id_t>(lizard::gcs_search_up_limit_tid<T>(lhs));
+}
+
+template my_trx_id_t innobase_search_up_limit_tid<lizard::Snapshot_scn_vision>(
+    const lizard::Snapshot_scn_vision &lhs);
+template my_trx_id_t innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>(
+    const lizard::Snapshot_gcn_vision &lhs);
 
 /**
   Copy server XA attributes into innobase.
@@ -100,19 +159,40 @@ bool innobase_snapshot_assigned_gcn_too_old(my_gcn_t gcn) {
   return gcn <= purge_sys->purged_gcn.get();
 }
 
+void innobase_set_gcn_if_bigger(my_gcn_t gcn_arg) {
+  gcn_t gcn = static_cast<gcn_t>(gcn_arg);
+  lizard::gcs_set_gcn_if_bigger(gcn);
+}
+
+int innobase_conver_timestamp_to_scn(THD *thd, my_utc_t utc_arg,
+		my_scn_t *scn_arg) {
+  utc_t utc = static_cast<utc_t>(utc_arg);
+  scn_t *scn = static_cast<scn_t *>(scn_arg);
+  return lizard::convert_timestamp_to_scn(thd, utc, scn);
+}
+
 /**
   Initialize innobase extension.
 
   param[in]  innobase_hton  handlerton of innobase.
 */
-void innobase_init_ext(handlerton *innobase_hton) {
-  innobase_hton->ext.register_xa_attributes = innobase_register_xa_attributes;
-  innobase_hton->ext.load_gcn = innobase_load_gcn;
-  innobase_hton->ext.load_scn = innobase_load_scn;
+void innobase_init_ext(handlerton *hton) {
+  hton->ext.register_xa_attributes = innobase_register_xa_attributes;
+  hton->ext.load_gcn = innobase_load_gcn;
+  hton->ext.load_scn = innobase_load_scn;
 
-  innobase_hton->ext.snapshot_scn_too_old = innobase_snapshot_scn_too_old;
-  innobase_hton->ext.snapshot_assigned_gcn_too_old =
+  hton->ext.snapshot_scn_too_old = innobase_snapshot_scn_too_old;
+  hton->ext.snapshot_assigned_gcn_too_old =
       innobase_snapshot_assigned_gcn_too_old;
-  innobase_hton->ext.snapshot_automatic_gcn_too_old =
+  hton->ext.snapshot_automatic_gcn_too_old =
       innobase_snapshot_automatic_gcn_too_old;
+  hton->ext.set_gcn_if_bigger = innobase_set_gcn_if_bigger;
+  hton->ext.start_trx_for_xa = innobase_start_trx_for_xa;
+  hton->ext.assign_slot_for_xa = innobase_assign_slot_for_xa;
+  hton->ext.search_trx_by_gtrid = innobase_search_trx_by_gtrid;
+  hton->ext.convert_timestamp_to_scn = innobase_conver_timestamp_to_scn;
+  hton->ext.search_up_limit_tid_for_scn =
+      innobase_search_up_limit_tid<lizard::Snapshot_scn_vision>;
+  hton->ext.search_up_limit_tid_for_gcn =
+      innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>;
 }

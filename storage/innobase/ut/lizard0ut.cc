@@ -95,23 +95,4 @@ template bool Partition<Undo_logs, Undo_hdr, TXN_UNDO_HASH_PARTITIONS>::insert(
 template bool Partition<Undo_logs, Undo_hdr, TXN_UNDO_HASH_PARTITIONS>::exist(
     Undo_hdr object);
 
-bool Lazy_printer::print(const char *msg) {
-  if (unlikely(m_first)) {
-    ib::info(ER_LIZARD) << msg;
-    m_timer.update();
-    m_first = false;
-    return true;
-  } else if (m_timer.since_last_update() > m_internal_secs) {
-    ib::info(ER_LIZARD) << msg;
-    m_timer.update();
-    return true;
-  }
-
-  return false;
-}
-
-void Lazy_printer::reset() {
-  m_first = true;
-}
-
 }  // namespace lizard

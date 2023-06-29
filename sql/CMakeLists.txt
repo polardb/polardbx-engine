@@ -1053,7 +1053,6 @@ SET(BINLOG_SOURCE
   stream_cipher.cc
   binlog/lizard0recovery.cc
   gcn_log_event.cc
-  lizard_binlog.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
 TARGET_LINK_LIBRARIES(binlog binlogevents_static)

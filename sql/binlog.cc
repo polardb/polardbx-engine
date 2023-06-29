@@ -11617,4 +11617,4 @@ bool Gcn_manager::write_gcn(THD *thd, Binlog_event_writer *writer) {
   return gcn_evt.write(writer);
 }
 
-#include "sql/binlog_ext.cc"
+#include "sql/lizard_binlog.cc"

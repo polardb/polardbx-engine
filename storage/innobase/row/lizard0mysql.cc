@@ -70,7 +70,7 @@ static scn_t convert_timestamp_to_scn_low(utc_t user_utc, dberr_t *err) {
   return fbq_scn;
 }
 
-int convert_timestamp_to_scn(THD *thd, my_utc_t utc, my_scn_t *scn) {
+int convert_timestamp_to_scn(THD *thd, utc_t utc, scn_t *scn) {
   dberr_t err;
 
   if (!srv_force_normal_query_if_fbq) {

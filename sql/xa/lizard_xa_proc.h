@@ -24,7 +24,8 @@
 #define SQL_XA_PROC_XA_INCLUDED
 
 #include "sql/package/proc.h"
-#include "storage/innobase/include/lizard0xa0iface.h"
+
+#include "sql/xa/lizard_xa_trx.h"
 
 /**
   XA procedures (dbms_xa package)
@@ -176,7 +177,7 @@ class Sql_cmd_xa_proc_prepare_with_trx_slot : public Sql_cmd_xa_proc_base {
   explicit Sql_cmd_xa_proc_prepare_with_trx_slot(THD *thd,
                                                  mem_root_deque<Item *> *list,
                                                  const Proc *proc)
-      : Sql_cmd_xa_proc_base(thd, list, proc), m_tsa(0) {}
+      : Sql_cmd_xa_proc_base(thd, list, proc), m_slot_ptr(0) {}
 
   /**
     Implementation of Proc execution body.
@@ -192,7 +193,7 @@ class Sql_cmd_xa_proc_prepare_with_trx_slot : public Sql_cmd_xa_proc_base {
   virtual void send_result(THD *thd, bool error) override;
 
  private:
-  lizard::xa::TSA m_tsa;
+  my_slot_ptr_t m_slot_ptr;
 };
 
 class Xa_proc_prepare_with_trx_slot : public Xa_proc_base {

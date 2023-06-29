@@ -3371,7 +3371,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
 
   lizard::simulate_snapshot_clause(thd, all_tables);
 
-  if (im::cn_heartbeat_timeout_freeze_updating(lex)) {
+  if (lizard::xa::cn_heartbeat_timeout_freeze_updating(lex)) {
     goto error;
   }
 

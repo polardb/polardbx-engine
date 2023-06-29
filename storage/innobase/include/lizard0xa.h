@@ -123,29 +123,17 @@ extern bool trx_slot_check_validity(const trx_t *trx);
 @return nullptr if no external xa. */
 extern const XID *trx_slot_get_xa_xid_from_thd(THD *thd);
 
-/*************************************************
-*                Heartbeat Freezer              *
-*************************************************/
-/** Freeze purge sys and update operations if no heartbeat is received for a
-long time */
-extern bool srv_no_heartbeat_freeze;
-
-/** No heartbeat timeout. */
-extern ulint srv_no_heartbeat_freeze_timeout;
-
 /**
-  Decide if the purge system should be frozen and all update operations
-  blocked.
-*/
-extern bool hb_freezer_determine_freeze();
+  Find transactions in the finalized state by GTRID.
 
-/**
-  If enable the hb_freezer, pretend to send heartbeat before updating, so it
-  won't be blocked because of timeout.
-*/
-void freeze_db_if_no_cn_heartbeat_enable_on_update(THD *, SYS_VAR *, void *var_ptr,
-                                                  const void *save);
+  @params[in] in_gtrid          gtird
+  @params[in] in_len            length
+  @param[out] Transaction_info  Corresponding transaction info
 
+  @retval     true if the corresponding transaction is found, false otherwise.
+*/
+bool trx_search_by_gtrid(const char *gtrid, unsigned len,
+                         Transaction_info *info);
 }  // namespace xa
 }  // namespace lizard
 

@@ -377,7 +377,8 @@ bool Snapshot_scn_vision::too_old() const {
 }
 
 void Snapshot_scn_vision::after_activate() {
-  my_trx_id_t tid = gcs_search_up_limit_tid<Snapshot_scn_vision>(*this);
+  handlerton *ttse = innodb_hton;
+  my_trx_id_t tid = ttse->ext.search_up_limit_tid_for_scn(*this);
   set_up_limit_tid(tid);
   return;
 }
@@ -400,11 +401,16 @@ bool Snapshot_gcn_vision::too_old() const {
       assert(0);
       return true;
   }
+
+  assert(0);
+  return true;
 }
 
 void Snapshot_gcn_vision::after_activate() {
-  gcs_set_gcn_if_bigger(val_int());
-  my_trx_id_t tid = gcs_search_up_limit_tid<Snapshot_gcn_vision>(*this);
+  handlerton *ttse = innodb_hton;
+  assert(ttse);
+  ttse->ext.set_gcn_if_bigger(val_int());
+  my_trx_id_t tid = ttse->ext.search_up_limit_tid_for_gcn(*this);
   set_up_limit_tid(tid);
   return;
 }
@@ -489,19 +495,18 @@ void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
 int Table_snapshot::exchange_timestamp_vision_to_scn_vision(
     Snapshot_vision **vision, THD *thd) {
   int error = 0;
+  handlerton *ttse = innodb_hton;
 
   my_utc_t utc_second = (*vision)->val_int();
   my_scn_t scn;
 
-  error = convert_timestamp_to_scn(thd, utc_second, &scn);
-
+  error = ttse->ext.convert_timestamp_to_scn(thd, utc_second, &scn);
   if (!error) {
     /** Change the vision. */
     *vision = get(AS_OF_SCN);
 
     (*vision)->store_int(scn);
   }
-
   return error;
 }
 

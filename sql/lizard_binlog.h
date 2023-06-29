@@ -52,4 +52,18 @@ class Gcn_manager {
   Gcn_manager &operator=(const Gcn_manager &) = default;
   Gcn_manager(Gcn_manager &&) = default;
 };
+
+namespace lizard {
+namespace xa {
+/**
+  Like binlog_start_trans_and_stmt. The difference is:
+
+  binlog_start_trans_and_stmt is not sure whether to open a statement or a
+  transaction, while binlog_start_trans is to open a transaction
+  deterministically.
+*/
+int binlog_start_trans(THD *thd);
+}
+}  // namespace lizard
+
 #endif

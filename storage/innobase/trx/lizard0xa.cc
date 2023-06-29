@@ -32,7 +32,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0xa.h"
 #include "lizard0read0types.h"
-#include "lizard0xa0iface.h"
 #include "lizard0undo.h"
 #include "m_ctype.h"
 #include "mysql/plugin.h"
@@ -41,7 +40,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_innodb.h"
 #include "lizard0ha_innodb.h"
 #include "sql/sql_class.h"
-#include "sql/mysqld.h" // innodb_hton
 #include "lizard0ut.h"
 
 #include "sql/sql_class.h"
@@ -157,25 +155,17 @@ uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len) {
   return res;
 }
 
-const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK", "UNKNOWN"};
+/**
+  Find transactions in the finalized state by GTRID.
 
-bool start_and_register_rw_trx_for_xa(THD *thd) {
-  trx_t *trx = check_trx_exists(thd);
+  @params[in] in_gtrid          gtird
+  @params[in] in_len            length
+  @param[out] Transaction_info  Corresponding transaction info
 
-  /** check_trx_exists will create trx if no trx. */
-  ut_ad(trx);
-
-  trx_start_if_not_started(trx, true, UT_LOCATION_HERE);
-
-  innobase_register_trx_only_trans(innodb_hton, thd, trx);
-
-  thd->get_ha_data(innodb_hton->slot)->ha_info[1].set_trx_read_write();
-
-  return false;
-}
-
-bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
-                                    Transaction_info *info) {
+  @retval     true if the corresponding transaction is found, false otherwise.
+*/
+bool trx_search_by_gtrid(const char *gtrid, unsigned len,
+                         Transaction_info *info) {
   trx_rseg_t *rseg;
   txn_undo_hdr_t txn_hdr;
   bool found;
@@ -185,7 +175,6 @@ bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
   ut_ad(rseg);
 
   found = txn_rseg_find_trx_info_by_gtrid(rseg, gtrid, len, &txn_hdr);
-
   if (found) {
     switch (txn_hdr.state) {
       case TXN_UNDO_LOG_COMMITED:
@@ -203,40 +192,9 @@ bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
       default:
         ut_error;
     }
-    info->gcn = txn_hdr.image.gcn;
+    info->gcn = static_cast<my_gcn_t>(txn_hdr.image.gcn);
   }
-
   return found;
-}
-
-const char *trx_slot_trx_state_to_str(const enum Transaction_state state) {
-  return Transaction_state_str[state];
-}
-
-bool trx_slot_assign_for_xa(THD *thd, TSA *tsa) {
-  trx_t *trx = check_trx_exists(thd);
-
-  /** check_trx_exists will create trx if no trx. */
-  ut_ad(trx);
-
-  /** The trx must have been started as rw mode. */
-  if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) ||
-      trx->id == 0 || trx->read_only) {
-    return true;
-  }
-
-  ut_ad(!trx->internal);
-
-  /** Force to assign a TXN. */
-  if (txn_undo_xid_add_txn_undo(thd, trx) != DB_SUCCESS) {
-    return true;
-  }
-
-  if (tsa) {
-    *tsa = static_cast<TSA>(trx->txn_desc.undo_ptr);
-  }
-
-  return false;
 }
 
 const XID *trx_slot_get_xa_xid_from_thd(THD *thd) {
@@ -296,101 +254,6 @@ bool trx_slot_check_validity(const trx_t *trx) {
   }
 
   return true;
-}
-
-/*************************************************
-*                Heartbeat Freezer              *
-*************************************************/
-bool srv_no_heartbeat_freeze;
-
-ulint srv_no_heartbeat_freeze_timeout;
-
-class Heartbeat_freezer {
- public:
-  Heartbeat_freezer() : m_is_freeze(false) {}
-
-  bool is_freeze() { return m_is_freeze; }
-
-  void heartbeat() {
-    std::lock_guard<std::mutex> guard(m_mutex);
-    m_timer.update();
-    m_is_freeze = false;
-  }
-
-  bool determine_freeze() {
-    uint64_t diff_time;
-    bool block;
-    constexpr uint64_t PRINTER_INTERVAL_SECONDS = 180;
-    static Lazy_printer printer(PRINTER_INTERVAL_SECONDS);
-
-    std::lock_guard<std::mutex> guard(m_mutex);
-
-    if (!srv_no_heartbeat_freeze) {
-      block = false;
-      goto exit_func;
-    }
-
-    diff_time = m_timer.since_last_update();
-
-    block = (diff_time > srv_no_heartbeat_freeze_timeout);
-
-  exit_func:
-    if (block) {
-      printer.print(
-          "The purge sys is blocked because no heartbeat has been received "
-          "for a long time. If you want to advance the purge sys, please call "
-          "dbms_xa.send_heartbeat().");
-
-      m_is_freeze = true;
-    } else {
-      m_is_freeze = false;
-      printer.reset();
-    }
-
-    return block;
-  }
-
- private:
-  /** Timer for check timeout. */
-  Simple_timer m_timer;
-
-  /* No need to use std::atomic because no need to read the newest value
-  immediately. */
-  bool m_is_freeze;
-
-  /* Mutex modification of m_is_freeze. */
-  std::mutex m_mutex;
-};
-
-Heartbeat_freezer hb_freezer;
-
-void hb_freezer_heartbeat() {
-  hb_freezer.heartbeat();
-}
-
-bool hb_freezer_determine_freeze() {
-  return hb_freezer.determine_freeze();
-}
-
-bool hb_freezer_is_freeze() {
-  return srv_no_heartbeat_freeze && hb_freezer.is_freeze();
-}
-
-/**
-  If enable the hb_freezer, pretend to send heartbeat before updating, so it
-  won't be blocked because of timeout.
-*/
-void freeze_db_if_no_cn_heartbeat_enable_on_update(THD *, SYS_VAR *, void *var_ptr,
-                                                  const void *save) {
-  const bool is_enable = *static_cast<const bool *>(save);
-
-  /** 1. Pretend to send heartbeat. */
-  if (is_enable) {
-    hb_freezer_heartbeat();
-  }
-
-  /** 2.Update the var */
-  *static_cast<bool *>(var_ptr) = is_enable;
 }
 
 }  // namespace xa

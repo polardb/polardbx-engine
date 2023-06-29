@@ -71,6 +71,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0purge.h"
 #include "lizard0xa.h"
 
+#include "lizard_iface.h"
+
 /** Maximum allowable purge history length.  <=0 means 'infinite'. */
 ulong srv_max_purge_lag = 0;
 

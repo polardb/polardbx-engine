@@ -269,6 +269,8 @@ void gcs_erase_lists(trx_t *trx);
 template <typename T>
 extern trx_id_t gcs_search_up_limit_tid(const T &lhs);
 
+extern void gcs_set_gcn_if_bigger(gcn_t gcn);
+
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /** Check if min_safe_scn is valid */
 void min_safe_scn_valid();

@@ -605,10 +605,14 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx);
 bool txn_check_gtrid_rseg_mapping(const XID *xid,
                                   const trx_rseg_t *expect_rseg);
 
-/** For saving XID add txn undo slot, if required.
-@param[in]  trx   transaction
-@return innodb error code. */
-dberr_t txn_undo_xid_add_txn_undo(THD *thd, trx_t *trx);
+/** Allocate txn undo and return transaction slot address.
+ *
+ * @param[in]	trx
+ * @param[out]	Slot address
+ *
+ * @retval	innodb error code.
+ **/
+dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr);
 
 /*-----------------------------------------------------------------------------*/
 /**
