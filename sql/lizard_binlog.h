@@ -37,6 +37,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 class THD;
 class Binlog_event_writer;
 
+extern bool opt_gcn_write_event;
+
 class Gcn_manager {
  public:
   Gcn_manager() {}

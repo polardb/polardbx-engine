@@ -397,8 +397,8 @@ bool Snapshot_gcn_vision::too_old() const {
     case MYSQL_CSR_ASSIGNED:
       assert(m_current_scn == MYSQL_SCN_NULL && m_gcn != MYSQL_GCN_NULL);
       return  innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn);
-    case MYSQL_CSR_NONE:
-      assert(0);
+    default:
+      assert(m_csr == MYSQL_CSR_NONE);
       return true;
   }
 

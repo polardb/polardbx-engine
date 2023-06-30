@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define GCN_EVENT_H
 
 #include "control_events.h"
+#include "sql/lizard/lizard_rpl_gcn.h" // MyGCN...
 
 namespace binary_log {
 /**
@@ -111,12 +112,23 @@ class Gcn_event : public Binary_log_event {
 #ifndef HAVE_MYSYS
   // TODO(WL#7684): Implement the method print_event_info and print_long_info
   //               for all the events supported  in  MySQL Binlog
-  virtual void print_event_info(std::ostream &) override {}
-  virtual void print_long_info(std::ostream &) override {}
+  void print_event_info(std::ostream &) {}
+  void print_long_info(std::ostream &) {}
 #endif
 
-  bool has_commit_gcn() { return flags & FLAG_HAVE_COMMITTED_GCN; }
-  uint64_t get_commit_gcn() { return commit_gcn; }
+  bool have_commit_gcn() const { return flags & FLAG_HAVE_COMMITTED_GCN; }
+  bool is_assigned_gcn() const { return flags & FLAG_GCN_ASSIGNED; }
+
+  MyGCN get_commit_gcn() const {
+    MyGCN my_gcn;
+
+    assert(have_commit_gcn());
+
+    my_gcn.set(commit_gcn,
+               is_assigned_gcn() ? MYSQL_CSR_ASSIGNED : MYSQL_CSR_AUTOMATIC);
+
+    return my_gcn;
+  }
 };
 
 }  // end namespace binary_log

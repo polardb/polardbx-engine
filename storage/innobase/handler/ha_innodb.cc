@@ -20363,7 +20363,7 @@ static xa_status_code innobase_commit_by_xid(
   if (trx != nullptr) {
     TrxInInnoDB trx_in_innodb(trx);
 
-    lizard::Guard_xa_specification guard(trx, xa_spec);
+    lizard::Guard_xa_specification guard(trx, xa_spec, false);
 
     innobase_commit_low(trx);
     ut_ad(trx->mysql_thd == nullptr);
@@ -20393,7 +20393,7 @@ static xa_status_code innobase_rollback_by_xid(
   if (trx != nullptr) {
     TrxInInnoDB trx_in_innodb(trx);
 
-    lizard::Guard_xa_specification guard(trx, xa_spec);
+    lizard::Guard_xa_specification guard(trx, xa_spec, false);
 
     int ret = innobase_rollback_trx(trx);
 
@@ -20446,7 +20446,7 @@ static xa_status_code innobase_set_prepared_in_tc_by_xid(
 
     innobase_srv_conc_force_exit_innodb(trx);
 
-    lizard::Guard_xa_specification guard(trx, xa_spec);
+    lizard::Guard_xa_specification guard(trx, xa_spec, true);
 
     dberr_t err = trx_set_prepared_in_tc_for_mysql(trx);
 

@@ -30,6 +30,7 @@
 #include "sql/xa.h"              // XID
 
 #include "sql/binlog/lizard0recovery.h"
+#include "sql/gcn_log_event.h"
 
 namespace binlog {
 class Group_specification_recovery;
@@ -326,6 +327,8 @@ class Binlog_recovery {
   void process_gtid_event(Gtid_log_event &ev);
 
   void process_format_event(const Format_description_event &ev);
+
+  void process_gcn_event(const Gcn_log_event &ev);
 
  public:
   void gather_internal_xa_spec(const my_xid xid, const Binlog_xa_specification &spec);

@@ -1021,7 +1021,8 @@ class XA_specification_strategy {
 
 class Guard_xa_specification {
  public:
-  Guard_xa_specification(trx_t *trx, XA_specification *xa_spec);
+  Guard_xa_specification(trx_t *trx, XA_specification *xa_spec,
+                         bool disable_gcn);
 
   virtual ~Guard_xa_specification();
 

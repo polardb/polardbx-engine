@@ -2835,7 +2835,8 @@ void XA_specification_strategy::overwrite_gcn(trx_t *trx) const {
 }
 
 Guard_xa_specification::Guard_xa_specification(trx_t *trx,
-                                               XA_specification *xa_spec)
+                                               XA_specification *xa_spec,
+                                               bool disable_gcn)
     : m_trx(trx), m_xa_spec(xa_spec) {
   ut_ad(trx);
 
@@ -2846,7 +2847,7 @@ Guard_xa_specification::Guard_xa_specification(trx_t *trx,
     xss.overwrite_gtid_storage(trx);
   }
 
-  if (xss.has_gcn()) {
+  if (!disable_gcn && xss.has_gcn()) {
     xss.overwrite_gcn(trx);
   }
 }

@@ -66,7 +66,8 @@ class Binlog_xa_specification : public XA_specification {
 
   virtual ~Binlog_xa_specification() {}
 
-  Binlog_xa_specification(const Binlog_xa_specification &other) {
+  Binlog_xa_specification(const Binlog_xa_specification &other)
+      : XA_specification(other) {
     m_gtid = other.m_gtid;
     m_source = other.m_source;
     m_sid.copy_from(other.m_sid);
@@ -74,6 +75,8 @@ class Binlog_xa_specification : public XA_specification {
 
   Binlog_xa_specification &operator=(const Binlog_xa_specification &other) {
     if (this != &other) {
+      XA_specification::operator=(other);
+
       this->m_gtid = other.m_gtid;
       this->m_source = other.m_source;
       m_sid.copy_from(other.m_sid);

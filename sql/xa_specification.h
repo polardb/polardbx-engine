@@ -56,6 +56,17 @@ class XA_specification {
     return m_gcn.print();
   }
 
+  XA_specification(const XA_specification &other) {
+    m_gcn = other.gcn();
+  }
+
+  XA_specification &operator=(const XA_specification &other) {
+    if (this != &other) {
+      m_gcn = other.gcn();
+    }
+    return *this;
+  }
+
   void set_gcn(const MyGCN &gcn) { m_gcn = gcn; }
   const MyGCN& gcn() const { return m_gcn; }
 

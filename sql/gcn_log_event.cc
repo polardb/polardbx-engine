@@ -259,14 +259,16 @@ bool Gcn_log_event::write(Basic_ostream *ostream) {
 
 #ifndef MYSQL_SERVER
 void Gcn_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
-  assert(flags != 0);
   IO_CACHE *const head = &print_event_info->head_cache;
 
   if (!print_event_info->short_form) {
     print_header(head, print_event_info, false);
-    my_b_printf(head, "\tGcn\thave_snapshot_seq=%s\thave_commit_seq=%s\n",
-                (flags & FLAG_HAVE_SNAPSHOT_SEQ) ? "true" : "false",
-                (flags & FLAG_HAVE_COMMITTED_SEQ) ? "true" : "false");
+    my_b_printf(
+        head,
+        "\tGcn\thave_snapshot_seq=%s\thave_commit_seq=%s\tGCN_ASSIGNED=%s\n",
+        (flags & FLAG_HAVE_SNAPSHOT_SEQ) ? "true" : "false",
+        (flags & FLAG_HAVE_COMMITTED_SEQ) ? "true" : "false",
+        (flags & FLAG_GCN_ASSIGNED) ? "ture" : "false");
   }
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {
@@ -282,6 +284,8 @@ int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
   assert(rli->info_thd == thd);
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {
+    assert(commit_gcn != MYSQL_GCN_NULL);
+
     thd->variables.innodb_commit_gcn = commit_gcn;
 
     /** Set owned_commit_gcn in THD. */
@@ -304,12 +308,6 @@ int Gcn_log_event::do_update_pos(Relay_log_info *rli) {
 }
 
 Log_event::enum_skip_reason Gcn_log_event::do_shall_skip(Relay_log_info *rli) {
-  Log_event::enum_skip_reason ret = Log_event::continue_group(rli);
-
-  if (ret != EVENT_SKIP_NOT) {
-    // TODO:
-    // thd->m_extra_desc.m_commit_gcn = MYSQL_GCN_NULL;
-  }
-  return ret;
+  return Log_event::continue_group(rli);
 }
 #endif  // MYSQL_SERVER

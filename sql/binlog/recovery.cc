@@ -88,6 +88,9 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
         this->process_gtid_event(dynamic_cast<Gtid_log_event &>(*ev));
         break;
       }
+      case binary_log::GCN_LOG_EVENT: {
+        this->process_gcn_event(dynamic_cast<Gcn_log_event &>(*ev));
+      }
       default: {
         break;
       }

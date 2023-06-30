@@ -1,0 +1,339 @@
+#
+# Test recover xa specification.
+#
+source include/have_log_bin.inc;
+-- source include/have_binlog_format_row.inc
+--source include/not_valgrind.inc
+source include/have_debug.inc;
+--source include/not_crashrep.inc
+
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+
+connection default;
+
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+--let $commit_gcn = `select @base_seq`
+--let $step_gcn = 100
+
+create database db_tc;
+create table db_tc.t(id int);
+
+# 1. normal commit (insert)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+begin;
+insert into db_tc.t values(1);
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+commit;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $diff = 1
+
+--expr $snapshot_gcn = $commit_gcn - $diff
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from db_tc.t;
+
+--expr $snapshot_gcn = $commit_gcn + $diff
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from db_tc.t;
+
+# 2. normal commit (update)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+begin;
+update db_tc.t set id = 2;
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+commit;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $diff = 1
+
+--expr $snapshot_gcn = $commit_gcn - $diff
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from db_tc.t;
+
+--expr $snapshot_gcn = $commit_gcn + $diff
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from db_tc.t;
+
+# 3. xa prepare (insert)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+--error 2013
+xa prepare 'xx';
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+xa commit 'xx';
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+# 4. xa prepare (update)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+xa start 'xx';
+update db_tc.t set id = 2;
+xa end 'xx';
+--error 2013
+xa prepare 'xx';
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+xa commit 'xx';
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+
+# 5. xa commit one phase (insert)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+xa commit 'xx' one phase;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+
+# 6. xa commit one phase (update)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+xa start 'xx';
+update db_tc.t set id = 2;
+xa end 'xx';
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+xa commit 'xx' one phase;
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+
+# 7. xa commit (insert)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+xa commit 'xx';
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+# 8. xa commit (update)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+xa start 'xx';
+update db_tc.t set id = 2;
+xa end 'xx';
+xa prepare 'xx';
+
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+xa commit 'xx';
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+# 9. xa rollback (insert)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+xa start 'xx';
+insert into db_tc.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+xa rollback 'xx';
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= ROLLBACK
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+# 10. xa rollback (update)
+#
+connection default;
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+xa start 'xx';
+insert into db_tc.t values(1);
+update db_tc.t set id = 2;
+xa end 'xx';
+xa prepare 'xx';
+
+SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+
+--expr $commit_gcn = $commit_gcn + $step_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+
+--error 2013
+xa rollback 'xx';
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+connection default;
+--let $expect_gcn= $commit_gcn
+--let $expect_state= ROLLBACK
+--let $gtrid= 'xx'
+--source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+
+
+connection default;
+drop table db_tc.t;
+drop database db_tc;

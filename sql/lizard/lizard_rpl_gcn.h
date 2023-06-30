@@ -46,7 +46,7 @@ struct MyGCN {
   bool is_empty() const {
 #ifdef UNIV_DEBUG
     if (gcn == MYSQL_GCN_NULL) {
-      assert(csr != MYSQL_CSR_NONE);
+      assert(csr == MYSQL_CSR_NONE);
     }
 #endif
     return gcn == MYSQL_GCN_NULL;

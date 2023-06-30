@@ -248,7 +248,7 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
   if (info.commit_list ? info.commit_list->count(xid) != 0
                        : tc_heuristic_recover == TC_HEURISTIC_RECOVER_COMMIT) {
     enum xa_status_code exec_status;
-    
+
     if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
       exec_status = ::generate_xa_recovery_error();
     else

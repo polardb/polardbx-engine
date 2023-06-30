@@ -86,6 +86,18 @@ void binlog::Binlog_recovery::process_format_event(
   m_server_version = do_server_version_int(ev.server_version);
 }
 
+void binlog::Binlog_recovery::process_gcn_event(const Gcn_log_event &ev) {
+  this->m_is_malformed = this->m_in_transaction;
+  if (this->m_is_malformed) {
+    this->m_failure_message.assign(
+        "Gcn_log_event inside the boundary of a sequnece of events "
+        "representing an active transaction");
+    return;
+  }
+
+  m_xa_spec.set_gcn(ev.get_commit_gcn());
+}
+
 /** Gather internal commit xid and spec.*/
 void binlog::Binlog_recovery::gather_internal_xa_spec(
     const my_xid xid, const Binlog_xa_specification &spec) {

@@ -164,3 +164,11 @@ static Sys_var_ulonglong Sys_freeze_db_if_no_cn_heartbeat_timeout_sec(
     GLOBAL_VAR(lizard::xa::opt_no_heartbeat_freeze_timeout),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, 24 * 60 * 60), DEFAULT(10),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+extern bool opt_gcn_write_event;
+static Sys_var_bool Sys_gcn_write_event(
+    "gcn_write_event",
+    "Writting a gcn event which content is gcn number for every transaction.",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_gcn_write_event),
+    CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));

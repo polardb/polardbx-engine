@@ -994,7 +994,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   */
   bool is_rotating_caused_by_incident;
 
- private:
+ public:
   std::unique_ptr<Gcn_manager> gcn_mgr;
 };
 
