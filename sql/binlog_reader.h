@@ -394,6 +394,7 @@ class Basic_binlog_file_reader {
         binary_log::Log_event_type type = ev->get_type_code();
         delete ev;
         if (type != binary_log::PREVIOUS_GTIDS_LOG_EVENT &&
+            type != binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT &&
             type != binary_log::ROTATE_EVENT)
           break;
       }

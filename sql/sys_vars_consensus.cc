@@ -793,3 +793,10 @@ static Sys_var_ulonglong Sys_consensus_auto_leader_transfer_check_seconds(
     GLOBAL_VAR(opt_consensus_auto_leader_transfer_check_seconds), CMD_LINE(OPT_ARG),
     VALID_RANGE(10, 300), DEFAULT(60),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_auto_leader_transfer_check_seconds));
+
+
+static Sys_var_bool Sys_consensus_safe_for_reset_master(
+      "consensus_safe_for_reset_master",
+      "insert Consensus_empty event into binblog after reset master",
+      SESSION_VAR(opt_consensus_safe_for_reset_master),
+      CMD_LINE(OPT_ARG), DEFAULT(FALSE), NO_MUTEX_GUARD, NOT_IN_BINLOG);

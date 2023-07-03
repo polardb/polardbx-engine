@@ -59,7 +59,8 @@ SET GLOBAL binlog_error_action= IGNORE_ERROR;
 ###########
 
 # assertion: should raise error
--- error ER_NO_UNIQUE_LOGFILE
+# xcluster do not throw error on flush logs
+# -- error ER_NO_UNIQUE_LOGFILE
 FLUSH LOGS;
 
 ##############
@@ -76,6 +77,8 @@ FLUSH LOGS;
 -- copy_file $MYSQLD_DATADIR/binlog.index.orig $MYSQLD_DATADIR/binlog.index
 -- remove_file $MYSQLD_DATADIR/binlog.index.orig
 
+-- remove_file $MYSQLD_DATADIR/binlog.000001
+-- copy_file $MYSQLD_DATADIR/binlog.2147483647 $MYSQLD_DATADIR/binlog.000001
 -- remove_file $MYSQLD_DATADIR/binlog.2147483646
 -- remove_file $MYSQLD_DATADIR/binlog.2147483647
 

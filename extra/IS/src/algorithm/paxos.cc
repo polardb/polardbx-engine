@@ -2321,7 +2321,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
     easy_warn_log(
         "Server %d : onAppendLogResponce receive a msg msgId(%llu) from server "
         "%llu learnerSource:%llu who's learnerSource not match or already not "
-        "a leaner!\n",
+        "a learner!\n",
         localServer_->serverId, msg->msgid(), msg->serverid(),
         server->learnerSource);
     return -3;
@@ -3349,7 +3349,7 @@ int Paxos::initAsLearner(std::string &strConfig, ClientService *cs,
   port_ = std::stoull(curConfig.substr(pos + 1));
   int error = 0;
   if ((error = srv_->start(port_))) {
-    easy_error_log("Fail to start libeasy service, error(%d).", error);
+    easy_error_log("Fail to start libeasy service on port(%u), error(%d).", port_, error);
     abort();
   }
 

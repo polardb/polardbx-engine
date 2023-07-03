@@ -38,7 +38,11 @@ Preparing deadlock scenario for mysql.component
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
 ROLLBACK;
+<<<<<<< HEAD
 Preparing deadlock scenario for mysql.concurrency_control
+=======
+Preparing deadlock scenario for mysql.consensus_info
+>>>>>>> [Raft] fix mysql test case bugs
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
 ROLLBACK;

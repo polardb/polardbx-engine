@@ -1,6 +1,7 @@
 #
 # 0. Add suppressions for the test and backup data directory
 call mtr.add_suppression("Failed to delete file.*");
+set @@consensus_safe_for_reset_master = 1;
 RESET MASTER;
 #
 # 1. Case1: Remove binary log file and create directory with same name

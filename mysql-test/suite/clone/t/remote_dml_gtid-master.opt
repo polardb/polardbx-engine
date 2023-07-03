@@ -1,2 +1,3 @@
 --gtid_mode=ON
 --enforce_gtid_consistency
+--consensus_safe_for_reset_master=1

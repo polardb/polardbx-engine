@@ -24,6 +24,11 @@ let $MYSQLD_DATADIR1 = $MYSQL_TMP_DIR/datadir1/data;
 
 call mtr.add_suppression("ERROR 1118 \\(42000\\) at line 106: Row size too large \\(> 8126\\)");
 
+let $consensus_port = query_get_value("select @@port+40 as c1", c1, 1);
+--let $cluster_info= '127.0.0.1:$consensus_port@1'
+--source include/make_consensus_args.inc
+
+
 # Stop the MTR default datadir, as it was started with default 16k page size
 --echo # Stop DB server which was created by MTR default
 --source include/shutdown_mysqld.inc
@@ -35,8 +40,9 @@ write_file $BOOTSTRAP_SQL;
 CREATE DATABASE test DEFAULT CHARACTER SET latin1;
 EOF
 
+
 # Set the bootstrap parameter page size 32k for datadir1
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=32K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=32K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Run the bootstrap command with page size 32k
 --exec $NEW_CMD
@@ -163,7 +169,7 @@ DROP DATABASE test;
 --mkdir $MYSQL_TMP_DIR/datadir1/data
 
 # Set the bootstrap parameter page size 16k for datadir1
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=16K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=16K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Run the bootstrap command with page size 16k
 --exec $NEW_CMD
@@ -225,7 +231,7 @@ DROP DATABASE test;
 --mkdir $MYSQL_TMP_DIR/datadir1/data
 
 # Set the bootstrap parameter page size 64k for datadir1
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=64K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=64K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Run the bootstrap command with page size 64k
 --exec $NEW_CMD

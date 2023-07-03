@@ -12,8 +12,10 @@ let datadir= $MYSQL_TMP_DIR/help_verbose/data;
 let SEARCH_FILE = $bugdir/mysqld.log;
 let $args=--no-defaults --innodb_dedicated_server=OFF --lc_messages_dir=$MYSQL_SHAREDIR --datadir=$datadir --skip-grant-tables --secure-file-priv=$bugdir>$SEARCH_FILE 2>&1 ;
 
+--source include/make_consensus_args.inc
+
 --echo # Initialize
---exec $MYSQLD $args --initialize
+--exec $MYSQLD $args --initialize $consensus_args
 
 --echo # Start with 64M buffer pool
 --exec $MYSQLD $args --innodb_buffer_pool_size=64M --help --verbose

@@ -2275,13 +2275,6 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
     /* correct the log_pos temporarily stored in IO_CACHE of consensus_log_manager */
     correct_binlog_writer_log_pos(&writer);
 
-    if (opt_consensuslog_revise) {
-      writer.inc_end_log_pos(mysql_bin_log.get_binlog_file()->position());
-      writer.inc_end_log_pos(Consensus_log_event::MAX_EVENT_LENGTH);
-      if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
-        writer.inc_end_log_pos(4);  // checksum length
-    }
-
     /* The GTID ownership process might set the commit_error */
     error = (thd->commit_error == THD::CE_FLUSH_ERROR ||
              thd->commit_error == THD::CE_FLUSH_GNO_EXHAUSTED_ERROR);

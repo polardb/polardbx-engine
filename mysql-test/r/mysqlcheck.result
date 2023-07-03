@@ -7,7 +7,11 @@ mtr.test_ignored_global_suppressions               OK
 mtr.test_suppressions                              OK
 mysql.columns_priv                                 OK
 mysql.component                                    OK
+<<<<<<< HEAD
 mysql.concurrency_control                          OK
+=======
+mysql.consensus_info                               OK
+>>>>>>> [Raft] fix mysql test case bugs
 mysql.db                                           OK
 mysql.default_roles                                OK
 mysql.engine_cost                                  OK
@@ -66,7 +70,11 @@ status   : OK
 mysql.component
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
+<<<<<<< HEAD
 mysql.concurrency_control
+=======
+mysql.consensus_info
+>>>>>>> [Raft] fix mysql test case bugs
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.db
@@ -189,7 +197,11 @@ note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.columns_priv                                 OK
 mysql.component                                    OK
+<<<<<<< HEAD
 mysql.concurrency_control                          OK
+=======
+mysql.consensus_info                               OK
+>>>>>>> [Raft] fix mysql test case bugs
 mysql.db                                           OK
 mysql.default_roles                                OK
 mysql.engine_cost                                  OK
@@ -235,7 +247,11 @@ status   : OK
 mysql.component
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
+<<<<<<< HEAD
 mysql.concurrency_control
+=======
+mysql.consensus_info
+>>>>>>> [Raft] fix mysql test case bugs
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.db

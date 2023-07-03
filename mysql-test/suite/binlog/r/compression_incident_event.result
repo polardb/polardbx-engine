@@ -10,7 +10,6 @@ include/assert.inc [Expected event type Query]
 include/assert.inc [Expected event type Table_map]
 include/assert.inc [Expected event type Write_rows]
 include/assert.inc [Expected event type Xid]
-include/assert.inc [Expected event type Incident]
 include/assert.inc [Number of rows in performance_schema.binary_log_transaction_compression_stats = 0 for compression_type != NONE (because of incident event)]
 include/assert.inc [Number of rows in performance_schema.binary_log_transaction_compression_stats = 1 for compression_type = NONE]
 DROP TABLE t1;

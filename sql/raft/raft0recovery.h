@@ -84,21 +84,13 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
   Binlog_recovery &recover() override;
 
  private:
-  std::unique_ptr<Process_hook<Query_log_event>>
-  create_process_query_event_hook(Query_log_event const &ev) override;
+  void process_xa_commit(const std::string &query) override;
 
-  std::unique_ptr<Process_hook<std::string>>
-  create_process_xa_commit_hook(std::string const &query) override;
+  void process_xa_rollback(const std::string &query) override;
 
-  std::unique_ptr<Process_hook<std::string>>
-  create_process_xa_rollback_hook(std::string const &query) override;
+  void process_xid_event(Xid_log_event const &ev) override;
 
-  std::unique_ptr<Process_hook<Xid_log_event>>
-  create_process_xid_event_hook(Xid_log_event const &ev) override;
-
-  std::unique_ptr<Process_hook<XA_prepare_log_event>>
-  create_process_xa_prepare_event_hook(
-      XA_prepare_log_event const &ev) override;
+  void process_xa_prepare_event(XA_prepare_log_event const &ev) override;
 
   void process_consensus_event(const Consensus_log_event &ev);
 
@@ -109,7 +101,8 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
 
   void process_internal_xid(ulong unmasked_server_id, my_xid xid);
 
-  void process_external_xid(ulong unmasked_server_id, const XID &xid);
+  void process_external_xid(ulong unmasked_server_id, const XID &xid,
+                            enum_ha_recover_xa_state state);
 
  private:
   uint64 m_current_index;

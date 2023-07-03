@@ -99,7 +99,7 @@ FLUSH LOGS;
 
 # 6.b. The `XA PREPARE` and `XA ROLLBACK` aren't found in the binary log.
 #
---let $event_sequence = $empty_event_sequence
+--let $event_sequence = Consensus_log # Consensus_empty
 --source include/assert_binlog_events.inc
 
 # 6.c. The GTID_EXECUTED variable wasn't updated.

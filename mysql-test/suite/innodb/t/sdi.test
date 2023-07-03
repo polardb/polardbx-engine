@@ -37,8 +37,11 @@ write_file $BOOTSTRAP_SQL;
 CREATE DATABASE test;
 EOF
 
+--source include/make_consensus_args.inc
+
+
 # Set the bootstrap parameters with undo log encryption enabled
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --secure-file-priv="" --innodb_redo_log_capacity=$LOG_CAPACITY --innodb_page_size=$START_PAGE_SIZE --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL  </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --secure-file-priv="" --innodb_redo_log_capacity=$LOG_CAPACITY --innodb_page_size=$START_PAGE_SIZE --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL  </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Stop the MTR default DB server
 --source include/shutdown_mysqld.inc

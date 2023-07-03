@@ -165,8 +165,8 @@ EXPLAIN
 set max_heap_table_size=1024*2014*1024;            set tmp_table_size = @@max_heap_table_size;            EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT i,d,c FROM t EXCEPT SELECT i,d,c FROM t) derived
 SELECT id FROM timings ORDER BY t LIMIT 2 OFFSET 2;
 id
-1
 3
+1
 set tmp_table_size = default;
 set internal_tmp_mem_storage_engine = default;
 DROP TABLE timings;

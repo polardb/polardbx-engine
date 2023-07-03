@@ -32,9 +32,8 @@ IF(INSTALL_MYSQLTESTDIR)
     COMPONENT Test
     PATTERN "var" EXCLUDE
     PATTERN "var/" EXCLUDE
-    PATTERN "var_normal/" EXCLUDE
-    PATTERN "var_tp/" EXCLUDE
-    PATTERN "var_tp_ps/" EXCLUDE
+    PATTERN "var_*" EXCLUDE
+    PATTERN "var.*" EXCLUDE
     PATTERN "lib/My/SafeProcess" EXCLUDE
     PATTERN "CPack" EXCLUDE
     PATTERN "CMake*" EXCLUDE

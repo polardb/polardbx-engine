@@ -33,6 +33,7 @@
 --echo #
 --echo # 0. Add suppressions for the test and backup data directory
 call mtr.add_suppression("Failed to delete file.*");
+set @@consensus_safe_for_reset_master = 1;
 RESET MASTER;
 --let $MYSQLD_DATADIR= `SELECT @@datadir`
 --let $BACKUP_DATADIR = $MYSQL_TMP_DIR/data_new

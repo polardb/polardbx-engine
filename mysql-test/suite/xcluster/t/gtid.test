@@ -1,6 +1,6 @@
 --source include/have_log_bin.inc
 --source include/have_gtid.inc
---source include/have_debug_sync_new.inc
+--source include/have_debug_sync.inc
 call mtr.add_suppression("The consensus follower is not allowed to to do current operation.");
 
 --source include/paxos.inc

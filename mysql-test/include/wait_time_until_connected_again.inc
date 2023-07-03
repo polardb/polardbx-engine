@@ -23,5 +23,15 @@ while ($mysql_errno)
   }
   --sleep 0.5
 }
+# wait leader election
+--sleep 1
+let $wait_timeout= 60;
+let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
+--source include/wait_condition.inc
+
+# wait leader enable read/write
+let $wait_timeout= 60;
+let $wait_condition= select SERVER_READY_FOR_RW='Yes' from information_schema.alisql_cluster_local;
+--source include/wait_condition.inc
 --enable_query_log
 --enable_result_log

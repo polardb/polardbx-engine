@@ -48,6 +48,8 @@ The following options may be given as the first argument:
  library, for example exit() from libc.so
  -a, --ansi          Use ANSI SQL syntax instead of MySQL syntax. This mode
  will also set transaction isolation level 'serializable'.
+ --appliedindex-force-delay[=#] 
+ force set a smaller appliedindex
  --authentication-policy=name 
  Defines policies around how user account can be
  configured with Multi Factor authentication methods
@@ -277,10 +279,41 @@ The following options may be given as the first argument:
  proxy user mapping should be done according to GRANT
  PROXY privilege definition.
  -r, --chroot=name   Chroot mysqld daemon during startup.
+<<<<<<< HEAD
  --client-endpoint-ip=name 
  The endpoint ip that client use to connect.
+=======
+ --cluster-current-term=# 
+ Cluster nodes current term  information
+ --cluster-dump-meta Cluster dump meta
+ --cluster-force-change-meta 
+ Cluster force to change meta
+ --cluster-force-recover-index=# 
+ Cluster restore from leader set apply index point
+ --cluster-force-single-mode 
+ Cluster force to use single mode
+ --cluster-id=#      cluster id
+ --cluster-info=name Cluster nodes ip-port information
+ --cluster-learner-node 
+ Cluster learner node type
+ --cluster-log-type-node 
+ Cluster log type instance
+ --cluster-mts-recover-use-index 
+ Cluster use idex to recover mts
+ (Defaults to on; use --skip-cluster-mts-recover-use-index to disable.)
+ --cluster-purged-gtid=name 
+ Cluster set the purged gtid
+ --cluster-start-index=# 
+ Cluster start valid index
+>>>>>>> 4785e8de0cf... fix cases 1
  --collation-server=name 
  Set the default collation.
+ --commit-pos-watcher 
+ background thread checking and updating binlog commit
+ position
+ (Defaults to on; use --skip-commit-pos-watcher to disable.)
+ --commit-pos-watcher-interval[=#] 
+ interval(us) for background thread commit_pos_watcher
  --completion-type=name 
  The transaction completion type, one of NO_CHAIN, CHAIN,
  RELEASE
@@ -294,6 +327,128 @@ The following options may be given as the first argument:
  memory counter
  --connection-memory-limit=# 
  Maximum amount of memory connection can consume
+ --consensus-auto-leader-transfer 
+ whether to enable auto leader transfer in consensus layer
+ (Defaults to on; use --skip-consensus-auto-leader-transfer to disable.)
+ --consensus-auto-leader-transfer-check-seconds[=#] 
+ the interval between a leader check its health for a
+ transfer
+ --consensus-auto-reset-match-index 
+ enable auto reset match index when consensus follower has
+ fewer logs
+ (Defaults to on; use --skip-consensus-auto-reset-match-index to disable.)
+ --consensus-check-commit-index-interval[=#] 
+ check interval for slave calling checkCommitIndex
+ --consensus-check-large-event 
+ check consensus large event or not
+ (Defaults to on; use --skip-consensus-check-large-event to disable.)
+ --consensus-checksum 
+ Checksum when consensus receive log. Disabled by default.
+ --consensus-configure-change-timeout=# 
+ Consensus configure change timeout (ms). Default 1 min
+ --consensus-disable-election 
+ Disable consensus election and stepdown. Disabled by
+ default.
+ --consensus-disable-fifo-cache 
+ disable consensus fifo cache (run with weak consensus
+ mode)
+ --consensus-dynamic-easyindex 
+ Enable dynamic easy addr cidx. Enabled by default.
+ (Defaults to on; use --skip-consensus-dynamic-easyindex to disable.)
+ --consensus-election-timeout=# 
+ Consensus election timeout
+ --consensus-flow-control[=name] 
+ consensus flow control (<-1: no log send, -1: only send
+ log during heartbeat, 0: no flow control, >0: [TODO] flow
+ control).
+ --consensus-force-promote 
+ Try to force promote a follower to leader
+ --consensus-force-recovery 
+ for innodb_force_recovery
+ --consensus-force-sync-epoch-diff[=#] 
+ consensus forceSync epoch diff
+ --consensus-heartbeat-thread-cnt[=#] 
+ Number of consensus heartbeat thread
+ --consensus-index-buf-enabled 
+ Whether to enable Relay_log_info::consensus_index_buf
+ (Defaults to on; use --skip-consensus-index-buf-enabled to disable.)
+ --consensus-io-thread-cnt[=#] 
+ Number of consensus io thread
+ --consensus-large-batch-ratio[=#] 
+ Large batch ratio of consensus server send at once
+ --consensus-large-event-limit=# 
+ Consensus large event limit
+ --consensus-large-event-split-size[=#] 
+ split size for large event, dangerous to change this
+ variable
+ --consensus-large-trx 
+ consensus large trx or not
+ (Defaults to on; use --skip-consensus-large-trx to disable.)
+ --consensus-large-trx-split-size=# 
+ Max size to split large trx into multi consensus logs.
+ (default 2M)
+ --consensus-leader-stop-apply 
+ leader stop apply
+ --consensus-leader-stop-apply-time[=#] 
+ leader stop apply time
+ --consensus-learner-heartbeat 
+ enable send heartbeat to learner
+ (Defaults to on; use --skip-consensus-learner-heartbeat to disable.)
+ --consensus-learner-pipelining 
+ enable pipelining send msg to learner
+ --consensus-learner-timeout=# 
+ Consensus learner connection timeout
+ --consensus-log-cache-size[=#] 
+ Max cached logs size
+ --consensus-log-level[=name] 
+ consensus log level
+ --consensus-max-delay-index[=#] 
+ Max index delay for pipeline log delivery
+ --consensus-max-log-size=# 
+ Max one log size. (default: 20M)
+ --consensus-max-packet-size[=#] 
+ Max package size the consensus server send at once
+ --consensus-min-delay-index[=#] 
+ Min index delay for pipeline log delivery
+ --consensus-msg-compress-option[=name] 
+ consensus msg compress option to one or multiple
+ addressesip:port type(0: no compression, 1: lz4
+ compression, 2: zstd compression) threshold checksum,    
+ if ip:port is *:* it means set option to entire
+ cluster.
+ --consensus-new-follower-threshold[=#] 
+ Max delay index to allow a learner becomes a follower
+ --consensus-old-compact-mode 
+ set server to old compact mode to use to be compactible
+ with version before 1.2.0.2
+ (Defaults to on; use --skip-consensus-old-compact-mode to disable.)
+ --consensus-optimistic-heartbeat 
+ whether to use optimistic heartbeat in consensus layer
+ --consensus-pipelining-timeout[=#] 
+ the timeout the consensus server cache the log
+ (milliseconds)
+ --consensus-prefetch-cache-size[=#] 
+ Max cached logs size
+ --consensus-prefetch-fast-fetch 
+ prefetch speed optimize
+ --consensus-prefetch-wakeup-ratio[=#] 
+ prefetch wakeup ratio 
+ --consensus-prefetch-window-size[=#] 
+ prefetch window size
+ --consensus-replicate-with-cache-log 
+ set server to replicate with cache log
+ --consensus-safe-for-reset-master 
+ insert Consensus_empty event into binblog after reset
+ master
+ --consensus-send-timeout=# 
+ Consensus send packet timeout
+ --consensus-sync-follower-meta-interva[=#] 
+ Interval of leader sync follower's meta for learner
+ source
+ --consensus-worker-thread-cnt[=#] 
+ Number of consensus worker thread
+ --consensuslog-revise 
+ revise consensuslog before flush to disk
  --console           Write error output on screen; don't remove the console
  window on windows.
  --core-file         Write core on errors.
@@ -341,6 +496,10 @@ The following options may be given as the first argument:
  client that does INSERT DELAYED will wait until there is
  room in the queue again. This variable is deprecated
  along with INSERT DELAYED.
+ --disable-wait-commitindex 
+ Whether to wait commitdex when applying binlog in
+ follower, it may detory the cluster data if some crash
+ happen
  --disabled-storage-engines=name 
  Limit CREATE TABLE for the storage engines listed
  --disconnect-on-expired-password 
@@ -360,6 +519,9 @@ The following options may be given as the first argument:
  before storage engine initialization, where each plugin
  is identified as name=library, where name is the plugin
  name and library is the plugin library in plugin_dir.
+ --enable-appliedindex-checker 
+ enable applied index checker during ordered_commit
+ (Defaults to on; use --skip-enable-appliedindex-checker to disable.)
  --end-markers-in-json 
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
@@ -409,6 +571,7 @@ The following options may be given as the first argument:
  --flush             Flush MyISAM tables to disk between SQL commands
  --flush-time=#      A dedicated thread is created to flush all tables at the
  given interval
+ --force-revise      force revise or not
  --ft-boolean-syntax=name 
  List of operators for MATCH ... AGAINST ( ... IN BOOLEAN
  MODE)
@@ -812,9 +975,13 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
+<<<<<<< HEAD
  --opt-enable-rds-priv-strategy 
  When this option is enabled,it will protect reserved
  account and privileges
+=======
+<<<<<<< HEAD
+>>>>>>> [Raft] fix mysql test case bugs
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
@@ -825,6 +992,11 @@ The following options may be given as the first argument:
  --opt-tablestat     When this option is enabled,it will accumulate the table
  statistics
  (Defaults to on; use --skip-opt-tablestat to disable.)
+=======
+ --opt-force-index-pct-cached 
+ force cached table index in memory when estimate query
+ cost
+>>>>>>> 4785e8de0cf... fix cases 1
  --optimizer-max-subgraph-pairs=# 
  Maximum depth of subgraph pairs a query can have before
  the hypergraph join optimizer starts reducing the search
@@ -1209,12 +1381,15 @@ The following options may be given as the first argument:
  buffer of this size for each table it scans. If you do
  many sequential scans, you may want to increase this
  value
+ --read-lsn=#        Minimun log applied index required for replica consistent
+ reads
  --read-only         Make all non-temporary tables read-only, with the
  exception for replication applier threads and users with
  the SUPER privilege.
  --read-rnd-buffer-size=# 
  When reading rows in sorted order after a sort, the rows
  are read through this buffer to avoid a disk seeks
+<<<<<<< HEAD
  --recycle-bin       Whether recycle the table which is going to be dropped
  --recycle-bin-retention=# 
  Seconds before really purging the recycled table.
@@ -1223,6 +1398,10 @@ The following options may be given as the first argument:
  Interval in seconds for recycle scheduler.
  --recycle-scheduler-purge-table-print 
  Print the recycle scheduler process.
+=======
+ --recover-snapshot  recover from the backup of cloud storage and output the
+ committed index
+>>>>>>> [Raft] fix mysql test case bugs
  --regexp-stack-limit=# 
  Stack size limit for regular expressions matches
  --regexp-time-limit=# 
@@ -1302,6 +1481,9 @@ The following options may be given as the first argument:
  Force replication worker threads to commit in the same
  order as on the source. Enabled by default
  (Defaults to on; use --skip-replica-preserve-commit-order to disable.)
+ --replica-read-timeout=# 
+ Maximum wait period (milliseconds) when performing
+ replica consistent reads
  --replica-skip-errors=name 
  Comma-separated list of error numbers. If an applier
  thread on this replica encounters one of these errors
@@ -1427,6 +1609,8 @@ The following options may be given as the first argument:
  When this option is enabled, connections attempted using
  insecure transport will be rejected.  Secure transports
  are SSL/TLS, Unix socket or Shared Memory (on Windows).
+ --reset-consensus-prefetch-cache 
+ reset consensus prefetch_cache
  --rpl-read-size=#   The size for reads done from the binlog and relay log. It
  must be a multiple of 4kb. Making it larger might help
  with IO stalls while reading these files when they are
@@ -1465,6 +1649,8 @@ The following options may be given as the first argument:
  Controls the amount of global transaction ids to be
  included in the response packet sent by the
  server.(Default: OFF).
+ --session-track-index 
+ Track current index for non-select request.
  --session-track-schema 
  Track changes to the 'default schema'.
  (Defaults to on; use --skip-session-track-schema to disable.)
@@ -1692,6 +1878,8 @@ The following options may be given as the first argument:
  Define threads usage for handling queries, one of
  one-thread-per-connection, no-threads, loaded-dynamically
  --thread-stack=#    The stack size for each thread
+ --thread-stack-warning=# 
+ The warning stack size for each thread
  --tls-ciphersuites=name 
  --tmp-table-size=#  If an internal in-memory temporary table in the MEMORY or
  TempTable storage engine exceeds this size, MySQL will
@@ -1736,6 +1924,8 @@ The following options may be given as the first argument:
  -V, --version       Output version information and exit.
  --wait-timeout=#    The number of seconds the server waits for activity on a
  connection before closing it
+ --weak-consensus-mode 
+ set server to weak consensus mode
  --windowing-use-high-precision 
  For SQL window functions, determines whether to enable
  inversion optimization for moving window frames also for
@@ -1769,6 +1959,7 @@ admin-ssl-crlpath (No default value)
 admin-ssl-key (No default value)
 admin-tls-ciphersuites (No default value)
 allow-suspicious-udfs FALSE
+appliedindex-force-delay 0
 authentication-policy *,,
 auto-increment-increment 1
 auto-increment-offset 1
@@ -1817,13 +2008,79 @@ character-set-server utf8mb4
 character-sets-dir MYSQL_CHARSETSDIR/
 check-proxy-users FALSE
 chroot (No default value)
+<<<<<<< HEAD
 client-endpoint-ip (No default value)
+=======
+cluster-current-term 0
+cluster-dump-meta FALSE
+cluster-force-change-meta FALSE
+cluster-force-recover-index 0
+cluster-force-single-mode FALSE
+cluster-id 0
+cluster-info (No default value)
+cluster-learner-node FALSE
+cluster-log-type-node FALSE
+cluster-mts-recover-use-index TRUE
+cluster-purged-gtid (No default value)
+cluster-start-index 1
+>>>>>>> 4785e8de0cf... fix cases 1
 collation-server utf8mb4_0900_ai_ci
+commit-pos-watcher TRUE
+commit-pos-watcher-interval 1000000
 completion-type NO_CHAIN
 concurrent-insert AUTO
 connect-timeout 10
 connection-memory-chunk-size 8912
 connection-memory-limit 18446744073709551615
+consensus-auto-leader-transfer TRUE
+consensus-auto-leader-transfer-check-seconds 60
+consensus-auto-reset-match-index TRUE
+consensus-check-commit-index-interval 1000
+consensus-check-large-event TRUE
+consensus-checksum FALSE
+consensus-configure-change-timeout 60000
+consensus-disable-election FALSE
+consensus-disable-fifo-cache FALSE
+consensus-dynamic-easyindex TRUE
+consensus-election-timeout 5000
+consensus-flow-control (No default value)
+consensus-force-promote FALSE
+consensus-force-recovery FALSE
+consensus-force-sync-epoch-diff 0
+consensus-heartbeat-thread-cnt 0
+consensus-index-buf-enabled TRUE
+consensus-io-thread-cnt 3
+consensus-large-batch-ratio 50
+consensus-large-event-limit 1073741824
+consensus-large-event-split-size 2097152
+consensus-large-trx TRUE
+consensus-large-trx-split-size 2097152
+consensus-leader-stop-apply FALSE
+consensus-leader-stop-apply-time 0
+consensus-learner-heartbeat TRUE
+consensus-learner-pipelining FALSE
+consensus-learner-timeout 0
+consensus-log-cache-size 67108864
+consensus-log-level LOG_ERROR
+consensus-max-delay-index 50000
+consensus-max-log-size 20971520
+consensus-max-packet-size 131072
+consensus-min-delay-index 5000
+consensus-msg-compress-option (No default value)
+consensus-new-follower-threshold 10000
+consensus-old-compact-mode TRUE
+consensus-optimistic-heartbeat FALSE
+consensus-pipelining-timeout 1
+consensus-prefetch-cache-size 67108864
+consensus-prefetch-fast-fetch FALSE
+consensus-prefetch-wakeup-ratio 2
+consensus-prefetch-window-size 10
+consensus-replicate-with-cache-log FALSE
+consensus-safe-for-reset-master FALSE
+consensus-send-timeout 0
+consensus-sync-follower-meta-interva 1
+consensus-worker-thread-cnt 3
+consensuslog-revise FALSE
 console FALSE
 create-admin-listener-thread FALSE
 cte-max-recursion-depth 1000
@@ -1839,10 +2096,12 @@ delay-key-write ON
 delayed-insert-limit 100
 delayed-insert-timeout 300
 delayed-queue-size 1000
+disable-wait-commitindex FALSE
 disabled-storage-engines 
 disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
+enable-appliedindex-checker TRUE
 end-markers-in-json FALSE
 enforce-gtid-consistency FALSE
 eq-range-index-dive-limit 200
@@ -1853,6 +2112,7 @@ explicit-defaults-for-timestamp TRUE
 external-locking FALSE
 flush FALSE
 flush-time 0
+force-revise FALSE
 ft-boolean-syntax + -><()~*:""&|
 ft-max-word-len 84
 ft-min-word-len 4
@@ -1975,11 +2235,15 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
+<<<<<<< HEAD
 only-report-warning-when-skip-sequence TRUE
 opt-enable-rds-priv-strategy FALSE
 opt-indexstat TRUE
 opt-outline-enabled TRUE
 opt-tablestat TRUE
+=======
+opt-force-index-pct-cached FALSE
+>>>>>>> 4785e8de0cf... fix cases 1
 optimizer-max-subgraph-pairs 100000
 optimizer-prune-level 1
 optimizer-search-depth 62
@@ -2051,7 +2315,11 @@ performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-sql-text-length 1024
 performance-schema-max-stage-classes 175
+<<<<<<< HEAD
 performance-schema-max-statement-classes 221
+=======
+performance-schema-max-statement-classes 225
+>>>>>>> 4785e8de0cf... fix cases 1
 performance-schema-max-statement-stack 10
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1
@@ -2093,13 +2361,18 @@ rds-kill-connections 0
 rds-kill-user-list (No default value)
 rds-version 32
 read-buffer-size 131072
+read-lsn 0
 read-only FALSE
 read-rnd-buffer-size 262144
+<<<<<<< HEAD
 recycle-bin FALSE
 recycle-bin-retention 604800
 recycle-scheduler FALSE
 recycle-scheduler-interval 30
 recycle-scheduler-purge-table-print FALSE
+=======
+recover-snapshot FALSE
+>>>>>>> [Raft] fix mysql test case bugs
 regexp-stack-limit 8000000
 regexp-time-limit 32
 relay-log relaylog
@@ -2120,6 +2393,7 @@ replica-parallel-type LOGICAL_CLOCK
 replica-parallel-workers 4
 replica-pending-jobs-size-max 134217728
 replica-preserve-commit-order TRUE
+replica-read-timeout 3000
 replica-skip-errors (No default value)
 replica-sql-verify-checksum TRUE
 replica-transaction-retries 10
@@ -2132,6 +2406,7 @@ report-password (No default value)
 report-port 0
 report-user (No default value)
 require-secure-transport FALSE
+reset-consensus-prefetch-cache FALSE
 rpl-read-size 8192
 rpl-stop-replica-timeout 31536000
 rpl-stop-slave-timeout 31536000
@@ -2144,6 +2419,7 @@ select-into-disk-sync-delay 0
 server-id 1
 server-id-bits 32
 session-track-gtids OFF
+session-track-index FALSE
 session-track-schema TRUE
 session-track-state-change FALSE
 session-track-system-variables time_zone,autocommit,character_set_client,character_set_results,character_set_connection
@@ -2205,6 +2481,7 @@ terminology-use-previous NONE
 thread-cache-size 9
 thread-handling one-thread-per-connection
 thread-stack 1048576
+thread-stack-warning 1048576
 tls-ciphersuites (No default value)
 tmp-table-size 16777216
 transaction-alloc-block-size 8192
@@ -2218,6 +2495,7 @@ validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
 wait-timeout 28800
+weak-consensus-mode FALSE
 windowing-use-high-precision TRUE
 xa-detach-on-prepare TRUE
 

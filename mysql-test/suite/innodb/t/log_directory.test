@@ -4,12 +4,15 @@ let tmpdir = $MYSQLTEST_VARDIR/tmp;
 let logdir = $tmpdir/logdir;
 let datadir = $tmpdir/datadir;
 
+--source include/make_consensus_args.inc
+
 let SEARCH_FILE = $tmpdir/my_restart.err;
-let $args=--no-defaults --innodb-log-group-home-dir=$logdir --datadir=$datadir --secure-file-priv="" --loose-skip-auto-generate-certs --loose-skip-sha256-password-auto-generate-rsa-keys --loose-console --loose-skip-log-bin --log-error-verbosity=3 > $SEARCH_FILE 2>&1 ;
+let $args=--no-defaults $consensus_args --innodb-log-group-home-dir=$logdir --datadir=$datadir --secure-file-priv="" --loose-skip-auto-generate-certs --loose-skip-sha256-password-auto-generate-rsa-keys --loose-console --loose-skip-log-bin --log-error-verbosity=3 > $SEARCH_FILE 2>&1 ;
 
 --echo ############################################################################################
 --echo # Case 1. The redo log directory has ib_logfile0 before initializing new datadir.
 --echo ############################################################################################
+
 
 --echo # Prepare...
 --mkdir $datadir

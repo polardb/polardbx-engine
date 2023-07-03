@@ -21,7 +21,7 @@ XA ROLLBACK X'78696431',X'',1;
 ERROR HY000: Lost connection to MySQL server during query
 # restart
 include/assert.inc [Found 1 log message(s) for "Successfully prepared 1 XA transaction"]
-include/assert_binlog_events.inc [()]
+include/assert_binlog_events.inc [Consensus_log # Consensus_empty]
 include/assert.inc [GTID_EXECUTED has not been updated]
 include/assert.inc [1 XA transaction(s) in PREPARED state]
 include/assert.inc [XA transaction X'78696431',X'',1 is in PREPARED state]

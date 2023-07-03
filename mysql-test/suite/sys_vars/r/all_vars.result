@@ -132,6 +132,8 @@ consensus_prefetch_window_size
 consensus_prefetch_window_size
 consensus_replicate_with_cache_log
 consensus_replicate_with_cache_log
+consensus_safe_for_reset_master
+consensus_safe_for_reset_master
 consensus_send_timeout
 consensus_send_timeout
 consensus_sync_follower_meta_interva
@@ -277,6 +279,7 @@ master_verify_checksum
 master_verify_checksum
 max_length_for_sort_data
 max_length_for_sort_data
+<<<<<<< HEAD
 only_report_warning_when_skip_sequence
 only_report_warning_when_skip_sequence
 opt_enable_rds_priv_strategy
@@ -287,6 +290,10 @@ opt_outline_enabled
 opt_outline_enabled
 opt_tablestat
 opt_tablestat
+=======
+opt_force_index_pct_cached
+opt_force_index_pct_cached
+>>>>>>> 4785e8de0cf... fix cases 1
 optimizer_max_subgraph_pairs
 optimizer_max_subgraph_pairs
 outline_allowed_sql_digest_truncate

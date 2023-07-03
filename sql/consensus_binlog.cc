@@ -1308,12 +1308,6 @@ static void store_gtid_for_xpaxos(const char *buf, Relay_log_info *rli) {
   fd_ev.footer()->checksum_alg =
       static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
 
-  //TODO @yanhua gcn
-  // if (event_type == binary_log::GCN_LOG_EVENT) {
-  //   buf = buf + Gcn_log_event::get_event_length(fd_ev.footer()->checksum_alg);
-  //   event_type = (Log_event_type)buf[EVENT_TYPE_OFFSET];
-  // }
-
   if (event_type == binary_log::GTID_LOG_EVENT) {
     Gtid_log_event gtid_ev(buf, &fd_ev);
     rli->get_sid_lock()->wrlock();

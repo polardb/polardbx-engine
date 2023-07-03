@@ -213,7 +213,7 @@ $xcluster_port_offset{'consensus'} = 40;
   # 11~39 x & galaxyx share same range for now (this is a hack)
   # 30~39 rpc
   # 40~49 cluster
-# 50~99 xcluster leaner
+  # 50~99 xcluster learner
   # same as above
   # but x & galaxyx not share the same ports range
 my $ports_per_thread = 100;
@@ -260,7 +260,6 @@ our @DEFAULT_SUITES = qw(
   binlog
   binlog_gtid
   binlog_nogtid
-  clone
   collations
   connection_control
   encryption
@@ -5165,27 +5164,6 @@ sub run_testcase ($) {
 
     # only run once
     if ($xcluster_bootstrap == 0) {
-      # load sql
-      my $ret = run_query($mysqld_leader, "CREATE DATABASE IF NOT EXISTS test;");
-      if ($ret != 0) {
-        $tinfo->{'dont_kill_server'} = 1;
-        mtr_warning("Error when execute query1: create database test;");
-        report_failure_and_restart($tinfo);
-        return 1;
-      }
-      $ret = run_query($mysqld_leader, "CREATE DATABASE IF NOT EXISTS mtr;");
-      if ($ret != 0) {
-        mtr_warning("Error when execute query2: create database test;");
-        report_failure_and_restart($tinfo);
-        return 1;
-      }
-      $ret = run_query($mysqld_leader, "CREATE TABLE IF NOT EXISTS mtr.test_suppressions (pattern VARCHAR(255)) ENGINE=MyISAM;");
-      if ($ret != 0) {
-        mtr_warning("Error when execute query3: create database test;");
-        report_failure_and_restart($tinfo);
-        return 1;
-      }
-
       #unlink db.opt
       unlink("$opt_vardir/mysqld.1/data/test/db.opt");
       my $args_leader;

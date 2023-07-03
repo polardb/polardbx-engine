@@ -69,11 +69,12 @@ EOF
 # mysqld_safe takes some time to start mysqld
 --enable_reconnect
 --source include/wait_until_connected_again.inc
+--source include/make_consensus_args.inc
 --disable_reconnect
 --shutdown_server
 
 # e) With relative path to datadir
---exec $MYSQLD --no-defaults --loose-innodb-dedicated-server=OFF --initialize-insecure --init-file=$BOOTSTRAP_SQL --secure-file-priv="" --basedir=$MYSQL_BASEDIR --datadir=$MYSQLTEST_VARDIR/datatest1/
+--exec $MYSQLD --no-defaults --loose-innodb-dedicated-server=OFF --initialize-insecure $consensus_args --init-file=$BOOTSTRAP_SQL --secure-file-priv="" --basedir=$MYSQL_BASEDIR --datadir=$MYSQLTEST_VARDIR/datatest1/
 --exec sh $MYSQLD_SAFE --defaults-file=$MYSQLTEST_VARDIR/my.cnf --log-error=$MYSQLTEST_VARDIR/log/err.log --basedir=$MYSQL_BASEDIR --ledir=$mysqld_path --mysqld=$mysqld_bin --datadir=$MYSQLTEST_VARDIR/datatest1/./ --socket=$MYSQL_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --timezone=SYSTEM --log-output=file --loose-debug-sync-timeout=600 --default-storage-engine=InnoDB --default-tmp-storage-engine=InnoDB  --secure-file-priv="" --loose-skip-log-bin --core-file --innodb-page-size=$other_page_size_nk < /dev/null > /dev/null 2>&1 &
 
  # mysqld_safe takes some time to start mysqld
@@ -121,7 +122,7 @@ connection default;
 # --exec sh $MYSQLD_SAFE --defaults-file=$MYSQLTEST_VARDIR/my.cnf --log-error=$MYSQLTEST_VARDIR/log/err.log --basedir=$MYSQL_BASEDIR --ledir=$mysqld_path --mysqld=$mysqld_bin --datadir=$MYSQLTEST_VARDIR/nonexistent --socket=$MYSQL_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --timezone=SYSTEM --log-output=file --loose-debug-sync-timeout=600 --default-storage-engine=InnoDB --default-tmp-storage-engine=InnoDB  --secure-file-priv="" --loose-skip-log-bin --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --innodb-page-size=$other_page_size_nk  < /dev/null > /dev/null 2>&1
 
 # i) With no permissions to datadir
-# --exec $MYSQLD --no-defaults --loose-innodb-dedicated-server=OFF --initialize-insecure --init-file=$BOOTSTRAP_SQL --secure-file-priv="" --basedir=$MYSQL_BASEDIR --datadir=$MYSQLTEST_VARDIR/datatest2
+# --exec $MYSQLD --no-defaults --loose-innodb-dedicated-server=OFF --initialize-insecure $consensus_args --init-file=$BOOTSTRAP_SQL --secure-file-priv="" --basedir=$MYSQL_BASEDIR --datadir=$MYSQLTEST_VARDIR/datatest2
 #chmod 0666 $MYSQLTEST_VARDIR/datatest2;
 # --error 1
 # --exec sh $MYSQLD_SAFE --log-error=$MYSQLTEST_VARDIR/log/err.log --basedir=$MYSQL_BASEDIR --ledir=$mysqld_path --mysqld=$mysqld_bin --datadir=$MYSQLTEST_VARDIR/datatest2 --socket=$MYSQL_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --timezone=SYSTEM --log-output=file --loose-debug-sync-timeout=600 --default-storage-engine=InnoDB --default-tmp-storage-engine=InnoDB  --secure-file-priv="" --loose-skip-log-bin --core-file --innodb-page-size=$other_page_size_nk < /dev/null > /dev/null 2>&1

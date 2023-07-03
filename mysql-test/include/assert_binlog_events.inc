@@ -80,6 +80,8 @@
 #       !Empty_gtid_transaction -> Gtid # Begin # Commit
 #       !Gtid_or_anon -> (Gtid | Anonymous_Gtid)
 #       !GCN -> Gcn/.*INNODB_COMMIT_SEQ.*
+#       !Previous_consensus_index -> (Previous_consensus_index)
+#       !Consensus_log -> (Consensus_log)
 #
 #     Whitespace around / and # is ignored.
 #
@@ -229,6 +231,8 @@ while ($_abe_verdict != 'ok')
   $event_sequence =~ s{!Gtid_transaction}{Gtid\n(!DDL|!DML_transaction)}g;
   $event_sequence =~ s{!Gtid_or_anon}{(Gtid|Anonymous_Gtid)}g;
   $event_sequence =~ s{!GCN}{Gcn/.*INNODB_COMMIT_SEQ.*}g;
+  $event_sequence =~ s{!Consensus_log}{(Consensus_log)}g;
+  $event_sequence =~ s{!Previous_consensus_index}{(Previous_consensus_index)}g;
   $event_sequence =~ s{!Empty_gtid_transaction}{Gtid\n!Begin\n!Commit}g;
   $event_sequence =~ s{!DML_transaction}{!Begin\n!Multi_DML\n!Commit}g;
   $event_sequence =~ s{!DDL}{Query/(?!BEGIN|COMMIT).*}g;

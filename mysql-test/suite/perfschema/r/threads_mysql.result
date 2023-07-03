@@ -17,6 +17,36 @@ processlist_info	NULL
 unified_parent_thread_id	unified parent_thread_id
 role	NULL
 instrumented	YES
+name	thread/sql/consensus_commit_pos_watcher
+type	BACKGROUND
+processlist_user	NULL
+processlist_host	NULL
+processlist_db	NULL
+processlist_command	NULL
+processlist_info	NULL
+unified_parent_thread_id	unified parent_thread_id
+role	NULL
+instrumented	YES
+name	thread/sql/consensus_stage_change
+type	BACKGROUND
+processlist_user	NULL
+processlist_host	NULL
+processlist_db	NULL
+processlist_command	NULL
+processlist_info	NULL
+unified_parent_thread_id	unified parent_thread_id
+role	NULL
+instrumented	YES
+name	thread/sql/fifo_cleaner
+type	BACKGROUND
+processlist_user	NULL
+processlist_host	NULL
+processlist_db	NULL
+processlist_command	NULL
+processlist_info	NULL
+unified_parent_thread_id	unified parent_thread_id
+role	NULL
+instrumented	YES
 name	thread/sql/main
 type	BACKGROUND
 processlist_user	NULL
@@ -114,6 +144,9 @@ ORDER BY parent_thread_name, child_thread_name;
 parent_thread_name	child_thread_name
 thread/sql/event_scheduler	thread/sql/event_worker
 thread/sql/main	thread/sql/compress_gtid_table
+thread/sql/main	thread/sql/consensus_commit_pos_watcher
+thread/sql/main	thread/sql/consensus_stage_change
+thread/sql/main	thread/sql/fifo_cleaner
 thread/sql/main	thread/sql/one_connection
 thread/sql/main	thread/sql/signal_handler
 thread/sql/one_connection	thread/sql/event_scheduler

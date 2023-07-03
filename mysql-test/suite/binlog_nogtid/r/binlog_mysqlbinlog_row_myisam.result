@@ -2393,11 +2393,19 @@ DELIMITER /*!*/;
 # # server id #  end_log_pos # CRC32 # 	Start: binlog v #, server v # created # at startup
 ROLLBACK/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Previous Consensus index=##
+##PREV_CONSENSUS_INDEX: ##'/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=1785
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -2512,8 +2520,13 @@ crn INT -- row number
 ) ENGINE=MyISAM DEFAULT CHARSET latin1
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=790
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -2621,8 +2634,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=6368
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -2729,8 +2747,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=5600
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -2918,8 +2941,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=6613
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3106,8 +3134,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=6613
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3294,8 +3327,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=5636
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3482,8 +3520,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=5636
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3670,8 +3713,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=6368
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3778,8 +3826,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=790
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3886,8 +3939,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=5594
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3994,8 +4052,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=571
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4200,11 +4263,19 @@ DELIMITER /*!*/;
 # # server id #  end_log_pos # CRC32 # 	Start: binlog v #, server v # created # at startup
 ROLLBACK/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Previous Consensus index=##
+##PREV_CONSENSUS_INDEX: ##'/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=263
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4234,8 +4305,13 @@ crn INT -- row number
 ) ENGINE=MyISAM DEFAULT CHARSET latin1
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=491
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4306,8 +4382,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=605
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4396,8 +4477,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=453
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4644,11 +4730,19 @@ DELIMITER /*!*/;
 # # server id #  end_log_pos # CRC32 # 	Start: binlog v #, server v # created # at startup
 ROLLBACK/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Previous Consensus index=##
+##PREV_CONSENSUS_INDEX: ##'/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=270
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4678,8 +4772,13 @@ c_1_n INT -- row number
 ) ENGINE=MyISAM DEFAULT CHARSET latin1
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=270
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4699,8 +4798,13 @@ c_2_n INT -- row number
 ) ENGINE=MyISAM DEFAULT CHARSET latin1
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=270
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4720,8 +4824,13 @@ c_3_n INT -- row number
 ) ENGINE=MyISAM DEFAULT CHARSET latin1
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=518
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4792,8 +4901,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=518
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4864,8 +4978,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=518
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4936,8 +5055,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=163
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4952,8 +5076,13 @@ SET TIMESTAMP=#/*!*/;
 ANALYZE TABLE t1
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=163
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4968,8 +5097,13 @@ SET TIMESTAMP=#/*!*/;
 ANALYZE TABLE t2
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=163
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4984,8 +5118,13 @@ SET TIMESTAMP=#/*!*/;
 ANALYZE TABLE t3
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=1313
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -5183,8 +5322,13 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=896
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -5376,11 +5520,19 @@ DELIMITER /*!*/;
 # # server id #  end_log_pos # CRC32 # 	Start: binlog v #, server v # created # at startup
 ROLLBACK/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Previous Consensus index=##
+##PREV_CONSENSUS_INDEX: ##'/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=257
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -5410,8 +5562,13 @@ c3 VARCHAR(60)
 ) ENGINE=MyISAM DEFAULT CHARSET latin1
 /*!*/;
 # at #
+<<<<<<< HEAD
 # # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
 SET @@session.innodb_commit_seq=##/*!*/;
+=======
+# # server id #  end_log_pos # CRC32 # 	Consensus flag=#	term=#	index=#	length=359
+##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
+>>>>>>> [Raft] fix mysql test case bugs
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;

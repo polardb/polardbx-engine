@@ -2,6 +2,8 @@
 --echo # Bug #29622406: --INTIALIZE FAILS WHEN MYSQLD CONFIG HAS PLUGIN LOADING
 --echo #
 
+--source include/make_consensus_args.inc
+
 --let BASEDIR= `select @@basedir`
 --let $MYSQLD_SOCKET= `SELECT @@socket`
 --let $MYSQLD_PORT= `SELECT @@port`
@@ -14,7 +16,7 @@
 --echo # Server is down
 
 --echo # Must not crash
---let DEFARGS= --no-defaults --console --socket=$MYSQLD_SOCKET --port=$MYSQLD_PORT --skip-ssl --datadir=$DDIR
+--let DEFARGS= --no-defaults $consensus_args --console --socket=$MYSQLD_SOCKET --port=$MYSQLD_PORT --skip-ssl --datadir=$DDIR
 --exec $MYSQLD $DEFARGS --initialize $PFS_EXAMPLE_PLUGIN_EMPLOYEE_OPT $PFS_EXAMPLE_PLUGIN_EMPLOYEE_LOAD_ADD > $MYSQLD_LOG 2>&1
 
 --echo # Restarting the server

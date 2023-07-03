@@ -364,6 +364,9 @@ XA ROLLBACK 'trx';
 
 # --let $event_sequence= Gtid/SET.* # Query/use.* # Gtid/SET.* # Query/XA START.* # Table_map/.* # Write_rows/.* # Query/XA END.* # XA_prepare/XA PREPARE.* # Gtid/SET.* # Query/XA ROLLBACK.*
 --let $event_sequence= !GCN # Gtid/SET.* # Query/use.* # !GCN # Gtid/SET.* # Query/XA START.* # Table_map/.* # Write_rows/.* # Query/XA END.* # XA_prepare/XA PREPARE.* # !GCN # Gtid/SET.* # Query/XA ROLLBACK.*
+=======
+--let $event_sequence= Consensus_log # !GCN # Gtid/SET.* # Query/use.* # Consensus_log # !GCN # Gtid/SET.* # Query/XA START.* # Table_map/.* # Write_rows/.* # Query/XA END.* # XA_prepare/XA PREPARE.* # Consensus_log # !GCN # Gtid/SET.* # Query/XA ROLLBACK.*
+>>>>>>> [Raft] fix mysql test case bugs
 --source include/assert_binlog_events.inc
 
 --echo #

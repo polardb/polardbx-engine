@@ -82,7 +82,7 @@
 --let $ofile = $MYSQLTEST_VARDIR/tmp/binlog_expire_warnings-output.err
 
 --let $i = 0
-while ($i < 2) {
+while ($i < 1) {
 
 if ($i == 0) {
     --echo #### Binary log ENABLED ####
@@ -90,7 +90,7 @@ if ($i == 0) {
     --let $binlog_off = 0
   }
   if ($i == 1) {
-    --echo #### Binary log DISABLED ####
+    --echo #### Binary log DISABLED #### not support for polarx
     --let $options = --skip-log-bin
     --let $binlog_off = 1
   }

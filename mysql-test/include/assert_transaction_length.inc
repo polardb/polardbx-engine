@@ -145,7 +145,8 @@ perl;
 
     # Assume end of transaction on INCIDENT or ROTATE with server id 0
     if ($line =~ m/^# Incident:/ ||
-        $line =~ m/^#.*server id 0.*Rotate/)
+        $line =~ m/^#.*server id 0.*Rotate/ ||
+        $line =~ m/^#.*Consensus flag/)
     {
       # If we found an INCIDENT, all the events from the last transaction are consumed
       if ($trx_remaining_size != 0)
@@ -160,7 +161,7 @@ perl;
     }
 
     # Store the end log pos to be used on the last transaction of binary logs
-    if ($line =~ m/^#.*end_log_pos/)
+    if ($line =~ m/^#.*end_log_pos/ && $line !=~ m/^#.*Consensus flag/)
     {
       $end_log_pos = $line;
       $end_log_pos =~ s/.*end_log_pos //g;

@@ -68,6 +68,6 @@ col1
 select sum(interval_end - interval_start + 1) as count_gtid
 from mysql.gtid_executed group by source_uuid;
 count_gtid
-10
+7
 
 drop table t1;

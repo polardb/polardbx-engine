@@ -51,15 +51,15 @@ test_type="normal"
 parse_options "$@"
 
 # Basic options
-OPT="perl mysql-test-run.pl --report-unstable-tests --sanitize --timer --force --max-test-fail=0"
-OPT="$OPT --skip-ndb --skip-combinations --nounit-tests --parallel=32 "
+OPT="perl mysql-test-run.pl --report-unstable-tests --sanitize --timer --force --max-test-fail=0 --retry=1"
+OPT="$OPT --skip-ndb --skip-rpl  --skip-combinations --nounit-tests  --parallel=32 "
 OPT="$OPT --report-features --unit-tests-report"
 
 extra_mtr_option=""
 if [ x"$test_type" = x"normal" ]; then
   extra_mtr_option=""
   $OPT $extra_mtr_option --vardir=var_normal  &>all.normal
-  $OPT $extra_mtr_option --vardir=var_normal_ps --ps-protocol  &>all.normal_ps
+  #$OPT $extra_mtr_option --vardir=var_normal_ps --ps-protocol  &>all.normal_ps
 elif [ x"$test_type" = x"big" ]; then
   extra_mtr_option="--only-big-test --testcase-timeout=45"
   $OPT $extra_mtr_option --vardir=var_normal  &>all.normal

@@ -337,25 +337,27 @@ remove_file $MYSQL_TMP_DIR/data_$VERSION.zip;
 let $VERSION = initialize;
 let $MYSQLD_DATADIR = $MYSQL_TMP_DIR/data_$VERSION;
 
+--source include/make_consensus_args.inc
+
 --echo #
 --echo # Initialize with read-only = 1 succeeds.
 --echo #
 let $MYSQLD_LOG = $MYSQLTEST_VARDIR/log/read_only_$VERSION.log;
-exec $MYSQLD --datadir=$MYSQLD_DATADIR --read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure;
+exec $MYSQLD --datadir=$MYSQLD_DATADIR --read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure $consensus_args;
 force-rmdir $MYSQL_TMP_DIR/data_$VERSION;
 
 --echo #
 --echo # Initialize with super-read-only = 1 succeeds.
 --echo #
 let $MYSQLD_LOG = $MYSQLTEST_VARDIR/log/super_read_only_$VERSION.log;
-exec $MYSQLD --datadir=$MYSQLD_DATADIR --super-read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure;
+exec $MYSQLD --datadir=$MYSQLD_DATADIR --super-read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure $consensus_args;
 force-rmdir $MYSQL_TMP_DIR/data_$VERSION;
 
 --echo #
 --echo # Initialize with transaction-read-only = 1 succeeds.
 --echo #
 let $MYSQLD_LOG = $MYSQLTEST_VARDIR/log/transaction_read_only_$VERSION.log;
-exec $MYSQLD --datadir=$MYSQLD_DATADIR --transaction-read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure;
+exec $MYSQLD --datadir=$MYSQLD_DATADIR --transaction-read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure $consensus_args;
 force-rmdir $MYSQL_TMP_DIR/data_$VERSION;
 
 --echo #
@@ -363,7 +365,7 @@ force-rmdir $MYSQL_TMP_DIR/data_$VERSION;
 --echo #
 let $MYSQLD_LOG = $MYSQLTEST_VARDIR/log/innodb_read_only_$VERSION.log;
 --error 1
-exec $MYSQLD --datadir=$MYSQLD_DATADIR --innodb-read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure;
+exec $MYSQLD --datadir=$MYSQLD_DATADIR --innodb-read-only=1 --log-error=$MYSQLD_LOG --initialize-insecure $consensus_args;
 let SEARCH_FILE = $MYSQLD_LOG;
 let SEARCH_PATTERN = --innodb-read-only is set;
 source include/search_pattern.inc;

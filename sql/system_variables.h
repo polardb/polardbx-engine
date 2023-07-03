@@ -358,6 +358,7 @@ struct System_variables {
   bool session_track_state_change;
   ulong session_track_transaction_info;
   bool session_track_index;
+  bool opt_consensus_safe_for_reset_master;
 
   /*
     Time in seconds, after which the statistics in mysql.table/index_stats

@@ -22,8 +22,8 @@ call mtr.add_suppression("The content of the statement cache is corrupted "
 
 --let $old_max_binlog_stmt_cache_size= query_get_value(SHOW VARIABLES LIKE "max_binlog_stmt_cache_size", Value, 1)
 --let $old_binlog_stmt_cache_size= query_get_value(SHOW VARIABLES LIKE "binlog_stmt_cache_size", Value, 1)
-SET GLOBAL max_binlog_stmt_cache_size = 4096;
 SET GLOBAL binlog_stmt_cache_size = 4096;
+SET GLOBAL max_binlog_stmt_cache_size = 4096;
 
 connect(con1,localhost,root,,);
 --connection con1

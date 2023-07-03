@@ -132,7 +132,7 @@ SHOW VARIABLES LIKE "master_info_repository";
 SHOW VARIABLES LIKE "relay_log_info_repository";
 
 SET GLOBAL master_info_repository= 'FILE';
-SET GLOBAL relay_log_info_repository= 'FILE';
+#SET GLOBAL relay_log_info_repository= 'FILE';
 
 SHOW VARIABLES LIKE "master_info_repository";
 SHOW VARIABLES LIKE "relay_log_info_repository";

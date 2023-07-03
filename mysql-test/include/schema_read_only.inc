@@ -173,13 +173,15 @@ DROP SCHEMA S;
 eval CREATE SCHEMA $CREATE_S;
 ALTER SCHEMA S READ ONLY=1;
 
+--source include/make_consensus_args.inc
+
 let BASEDIR=`select @@basedir`;
 source include/shutdown_mysqld.inc;
 
 --echo # Initialization.
 let DDIR= $MYSQL_TMP_DIR/schema_readonly_test;
 let MYSQLD_LOG= $MYSQLTEST_VARDIR/log/schema_readonly.log;
-let extra_args= --no-defaults --console --secure-file-priv=""
+let extra_args= --no-defaults $consensus_args --console --secure-file-priv=""
     --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR --datadir=$DDIR
     --log-error=$MYSQLD_LOG;
 --exec $MYSQLD $extra_args --debug="+d,schema_read_only" --initialize-insecure

@@ -501,3 +501,12 @@ static Sys_var_bool Sys_disable_wait_commitindex(
        "it may detory the cluster data if some crash happen",
        GLOBAL_VAR(opt_disable_wait_commitindex), CMD_LINE(OPT_ARG),
        DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+extern bool opt_force_index_pct_cached;
+static Sys_var_bool Sys_force_index_percentage_cached(
+    "opt_force_index_pct_cached",
+    "force cached table index in memory when estimate query cost",
+    GLOBAL_VAR(opt_force_index_pct_cached), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
+
+/* RDS DEFINED */

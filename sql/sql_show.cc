@@ -5073,7 +5073,6 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_old_format, nullptr, false},
     {"IO_STATISTICS", table_iostat_fields_info, fill_schema_table_iostat,
      make_old_format, nullptr, false},
-     {nullptr, nullptr, nullptr, nullptr, nullptr, false},
     {"ALISQL_CLUSTER_GLOBAL", alisql_cluster_global_fields_info,
      fill_alisql_cluster_global, nullptr, nullptr, false},
     {"ALISQL_CLUSTER_LOCAL", alisql_cluster_local_fields_info,

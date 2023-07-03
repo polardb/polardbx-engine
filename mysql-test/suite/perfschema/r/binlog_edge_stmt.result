@@ -158,7 +158,7 @@ binlog.000001	#	Query	#	#	COMMIT
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_tx_table(a)
 select Relay_log_pos from mysql.slave_relay_log_info
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_bh_table(a)
 select Relay_log_pos from mysql.slave_relay_log_info
@@ -166,7 +166,7 @@ binlog.000001	#	Query	#	#	COMMIT
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_tx_table(a)
 select Master_log_pos from mysql.slave_master_info
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_bh_table(a)
 select Master_log_pos from mysql.slave_master_info
@@ -174,7 +174,7 @@ binlog.000001	#	Query	#	#	COMMIT
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_tx_table(a)
 select Relay_log_pos from mysql.slave_worker_info
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_bh_table(a)
 select Relay_log_pos from mysql.slave_worker_info

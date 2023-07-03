@@ -91,7 +91,7 @@ INSERT INTO t1 VALUES (1);
 
 # 5.c. The `XA COMMIT ... ONE PHASE` wasn't logged to the binary log.
 #
---let $event_sequence = $empty_event_sequence
+--let $event_sequence = Consensus_log # Consensus_empty
 --source include/assert_binlog_events.inc
 
 # 5.d. There aren't any changes to GTID_EXECUTED.

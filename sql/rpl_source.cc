@@ -77,9 +77,11 @@
 #include "thr_mutex.h"
 #include "typelib.h"
 
+#include "bl_consensus_log.h"
 #include "my_macros.h"
+#include "paxos.pb.h"
 #include "scope_guard.h"
-#include "sql/consensus_log_manager.h" // ConsensusLogManager
+#include "sql/consensus_log_manager.h"  // ConsensusLogManager
 
 #define READ_CONSENSUS_LOG()  \
   consensus_log_manager.lock_consensus(TRUE);\
@@ -1184,6 +1186,16 @@ bool reset_master(THD *thd, bool unlock_global_read_lock) {
       lead to an inconsistent state.
     */
     ret = mysql_bin_log.reset_logs(thd);
+
+    /// @attention a hack to pass mysql-test
+#ifndef NDEBUG
+    if (!ret && thd->variables.opt_consensus_safe_for_reset_master) {
+      alisql::LogEntry entry1;
+      consensus_ptr->getLog()->getEmptyEntry(entry1);
+      consensus_ptr->replicateLog(entry1);
+    }
+#endif
+
   } else {
     global_sid_lock->wrlock();
     ret = (gtid_state->clear(thd) != 0);

@@ -1,1 +1,1 @@
---expire-logs-days=0
+--expire-logs-days=0 --consensus_safe_for_reset_master=1

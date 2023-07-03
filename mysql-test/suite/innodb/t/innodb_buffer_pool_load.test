@@ -176,7 +176,9 @@ write_file $BOOTSTRAP_SQL;
 CREATE DATABASE test;
 EOF
 
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb-data-home-dir= --innodb_data_file_path=$MYSQL_TMP_DIR/datadir1/ibdata:16M:autoextend --datadir=$MYSQLD_DATADIR1 --innodb_redo_log_capacity=30M --init-file=$BOOTSTRAP_SQL</dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1 --innodb-page-size=$start_page_size;
+--source include/make_consensus_args.inc
+
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --lc_messages_dir=$MYSQL_SHAREDIR --innodb-data-home-dir= --innodb_data_file_path=$MYSQL_TMP_DIR/datadir1/ibdata:16M:autoextend --datadir=$MYSQLD_DATADIR1 --innodb_redo_log_capacity=30M --init-file=$BOOTSTRAP_SQL</dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1 --innodb-page-size=$start_page_size;
 
 # Run the bootstrap command
 --exec $NEW_CMD

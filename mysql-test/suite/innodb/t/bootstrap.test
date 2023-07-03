@@ -8,6 +8,8 @@ let bugdir= $MYSQLTEST_VARDIR/tmp/log_file;
 --mkdir $bugdir
 --mkdir $bugdir/data
 
+--source include/make_consensus_args.inc
+
 --source include/shutdown_mysqld.inc
 let SEARCH_FILE = $bugdir/my_restart.err;
 let $args=--defaults-file=$bugdir/my.cnf --loose-console --innodb_dedicated_server=OFF --core-file --log-error-verbosity=3 > $SEARCH_FILE 2>&1 ;
@@ -48,7 +50,7 @@ let SEARCH_PATTERN=\[ERROR\] .*MY-\\d+.* File .*ibdata1: 'open' returned OS erro
 --remove_file $bugdir/data/auto.cnf
 
 --echo # Start mysqld to create tablespaces according to my.cnf
---exec $MYSQLD $args --initialize-insecure
+--exec $MYSQLD $args --initialize-insecure $consensus_args 
 
 --echo # Backup the datadir
 --force-cpdir $bugdir/data $bugdir/data_backup
@@ -145,7 +147,7 @@ let SEARCH_PATTERN=\[ERROR\] .* The innodb_undo_directory is not allowed to be a
 I love MySQL.
 EOF
 --error 1,42
---exec $MYSQLD $args --initialize-insecure --innodb_log_group_home_dir=$bugdir/step11-log/ --innodb_data_home_dir=$bugdir/step11/ --datadir=$bugdir/step11 --innodb-unknown-parameter-11
+--exec $MYSQLD $args --initialize-insecure $consensus_args --innodb_log_group_home_dir=$bugdir/step11-log/ --innodb_data_home_dir=$bugdir/step11/ --datadir=$bugdir/step11 --innodb-unknown-parameter-11
 let SEARCH_PATTERN=--initialize specified but the redo log directory .* has redo log files inside;
 --source include/search_pattern.inc
 --force-rmdir $bugdir/step11-log
