@@ -42,6 +42,9 @@ namespace binlog {
 
 /** XA specification when TC_LOG = Binary Log */
 class Binlog_xa_specification : public XA_specification {
+ private:
+  typedef XA_specification super;
+
  public:
   enum class Source {
     /** Not sure*/
@@ -86,25 +89,23 @@ class Binlog_xa_specification : public XA_specification {
 
   bool is_legal_source() const { return m_source != Source::NONE; }
 
-  void clear() {
+  virtual void clear() override {
+    super::clear();
     m_source = Source::NONE;
-    clear_gtid();
+    m_gtid.clear();
   }
 
-  bool has_gtid() const { return !m_gtid.is_empty(); }
-
-  void mark_end() { clear(); }
+  void transaction_end() { clear(); }
 
   /** Getter and Setter */
   Gtid *gtid() { return &m_gtid; }
   rpl_sid *sid() { return &m_sid; }
   Source source() const { return m_source; }
 
+  bool has_gtid() const { return !m_gtid.is_empty(); }
+
   /**TODO: */
   virtual std::string print() override { return "Gtid:"; }
-
- private:
-  void clear_gtid() { m_gtid.clear(); }
 
  public:
   Source m_source;
@@ -116,7 +117,7 @@ class Commit_binlog_xa_specification {
  public:
   Commit_binlog_xa_specification(Binlog_xa_specification *spec) : m_spec(spec) {}
 
-  ~Commit_binlog_xa_specification() { m_spec->mark_end(); }
+  ~Commit_binlog_xa_specification() { m_spec->transaction_end(); }
 
  private:
   Binlog_xa_specification *m_spec;

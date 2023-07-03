@@ -56,6 +56,8 @@ class XA_specification {
     return m_gcn.print();
   }
 
+  virtual void clear() { m_gcn.reset(); }
+
   XA_specification(const XA_specification &other) {
     m_gcn = other.gcn();
   }
