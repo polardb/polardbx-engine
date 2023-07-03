@@ -255,10 +255,10 @@ int Pending_recovering_trx::withdraw() {
   assert(is_state_legal());
 
   if (type == xid_type::INTERNAL) {
-    ret = ht.rollback_by_xid(&ht, xid);
+    ret = ht.rollback_by_xid(&ht, xid, nullptr);
   } else if (type == xid_type::EXTERNAL) {
     if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
-      ret = ht.rollback_by_xid(&ht, xid);
+      ret = ht.rollback_by_xid(&ht, xid, nullptr);
     } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
       // do nothing
     }
@@ -279,19 +279,19 @@ int Pending_recovering_trx::recover() {
   assert(is_state_legal());
 
   if (type == xid_type::INTERNAL) {
-    ret = ht.commit_by_xid(&ht, xid);
+    ret = ht.commit_by_xid(&ht, xid, nullptr);
   } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
     if (next_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
-      ret = ht.set_prepared_in_tc_by_xid(&ht, xid);
+      ret = ht.set_prepared_in_tc_by_xid(&ht, xid, nullptr);
     } else if (next_state ==
                enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE) {
-      ret = ht.commit_by_xid(&ht, xid);
+      ret = ht.commit_by_xid(&ht, xid, nullptr);
     }
   } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
     if (next_state == enum_ha_recover_xa_state::COMMITTED) {
-      ret = ht.commit_by_xid(&ht, xid);
+      ret = ht.commit_by_xid(&ht, xid, nullptr);
     } else if (next_state == enum_ha_recover_xa_state::ROLLEDBACK) {
-      ret = ht.rollback_by_xid(&ht, xid);
+      ret = ht.rollback_by_xid(&ht, xid, nullptr);
     }
   }
   return ret;

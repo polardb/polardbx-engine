@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/consensus_log_manager.h"
 #include "sql/consensus_recovery_manager.h"
 #include "sql/log_event.h"
+#include "sql/gcn_log_event.h"
 #include "sql/rpl_gtid.h"
 #include "sql/xa/xid_extract.h"
 

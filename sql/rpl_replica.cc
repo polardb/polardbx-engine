@@ -176,6 +176,7 @@
 #include "sql/consensus_admin.h"
 #include "sql/replica_read_manager.h"
 # include "sql/rpl_rli_ext.h"
+#include "sql/gcn_log_event.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;

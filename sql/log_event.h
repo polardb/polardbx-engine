@@ -4318,10 +4318,6 @@ inline bool is_gtid_event(Log_event *evt) {
           evt->get_type_code() == binary_log::ANONYMOUS_GTID_LOG_EVENT);
 }
 
-inline bool is_gcn_event(Log_event *evt) {
-  return (evt->get_type_code() == binary_log::GCN_LOG_EVENT);
-}
-
 /**
   Check if the given event is a session control event, one of
   `User_var_event`, `Intvar_event` or `Rand_event`.

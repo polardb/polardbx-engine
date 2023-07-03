@@ -55,6 +55,7 @@
 #include "sql/ha_sequence.h"
 
 #include "sql/xa/lizard_xa_trx.h"
+#include "sql/replica_read_manager.h"
 
 /* Global scope variables */
 char innodb_version[SERVER_VERSION_LENGTH];
@@ -452,6 +453,9 @@ static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
                                        DEFAULT(FALSE), NO_MUTEX_GUARD,
                                        NOT_IN_BINLOG, ON_CHECK(0),
                                        ON_UPDATE(0));
+
+extern uint64_t opt_replica_read_timeout;
+static const uint64_t DEFAULT_REPLICA_READ_TIMEOUT = 3000; // ms
 
 static Sys_var_ulonglong Sys_replica_read_timeout(
       "replica_read_timeout",

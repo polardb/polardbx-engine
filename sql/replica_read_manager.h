@@ -11,10 +11,6 @@
 #include <atomic>
 #include <algorithm>
 
-extern uint64_t opt_replica_read_timeout;
-
-static const uint64_t DEFAULT_REPLICA_READ_TIMEOUT = 3000; // ms
-
 class ReplicaReadManager {
 
     struct ReadLsnCond {

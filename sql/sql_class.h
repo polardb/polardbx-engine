@@ -4810,7 +4810,6 @@ public:
   PS_PARAM *bind_parameter_values;
   /** the number of elements in parameters */
   unsigned long bind_parameter_values_count;
-  bool raft_replication_channel;
 
  public:
   /**
@@ -4851,6 +4850,8 @@ public:
   MyGCN owned_commit_gcn;
 
   MyVisionGCN owned_vision_gcn;
+
+  bool raft_replication_channel;
 
   void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;

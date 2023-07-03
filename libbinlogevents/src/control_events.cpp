@@ -183,7 +183,7 @@ Format_description_event::Format_description_event(uint8_t binlog_ver,
           0,                                       /* for log_event_type 105 (Gcn) */
       };
       static_assert((sizeof(server_event_header_length) /
-                     sizeof(server_event_header_length[0])) == LOG_EVENT_TYPES,
+                     sizeof(server_event_header_length[0])) == ENUM_END_EVENT,
                     "Attention: it might result in memory overflow");
       /*
         Allows us to sanity-check that all events initialized their

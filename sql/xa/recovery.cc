@@ -356,7 +356,7 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
           exec_status = XA_OK;
           collect_pending_recovering_trx = true;
         } else {
-          exec_status = ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id));
+          exec_status = ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
         }
         if (exec_status == XA_OK) {
           ::add_to_stats<STATS_SUCCESS, STATS_ROLLEDBACK>(stats);

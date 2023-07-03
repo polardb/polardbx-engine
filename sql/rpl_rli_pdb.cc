@@ -75,6 +75,7 @@
 
 #include "sql/gcn_log_event.h"
 #include "sql/raft/raft0err.h"
+#include "sql/gcn_log_event.h"
 
 #ifndef NDEBUG
 ulong w_rr = 0;

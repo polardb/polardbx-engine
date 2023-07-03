@@ -1390,9 +1390,6 @@ void warn_about_deprecated_binary(THD *thd)
 %token<lexer.keyword> BULK_SYM                   1201  /* MYSQL */
 %token<lexer.keyword> URL_SYM                    1202   /* MYSQL */
 %token<lexer.keyword> GENERATE_SYM               1203   /* MYSQL */
-%token<lexer.keyword> CONSENSUS_SYM              1204   /* MYSQL */
-%token<lexer.keyword> CONSENSUSLOG_SYM           1205   /* MYSQL */
-%token<lexer.keyword> XPAXOS_REPLICATION         1206   /* MYSQL */
 
 /*
   Precedence rules used to resolve the ambiguity when using keywords as idents
@@ -1426,6 +1423,11 @@ void warn_about_deprecated_binary(THD *thd)
 %token<lexer.keyword> NOCACHE_SYM                   1209 /* MYSQL */
 %token<lexer.keyword> NOCYCLE_SYM                   1210 /* MYSQL */
 %token<lexer.keyword> SEQUENCE_SYM                  1211 /* MYSQL */
+
+/* Tokens for raft */
+%token<lexer.keyword> CONSENSUS_SYM              1212   /* MYSQL */
+%token<lexer.keyword> CONSENSUSLOG_SYM           1213   /* MYSQL */
+%token<lexer.keyword> XPAXOS_REPLICATION         1214   /* MYSQL */
 
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
