@@ -6007,7 +6007,7 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
     assert_trx_commit_mark_initial(trx);
     if (trx_is_started(trx)) {
       ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
-      trx->txn_desc.cmmt.copy_my_gcn(&thd->owned_commit_gcn);
+      trx->txn_desc.cmmt.copy_from_my_gcn(&thd->owned_commit_gcn);
     }
 
     innobase_commit_low(trx);
@@ -6111,7 +6111,7 @@ static int innobase_rollback(handlerton *hton, /*!< in: InnoDB handlerton */
     assert_trx_commit_mark_initial(trx);
     if (trx_is_started(trx)) {
       ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
-      trx->txn_desc.cmmt.copy_my_gcn(&thd->owned_commit_gcn);
+      trx->txn_desc.cmmt.copy_from_my_gcn(&thd->owned_commit_gcn);
     }
 
     error = trx_rollback_for_mysql(trx);

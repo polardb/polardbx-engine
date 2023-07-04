@@ -2830,7 +2830,7 @@ void XA_specification_strategy::overwrite_gcn(trx_t *trx) const {
 
   if (trx_is_started(trx)) {
     ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
-    trx->txn_desc.cmmt.copy_my_gcn(&(m_xa_spec->gcn()));
+    trx->txn_desc.cmmt.copy_from_my_gcn(&(m_xa_spec->gcn()));
   }
 }
 

@@ -64,7 +64,8 @@ struct commit_mark_t {
    * generate automatically */
   csr_t csr;
   /** Copy gcn state from owned_commit_gcn. */
-  void copy_my_gcn(const MyGCN *);
+  void copy_from_my_gcn(const MyGCN *);
+  void copy_to_my_gcn(MyGCN *);
 };
 
 /** Compare function */

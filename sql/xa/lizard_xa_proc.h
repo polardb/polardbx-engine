@@ -126,7 +126,7 @@ class Xa_proc_find_by_gtrid : public Xa_proc_base {
     return MYSQL_TYPE_LONGLONG;
   }
 
-  enum enum_column { COLUMN_GCN = 0, COLUMN_STATE, COLUMN_LAST };
+  enum enum_column { COLUMN_GCN = 0, COLUMN_STATE, COLUMN_CSR, COLUMN_LAST };
 
  public:
   explicit Xa_proc_find_by_gtrid(PSI_memory_key key) : Xa_proc_base(key) {
@@ -142,6 +142,7 @@ class Xa_proc_find_by_gtrid : public Xa_proc_base {
     Column_element elements[COLUMN_LAST] = {
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("GCN"), 0},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("State"), 16},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("CSR"), 16},
     };
 
     for (size_t i = 0; i < COLUMN_LAST; i++) {

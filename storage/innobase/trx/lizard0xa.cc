@@ -192,7 +192,7 @@ bool trx_search_by_gtrid(const char *gtrid, unsigned len,
       default:
         ut_error;
     }
-    info->gcn = static_cast<my_gcn_t>(txn_hdr.image.gcn);
+    txn_hdr.image.copy_to_my_gcn(&info->gcn);
   }
   return found;
 }

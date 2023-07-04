@@ -40,6 +40,10 @@ const LEX_CSTRING transaction_state_str[] = {{STRING_WITH_LEN("COMMIT")},
                                              {STRING_WITH_LEN("ROLLBACK")},
                                              {STRING_WITH_LEN("UNKNOWN")}};
 
+const LEX_CSTRING transaction_csr_str[] = {{C_STRING_WITH_LEN("AUTOMATIC_GCN")},
+                                           {C_STRING_WITH_LEN("ASSIGNED_GCN")},
+                                           {C_STRING_WITH_LEN("NONE")}};
+
 /* Singleton instance for find_by_gtrid */
 Proc *Xa_proc_find_by_gtrid::instance() {
   static Proc *proc = new Xa_proc_find_by_gtrid(key_memory_xa_proc);
@@ -126,6 +130,14 @@ bool Sql_cmd_xa_proc_find_by_gtrid::pc_execute(THD *) {
   DBUG_RETURN(false);
 }
 
+static const LEX_CSTRING get_csr_str(const enum my_csr_t my_csr) {
+  if (my_csr == MYSQL_CSR_NONE) {
+    return transaction_csr_str[2];
+  } else {
+    return transaction_csr_str[my_csr];
+  }
+}
+
 void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
   DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::send_result");
   handlerton *ttse = innodb_hton;
@@ -155,10 +167,14 @@ void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
   found = ttse->ext.search_trx_by_gtrid(gtrid, gtrid_length, &info);
   if (found) {
     protocol->start_row();
-    protocol->store((ulonglong)info.gcn);
+    protocol->store((ulonglong)info.gcn.get_gcn());
+
     protocol->store_string(transaction_state_str[info.state].str,
                            transaction_state_str[info.state].length,
                            system_charset_info);
+
+    const LEX_CSTRING csr_str = get_csr_str(info.gcn.get_csr());
+    protocol->store_string(csr_str.str, csr_str.length, system_charset_info);
 
     if (protocol->end_row()) DBUG_VOID_RETURN;
   }

@@ -28,7 +28,27 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define LIZARD_LIZARD_RPL_GCN_INCLUDED
 
 #include "my_dbug.h"
-#include "lizard_iface.h"
+
+typedef uint64_t my_scn_t;
+typedef uint64_t my_gcn_t;
+typedef uint64_t my_utc_t;
+typedef uint64_t my_trx_id_t;
+
+/** Transaction slot address */
+typedef uint64_t my_slot_ptr_t;
+
+constexpr my_scn_t MYSQL_SCN_NULL = std::numeric_limits<my_scn_t>::max();
+
+constexpr my_gcn_t MYSQL_GCN_NULL = std::numeric_limits<my_gcn_t>::max();
+
+constexpr my_gcn_t MYSQL_GCN_MIN = 1024;
+
+/** Commit number source type. */
+enum my_csr_t {
+  MYSQL_CSR_NONE = -1,
+  MYSQL_CSR_AUTOMATIC = 0,
+  MYSQL_CSR_ASSIGNED = 1
+};
 
 struct MyGCN {
  private:
@@ -142,5 +162,22 @@ struct MyVisionGCN {
   my_gcn_t gcn;
   my_scn_t current_scn;
 };
+
+namespace lizard {
+namespace xa {
+
+enum Transaction_state {
+  TRANS_STATE_COMMITTED = 0,
+  TRANS_STATE_ROLLBACK = 1,
+  TRANS_STATE_UNKNOWN = 2,
+};
+
+struct Transaction_info {
+  Transaction_state state;
+  MyGCN gcn;
+};
+
+}  // namespace xa
+}  // namespace lizard
 
 #endif

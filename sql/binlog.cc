@@ -9004,6 +9004,11 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   DEBUG_SYNC(thd, "bgc_after_sync_stage_before_commit_stage");
 
   leave_mutex_before_commit_stage = &LOCK_sync;
+
+  DBUG_EXECUTE_IF("simulate_crash_between_ib_commit_and_binlog_commit", {
+      DBUG_SUICIDE();
+  });
+
   /*
     Stage #3: Commit all transactions in order.
 

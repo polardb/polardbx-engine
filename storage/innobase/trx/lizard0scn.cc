@@ -361,7 +361,7 @@ enum scn_state_t commit_mark_state(const commit_mark_t &cmmt) {
 /*****************************************
 *              commit_scn_t             *
 *****************************************/
-void commit_mark_t::copy_my_gcn(const MyGCN *my_gcn) {
+void commit_mark_t::copy_from_my_gcn(const MyGCN *my_gcn) {
   if (!my_gcn->is_empty()) {
     gcn = my_gcn->get_gcn();
     csr = my_gcn->is_assigned() ? CSR_ASSIGNED : CSR_AUTOMATIC;
@@ -370,4 +370,16 @@ void commit_mark_t::copy_my_gcn(const MyGCN *my_gcn) {
     gcn = lizard::GCN_NULL;
     csr = CSR_AUTOMATIC;
   }
+}
+
+void commit_mark_t::copy_to_my_gcn(MyGCN *my_gcn) {
+  my_csr_t my_csr = my_csr_t::MYSQL_CSR_NONE;
+
+  if (csr == csr_t::CSR_AUTOMATIC) {
+    my_csr = my_csr_t::MYSQL_CSR_AUTOMATIC;
+  } else {
+    my_csr = my_csr_t::MYSQL_CSR_ASSIGNED;
+  }
+
+  my_gcn->set(gcn, my_csr);
 }
