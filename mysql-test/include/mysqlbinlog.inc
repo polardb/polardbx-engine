@@ -111,6 +111,7 @@ if (!$mysqlbinlog_skip_replace)
     /SET @@session.original_commit_timestamp=[0-9]*/SET @@session.original_commit_timestamp= MICROSECONDS-FROM-EPOCH/
     /SET @@session.original_server_version=[0-9]*/SET @@session.original_server_version= ORIGINAL_SERVER_VERSION/
     /SET @@session.immediate_server_version=[0-9]*/SET @@session.immediate_server_version= IMMEDIATE_SERVER_VERSION/
+    /SET @@session.innodb_commit_seq=[0-9]*/SET @@session.innodb_commit_seq=##/
     /SET @@SESSION.GTID_NEXT= '.*'/SET @@SESSION.GTID_NEXT= '#'/
     /CRC32 0x[0-9a-f]{8}/CRC32 #/
     /# [a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}:/# #:/;

@@ -1,0 +1,2 @@
+--gtid-mode=off
+--innodb_undo_retention=9000

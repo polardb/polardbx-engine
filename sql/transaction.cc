@@ -221,9 +221,6 @@ bool trans_begin(THD *thd, uint flags) {
   PPI_TRANSACTION_CALL(start_transaction)(thd->ppi_transaction);
   thd->audit_trx_ctx.start_transaction();
 
-  /* This is a defensive action, reset gcn when explicit transaction begin. */
-  thd->reset_gcn_variables();
-
   return res;
 }
 

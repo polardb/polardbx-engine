@@ -5,6 +5,7 @@ create database lizard_db;
 
 
 use information_schema;
+--replace_column 10 #
 select * from INNODB_TABLESPACES where space = 4294967290;
 select * from INNODB_TABLESPACES_BRIEF where space = 4294967290;
 select * from INNODB_DATAFILES where space = 4294967290;

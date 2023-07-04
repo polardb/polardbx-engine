@@ -1,17 +1,16 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create table t1 (n int);
 set global innodb_undo_retention = 100;
-show status like "lizard_commit_gcn";
+show status like "lizard_current_gcn";
 Variable_name	Value
-Lizard_commit_gcn	1024
+Lizard_current_gcn	1024
 set innodb_commit_seq = @base_seq + 1;
 insert into t1 values(5);
 show variables like "innodb_commit_seq";
 Variable_name	Value
 innodb_commit_seq	18446744073709551615
-set innodb_commit_seq = @base_seq + 3;
+set innodb_commit_seq = @base_seq + 4;
 insert into t1 values(7);
-select /*+ SET_VAR(innodb_snapshot_seq=1026) */ * from t1;
 n
 5
 show variables like "innodb_snapshot_seq";
@@ -23,11 +22,11 @@ select * from t1;
 n
 5
 7
-set innodb_snapshot_seq = @base_seq + 2;
+set innodb_snapshot_seq = @base_seq + 3;
 select * from t1;
 n
 5
-set innodb_snapshot_seq = @base_seq;
+set innodb_snapshot_seq = @base_seq + 2;
 select * from t1;
 n
 5
@@ -38,17 +37,17 @@ select * from t1;
 n
 5
 7
-set innodb_snapshot_seq = @base_seq + 2;
+set innodb_snapshot_seq = @base_seq + 3;
 select * from t1;
 n
 5
-set innodb_snapshot_seq = @base_seq;
+set innodb_snapshot_seq = @base_seq + 2;
 select * from t1;
 n
 5
 commit;
 begin;
-set innodb_commit_seq = @base_seq + 5;
+set innodb_commit_seq = @base_seq + 6;
 commit and chain;
 show variables like "innodb_commit_seq";
 Variable_name	Value

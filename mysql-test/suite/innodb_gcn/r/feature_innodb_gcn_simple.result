@@ -1,3 +1,4 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 set global innodb_undo_retention=1800;
 set global innodb_undo_space_reserved_size=1024;
 DROP TABLE IF EXISTS t1;
@@ -7,8 +8,6 @@ value VARCHAR(50) NOT NULL,
 PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
 *** TEST: read with timestamp should see transaction or not
 REPLACE INTO t1 VALUES (0, 'zero'), (1, 'one'), (2, 'two'), (3, 'three');
 begin;
@@ -201,7 +200,7 @@ select * from t1;
 set innodb_commit_seq = @base_seq +  1004;
 xa commit 't';
 include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 select * from t1;
 id	value
 0	zero
@@ -237,7 +236,7 @@ select * from t2 force index(sec) where sec = 2;
 set innodb_commit_seq = @base_seq + 1504;
 xa commit 't';
 include/assert.inc [Assert that innodb_snapshot_seq/innodb_commit_seq are cleared]
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+ERROR HY000: Prepare wait timeout exceeded; try restarting global query
 select * from t2;
 id	sec	value
 0	0	zero

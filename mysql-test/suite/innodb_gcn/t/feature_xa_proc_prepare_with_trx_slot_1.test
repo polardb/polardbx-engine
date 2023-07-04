@@ -1,3 +1,4 @@
+call mtr.add_suppression("Found 1 prepared XA transactions");
 --source suite/innodb_gcn/include/init_conn_base_seq.inc
 create table t1 (id int);
 

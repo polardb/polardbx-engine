@@ -215,7 +215,7 @@ XA ROLLBACK 'trx';
 #
 # S8. Check binlog for related event (should be found).
 #
-include/assert_binlog_events.inc [Gtid/SET.* # Query/use.* # Gtid/SET.* # Query/XA START.* # Table_map/.* # Write_rows/.* # Query/XA END.* # XA_prepare/XA PREPARE.* # Gtid/SET.* # Query/XA ROLLBACK.*]
+include/assert_binlog_events.inc [!GCN # Gtid/SET.* # Query/use.* # !GCN # Gtid/SET.* # Query/XA START.* # Table_map/.* # Write_rows/.* # Query/XA END.* # XA_prepare/XA PREPARE.* # !GCN # Gtid/SET.* # Query/XA ROLLBACK.*]
 #
 # S9. Check GTID_EXECUTED for the executed UUID (should be found).
 #

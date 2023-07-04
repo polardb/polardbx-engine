@@ -658,6 +658,7 @@ SET(SQL_SHARED_SOURCES
   timestamp_service.cc
   tso/tso_proc.cc
   lizard/lizard_snapshot.cc
+  lizard_rpl_binlog_sender.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)

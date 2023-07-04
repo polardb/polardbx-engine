@@ -2396,6 +2396,9 @@ ROLLBACK/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -2509,6 +2512,9 @@ crn INT -- row number
 ) ENGINE=InnoDB DEFAULT CHARSET latin1
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -2613,108 +2619,8 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
-# # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
-/*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
-# original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
-# immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
-/*!80001 SET @@session.original_commit_timestamp= MICROSECONDS-FROM-EPOCH*//*!*/;
-/*!80014 SET @@session.original_server_version= ORIGINAL_SERVER_VERSION*//*!*/;
-/*!80014 SET @@session.immediate_server_version= IMMEDIATE_SERVER_VERSION*//*!*/;
-SET @@SESSION.GTID_NEXT= '#'/*!*/;
-# at #
-# # server id #  end_log_pos # CRC32 # 	Query	thread_id=#	exec_time=#	error_code=0
-SET TIMESTAMP=#/*!*/;
-BEGIN
-/*!*/;
-# at #
-# # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
-# has_generated_invisible_primary_key=0
-# at #
-# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
-### INSERT INTO `test`.`t1`
-### SET
-###   @1=b'1' /* BIT(1) meta=1 nullable=1 is_null=0 */
-###   @2=b'1111111111111111111111111111111111111111111111111111111111111111' /* BIT(64) meta=2048 nullable=1 is_null=0 */
-###   @3=127 /* TINYINT meta=0 nullable=1 is_null=0 */
-###   @4=-1 (255) /* TINYINT meta=0 nullable=1 is_null=0 */
-###   @5=-1 (255) /* TINYINT meta=0 nullable=1 is_null=0 */
-###   @6=1 /* TINYINT meta=0 nullable=1 is_null=0 */
-###   @7=32767 /* SHORTINT meta=0 nullable=1 is_null=0 */
-###   @8=-1 (65535) /* SHORTINT meta=0 nullable=1 is_null=0 */
-###   @9=-1 (65535) /* SHORTINT meta=0 nullable=1 is_null=0 */
-###   @10=8388607 /* MEDIUMINT meta=0 nullable=1 is_null=0 */
-###   @11=-1 (16777215) /* MEDIUMINT meta=0 nullable=1 is_null=0 */
-###   @12=-1 (16777215) /* MEDIUMINT meta=0 nullable=1 is_null=0 */
-###   @13=2147483647 /* INT meta=0 nullable=1 is_null=0 */
-###   @14=-1 (4294967295) /* INT meta=0 nullable=1 is_null=0 */
-###   @15=-1 (4294967295) /* INT meta=0 nullable=1 is_null=0 */
-###   @16=9223372036854775807 /* LONGINT meta=0 nullable=1 is_null=0 */
-###   @17=-1 (18446744073709551615) /* LONGINT meta=0 nullable=1 is_null=0 */
-###   @18=-1 (18446744073709551615) /* LONGINT meta=0 nullable=1 is_null=0 */
-###   @19=3.402... /* FLOAT meta=4 nullable=1 is_null=0 */
-###   @20=3.402... /* FLOAT meta=4 nullable=1 is_null=0 */
-###   @21=3.402... /* FLOAT meta=4 nullable=1 is_null=0 */
-###   @22=1.797... /* DOUBLE meta=8 nullable=1 is_null=0 */
-###   @23=1.797... /* DOUBLE meta=8 nullable=1 is_null=0 */
-###   @24=1.797... /* DOUBLE meta=8 nullable=1 is_null=0 */
-###   @25=9999999999 /* DECIMAL(10,0) meta=2560 nullable=1 is_null=0 */
-###   @26=9999999999 /* DECIMAL(10,0) meta=2560 nullable=1 is_null=0 */
-###   @27=9999999999 /* DECIMAL(10,0) meta=2560 nullable=1 is_null=0 */
-###   @28='9999:12:31' /* DATE meta=0 nullable=1 is_null=0 */
-###   @29='9999-12-31 23:59:59' /* DATETIME(0) meta=0 nullable=1 is_null=0 */
-###   @30=2146522447 /* TIMESTAMP(0) meta=0 nullable=1 is_null=0 */
-###   @31='838:59:59' /* TIME(0) meta=0 nullable=1 is_null=0 */
-###   @32=2155 /* YEAR meta=0 nullable=1 is_null=0 */
-###   @33='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
-###   @34='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
-###   @35='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
-###   @36='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* STRING(255) meta=65279 nullable=1 is_null=0 */
-###   @37='ï¿¿' /* STRING(3) meta=65027 nullable=1 is_null=0 */
-###   @38='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
-###   @39='ï¿¿' /* STRING(3) meta=65027 nullable=1 is_null=0 */
-###   @40='ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿' /* STRING(765) meta=57085 nullable=1 is_null=0 */
-###   @41='ÿÿ' /* STRING(2) meta=65026 nullable=1 is_null=0 */
-###   @42='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
-###   @43='ÿÿ' /* STRING(2) meta=65026 nullable=1 is_null=0 */
-###   @44='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* STRING(510) meta=61182 nullable=1 is_null=0 */
-###   @45='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
-###   @46='ÿ' /* VARSTRING(1) meta=1 nullable=1 is_null=0 */
-###   @47='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(255) meta=255 nullable=1 is_null=0 */
-###   @48='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(261) meta=261 nullable=1 is_null=0 */
-###   @49='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
-###   @50='ï¿¿' /* VARSTRING(3) meta=3 nullable=1 is_null=0 */
-###   @51='ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿' /* VARSTRING(765) meta=765 nullable=1 is_null=0 */
-###   @52='ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿' /* VARSTRING(783) meta=783 nullable=1 is_null=0 */
-###   @53='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
-###   @54='ÿÿ' /* VARSTRING(2) meta=2 nullable=1 is_null=0 */
-###   @55='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(510) meta=510 nullable=1 is_null=0 */
-###   @56='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(522) meta=522 nullable=1 is_null=0 */
-###   @57='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
-###   @58='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
-###   @59='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
-###   @60='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* STRING(255) meta=65279 nullable=1 is_null=0 */
-###   @61='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
-###   @62='ÿ' /* VARSTRING(1) meta=1 nullable=1 is_null=0 */
-###   @63='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(255) meta=255 nullable=1 is_null=0 */
-###   @64='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(261) meta=261 nullable=1 is_null=0 */
-###   @65='tinyblob' /* TINYBLOB/TINYTEXT meta=1 nullable=1 is_null=0 */
-###   @66='tinytext' /* TINYBLOB/TINYTEXT meta=1 nullable=1 is_null=0 */
-###   @67='\x00t\x00i\x00n\x00y\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* TINYBLOB/TINYTEXT meta=1 nullable=1 is_null=0 */
-###   @68='blob' /* BLOB/TEXT meta=2 nullable=1 is_null=0 */
-###   @69='text' /* BLOB/TEXT meta=2 nullable=1 is_null=0 */
-###   @70='\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* BLOB/TEXT meta=2 nullable=1 is_null=0 */
-###   @71='mediumblob' /* MEDIUMBLOB/MEDIUMTEXT meta=3 nullable=1 is_null=0 */
-###   @72='mediumtext' /* MEDIUMBLOB/MEDIUMTEXT meta=3 nullable=1 is_null=0 */
-###   @73='\x00m\x00e\x00d\x00i\x00u\x00m\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* MEDIUMBLOB/MEDIUMTEXT meta=3 nullable=1 is_null=0 */
-###   @74='longblob' /* LONGBLOB/LONGTEXT meta=4 nullable=1 is_null=0 */
-###   @75='longtext' /* LONGBLOB/LONGTEXT meta=4 nullable=1 is_null=0 */
-###   @76='\x00l\x00o\x00n\x00g\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* LONGBLOB/LONGTEXT meta=4 nullable=1 is_null=0 */
-###   @77=3 /* ENUM(1 byte) meta=63233 nullable=1 is_null=0 */
-###   @78=b'00000111' /* SET(1 bytes) meta=63489 nullable=1 is_null=0 */
-###   @79=2 /* INT meta=0 nullable=1 is_null=0 */
-# at #
-# # server id #  end_log_pos # CRC32 # 	Xid = #
-COMMIT/*!*/;
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -2736,6 +2642,112 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
 ### INSERT INTO `test`.`t1`
 ### SET
+###   @1=b'1' /* BIT(1) meta=1 nullable=1 is_null=0 */
+###   @2=b'1111111111111111111111111111111111111111111111111111111111111111' /* BIT(64) meta=2048 nullable=1 is_null=0 */
+###   @3=127 /* TINYINT meta=0 nullable=1 is_null=0 */
+###   @4=-1 (255) /* TINYINT meta=0 nullable=1 is_null=0 */
+###   @5=-1 (255) /* TINYINT meta=0 nullable=1 is_null=0 */
+###   @6=1 /* TINYINT meta=0 nullable=1 is_null=0 */
+###   @7=32767 /* SHORTINT meta=0 nullable=1 is_null=0 */
+###   @8=-1 (65535) /* SHORTINT meta=0 nullable=1 is_null=0 */
+###   @9=-1 (65535) /* SHORTINT meta=0 nullable=1 is_null=0 */
+###   @10=8388607 /* MEDIUMINT meta=0 nullable=1 is_null=0 */
+###   @11=-1 (16777215) /* MEDIUMINT meta=0 nullable=1 is_null=0 */
+###   @12=-1 (16777215) /* MEDIUMINT meta=0 nullable=1 is_null=0 */
+###   @13=2147483647 /* INT meta=0 nullable=1 is_null=0 */
+###   @14=-1 (4294967295) /* INT meta=0 nullable=1 is_null=0 */
+###   @15=-1 (4294967295) /* INT meta=0 nullable=1 is_null=0 */
+###   @16=9223372036854775807 /* LONGINT meta=0 nullable=1 is_null=0 */
+###   @17=-1 (18446744073709551615) /* LONGINT meta=0 nullable=1 is_null=0 */
+###   @18=-1 (18446744073709551615) /* LONGINT meta=0 nullable=1 is_null=0 */
+###   @19=3.402... /* FLOAT meta=4 nullable=1 is_null=0 */
+###   @20=3.402... /* FLOAT meta=4 nullable=1 is_null=0 */
+###   @21=3.402... /* FLOAT meta=4 nullable=1 is_null=0 */
+###   @22=1.797... /* DOUBLE meta=8 nullable=1 is_null=0 */
+###   @23=1.797... /* DOUBLE meta=8 nullable=1 is_null=0 */
+###   @24=1.797... /* DOUBLE meta=8 nullable=1 is_null=0 */
+###   @25=9999999999 /* DECIMAL(10,0) meta=2560 nullable=1 is_null=0 */
+###   @26=9999999999 /* DECIMAL(10,0) meta=2560 nullable=1 is_null=0 */
+###   @27=9999999999 /* DECIMAL(10,0) meta=2560 nullable=1 is_null=0 */
+###   @28='9999:12:31' /* DATE meta=0 nullable=1 is_null=0 */
+###   @29='9999-12-31 23:59:59' /* DATETIME(0) meta=0 nullable=1 is_null=0 */
+###   @30=2146522447 /* TIMESTAMP(0) meta=0 nullable=1 is_null=0 */
+###   @31='838:59:59' /* TIME(0) meta=0 nullable=1 is_null=0 */
+###   @32=2155 /* YEAR meta=0 nullable=1 is_null=0 */
+###   @33='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
+###   @34='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
+###   @35='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
+###   @36='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* STRING(255) meta=65279 nullable=1 is_null=0 */
+###   @37='ï¿¿' /* STRING(3) meta=65027 nullable=1 is_null=0 */
+###   @38='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
+###   @39='ï¿¿' /* STRING(3) meta=65027 nullable=1 is_null=0 */
+###   @40='ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿' /* STRING(765) meta=57085 nullable=1 is_null=0 */
+###   @41='ÿÿ' /* STRING(2) meta=65026 nullable=1 is_null=0 */
+###   @42='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
+###   @43='ÿÿ' /* STRING(2) meta=65026 nullable=1 is_null=0 */
+###   @44='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* STRING(510) meta=61182 nullable=1 is_null=0 */
+###   @45='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
+###   @46='ÿ' /* VARSTRING(1) meta=1 nullable=1 is_null=0 */
+###   @47='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(255) meta=255 nullable=1 is_null=0 */
+###   @48='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(261) meta=261 nullable=1 is_null=0 */
+###   @49='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
+###   @50='ï¿¿' /* VARSTRING(3) meta=3 nullable=1 is_null=0 */
+###   @51='ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿' /* VARSTRING(765) meta=765 nullable=1 is_null=0 */
+###   @52='ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿ï¿¿' /* VARSTRING(783) meta=783 nullable=1 is_null=0 */
+###   @53='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
+###   @54='ÿÿ' /* VARSTRING(2) meta=2 nullable=1 is_null=0 */
+###   @55='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(510) meta=510 nullable=1 is_null=0 */
+###   @56='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(522) meta=522 nullable=1 is_null=0 */
+###   @57='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
+###   @58='' /* STRING(0) meta=65024 nullable=1 is_null=0 */
+###   @59='ÿ' /* STRING(1) meta=65025 nullable=1 is_null=0 */
+###   @60='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* STRING(255) meta=65279 nullable=1 is_null=0 */
+###   @61='' /* VARSTRING(0) meta=0 nullable=1 is_null=0 */
+###   @62='ÿ' /* VARSTRING(1) meta=1 nullable=1 is_null=0 */
+###   @63='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(255) meta=255 nullable=1 is_null=0 */
+###   @64='ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ' /* VARSTRING(261) meta=261 nullable=1 is_null=0 */
+###   @65='tinyblob' /* TINYBLOB/TINYTEXT meta=1 nullable=1 is_null=0 */
+###   @66='tinytext' /* TINYBLOB/TINYTEXT meta=1 nullable=1 is_null=0 */
+###   @67='\x00t\x00i\x00n\x00y\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* TINYBLOB/TINYTEXT meta=1 nullable=1 is_null=0 */
+###   @68='blob' /* BLOB/TEXT meta=2 nullable=1 is_null=0 */
+###   @69='text' /* BLOB/TEXT meta=2 nullable=1 is_null=0 */
+###   @70='\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* BLOB/TEXT meta=2 nullable=1 is_null=0 */
+###   @71='mediumblob' /* MEDIUMBLOB/MEDIUMTEXT meta=3 nullable=1 is_null=0 */
+###   @72='mediumtext' /* MEDIUMBLOB/MEDIUMTEXT meta=3 nullable=1 is_null=0 */
+###   @73='\x00m\x00e\x00d\x00i\x00u\x00m\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* MEDIUMBLOB/MEDIUMTEXT meta=3 nullable=1 is_null=0 */
+###   @74='longblob' /* LONGBLOB/LONGTEXT meta=4 nullable=1 is_null=0 */
+###   @75='longtext' /* LONGBLOB/LONGTEXT meta=4 nullable=1 is_null=0 */
+###   @76='\x00l\x00o\x00n\x00g\x00t\x00e\x00x\x00t\x00-\x00u\x00c\x00s\x002' /* LONGBLOB/LONGTEXT meta=4 nullable=1 is_null=0 */
+###   @77=3 /* ENUM(1 byte) meta=63233 nullable=1 is_null=0 */
+###   @78=b'00000111' /* SET(1 bytes) meta=63489 nullable=1 is_null=0 */
+###   @79=2 /* INT meta=0 nullable=1 is_null=0 */
+# at #
+# # server id #  end_log_pos # CRC32 # 	Xid = #
+COMMIT/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
+/*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
+# original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
+# immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
+/*!80001 SET @@session.original_commit_timestamp= MICROSECONDS-FROM-EPOCH*//*!*/;
+/*!80014 SET @@session.original_server_version= ORIGINAL_SERVER_VERSION*//*!*/;
+/*!80014 SET @@session.immediate_server_version= IMMEDIATE_SERVER_VERSION*//*!*/;
+SET @@SESSION.GTID_NEXT= '#'/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Query	thread_id=#	exec_time=#	error_code=0
+SET TIMESTAMP=#/*!*/;
+BEGIN
+/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Table_map: `test`.`t1` mapped to number #
+# has_generated_invisible_primary_key=0
+# at #
+# # server id #  end_log_pos # CRC32 # 	Write_rows: table id # flags: STMT_END_F
+### INSERT INTO `test`.`t1`
+### SET
 ###   @1=NULL /* BIT(1) meta=1 nullable=1 is_null=1 */
 ###   @2=NULL /* BIT(64) meta=2048 nullable=1 is_null=1 */
 ###   @3=NULL /* TINYINT meta=0 nullable=1 is_null=1 */
@@ -2900,6 +2912,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -3083,6 +3098,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -3265,6 +3283,9 @@ BEGIN
 # at #
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3449,6 +3470,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -3632,6 +3656,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -3734,6 +3761,9 @@ BEGIN
 # at #
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -3838,6 +3868,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -3940,6 +3973,9 @@ BEGIN
 # at #
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4145,6 +4181,9 @@ ROLLBACK/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4172,6 +4211,9 @@ c47 VARCHAR(24),
 crn INT -- row number
 ) ENGINE=InnoDB DEFAULT CHARSET latin1
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4239,6 +4281,9 @@ BEGIN
 # at #
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4324,6 +4369,9 @@ BEGIN
 # at #
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4571,6 +4619,9 @@ ROLLBACK/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4599,6 +4650,9 @@ c_1_n INT -- row number
 ) ENGINE=InnoDB DEFAULT CHARSET latin1
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4617,6 +4671,9 @@ c_2_n INT -- row number
 ) ENGINE=InnoDB DEFAULT CHARSET latin1
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4634,6 +4691,9 @@ c_3_2 VARCHAR(255),
 c_3_n INT -- row number
 ) ENGINE=InnoDB DEFAULT CHARSET latin1
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4702,6 +4762,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4768,6 +4831,9 @@ BEGIN
 # at #
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -4836,6 +4902,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4848,6 +4917,9 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 ANALYZE TABLE t1
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4862,6 +4934,9 @@ SET TIMESTAMP=#/*!*/;
 ANALYZE TABLE t2
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -4874,6 +4949,9 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 ANALYZE TABLE t3
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -5069,6 +5147,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -5260,6 +5341,9 @@ ROLLBACK/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -5287,6 +5371,9 @@ c2 INT,
 c3 VARCHAR(60)
 ) ENGINE=InnoDB DEFAULT CHARSET latin1
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;

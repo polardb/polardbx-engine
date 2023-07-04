@@ -37,6 +37,8 @@
 #include "sql/rpl_gtid.h"
 #include "sql/sql_error.h"  // Diagnostics_area
 
+#include "sql/lizard_rpl_binlog_sender.h"
+
 class String;
 class THD;
 
@@ -496,6 +498,12 @@ class Binlog_sender {
    @param current_size The baseline (for instance, the current buffer size).
   */
   void calc_shrink_buffer_size(size_t current_size);
+
+ public:
+  friend class lizard::Delay_binlog_sender;
+
+ private:
+  lizard::Delay_binlog_sender m_delay_sender;
 };
 
 #endif  // DEFINED_RPL_BINLOG_SENDER

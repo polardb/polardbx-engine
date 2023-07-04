@@ -1,3 +1,4 @@
+source include/have_debug.inc;
 set global innodb_undo_retention = 900;
 
 create table t1 (id int);

@@ -194,7 +194,7 @@ while ($j <= 3)
     #           and no GTIDs are utilized.
     if ($i == 1)
     {
-      --let $event_sequence= $gtid_event # !Begin # !Insert # !Commit
+      --let $event_sequence= !GCN # $gtid_event # !Begin # !Insert # !Commit
       --source include/assert_binlog_events.inc
       if ($gtid_mode == 'ON')
       {

@@ -1,0 +1,2 @@
+--innodb_undo_retention=1800
+--transaction-isolation=READ-COMMITTED

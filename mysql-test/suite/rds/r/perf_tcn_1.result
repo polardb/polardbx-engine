@@ -1,3 +1,4 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 set autocommit=1;
 create database db_1;
 create table db_1.t1(
@@ -5,10 +6,8 @@ id int primary key auto_increment,
 col1 varchar(100),
 col2 int
 )engine= innodb;
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
 count(*)
 100
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
 count(*)
 100
 show global status like '%tcn_cache%';
@@ -19,10 +18,8 @@ Lizard_block_tcn_cache_evict	0
 Lizard_global_tcn_cache_hit	0
 Lizard_global_tcn_cache_miss	0
 Lizard_global_tcn_cache_evict	0
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
 count(*)
 100
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
 count(*)
 100
 show global status like '%tcn_cache%';

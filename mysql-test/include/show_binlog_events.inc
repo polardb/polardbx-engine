@@ -9,6 +9,7 @@
 # [--let $binlog_limit= 1, 3 ]
 # [--let $keep_transaction_payload_events = 0]
 # [--let $keep_gtid_events= 1]
+# [--let $keep_gcn_events= 1]
 # [--let $keep_view_change_events= 1]
 # [--let $mask_binlog_commit_events= 1]
 # [--let $mask_anonymous_gtid_events= 1]
@@ -37,6 +38,11 @@
 #     filtered out, so that the output is independent of whether GTIDs
 #     are enabled or not.  If this flag is set, events are kept but
 #     the actual GTID values are masked out.
+#
+#   $keep_gcn_events
+#     By default, Gcn_log_event are filtered out, so that the output is
+#     independent of whether GCN-Writing are enabled or not.  If this flag
+#     is set, events are kept but the actual gcn values are masked out.
 #
 #   $keep_view_change_events
 #     By default, View Change Events are filtered out, so that the output is

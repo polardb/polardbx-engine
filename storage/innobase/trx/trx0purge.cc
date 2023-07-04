@@ -1668,7 +1668,7 @@ static void trx_purge_rseg_get_next_history_log(
   purge_sys->iter.undo_no = 0;
   purge_sys->iter.undo_rseg_space = SPACE_UNKNOWN;
   purge_sys->next_stored = false;
-  purge_sys->iter.scn = rseg->last_scn + 1;
+  purge_sys->iter.scn = rseg->last_scn;
 
   mtr_start(&mtr);
 

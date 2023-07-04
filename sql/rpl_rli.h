@@ -1175,6 +1175,7 @@ class Relay_log_info : public Rpl_info {
   Prealloced_array<Slave_job_item, 8> curr_group_da;
 
   bool curr_group_seen_gtid;   // current group started with Gtid-event or not
+  bool curr_group_seen_gcn;    // Lizard: current group started with Gcn-event or not
   bool curr_group_seen_begin;  // current group started with B-event or not
   bool curr_group_isolated;    // current group requires execution in isolation
   bool mts_end_group_sets_max_dbs;  // flag indicates if partitioning info is

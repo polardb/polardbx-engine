@@ -1,0 +1,15 @@
+set global innodb_undo_retention = 1800;
+use test;
+create table t1 (a int , primary key (a));
+xa begin 'xa1';
+insert into t1 values (1);
+xa end 'xa1';
+xa prepare 'xa1';
+set innodb_commit_seq = 10000;
+xa commit 'xa1';
+# restart
+set innodb_snapshot_seq = 8000;
+select * from t1;
+ERROR HY000: Snapshot too old
+drop table t1;
+set global innodb_undo_retention = default;

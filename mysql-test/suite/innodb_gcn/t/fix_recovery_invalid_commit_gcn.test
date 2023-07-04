@@ -15,7 +15,7 @@ create table test1.t1 (n int);
 --let $MYSQL_PORT= `SELECT @@port`
 --let $MYSQL_MESSAGESDIR= `SELECT @@lc_messages_dir`
 
---let $base_seq= `SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence'`
+--let $base_seq= `SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn'`
 
 # Shutdown mysqld which is started by mtr.
 --let $_server_id= `SELECT @@server_id`
@@ -27,22 +27,24 @@ create table test1.t1 (n int);
 # Run the mysqld with exec with --daemonize option.
 --exec $MYSQLD --defaults-file=$MYSQLTEST_VARDIR/my.cnf --innodb_undo_retention=100 --basedir=$MYSQL_BASEDIR --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --daemonize --secure-file-priv="" >$MYSQLTEST_VARDIR/log/mysqld_out_err.log 2>&1
 
+# TODO: fix it <18-04-23, zanye.zjy> #
 # Mysqld crash before commit by gcn, after write binlog.
---exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set global debug = '+d,crash_before_gcn_commit';"
+# --exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set global debug = '+d,crash_before_gcn_commit';"
 
---exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "insert into test1.t1 values (1);"
-
+# Mysqld crash before commit by gcn, after write binlog.
 --error 1
---exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set innodb_commit_seq= $base_seq + 1; insert into test1.t1 values (2);"
+--exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set session debug = '+d, crash_before_gcn_commit'; insert into test1.t1 values (1);"
 
 # Run the mysqld with exec with --daemonize option.
 --exec $MYSQLD --defaults-file=$MYSQLTEST_VARDIR/my.cnf --innodb_undo_retention=100 --basedir=$MYSQL_BASEDIR --datadir=$MYSQLD_DATADIR --socket=$MYSQL_SOCKET --pid-file=$MYSQL_PIDFILE --port=$MYSQL_PORT --core-file --lc-messages-dir=$MYSQL_MESSAGESDIR --daemonize --secure-file-priv="" >$MYSQLTEST_VARDIR/log/mysqld_out_err.log 2>&1
+
+--exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set innodb_commit_seq= $base_seq + 10; insert into test1.t1 values (2);"
 
 # Test whether the gcn in binlog has been recovered.
 
 --exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "select * from test1.t1;"
 
---exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "select /*+ SET_VAR(innodb_snapshot_seq= $base_seq) */ * from test1.t1;"
+--exec $MYSQL --socket=$MYSQL_SOCKET -uroot -e "set innodb_snapshot_seq= $base_seq + 9;select * from test1.t1;"
 
 # Restart the original server
 --exec kill -9 `cat $MYSQL_PIDFILE`

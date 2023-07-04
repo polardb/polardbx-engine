@@ -22,6 +22,7 @@ include/mysqlbinlog.inc
 DELIMITER /*!*/;
 ROLLBACK/*!*/;
 # [empty]
+SET @@session.innodb_commit_seq=##/*!*/;
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)

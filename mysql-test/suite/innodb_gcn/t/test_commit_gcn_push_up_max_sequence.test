@@ -6,7 +6,7 @@
 CREATE TABLE tmp_max_seq_test (id INT) ENGINE=InnoDB;
 insert into tmp_max_seq_test values (1);
 
---let $max_sequence_before=`SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence'`
+--let $max_sequence_before=`SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn'`
 
 # increment max_sequence
 eval set innodb_commit_seq = $max_sequence_before + 1;
@@ -16,7 +16,7 @@ update tmp_max_seq_test set id = id + 1;
 --source include/kill_and_restart_mysqld.inc
 --echo # Restart completed
 
---let $max_sequence_after=`SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence'`
+--let $max_sequence_after=`SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn'`
 
 --let $assert_text = max_sequence should be incremented after reboot
 --let $assert_cond = $max_sequence_before < $max_sequence_after

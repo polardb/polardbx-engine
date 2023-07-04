@@ -1,6 +1,14 @@
 --echo # While the purge thread is turned off, perform enough DML to cause
 --echo # undo tablespace sizes grow beyond the truncation threshold.
 
+# Lizard Revision:
+# gcs history will start new trx and assign durable rseg,
+# which might cause uneven usage of the undo tablespace,
+# because there are some big transactions in the testcase.
+--disable_query_log
+set global innodb_scn_history_task_enabled = off;
+--enable_query_log
+
 if ($CRASH_ON_SHUTDOWN == 0)
 {
   --echo # Then check if truncation is accomplished by restarting mysqld
@@ -244,3 +252,7 @@ if ($USE_EXPLICIT == 1)
 
 SELECT NAME, SPACE_TYPE, STATE, AUTOEXTEND_SIZE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
        WHERE SPACE_TYPE = 'Undo' ORDER BY NAME;
+
+--disable_query_log
+set global innodb_scn_history_task_enabled = default;
+--enable_query_log

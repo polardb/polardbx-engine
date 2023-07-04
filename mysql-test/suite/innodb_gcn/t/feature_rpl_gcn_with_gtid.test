@@ -1,0 +1,1 @@
+--source suite/innodb_gcn/t/feature_rpl_gcn_parallel_type.inc

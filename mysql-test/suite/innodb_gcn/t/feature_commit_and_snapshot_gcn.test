@@ -5,8 +5,7 @@
 create table t1 (n int);
 
 set global innodb_undo_retention = 100;
-
-show status like "lizard_commit_gcn";
+show status like "lizard_current_gcn";
 
 # Test innodb_commit_seq for statement when autocommit.
 set innodb_commit_seq = @base_seq + 1;
@@ -14,10 +13,13 @@ insert into t1 values(5);
 
 show variables like "innodb_commit_seq";
 
-set innodb_commit_seq = @base_seq + 3;
+set innodb_commit_seq = @base_seq + 4;
 insert into t1 values(7);
 
-select /*+ SET_VAR(innodb_snapshot_seq=1026) */ * from t1;
+--let snapshot_gcn = `select @base_seq + 2`
+--disable_query_log
+--eval select /*+ SET_VAR(innodb_snapshot_seq=$snapshot_gcn) */ * from t1
+--enable_query_log
 
 show variables like "innodb_snapshot_seq";
 
@@ -27,10 +29,10 @@ set transaction_isolation = "READ-COMMITTED";
 begin;
 select * from t1;
 
-set innodb_snapshot_seq = @base_seq + 2;
+set innodb_snapshot_seq = @base_seq + 3;
 select * from t1;
 
-set innodb_snapshot_seq = @base_seq;
+set innodb_snapshot_seq = @base_seq + 2;
 select * from t1;
 commit;
 
@@ -40,16 +42,16 @@ set transaction_isolation = "REPEATABLE-READ";
 begin;
 select * from t1;
 
-set innodb_snapshot_seq = @base_seq + 2;
+set innodb_snapshot_seq = @base_seq + 3;
 select * from t1;
 
-set innodb_snapshot_seq = @base_seq;
+set innodb_snapshot_seq = @base_seq + 2;
 select * from t1;
 commit;
 
 # Test reset gcn for commit and chain
 begin;
-set innodb_commit_seq = @base_seq + 5;
+set innodb_commit_seq = @base_seq + 6;
 commit and chain;
 
 show variables like "innodb_commit_seq";

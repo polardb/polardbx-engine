@@ -26,6 +26,7 @@ include/mysqlbinlog.inc
 DELIMITER /*!*/;
 ROLLBACK/*!*/;
 # [empty]
+SET @@session.innodb_commit_seq=##/*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 /*!80001 SET @@session.original_commit_timestamp= MICROSECONDS-FROM-EPOCH*//*!*/;
@@ -50,6 +51,7 @@ SET TIMESTAMP=#/*!*/;
 INSERT INTO t1 VALUES(@`a b`)
 /*!*/;
 COMMIT/*!*/;
+SET @@session.innodb_commit_seq=##/*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 /*!80001 SET @@session.original_commit_timestamp= MICROSECONDS-FROM-EPOCH*//*!*/;

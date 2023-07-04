@@ -68,26 +68,23 @@ select * from tt as of timestamp (1<2);
 select * from tt as of scn (a<b);
 
 
-# Not surpported  ==========================
+# Not surpported, bypass ==========================
 
 create temporary table tmp(a int);
---error ER_AS_OF_NOT_INNODB_TABLE
 select * from tmp as of scn 1;
 drop table tmp;
 
 # now bypass, do not raise error for non-innnodb table
-select * from information_schema.INNODB_TABLESPACES as of scn 1 limit 1;
+select * from information_schema.INNODB_TABLESPACES as of scn 1 limit 0;
 
 --error ER_AS_OF_CONFLICT_LOCK_CLAUSE
 select * from tt as of scn 1 as alias for update;
 --error ER_AS_OF_CONFLICT_LOCK_CLAUSE
 select * from tt as of scn 1 as alias LOCK IN SHARE MODE;
 
---error ER_AS_OF_NOT_INNODB_TABLE
 select * from vv as of scn 1;
 
 lock tables vv read;
---error ER_AS_OF_NOT_INNODB_TABLE
 select * from vv as of scn 1;
 unlock tables;
 

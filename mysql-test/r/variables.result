@@ -2052,6 +2052,7 @@ SET SESSION gtid_next = @@session.gtid_next;
 SET SESSION identity = @@session.identity;
 SET SESSION immediate_server_version = @@session.immediate_server_version;
 SET SESSION innodb_commit_seq = @@session.innodb_commit_seq;
+SET SESSION innodb_current_snapshot_seq = @@session.innodb_current_snapshot_seq;
 SET SESSION innodb_snapshot_seq = @@session.innodb_snapshot_seq;
 SET SESSION insert_id = @@session.insert_id;
 SET SESSION last_insert_id = @@session.last_insert_id;

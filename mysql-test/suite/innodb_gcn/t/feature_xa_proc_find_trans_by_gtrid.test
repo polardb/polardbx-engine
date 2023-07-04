@@ -15,10 +15,10 @@ set global innodb_undo_retention = 9000;
 xa start '1';
 insert into t1 values (1);
 xa end '1';
+xa prepare '1';
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
-xa prepare '1';
 xa commit '1';
 
 --let $expect_gcn= $commit_gcn
@@ -33,10 +33,10 @@ xa commit '1';
 xa start '2';
 insert into t1 values (1);
 xa end '2';
+xa prepare '2';
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
-xa prepare '2';
 xa rollback '2';
 
 --let $expect_gcn=
@@ -56,9 +56,6 @@ connection default;
 xa start '3';
 insert into t1 values (1);
 xa end '3';
---disable_query_log
---eval set innodb_commit_seq = $commit_gcn
---enable_query_log
 xa prepare '3';
 
 connection conn1;
@@ -85,10 +82,10 @@ connection default;
 --let $commit_gcn = `select @base_seq + 400`
 xa start '4';
 xa end '4';
+xa prepare '4';
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
-xa prepare '4';
 xa commit '4';
 
 --let $expect_none=1
@@ -105,11 +102,12 @@ insert into t1 values (1);
 call dbms_xa.find_by_gtrid('5');
 xa end '5';
 call dbms_xa.find_by_gtrid('5');
+xa prepare '5';
+call dbms_xa.find_by_gtrid('5');
+
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
-xa prepare '5';
-call dbms_xa.find_by_gtrid('5');
 xa commit '5';
 
 --echo ###############################
@@ -125,10 +123,10 @@ call dbms_xa.find_by_gtrid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 xa start 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
 insert into t1 values (1);
 xa end 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
+xa prepare 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
-xa prepare 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
 xa commit 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000003_GROUP@0004';
 
 --let $expect_gcn= $commit_gcn

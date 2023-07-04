@@ -424,6 +424,9 @@ The following options may be given as the first argument:
  Number of best matches to use for query expansion
  --ft-stopword-file=name 
  Use stopwords from this file instead of built-in list
+ --gcn-write-event   Writting a gcn event which content is gcn number for
+ every transaction.
+ (Defaults to on; use --skip-gcn-write-event to disable.)
  --gdb               Set up signals usable for debugging.
  --general-log       Log connections and queries to a table or log file.
  Defaults to logging to a file hostname.log, or if
@@ -438,9 +441,6 @@ The following options may be given as the first argument:
  --global-connection-memory-tracking 
  Enable updating the global memory counter and checking
  the global connection memory limit exceeding
- --global-query-wait-timeout=# 
- Timeout in seconds to wait for XA prepared  before
- returning an error.
  --group-concat-max-len=# 
  The maximum length of the result of function 
  GROUP_CONCAT()
@@ -1826,12 +1826,12 @@ ft-max-word-len 84
 ft-min-word-len 4
 ft-query-expansion-limit 20
 ft-stopword-file (No default value)
+gcn-write-event TRUE
 gdb FALSE
 general-log FALSE
 generated-random-password-length 20
 global-connection-memory-limit 18446744073709551615
 global-connection-memory-tracking FALSE
-global-query-wait-timeout 31536000
 group-concat-max-len 1024
 group-replication-consistency EVENTUAL
 gtid-executed-compression-period 0

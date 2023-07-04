@@ -166,6 +166,7 @@
 #include "scope_guard.h"
 
 #include "sql/xa/lizard_xa_trx.h"
+#include "sql/gcn_log_event.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;
@@ -4521,6 +4522,7 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
           rli->curr_group_assigned_parts.clear();
           // reset the B-group and Gtid-group marker
           rli->curr_group_seen_begin = rli->curr_group_seen_gtid = false;
+          rli->curr_group_seen_gcn = false;
           rli->last_assigned_worker = nullptr;
         }
         /*
@@ -4611,7 +4613,7 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
         ((ev->get_type_code() != binary_log::XID_EVENT &&
           !is_committed_ddl(*ptr_ev)) ||
          skip_event ||
-         (rli->is_mts_recovery() && !is_gtid_event(ev) &&
+         (rli->is_mts_recovery() && !is_gtid_event(ev) && !is_gcn_event(ev) &&
           (ev->ends_group() || !rli->mts_recovery_group_seen_begin) &&
           bitmap_is_set(&rli->recovery_groups, rli->mts_recovery_index)))) {
 #ifndef NDEBUG
@@ -6585,6 +6587,7 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
   rli->mts_coordinator_basic_nap = mts_coordinator_basic_nap;
   rli->mts_worker_underrun_level = mts_worker_underrun_level;
   rli->curr_group_seen_begin = rli->curr_group_seen_gtid = false;
+  rli->curr_group_seen_gcn = false;
   rli->curr_group_isolated = false;
   rli->rli_checkpoint_seqno = 0;
   rli->mts_last_online_stat = time(nullptr);

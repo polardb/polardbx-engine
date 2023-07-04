@@ -67,6 +67,8 @@
 #include "typelib.h"
 #include "unsafe_string_append.h"
 
+#include "sql/lizard_rpl_binlog_sender.h"
+
 #ifndef NDEBUG
 static uint binlog_dump_count = 0;
 #endif
@@ -251,7 +253,8 @@ Binlog_sender::Binlog_sender(THD *thd, const char *start_file,
       m_flag(flag),
       m_observe_transmission(false),
       m_transmit_started(false),
-      m_prev_event_type(binary_log::UNKNOWN_EVENT) {}
+      m_prev_event_type(binary_log::UNKNOWN_EVENT),
+      m_delay_sender(this) {}
 
 void Binlog_sender::init() {
   DBUG_TRACE;
@@ -636,6 +639,8 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
       }
       DBUG_PRINT("info", ("Event of type %s is skipped",
                           Log_event::get_type_str(event_type)));
+
+      m_delay_sender.skip_delay_events();
     } else {
       /*
         A heartbeat is required before sending a event, If some events are
@@ -655,6 +660,15 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
         m_packet.copy(tmp);
         m_packet.length(tmp.length());
       }
+
+      /** Cannot send Gcn_log_event immediately, because only by reading the
+      gtid event can we know whether the transaction should be skipped. */
+      if (event_type == binary_log::GCN_LOG_EVENT) {
+        m_delay_sender.push_event(m_packet, log_file, log_pos, in_exclude_group);
+        continue;
+      }
+
+      if (m_delay_sender.send_all_delay_events()) return 1;
 
       Observe_transmission_guard obs_guard(
           m_observe_transmission, event_type,

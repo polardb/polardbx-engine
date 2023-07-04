@@ -33,16 +33,22 @@ CREATE TABLE t1 (c1 INT);
 --let $assert_cond="[SHOW BINLOG EVENTS FROM 4 LIMIT 1, Pos, 1]" = 4
 --source include/assert.inc
 
---let $assert_text=Verify that the starting offset (126) of an event after the invalid position 14 is displayed.
---let $assert_cond="[SHOW BINLOG EVENTS FROM 14 LIMIT 1, Pos, 1]" = 126
+# Lizard: (Server ver: 8.0.32-debug) --> (Server ver: 8.0.32-galaxy-dev-debug)
+--let $assert_text=Verify that the starting offset (190) of an event after the invalid position 14 is displayed.
+--let $assert_cond="[SHOW BINLOG EVENTS FROM 14 LIMIT 1, Pos, 1]" = 190
 --source include/assert.inc
 
---let $assert_text=Verify that the starting offset (157) of an event after the invalid position 127 is displayed.
---let $assert_cond="[SHOW BINLOG EVENTS FROM 127 LIMIT 1, Pos, 1]" = 157
+# Lizard: Gcn_log_event
+--let $assert_text=Verify that the starting offset (221) of an event after the invalid position 191 is displayed.
+--let $assert_cond="[SHOW BINLOG EVENTS FROM 191 LIMIT 1, Pos, 1]" = 221
 --source include/assert.inc
 
---let $assert_text=Verify that the starting offset (157) of an event at the valid position 157 is displayed.
---let $assert_cond="[SHOW BINLOG EVENTS FROM 157 LIMIT 1, Pos, 1]" = 157
+--let $assert_text=Verify that the starting offset (253) of an event after the invalid position 222 is displayed.
+--let $assert_cond="[SHOW BINLOG EVENTS FROM 222 LIMIT 1, Pos, 1]" = 253
+--source include/assert.inc
+
+--let $assert_text=Verify that the starting offset (253) of an event at the valid position 253 is displayed.
+--let $assert_cond="[SHOW BINLOG EVENTS FROM 253 LIMIT 1, Pos, 1]" = 253
 --source include/assert.inc
 
 DROP TABLE t1;

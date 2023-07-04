@@ -1803,6 +1803,7 @@ explain select min(fld1),max(fld1),count(*) from t2;
 explain format=tree select min(fld1),max(fld1),count(*) from t2;  # Should be computed at optimize time.
 ANALYZE TABLE t2;
 --skip_if_hypergraph  # Depends on query plan.
+# --replace_result 243.80 {checked_valid} 123.90 {checked_valid}
 explain format=tree select min(fld1),max(fld1),count(*) from t2 where rand() > 0.5;  # Should _not_ be computed at optimize time.
 # PS does correct pre-zero here. MySQL can't do it as it returns a number.
 --disable_ps_protocol

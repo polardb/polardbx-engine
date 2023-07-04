@@ -4,6 +4,7 @@ connection default;
 SELECT @@innodb_undo_tablespaces;
 
 use information_schema;
+--replace_column 10 #
 select * from INNODB_TABLESPACES where space >= 4294967276 and space <= 4294967279;
 select * from INNODB_TABLESPACES_BRIEF where space >= 4294967276 and space <= 4294967279;
 select * from INNODB_DATAFILES where space >= 4294967276 and space <= 4294967279;

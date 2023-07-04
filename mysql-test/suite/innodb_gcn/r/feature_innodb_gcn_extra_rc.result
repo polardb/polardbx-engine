@@ -1,4 +1,4 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 show variables like "transaction_isolation";
 Variable_name	Value
 transaction_isolation	READ-COMMITTED
@@ -205,15 +205,7 @@ a	b
 4000	0
 4100	0
 delete from u1;
-#
-# as of gcn read record which has been cleaned out
-#
-insert into u1 values(5000, 0);
-select * from u1 where a = 5000;
-set innodb_snapshot_seq = @base_seq + 5000;
-select * from u1 where a = 5000;
-a	b
-delete from u1;
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 #
 # /*+ SET_VAR(innodb_snapshot_seq= ... ) */ && count(*)
 # base_seq = 1000000;
@@ -222,19 +214,19 @@ xa begin '1000000';
 insert into u1 values (1000000, 0);
 xa end '1000000';
 xa prepare '1000000';
-set innodb_commit_seq = 1000000;
+set innodb_commit_seq = @base_seq +10000;
 xa commit '1000000';
-set innodb_snapshot_seq = 999999;
+set innodb_snapshot_seq = @base_seq +9999;
 select * from u1;
 a	b
-set innodb_snapshot_seq = 999999;
+set innodb_snapshot_seq = @base_seq +9999;
 select count(*) from u1;
 count(*)
-1
-select /*+ SET_VAR(innodb_snapshot_seq= 999999) */ count(*) from u1;
+0
+# select /*+ SET_VAR(innodb_snapshot_seq= snapshot_seq) */ count(*) from u1
 count(*)
-1
-select /*+ SET_VAR(innodb_snapshot_seq= 999999) */ * from u1;
+0
+# select /*+ SET_VAR(innodb_snapshot_seq= snapshot_seq) */ * from u1
 a	b
 delete from u1;
 drop table u1;

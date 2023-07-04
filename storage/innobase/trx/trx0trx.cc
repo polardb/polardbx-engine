@@ -3681,7 +3681,7 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
   trx_sys_mutex_exit();
 
   trx_sys_rw_trx_add(trx);
-  
+
   trx_set_trx_id_for_audit_trx_ctx(trx);
 }
 

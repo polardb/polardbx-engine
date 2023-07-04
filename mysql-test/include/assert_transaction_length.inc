@@ -73,6 +73,8 @@ perl;
   my $trx_size= 0;
   my $trx_start= 0;
   my $trx_remaining_size= 0;
+  my $found_next_trx_gcn= 0;
+  my $remain_trx_size_not_be_zero_when_next_gcn = 0;
 
   sub trx_too_small
   {
@@ -109,6 +111,21 @@ perl;
       $last_log_pos = $log_pos;
       $log_pos = $line;
       $log_pos =~ s/^# at //g;
+
+      if ($found_next_trx_gcn)
+      {
+        $found_next_trx_gcn = 0;
+        if ($trx_size)
+        {
+          if ($trx_remaining_size)
+          {
+            $remain_trx_size_not_be_zero_when_next_gcn = 1;
+            last;
+          }
+        }
+        next;
+      }
+
       # Consume the event size from the transaction size
       if ($trx_size > 0)
       {
@@ -119,6 +136,11 @@ perl;
           last;
         }
       }
+    }
+
+    if ($line =~ m/^SET.*session.innodb_commit_seq=/ )
+    {
+      $found_next_trx_gcn = 1;
     }
 
     # Assume end of transaction on INCIDENT or ROTATE with server id 0
@@ -173,7 +195,16 @@ perl;
 
   close(FILE) or die("Error $? closing $dump: $!");
 
-  if (!$is_relay_log)
+  if ($remain_trx_size_not_be_zero_when_next_gcn)
+  {
+    open ERR, "> $err" or die("Error $? opening $err: $!");
+    print ERR "\n";
+    print ERR "trx_remaining_size should be 0, but actually $trx_remaining_size";
+    print ERR ", when seeing the gcn log event of next trx.\n";
+    close ERR or die("Error $? closing $err: $!");
+    $error= 1;
+  }
+  elsif (!$is_relay_log)
   {
     # Consumes the last event by using end_log_pos
     if ($error == 0 && $trx_remaining_size > 0)

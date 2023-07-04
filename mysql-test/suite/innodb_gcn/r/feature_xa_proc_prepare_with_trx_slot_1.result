@@ -1,3 +1,4 @@
+call mtr.add_suppression("Found 1 prepared XA transactions");
 SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create table t1 (id int);
 ###############################
@@ -29,7 +30,7 @@ insert into t1 values (1);
 xa end '1';
 xa prepare '1';
 call dbms_xa.prepare_with_trx_slot('1', '', 1);
-ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  NON-EXISTING state
 xa commit '1';
 ###############################
 # Case 3

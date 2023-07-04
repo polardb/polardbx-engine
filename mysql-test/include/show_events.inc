@@ -141,6 +141,18 @@ if ($keep_gtid_events)
   ||
   --let $script= $script s{DOLLARuuid_gno_regex(?:,DOLLARuuid_gno_regex)*}{Gtid_set};
 }
+
+if (!$keep_gcn_events)
+{
+  --let $script= $script DOLLAR_ = '' if (m{\t(?:Gcn)\t});
+}
+if ($keep_gcn_events) {
+  let $pre_script= $pre_script
+    my DOLLARgcn_regex = '(INNODB_COMMIT_SEQ=[0-9]+)';
+  ||
+  --let $script= $script s{DOLLARgcn_regex}{INNODB_COMMIT_SEQ=##};
+}
+
 # To mask binlog and relaylog commit events
 if ($mask_binlog_commit_events)
 {

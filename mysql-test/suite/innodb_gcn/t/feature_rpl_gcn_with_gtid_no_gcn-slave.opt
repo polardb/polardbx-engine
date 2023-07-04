@@ -1,0 +1,4 @@
+--gtid-mode=on
+--enforce_gtid_consistency=on
+--innodb_undo_retention=9000
+--gcn_write_event=0

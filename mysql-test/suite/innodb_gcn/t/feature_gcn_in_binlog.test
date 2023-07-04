@@ -1,0 +1,82 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+SHOW VARIABLES LIKE "gcn_write_event";
+SHOW STATUS LIKE "%gcn%";
+
+create database mydb;
+
+use mydb;
+create table t1 (a int, b int, primary key(a));
+
+RESET MASTER;
+
+set innodb_snapshot_seq = @base_seq +10000;
+select * from t1;
+
+insert into t1 values (0,0);
+
+xa begin 'x1';
+insert into t1 values (1,1);
+xa end 'x1';
+xa commit 'x1' one phase;
+
+xa begin 'x2';
+insert into t1 values (2,2);
+xa end 'x2';
+xa prepare 'x2';
+
+set innodb_commit_seq  = 10001;
+xa commit 'x2';
+
+alter table t1 engine='innodb';
+
+--replace_column 6 #
+show binlog events limit 2, 6;
+
+--replace_column 6 #
+show binlog events limit 8, 3;
+
+delete from t1;
+
+flush logs;
+
+--let $restart_parameters = restart: --gcn_write_event=false
+--let $wait_counter=10000
+--source include/restart_mysqld.inc
+--source include/wait_until_connected_again.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+RESET MASTER;
+
+set innodb_snapshot_seq = @base_seq +20000;
+select * from t1;
+
+insert into t1 values (20,20);
+
+xa begin 'x1';
+insert into t1 values (21,21);
+xa end 'x1';
+xa commit 'x1' one phase;
+
+xa begin 'x2';
+insert into t1 values (22,22);
+xa end 'x2';
+xa prepare 'x2';
+
+set innodb_commit_seq  = @base_seq +20001;
+xa commit 'x2';
+
+alter table t1 engine='innodb';
+
+--replace_column 6 #
+show binlog events limit 2, 6;
+
+--replace_column 6 #
+show binlog events limit 7,3;
+
+--let $restart_parameters = restart:
+--let $wait_counter=10000
+--source include/restart_mysqld.inc
+--source include/wait_until_connected_again.inc
+
+drop database mydb;

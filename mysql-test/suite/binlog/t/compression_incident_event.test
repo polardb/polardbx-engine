@@ -32,31 +32,36 @@ INSERT INTO t1 VALUES (1, REPEAT ('a', 1000));
 --let $debug_point=binlog_compression_inject_incident
 --source include/remove_debug_point.inc
 
-# 1 - Format_desc event, 2 - Previous_gtids event, 3 - Gtid event
+## 1 - Format_desc event, 2 - Previous_gtids event, 3 - Gtid event
+# Lizard Revision:
+# 1 - Format_desc event, 2 - Previous_gtids event, 3 - Gcn event, 4 - Gtid event
 
---let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 4)
+--let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 5)
 --let $assert_text = Expected event type Query
 --let $assert_cond = "$evt" = "Query"
 --source include/assert.inc
 
---let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 5)
+--let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 6)
 --let $assert_text = Expected event type Table_map
 --let $assert_cond = "$evt" = "Table_map"
 --source include/assert.inc
 
---let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 6)
+--let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 7)
 --let $assert_text = Expected event type Write_rows
 --let $assert_cond = "$evt" = "Write_rows"
 --source include/assert.inc
 
---let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 7)
+--let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 8)
 --let $assert_text = Expected event type Xid
 --let $assert_cond = "$evt" = "Xid"
 --source include/assert.inc
 
-# 8 - Gtid event
+## 8 - Gtid event
+# Lizard Revision:
+# 8 - Gcn event
+# 10 - Gtid event
 
---let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 9)
+--let $evt= query_get_value(SHOW BINLOG EVENTS, Event_type, 11)
 --let $assert_text = Expected event type Incident
 --let $assert_cond = "$evt" = "Incident"
 --source include/assert.inc

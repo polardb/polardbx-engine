@@ -1,0 +1,9 @@
+create table tp(a int primary key, b int);
+insert into tp values(1, 1);
+begin;
+SET innodb_snapshot_seq = 6991353062497452032;
+select * from tp;
+a	b
+1	1
+commit;
+drop table tp;

@@ -79,6 +79,7 @@
 #       !Gtid_transaction -> Gtid # (DML_transaction | DDL)
 #       !Empty_gtid_transaction -> Gtid # Begin # Commit
 #       !Gtid_or_anon -> (Gtid | Anonymous_Gtid)
+#       !GCN -> Gcn/.*INNODB_COMMIT_SEQ.*
 #
 #     Whitespace around / and # is ignored.
 #
@@ -227,6 +228,7 @@ while ($_abe_verdict != 'ok')
   # Expand syntactic sugar definitions.
   $event_sequence =~ s{!Gtid_transaction}{Gtid\n(!DDL|!DML_transaction)}g;
   $event_sequence =~ s{!Gtid_or_anon}{(Gtid|Anonymous_Gtid)}g;
+  $event_sequence =~ s{!GCN}{Gcn/.*INNODB_COMMIT_SEQ.*}g;
   $event_sequence =~ s{!Empty_gtid_transaction}{Gtid\n!Begin\n!Commit}g;
   $event_sequence =~ s{!DML_transaction}{!Begin\n!Multi_DML\n!Commit}g;
   $event_sequence =~ s{!DDL}{Query/(?!BEGIN|COMMIT).*}g;

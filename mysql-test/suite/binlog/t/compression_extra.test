@@ -26,19 +26,33 @@ INSERT INTO t2 VALUES (1, REPEAT ('b', 1000));
 COMMIT;
 
 # 1 - Format_desc event, 2 - Previous_gtids event, 3 - Gtid event
---let $tple_elp= query_get_value(SHOW BINLOG EVENTS, End_log_pos, 4)
+# --let $tple_elp= query_get_value(SHOW BINLOG EVENTS, End_log_pos, 4)
 
---let $i = 5
+# Lizard Revision:
+# 1 - Format_desc event, 2 - Previous_gtids event, 3 - Gcn event, 4 - Gtid event
+# 5 - Transaction_payload
+--let $tple_elp= query_get_value(SHOW BINLOG EVENTS, End_log_pos, 5)
 
-while ($i < 11)
+--let $i = 6
+
+while ($i < 12)
 {
   # 5 - Query, 6 - Table_map, 7 - Write_rows, 8 - Table_map, 9 - Write_rows, 10 - Xid
-  if ($i == 5) { let $evt_expected = Query; }
-  if ($i == 6) { let $evt_expected = Table_map; }
-  if ($i == 7) { let $evt_expected = Write_rows; }
-  if ($i == 8) { let $evt_expected = Table_map; }
-  if ($i == 9) { let $evt_expected = Write_rows; }
-  if ($i == 10) { let $evt_expected = Xid; }
+  # if ($i == 5) { let $evt_expected = Query; }
+  # if ($i == 6) { let $evt_expected = Table_map; }
+  # if ($i == 7) { let $evt_expected = Write_rows; }
+  # if ($i == 8) { let $evt_expected = Table_map; }
+  # if ($i == 9) { let $evt_expected = Write_rows; }
+  # if ($i == 10) { let $evt_expected = Xid; }
+
+  # Lizard Revision:
+  # 6 - Query, 7 - Table_map, 8 - Write_rows, 9 - Table_map, 10 - Write_rows, 11 - Xid
+  if ($i == 6) { let $evt_expected = Query; }
+  if ($i == 7) { let $evt_expected = Table_map; }
+  if ($i == 8) { let $evt_expected = Write_rows; }
+  if ($i == 9) { let $evt_expected = Table_map; }
+  if ($i == 10) { let $evt_expected = Write_rows; }
+  if ($i == 11) { let $evt_expected = Xid; }
 
   --let $evt_elp= query_get_value(SHOW BINLOG EVENTS, End_log_pos, $i)
   --let $assert_text = $evt_expected event has same end_log_pos as the Transaction_payload_event

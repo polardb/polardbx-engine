@@ -45,7 +45,7 @@ select * from tmp as of gcn 1;
 a
 drop table tmp;
 select * from information_schema.INNODB_TABLESPACES as of gcn 1 limit 0;
-SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
+SPACE	NAME	FLAG	ROW_FORMAT	PAGE_SIZE	ZIP_PAGE_SIZE	SPACE_TYPE	FS_BLOCK_SIZE	FILE_SIZE	ALLOCATED_SIZE	AUTOEXTEND_SIZE	SERVER_VERSION	SPACE_VERSION	ENCRYPTION	STATE
 select * from tt as of gcn 1 as alias for update;
 ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
 select * from tt as of gcn 1 as alias LOCK IN SHARE MODE;

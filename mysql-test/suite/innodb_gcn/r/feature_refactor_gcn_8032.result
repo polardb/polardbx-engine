@@ -1,7 +1,7 @@
 ###############################
 # close binlog
 ###############################
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create table tt (id int);
 ###############################
 # Case 1: commit detached XA
@@ -56,7 +56,7 @@ set xa_detach_on_prepare = default;
 # open binlog
 ###############################
 # restart:--log-bin=binlog
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Innodb_max_sequence');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create table tt (id int);
 ###############################
 # Case 1: commit detached XA

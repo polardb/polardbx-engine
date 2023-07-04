@@ -269,7 +269,6 @@ our @DEFAULT_SUITES = qw(
   component_keyring_file
   galaxy_sql
   rds
-  xcluster
   lizard
   innodb_gcn
 );

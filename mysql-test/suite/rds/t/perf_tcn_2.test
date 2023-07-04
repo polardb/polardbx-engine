@@ -2,6 +2,8 @@
 connect(conn1, localhost, root,,);
 
 connection conn1;
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+--let $my_gcn = `select @base_seq + 2048`
 set autocommit=1;
 
  create database db_1;
@@ -21,8 +23,10 @@ set autocommit=1;
  }
 --enable_query_log
 
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
+--disable_query_log
+--eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
+--eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
+--enable_query_log
 show global status like '%tcn_cache%';
 
 
@@ -30,8 +34,10 @@ disconnect conn1;
 
 connect(conn2, localhost, root,,);
 connection conn2;
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
-select count(*) from db_1.t1 as of gcn 2048 where id > 0;
+--disable_query_log
+--eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
+--eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
+--enable_query_log
 show global status like '%tcn_cache%';
 
 drop table db_1.t1;

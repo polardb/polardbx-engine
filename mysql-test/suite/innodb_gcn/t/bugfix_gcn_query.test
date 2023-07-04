@@ -1,0 +1,18 @@
+--source include/have_binlog_format_row.inc
+connect(conn1, localhost, root,,);
+
+connection conn1;
+
+create table tp(a int primary key, b int);
+
+insert into tp values(1, 1);
+
+begin;
+SET innodb_snapshot_seq = 6991353062497452032;
+select * from tp;
+commit;
+
+drop table tp;
+
+disconnect conn1;
+
