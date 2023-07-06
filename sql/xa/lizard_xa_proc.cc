@@ -188,6 +188,34 @@ Proc *Xa_proc_prepare_with_trx_slot::instance() {
   return proc;
 }
 
+class Nested_xa_prepare_lex {
+ public:
+  Nested_xa_prepare_lex(THD *thd, XID *xid)
+      : m_thd(thd), m_saved_lex(thd->lex) {
+    thd->lex = new (thd->mem_root) st_lex_local;
+    lex_start(thd);
+
+    thd->lex->sql_command = SQLCOM_XA_PREPARE;
+    thd->lex->m_sql_cmd = new (thd->mem_root) Sql_cmd_xa_prepare(xid);
+  }
+
+  ~Nested_xa_prepare_lex() {
+    free_lex(m_thd->lex);
+    m_thd->lex = m_saved_lex;
+  }
+
+ private:
+  void free_lex(LEX *lex) {
+    lex_end(lex);
+    destroy(lex->result);
+    lex->destroy();
+    delete (st_lex_local *)lex;
+  }
+
+  THD *m_thd;
+  LEX *m_saved_lex;
+};
+
 Sql_cmd *Xa_proc_prepare_with_trx_slot::evoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
@@ -219,10 +247,12 @@ bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
     DBUG_RETURN(true);
   }
 
-  /** 4. Do xa prepare. */
-  Sql_cmd_xa_prepare *executor = new (thd->mem_root) Sql_cmd_xa_prepare(&xid);
-  executor->set_delay_ok();
-  if (executor->execute(thd)) {
+  /** 4. Do xa prepare. Will generate a new nested LEX to complete xa_prepare.
+  Because Sql_cmd_xa_prepare::execute will depend on the state on LEX in
+  some places. */
+  Nested_xa_prepare_lex nested_xa_prepare_lex(thd, &xid);
+  (dynamic_cast<Sql_cmd_xa_prepare *>(thd->lex->m_sql_cmd))->set_delay_ok();
+  if (thd->lex->m_sql_cmd->execute(thd)) {
     DBUG_RETURN(true);
   }
 

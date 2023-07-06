@@ -3873,6 +3873,9 @@ bool trx_is_prepared_in_tc(trx_t const *trx) {
     } else {
       undo = trx->rsegs.m_redo.update_undo;
     }
+  } else if (trx->rsegs.m_txn.rseg != nullptr &&
+             lizard::trx_is_txn_rseg_updated(trx)) {
+    undo = trx->rsegs.m_txn.txn_undo;
   }
 
   return undo != nullptr && (undo->state == TRX_UNDO_PREPARED_80028 ||

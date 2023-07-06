@@ -1774,15 +1774,16 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
      But if crashed just after allocated txn undo, here maybe possible.
   */
   if (trx->rsegs.m_redo.rseg == nullptr) {
-    lizard_ut_ad(undo->state == TRX_UNDO_ACTIVE ||
-                 undo->state == TRX_UNDO_PREPARED);
+    lizard_ut_ad(undo->state == TRX_UNDO_ACTIVE || undo->is_prepared());
     ut_ad(trx_state_eq(trx, TRX_STATE_NOT_STARTED));
 
     if (undo->state == TRX_UNDO_ACTIVE) {
-      trx->state = TRX_STATE_ACTIVE;
+      trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
     } else {
+      /* Can't be TRX_UNDO_CACHED because the undo is in txn_undo_list. */
+      ut_a(undo->is_prepared());
       ++trx_sys->n_prepared_trx;
-      trx->state = TRX_STATE_PREPARED;
+      trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
     }
 
     /* A running transaction always has the number field inited to
