@@ -231,6 +231,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/xa_specification.h"
 
+#include "sys_vars_ext.h"
+
+static char *innodb_version_str = (char *)innodb_version;
+
+
 #ifndef UNIV_HOTBACKUP
 
 namespace innobase {
@@ -356,8 +361,6 @@ static bool innobase_rollback_on_timeout = false;
 static bool innobase_create_status_file = false;
 bool innobase_stats_on_metadata = true;
 static bool innodb_optimize_fulltext_only = false;
-
-static char *innodb_version_str = (char *)INNODB_VERSION_STR;
 
 static Innodb_data_lock_inspector innodb_data_lock_inspector;
 

@@ -25,6 +25,18 @@
 #include "sys_vars.h"
 #include "sys_vars_ext.h"
 #include "plugin/performance_point/pps.h"
+
+#include "my_config.h"
+#include "mysqld.h"
+
+#include <assert.h>
+#include <limits.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <zlib.h>
+#include <atomic>
 /**
   Performance_point is statically compiled plugin,
   so include it directly
@@ -33,6 +45,57 @@
 #include "sql/ha_sequence.h"
 
 #include "sql/xa/lizard_xa_trx.h"
+
+uint rds_version = 0;
+char innodb_version[SERVER_VERSION_LENGTH];
+
+/**
+  Customize mysqld server version
+
+  MYSQL_VERSION_PATCH that's among version string can be reset
+  by "rds_version" variable dynamically.
+
+  @returns void.
+*/
+void customize_server_version() {
+  char tmp_version[SERVER_VERSION_LENGTH];
+  uint version_patch;
+  size_t size;
+  char *end;
+
+  memset(tmp_version, '\0', SERVER_VERSION_LENGTH);
+  version_patch = rds_version > MYSQL_VERSION_PATCH ?
+      rds_version : MYSQL_VERSION_PATCH;
+
+  size = snprintf(tmp_version, SERVER_VERSION_LENGTH, "%d.%d.%d%s",
+                  MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR,
+                  version_patch, MYSQL_VERSION_EXTRA);
+
+  strxmov(innodb_version, tmp_version, NullS);
+
+  end = strstr(server_version, "-");
+  if (end && (size < SERVER_VERSION_LENGTH)) {
+    snprintf(tmp_version + size, (SERVER_VERSION_LENGTH - size), "%s", end);
+  }
+  strxmov(server_version, tmp_version, NullS);
+}
+
+static bool fix_server_version(sys_var*, THD*, enum_var_type) {
+  customize_server_version();
+  return false;
+}
+
+/**
+  RDS DEFINED variables
+*/
+static Sys_var_uint Sys_rds_version(
+    "rds_version",
+    "The mysql patch version",
+    GLOBAL_VAR(rds_version), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, 999), DEFAULT(MYSQL_VERSION_PATCH),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(fix_server_version));
+/* RDS DEFINED */
 
 static Sys_var_bool Sys_opt_tablestat("opt_tablestat",
                                       "When this option is enabled,"

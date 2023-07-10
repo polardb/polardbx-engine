@@ -1,0 +1,42 @@
+SET @old_rds_version = @@global.rds_version;
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+32	#	8.0.32
+SET GLOBAL rds_version = 0;
+Warnings:
+Warning	1292	Truncated incorrect rds_version value: '0'
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+1	#	8.0.32
+SET GLOBAL rds_version = -1;
+Warnings:
+Warning	1292	Truncated incorrect rds_version value: '-1'
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+1	#	8.0.32
+SET GLOBAL rds_version = 1000;
+Warnings:
+Warning	1292	Truncated incorrect rds_version value: '1000'
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+999	#	8.0.999
+SET GLOBAL rds_version = 12;
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+12	#	8.0.32
+SET GLOBAL rds_version = 1;
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+1	#	8.0.32
+SET GLOBAL rds_version = 99;
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+99	#	8.0.99
+SET GLOBAL rds_version = 999;
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+999	#	8.0.999
+SET GLOBAL rds_version = @old_rds_version;
+SELECT @@rds_version, @@version, @@innodb_version;
+@@rds_version	@@version	@@innodb_version
+32	#	8.0.32

@@ -1,0 +1,45 @@
+#######################################
+#  Option name: rds_version           #
+#  Variable Scope: global             #
+#  Permitted Values: [1, 999]         #
+#######################################
+
+# store the old value
+SET @old_rds_version = @@global.rds_version;
+
+# test default value
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+
+#test unvalid setting
+SET GLOBAL rds_version = 0;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+SET GLOBAL rds_version = -1;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+SET GLOBAL rds_version = 1000;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+
+#Test valid setting
+SET GLOBAL rds_version = 12;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+
+SET GLOBAL rds_version = 1;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+
+SET GLOBAL rds_version = 99;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+
+SET GLOBAL rds_version = 999;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
+
+#clean
+SET GLOBAL rds_version = @old_rds_version;
+--replace_column 2 #
+SELECT @@rds_version, @@version, @@innodb_version;
