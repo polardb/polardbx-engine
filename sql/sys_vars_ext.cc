@@ -46,8 +46,22 @@
 
 #include "sql/xa/lizard_xa_trx.h"
 
-uint rds_version = 0;
+/* Global scope variables */
 char innodb_version[SERVER_VERSION_LENGTH];
+
+/* Local scope variables */
+static uint rds_version = 0;
+static char *rds_release_date_ptr = NULL;
+
+
+/**
+  Output the latest commit id for the MYSQLD binary.
+
+  @returns void.
+*/
+void print_commit_id() {
+  printf("commit id: %s\n", RDS_COMMIT_ID);
+}
 
 /**
   Customize mysqld server version
@@ -95,6 +109,12 @@ static Sys_var_uint Sys_rds_version(
     VALID_RANGE(1, 999), DEFAULT(MYSQL_VERSION_PATCH),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(0), ON_UPDATE(fix_server_version));
+
+static Sys_var_charptr Sys_rds_release_date(
+    "rds_release_date", "RDS RPM package release date",
+    READ_ONLY GLOBAL_VAR(rds_release_date_ptr), NO_CMD_LINE,
+    IN_SYSTEM_CHARSET, DEFAULT(RDS_RELEASE_DATE));
+
 /* RDS DEFINED */
 
 static Sys_var_bool Sys_opt_tablestat("opt_tablestat",

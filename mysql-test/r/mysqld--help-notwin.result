@@ -371,16 +371,6 @@ The following options may be given as the first argument:
  Enable the event scheduler. Possible values are ON, OFF,
  and DISABLED (keep the event scheduler completely
  deactivated, it cannot be activated run-time)
- --example[=name]    Enable or disable EXAMPLE plugin. Possible values are ON,
- OFF, FORCE (don't start if the plugin fails to load).
- --example-double-thdvar=# 
- 0.500000..1000.500000
- --example-double-var=# 
- 0.500000..1000.500000
- --example-enum-var=name 
- Sample ENUM system variable.
- --example-ulong-var=# 
- 0..1000
  -T, --exit-info[=#] Used for debugging. Use at your own risk.
  --expire-logs-days=# 
  If non-zero, binary logs will be purged after
@@ -1810,11 +1800,6 @@ end-markers-in-json FALSE
 enforce-gtid-consistency FALSE
 eq-range-index-dive-limit 200
 event-scheduler ON
-example ON
-example-double-thdvar 8.5
-example-double-var 8.5
-example-enum-var e1
-example-ulong-var 8
 expire-logs-days 0
 explain-format TRADITIONAL
 explicit-defaults-for-timestamp TRUE
@@ -2050,7 +2035,7 @@ rds-audit-log-skip FALSE
 rds-audit-log-statement-policy ALL
 rds-audit-log-strategy ASYNCHRONOUS
 rds-audit-log-version MYSQL_V1
-rds-version 12
+rds-version 32
 read-buffer-size 131072
 read-only FALSE
 read-rnd-buffer-size 262144

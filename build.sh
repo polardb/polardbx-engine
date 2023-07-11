@@ -197,6 +197,7 @@ parse_options "$@"
 get_mach_type
 get_os_type
 get_linux_version
+commit_id=`git rev-parse --short HEAD`
 
 if [ x"$build_type" = x"debug" ]; then
   build_type="Debug"
@@ -331,6 +332,7 @@ else
       -DWITH_VALGRIND=$valg              \
       -DENABLE_GPROF=0                   \
       -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
+      -DRDS_COMMIT_ID=$commit_id         \
       -DDOWNLOAD_BOOST=0                \
       -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
       -DWITH_UNIT_TESTS=0

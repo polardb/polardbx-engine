@@ -37,9 +37,9 @@
 #include <string.h>
 #include <sys/types.h>
 
-extern uint rds_version;
-
 extern "C" MYSQL_PLUGIN_IMPORT char innodb_version[SERVER_VERSION_LENGTH];
+
 extern void customize_server_version();
 
+extern void print_commit_id();
 #endif /* SYS_VARS_EXT_INCLUDED */

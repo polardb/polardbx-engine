@@ -24,6 +24,9 @@
 #define LIBMYSQL_VERSION           "@VERSION@"
 #define LIBMYSQL_VERSION_ID         @MYSQL_VERSION_ID@
 
+#define RDS_RELEASE_DATE           "@RDS_RELEASE_DATE@"
+#define RDS_COMMIT_ID              "@RDS_COMMIT_ID@"
+
 #ifndef LICENSE
 #define LICENSE                     GPL
 #endif /* LICENSE */
