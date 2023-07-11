@@ -1,0 +1,22 @@
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+create user 'u1'@'%';
+grant all privileges on my_db.* to 'u1'@'%';
+set global maintain_user_list='x1';
+set global maintain_user_list='x2';
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+set global maintain_user_list='u1,u2';
+set global maintain_user_list='u2,u1';
+show grants;
+Grants for u1@%
+GRANT USAGE ON *.* TO `u1`@`%`
+GRANT ALL PRIVILEGES ON `my_db`.* TO `u1`@`%`
+set global maintain_user_list='';
+set global maintain_user_list=' ';
+set global maintain_user_list='u2,u1';
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global maintain_user_list='u0,xx';

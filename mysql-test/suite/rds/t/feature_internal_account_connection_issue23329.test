@@ -1,0 +1,128 @@
+connect(con_root,localhost, root,,);
+
+connection con_root;
+
+select @@global.max_connections into @saved_max_connections;
+select @@global.maintain_user_list into @saved_maintain_user_list;
+
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+create user 'u1'@'%';
+grant all privileges on my_db.* to 'u1'@'%';
+
+show global status like '%_connected';
+
+#
+#0. normal maintain user connection count test
+echo 'test:0';
+connect(con_u0, localhost, u0,,);
+show global status like '%_connected';
+disconnect con_u0;
+--source include/wait_until_disconnected.inc
+connection con_root;
+show global status like '%_connected';
+
+#
+#1.disconnect after reset maintain_user_list;
+echo 'test:1';
+connect(con_u0_1, localhost, u0,,);
+show global status like '%_connected';
+set global maintain_user_list='';
+disconnect con_u0_1;
+--source include/wait_until_disconnected.inc
+connection con_root;
+show global status like '%_connected';
+
+
+connection con_root;
+set global maintain_user_list='u0,xx';
+
+#
+#2. test max_connection count
+echo 'test:2';
+connect(con_u0_2, localhost, u0,,);
+connect(con_u0_3, localhost, u0,,);
+show global status like '%_connected';
+
+--disable_query_log
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(con_u0_4, localhost, u0,,);
+--enable_query_log
+
+disconnect con_u0_2;
+disconnect con_u0_3;
+--source include/wait_until_disconnected.inc
+
+#
+#3. test COM_CHANGE_USER to normal user
+echo 'test:3';
+connect(con_u0_4, localhost, u0,,);
+SELECT USER(), CURRENT_USER();
+show global status like '%_connected';
+--change_user u1,,my_db
+SELECT USER(), CURRENT_USER();
+show global status like '%_connected';
+
+disconnect con_u0_4;
+--source include/wait_until_disconnected.inc
+connection con_root;
+show global status like '%_connected';
+
+
+#
+#4. test COM_CHANGE_USER to maintain_user
+echo 'test:4';
+
+connect(con_u1_0, localhost, u1,,);
+SELECT USER(), CURRENT_USER();
+show global status like '%_connected';
+--change_user u0,,my_db
+SELECT USER(), CURRENT_USER();
+show global status like '%_connected';
+
+disconnect con_u1_0;
+--source include/wait_until_disconnected.inc
+
+connection con_root;
+show global status like '%_connected';
+
+#
+#5. test max_connections
+echo 'test:5'
+connection con_root;
+set global max_connections = 4;
+
+--disable_query_log
+--error ER_CON_COUNT_ERROR
+connect(con_u1_1, localhost, u1,,);
+--enable_query_log
+
+connect(con_u0_5, localhost, u0,,);
+SELECT USER(), CURRENT_USER();
+show global status like '%_connected';
+
+--disable_query_log
+--error ER_CON_COUNT_ERROR
+--change_user u1,,my_db
+--enable_query_log
+
+--sleep 5
+SELECT USER(), CURRENT_USER();
+show global status like '%_connected';
+
+disconnect con_u0_5;
+--source include/wait_until_disconnected.inc
+connection con_root;
+show global status like '%_connected';
+
+connection con_root;
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+
+set global maintain_user_list= @saved_maintain_user_list;
+set global max_connections= @saved_max_connections;
+
+disconnect con_root;
+

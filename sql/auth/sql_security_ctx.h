@@ -34,6 +34,7 @@
 #include "mysql_com.h"    // USERNAME_LENGTH
 #include "sql/auth/auth_common.h"
 #include "sql/auth/partial_revokes.h"
+#include "sql/auth/sql_internal_account.h" //struct ACCOUNT_ATTR
 #include "sql/sql_const.h"
 #include "sql_string.h"
 
@@ -401,6 +402,9 @@ class Security_context {
     m_thd - Thread handle, set to nullptr if this does not belong to any THD yet
   */
   THD *m_thd;
+
+ public:
+  struct im::ST_ACCOUNT_ATTR account_attr;
 };
 
 /**

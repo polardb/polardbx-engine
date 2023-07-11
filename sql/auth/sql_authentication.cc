@@ -72,6 +72,7 @@
 #include "sql/auth/auth_internal.h"  // optimize_plugin_compare_by_pointer
 #include "sql/auth/partial_revokes.h"
 #include "sql/auth/sql_auth_cache.h"  // acl_cache
+#include "sql/auth/sql_internal_account.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/conn_handler/connection_handler_manager.h"  // Connection_handler_manager
 #include "sql/current_thd.h"                              // current_thd
@@ -4033,6 +4034,8 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       assert(mpvio.restrictions);
       sctx->set_master_access(acl_user->access, *(mpvio.restrictions));
       assign_priv_user_host(sctx, const_cast<ACL_USER *>(acl_user));
+
+      im::internal_account_init_acl(sctx, sctx->priv_user().str);
       /* Assign default role */
       {
         List_of_auth_id_refs default_roles;
@@ -4192,6 +4195,29 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       goto end;
     }
 
+    if (command == COM_CONNECT) {
+      if (im::internal_account_adjust_connection(thd, command)) {
+        release_user_connection(thd);
+        my_error(ER_IA_TOO_MANY_CONNECTIONS, MYF(0), sctx->priv_user().str,
+                im::Internal_account_config::str(sctx->account_attr.get_type()));
+        return 1;
+      }
+    } else {
+      assert(command == COM_CHANGE_USER);
+      if (im::internal_account_change_connection(thd, command)) {
+        release_user_connection(thd);
+        my_error(ER_IA_TOO_MANY_CONNECTIONS, MYF(0), sctx->priv_user().str,
+                im::Internal_account_config::str(sctx->account_attr.get_type()));
+        return 1;
+      }
+    }
+
+    if (im::internal_account_exceed_max_connection(thd)) {
+      release_user_connection(thd);
+      my_error(ER_CON_COUNT_ERROR, MYF(0));
+      return 1;
+    }
+    
     /*
       This is the default access rights for the current database.  It's
       set to 0 here because we don't have an active database yet (and we

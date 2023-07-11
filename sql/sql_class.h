@@ -4820,6 +4820,9 @@ class THD : public MDL_context_owner,
   }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
+
+ public:
+  struct im::ST_CONN_ATTR conn_attr;
 };
 
 inline ulonglong thd_get_snapshot_gcn(THD *thd) {

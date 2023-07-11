@@ -1,0 +1,103 @@
+select @@global.max_connections into @saved_max_connections;
+select @@global.maintain_user_list into @saved_maintain_user_list;
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+create user 'u1'@'%';
+grant all privileges on my_db.* to 'u1'@'%';
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	0
+'test:0'
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	1
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	0
+'test:1'
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	1
+set global maintain_user_list='';
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	0
+set global maintain_user_list='u0,xx';
+'test:2'
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	2
+ERROR HY000: User u0 already has more than Maintain_user active conections
+'test:3'
+SELECT USER(), CURRENT_USER();
+USER()	CURRENT_USER()
+u0@localhost	u0@%
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	1
+SELECT USER(), CURRENT_USER();
+USER()	CURRENT_USER()
+u1@localhost	u1@%
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	3
+Threads_maintain_connected	0
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	0
+'test:4'
+SELECT USER(), CURRENT_USER();
+USER()	CURRENT_USER()
+u1@localhost	u1@%
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	3
+Threads_maintain_connected	0
+SELECT USER(), CURRENT_USER();
+USER()	CURRENT_USER()
+u0@localhost	u0@%
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	1
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	0
+'test:5'
+connection con_root
+set global max_connections = 4;
+ERROR 08004: Too many connections
+SELECT USER(), CURRENT_USER();
+USER()	CURRENT_USER()
+u0@localhost	u0@%
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	1
+ERROR 08004: Too many connections
+SELECT USER(), CURRENT_USER();
+USER()	CURRENT_USER()
+u0@localhost	u0@%
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	1
+show global status like '%_connected';
+Variable_name	Value
+Threads_connected	2
+Threads_maintain_connected	0
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global maintain_user_list= @saved_maintain_user_list;
+set global max_connections= @saved_max_connections;

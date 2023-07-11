@@ -99,6 +99,15 @@ bool Connection_handler_manager::valid_connection_count() {
   return connection_accepted;
 }
 
+uint Connection_handler_manager::get_connection_count() {
+  uint value;
+  mysql_mutex_lock(&LOCK_connection_count);
+  value = connection_count;
+  mysql_mutex_unlock(&LOCK_connection_count);
+
+  return value;
+}
+
 bool Connection_handler_manager::check_and_incr_conn_count(
     bool is_admin_connection) {
   bool connection_accepted = true;

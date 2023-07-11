@@ -174,6 +174,11 @@ class Connection_handler_manager {
   bool check_and_incr_conn_count(bool ignore_max_connection_count);
 
   /**
+    Get the connection count.
+  */
+  static uint get_connection_count();
+  
+  /**
     Reset the max_used_connections counter to the number of current
     connections.
   */

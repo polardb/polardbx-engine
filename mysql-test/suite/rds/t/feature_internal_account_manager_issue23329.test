@@ -1,0 +1,54 @@
+connect(con_root,localhost, root,,);
+
+connection con_root;
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+create user 'u1'@'%';
+grant all privileges on my_db.* to 'u1'@'%';
+
+#
+#0. test maintain_user_list in my.cnf
+connect(con_u0, localhost, u0,,);
+set global maintain_user_list='x1';
+
+#
+#1. normal user cann't modify global variables
+connect(con_u1, localhost, u1,,);
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+set global maintain_user_list='x2';
+
+connection con_root;
+set global maintain_user_list='u1,u2';
+
+#
+#2. maintain user has all privileges
+connect(con_u1_1, localhost, u1,,);
+connection con_u1_1;
+set global maintain_user_list='u2,u1';
+show grants;
+
+#
+#3. test meaningless account
+connection con_root;
+set global maintain_user_list='';
+set global maintain_user_list=' ';
+
+#
+#4. Deny set command after step 3 
+connect(con_u1_2, localhost, u1,,);
+connection con_u1_2;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+set global maintain_user_list='u2,u1';
+
+connection con_root;
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global maintain_user_list='u0,xx';
+
+disconnect con_root;
+disconnect con_u0;
+disconnect con_u1;
+disconnect con_u1_1;
+disconnect con_u1_2;

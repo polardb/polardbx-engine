@@ -59,6 +59,7 @@
 #include "mysqld_error.h"
 #include "pfs_thread_provider.h"
 #include "rwlock_scoped_lock.h"
+#include "sql/auth/sql_internal_account.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/conn_handler/connection_handler_manager.h"
 #include "sql/current_thd.h"
@@ -863,7 +864,7 @@ bool Srv_session::open() {
       m_err_protocol_ctx.handler(m_err_protocol_ctx.handler_context,
                                  ER_OUT_OF_RESOURCES,
                                  ER_DEFAULT(ER_OUT_OF_RESOURCES));
-    Connection_handler_manager::dec_connection_count();
+    im::global_manager_dec_connection(m_thd);
     return true;
   }
 
@@ -1087,7 +1088,7 @@ bool Srv_session::close() {
   m_thd->pop_protocol();
   mysql_mutex_unlock(&m_thd->LOCK_thd_protocol);
 
-  Connection_handler_manager::dec_connection_count();
+  im::global_manager_dec_connection(m_thd);
 
   return false;
 }

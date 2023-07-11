@@ -48,6 +48,7 @@
 #include "mysql_com.h"
 #include "mysqld_error.h"  // ER_*
 #include "pfs_thread_provider.h"
+#include "sql/auth/sql_internal_account.h"
 #include "sql/conn_handler/channel_info.h"  // Channel_info
 #include "sql/conn_handler/connection_handler_impl.h"
 #include "sql/conn_handler/connection_handler_manager.h"  // Connection_handler_manager
@@ -254,7 +255,7 @@ static void *handle_connection(void *arg) {
     connection_errors_internal++;
     channel_info->send_error_and_close_channel(ER_OUT_OF_RESOURCES, 0, false);
     handler_manager->inc_aborted_connects();
-    Connection_handler_manager::dec_connection_count();
+    im::global_manager_dec_connection(nullptr);
     delete channel_info;
     my_thread_exit(nullptr);
     return nullptr;
@@ -265,7 +266,7 @@ static void *handle_connection(void *arg) {
     if (thd == nullptr) {
       connection_errors_internal++;
       handler_manager->inc_aborted_connects();
-      Connection_handler_manager::dec_connection_count();
+      im::global_manager_dec_connection(nullptr);
       break;  // We are out of resources, no sense in continuing.
     }
 
@@ -318,7 +319,7 @@ static void *handle_connection(void *arg) {
     ERR_remove_thread_state(0);
 #endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
     thd_manager->remove_thd(thd);
-    Connection_handler_manager::dec_connection_count();
+    im::global_manager_dec_connection(thd);
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
     /* Decouple THD and the thread instrumentation. */
@@ -348,7 +349,7 @@ static void *handle_connection(void *arg) {
       channel_info->send_error_and_close_channel(ER_SERVER_SHUTDOWN, 0, false);
       delete channel_info;
       channel_info = nullptr;
-      Connection_handler_manager::dec_connection_count();
+      im::global_manager_dec_connection(thd);
       break;
     }
   }
@@ -432,7 +433,7 @@ handle_error:
       LogErr(ERROR_LEVEL, ER_CONN_PER_THREAD_NO_THREAD, error);
     channel_info->send_error_and_close_channel(ER_CANT_CREATE_THREAD, error,
                                                true);
-    Connection_handler_manager::dec_connection_count();
+    im::global_manager_dec_connection(nullptr);
     return true;
   }
 

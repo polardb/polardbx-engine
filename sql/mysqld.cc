@@ -771,6 +771,7 @@ MySQL clients support the protocol:
 #endif
 #include "sql/auth/auth_common.h"         // grant_init
 #include "sql/auth/sql_authentication.h"  // init_rsa_keys
+#include "sql/auth/sql_internal_account.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/auto_thd.h"   // Auto_THD
 #include "sql/binlog.h"     // mysql_bin_log
@@ -2360,7 +2361,7 @@ static void close_connections(void) {
     Connection threads might take a little while to go down after removing from
     global thread list. Give it some time.
   */
-  Connection_handler_manager::wait_till_no_connection();
+  im::global_manager_wait_no_connection();
 
   delete_slave_info_objects();
   DBUG_PRINT("quit", ("close_connections thread"));
@@ -2694,6 +2695,7 @@ static void clean_up(bool print_message) {
   persisted_variables_cache.cleanup();
 
   udf_deinit_globals();
+  im::internal_account_ctx_destroy();
 
   object_statistics_context_destroy();
   destroy_performance_point();
@@ -2758,6 +2760,7 @@ static void clean_up_mutexes() {
   mysql_mutex_destroy(&LOCK_partial_revokes);
   mysql_mutex_destroy(&LOCK_authentication_policy);
   mysql_mutex_destroy(&LOCK_global_conn_mem_limit);
+  mysql_mutex_destroy(&im::LOCK_internal_account_string);
 }
 
 /****************************************************************************
@@ -5343,6 +5346,8 @@ static int init_thread_environment() {
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_global_conn_mem_limit, &LOCK_global_conn_mem_limit,
                    MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(im::key_LOCK_internal_account_string,
+		   &im::LOCK_internal_account_string, MY_MUTEX_INIT_FAST);
   return 0;
 }
 
@@ -8122,6 +8127,8 @@ int mysqld_main(int argc, char **argv)
 
   initialize_information_schema_acl();
 
+  im::internal_account_ctx_init();
+
   (void)RUN_HOOK(server_state, after_recovery, (nullptr));
 
   if (Events::init(opt_noacl || opt_initialize))
@@ -9934,6 +9941,8 @@ SHOW_VAR status_vars[] = {
      SHOW_INT, SHOW_SCOPE_GLOBAL},
     {"Threads_created", (char *)&show_num_thread_created, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
+    {"Threads_maintain_connected", (char *)&im::show_maintain_connection_count,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {"Threads_running", (char *)&show_num_thread_running, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
     {"Uptime", (char *)&show_starttime, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
@@ -11833,7 +11842,8 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_delegate_connection_mutex, "LOCK_delegate_connection_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_group_replication_connection_mutex, "LOCK_group_replication_connection_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 { &key_LOCK_authentication_policy, "LOCK_authentication_policy", PSI_FLAG_SINGLETON, 0, "A lock to ensure execution of CREATE USER or ALTER USER sql and SET @@global.authentication_policy variable are serialized"},
-  { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
+  { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &im::key_LOCK_internal_account_string, "LOCK_internal_account_string", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 

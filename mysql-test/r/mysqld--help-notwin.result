@@ -648,6 +648,10 @@ The following options may be given as the first argument:
  If set to 1 table names are stored in lowercase on disk
  and table names will be case-insensitive.  Should be set
  to 2 if you are using a case insensitive file system
+ --maintain-max-connections=# 
+ The max connection count for maintain user
+ --maintain-user-list=name 
+ maintenace account string split by ','
  --mandatory-roles=name 
  All the specified roles are always considered granted to
  every user and they can't be revoked. Mandatory roles
@@ -1877,6 +1881,8 @@ log-timestamps UTC
 long-query-time 10
 low-priority-updates FALSE
 lower-case-table-names 1
+maintain-max-connections 0
+maintain-user-list (No default value)
 mandatory-roles 
 master-info-file master.info
 master-info-repository TABLE

@@ -131,6 +131,10 @@ log_slow_replica_statements
 log_slow_replica_statements
 log_slow_slave_statements
 log_slow_slave_statements
+maintain_max_connections
+maintain_max_connections
+maintain_user_list
+maintain_user_list
 mandatory_roles
 mandatory_roles
 master_verify_checksum

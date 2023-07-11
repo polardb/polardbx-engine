@@ -93,6 +93,7 @@ void Security_context::init() {
   m_has_drop_policy = false;
   m_executed_drop_policy = false;
   m_registration_sandbox_mode = false;
+  account_attr.reset();
 }
 
 void Security_context::logout() {
@@ -160,6 +161,7 @@ void Security_context::destroy() {
   m_is_skip_grants_user = false;
   clear_db_restrictions();
   m_registration_sandbox_mode = false;
+  account_attr.reset();
 }
 
 /**
@@ -220,6 +222,8 @@ void Security_context::copy_security_ctx(const Security_context &src_sctx) {
   m_has_drop_policy = false;  // you cannot copy a drop policy
   m_executed_drop_policy = false;
   m_restrictions = src_sctx.restrictions();
+
+  account_attr = src_sctx.account_attr;
 }
 
 /**
