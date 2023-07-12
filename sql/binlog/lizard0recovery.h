@@ -57,6 +57,10 @@ class XA_spec_recovery {
 
   XA_spec_list *xa_spec_list() { return &m_spec_list; }
 
+  void clear() {
+    m_spec_list.clear();
+  }
+
  private:
   MEM_ROOT m_mem_root;
   XA_spec_list m_spec_list;

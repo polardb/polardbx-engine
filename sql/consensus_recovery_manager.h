@@ -23,6 +23,7 @@
 #include "handler.h"
 #include "hash.h"
 #include "xa.h"
+#include "xa_specification.h"
 
 #include <atomic>
 #include <map>
@@ -38,8 +39,7 @@ extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
  * Internal_xid: PREPARE_IN_SE ---recover--> COMMITTED
  *                             ---withdraw--> NOT_FOUND
  *
- * External_xid: PREPARE_IN_SE ---recover-->
- * PREPARE_IN_TC/COMMITTED_WITH_ONEPHASE
+ * External_xid: PREPARE_IN_SE ---recover--> PREPARE_IN_TC/COMMITTED_WITH_ONEPHASE
  *                             ---withdraw--> NOT_FOUND
  *               PREPARE_IN_TC ---recover--> COMMITTED/ROLLBACK
  *                             ---withdraw--> PREPARE_IN_TC
@@ -54,6 +54,7 @@ class Pending_recovering_trx {
   Pending_recovering_trx(handlerton &ht, xid_type type,
                          enum_ha_recover_xa_state current_state,
                          enum_ha_recover_xa_state next_state, XID *xid,
+                         const XA_specification &xa_spec,
                          uint64 consensus_index);
 
   ~Pending_recovering_trx();
@@ -81,6 +82,7 @@ class Pending_recovering_trx {
   const enum_ha_recover_xa_state current_state;
   const enum_ha_recover_xa_state next_state;
   XID *xid;
+  XA_specification xa_spec;
   const uint64 consensus_index;
 };
 
@@ -115,7 +117,8 @@ class Consensus_recovery_manager {
   void add_pending_recovering_trx(handlerton &ht,
                                   enum_ha_recover_xa_state current_state,
                                   enum_ha_recover_xa_state next_state,
-                                  const XID &xid);
+                                  const XID &xid,
+                                  const XA_specification &xa_spec);
 
   void clear();
   uint64 get_max_consensus_index_from_pending_recovering_trxs();
@@ -149,7 +152,9 @@ class Consensus_recovery_manager {
                                   Pending_recovering_trx::xid_type type,
                                   enum_ha_recover_xa_state prepare_state,
                                   enum_ha_recover_xa_state committed_state,
-                                  const XID &xid, uint64 consensus_index);
+                                  const XID &xid,
+                                  const XA_specification &xa_spec,
+                                  uint64 consensus_index);
 };
 
 #endif

@@ -277,7 +277,7 @@ class Binlog_recovery {
 
     @param ev The `Query_log_event` to process
    */
-  void process_atomic_ddl(Query_log_event const &ev);
+  virtual void process_atomic_ddl(Query_log_event const &ev);
   /**
     Invoked when an `XA COMMIT` is found in a `Query_log_event`.
 
@@ -335,7 +335,7 @@ class Binlog_recovery {
   void gather_internal_xa_spec(const my_xid xid, const Binlog_xa_specification &spec);
   void gather_external_xa_spec(const XID &xid, const Binlog_xa_specification &spec);
 
- private:
+ protected:
   Binlog_xa_specification m_xa_spec;
   std::unique_ptr<XA_spec_recovery> m_xa_spec_recovery;
 

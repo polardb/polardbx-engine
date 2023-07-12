@@ -61,7 +61,7 @@ class XA_spec_list {
                              Mem_root_allocator<State_pair>>;
 
  public:
-  XA_spec_list(MEM_ROOT *mem_root)
+  explicit XA_spec_list(MEM_ROOT *mem_root)
       : m_mem_root(mem_root),
         m_commit_alloc(m_mem_root),
         m_commit_map(m_commit_alloc),
@@ -91,6 +91,11 @@ class XA_spec_list {
 
   Commit_map *commit_map() { return &m_commit_map; }
   State_map *state_map() { return &m_state_map; }
+
+  void clear() {
+    m_commit_map.clear();
+    m_state_map.clear();
+  }
 
  private:
   MEM_ROOT *m_mem_root;

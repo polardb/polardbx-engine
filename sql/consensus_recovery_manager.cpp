@@ -80,7 +80,8 @@ template <>
 void Consensus_recovery_manager::add_pending_recovering_trx<
     Pending_recovering_trx::xid_type::INTERNAL>(
     handlerton &ht, enum_ha_recover_xa_state current_state,
-    enum_ha_recover_xa_state next_state, const XID &xid) {
+    enum_ha_recover_xa_state next_state, const XID &xid,
+    const XA_specification &xa_spec) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   auto iter = internal_xids_in_binlog.find(xid.get_my_xid());
   if (iter != internal_xids_in_binlog.end()) {
@@ -91,7 +92,8 @@ void Consensus_recovery_manager::add_pending_recovering_trx<
         << " was added into commit map at "
            "Consensus_recovery_manager::add_xid_to_commit_map";
     add_pending_recovering_trx(ht, Pending_recovering_trx::xid_type::INTERNAL,
-                               current_state, next_state, xid, consensus_index);
+                               current_state, next_state, xid, xa_spec,
+                               consensus_index);
   }
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
@@ -100,7 +102,8 @@ template <>
 void Consensus_recovery_manager::add_pending_recovering_trx<
     Pending_recovering_trx::xid_type::EXTERNAL>(
     handlerton &ht, enum_ha_recover_xa_state current_state,
-    enum_ha_recover_xa_state next_state, const XID &xid) {
+    enum_ha_recover_xa_state next_state, const XID &xid,
+    const XA_specification &xa_spec) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   auto iter = external_xids_in_binlog.find(xid);
   if (iter != external_xids_in_binlog.end()) {
@@ -110,7 +113,8 @@ void Consensus_recovery_manager::add_pending_recovering_trx<
         << " was added into commit map at "
            "Consensus_recovery_manager::nladd_xid_to_commit_map";
     add_pending_recovering_trx(ht, Pending_recovering_trx::xid_type::EXTERNAL,
-                               current_state, next_state, xid, consensus_index);
+                               current_state, next_state, xid, xa_spec,
+                               consensus_index);
   } else {
     raft::warn(ER_RAFT_RECOVERY)
         << "XID = [" << xid.key() << "] "
@@ -123,12 +127,13 @@ void Consensus_recovery_manager::add_pending_recovering_trx<
 void Consensus_recovery_manager::add_pending_recovering_trx(
     handlerton &ht, Pending_recovering_trx::xid_type type,
     enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
-    const XID &xid, uint64 consensus_index) {
+    const XID &xid, const XA_specification &xa_spec, uint64 consensus_index) {
   XID *dup_xid = (XID *)my_memdup(key_memory_xa_transaction_contexts, &xid,
                                   sizeof(XID), MYF(0));
   Pending_Recovering_trxs[consensus_index] =
-      std::make_unique<Pending_recovering_trx>(
-          ht, type, current_state, next_state, dup_xid, consensus_index);
+      std::make_unique<Pending_recovering_trx>(ht, type, current_state,
+                                               next_state, dup_xid, xa_spec,
+                                               consensus_index);
 }
 
 void Consensus_recovery_manager::clear_trx_in_binlog() {
@@ -255,10 +260,10 @@ int Pending_recovering_trx::withdraw() {
   assert(is_state_legal());
 
   if (type == xid_type::INTERNAL) {
-    ret = ht.rollback_by_xid(&ht, xid, nullptr);
+    ret = ht.rollback_by_xid(&ht, xid, &xa_spec);
   } else if (type == xid_type::EXTERNAL) {
     if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
-      ret = ht.rollback_by_xid(&ht, xid, nullptr);
+      ret = ht.rollback_by_xid(&ht, xid, &xa_spec);
     } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
       // do nothing
     }
@@ -279,34 +284,35 @@ int Pending_recovering_trx::recover() {
   assert(is_state_legal());
 
   if (type == xid_type::INTERNAL) {
-    ret = ht.commit_by_xid(&ht, xid, nullptr);
+    ret = ht.commit_by_xid(&ht, xid, &xa_spec);
   } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
     if (next_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
-      ret = ht.set_prepared_in_tc_by_xid(&ht, xid, nullptr);
+      ret = ht.set_prepared_in_tc_by_xid(&ht, xid, &xa_spec);
     } else if (next_state ==
                enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE) {
-      ret = ht.commit_by_xid(&ht, xid, nullptr);
+      ret = ht.commit_by_xid(&ht, xid, &xa_spec);
     }
   } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
     if (next_state == enum_ha_recover_xa_state::COMMITTED) {
-      ret = ht.commit_by_xid(&ht, xid, nullptr);
+      ret = ht.commit_by_xid(&ht, xid, &xa_spec);
     } else if (next_state == enum_ha_recover_xa_state::ROLLEDBACK) {
-      ret = ht.rollback_by_xid(&ht, xid, nullptr);
+      ret = ht.rollback_by_xid(&ht, xid, &xa_spec);
     }
   }
   return ret;
 }
 
 Pending_recovering_trx::Pending_recovering_trx(
-    handlerton &ht, Pending_recovering_trx::xid_type type,
-    enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
-    XID *xid, uint64 consensus_index)
+    handlerton &ht, xid_type type, enum_ha_recover_xa_state current_state,
+    enum_ha_recover_xa_state next_state, XID *xid,
+    const XA_specification &xa_spec, uint64 consensus_index)
     : immutable(false),
       ht(ht),
       type(type),
       current_state(current_state),
       next_state(next_state),
       xid(xid),
+      xa_spec(xa_spec),
       consensus_index(consensus_index) {}
 
 Pending_recovering_trx::~Pending_recovering_trx() {

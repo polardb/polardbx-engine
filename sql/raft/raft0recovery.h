@@ -88,6 +88,8 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
 
   void process_xa_rollback(const std::string &query) override;
 
+  void process_atomic_ddl(Query_log_event const &ev) override;
+
   void process_xid_event(Xid_log_event const &ev) override;
 
   void process_xa_prepare_event(XA_prepare_log_event const &ev) override;
@@ -96,8 +98,6 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
 
   void process_previous_consensus_index_event(
       const Previous_consensus_index_log_event &ev);
-
-  void process_gtid_event(Gtid_log_event &ev);
 
   void process_internal_xid(ulong unmasked_server_id, my_xid xid);
 

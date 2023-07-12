@@ -266,7 +266,8 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
           ->add_pending_recovering_trx<
               Pending_recovering_trx::xid_type::INTERNAL>(
               ht, enum_ha_recover_xa_state::PREPARED_IN_SE,
-              enum_ha_recover_xa_state::COMMITTED, xa_trx.id);
+              enum_ha_recover_xa_state::COMMITTED, xa_trx.id,
+              *info.spec_list->find(xid));
     }
 
     if (exec_status == XA_OK)
@@ -405,7 +406,8 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
     consensus_log_manager.get_recovery_manager()
         ->add_pending_recovering_trx<
             Pending_recovering_trx::xid_type::EXTERNAL>(
-            ht, state_in_ht, state, xa_trx.id);
+            ht, state_in_ht, state, xa_trx.id,
+            *info.spec_list->find(xa_trx.id));
   }
 }
 
