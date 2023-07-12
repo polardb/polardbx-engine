@@ -143,6 +143,18 @@ if ($keep_gtid_events)
   --let $script= $script s{DOLLARuuid_gno_regex(?:,DOLLARuuid_gno_regex)*}{Gtid_set};
 }
 
+if (!$keep_consensus_events)
+{
+  --let $script= $script DOLLAR_ = '' if (m{\t(?:Consensus_log|Previous_consensus_index|Consensus_empty)\t});
+}
+if ($keep_consensus_events)
+{
+  let $pre_script= $pre_script
+    my DOLLARconsensus_regex = '[0-9]+';
+  ||
+  --let $script= $script s{DOLLARconsensus_regex}{##};
+}
+
 if (!$keep_gcn_events)
 {
   --let $script= $script DOLLAR_ = '' if (m{\t(?:Gcn)\t});

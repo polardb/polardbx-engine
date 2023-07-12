@@ -9,6 +9,7 @@
 # [--let $binlog_limit= 1, 3 ]
 # [--let $keep_transaction_payload_events = 0]
 # [--let $keep_gtid_events= 1]
+# [--let $keep_consensus_events= 1]
 # [--let $keep_gcn_events= 1]
 # [--let $keep_view_change_events= 1]
 # [--let $mask_binlog_commit_events= 1]
@@ -38,6 +39,12 @@
 #     filtered out, so that the output is independent of whether GTIDs
 #     are enabled or not.  If this flag is set, events are kept but
 #     the actual GTID values are masked out.
+#
+#   $keep_consensus_events
+#     By default, Consens_log_event, Previous_consensus_index and 
+#	  Consensus_emptyare filtered out, so that the output is
+#     independent of whether Consensus are enabled or not.  If this flag
+#     is set, events are kept but the actual consensus values are masked out.
 #
 #   $keep_gcn_events
 #     By default, Gcn_log_event are filtered out, so that the output is

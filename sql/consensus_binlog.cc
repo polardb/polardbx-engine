@@ -2065,7 +2065,3 @@ end:
 
   return error;
 }
-
-mysql_mutex_t &MYSQL_BIN_LOG::LOCK_flush() {
-  return *consensus_log_manager.get_sequence_stage1_lock();
-}

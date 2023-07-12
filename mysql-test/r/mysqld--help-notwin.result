@@ -279,10 +279,8 @@ The following options may be given as the first argument:
  proxy user mapping should be done according to GRANT
  PROXY privilege definition.
  -r, --chroot=name   Chroot mysqld daemon during startup.
-<<<<<<< HEAD
  --client-endpoint-ip=name 
  The endpoint ip that client use to connect.
-=======
  --cluster-current-term=# 
  Cluster nodes current term  information
  --cluster-dump-meta Cluster dump meta
@@ -305,7 +303,6 @@ The following options may be given as the first argument:
  Cluster set the purged gtid
  --cluster-start-index=# 
  Cluster start valid index
->>>>>>> 4785e8de0cf... fix cases 1
  --collation-server=name 
  Set the default collation.
  --commit-pos-watcher 
@@ -976,12 +973,18 @@ The following options may be given as the first argument:
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
 <<<<<<< HEAD
+<<<<<<< HEAD
  --opt-enable-rds-priv-strategy 
  When this option is enabled,it will protect reserved
  account and privileges
 =======
 <<<<<<< HEAD
 >>>>>>> [Raft] fix mysql test case bugs
+=======
+ --opt-force-index-pct-cached 
+ force cached table index in memory when estimate query
+ cost
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
@@ -992,11 +995,6 @@ The following options may be given as the first argument:
  --opt-tablestat     When this option is enabled,it will accumulate the table
  statistics
  (Defaults to on; use --skip-opt-tablestat to disable.)
-=======
- --opt-force-index-pct-cached 
- force cached table index in memory when estimate query
- cost
->>>>>>> 4785e8de0cf... fix cases 1
  --optimizer-max-subgraph-pairs=# 
  Maximum depth of subgraph pairs a query can have before
  the hypergraph join optimizer starts reducing the search
@@ -2008,9 +2006,7 @@ character-set-server utf8mb4
 character-sets-dir MYSQL_CHARSETSDIR/
 check-proxy-users FALSE
 chroot (No default value)
-<<<<<<< HEAD
 client-endpoint-ip (No default value)
-=======
 cluster-current-term 0
 cluster-dump-meta FALSE
 cluster-force-change-meta FALSE
@@ -2023,7 +2019,6 @@ cluster-log-type-node FALSE
 cluster-mts-recover-use-index TRUE
 cluster-purged-gtid (No default value)
 cluster-start-index 1
->>>>>>> 4785e8de0cf... fix cases 1
 collation-server utf8mb4_0900_ai_ci
 commit-pos-watcher TRUE
 commit-pos-watcher-interval 1000000
@@ -2235,15 +2230,20 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
-<<<<<<< HEAD
 only-report-warning-when-skip-sequence TRUE
+<<<<<<< HEAD
 opt-enable-rds-priv-strategy FALSE
+<<<<<<< HEAD
 opt-indexstat TRUE
 opt-outline-enabled TRUE
 opt-tablestat TRUE
 =======
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
+=======
 opt-force-index-pct-cached FALSE
->>>>>>> 4785e8de0cf... fix cases 1
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
+opt-indexstat TRUE
+opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000
 optimizer-prune-level 1
 optimizer-search-depth 62
@@ -2315,11 +2315,7 @@ performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-sql-text-length 1024
 performance-schema-max-stage-classes 175
-<<<<<<< HEAD
-performance-schema-max-statement-classes 221
-=======
 performance-schema-max-statement-classes 225
->>>>>>> 4785e8de0cf... fix cases 1
 performance-schema-max-statement-stack 10
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1

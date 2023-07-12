@@ -82,8 +82,6 @@
     consensus_log_manager.unlock_consensus();\
   });
 
->>>>>>> [Raft] support consensus log apply
-
 #ifndef NDEBUG
 static uint binlog_dump_count = 0;
 #endif

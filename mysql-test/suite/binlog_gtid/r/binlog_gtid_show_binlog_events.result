@@ -3,10 +3,6 @@ include/assert.inc [Verify that the starting offset (4) of an event after the in
 include/assert.inc [Verify that the starting offset (4) of an event at the valid position 4 is displayed.]
 include/assert.inc [Verify that the starting offset (190) of an event after the invalid position 14 is displayed.]
 include/assert.inc [Verify that the starting offset (221) of an event after the invalid position 191 is displayed.]
-<<<<<<< HEAD
-include/assert.inc [Verify that the starting offset (253) of an event after the invalid position 222 is displayed.]
-include/assert.inc [Verify that the starting offset (253) of an event at the valid position 253 is displayed.]
-=======
-include/assert.inc [Verify that the starting offset (221) of an event at the valid position 221 is displayed.]
->>>>>>> [Raft] fix mysql test case bugs
+include/assert.inc [Verify that the starting offset (252) of an event after the invalid position 222 is displayed.]
+include/assert.inc [Verify that the starting offset (252) of an event at the valid position 252 is displayed.]
 DROP TABLE t1;

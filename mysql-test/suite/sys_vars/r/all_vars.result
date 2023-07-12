@@ -150,6 +150,13 @@ disable_wait_commitindex
 disable_wait_commitindex
 disabled_storage_engines
 disabled_storage_engines
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 example_create_count_thdvar
 example_create_count_thdvar
 example_double_thdvar
@@ -162,6 +169,17 @@ example_last_create_thdvar
 example_last_create_thdvar
 example_ulong_var
 example_ulong_var
+<<<<<<< HEAD
+=======
+>>>>>>> [Raft] support mtr and consensus_proc pl
+explain_format
+explain_format
+gcn_write_event
+gcn_write_event
+=======
+=======
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 enable_appliedindex_checker
 enable_appliedindex_checker
 explain_format
@@ -279,21 +297,21 @@ master_verify_checksum
 master_verify_checksum
 max_length_for_sort_data
 max_length_for_sort_data
+only_report_warning_when_skip_sequence
+only_report_warning_when_skip_sequence
 <<<<<<< HEAD
-only_report_warning_when_skip_sequence
-only_report_warning_when_skip_sequence
 opt_enable_rds_priv_strategy
 opt_enable_rds_priv_strategy
-opt_indexstat
-opt_indexstat
-opt_outline_enabled
-opt_outline_enabled
-opt_tablestat
-opt_tablestat
 =======
 opt_force_index_pct_cached
 opt_force_index_pct_cached
->>>>>>> 4785e8de0cf... fix cases 1
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
+opt_indexstat
+opt_indexstat
+opt_outline_enabled
+opt_outline_enabled
+opt_tablestat
+opt_tablestat
 optimizer_max_subgraph_pairs
 optimizer_max_subgraph_pairs
 outline_allowed_sql_digest_truncate
@@ -341,12 +359,18 @@ rds_audit_log_strategy
 rds_audit_log_strategy
 rds_audit_log_version
 rds_audit_log_version
+<<<<<<< HEAD
 rds_kill_connections
 rds_kill_connections
 rds_kill_user_list
 rds_kill_user_list
+=======
+<<<<<<< HEAD
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 rds_release_date
 rds_release_date
+=======
+>>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 rds_version
 rds_version
 read_lsn

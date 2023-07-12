@@ -8646,7 +8646,6 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   assert(total_bytes_var && rotate_var && out_queue_var);
   my_off_t total_bytes = 0;
   int flush_error = 1;
-  // mysql_mutex_assert_owner(/*&LOCK_log*/ &LOCK_flush());
   mysql_mutex_assert_owner(consensus_log_manager.get_sequence_stage1_lock());
 
   // check if could write binlog according to consenesus layer
@@ -12094,8 +12093,6 @@ int binlog_start_trans(THD *thd) {
 /*****************************************************************
 *                Lizard Binlog Extend End                       *
 *****************************************************************/
-
-#include "sql/lizard_binlog.cc"
 
 #include "sql/consensus_binlog.cc"
 #include "sql/consensus_log_manager.cc"

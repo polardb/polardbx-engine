@@ -27,11 +27,8 @@ DELIMITER /*!*/;
 ROLLBACK/*!*/;
 ##PREV_CONSENSUS_INDEX: ##'/*!*/;
 # [empty]
-<<<<<<< HEAD
-SET @@session.innodb_commit_seq=##/*!*/;
-=======
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
->>>>>>> [Raft] fix mysql test case bugs
+SET @@session.innodb_commit_seq=###/*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 /*!80001 SET @@session.original_commit_timestamp= MICROSECONDS-FROM-EPOCH*//*!*/;
@@ -56,11 +53,8 @@ SET TIMESTAMP=#/*!*/;
 INSERT INTO t1 VALUES(@`a b`)
 /*!*/;
 COMMIT/*!*/;
-<<<<<<< HEAD
-SET @@session.innodb_commit_seq=##/*!*/;
-=======
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
->>>>>>> [Raft] fix mysql test case bugs
+SET @@session.innodb_commit_seq=###/*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 /*!80001 SET @@session.original_commit_timestamp= MICROSECONDS-FROM-EPOCH*//*!*/;

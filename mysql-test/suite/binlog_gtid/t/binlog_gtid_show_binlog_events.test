@@ -43,12 +43,12 @@ CREATE TABLE t1 (c1 INT);
 --let $assert_cond="[SHOW BINLOG EVENTS FROM 191 LIMIT 1, Pos, 1]" = 221
 --source include/assert.inc
 
---let $assert_text=Verify that the starting offset (253) of an event after the invalid position 222 is displayed.
---let $assert_cond="[SHOW BINLOG EVENTS FROM 222 LIMIT 1, Pos, 1]" = 253
+--let $assert_text=Verify that the starting offset (252) of an event after the invalid position 222 is displayed.
+--let $assert_cond="[SHOW BINLOG EVENTS FROM 222 LIMIT 1, Pos, 1]" = 252
 --source include/assert.inc
 
---let $assert_text=Verify that the starting offset (253) of an event at the valid position 253 is displayed.
---let $assert_cond="[SHOW BINLOG EVENTS FROM 253 LIMIT 1, Pos, 1]" = 253
+--let $assert_text=Verify that the starting offset (252) of an event at the valid position 252 is displayed.
+--let $assert_cond="[SHOW BINLOG EVENTS FROM 252 LIMIT 1, Pos, 1]" = 252
 --source include/assert.inc
 
 DROP TABLE t1;

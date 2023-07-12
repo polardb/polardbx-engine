@@ -1044,10 +1044,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
                          bool need_lock_index, bool need_sid_lock,
                          Format_description_log_event *extra_description_event);
 
- private:
   std::unique_ptr<Gcn_manager> gcn_mgr;
-
-  static mysql_mutex_t &LOCK_flush();
 };
 
 struct LOAD_FILE_INFO {

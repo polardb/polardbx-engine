@@ -118,6 +118,7 @@ if (!$mysqlbinlog_skip_replace)
     /Consensus flag=[0-9]*/Consensus flag=#/
     /term=[0-9]*/term=#/
     /index=[0-9]*/index=#/
+    /length=[0-9]*/length=#/
     /PREV_CONSENSUS_INDEX: [0-9]*/PREV_CONSENSUS_INDEX: #/
     /CONSENSUS FLAG: [0-9]*/CONSENSUS FLAG: #/
     /TERM: [0-9]*/TERM: #/

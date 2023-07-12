@@ -23,11 +23,8 @@ DELIMITER /*!*/;
 ROLLBACK/*!*/;
 ##PREV_CONSENSUS_INDEX: ##'/*!*/;
 # [empty]
-<<<<<<< HEAD
-SET @@session.innodb_commit_seq=##/*!*/;
-=======
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
->>>>>>> [Raft] support mtr and consensus_proc pl
+SET @@session.innodb_commit_seq=###/*!*/;
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
