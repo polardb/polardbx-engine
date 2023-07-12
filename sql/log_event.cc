@@ -2623,43 +2623,18 @@ static bool schedule_next_event(Log_event *ev, Relay_log_info *rli) {
 */
 
 Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
-  Slave_job_group group = Slave_job_group(), *ptr_group = nullptr;
+  Slave_job_group *ptr_group = nullptr;
   bool is_s_event;
   Slave_worker *ret_worker = nullptr;
   char llbuff[22];
   Slave_committed_queue *gaq = rli->gaq;
-  size_t gcn_size = rli->curr_group_seen_gcn ? 1 : 0;
+  lizard::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
+      rli->get_b_events_before_gtid_mgr();
+  size_t b_ev_before_gtid_size = b_events_before_gtid_mgr.get_size();
   DBUG_TRACE;
 
-  if (is_gcn_event(this)) {
-    // 1. start a group and enque gaq.
-    rli->mts_groups_assigned++;
-
-    rli->curr_group_isolated = false;
-    group.reset(common_header->log_pos, rli->mts_groups_assigned);
-    // the last occupied GAQ's array index
-    gaq->assigned_group_index = gaq->en_queue(&group);
-    DBUG_PRINT("info", ("gaq_idx= %ld  gaq->size=%zu",
-                        gaq->assigned_group_index, gaq->capacity));
-    assert(gaq->assigned_group_index != MTS_WORKER_UNDEF);
-    assert(gaq->assigned_group_index < gaq->capacity);
-    assert(gaq->get_job_group(rli->gaq->assigned_group_index)
-               ->group_relay_log_name == nullptr);
-    assert(rli->last_assigned_worker == nullptr ||
-           !is_mts_db_partitioned(rli));
-
-    // 2. Save temporarily to curr_group_da because we don't know
-    //    the partition information yet.
-    // gcn event must before gtid event.
-    assert(!rli->curr_group_seen_gtid && !rli->curr_group_seen_begin);
-    Slave_job_item job_item = {this, rli->get_event_relay_log_number(),
-                               rli->get_event_start_pos()};
-        // B-event is appended to the Deferred Array associated with GCAP
-    rli->curr_group_da.push_back(job_item);
-
-    assert(rli->curr_group_da.size() == 1);
-
-    rli->curr_group_seen_gcn = true;
+  if (lizard::is_b_events_before_gtid(this)) {
+    b_events_before_gtid_mgr.mark_as_curr_group(this);
     return nullptr;
   }
 
@@ -2680,22 +2655,10 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
         gaq->get_job_group(rli->gaq->assigned_group_index)->worker_id !=
             MTS_WORKER_UNDEF))) {
     if (!rli->curr_group_seen_gtid && !rli->curr_group_seen_begin) {
-      if (!rli->curr_group_seen_gcn) {
-        rli->mts_groups_assigned++;
-
-        rli->curr_group_isolated = false;
-        group.reset(common_header->log_pos, rli->mts_groups_assigned);
-        // the last occupied GAQ's array index
-        gaq->assigned_group_index = gaq->en_queue(&group);
-        DBUG_PRINT("info", ("gaq_idx= %ld  gaq->size=%zu",
-                            gaq->assigned_group_index, gaq->capacity));
-        assert(gaq->assigned_group_index != MTS_WORKER_UNDEF);
-        assert(gaq->assigned_group_index < gaq->capacity);
-        assert(gaq->get_job_group(rli->gaq->assigned_group_index)
-                   ->group_relay_log_name == nullptr);
-        assert(rli->last_assigned_worker == nullptr ||
-               !is_mts_db_partitioned(rli));
+      if (!b_events_before_gtid_mgr.seen_b_events_before_gtid()) {
+        start_sjg_and_enque_gaq(rli, this);
       } else {
+        /** TODO: Cons_log_index <12-07-23, zanye.zjy> */
         assert(rli->curr_group_da.size() == 1);
         assert(is_gcn_event(rli->curr_group_da[0].data));
       }
@@ -2706,7 +2669,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
         // B-event is appended to the Deferred Array associated with GCAP
         rli->curr_group_da.push_back(job_item);
 
-        assert(rli->curr_group_da.size() == (1 + gcn_size));
+        assert(rli->curr_group_da.size() == (1 + b_ev_before_gtid_size));
 
         if (starts_group()) {
           // mark the current group as started with explicit B-event
@@ -2750,7 +2713,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
         return nullptr;
       }
 
-      assert(rli->curr_group_da.size() == (2 + gcn_size));
+      assert(rli->curr_group_da.size() == (2 + b_ev_before_gtid_size));
       assert(starts_group());
       return ret_worker;
     }
@@ -2793,17 +2756,17 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
                                     rli->curr_group_seen_gtid && ends_group();
 
       bool begin_load_query_event =
-          ((rli->curr_group_da.size() == (3 + gcn_size) &&
+          ((rli->curr_group_da.size() == (3 + b_ev_before_gtid_size) &&
             rli->curr_group_seen_gtid) ||
-           (rli->curr_group_da.size() == (2 + gcn_size) &&
+           (rli->curr_group_da.size() == (2 + b_ev_before_gtid_size) &&
             !rli->curr_group_seen_gtid)) &&
           (rli->curr_group_da.back().data->get_type_code() ==
            binary_log::BEGIN_LOAD_QUERY_EVENT);
 
       bool delete_file_event =
-          ((rli->curr_group_da.size() == (4 + gcn_size) &&
+          ((rli->curr_group_da.size() == (4 + b_ev_before_gtid_size) &&
             rli->curr_group_seen_gtid) ||
-           (rli->curr_group_da.size() == (3 + gcn_size) &&
+           (rli->curr_group_da.size() == (3 + b_ev_before_gtid_size) &&
             !rli->curr_group_seen_gtid)) &&
           (rli->curr_group_da.back().data->get_type_code() ==
            binary_log::DELETE_FILE_EVENT);
@@ -3227,7 +3190,7 @@ int Log_event::apply_event(Relay_log_info *rli) {
         if (get_type_code() == binary_log::INCIDENT_EVENT &&
             rli->curr_group_da.size() > 0) {
           assert(rli->curr_group_da.size() ==
-                 (1 + (rli->curr_group_seen_gcn ? 1 : 0)));
+                 (1 + rli->get_b_events_before_gtid_mgr().get_size()));
           /*
             When MTS is enabled, the incident event must be applied by the
             coordinator. So the coordinator applies its GTID right before

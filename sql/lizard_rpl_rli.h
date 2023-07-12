@@ -1,3 +1,4 @@
+
 /*****************************************************************************
 
 Copyright (c) 2013, 2023, Alibaba and/or its affiliates. All Rights Reserved.
@@ -24,58 +25,43 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file sql/lizard_rpl_binlog_sender.cc
+/** @file sql/lizard_rpl_rli.h
 
-  Replication binlog sender.
+  Lizard relay log.
 
-  Created 2023-07-11 by Jiyang.zhang
+  Created 2023-07-12 by Jiyang.zhang
  *******************************************************/
+#ifndef LIZARD_LIZARD_RPL_RLI_INCLUDED
+#define LIZARD_LIZARD_RPL_RLI_INCLUDED
 
-#include "sql/lizard_rpl_binlog_sender.h"
-#include "sql/rpl_binlog_sender.h"
+#include <cstddef>  // size_t...
+
+class Log_event;
+class Relay_log_info;
+
+void start_sjg_and_enque_gaq(Relay_log_info *rli, Log_event *ev);
 
 namespace lizard {
-int Delay_binlog_sender::send_all_delay_events() {
-  int error = 0;
-  String tmp;
+class Begin_events_before_gtid_manager {
+ public:
+  static bool is_b_events_before_gtid(Log_event *ev);
 
-  if (!has_delayed_events()) {
-    return 0;
-  }
+  Begin_events_before_gtid_manager(Relay_log_info *_rli) : rli(_rli) {}
 
-  tmp.copy(m_target->m_packet);
-  tmp.length(m_target->m_packet.length());
+  bool seen_b_events_before_gtid() const;
 
-  for (auto &ev : m_events) {
-    if (ev.is_empty()) {
-      continue;
-    }
+  void mark_as_curr_group(Log_event *ev);
 
-    m_target->m_packet.copy(ev.packet);
-    m_target->m_packet.length(ev.packet.length());
+  void reset_seen_status();
 
-    if (m_target->before_send_hook(ev.log_file.c_str(), ev.log_pos) ||
-        unlikely(m_target->send_packet()) ||
-        unlikely(m_target->after_send_hook(
-            ev.log_file.c_str(), ev.in_exclude_group ? ev.log_pos : 0))) {
-      error = 1;
-      break;
-    }
-  }
+  size_t get_size() const;
 
-  forget_delay_events();
+ private:
+  Relay_log_info *rli;
+};
 
-  /** TODO: If error happens, also restore m_packet, we don't know if it's a
-  good choice. <12-07-23, zanye.zjy> */
-  m_target->m_packet.copy(tmp);
-  m_target->m_packet.length(tmp.length());
-
-  return error;
-}
-
-void Delay_binlog_sender::forget_delay_events() {
-  for (auto &ev : m_events) {
-    ev.reset();
-  }
-}
+constexpr auto is_b_events_before_gtid =
+    &Begin_events_before_gtid_manager::is_b_events_before_gtid;
 }  // namespace lizard
+
+#endif // LIZARD_LIZARD_RPL_RLI_INCLUDED

@@ -640,7 +640,7 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
       DBUG_PRINT("info", ("Event of type %s is skipped",
                           Log_event::get_type_str(event_type)));
 
-      m_delay_sender.skip_delay_events();
+      m_delay_sender.forget_delay_events();
     } else {
       /*
         A heartbeat is required before sending a event, If some events are
@@ -664,7 +664,8 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
       /** Cannot send Gcn_log_event immediately, because only by reading the
       gtid event can we know whether the transaction should be skipped. */
       if (event_type == binary_log::GCN_LOG_EVENT) {
-        m_delay_sender.push_event(m_packet, log_file, log_pos, in_exclude_group);
+        m_delay_sender.push_event(m_packet, log_file, log_pos, in_exclude_group,
+                                  event_type);
         continue;
       }
 

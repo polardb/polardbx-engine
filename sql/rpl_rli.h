@@ -63,6 +63,8 @@
 #include "sql/system_variables.h"
 #include "sql/table.h"
 
+#include "sql/lizard_rpl_rli.h"
+
 class Commit_order_manager;
 class Master_info;
 class Rpl_filter;
@@ -1175,7 +1177,10 @@ class Relay_log_info : public Rpl_info {
   Prealloced_array<Slave_job_item, 8> curr_group_da;
 
   bool curr_group_seen_gtid;   // current group started with Gtid-event or not
+ private:
+  /** TODO: Cons_log_index <12-07-23, zanye.zjy> */
   bool curr_group_seen_gcn;    // Lizard: current group started with Gcn-event or not
+ public:
   bool curr_group_seen_begin;  // current group started with B-event or not
   bool curr_group_isolated;    // current group requires execution in isolation
   bool mts_end_group_sets_max_dbs;  // flag indicates if partitioning info is
@@ -2112,6 +2117,17 @@ class Relay_log_info : public Rpl_info {
     @param on_rollback  when true the method carries out rollback action
   */
   virtual void post_commit(bool on_rollback);
+
+ protected:
+  lizard::Begin_events_before_gtid_manager m_b_events_before_gtid_mgr;
+
+ public:
+  lizard::Begin_events_before_gtid_manager &get_b_events_before_gtid_mgr() {
+    return m_b_events_before_gtid_mgr;
+  }
+
+ private:
+  friend lizard::Begin_events_before_gtid_manager;
 };
 
 /**

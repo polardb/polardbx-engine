@@ -196,7 +196,8 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       m_allow_drop_write_set(false),
       m_is_engine_ha_data_detached(false),
       current_event(nullptr),
-      ddl_not_atomic(false) {
+      ddl_not_atomic(false),
+      m_b_events_before_gtid_mgr(this) {
   DBUG_TRACE;
 
 #ifdef HAVE_PSI_INTERFACE

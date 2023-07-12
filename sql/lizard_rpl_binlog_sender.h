@@ -37,44 +37,75 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 
 #include "sql_string.h"
+#include "libbinlogevents/include/binlog_event.h"
 
 class Binlog_sender;
 
 namespace lizard {
 class Delay_binlog_sender {
  public:
-  Delay_binlog_sender(Binlog_sender *target) : m_target(target) {
-    m_events.reserve(2);
-  }
+  Delay_binlog_sender(Binlog_sender *target)
+      : m_target(target), m_events() {}
 
   void push_event(String &_packet, const char *_log_file, my_off_t _log_pos,
-                  bool _in_exclude_group) {
-    m_events.emplace_back(_packet, _log_file, _log_pos, _in_exclude_group);
+                  bool _in_exclude_group,
+                  binary_log::Log_event_type event_type) {
+    switch (event_type) {
+      case binary_log::GCN_LOG_EVENT:
+        m_events[1].set(_packet, _log_file, _log_pos, _in_exclude_group);
+        break;
+      // TODO: Cons_index_log
+      default:
+        assert(0);
+    }
   }
 
   int send_all_delay_events();
 
-  void skip_delay_events();
+  void forget_delay_events();
 
  private:
-  class Event_packet_ctx {
-   public:
-    Event_packet_ctx(String &_packet, const char *_log_file, my_off_t _log_pos,
-                     bool _in_exclude_group) {
+  bool has_delayed_events() const {
+    for (auto &ev : m_events) {
+      if (!ev.is_empty()) return true;
+    }
+    return false;
+  }
+
+  struct Event_packet_ctx {
+    Event_packet_ctx()
+        : packet(), log_file(), log_pos(0), in_exclude_group(false) {
+      packet.reserve(128);
+      log_file.reserve(128);
+    }
+
+    void set(String &_packet, const char *_log_file, my_off_t _log_pos,
+             bool _in_exclude_group) {
       packet.copy(_packet);
       packet.length(_packet.length());
-      log_file = _log_file;
+      log_file.append(_log_file);
       log_pos = _log_pos;
       in_exclude_group = _in_exclude_group;
     }
+
+    void reset() {
+      packet.length(0);
+      log_file.clear();
+      log_pos = 0;
+      in_exclude_group = 0;
+    }
+
+    bool is_empty() const { return packet.is_empty(); }
+
     String packet;
-    const char *log_file;
+    std::string log_file;
     my_off_t log_pos;
     bool in_exclude_group;
   };
 
   Binlog_sender *m_target;
-  std::vector<Event_packet_ctx> m_events;
+  // 0: Cons_log_index,  1: Gcn_log_event
+  std::array<Event_packet_ctx, 2> m_events;
 };
 
 }  // namespace lizard

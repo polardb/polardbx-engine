@@ -364,7 +364,7 @@ int Slave_worker::init_worker(Relay_log_info *rli, ulong i) {
   jobs.capacity = c_rli->mts_slave_worker_queue_len_max;
   jobs.inited_queue = true;
   curr_group_seen_gtid = false;
-  curr_group_seen_gcn = false;
+  m_b_events_before_gtid_mgr.reset_seen_status();
 #ifndef NDEBUG
   curr_group_seen_sequence_number = false;
 #endif
@@ -1303,7 +1303,7 @@ void Slave_worker::slave_worker_ends_group(Log_event *ev, int error) {
 #endif
   }
   curr_group_seen_gtid = false;
-  curr_group_seen_gcn = false;
+  m_b_events_before_gtid_mgr.reset_seen_status();
 }
 
 Slave_committed_queue::Slave_committed_queue(size_t max, uint n)
@@ -1704,7 +1704,8 @@ int Slave_worker::slave_worker_exec_event(Log_event *ev) {
 #endif
 
   // Address partitioning only in database mode
-  if (!is_gtid_event(ev) && is_mts_db_partitioned(rli) && !is_gcn_event(ev)) {
+  if (!is_gtid_event(ev) && is_mts_db_partitioned(rli) &&
+      !lizard::is_b_events_before_gtid(ev)) {
     if (ev->contains_partition_info(end_group_sets_max_dbs)) {
       uint num_dbs = ev->mts_number_dbs();
 
@@ -2478,12 +2479,13 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
       WL#7592 refines the original assert disjunction formula
       with the final disjunct.
     */
-    assert(seen_begin || is_gtid_event(ev) || is_gcn_event(ev) ||
+    assert(seen_begin || is_gtid_event(ev) ||
+           lizard::is_b_events_before_gtid(ev) ||
            ev->get_type_code() == binary_log::QUERY_EVENT ||
            is_mts_db_partitioned(rli) || worker->id == 0 || seen_gtid);
 
     if (ev->ends_group() || (!seen_begin && !is_gtid_event(ev) &&
-                             !is_gcn_event(ev) &&
+                             !lizard::is_b_events_before_gtid(ev) &&
                              (ev->get_type_code() == binary_log::QUERY_EVENT ||
                               /* break through by LC only in GTID off */
                               (!seen_gtid && !is_mts_db_partitioned(rli)))))
