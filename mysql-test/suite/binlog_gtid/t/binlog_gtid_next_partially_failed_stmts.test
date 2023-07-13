@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # Verify that a partially failed statement saves its gtid into

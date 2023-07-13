@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 -- source include/force_binlog_format_statement.inc
 

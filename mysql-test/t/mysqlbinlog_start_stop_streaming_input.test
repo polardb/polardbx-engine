@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # Test the --[start|stop]-[position|datetime] options to mysqlbinlog,

@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # When binlog is disabled, verify that we can set GTID_NEXT

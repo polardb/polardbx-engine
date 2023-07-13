@@ -291,17 +291,6 @@ let $sysvar_specs =
     "skip_set_persist_only_default": 1
   },
   {
-    "name": "replica_load_tmpdir",
-    "alias": "slave_load_tmpdir",
-    $readonly,
-    $nopersist,
-    "default": "'$tmpdir'",
-    "values": ["'$tmpdir/x'", "'$tmpdir'", "'$tmpdir/y'"],
-    "invalid": ["NULL", "ON"],
-    "value_map": {"'$tmpdir/x'": "$tmpdir/x", "'$tmpdir'": "$tmpdir", "'$tmpdir/y'": "$tmpdir/y"},
-    "mask_value": 1
-  },
-  {
     "name": "replica_max_allowed_packet",
     "alias": "slave_max_allowed_packet",
     "default": 1073741824,

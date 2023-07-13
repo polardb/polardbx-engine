@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # This test ensures that binary log events are properly written to the

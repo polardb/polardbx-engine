@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ###############################################################################
 # Bug#11758766:MYSQLD CONTINUES OPERATION WITHOUT LOGGING WHEN BINLOGS
 # CANNOT BE WRITTEN

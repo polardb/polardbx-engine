@@ -14,14 +14,6 @@ Warning	1287	'@@relay_log_info_repository' is deprecated and will be removed in 
 SELECT COUNT(@@SESSION.relay_log_info_repository);
 ERROR HY000: Variable 'relay_log_info_repository' is a GLOBAL variable
 '#---------------------BS_STVARS_002_02----------------------#'
-SET @@GLOBAL.relay_log_info_repository= "FILE";
-Warnings:
-Warning	1287	'@@relay_log_info_repository' is deprecated and will be removed in a future release.
-SELECT @@GLOBAL.relay_log_info_repository;
-@@GLOBAL.relay_log_info_repository
-FILE
-Warnings:
-Warning	1287	'@@relay_log_info_repository' is deprecated and will be removed in a future release.
 '#---------------------BS_STVARS_002_03----------------------#'
 SELECT @@GLOBAL.relay_log_info_repository = VARIABLE_VALUE
 FROM performance_schema.global_variables

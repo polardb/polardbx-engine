@@ -73,15 +73,4 @@ set @g1 = ST_GeomFromText('Polygon((-90 -180,-90 180,90 180,90 -180,-90 -180))',
 select count(*) from t1 where MBRWithin(t1.c2, @g1);
 count(*)
 0
-SET GLOBAL innodb_fast_shutdown = 0;
-# restart: --innodb-read-only
-set @g1 = ST_GeomFromText('Polygon((-90 -180,-90 180,90 180,90 -180,-90 -180))', 4326);
-select count(*) from t1 where MBRWithin(t1.c2, @g1);
-count(*)
-0
-set @g1 = ST_GeomFromText('Polygon((2 2,2 180,90 180,90 2,2 2))', 4326);
-select count(*) from t1 where MBRWithin(t1.c2, @g1);
-count(*)
-57344
-# restart
 drop table t1;

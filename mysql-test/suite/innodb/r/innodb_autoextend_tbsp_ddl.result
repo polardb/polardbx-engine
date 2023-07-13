@@ -122,7 +122,7 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%myspace%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-myspace	662700032	4194304
+myspace	671088640	4194304
 DROP TABLE tsp;
 DROP TABLESPACE myspace;
 # Validate movement of table from file_per_table tablespace to general tablespace

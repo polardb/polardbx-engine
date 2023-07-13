@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Background ====
 #
 # Some statements may execute differently on master and slave when

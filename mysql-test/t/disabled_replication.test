@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 # Not GTIDs because it sets slave_sql_skip_counter
 # When log-bin, skip-log-bin and binlog-format options are specified, mask the warning.

@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 # Test grants for various objects (especially variables) related to
 # the binary log

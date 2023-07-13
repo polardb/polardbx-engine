@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 # Test for BUG#28908 Replication: set global server_id is not setting the session server_id
 

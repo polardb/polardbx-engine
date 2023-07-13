@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # Test that multiple compressed files can be passed to mysqlbinlog as direct

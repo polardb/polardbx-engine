@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # WL#7796 - WAIT_FOR_GTID_EXECUTED
 #
 # This test checks that a concurrent client can kill the waiting thread and

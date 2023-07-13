@@ -66,6 +66,7 @@ int Service::start(int port) {
 }
 
 void Service::closeThreadPool() {
+  if (shutdown_stage_1)  return;
   easy_eio_shutdown(pool_eio_);
   easy_eio_stop(pool_eio_);
   easy_eio_wait(pool_eio_);

@@ -33,6 +33,7 @@ SELECT @@innodb_temp_data_file_path;
 SELECT FILE_NAME FROM INFORMATION_SCHEMA.FILES
   WHERE TABLESPACE_NAME='innodb_temporary';
 
+--exit
 # Restart the server with a non-default innodb-temp-data-file-path and read only mode
 --let $restart_parameters = restart: --innodb-temp-data-file-path=newtemp:12M:autoextend
 --source include/restart_innodb_read_only.inc

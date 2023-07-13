@@ -103,10 +103,11 @@ void Paxos::shutdown() {
   changeStateQueue_.stop();
   appendLogQueue_.stop();
   commitDepQueue_.stop();
-  config_->forEach(&Server::stop, NULL);
-  config_->forEachLearners(&Server::stop, NULL);
+  if (config_.get() != nullptr) {
+    config_->forEach(&Server::stop, NULL);
+    config_->forEachLearners(&Server::stop, NULL);
+  }
   srv_->closeThreadPool();
-  srv_->shutdown();
   /* When Service::shutdown return, there is not backend worker left, so we can
    * release config_ now. */
   config_.reset();

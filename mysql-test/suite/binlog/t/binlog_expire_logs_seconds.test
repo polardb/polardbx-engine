@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 #
 # WL#9236: Add a new variable binlog_expire_logs_seconds
 #

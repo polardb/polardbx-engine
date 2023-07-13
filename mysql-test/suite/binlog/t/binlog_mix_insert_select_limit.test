@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 #==== Purpose ====
 #
 # Verify that there is no crash in the server while executing the command

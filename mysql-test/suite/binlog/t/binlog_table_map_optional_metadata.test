@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ################################################################################
 # WL#4618 RBR: extended table metadata in the binary log
 #

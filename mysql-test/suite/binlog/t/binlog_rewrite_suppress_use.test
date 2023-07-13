@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # WL#6404 - Add rewrite-db option to mysqlbinlog on RBR
 #
 # The test aims to check that the use of rewrite-db option of

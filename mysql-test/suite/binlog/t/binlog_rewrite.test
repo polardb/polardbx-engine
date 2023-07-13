@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 #
 # WL#5706/Bug#58712/Bug#11746378

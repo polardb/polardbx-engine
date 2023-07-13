@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # The purpose of this test is to ensure that the server properly disregards XA

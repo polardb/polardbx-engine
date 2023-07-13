@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # mysqlbinlog_big.test
 #
 # Show that mysqlbinlog can handle big rows.

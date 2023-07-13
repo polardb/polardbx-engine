@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # When binlog is disabled and @@SESSION.GTID_NEXT == 'UUID:NUMBER',

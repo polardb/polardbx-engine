@@ -245,6 +245,7 @@ innodb.instant_ddl_upgrade_metadata_debug         : WL#000 Lizard didn't support
 innodb.instant_ddl_upgrade_part_metadata_debug    : WL#000 Lizard didn't support in-place upgrade.
 innodb.instant_ddl_upgrade_update                 : WL#000 Lizard didn't support in-place upgrade.
 innodb.instant_ddl_upgrade_rollback               : WL#000 Lizard didn't support in-place upgrade.
+main.dd_schema_definition_debug                   : WL#000 Lizard didn't support in-place upgrade.
 
 # innodb-rollback-segments
 innodb.innodb_bug12400341                         : WL#000 Lizard didn't support adjust innodb-rollback-segments.
@@ -299,20 +300,20 @@ main.grant_dynamic				 				 : WL#21509040 start slave
 main.mysqlbinlog_raw_mode                        : WL#21509040 reset master
 main.rewrite_general_log                         : WL#21509040 change master
 main.dd_upgrade_partition                        : WL#21509040 disable binlog
-main.dd_upgrade_test                             : WL#21509040 disable temp
+main.dd_upgrade_test                             : WL#21509040 disable lizard
 main.fix_priv_tables                             : WL#21509040 check slave_master_info failed
 main.basedir                                     : WL#21509040 disable temp
 main.binlog_partial_json_warnings                : WL#21509040 binlog=stmt
 main.initialize_gtid                             : WL#21509040 not support gtid
-main.dictionary_tablespace                       : WL#21509040 disable temp
 main.mysqld_safe                                 : WL#21509040 disable temp
 main.log_tables_upgrade                          : WL#21509040 disable temp check failed
 main.persisted_variables_bugs                    : WL#21509040 reset master
 main.rpl_multi_source_mysqldump_slave            : WL#21509040 start slave
 main.mysql_upgrade_slave_master_info             : WL#21509040 slave_master_info
 main.populate_collations_read_only               : WL#21509040 not support innodb_read_only
-main.mysql_57_inplace_upgrade                    : WL#21509040 disable temp
-main.mysql_80_inplace_upgrade                    : WL#21509040 disable temp
+main.mysql_57_inplace_upgrade                    : WL#21509040 disable upgrade
+main.mysql_80_inplace_upgrade                    : WL#21509040 disable upgrade
+main.per_thread_connection_handler				 : WL#21509040 unstable
 main.dd_upgrade_cs                               : WL#21509040 not support start from no 3 nodes dir
 main.dd_upgrade_error_debug                      : WL#21509040 not support start from no 3 nodes dir
 main.dd_upgrade_error                            : WL#21509040 not support start from no 3 nodes dir
@@ -332,7 +333,6 @@ binlog.binlog_expire_logs_days_deprecation       : WL#21509040 binlog expire
 binlog.binlog_purge_binary_logs_stall            : WL#21509040 purge binlog
 binlog.binlog_cache_write_failure                : WL#21509040 commit failed
 binlog.binlog_index                              : WL#21509040 crash 
-binlog.binlog_max_extension                      : WL#21509040 disable tmp 
 binlog.binlog_restart_server_with_exhausted_index_value : WL#21509040 disable tmp 
 binlog.binlog_purge_binary_logs_to               : WL#21509040 crash
 binlog.binlog_reset_master_active_trx            : WL#21509040 binlog check failed
@@ -352,10 +352,29 @@ binlog_gtid.binlog_gtid_xa_prepare_failure_before_gtid_externalization 	: WL#001
 binlog_gtid.binlog_gtid_xa_rollback_failure_before_rollback_engines		: WL#001 wait for merge  @xiedao
 binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table		: WL#001 wait for merge  @xiedao
 binlog_gtid.binlog_gtid_table_readonly									: WL#001 wait for merge  @xiedao
-binlog_gtid.binlog_gtid_binlog_recovery_errors		 : WL#21509040 disable temp
+binlog_nogtid.feature_tc_log_identifier									: WL#001 wait for merge  @xiedao
+binlog_gtid.binlog_gtid_binlog_recovery_errors		 					: WL#001 wait for merge  @xiedao
+innodb.gtid_shutdown                                                    : WL#001 wait for merge  @xiedao
+innodb.ddl_crash_alter_partition										: WL#001 wait for merge  @xiedao
+innodb.tablespace_encrypt_2												: WL#001 wait for merge  @xiedao
+innodb.tablespace_encrypt_9												: WL#001 wait for merge  @xiedao
+innodb.tablespace_encrypt_10											: WL#001 wait for merge  @xiedao
+innodb.tablespace_encrypt_7												: WL#001 wait for merge  @xiedao
+innodb.innodb_bulk_create_index_debug									: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e01										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e02										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e03										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e04										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e05										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e06										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e07										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e08										: WL#001 wait for merge  @xiedao
+innodb_undo.truncate_recover_e09										: WL#001 wait for merge  @xiedao
 
-binlog_nogtid.binlog_gtid_simple_recovery        	 : WL#21509040 disable temp
-binlog_nogtid.binlog_persist_only_variables          : WL#21509040 disable temp
+binlog_nogtid.binlog_gtid_simple_recovery        	 : WL#21509040 binlog remove
+
+innodb_zip.16k                             				 : WL#21509040 @zanye
+
 
 federated.federated                            : WL#001 x-cluster does not support master / slave mode
 federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
@@ -398,10 +417,14 @@ innodb_undo.truncate_recover_08                  : WL#21509040 not support remov
 innodb_undo.truncate_recover_09                  : WL#21509040 not support remove file binlog*
 innodb.upgrade_orphan                            : WL#21509040 start from not 3 node dir
 innodb.dblwr_encrypt_recover1					 : WL#21509040 encrypt binlog
-innodb.innodb_read_only                          : WL#21509040 flush consensus_info failed
-innodb.innodb_read_only-2                        : WL#21509040 flush consensus_info failed
+innodb.innodb_read_only                          : WL#21509040 innodb-read-only
+innodb.innodb_read_only-2                        : WL#21509040 innodb-read-only
+innodb.innodb_read_only-1                        : WL#21509040 innodb-read-only
 
 service_sys_var_registration.sys_var_service_cl       : WL#21509040 not support restart --log-in
 perfschema.table_component_lifecycle                  : WL#21509040 write before consensus module init
 sys_vars.innodb_version_basic                         : WL#21509040 modify the version
 
+main.wl14965											:  WL#001 upgrade from 8027
+
+innodb.index_merge_threshold        					:  WL#001 index bug, both branch

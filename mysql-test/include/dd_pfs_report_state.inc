@@ -62,6 +62,8 @@ if ($object_alloc != '')
                  WHERE EVENT_NAME = 'memory/sql/dd::objects' AND
                        EVENT_NAME = Name AND
                        Query = 'savepoint');
+  select @diff as 'diff';
+  --echo object_alloc=$object_alloc
   let $assert_cond= @diff = $object_alloc;
   let $assert_text = '$operation' will allocate $object_alloc objects.;
   source include/assert.inc;
@@ -77,6 +79,8 @@ if ($object_free != '')
                  WHERE EVENT_NAME = 'memory/sql/dd::objects' AND
                        EVENT_NAME = Name AND
                        Query = 'savepoint');
+  select @diff as 'diff';
+  --echo object_free=$object_free
   let $assert_cond= @diff = $object_free;
   let $assert_text = '$operation' will free $object_free objects.;
   source include/assert.inc;
@@ -92,6 +96,9 @@ if ($object_count != '')
                  WHERE EVENT_NAME = 'memory/sql/dd::objects' AND
                        EVENT_NAME = Name AND
                        Query = 'savepoint');
+  select @diff as 'diff';
+  --echo object_count=$object_count
+
   let $assert_cond= @diff = $object_count;
   let $assert_text = '$operation' will leave $object_count objects.;
   source include/assert.inc;

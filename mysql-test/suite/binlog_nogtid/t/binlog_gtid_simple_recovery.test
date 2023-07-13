@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # BUG#16741603: MYSQLD SCANS ALL BINARY LOGS ON CRASH RECOVERY

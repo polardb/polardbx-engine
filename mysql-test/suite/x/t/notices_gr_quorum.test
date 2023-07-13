@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ################################################################################
 #
 # WL#10655: Global notification for GR membership changes

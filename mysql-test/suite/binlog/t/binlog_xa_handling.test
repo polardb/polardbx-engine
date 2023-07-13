@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ###############################################################################
 # Bug#19928622: ASSERTION `! IS_SET()' FAILED. | ABORT IN
 # DIAGNOSTICS_AREA::SET_OK_STATUS

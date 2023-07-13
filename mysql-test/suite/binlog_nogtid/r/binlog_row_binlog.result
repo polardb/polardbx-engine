@@ -663,6 +663,7 @@ binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (mysql.user)
 binlog.000001	#	Delete_rows	#	#	table_id: # flags: STMT_END_F
 binlog.000001	#	Xid	#	#	COMMIT /* XID */
+binlog.000001	#	Rotate	#	#	binlog.000002;pos=POS
 drop table t1,t2,t3,tt1;
 reset master;
 drop table if exists t3;

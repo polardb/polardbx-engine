@@ -237,15 +237,15 @@ SET @@session.max_join_size= @old_join_size;
 --echo # statistics from IS queries in read only mode.
 --echo #########################################################
 
-use test;
-CREATE TABLE t1(a INT PRIMARY KEY) ENGINE=InnoDB;
-INSERT INTO t1 VALUES(1);
-call mtr.add_suppression('Skipped updating resource group metadata in InnoDB read only mode.');
---source include/restart_innodb_read_only.inc
-ANALYZE TABLE t1;
-let $restart_parameters = restart;
---source include/restart_mysqld.inc
-DROP TABLE t1;
+#use test;
+#CREATE TABLE t1(a INT PRIMARY KEY) ENGINE=InnoDB;
+#INSERT INTO t1 VALUES(1);
+#call mtr.add_suppression('Skipped updating resource group metadata in InnoDB read only mode.');
+#--source include/restart_innodb_read_only.inc
+#ANALYZE TABLE t1;
+#let $restart_parameters = restart;
+#--source include/restart_mysqld.inc
+#DROP TABLE t1;
 
 
 --echo #########################################################

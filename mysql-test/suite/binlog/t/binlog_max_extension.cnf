@@ -1,2 +1,0 @@
-[mysqld]
-consensus_safe_for_reset_master=1

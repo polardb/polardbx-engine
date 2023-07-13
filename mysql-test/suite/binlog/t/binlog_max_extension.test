@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 #  BUG#40611: MySQL cannot make a binary log after sequential number beyond 
 #             unsigned long.

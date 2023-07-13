@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ######################## t/grant_alter_user_qa.test ###################################
 # Testing CREATE/ALTER/GRANT USER new syntax and                                      #
 # new variable "log-builtin-as-identified-by-password" default value "OFF"         #

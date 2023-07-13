@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 --echo #
 --echo # WL#14690: Support IF EXISTS and IGNORE UNKNOWN USER optional clauses

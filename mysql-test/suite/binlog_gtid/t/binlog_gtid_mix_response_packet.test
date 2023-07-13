@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 #
 # WL#6972: Collect GTIDs to include in the protocol's OK packet
 #

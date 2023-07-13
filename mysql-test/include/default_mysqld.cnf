@@ -75,7 +75,7 @@ consensus-io-thread_cnt=8
 consensus-worker-thread_cnt=8
 consensus_log_level=LOG_ERROR
 
-skip-slave-start=OFF
+skip-replica-start=OFF
 binlog_order_commits=OFF
 
 [mysqld.1]

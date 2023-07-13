@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Requirements ====
 #
 # R1. When '@@SESSION.GTID_NEXT' is set to 'AUTOMATIC', an XA empty

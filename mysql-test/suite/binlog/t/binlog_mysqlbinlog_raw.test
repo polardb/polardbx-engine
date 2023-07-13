@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ###############################################################################
 # Bug#24609402 MYSQLBINLOG --RAW DOES NOT GET ALL LATEST EVENTS
 #

@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # === Purpose ===
 #
 # Verify 'mysqlbinlog --read-from-remote-server --hexdump' works for

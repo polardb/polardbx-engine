@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # This test evaluates the output of mysqlbinlog with --require_row_format

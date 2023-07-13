@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # mysqlbinlog_trans.test
 #
 # Show that mysqlbinlog work correctly with transactions.

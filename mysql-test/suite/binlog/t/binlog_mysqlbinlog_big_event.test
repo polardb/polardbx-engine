@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 # Test mysqlbinlog with a binlog event larger than 128kb.
 # using have_binlog_format_statement to create a statement

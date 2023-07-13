@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 --echo #
 --echo # WL#12959: Contribution by Facebook: Added optional commenting of the
 --echo #   @@GLOBAL.GTID_PURGED by dump

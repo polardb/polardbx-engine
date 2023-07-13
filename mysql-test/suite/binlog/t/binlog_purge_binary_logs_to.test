@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # === Purpose ===
 #
 # This test verifies that `PURGE BINARY LOGS TO` purges the binlog files

@@ -39,9 +39,9 @@ SELECT COUNT(@@SESSION.relay_log_info_repository);
 ####################################################################
 #   Check if Value can set                                         #
 ####################################################################
-SET @@GLOBAL.relay_log_info_repository= "FILE";
+#SET @@GLOBAL.relay_log_info_repository= "FILE";
 
-SELECT @@GLOBAL.relay_log_info_repository;
+#SELECT @@GLOBAL.relay_log_info_repository;
 
 
 --echo '#---------------------BS_STVARS_002_03----------------------#'

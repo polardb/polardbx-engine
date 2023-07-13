@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ###############################################################################
 # Bug#21276561: FAILURE TO GENERATE GTID LEADS TO INCONSISTENCY
 #

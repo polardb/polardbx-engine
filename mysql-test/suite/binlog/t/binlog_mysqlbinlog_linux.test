@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # This test should run specifically on linux, given the toolchain
 # it needs to be able to execute properly
 # Also, Disable windows run due to Bug#29435008

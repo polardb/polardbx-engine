@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 RESET MASTER;
 SET @start_global_value = @@global.gtid_executed;

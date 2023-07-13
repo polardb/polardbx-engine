@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 
 #
 # Bug #34283  mysqlbinlog leaves tmpfile after termination

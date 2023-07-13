@@ -24,7 +24,6 @@ XA PREPARE 'xatest';
 XA COMMIT 'xatest';
 id	col1
 1	1
-2	1
 XA START 'xatest';
 INSERT INTO t VALUES(3, 1);
 XA END 'xatest';

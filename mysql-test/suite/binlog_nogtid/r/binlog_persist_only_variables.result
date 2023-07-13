@@ -47,7 +47,7 @@ INSERT INTO aliases(name) VALUES
 ('slave_parallel_workers'), ('slave_pending_jobs_size_max'),
 ('pseudo_slave_mode'), ('skip_slave_start');
 
-include/assert.inc [Expect 114 variables in the table.]
+include/assert.inc [Expect 117 variables in the table.]
 
 # Test SET PERSIST_ONLY
 SET PERSIST_ONLY binlog_cache_size = @@GLOBAL.binlog_cache_size;
@@ -77,6 +77,8 @@ SET PERSIST_ONLY binlog_transaction_compression = @@GLOBAL.binlog_transaction_co
 SET PERSIST_ONLY binlog_transaction_compression_level_zstd = @@GLOBAL.binlog_transaction_compression_level_zstd;
 SET PERSIST_ONLY binlog_transaction_dependency_history_size = @@GLOBAL.binlog_transaction_dependency_history_size;
 SET PERSIST_ONLY binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction_dependency_tracking;
+SET PERSIST_ONLY consensus_replicate_with_cache_log = @@GLOBAL.consensus_replicate_with_cache_log;
+SET PERSIST_ONLY consensus_safe_for_reset_master = @@GLOBAL.consensus_safe_for_reset_master;
 SET PERSIST_ONLY enforce_gtid_consistency = @@GLOBAL.enforce_gtid_consistency;
 SET PERSIST_ONLY group_replication_consistency = @@GLOBAL.group_replication_consistency;
 SET PERSIST_ONLY gtid_executed = @@GLOBAL.gtid_executed;
@@ -155,6 +157,7 @@ Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a fu
 SET PERSIST_ONLY replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
 SET PERSIST_ONLY replica_pending_jobs_size_max = @@GLOBAL.replica_pending_jobs_size_max;
 SET PERSIST_ONLY replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
+SET PERSIST_ONLY replica_read_timeout = @@GLOBAL.replica_read_timeout;
 SET PERSIST_ONLY replica_skip_errors = @@GLOBAL.replica_skip_errors;
 SET PERSIST_ONLY replica_sql_verify_checksum = @@GLOBAL.replica_sql_verify_checksum;
 SET PERSIST_ONLY replica_transaction_retries = @@GLOBAL.replica_transaction_retries;
@@ -262,16 +265,16 @@ SET PERSIST_ONLY sync_relay_log = @@GLOBAL.sync_relay_log;
 SET PERSIST_ONLY sync_relay_log_info = @@GLOBAL.sync_relay_log_info;
 SET PERSIST_ONLY sync_source_info = @@GLOBAL.sync_source_info;
 
-include/assert.inc [Expect 101 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 104 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 101 persisted variables in persisted_variables table.]
-include/assert.inc [Expect 101 persisted variables shown as PERSISTED in variables_info table.]
-include/assert.inc [Expect 101 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 104 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 104 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 104 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST. Verify persisted variable settings
@@ -300,6 +303,8 @@ RESET PERSIST binlog_transaction_compression;
 RESET PERSIST binlog_transaction_compression_level_zstd;
 RESET PERSIST binlog_transaction_dependency_history_size;
 RESET PERSIST binlog_transaction_dependency_tracking;
+RESET PERSIST consensus_replicate_with_cache_log;
+RESET PERSIST consensus_safe_for_reset_master;
 RESET PERSIST enforce_gtid_consistency;
 RESET PERSIST group_replication_consistency;
 RESET PERSIST gtid_executed;
@@ -353,6 +358,7 @@ RESET PERSIST replica_parallel_type;
 RESET PERSIST replica_parallel_workers;
 RESET PERSIST replica_pending_jobs_size_max;
 RESET PERSIST replica_preserve_commit_order;
+RESET PERSIST replica_read_timeout;
 RESET PERSIST replica_skip_errors;
 RESET PERSIST replica_sql_verify_checksum;
 RESET PERSIST replica_transaction_retries;

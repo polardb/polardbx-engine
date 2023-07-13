@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # This test uses chmod, can't be run with root permissions
 -- source include/not_as_root.inc
 

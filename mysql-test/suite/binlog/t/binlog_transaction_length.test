@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ################################################################################
 # Validate that logged transactions have the correct transaction length on the
 # GTID event.

@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 #
 # The test verifies proper computation of logical timestamps and
 # their logging when GTID is ON in few situations.

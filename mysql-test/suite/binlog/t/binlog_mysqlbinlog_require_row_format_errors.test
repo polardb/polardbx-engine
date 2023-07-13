@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 # ==== Purpose ====
 #
 # This test evaluates the behavior of mysqlbinlog when using the

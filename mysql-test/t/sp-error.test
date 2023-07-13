@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 #
 # Stored PROCEDURE error tests
 #

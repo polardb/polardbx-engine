@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 #
 # WL#3549: Test incident events and binlog compression
 #

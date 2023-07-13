@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ###############################################################################
 # Bug#17942050:KILL OF TRUNCATE TABLE WILL LEAD TO BINARY LOG WRITTEN WHILE
 # ROWS REMAINS

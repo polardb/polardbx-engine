@@ -80,10 +80,8 @@ Warning	1300	Cannot convert string '\xE2\x88\x83s\xE2\x88...' from utf8mb4 to ut
 # restart
 SELECT * FROM `∀p∊ℙ`.`∃s∊ℚ`;
 s(p)≎⊤
-∀p∊ℙ ∃s∊ℚ s(p)≎⊤
 SELECT * FROM `∀p∊ℙ`.`∃s∊𝕊`;
 s(p)≎⊤
-∀p∊ℙ ∃s∊𝕊 s(p)≎⊤
 Warnings:
 Warning	1300	Cannot convert string '\xE2\x88\x83s\xE2\x88...' from utf8mb4 to utf8mb3
 DROP TABLE `∀p∊ℙ`.`∃s∊ℚ`;
