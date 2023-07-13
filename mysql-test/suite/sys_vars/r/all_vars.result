@@ -151,6 +151,7 @@ disable_wait_commitindex
 disabled_storage_engines
 disabled_storage_engines
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -180,6 +181,8 @@ gcn_write_event
 =======
 >>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 >>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
+=======
+>>>>>>> [Raft] fix compile error after rebase feature_mix_binlog_relaylog on master-8.0.32 181647e53
 enable_appliedindex_checker
 enable_appliedindex_checker
 explain_format
@@ -360,6 +363,7 @@ rds_audit_log_strategy
 rds_audit_log_version
 rds_audit_log_version
 <<<<<<< HEAD
+<<<<<<< HEAD
 rds_kill_connections
 rds_kill_connections
 rds_kill_user_list
@@ -367,10 +371,10 @@ rds_kill_user_list
 =======
 <<<<<<< HEAD
 >>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
-rds_release_date
-rds_release_date
 =======
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
+>>>>>>> [Raft] fix compile error after rebase feature_mix_binlog_relaylog on master-8.0.32 181647e53
+rds_release_date
+rds_release_date
 rds_version
 rds_version
 read_lsn

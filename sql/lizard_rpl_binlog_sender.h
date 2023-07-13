@@ -51,10 +51,12 @@ class Delay_binlog_sender {
                   bool _in_exclude_group,
                   binary_log::Log_event_type event_type) {
     switch (event_type) {
+      case binary_log::CONSENSUS_LOG_EVENT:
+        m_events[0].set(_packet, _log_file, _log_pos, _in_exclude_group);
+        break;
       case binary_log::GCN_LOG_EVENT:
         m_events[1].set(_packet, _log_file, _log_pos, _in_exclude_group);
         break;
-      // TODO: Cons_index_log
       default:
         assert(0);
     }

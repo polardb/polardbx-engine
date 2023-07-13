@@ -43,7 +43,7 @@ void start_sjg_and_enque_gaq(Relay_log_info *rli, Log_event *ev) {
   rli->mts_groups_assigned++;
 
   rli->curr_group_isolated = false;
-  group.reset(ev->common_header->log_pos, rli->mts_groups_assigned);
+  group.reset(ev->common_header->log_pos, rli->mts_groups_assigned, ev->consensus_index);
   // the last occupied GAQ's array index
   gaq->assigned_group_index = gaq->en_queue(&group);
   DBUG_PRINT("info", ("gaq_idx= %ld  gaq->size=%zu", gaq->assigned_group_index,

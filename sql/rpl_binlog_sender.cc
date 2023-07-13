@@ -704,7 +704,7 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
 
       /** Cannot send Gcn_log_event immediately, because only by reading the
       gtid event can we know whether the transaction should be skipped. */
-      if (event_type == binary_log::GCN_LOG_EVENT) {
+      if (event_type == binary_log::GCN_LOG_EVENT || event_type == binary_log::CONSENSUS_LOG_EVENT) {
         m_delay_sender.push_event(m_packet, log_file, log_pos, in_exclude_group,
                                   event_type);
         continue;
