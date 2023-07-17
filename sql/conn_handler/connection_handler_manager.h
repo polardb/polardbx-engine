@@ -38,6 +38,10 @@ class THD;
 struct mysql_cond_t;
 struct mysql_mutex_t;
 
+namespace im {
+class Internal_account_ctx;
+}
+
 /**
   Functions to notify interested connection handlers
   of events like beginning of wait and end of wait and post-kill
@@ -184,6 +188,7 @@ class Connection_handler_manager {
   */
   static void reset_max_used_connections();
 
+ private:
   /**
     Decrease the number of current connections.
   */
@@ -193,10 +198,12 @@ class Connection_handler_manager {
     /*
       Notify shutdown thread when last connection is done with its job
     */
-    if (connection_count == 0) mysql_cond_signal(&COND_connection_count);
+    if (connection_count == 0)
+      mysql_cond_signal(&COND_connection_count);
     mysql_mutex_unlock(&LOCK_connection_count);
   }
 
+ public:
   void inc_aborted_connects() { m_aborted_connects++; }
 
   ulong aborted_connects() const { return m_aborted_connects; }
@@ -237,5 +244,8 @@ class Connection_handler_manager {
     wat till connection_count to become zero.
   */
   static void wait_till_no_connection();
+
+ public:
+  friend class im::Internal_account_ctx;
 };
 #endif  // CONNECTION_HANDLER_MANAGER_INCLUDED.

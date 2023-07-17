@@ -282,9 +282,6 @@ THD *create_thd(Channel_info *channel_info) {
 
 void destroy_channel_info(Channel_info *channel_info) { delete channel_info; }
 
-void dec_connection_count() {
-  Connection_handler_manager::dec_connection_count();
-}
 
 void increment_aborted_connects() {
   Connection_handler_manager::get_instance()->inc_aborted_connects();

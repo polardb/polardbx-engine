@@ -349,7 +349,7 @@ static void *handle_connection(void *arg) {
       channel_info->send_error_and_close_channel(ER_SERVER_SHUTDOWN, 0, false);
       delete channel_info;
       channel_info = nullptr;
-      im::global_manager_dec_connection(thd);
+      im::global_manager_dec_connection(nullptr);
       break;
     }
   }
