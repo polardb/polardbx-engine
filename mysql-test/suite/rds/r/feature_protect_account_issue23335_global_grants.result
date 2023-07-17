@@ -1,0 +1,62 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+set global opt_enable_rds_priv_strategy=on;
+create database my_db;
+#First user which is maintain user
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%' WITH GRANT OPTION;
+show grants for 'u0'@'%';
+Grants for u0@%
+GRANT USAGE ON *.* TO `u0`@`%`
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO `u0`@`%` WITH GRANT OPTION
+GRANT ALL PRIVILEGES ON `my_db`.* TO `u0`@`%`
+#Second user which is normal user
+create user 'u1'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT
+OPTION;
+show grants for 'u1'@'%';
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+test the grant or insert operation;
+GRANT BINLOG_ADMIN, SYSTEM_VARIABLES_ADMIN ON *.* TO 'u1'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+insert into mysql.global_grants(user, host, priv, WITH_GRANT_OPTION) values('u1',
+'%',
+'SYSTEM_VARIABLES_ADMIN',
+'Y');
+ERROR HY000: Rerserved user or privileges can't be modified
+commit;
+show grants for 'u1'@'%';
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+test the revoke or delete maintain user
+revoke SYSTEM_VARIABLES_ADMIN on *.* from 'u0'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+delete from mysql.global_grants where user='u0';
+ERROR HY000: Rerserved user or privileges can't be modified
+commit;
+test revoke or delete myself;
+grant BINLOG_ADMIN, SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%'  WITH GRANT OPTION;
+revoke SYSTEM_VARIABLES_ADMIN ON *.* from 'u1'@'%';
+delete from mysql.global_grants where user='u1';
+commit;
+flush privileges;
+show grants;
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+test revoke or update
+update mysql.global_grants set user='u1' where user='u0';
+ERROR HY000: Rerserved user or privileges can't be modified
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global opt_enable_rds_priv_strategy=off;
+include/rpl_end.inc

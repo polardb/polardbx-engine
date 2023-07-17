@@ -798,6 +798,9 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
+ --opt-enable-rds-priv-strategy 
+ When this option is enabled,it will protect reserved
+ account and privileges
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
@@ -1172,6 +1175,10 @@ The following options may be given as the first argument:
  --rds-audit-log-version=name 
  The version of audit log, currently support MYSQL_V1 and
  MYSQL_V3.
+ --rds-kill-connections=# 
+ Max conenction count for rds kill user
+ --rds-kill-user-list=name 
+ user can kill non-super user, string split by ','
  --rds-version[=#]   The mysql patch version
  --read-buffer-size=# 
  Each thread that does a sequential scan allocates a
@@ -1932,6 +1939,7 @@ old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
 only-report-warning-when-skip-sequence TRUE
+opt-enable-rds-priv-strategy FALSE
 opt-indexstat TRUE
 opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000
@@ -2041,6 +2049,8 @@ rds-audit-log-skip FALSE
 rds-audit-log-statement-policy ALL
 rds-audit-log-strategy ASYNCHRONOUS
 rds-audit-log-version MYSQL_V1
+rds-kill-connections 0
+rds-kill-user-list (No default value)
 rds-version 32
 read-buffer-size 131072
 read-only FALSE

@@ -10052,6 +10052,9 @@ ER_GP_WAIT_TIMEOUT
 ER_IA_TOO_MANY_CONNECTIONS
   eng "User %-.64s already has more than %-.64s active conections"
 
+ER_RESERVED_USER_OR_PRIVS
+  eng "Rerserved user or privileges can't be modified"
+
 #
 #  End of RDS error message.
 #

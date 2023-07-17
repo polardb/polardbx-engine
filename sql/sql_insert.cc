@@ -57,6 +57,7 @@
 #include "prealloced_array.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_grant_all_columns
+#include "sql/auth/sql_guard.h"
 #include "sql/binlog.h"
 #include "sql/create_field.h"
 #include "sql/dd/cache/dictionary_client.h"
@@ -636,7 +637,10 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
         // continue when IGNORE clause is used.
         continue;
       }
-
+      if (im::guard_record(thd, insert_table, im::Guard_type::GUARD_INSERT)) {
+        has_error = true;
+        break;
+      }
       if (write_record(thd, insert_table, &info, &update)) {
         has_error = true;
         break;

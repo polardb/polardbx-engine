@@ -74,6 +74,10 @@ namespace histograms {
 class Histogram;
 }
 
+namespace im {
+class Entity_guard;
+};
+
 class ACL_internal_schema_access;
 class ACL_internal_table_access;
 class COND_EQUAL;
@@ -1273,6 +1277,8 @@ struct TABLE_SHARE {
  public:
   /** Sequence attributes represent that it is sequence table */
   Sequence_property *sequence_property;
+
+  im::Entity_guard *entity_guard;
 };
 
 /**
@@ -2397,6 +2403,9 @@ struct TABLE {
 
   /** Table snapshot that come from snapshot hint on statement. */
   lizard::Table_snapshot table_snapshot;
+
+  /* The Entity guard that is cloned from TABLE_SHARE */
+  im::Entity_guard *entity_guard;
 };
 
 static inline void empty_record(TABLE *table) {

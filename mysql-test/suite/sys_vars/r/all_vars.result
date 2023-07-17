@@ -143,6 +143,8 @@ max_length_for_sort_data
 max_length_for_sort_data
 only_report_warning_when_skip_sequence
 only_report_warning_when_skip_sequence
+opt_enable_rds_priv_strategy
+opt_enable_rds_priv_strategy
 opt_indexstat
 opt_indexstat
 opt_tablestat
@@ -190,6 +192,10 @@ rds_audit_log_strategy
 rds_audit_log_strategy
 rds_audit_log_version
 rds_audit_log_version
+rds_kill_connections
+rds_kill_connections
+rds_kill_user_list
+rds_kill_user_list
 rds_release_date
 rds_release_date
 rds_version

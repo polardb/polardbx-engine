@@ -1,0 +1,108 @@
+--source include/have_log_bin.inc
+
+--source include/master-slave.inc
+
+connect(con_root,localhost, root,,,$MASTER_MYPORT);
+
+connection con_root;
+
+set global opt_enable_rds_priv_strategy=on;
+
+create database my_db;
+
+#
+--echo #First user which is maintain user
+#
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%' WITH GRANT OPTION;
+show grants for 'u0'@'%';
+
+#
+--echo #Second user which is normal user
+#
+create user 'u1'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+      REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+      LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+      SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+      CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT
+      OPTION;
+show grants for 'u1'@'%';
+
+
+
+#
+-- echo test the grant or insert operation;
+#
+connect(con_u1, localhost, u1,,,$MASTER_MYPORT);
+
+connection con_u1;
+
+--error ER_RESERVED_USER_OR_PRIVS
+GRANT BINLOG_ADMIN, SYSTEM_VARIABLES_ADMIN ON *.* TO 'u1'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.global_grants(user, host, priv, WITH_GRANT_OPTION) values('u1',
+                                                                       '%',
+                                                                       'SYSTEM_VARIABLES_ADMIN',
+                                                                       'Y');
+commit;
+show grants for 'u1'@'%';
+
+
+#
+-- echo test the revoke or delete maintain user
+#
+
+connection con_u1;
+
+--error ER_RESERVED_USER_OR_PRIVS
+revoke SYSTEM_VARIABLES_ADMIN on *.* from 'u0'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+delete from mysql.global_grants where user='u0';
+commit;
+
+
+#
+--echo test revoke or delete myself;
+#
+connection con_root;
+
+grant BINLOG_ADMIN, SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%'  WITH GRANT OPTION;
+
+connection con_u1;
+revoke SYSTEM_VARIABLES_ADMIN ON *.* from 'u1'@'%';
+
+delete from mysql.global_grants where user='u1';
+commit;
+flush privileges;
+
+show grants;
+
+
+#
+-- echo test revoke or update
+#
+
+connection con_u1;
+
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.global_grants set user='u1' where user='u0';
+
+
+#
+
+disconnect con_u1;
+
+connection con_root;
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global opt_enable_rds_priv_strategy=off;
+
+
+sync_slave_with_master;
+--source include/rpl_end.inc
+

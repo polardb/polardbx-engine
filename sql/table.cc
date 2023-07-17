@@ -68,6 +68,7 @@
 #include "sql-common/json_path.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // acl_getroot
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/binlog.h"                      // mysql_bin_log
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache_Dictionary_client
@@ -432,6 +433,10 @@ TABLE_SHARE *alloc_table_share(const char *db, const char *table_name,
     /** Must destruct it without free */
     share->sequence_property = new (&mem_root) Sequence_property();
 
+    /* Lookup the predefined entity guard */
+    share->entity_guard = im::guard_clone(
+        im::internal_entity_guard_lookup(key, key_length), &mem_root);
+
     share->mem_root = std::move(mem_root);
     mysql_mutex_init(key_TABLE_SHARE_LOCK_ha_data, &share->LOCK_ha_data,
                      MY_MUTEX_INIT_FAST);
@@ -497,6 +502,8 @@ void init_tmp_table_share(THD *thd, TABLE_SHARE *share, const char *key,
   share->table_map_id = (ulonglong)thd->query_id;
 
   share->m_flush_tickets.clear();
+
+  share->entity_guard = nullptr;
 
   share->sequence_property = new (&share->mem_root) Sequence_property();
 }
@@ -581,6 +588,7 @@ void TABLE_SHARE::destroy() {
 #ifdef HAVE_PSI_TABLE_INTERFACE
   PSI_TABLE_CALL(release_table_share)(m_psi);
 #endif
+  guard_destroy(entity_guard);
   ::destroy(sequence_property);
 
   /*
@@ -3256,6 +3264,8 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   } else {
     outparam->no_replicate = false;
   }
+  /* Clone Entity guard */
+  outparam->entity_guard = im::guard_clone(share->entity_guard, root);
 
   /* Increment the opened_tables counter, only when open flags set. */
   if (db_stat) thd->status_var.opened_tables++;
@@ -3281,6 +3291,7 @@ err:
   }
   outparam->file = nullptr;  // For easier error checking
   outparam->db_stat = 0;
+  im::guard_destroy(outparam->entity_guard);
   if (!internal_tmp) root->Clear();
   my_free(const_cast<char *>(outparam->alias));
   return error;
@@ -3329,6 +3340,7 @@ int closefrm(TABLE *table, bool free_share) {
     else
       free_table_share(table->s);
   }
+  im::guard_destroy(table->entity_guard);
   table->mem_root.Clear();
   return error;
 }

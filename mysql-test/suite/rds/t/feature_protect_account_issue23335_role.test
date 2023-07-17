@@ -1,0 +1,100 @@
+--source include/have_log_bin.inc
+
+--source include/master-slave.inc
+
+connect(con_root,localhost, root,,,$MASTER_MYPORT);
+
+connection con_root;
+
+set global opt_enable_rds_priv_strategy=on;
+
+create database my_db;
+
+#
+--echo #First user which is maintain user
+#
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%' WITH GRANT OPTION;
+grant 'root'@'localhost' to 'u0'@'%';
+show grants for 'u0'@'%';
+
+
+#
+--echo #Second user which is normal user
+#
+create user 'u1'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+      REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+      LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+      SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+      CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT
+      OPTION;
+grant ROLE_ADMIN ON *.* to  'u1'@'%' with grant option;
+show grants for 'u1'@'%';
+
+create user 'u2'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+      REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+      LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+      SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+      CREATE ROLE, DROP ROLE ON *.* TO `u2`@`%` WITH GRANT
+      OPTION;
+show grants for 'u2'@'%';
+
+
+#
+-- echo test the grant or insert role;
+#
+connect(con_u1, localhost, u1,,,$MASTER_MYPORT);
+
+connection con_u1;
+
+grant 'u2'@'%' to 'u1'@'%';
+revoke 'u2'@'%' from 'u1'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+grant 'u0'@'%' to 'u1'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.role_edges(from_host, from_user, to_host, to_user,
+                             WITH_ADMIN_OPTION) value ('%', 'u0', 'u1', '%', 'N');
+commit;
+#
+
+#
+-- echo test rovoke or update role;
+#
+connection con_u1;
+
+--error ER_RESERVED_USER_OR_PRIVS
+revoke INSERT ON my_db.* from 'u0'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.role_edges set to_user='u1' where to_user='u0';
+commit;
+
+
+#
+-- echo test the delete role;
+#
+
+connection con_u1;
+
+--error ER_RESERVED_USER_OR_PRIVS
+delete from mysql.role_edges where from_user='root';
+
+
+disconnect con_u1;
+
+connection con_root;
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+drop user 'u2'@'%';
+set global opt_enable_rds_priv_strategy=off;
+
+
+sync_slave_with_master;
+--source include/rpl_end.inc
+

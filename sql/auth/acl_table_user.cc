@@ -50,6 +50,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "sql/auth/partial_revokes.h"
 #include "sql/auth/sql_auth_cache.h"     /* global_acl_memory */
 #include "sql/auth/sql_authentication.h" /* Cached_authentication_plugins */
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_user_table.h"     /* Acl_table_intact */
 #include "sql/auth/user_table.h"         /* replace_user_table */
 #include "sql/field.h"     /* Field, Field_json, Field_enum, TYPE_OK */
@@ -2155,6 +2156,9 @@ int replace_user_table(THD *thd, TABLE *table, LEX_USER *combo, ulong rights,
   assert(assert_acl_cache_write_lock(thd));
 
   return_value = user_table.driver();
+  if (im::guard_record(thd, table, im::Guard_type::GUARD_UPDATE)) {
+    return_value.error = -1;
+  }
 
   if (!(return_value.error || return_value.skip_cache_update)) {
     bool old_row_exists = (user_table.get_operation_mode() ==

@@ -771,6 +771,7 @@ MySQL clients support the protocol:
 #endif
 #include "sql/auth/auth_common.h"         // grant_init
 #include "sql/auth/sql_authentication.h"  // init_rsa_keys
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_internal_account.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/auto_thd.h"   // Auto_THD
@@ -2696,6 +2697,7 @@ static void clean_up(bool print_message) {
 
   udf_deinit_globals();
   im::internal_account_ctx_destroy();
+  im::internal_guard_strategy_shutdown();
 
   object_statistics_context_destroy();
   destroy_performance_point();
@@ -7326,6 +7328,8 @@ int mysqld_main(int argc, char **argv)
   if (init_error_log()) unireg_abort(MYSQLD_ABORT_EXIT);
   if (!opt_validate_config) adjust_related_options(&requested_open_files);
 
+  im::internal_guard_strategy_init(opt_initialize);
+  
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
   if (heo_error == 0) {
     if (!is_help_or_validate_option() && !opt_initialize) {

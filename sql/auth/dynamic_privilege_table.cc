@@ -44,6 +44,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "sql/auth/auth_common.h"
 #include "sql/auth/auth_internal.h"
 #include "sql/auth/sql_auth_cache.h"
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_user_table.h"
 #include "sql/current_thd.h"
 #include "sql/field.h"
@@ -222,6 +223,10 @@ bool modify_dynamic_privileges_in_table(THD *thd, TABLE *table,
       DBUG_PRINT("note",
                  ("Delete dynamic privilege %s for `%s`@`%s`", privilege.str,
                   auth_id.first.str, auth_id.second.str));
+      if ((im::guard_record(thd, table,
+                            im::Guard_type::GUARD_DELETE, 0))) {
+        return true;
+      }
       ret = table->file->ha_delete_row(table->record[0]);
     } else if (ret == HA_ERR_KEY_NOT_FOUND) {
       /* If the key didn't exist the record is already gone and all is well. */
@@ -233,6 +238,10 @@ bool modify_dynamic_privileges_in_table(THD *thd, TABLE *table,
                ("Insert dynamic privilege %s for `%s`@`%s` %s", privilege.str,
                 auth_id.first.str, auth_id.second.str,
                 (with_grant_option == true ? "WITH GRANT OPTION" : "")));
+    if (im::guard_record(thd, table,
+                         im::Guard_type::GUARD_INSERT)) {
+      return true;
+    }
     ret = table->file->ha_write_row(table->record[0]);
   }
   return ret != 0;

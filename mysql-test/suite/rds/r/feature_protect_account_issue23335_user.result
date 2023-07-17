@@ -1,0 +1,103 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+set global opt_enable_rds_priv_strategy=on;
+create database my_db;
+#First user which is maintain user
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+show grants for 'u0'@'%';
+Grants for u0@%
+GRANT USAGE ON *.* TO `u0`@`%`
+GRANT ALL PRIVILEGES ON `my_db`.* TO `u0`@`%`
+#Second user which is normal user
+create user 'u1'@'%';
+grant all privileges on *.* to 'u1'@'%' with grant option;
+revoke super on *.* from 'u1'@'%';
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+show grants for 'u1'@'%';
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT APPLICATION_PASSWORD_ADMIN,AUDIT_ABORT_EXEMPT,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,FIREWALL_EXEMPT,FLUSH_OPTIMIZER_COSTS,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_USER_ID,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,XA_RECOVER_ADMIN ON *.* TO `u1`@`%` WITH GRANT OPTION
+#the u0 account is in maintain_user_list;
+create user 'u0_0'@'%';
+grant create, insert  on my_db.* to 'u0_0'@'%';
+grant super on *.* to 'u0_0'@'%';
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+revoke insert on my_db.* from 'u0_0'@'%';
+drop user 'u0_0'@'%';
+create user 'xx'@'%';
+grant create, insert  on my_db.* to 'xx'@'%';
+grant super on *.* to 'xx'@'%';
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+revoke insert on my_db.* from 'xx'@'%';
+drop user 'xx'@'%';
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+insert into mysql.user(host, user) values('%', 'xx');
+Warnings:
+Warning	1364	Field 'ssl_cipher' doesn't have a default value
+Warning	1364	Field 'x509_issuer' doesn't have a default value
+Warning	1364	Field 'x509_subject' doesn't have a default value
+update mysql.user set super_priv='Y' where user='xx';
+update mysql.user set create_priv='Y' where user='xx';
+commit;
+flush privileges;
+show grants for 'xx'@'%';
+Grants for xx@%
+GRANT CREATE, SUPER ON *.* TO `xx`@`%`
+delete from mysql.user where user='xx';
+flush privileges;
+commit;
+#normal user cann't insert/update/delete reserved user.
+create user 'u1_0'@'%';
+grant create, insert  on *.* to 'u1_0'@'%';
+revoke insert on *.* from 'u1_0'@'%';
+drop user 'u1_0'@'%';
+#create user failed if target username is in maintain_user_list
+create user 'xx'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+SET PASSWORD FOR 'u0'@'%' = 'xx';
+ERROR HY000: Rerserved user or privileges can't be modified
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+insert into mysql.user(host, user) values ('%', 'xx');
+ERROR HY000: Rerserved user or privileges can't be modified
+insert into mysql.user(host, user, super_priv) values ('%', 'zz', 'Y');
+ERROR HY000: Rerserved user or privileges can't be modified
+rollback;
+create user 'xx'@'%';
+grant create, insert  on *.* to 'xx'@'%';
+grant super on *.* to 'xx'@'%';
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+grant alter on *.* to 'xx'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+revoke create on *.* from 'xx'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.user set super_priv='N' where user='xx';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.user set file_priv='Y' where user='xx';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.user set shutdown_priv='Y' where user='xx';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.user set create_tablespace_priv='Y' where user='xx';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.user set user='xx' where user='u1';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.user set super_priv='N';
+ERROR HY000: Rerserved user or privileges can't be modified
+delete from mysql.user where user='xx';
+ERROR HY000: Rerserved user or privileges can't be modified
+delete from mysql.user;
+ERROR HY000: Rerserved user or privileges can't be modified
+rollback;
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+drop user 'xx'@'%';
+set global opt_enable_rds_priv_strategy=off;
+include/rpl_end.inc

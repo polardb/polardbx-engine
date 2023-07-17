@@ -44,6 +44,7 @@
 #include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
+#include "sql/auth/sql_guard.h"
 #include "sql/binlog.h"            // mysql_bin_log
 #include "sql/debug_sync.h"        // DEBUG_SYNC
 #include "sql/filesort.h"          // Filesort
@@ -118,6 +119,9 @@ bool DeleteCurrentRowAndProcessTriggers(THD *thd, TABLE *table,
                                           /*old_row_is_record1=*/false)) {
       return true;
     }
+  }
+  if ((im::guard_record(thd, table, im::Guard_type::GUARD_DELETE, 0))) {
+    return true;
   }
 
   if (const int delete_error = table->file->ha_delete_row(table->record[0]);

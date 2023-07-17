@@ -58,6 +58,7 @@
 #include "sql/auth/auth_internal.h"
 #include "sql/auth/sql_auth_cache.h"
 #include "sql/auth/sql_authentication.h"
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/binlog.h" /* mysql_bin_log.is_open() */
 #include "sql/debug_sync.h"
@@ -2046,6 +2047,11 @@ static int modify_grant_table(TABLE *table, Field *host_field,
                       system_charset_info);
     user_field->store(user_to->user.str, user_to->user.length,
                       system_charset_info);
+    if (((error = im::guard_record(table->in_use, table,
+                                   im::Guard_type::GUARD_UPDATE)))) {
+      error = -1;
+      goto end;
+    }
     error = table->file->ha_update_row(table->record[1], table->record[0]);
     assert(error != HA_ERR_FOUND_DUPP_KEY);
     assert(table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
@@ -2056,6 +2062,11 @@ static int modify_grant_table(TABLE *table, Field *host_field,
                     error = HA_ERR_LOCK_DEADLOCK;);
   } else {
     /* delete */
+    if (((error = im::guard_record(table->in_use, table,
+                                   im::Guard_type::GUARD_DELETE, 0)))) {
+      error = -1;
+      goto end;
+    }
     error = table->file->ha_delete_row(table->record[0]);
     assert(table->file->ht->db_type == DB_TYPE_NDBCLUSTER ||
            error != HA_ERR_LOCK_DEADLOCK);
@@ -2064,7 +2075,7 @@ static int modify_grant_table(TABLE *table, Field *host_field,
     DBUG_EXECUTE_IF("wl7158_modify_grant_table_2",
                     error = HA_ERR_LOCK_DEADLOCK;);
   }
-
+end:
   return error;
 }
 

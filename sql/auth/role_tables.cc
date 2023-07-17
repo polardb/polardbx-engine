@@ -40,6 +40,7 @@
 #include "mysqld_error.h"
 #include "sql/auth/auth_internal.h"
 #include "sql/auth/sql_auth_cache.h"
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_user_table.h"
 #include "sql/field.h"
 #include "sql/handler.h"
@@ -106,6 +107,9 @@ bool modify_role_edges_in_table(THD *thd, TABLE *table,
       DBUG_PRINT("note", ("Delete role edge (`%s`@`%s`, `%s`@`%s`)",
                           from_user.first.str, from_user.second.str,
                           to_user.first.str, to_user.second.str));
+      if ((im::guard_record(thd, table, im::Guard_type::GUARD_DELETE, 0))) {
+        return true;
+      }
       ret = table->file->ha_delete_row(table->record[0]);
     } else if (ret == HA_ERR_KEY_NOT_FOUND) {
       /* If the key didn't exist the record is already gone and all is well. */
@@ -117,6 +121,9 @@ bool modify_role_edges_in_table(THD *thd, TABLE *table,
       DBUG_PRINT("note", ("Insert role edge (`%s`@`%s`, `%s`@`%s`)",
                           from_user.first.str, from_user.second.str,
                           to_user.first.str, to_user.second.str));
+      if ((im::guard_record(thd, table, im::Guard_type::GUARD_INSERT, 0))) {
+        return true;
+      }
       ret = table->file->ha_write_row(table->record[0]);
     } else if (ret == 0 && with_admin_option_char == 'Y') {
       /*
@@ -134,6 +141,9 @@ bool modify_role_edges_in_table(THD *thd, TABLE *table,
       store_record(table, record[1]);
       table->field[MYSQL_ROLE_EDGES_FIELD_TO_WITH_ADMIN_OPT]->store(
           &with_admin_option_char, 1, system_charset_info, CHECK_FIELD_IGNORE);
+      if ((im::guard_record(thd, table, im::Guard_type::GUARD_UPDATE, 0))) {
+        return true;
+      }
       if (compare_records(
               table))  // if we already have WITH ADMIN this is a NOP
         ret = table->file->ha_update_row(table->record[1], table->record[0]);

@@ -1,0 +1,65 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+set global opt_enable_rds_priv_strategy=on;
+create database my_db;
+#First user which is maintain user
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%' WITH GRANT OPTION;
+grant 'root'@'localhost' to 'u0'@'%';
+show grants for 'u0'@'%';
+Grants for u0@%
+GRANT USAGE ON *.* TO `u0`@`%`
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO `u0`@`%` WITH GRANT OPTION
+GRANT ALL PRIVILEGES ON `my_db`.* TO `u0`@`%`
+GRANT `root`@`localhost` TO `u0`@`%`
+#Second user which is normal user
+create user 'u1'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT
+OPTION;
+grant ROLE_ADMIN ON *.* to  'u1'@'%' with grant option;
+show grants for 'u1'@'%';
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT ROLE_ADMIN ON *.* TO `u1`@`%` WITH GRANT OPTION
+create user 'u2'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+CREATE ROLE, DROP ROLE ON *.* TO `u2`@`%` WITH GRANT
+OPTION;
+show grants for 'u2'@'%';
+Grants for u2@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u2`@`%` WITH GRANT OPTION
+test the grant or insert role;
+grant 'u2'@'%' to 'u1'@'%';
+revoke 'u2'@'%' from 'u1'@'%';
+grant 'u0'@'%' to 'u1'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+insert into mysql.role_edges(from_host, from_user, to_host, to_user,
+WITH_ADMIN_OPTION) value ('%', 'u0', 'u1', '%', 'N');
+ERROR HY000: Rerserved user or privileges can't be modified
+commit;
+test rovoke or update role;
+revoke INSERT ON my_db.* from 'u0'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.role_edges set to_user='u1' where to_user='u0';
+ERROR HY000: Rerserved user or privileges can't be modified
+commit;
+test the delete role;
+delete from mysql.role_edges where from_user='root';
+ERROR HY000: Rerserved user or privileges can't be modified
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+drop user 'u2'@'%';
+set global opt_enable_rds_priv_strategy=off;
+include/rpl_end.inc

@@ -1,0 +1,136 @@
+--source include/have_log_bin.inc
+
+--source include/master-slave.inc
+
+connect(con_root,localhost, root,,,$MASTER_MYPORT);
+
+connection con_root;
+
+set global opt_enable_rds_priv_strategy=on;
+
+create database my_db;
+
+#
+--echo #First user which is maintain user
+#
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+show grants for 'u0'@'%';
+
+#
+--echo #Second user which is normal user
+#
+create user 'u1'@'%';
+grant all privileges on *.* to 'u1'@'%' with grant option;
+revoke super on *.* from 'u1'@'%';
+show grants for 'u1'@'%';
+
+
+#
+--echo #the u0 account is in maintain_user_list;
+#
+connect(con_u0, localhost, u0,,,$MASTER_MYPORT);
+
+connection con_u0;
+create user 'u0_0'@'%';
+grant create, insert  on my_db.* to 'u0_0'@'%';
+grant super on *.* to 'u0_0'@'%';
+revoke insert on my_db.* from 'u0_0'@'%';
+drop user 'u0_0'@'%';
+
+
+create user 'xx'@'%';
+grant create, insert  on my_db.* to 'xx'@'%';
+grant super on *.* to 'xx'@'%';
+revoke insert on my_db.* from 'xx'@'%';
+drop user 'xx'@'%';
+
+
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+insert into mysql.user(host, user) values('%', 'xx');
+update mysql.user set super_priv='Y' where user='xx';
+update mysql.user set create_priv='Y' where user='xx';
+commit;
+flush privileges;
+show grants for 'xx'@'%';
+delete from mysql.user where user='xx';
+flush privileges;
+commit;
+
+#
+--echo #normal user cann't insert/update/delete reserved user.
+#
+connect(con_u1, localhost, u1,,,$MASTER_MYPORT);
+
+connection con_u1;
+create user 'u1_0'@'%';
+grant create, insert  on *.* to 'u1_0'@'%';
+revoke insert on *.* from 'u1_0'@'%';
+drop user 'u1_0'@'%';
+
+#
+--echo #create user failed if target username is in maintain_user_list
+#
+connection con_u1;
+--error ER_RESERVED_USER_OR_PRIVS
+create user 'xx'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+SET PASSWORD FOR 'u0'@'%' = 'xx';
+
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user(host, user) values ('%', 'xx');
+
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user(host, user, super_priv) values ('%', 'zz', 'Y');
+rollback;
+
+
+connection con_u0;
+create user 'xx'@'%';
+grant create, insert  on *.* to 'xx'@'%';
+grant super on *.* to 'xx'@'%';
+
+connection con_u1;
+
+--error ER_RESERVED_USER_OR_PRIVS
+grant alter on *.* to 'xx'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+revoke create on *.* from 'xx'@'%';
+
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user set super_priv='N' where user='xx';
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user set file_priv='Y' where user='xx';
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user set shutdown_priv='Y' where user='xx';
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user set create_tablespace_priv='Y' where user='xx';
+
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user set user='xx' where user='u1';
+
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user set super_priv='N';
+
+--error ER_RESERVED_USER_OR_PRIVS
+delete from mysql.user where user='xx';
+
+--error ER_RESERVED_USER_OR_PRIVS
+delete from mysql.user;
+
+rollback;
+
+connection con_root;
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+drop user 'xx'@'%';
+set global opt_enable_rds_priv_strategy=off;
+
+
+sync_slave_with_master;
+--source include/rpl_end.inc
+

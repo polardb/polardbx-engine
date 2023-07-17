@@ -53,6 +53,7 @@
 #include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_grant, check_access
+#include "sql/auth/sql_guard.h"
 #include "sql/binlog.h"            // mysql_bin_log
 #include "sql/debug_sync.h"        // DEBUG_SYNC
 #include "sql/derror.h"            // ER_THD
@@ -954,7 +955,11 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           // continue when IGNORE clause is used.
           continue;
         }
-
+        
+        if ((im::guard_record(thd, table, im::Guard_type::GUARD_UPDATE))) {
+          error = 1;
+          break;
+        }
         if (will_batch) {
           /*
             Typically a batched handler can execute the batched jobs when:

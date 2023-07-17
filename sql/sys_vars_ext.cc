@@ -24,7 +24,7 @@
 #include "sql_statistics_common.h"
 #include "sys_vars.h"
 #include "sys_vars_ext.h"
-#include "plugin/performance_point/pps.h"
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_internal_account.h"
 
 #include "my_config.h"
@@ -156,6 +156,13 @@ static Sys_var_ulong Sys_rds_maintain_max_connections(
     GLOBAL_VAR(ia_config.connections[IA_type::MAINTENACE_USER]),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, ULONG_MAX), DEFAULT(0),
     BLOCK_SIZE(1));
+
+static Sys_var_bool Sys_opt_enable_rds_priv_strategy(
+    "opt_enable_rds_priv_strategy",
+    "When this option is enabled,"
+    "it will protect reserved account and privileges",
+    GLOBAL_VAR(opt_enable_rds_priv_strategy), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 /* RDS DEFINED */
 
