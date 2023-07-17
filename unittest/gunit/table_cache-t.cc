@@ -146,7 +146,7 @@ class Mock_share : public TABLE_SHARE {
 
   TABLE *create_table(THD *thd) {
     TABLE *result =
-        (TABLE *)my_malloc(PSI_NOT_INSTRUMENTED, sizeof(TABLE), MYF(0));
+        (TABLE *)my_malloc(PSI_NOT_INSTRUMENTED, sizeof(TABLE), MYF(MY_ZEROFILL));
     new (result) TABLE;
 
     result->s = this;
