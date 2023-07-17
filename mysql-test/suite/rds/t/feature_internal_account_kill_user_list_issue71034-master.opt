@@ -1,0 +1,3 @@
+--rds_kill_user_list='user_root'
+--maintain_user_list='aliroot,root'
+--maintain_max_connections=3

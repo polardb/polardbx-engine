@@ -122,6 +122,24 @@ using namespace im;
 static PolyLock_mutex Plock_internal_account_string(
     &LOCK_internal_account_string);
 
+static bool update_kill_user(sys_var *, THD *, enum_var_type) {
+  Internal_account_ctx::instance()->build_array(IA_type::KILL_USER);
+  return (false);
+}
+
+static Sys_var_charptr Sys_rds_kill_user_list(
+    "rds_kill_user_list", "user can kill non-super user, string split by ','",
+    GLOBAL_VAR(ia_config.user_str[IA_type::KILL_USER]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(0),
+    &Plock_internal_account_string, NOT_IN_BINLOG, ON_CHECK(NULL),
+    ON_UPDATE(update_kill_user));
+
+static Sys_var_ulong Sys_rds_kill_connections(
+    "rds_kill_connections", "Max conenction count for rds kill user",
+    GLOBAL_VAR(ia_config.connections[IA_type::KILL_USER]),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, ULONG_MAX), DEFAULT(0),
+    BLOCK_SIZE(1));
+
 static bool update_maintain_user(sys_var *, THD *, enum_var_type) {
   Internal_account_ctx::instance()->build_array(IA_type::MAINTENACE_USER);
   return (false);

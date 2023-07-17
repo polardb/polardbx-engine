@@ -1,0 +1,277 @@
+set @old_max_connections=  @@global.max_connections;
+set @old_maintain_max_connections= @@global.maintain_max_connections;
+set @old_rds_kill_connections= @@global.rds_kill_connections;
+set @old_rds_kill_user_list= @@global.rds_kill_user_list;
+
+show variables like 'rds_kill_user_list';
+show variables like 'maintain_user_list';
+
+set global rds_kill_user_list='aliyun_root';
+set global rds_kill_user_list='user_kill,user_root';
+
+create user "user_root"@"localhost";
+create user "user_kill"@"localhost";
+create user 'xx1'@'localhost';
+create user 'aliroot'@'localhost';
+grant all on *.* to 'aliroot'@'localhost' with grant option;
+grant usage on *.* to' xx1'@'localhost';
+grant usage on *.* to 'user_root'@'localhost';
+grant usage on *.* to 'user_kill'@'localhost';
+
+connect(normal1,localhost,xx1,,);
+connect(aliroot,localhost,aliroot,,);
+connect(user_root,localhost,user_root,,);
+
+connection default;
+let $wait_condition=
+  select count(*) = 4 from information_schema.processlist;
+--source include/wait_condition.inc
+
+let $xx1_pid=`select id from information_schema.processlist where user ='xx1'`;
+let $aliroot_pid=`select id from information_schema.processlist where user ='aliroot'`;
+let $user_root_pid=`select id from information_schema.processlist where user ='user_root'`;
+
+# test KILL_CONN
+connect(user_root1,localhost,user_root,,);
+--disable_result_log
+--disable_query_log
+eval kill $xx1_pid;
+--error ER_KILL_DENIED_ERROR
+eval kill $aliroot_pid;
+eval kill $user_root_pid;
+--enable_result_log
+--enable_query_log
+
+connection default;
+let $wait_condition=
+  select count(*) = 3 from information_schema.processlist;
+--source include/wait_condition.inc
+
+select id from information_schema.processlist where user ='xx1';
+
+disconnect normal1;
+disconnect aliroot;
+disconnect user_root;
+disconnect user_root1;
+
+connect(normal1,localhost,xx1,,);
+connect(aliroot,localhost,aliroot,,);
+connect(user_root,localhost,user_root,,);
+
+connection default;
+let $wait_condition=
+  select count(*) = 4 from information_schema.processlist;
+--source include/wait_condition.inc
+let $xx1_pid=`select id from information_schema.processlist where user ='xx1'`;
+let $aliroot_pid=`select id from information_schema.processlist where user ='aliroot'`;
+let $user_root_pid=`select id from information_schema.processlist where user ='user_root'`;
+
+# test NORMAL_CONN
+connect(normal2,localhost,xx1,,);
+--disable_query_log
+--disable_result_log
+eval kill $xx1_pid;
+--error ER_KILL_DENIED_ERROR
+eval kill $aliroot_pid;
+--error ER_KILL_DENIED_ERROR
+eval kill $user_root_pid;
+--enable_result_log
+--enable_query_log
+
+disconnect normal1;
+disconnect normal2;
+disconnect aliroot;
+disconnect user_root;
+connect(normal1,localhost,xx1,,);
+connect(aliroot,localhost,aliroot,,);
+connect(user_root,localhost,user_root,,);
+
+connection default;
+let $wait_condition=
+  select count(*) = 4 from information_schema.processlist;
+--source include/wait_condition.inc
+let $xx1_pid=`select id from information_schema.processlist where user ='xx1'`;
+let $aliroot_pid=`select id from information_schema.processlist where user ='aliroot'`;
+let $user_root_pid=`select id from information_schema.processlist where user ='user_root'`;
+
+# test MAINTAIN_CONN
+connect(aliroot1,localhost,aliroot,,);
+--disable_result_log
+--disable_query_log
+eval kill $xx1_pid;
+eval kill $aliroot_pid;
+eval kill $user_root_pid;
+--enable_result_log
+--enable_query_log
+
+disconnect normal1;
+disconnect aliroot;
+disconnect aliroot1;
+disconnect user_root;
+
+#####################################
+#
+# test rds_kill_connections
+#
+#####################################
+
+connection default;
+let $wait_condition=
+  select count(*) = 1 from information_schema.processlist;
+--source include/wait_condition.inc
+
+set global max_connections=6;
+set global maintain_max_connections=2;
+set global rds_kill_connections=2;
+
+--disable_result_log
+--disable_query_log
+# normal user can use 6-2-2=2 connections
+connect(normal1,localhost,xx1,,);
+connect(normal2,localhost,xx1,,);
+--error ER_CON_COUNT_ERROR
+connect(normal3,localhost,xx1,,);
+# kill user can use extra 2 connections
+connect(user_kill1,localhost,user_kill,,);
+connect(user_kill2,localhost,user_kill,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(user_kill3,localhost,user_kill,,);
+
+disconnect normal1;
+disconnect normal2;
+disconnect user_kill1;
+disconnect user_kill2;
+
+connection default;
+let $wait_condition=
+  select count(*) = 1 from information_schema.processlist;
+--source include/wait_condition.inc
+
+--disable_result_log
+--disable_query_log
+# kill user can use extra 2 connections
+connect(user_kill1,localhost,user_kill,,);
+connect(user_kill2,localhost,user_kill,,);
+connect(user_kill3,localhost,user_kill,,);
+connect(user_kill4,localhost,user_kill,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(user_kill5,localhost,user_kill,,);
+--error ER_CON_COUNT_ERROR
+connect(normal1,localhost,xx1,,);
+
+disconnect user_kill1;
+disconnect user_kill2;
+disconnect user_kill3;
+disconnect user_kill4;
+
+connection default;
+let $wait_condition=
+  select count(*) = 1 from information_schema.processlist;
+--source include/wait_condition.inc
+
+connect(user_kill1,localhost,user_kill,,);
+connect(user_kill2,localhost,user_kill,,);
+
+
+--error ER_CON_COUNT_ERROR
+connect(normal1,localhost,xx1,,);
+
+disconnect user_kill1;
+disconnect user_kill2;
+
+connection default;
+let $wait_condition=
+  select count(*) = 1 from information_schema.processlist;
+--source include/wait_condition.inc
+
+connect(aliroot1,localhost,aliroot,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(aliroot2,localhost,aliroot,,);
+
+connect(normal1,localhost,xx1,,);
+connect(normal2,localhost,xx1,,);
+--error ER_CON_COUNT_ERROR
+connect(normal3,localhost,xx1,,);
+connect(user_kill1,localhost,user_kill,,);
+connect(user_kill2,localhost,user_kill,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(user_kill3,localhost,user_kill,,);
+
+disconnect aliroot1;
+disconnect normal1;
+disconnect normal2;
+disconnect user_kill1;
+disconnect user_kill2;
+
+connection default;
+let $wait_condition=
+  select count(*) = 1 from information_schema.processlist;
+--source include/wait_condition.inc
+
+
+connect(user_kill1,localhost,user_kill,,);
+connect(aliroot1,localhost,aliroot,,);
+
+
+connect(normal1,localhost,xx1,,);
+--error ER_CON_COUNT_ERROR
+connect(normal2,localhost,xx1,,);
+connect(user_kill2,localhost,user_kill,,);
+--error ER_CON_COUNT_ERROR
+connect(normal3,localhost,xx1,,);
+connect(user_kill3,localhost,user_kill,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(user_kill4,localhost,user_kill,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(aliroot2,localhost,aliroot,,);
+
+disconnect user_kill1;
+disconnect user_kill2;
+disconnect user_kill3;
+disconnect normal1;
+disconnect aliroot1;
+
+connection default;
+let $wait_condition=
+connection default;
+let $wait_condition=
+  select count(*) = 1 from information_schema.processlist;
+--source include/wait_condition.inc
+
+connect(normal1,localhost,xx1,,);
+connect(normal2,localhost,xx1,,);
+--error ER_CON_COUNT_ERROR
+connect(normal3,localhost,xx1,,);
+
+connect(user_kill1,localhost,user_kill,,);
+connect(user_kill2,localhost,user_kill,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(user_kill3,localhost,user_kill,,);
+
+connect(aliroot1,localhost,aliroot,,);
+--error ER_IA_TOO_MANY_CONNECTIONS
+connect(aliroot2,localhost,aliroot,,);
+
+disconnect user_kill1;
+disconnect user_kill2;
+disconnect normal1;
+disconnect normal2;
+disconnect aliroot1;
+
+
+--enable_result_log
+--enable_query_log
+
+connection default;
+set global max_connections= @old_max_connections;
+set global maintain_max_connections= @old_maintain_max_connections;
+set global rds_kill_connections= @old_rds_kill_connections;
+set global rds_kill_user_list= @old_rds_kill_user_list;
+
+drop user 'xx1'@'localhost';
+drop user 'aliroot'@'localhost';
+drop user 'user_root'@'localhost';
+drop user 'user_kill'@'localhost';
+
+--enable_result_log
+--enable_query_log

@@ -78,6 +78,7 @@
 #include "prealloced_array.h"
 #include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
+#include "sql/auth/sql_internal_account.h" // IA_type::KILL_USER
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/binlog.h"  // purge_source_logs
 #include "sql/clone_handler.h"
@@ -6493,7 +6494,14 @@ static uint kill_one_thread(THD *thd, my_thread_id id, bool only_kill_query) {
           error = 0;
         }
       } else
-        error = 0;
+        error = 0;    
+    } else if (sctx->account_attr.get_type() == im::IA_type::KILL_USER &&
+               !tmp->security_context()->check_access(SUPER_ACL)) {
+      /* KILL_USER can only kill non-super user */
+      if (tmp->killed != THD::KILL_CONNECTION) {
+        tmp->awake(only_kill_query ? THD::KILL_QUERY : THD::KILL_CONNECTION);
+      }
+      error = 0;
     } else
       error = ER_KILL_DENIED_ERROR;
   }

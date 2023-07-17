@@ -260,6 +260,18 @@ bool Internal_account_ctx::adjust_connection(THD *thd,
   /** Do nothing if the account didn't set xx_max_connections */
   if ((conn_limit = ia_config.conn_at(sa_iter)) == 0) return false;
 
+  /**
+    KILL_USER can use normal user's connections and ia_config[IA_type::KILL_USER]
+    If !exceed_max_connection(thd) which means normal user's connections has
+    not been run out, this KILL_USER connection will be treated as normal user.
+    If exceed_max_connection(thd) which means normal user's connections has been
+    run out, this KILL_USER connection will be added to ia_ctx[IA_type::KILL_USER]
+  */
+  if (*sa_iter == IA_type::KILL_USER && !exceed_max_connection(thd)) {
+    thd->conn_attr.set(IA_type::KILL_USER);
+    return false;
+  }
+
   /** Connection type will be used to decrease connection count */
   Auto_conn_lock(this, *sa_iter);
   if ((connections[*sa_iter]++) < conn_limit) {
@@ -337,6 +349,14 @@ bool Internal_account_ctx::dec_connection_count(THD *thd) {
   IA_iterator iter(thd->conn_attr.get());
   if (*iter == IA_type::UNKNOWN_USER) {
     Connection_handler_manager::dec_connection_count();
+  } else if (*iter == IA_type::KILL_USER) {
+    Auto_conn_lock(this, *iter);
+    if (connections[*iter]) {
+      connections[*iter]--;
+      if (connections[*iter] == 0) mysql_cond_signal(&m_cond[*iter]);
+    } else {
+      Connection_handler_manager::dec_connection_count();
+    }
   } else {
     Auto_conn_lock(this, *iter);
     assert(connections[*iter] > 0);

@@ -1,0 +1,43 @@
+set @old_max_connections=  @@global.max_connections;
+set @old_maintain_max_connections= @@global.maintain_max_connections;
+set @old_rds_kill_connections= @@global.rds_kill_connections;
+set @old_rds_kill_user_list= @@global.rds_kill_user_list;
+show variables like 'rds_kill_user_list';
+Variable_name	Value
+rds_kill_user_list	user_root
+show variables like 'maintain_user_list';
+Variable_name	Value
+maintain_user_list	aliroot,root
+set global rds_kill_user_list='aliyun_root';
+set global rds_kill_user_list='user_kill,user_root';
+create user "user_root"@"localhost";
+create user "user_kill"@"localhost";
+create user 'xx1'@'localhost';
+create user 'aliroot'@'localhost';
+grant all on *.* to 'aliroot'@'localhost' with grant option;
+grant usage on *.* to' xx1'@'localhost';
+grant usage on *.* to 'user_root'@'localhost';
+grant usage on *.* to 'user_kill'@'localhost';
+Timeout in wait_condition.inc for select count(*) = 4 from information_schema.processlist
+Timeout in wait_condition.inc for select count(*) = 3 from information_schema.processlist
+select id from information_schema.processlist where user ='xx1';
+id
+Timeout in wait_condition.inc for select count(*) = 4 from information_schema.processlist
+Timeout in wait_condition.inc for select count(*) = 4 from information_schema.processlist
+Timeout in wait_condition.inc for select count(*) = 1 from information_schema.processlist
+set global max_connections=6;
+set global maintain_max_connections=2;
+set global rds_kill_connections=2;
+Timeout in wait_condition.inc for select count(*) = 1 from information_schema.processlist
+Timeout in wait_condition.inc for select count(*) = 1 from information_schema.processlist
+Timeout in wait_condition.inc for select count(*) = 1 from information_schema.processlist
+Timeout in wait_condition.inc for select count(*) = 1 from information_schema.processlist
+Timeout in wait_condition.inc for select count(*) = 1 from information_schema.processlist
+set global max_connections= @old_max_connections;
+set global maintain_max_connections= @old_maintain_max_connections;
+set global rds_kill_connections= @old_rds_kill_connections;
+set global rds_kill_user_list= @old_rds_kill_user_list;
+drop user 'xx1'@'localhost';
+drop user 'aliroot'@'localhost';
+drop user 'user_root'@'localhost';
+drop user 'user_kill'@'localhost';
