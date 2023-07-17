@@ -134,7 +134,7 @@ connect(normal3,localhost,xx1,,);
 # kill user can use extra 2 connections
 connect(user_kill1,localhost,user_kill,,);
 connect(user_kill2,localhost,user_kill,,);
---error ER_IA_TOO_MANY_CONNECTIONS
+--error ER_CON_COUNT_ERROR
 connect(user_kill3,localhost,user_kill,,);
 
 disconnect normal1;
@@ -154,7 +154,7 @@ connect(user_kill1,localhost,user_kill,,);
 connect(user_kill2,localhost,user_kill,,);
 connect(user_kill3,localhost,user_kill,,);
 connect(user_kill4,localhost,user_kill,,);
---error ER_IA_TOO_MANY_CONNECTIONS
+--error ER_CON_COUNT_ERROR
 connect(user_kill5,localhost,user_kill,,);
 --error ER_CON_COUNT_ERROR
 connect(normal1,localhost,xx1,,);
@@ -194,7 +194,7 @@ connect(normal2,localhost,xx1,,);
 connect(normal3,localhost,xx1,,);
 connect(user_kill1,localhost,user_kill,,);
 connect(user_kill2,localhost,user_kill,,);
---error ER_IA_TOO_MANY_CONNECTIONS
+--error ER_CON_COUNT_ERROR
 connect(user_kill3,localhost,user_kill,,);
 
 disconnect aliroot1;
@@ -220,7 +220,7 @@ connect(user_kill2,localhost,user_kill,,);
 --error ER_CON_COUNT_ERROR
 connect(normal3,localhost,xx1,,);
 connect(user_kill3,localhost,user_kill,,);
---error ER_IA_TOO_MANY_CONNECTIONS
+--error ER_CON_COUNT_ERROR
 connect(user_kill4,localhost,user_kill,,);
 --error ER_IA_TOO_MANY_CONNECTIONS
 connect(aliroot2,localhost,aliroot,,);
@@ -245,7 +245,7 @@ connect(normal3,localhost,xx1,,);
 
 connect(user_kill1,localhost,user_kill,,);
 connect(user_kill2,localhost,user_kill,,);
---error ER_IA_TOO_MANY_CONNECTIONS
+--error ER_CON_COUNT_ERROR
 connect(user_kill3,localhost,user_kill,,);
 
 connect(aliroot1,localhost,aliroot,,);

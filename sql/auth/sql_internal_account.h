@@ -395,7 +395,8 @@ struct ST_ACCOUNT_ATTR {
     m_account_type = IA_type::UNKNOWN_USER;
     m_account_access = Internal_account_config::NO_ACL;
   }
-
+  
+  ulonglong get_acl() { return m_account_access; }
   IA_type get_type() { return m_account_type; }
 };
 

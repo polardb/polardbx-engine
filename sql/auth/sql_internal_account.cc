@@ -268,10 +268,16 @@ bool Internal_account_ctx::adjust_connection(THD *thd,
     If exceed_max_connection(thd) which means normal user's connections has been
     run out, this KILL_USER connection will be added to ia_ctx[IA_type::KILL_USER]
   */
-  if (*sa_iter == IA_type::KILL_USER && !exceed_max_connection(thd)) {
-    thd->conn_attr.set(IA_type::KILL_USER);
-    return false;
-  }
+
+  /**
+    Revision 1:
+      Redesign the kill user connection management:
+       a) Security_context attribute still is treated as KILL_USER and have KILL_ACL.
+       b) THD connection will be treated as UNKOWN_USER and use the max connections.
+       c) Normal user only can use max_connection - kill_user_connections.
+       d) Kill user can use max_connection
+  */
+  if (*sa_iter == IA_type::KILL_USER) return false;
 
   /** Connection type will be used to decrease connection count */
   Auto_conn_lock lock(this, *sa_iter);
@@ -351,15 +357,6 @@ bool Internal_account_ctx::dec_connection_count(THD *thd) {
   IA_iterator iter(thd->conn_attr.get());
   if (*iter == IA_type::UNKNOWN_USER) {
     Connection_handler_manager::dec_connection_count();
-  } else if (*iter == IA_type::KILL_USER) {
-    Auto_conn_lock lock(this, *iter);
-    assert(lock.effect());
-    if (connections[*iter]) {
-      connections[*iter]--;
-      if (connections[*iter] == 0) mysql_cond_signal(&m_cond[*iter]);
-    } else {
-      Connection_handler_manager::dec_connection_count();
-    }
   } else {
     Auto_conn_lock lock(this, *iter);
     assert(lock.effect());
@@ -375,6 +372,9 @@ bool Internal_account_ctx::dec_connection_count(THD *thd) {
 */
 bool Internal_account_ctx::exceed_max_connection(THD *thd) {
   uint extra_connection = 0;
+  uint available_connection = 0;
+
+  available_connection = ia_config.available_connections();
 
   /* Allowed to have an extra connection for super account */
   if (thd->m_main_security_ctx.check_access(SUPER_ACL) ||
@@ -383,9 +383,13 @@ bool Internal_account_ctx::exceed_max_connection(THD *thd) {
           .first)
     extra_connection = 1;
 
+  /* If user has kill acl, then can have extra connections. */
+  if (thd->m_main_security_ctx.account_attr.get_type() == IA_type::KILL_USER)
+    available_connection += ia_config.connections[IA_type::KILL_USER];
+
   if ((thd->conn_attr.get() == IA_type::UNKNOWN_USER) &&
       (Connection_handler_manager::get_connection_count() >
-       (ia_config.available_connections() + extra_connection)))
+       (available_connection + extra_connection)))
     return true;
 
   return false;

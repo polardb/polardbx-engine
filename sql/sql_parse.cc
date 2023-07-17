@@ -6479,12 +6479,14 @@ static uint kill_one_thread(THD *thd, my_thread_id id, bool only_kill_query) {
 
     if (sctx->check_access(SUPER_ACL) ||
         sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN")).first ||
-        sctx->user_matches(tmp->security_context())) {
+        sctx->user_matches(tmp->security_context()) ||
+        ((sctx->account_attr.get_acl() &
+          im::Internal_account_config::KILL_ACL) &&
+         !tmp->security_context()->check_access(SUPER_ACL))) {
       /*
         Process the kill:
         if thread is not already undergoing any kill connection.
         Killer must have SYSTEM_USER privilege iff killee has the same privilege
-        privilege
       */
       if (tmp->killed != THD::KILL_CONNECTION) {
         if (tmp->is_system_user() && !thd->is_system_user()) {
@@ -6494,14 +6496,7 @@ static uint kill_one_thread(THD *thd, my_thread_id id, bool only_kill_query) {
           error = 0;
         }
       } else
-        error = 0;    
-    } else if (sctx->account_attr.get_type() == im::IA_type::KILL_USER &&
-               !tmp->security_context()->check_access(SUPER_ACL)) {
-      /* KILL_USER can only kill non-super user */
-      if (tmp->killed != THD::KILL_CONNECTION) {
-        tmp->awake(only_kill_query ? THD::KILL_QUERY : THD::KILL_CONNECTION);
-      }
-      error = 0;
+        error = 0;
     } else
       error = ER_KILL_DENIED_ERROR;
   }
