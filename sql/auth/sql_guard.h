@@ -109,7 +109,7 @@ class Entity_guard : public Guard {
   enum class Type { GUARD_INSERT, GUARD_UPDATE, GUARD_DELETE };
 
   /* Use all columns temporarily, restore it automatically */
-  class Auto_bitmap {
+  class Auto_bitmap : public Disable_unnamed_object {
    public:
     explicit Auto_bitmap(TABLE *ptr) {
       m_table = ptr;

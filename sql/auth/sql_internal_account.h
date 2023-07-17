@@ -30,6 +30,7 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/status_var.h"
 #include "prealloced_array.h"  //Prealloced_array
+#include "sql/common/component.h"
 
 class Security_context;
 
@@ -192,12 +193,14 @@ class Internal_account_ctx {
   Internal_account_ctx &operator=(const Internal_account_ctx &) = delete;
 
   /* Helper for locking/releasing lock */
-  class Auto_lock {
+  class Auto_lock : public Disable_unnamed_object {
    public:
-    explicit Auto_lock(Internal_account_ctx *ia_ctx, IA_type type) {
+    explicit Auto_lock(Internal_account_ctx *ia_ctx, IA_type type)
+        : Disable_unnamed_object() {
       m_ctx = ia_ctx;
       m_type = type;
     }
+
     virtual ~Auto_lock() {}
 
    protected:
@@ -342,6 +345,9 @@ class Internal_account_ctx {
     @retval     false   still available
   */
   bool exceed_max_connection(THD *thd);
+
+  ulonglong get_connection_count();
+
 
  private:
   std::vector<Account_array *> m_accounts;

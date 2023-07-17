@@ -73,6 +73,7 @@ bool Entity_guard::protect_record_from_delete(THD *thd, TABLE *table,
   DBUG_ENTER("Entity_guard::protect_record_from_delete");
 
   Auto_bitmap helper(table);
+  assert(helper.effect());
   field = table->field[field_pos];
 
   if (record == table->record[0]) {
@@ -138,6 +139,7 @@ bool User_entity_guard::guard_insert(THD *thd, TABLE *table) {
     DBUG_RETURN(false);
 
   Auto_bitmap_helper helper(table);
+  assert(helper.effect());
 
   /* Protect reserved username */
   user_name = get_field(thd->mem_root, table->field[MYSQL_USER_FIELD_USER]);
@@ -180,6 +182,7 @@ bool User_entity_guard::guard_update(THD *thd, TABLE *table) {
     DBUG_RETURN(false);
 
   Auto_bitmap helper(table);
+  assert(helper.effect());
 
   old_data = table->record[1];
   new_data = table->record[0];
@@ -304,6 +307,7 @@ bool Dynamic_privilege_entity_guard::guard_update(THD *thd, TABLE *table) {
     DBUG_RETURN(false);
 
   Auto_bitmap helper(table);
+  assert(helper.effect());
 
   old_data = table->record[1];
   new_data = table->record[0];
@@ -413,6 +417,7 @@ bool Role_entity_guard::guard_insert(THD *thd, TABLE *table) {
     DBUG_RETURN(false);
 
   Auto_bitmap_helper helper(table);
+  assert(helper.effect());
 
   user_name =
       get_field(thd->mem_root, table->field[MYSQL_ROLE_EDGES_FIELD_FROM_USER]);
@@ -470,6 +475,7 @@ bool Role_entity_guard::guard_update(THD *thd, TABLE *table) {
     DBUG_RETURN(false);
 
   Auto_bitmap helper(table);
+  assert(helper.effect());
 
   old_data = table->record[1];
   new_data = table->record[0];

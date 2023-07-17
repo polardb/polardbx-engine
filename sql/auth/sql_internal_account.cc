@@ -30,9 +30,7 @@
   2. Prefined ACLs or need-protect attributes for every kind of account
 */
 
-#include <mysql/components/services/log_builtins.h> /* LogComponentErr */
-#include <iostream>
-#include <string>
+
 #include "sql/auth/sql_internal_account.h"
 #include "sql/auth/auth_acls.h"                           // NO_ACCESS
 #include "sql/auth/sql_security_ctx.h"                    // Security_context
@@ -161,7 +159,8 @@ void Internal_account_ctx::build_array(IA_type type) {
   IA_iterator iter(type);
   arr = m_accounts[*iter];
 
-  Auto_user_lock(this, *iter, true);
+  Auto_user_lock lock(this, *iter, true);
+  assert(lock.effect());
   arr->clear();
 
   if (ia_config.user_at(iter) == nullptr || ia_config.user_at(iter)[0] == '\0')
@@ -189,7 +188,8 @@ bool Internal_account_ctx::exist_account(IA_type type, const char *account) {
 
   arr = m_accounts[type];
 
-  Auto_user_lock(this, type, false);
+  Auto_user_lock lock(this, type, false);
+  assert(lock.effect());
   for (Account_array::iterator it = arr->begin(); it != arr->end(); it++) {
     if ((*it).compare(account) == 0) return true;
   }
@@ -201,7 +201,8 @@ bool Internal_account_ctx::exist_account(IA_type type, const char *account) {
 */
 ulonglong Internal_account_ctx::active_connection_count(IA_type type) {
   IA_iterator iter(type);
-  Auto_conn_lock(this, *iter);
+  Auto_conn_lock lock(this, *iter);
+  assert(lock.effect());
   return connections[*iter];
 }
 /**
@@ -273,7 +274,8 @@ bool Internal_account_ctx::adjust_connection(THD *thd,
   }
 
   /** Connection type will be used to decrease connection count */
-  Auto_conn_lock(this, *sa_iter);
+  Auto_conn_lock lock(this, *sa_iter);
+  assert(lock.effect());
   if ((connections[*sa_iter]++) < conn_limit) {
     // Maybe COM_CONNECT or COM_CHANGE_USER
     if (command == COM_CONNECT) {
@@ -350,7 +352,8 @@ bool Internal_account_ctx::dec_connection_count(THD *thd) {
   if (*iter == IA_type::UNKNOWN_USER) {
     Connection_handler_manager::dec_connection_count();
   } else if (*iter == IA_type::KILL_USER) {
-    Auto_conn_lock(this, *iter);
+    Auto_conn_lock lock(this, *iter);
+    assert(lock.effect());
     if (connections[*iter]) {
       connections[*iter]--;
       if (connections[*iter] == 0) mysql_cond_signal(&m_cond[*iter]);
@@ -358,7 +361,8 @@ bool Internal_account_ctx::dec_connection_count(THD *thd) {
       Connection_handler_manager::dec_connection_count();
     }
   } else {
-    Auto_conn_lock(this, *iter);
+    Auto_conn_lock lock(this, *iter);
+    assert(lock.effect());
     assert(connections[*iter] > 0);
     connections[*iter]--;
     if (connections[*iter] == 0) mysql_cond_signal(&m_cond[*iter]);
@@ -386,12 +390,27 @@ bool Internal_account_ctx::exceed_max_connection(THD *thd) {
 
   return false;
 }
+
+ulonglong Internal_account_ctx::get_connection_count() {
+  ulonglong sum_count = 0;
+  for (IA_iterator iter = ia_config.begin(); iter != ia_config.end(); iter++) {
+    Auto_conn_lock lock(this, *iter);
+    assert(lock.effect());
+    sum_count += connections[*iter];
+  }
+
+  sum_count += Connection_handler_manager::get_connection_count();
+
+  return sum_count;
+}
+
 /**
   Wait all the internal account connection exit
 */
 void Internal_account_ctx::wait_till_no_connection() {
   for (IA_iterator iter = ia_config.begin(); iter != ia_config.end(); iter++) {
     Auto_conn_lock lock(this, *iter);
+    assert(lock.effect());
     while (connections[*iter] > 0)
       mysql_cond_wait(&m_cond[*iter], &m_mutex[*iter]);
   }
@@ -450,6 +469,10 @@ int show_maintain_connection_count(THD *, SHOW_VAR *var, char *buff) {
   *value = static_cast<long long>(
       internal_account_active_connection_count(IA_type::MAINTENACE_USER));
   return 0;
+}
+
+ulonglong get_total_connection_count() {
+  return Internal_account_ctx::instance()->get_connection_count();
 }
 
 } /* namespace im */
