@@ -1,0 +1,87 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+set global opt_enable_rds_priv_strategy=on;
+create database my_db;
+#First user which is maintain user
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%';
+show grants for 'u0'@'%';
+Grants for u0@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, SUPER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO `u0`@`%`
+GRANT APPLICATION_PASSWORD_ADMIN,AUDIT_ABORT_EXEMPT,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,FIREWALL_EXEMPT,FLUSH_OPTIMIZER_COSTS,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_USER_ID,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,XA_RECOVER_ADMIN ON *.* TO `u0`@`%`
+#Second user which is normal user
+create user 'u1'@'%';
+grant all privileges on *.* to 'u1'@'%' with grant option;
+revoke super on *.* from 'u1'@'%';
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+show grants for 'u1'@'%';
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT APPLICATION_PASSWORD_ADMIN,AUDIT_ABORT_EXEMPT,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,FIREWALL_EXEMPT,FLUSH_OPTIMIZER_COSTS,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_USER_ID,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,XA_RECOVER_ADMIN ON *.* TO `u1`@`%` WITH GRANT OPTION
+select/update/insert/delete, create/drop/alter/index acl
+use mysql;
+create table t_u0(id int);
+alter table t_u0 add col1 int;
+create index idx_id on t_u0(id);
+use mysql;
+select * from t_u0;
+id	col1
+insert into t_u0 values(1, 1);
+update t_u0 set id=2 where id=1;
+delete from t_u0;
+commit;
+create table t_u1(id int);
+ERROR 42000: Access denied for user 'u1'@'%' to database 'mysql'
+alter table t_u0 add col2 int;
+ERROR 42000: Access denied for user 'u1'@'%' to database 'mysql'
+create index idx_id on t_u0(id);
+ERROR 42000: Access denied for user 'u1'@'%' to database 'mysql'
+drop table t_u0;
+ERROR 42000: Access denied for user 'u1'@'%' to database 'mysql'
+drop table t_u0;
+view
+create view user_view as select * from user;
+select count(*) from user_view;
+count(*)
+6
+drop view user_view;
+create view user_view_u1 as select * from user;
+select count(*) from user_view_u1;
+count(*)
+6
+drop view user_view_u1;
+ERROR 42000: Access denied for user 'u1'@'%' to database 'mysql'
+drop view user_view_u1;
+trigger
+create table t_u0(content varchar(255));
+create trigger tri_t_u0 before insert
+on t_u0 for each row
+begin
+signal sqlstate 'HY000' SET message_text = "insert log table ";
+end |
+ERROR HY000: Triggers can not be created on system tables
+drop table t_u0;
+proc
+create table t_u0(content varchar(255));
+create procedure proc_u0()
+begin
+insert into t_u0 value('t_u0');
+commit;
+end |
+call proc_u0();
+drop table t_u0;
+drop procedure proc_u0;
+create procedure proc_u1()
+begin
+signal sqlstate 'HY000' SET message_text = "proc_u1 ";
+end |
+ERROR 42000: Access denied for user 'u1'@'%' to database 'mysql'
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global opt_enable_rds_priv_strategy=off;
+include/rpl_end.inc

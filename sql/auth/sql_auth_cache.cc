@@ -120,8 +120,11 @@ struct ACL_internal_schema_registry_entry {
   - information_schema,
   This can be reused later for:
   - mysql
+
+  Revision by RDS :
+  - Add mysql database acl entry
 */
-static ACL_internal_schema_registry_entry registry_array[2];
+static ACL_internal_schema_registry_entry registry_array[3];
 static uint m_registry_array_size = 0;
 
 MEM_ROOT global_acl_memory;

@@ -436,6 +436,24 @@ template <typename T>
 inline void guard_destroy(T *ptr) {
   if (ptr != nullptr) ptr->destroy();
 }
+
+/**
+  The mysql database access control:
+  We didn't allowed normal user to modify the mysql database structure.
+*/
+class Mysql_internal_schema_access : public ACL_internal_schema_access {
+ public:
+  Mysql_internal_schema_access() {}
+
+  ~Mysql_internal_schema_access() {}
+
+  ACL_internal_access_result check(ulong want_access, ulong *, bool) const override;
+
+  const ACL_internal_table_access *lookup(const char *name) const override;
+
+  static Mysql_internal_schema_access *instance();
+};
+
 } /* namespace im */
 
 #endif

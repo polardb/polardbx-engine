@@ -526,6 +526,17 @@ Internal_guard_strategy::~Internal_guard_strategy() {
 
 void internal_guard_strategy_init(bool bootstrap) {
   if (!bootstrap) {
+    /**
+      System table structure protecting strategy
+    */
+
+    /* mysql database acl */
+    ACL_internal_schema_registry::register_schema(
+        MYSQL_SCHEMA_NAME, Mysql_internal_schema_access::instance());
+
+    /**
+      Internal account protecting strategy
+    */
     /* 1. User table record guard */
     Internal_guard_strategy::instance()->register_guard<Entity_guard>(
         User_entity_guard::instance()->object_name(),
@@ -578,6 +589,42 @@ bool guard_record(THD *thd, TABLE *table, Guard_type type, uint record_pos) {
     }
   }
   return false;
+}
+
+/**
+  Didn't allowed normal user to modify the mysql database structure.
+ */
+ACL_internal_access_result Mysql_internal_schema_access::check(
+    ulong want_access, ulong *, bool) const {
+  const ulong forbidden_for_normal_user =
+      CREATE_ACL | DROP_ACL | REFERENCES_ACL | INDEX_ACL | ALTER_ACL |
+      LOCK_TABLES_ACL | EXECUTE_ACL | CREATE_PROC_ACL | ALTER_PROC_ACL |
+      EVENT_ACL | TRIGGER_ACL;
+
+  THD *thd = current_thd;
+  /**
+    If SUPER_ACL user or not enable rds privilege strategy,
+    check the ACL continually.
+  */
+  if ((thd && thd->security_context()->check_access(SUPER_ACL)) ||
+      !opt_enable_rds_priv_strategy)
+    return ACL_INTERNAL_ACCESS_CHECK_GRANT;
+
+  if (want_access & forbidden_for_normal_user)
+    return ACL_INTERNAL_ACCESS_DENIED;
+
+  return ACL_INTERNAL_ACCESS_CHECK_GRANT;
+}
+
+const ACL_internal_table_access *Mysql_internal_schema_access::lookup(
+    const char *) const {
+  /* Didn't set ACL on per table for mysql database. */
+  return NULL;
+}
+
+Mysql_internal_schema_access *Mysql_internal_schema_access::instance() {
+  static Mysql_internal_schema_access schema_access;
+  return &schema_access;
 }
 
 } /* namespace im */

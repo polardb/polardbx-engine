@@ -1,0 +1,142 @@
+--source include/have_log_bin.inc
+
+--source include/master-slave.inc
+
+connect(con_root,localhost, root,,,$MASTER_MYPORT);
+
+connection con_root;
+
+set global opt_enable_rds_priv_strategy=on;
+
+create database my_db;
+
+#
+--echo #First user which is maintain user
+#
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%';
+show grants for 'u0'@'%';
+
+#
+--echo #Second user which is normal user
+#
+create user 'u1'@'%';
+grant all privileges on *.* to 'u1'@'%' with grant option;
+revoke super on *.* from 'u1'@'%';
+show grants for 'u1'@'%';
+
+
+#
+-- echo select/update/insert/delete, create/drop/alter/index acl
+#
+connect(con_u0, localhost, u0,,,$MASTER_MYPORT);
+connection con_u0;
+
+use mysql;
+create table t_u0(id int);
+alter table t_u0 add col1 int;
+create index idx_id on t_u0(id);
+
+connect(con_u1, localhost, u1,,,$MASTER_MYPORT);
+connection con_u1;
+
+use mysql;
+select * from t_u0;
+insert into t_u0 values(1, 1);
+update t_u0 set id=2 where id=1;
+delete from t_u0;
+commit;
+
+
+--error ER_DBACCESS_DENIED_ERROR
+create table t_u1(id int);
+
+--error ER_DBACCESS_DENIED_ERROR
+alter table t_u0 add col2 int;
+
+--error ER_DBACCESS_DENIED_ERROR
+create index idx_id on t_u0(id);
+
+--error ER_DBACCESS_DENIED_ERROR
+drop table t_u0;
+
+
+connection con_u0;
+drop table t_u0;
+
+
+#
+--echo view
+#
+connection con_u0;
+create view user_view as select * from user;
+select count(*) from user_view;
+drop view user_view;
+
+connection con_u1;
+create view user_view_u1 as select * from user;
+select count(*) from user_view_u1;
+--error ER_DBACCESS_DENIED_ERROR
+drop view user_view_u1;
+
+connection con_u0;
+drop view user_view_u1;
+
+
+#
+--echo trigger
+#
+connection con_u0;
+
+create table t_u0(content varchar(255));
+
+DELIMITER |;
+--error ER_NO_TRIGGERS_ON_SYSTEM_SCHEMA
+create trigger tri_t_u0 before insert
+on t_u0 for each row
+begin
+   signal sqlstate 'HY000' SET message_text = "insert log table ";
+end |
+DELIMITER ;|
+
+drop table t_u0;
+
+
+#
+--echo proc
+#
+connection con_u0;
+
+create table t_u0(content varchar(255));
+
+DELIMITER |;
+create procedure proc_u0()
+begin
+   insert into t_u0 value('t_u0');
+   commit;
+end |
+DELIMITER ;|
+
+call proc_u0();
+drop table t_u0;
+drop procedure proc_u0;
+
+
+connection con_u1;
+
+DELIMITER |;
+--error ER_DBACCESS_DENIED_ERROR
+create procedure proc_u1()
+begin
+   signal sqlstate 'HY000' SET message_text = "proc_u1 ";
+end |
+DELIMITER ;|
+
+connection con_root;
+drop database my_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global opt_enable_rds_priv_strategy=off;
+
+sync_slave_with_master;
+--source include/rpl_end.inc
