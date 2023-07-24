@@ -124,6 +124,7 @@
 #include "sql/sql_audit.h"        // mysql_audit_table_access_notify
 #include "sql/sql_backup_lock.h"  // acquire_shared_backup_lock
 #include "sql/sql_class.h"        // THD
+#include "sql/sql_common_ext.h"
 #include "sql/sql_const.h"
 #include "sql/sql_data_change.h"
 #include "sql/sql_db.h"       // check_schema_readonly
@@ -5524,8 +5525,13 @@ bool lock_table_names(THD *thd, Table_ref *tables_start, Table_ref *tables_end,
   if (need_global_read_lock_protection &&
       !(flags & MYSQL_OPEN_SKIP_SCOPED_MDL_LOCK) &&
       !(flags & MYSQL_LOCK_IGNORE_GLOBAL_READ_ONLY) &&
-      check_readonly(thd, true))
-    return true;
+      check_readonly(thd, false)) {
+    if (lock_instance_mode != LOCK_INSTANCE_WRITE_GROWTH) {
+      err_readonly(thd);
+      return true;
+    }
+  }
+    
 
   // Check schema read only for all schemas.
   for (const Table_ref *table_l : schema_set)

@@ -1,0 +1,223 @@
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+show global variables like 'lock_instance_mode';
+Variable_name	Value
+lock_instance_mode	LOCK_NON
+select @@global.lock_instance_mode into @saved_lock_instance_mode;
+select @@global.read_only into @saved_read_only;
+select @@global.super_read_only into @saved_super_read_only;
+lock instance require readonly or super_readonly'
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+ERROR HY000: Lock instance LOCK_WRITE_GROWTH require read only or super read only
+set global lock_instance_mode = 'LOCK_WRITE';
+ERROR HY000: Lock instance LOCK_WRITE require read only or super read only
+set global lock_instance_mode = 'LOCK_READ';
+ERROR HY000: Lock instance LOCK_READ require read only or super read only
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+set global lock_instance_mode = 'LOCK_WRITE';
+set global lock_instance_mode = 'LOCK_READ';
+set global read_only = off;
+set global super_read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+set global lock_instance_mode = 'LOCK_WRITE';
+set global lock_instance_mode = 'LOCK_READ';
+set global super_read_only = off;
+test lock_write_growth
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  KEY `t1_ind` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values(1);
+commit;
+use my_db;
+select * from t1;
+id
+1
+insert into t1 values(1);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE_GROWTH option so it cannot execute this statement
+create table t2(id int);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE_GROWTH option so it cannot execute this statement
+truncate table t1;
+optimize table t1;
+Table	Op	Msg_type	Msg_text
+my_db.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+my_db.t1	optimize	status	OK
+drop index t1_ind on t1;
+drop table t1;
+commit;
+rollback;
+set global read_only =off;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+set global super_read_only = on;
+use my_db;
+select * from t1;
+id
+insert into t1 values(1);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE_GROWTH option so it cannot execute this statement
+create table t2(id int);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE_GROWTH option so it cannot execute this statement
+truncate table t1;
+optimize table t1;
+Table	Op	Msg_type	Msg_text
+my_db.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+my_db.t1	optimize	status	OK
+drop index t1_ind on t1;
+drop table t1;
+commit;
+rollback;
+test lock_write
+set global super_read_only = off;
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE';
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  KEY `t1_ind` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values(1);
+commit;
+use my_db;
+select * from t1;
+id
+1
+insert into t1 values(1);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+create table t2(id int);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+truncate table t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+optimize table t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+drop index t1_ind on t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+drop table t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+commit;
+rollback;
+set global read_only =off;
+set global super_read_only = on;
+use my_db;
+select * from t1;
+id
+1
+insert into t1 values(1);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+create table t2(id int);
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+truncate table t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+optimize table t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+drop index t1_ind on t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+drop table t1;
+ERROR HY000: The MySQL server is running with the LOCK_WRITE option so it cannot execute this statement
+commit;
+rollback;
+set global read_only = off;
+set global super_read_only = off;
+drop table t1;
+test lock_read
+set global super_read_only = off;
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_READ';
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  KEY `t1_ind` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values(1);
+commit;
+use my_db;
+select * from t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+insert into t1 values(1);
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+create table t2(id int);
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+truncate table t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+optimize table t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+drop index t1_ind on t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+drop table t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+commit;
+rollback;
+set global read_only =off;
+set global super_read_only = on;
+use my_db;
+select * from t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+insert into t1 values(1);
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+create table t2(id int);
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+truncate table t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+optimize table t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+drop index t1_ind on t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+drop table t1;
+ERROR HY000: The MySQL server is running with the LOCK_READ option so it cannot execute this statement
+commit;
+rollback;
+set global read_only = off;
+set global super_read_only = off;
+drop table t1;
+test drop db
+set global super_read_only = off;
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  KEY `t1_ind` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values(1);
+commit;
+use my_db;
+drop database my_db;
+set global read_only =off;
+create database my_db;
+set global super_read_only = on;
+drop database my_db;
+set global read_only = off;
+set global super_read_only = off;
+create database my_db;
+test lock_table_creation
+set global super_read_only = off;
+set global read_only = off;
+set global lock_instance_mode = 'LOCK_TABLE_CREATION';
+use my_db;
+create table t1(id int);
+ERROR HY000: The MySQL server is running with the LOCK_TABLE_CREATION option so it cannot execute this statement
+set global read_only = @saved_read_only;
+set global lock_instance_mode = @saved_lock_instance_mode;
+set global super_read_only = @saved_super_read_only;
+drop user 'u0'@'%';
+drop database my_db;

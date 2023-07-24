@@ -1,0 +1,289 @@
+connect(con_root,localhost, root,,);
+connection con_root;
+
+create database my_db;
+create user 'u0'@'%';
+grant all privileges on my_db.* to 'u0'@'%';
+
+
+connect(con_u0, localhost, u0,,);
+
+connection con_root;
+show global variables like 'lock_instance_mode';
+
+select @@global.lock_instance_mode into @saved_lock_instance_mode;
+select @@global.read_only into @saved_read_only;
+select @@global.super_read_only into @saved_super_read_only;
+
+#
+--echo lock instance require readonly or super_readonly'
+#
+connection con_root;
+--error ER_LOCK_INSTANCE_REQUIRE_READ_ONLY
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+--error ER_LOCK_INSTANCE_REQUIRE_READ_ONLY
+set global lock_instance_mode = 'LOCK_WRITE';
+--error ER_LOCK_INSTANCE_REQUIRE_READ_ONLY
+set global lock_instance_mode = 'LOCK_READ';
+
+set global read_only = on;
+
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+set global lock_instance_mode = 'LOCK_WRITE';
+set global lock_instance_mode = 'LOCK_READ';
+
+set global read_only = off;
+
+set global super_read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+set global lock_instance_mode = 'LOCK_WRITE';
+set global lock_instance_mode = 'LOCK_READ';
+set global super_read_only = off;
+
+
+#
+--echo test lock_write_growth
+#
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+
+connection con_root;
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+insert into t1 values(1);
+commit;
+
+
+connection con_u0;
+use my_db;
+select * from t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+insert into t1 values(1);
+--error ER_OPTION_PREVENTS_STATEMENT
+create table t2(id int);
+
+truncate table t1;
+optimize table t1;
+drop index t1_ind on t1;
+drop table t1;
+commit;
+rollback;
+
+connection con_root;
+set global read_only =off;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+set global super_read_only = on;
+
+connection con_u0;
+use my_db;
+select * from t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+insert into t1 values(1);
+--error ER_OPTION_PREVENTS_STATEMENT
+create table t2(id int);
+
+truncate table t1;
+optimize table t1;
+drop index t1_ind on t1;
+drop table t1;
+commit;
+rollback;
+
+#
+--echo test lock_write
+#
+connection con_root;
+set global super_read_only = off;
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE';
+
+connection con_root;
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+insert into t1 values(1);
+commit;
+
+
+connection con_u0;
+use my_db;
+select * from t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+insert into t1 values(1);
+--error ER_OPTION_PREVENTS_STATEMENT
+create table t2(id int);
+
+--error ER_OPTION_PREVENTS_STATEMENT
+truncate table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+optimize table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop index t1_ind on t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop table t1;
+commit;
+rollback;
+
+connection con_root;
+set global read_only =off;
+set global super_read_only = on;
+
+connection con_u0;
+use my_db;
+select * from t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+insert into t1 values(1);
+--error ER_OPTION_PREVENTS_STATEMENT
+create table t2(id int);
+
+--error ER_OPTION_PREVENTS_STATEMENT
+truncate table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+optimize table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop index t1_ind on t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop table t1;
+commit;
+rollback;
+
+
+connection con_root;
+set global read_only = off;
+set global super_read_only = off;
+drop table t1;
+
+#
+--echo test lock_read
+#
+
+connection con_root;
+set global super_read_only = off;
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_READ';
+
+connection con_root;
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+insert into t1 values(1);
+commit;
+
+
+connection con_u0;
+use my_db;
+--error ER_OPTION_PREVENTS_STATEMENT
+select * from t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+insert into t1 values(1);
+--error ER_OPTION_PREVENTS_STATEMENT
+create table t2(id int);
+
+--error ER_OPTION_PREVENTS_STATEMENT
+truncate table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+optimize table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop index t1_ind on t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop table t1;
+commit;
+rollback;
+
+connection con_root;
+set global read_only =off;
+set global super_read_only = on;
+
+connection con_u0;
+use my_db;
+--error ER_OPTION_PREVENTS_STATEMENT
+select * from t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+insert into t1 values(1);
+--error ER_OPTION_PREVENTS_STATEMENT
+create table t2(id int);
+
+--error ER_OPTION_PREVENTS_STATEMENT
+truncate table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+optimize table t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop index t1_ind on t1;
+--error ER_OPTION_PREVENTS_STATEMENT
+drop table t1;
+commit;
+rollback;
+
+
+connection con_root;
+set global read_only = off;
+set global super_read_only = off;
+drop table t1;
+
+
+#
+--echo test drop db
+#
+
+connection con_root;
+set global super_read_only = off;
+set global read_only = on;
+set global lock_instance_mode = 'LOCK_WRITE_GROWTH';
+
+connection con_root;
+use my_db;
+create table t1(id int);
+alter table t1 add index t1_ind(id);
+show create table t1;
+insert into t1 values(1);
+commit;
+
+
+connection con_u0;
+use my_db;
+drop database my_db;
+
+connection con_root;
+set global read_only =off;
+create database my_db;
+set global super_read_only = on;
+
+connection con_u0;
+drop database my_db;
+
+
+connection con_root;
+set global read_only = off;
+set global super_read_only = off;
+create database my_db;
+
+
+#
+--echo test lock_table_creation
+#
+connection con_root;
+set global super_read_only = off;
+set global read_only = off;
+set global lock_instance_mode = 'LOCK_TABLE_CREATION';
+
+connection con_u0;
+use my_db;
+--error ER_OPTION_PREVENTS_STATEMENT
+create table t1(id int);
+
+
+connection con_root;
+set global read_only = @saved_read_only;
+set global lock_instance_mode = @saved_lock_instance_mode;
+set global super_read_only = @saved_super_read_only;
+
+drop user 'u0'@'%';
+drop database my_db;
+
+disconnect con_u0;
+disconnect con_root;

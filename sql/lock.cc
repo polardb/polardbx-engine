@@ -105,6 +105,7 @@
 #include "sql/session_tracker.h"
 #include "sql/sql_base.h"  // MYSQL_LOCK_LOG_TABLE
 #include "sql/sql_class.h"
+#include "sql/sql_common_ext.h"
 #include "sql/sql_const.h"
 #include "sql/sql_db.h"  // check_schema_readonly
 #include "sql/sql_lex.h"
@@ -209,9 +210,12 @@ static int lock_tables_check(THD *thd, TABLE **tables, size_t count,
     if (!(flags & MYSQL_LOCK_IGNORE_GLOBAL_READ_ONLY) && !t->s->tmp_table &&
         !is_perfschema_db(t->s->db.str, t->s->db.length)) {
       if (t->reginfo.lock_type >= TL_WRITE_ALLOW_WRITE &&
-          (check_readonly(thd, true) ||
+          (check_readonly(thd, false) ||
            check_schema_readonly(thd, t->s->db.str, t->s))) {
-        return 1;
+        if (lock_instance_mode != LOCK_INSTANCE_WRITE_GROWTH) {
+          err_readonly(thd);
+          return 1;
+        }
       }
     }
   }
@@ -766,7 +770,12 @@ bool lock_schema_name(THD *thd, const char *db) {
     Now when we have protection against concurrent change of read_only
     option we can safely re-check its value.
   */
-  if (check_readonly(thd, true)) return true;
+  if (check_readonly(thd, false)) {
+    if (lock_instance_mode != LOCK_INSTANCE_WRITE_GROWTH) {
+      err_readonly(thd);
+      return true;
+    }
+  }
 
   /*
     We have an IX lock on the schema name, so we can check the read

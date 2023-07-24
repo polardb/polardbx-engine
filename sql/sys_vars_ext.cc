@@ -26,6 +26,7 @@
 #include "sys_vars_ext.h"
 #include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_internal_account.h"
+#include "sql/sql_common_ext.h"
 
 #include "my_config.h"
 #include "mysqld.h"
@@ -100,6 +101,20 @@ static bool fix_server_version(sys_var *, THD *, enum_var_type) {
   return false;
 }
 
+/* lock_instance mode > LOCK_INSTANCE_TABLE_CREATION require read only */
+static bool check_lock_instance_mode(sys_var *, THD *, set_var *var) {
+  if (var->save_result.ulonglong_value > LOCK_INSTANCE_TABLE_CREATION) {
+    if (!opt_readonly && !opt_super_readonly) {
+      my_error(ER_LOCK_INSTANCE_REQUIRE_READ_ONLY, MYF(0),
+               lock_instance_mode_names[var->save_result.ulonglong_value]);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
 /**
   RDS DEFINED variables
 */
@@ -163,6 +178,18 @@ static Sys_var_bool Sys_opt_enable_rds_priv_strategy(
     "it will protect reserved account and privileges",
     GLOBAL_VAR(opt_enable_rds_priv_strategy), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_enum Sys_lock_instance_mode(
+    "lock_instance_mode",
+    "Instance lock mode: "
+    "LOCK_NON is nothing to do;"
+    "LOCK_TABLE_CREATION deny all SQLCOM_CREATE_TABLE;"
+    "LOCK_WRITE_GROWTH equal read only but allow shrink space;"
+    "LOCK_WRITE equal read only;"
+    "LOCK_READ block all query;",
+    GLOBAL_VAR(lock_instance_mode), CMD_LINE(REQUIRED_ARG),
+    lock_instance_mode_names, DEFAULT(LOCK_INSTANCE_NON), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_lock_instance_mode), ON_UPDATE(NULL));
 
 /* RDS DEFINED */
 

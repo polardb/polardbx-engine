@@ -545,6 +545,12 @@ The following options may be given as the first argument:
  Set the language used for the month names and the days of
  the week.
  --local-infile      Enable LOAD DATA LOCAL INFILE
+ --lock-instance-mode=name 
+ Instance lock mode: LOCK_NON is nothing to
+ do;LOCK_TABLE_CREATION deny all
+ SQLCOM_CREATE_TABLE;LOCK_WRITE_GROWTH equal read only but
+ allow shrink space;LOCK_WRITE equal read only;LOCK_READ
+ block all query;
  --lock-wait-timeout=# 
  Timeout in seconds to wait for a lock before returning an
  error.
@@ -1860,6 +1866,7 @@ large-pages FALSE
 lc-messages en_US
 lc-time-names en_US
 local-infile FALSE
+lock-instance-mode LOCK_NON
 lock-wait-timeout 31536000
 log-bin (No default value)
 log-bin-index (No default value)

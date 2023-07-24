@@ -662,6 +662,7 @@ SET(SQL_SHARED_SOURCES
   lizard/lizard_snapshot.cc
   lizard_rpl_binlog_sender.cc
   lizard_rpl_rli.cc
+  sql_common_ext.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)

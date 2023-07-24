@@ -111,6 +111,7 @@
 #include "sql/sql_base.h"  // free_io_cache
 #include "sql/sql_bitmap.h"
 #include "sql/sql_class.h"
+#include "sql/sql_common_ext.h"
 #include "sql/sql_error.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_parse.h"   // check_stack_overrun
@@ -1736,10 +1737,13 @@ int ha_commit_trans(THD *thd, bool all, bool ignore_global_read_lock) {
     }
 
     if (rw_trans && stmt_has_updated_trans_table(ha_info) &&
-        check_readonly(thd, true)) {
-      ha_rollback_trans(thd, all);
-      error = 1;
-      goto end;
+        check_readonly(thd, false)) {
+      if (lock_instance_mode != LOCK_INSTANCE_WRITE_GROWTH) {
+        err_readonly(thd);
+        ha_rollback_trans(thd, all);
+        error = 1;
+        goto end;
+      }
     }
 
     if (!trn_ctx->no_2pc(trx_scope) && (trn_ctx->rw_ha_count(trx_scope) > 1))

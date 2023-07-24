@@ -10055,6 +10055,9 @@ ER_IA_TOO_MANY_CONNECTIONS
 ER_RESERVED_USER_OR_PRIVS
   eng "Rerserved user or privileges can't be modified"
 
+ER_LOCK_INSTANCE_REQUIRE_READ_ONLY
+  eng "Lock instance %-.64s require read only or super read only"
+
 #
 #  End of RDS error message.
 #

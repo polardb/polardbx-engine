@@ -147,6 +147,7 @@
 #include "sql/sql_check_constraint.h"
 #include "sql/sql_class.h"
 #include "sql/sql_cmd.h"
+#include "sql/sql_common_ext.h"
 #include "sql/sql_connect.h"  // decrease_user_connections
 #include "sql/sql_const.h"
 #include "sql/sql_db.h"  // mysql_change_db
@@ -1473,9 +1474,26 @@ out:
 static bool deny_updates_if_read_only_option(THD *thd, Table_ref *all_tables) {
   DBUG_TRACE;
 
+  LEX *lex = thd->lex;
+
+  // For lock_table_creation lock mode;
+  if (check_instance_lock_before_readonly(lex->sql_command) ==
+          LOCK_CHECK_DENY &&
+      !thd_is_slave_or_super(thd))
+    return true;
+
   if (!check_readonly(thd, false)) return false;
 
-  LEX *lex = thd->lex;
+  /* Check the sql command if instance is locked */
+  switch (check_instance_lock_after_readonly(lex->sql_command)) {
+    case LOCK_CHECK_ALLOWED:
+      return false;
+    case LOCK_CHECK_DENY:
+      return true;
+    case LOCK_CHECK_CONTINUE:
+      break;
+  }
+
   if (!(sql_command_flags[lex->sql_command] & CF_CHANGES_DATA)) return false;
 
   /* Multi update is an exception and is dealt with later. */
@@ -3199,7 +3217,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
       tables. Except for the replication thread and the 'super' users.
     */
     if (deny_updates_if_read_only_option(thd, all_tables)) {
-      err_readonly(thd);
+      err_readonly_or_instance_lock(thd);
       return -1;
     }
   } /* endif unlikely slave */
