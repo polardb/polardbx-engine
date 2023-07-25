@@ -58,7 +58,7 @@ MYSQL *STDCALL cli_mysql_real_connect(MYSQL *mysql, const char *host,
                                       ulong client_flag);
 
 void cli_mysql_close(MYSQL *mysql);
-
+// test123
 MYSQL_FIELD *cli_list_fields(MYSQL *mysql);
 bool cli_read_prepare_result(MYSQL *mysql, MYSQL_STMT *stmt);
 MYSQL_DATA *cli_read_rows(MYSQL *mysql, MYSQL_FIELD *mysql_fields, uint fields);
