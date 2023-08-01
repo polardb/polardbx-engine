@@ -455,15 +455,14 @@ void trx_assign_txn_rseg(trx_t *trx);
 dberr_t trx_always_assign_txn_undo(trx_t *trx);
 
 /**
-  If during an external XA, check whether the mapping relationship between gtrid
+  If during an external XA, check whether the mapping relationship between xid
   and rollback segment is as expected.
 
   @param[in]        trx         current transaction
 
   @return           true        if success
 */
-bool txn_check_gtrid_rseg_mapping(const XID *xid,
-                                  const trx_rseg_t *expect_rseg);
+bool txn_check_xid_rseg_mapping(const XID *xid, const trx_rseg_t *expect_rseg);
 
 /** For saving XID add txn undo slot, if required.
 @param[in]  trx   transaction
@@ -844,25 +843,23 @@ class Undo_retention {
 void undo_retention_init();
 
 /**
-  Get a TXN rseg by GTRID.
+  Get a TXN rseg by XID.
 
   @retval     rollback segment
 */
-trx_rseg_t *get_txn_rseg_by_gtrid(const char *gtrid, unsigned len);
+trx_rseg_t *get_txn_rseg_by_xid(const XID *xid);
 
 /**
-  Find transactions in the finalized state by GTRID.
+  Find transactions in the finalized state by XID.
 
-  @params[in] rseg         The rollseg where the transaction is being looked up.
-  @params[in] gtrid        gtird
-  @params[in] len          length
-  @params[out] txn_undo_hdr Corresponding txn undo header
+  @param[in]  rseg         The rollseg where the transaction is being looked up.
+  @params[in] xid          xid
+  @param[out] txn_undo_hdr Corresponding txn undo header
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool txn_rseg_find_trx_info_by_gtrid(trx_rseg_t *rseg, const char *gtrid,
-                                     unsigned len,
-                                     txn_undo_hdr_t *txn_undo_hdr);
+bool txn_rseg_find_trx_info_by_xid(trx_rseg_t *rseg, const XID *xid,
+                                   txn_undo_hdr_t *txn_undo_hdr);
 
 /**
   Only write XID on the TXN.

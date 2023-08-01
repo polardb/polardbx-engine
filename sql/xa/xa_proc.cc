@@ -28,14 +28,7 @@
 
 namespace lizard {
 namespace xa {
-const char *Transaction_state_str[] = {"COMMIT", "ROLLBACK", "UNKNOWN"};
 const char *Transaction_csr_str[] = {"AUTOMATIC_GCN", "ASSIGNED_GCN", "NONE"};
-
-/** trans state to message string. */
-static const char *trx_slot_trx_state_to_str(
-    const enum Transaction_state state) {
-  return Transaction_state_str[state];
-}
 
 /** trans gcn source to message string. */
 static const char *trx_slot_trx_gcn_csr_to_str(const enum my_csr_t my_csr) {
@@ -50,19 +43,48 @@ static const char *trx_slot_trx_gcn_csr_to_str(const enum my_csr_t my_csr) {
 }  // namespace lizard
 
 namespace im {
+
+static const char *xa_status_str[] = {
+  "ATTACHED",
+  "DETACHED",
+  "COMMIT",
+  "ROLLBACK",
+  "NOTSTART_OR_FORGET",
+  "NOT_SUPPORT",
+};
+
+enum XA_status {
+  /** Another seesion has attached XA. */
+  ATTACHED,
+  /** Detached XA, the real state of the XA can't be ACTIVE. */
+  DETACHED,
+  /** The XA has been erased from transaction cache, and also has been
+  committed. */
+  COMMIT,
+  /** The XA has been erased from transaction cache, and also has been
+  rollbacked. */
+  ROLLBACK,
+  /** Can't find such a XA in transaction cache and in transaction slots, it
+  might never exist or has been forgotten. */
+  NOTSTART_OR_FORGET,
+  /** Found the XA in transaction slots, but the real state (commit/rollback)
+  of the transaction can't be confirmed (using the old TXN format.). */
+  NOT_SUPPORT,
+};
+
 /* All concurrency control system memory usage */
 PSI_memory_key key_memory_xa_proc;
 
 /* The uniform schema name for xa */
 LEX_CSTRING XA_PROC_SCHEMA = {C_STRING_WITH_LEN("dbms_xa")};
 
-/* Singleton instance for find_by_gtrid */
-Proc *Xa_proc_find_by_gtrid::instance() {
-  static Proc *proc = new Xa_proc_find_by_gtrid(key_memory_xa_proc);
+/* Singleton instance for find_by_xid */
+Proc *Xa_proc_find_by_xid::instance() {
+  static Proc *proc = new Xa_proc_find_by_xid(key_memory_xa_proc);
   return proc;
 }
 
-Sql_cmd *Xa_proc_find_by_gtrid::evoke_cmd(THD *thd, List<Item> *list) const {
+Sql_cmd *Xa_proc_find_by_xid::evoke_cmd(THD *thd, List<Item> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -136,20 +158,21 @@ bool get_xid(const List<Item> *list, XID *xid) {
   return false;
 }
 
-bool Sql_cmd_xa_proc_find_by_gtrid::pc_execute(THD *) {
-  DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::pc_execute");
+bool Sql_cmd_xa_proc_find_by_xid::pc_execute(THD *) {
+  DBUG_ENTER("Sql_cmd_xa_proc_find_by_xid::pc_execute");
   DBUG_RETURN(false);
 }
 
-void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
-  DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::send_result");
-
+void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
+  DBUG_ENTER("Sql_cmd_xa_proc_find_by_xid::send_result");
   Protocol *protocol;
   XID xid;
+  XID_STATE *xs;
+  XA_status xa_status;
   lizard::xa::Transaction_info info;
   bool found;
-  char gtrid[MAXGTRIDSIZE];
-  unsigned gtrid_length;
+  my_gcn_t gcn;
+  enum my_csr_t csr;
 
   protocol = thd->get_protocol();
 
@@ -158,29 +181,64 @@ void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
     DBUG_VOID_RETURN;
   }
 
-  if (get_gtrid(m_list, gtrid, gtrid_length)) {
-    my_error(ER_XA_PROC_WRONG_GTRID, MYF(0), MAXGTRIDSIZE);
+  if (get_xid(m_list, &xid)) {
+    my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
     DBUG_VOID_RETURN;
+  }
+
+  std::shared_ptr<Transaction_ctx> transaction = transaction_cache_search(&xid);
+  if (transaction) {
+    /** Case 1: DETACHED or ATTACHED. */
+    xs = transaction->xid_state();
+
+    xa_status =
+        xs->is_in_recovery() ? XA_status::DETACHED : XA_status::ATTACHED;
+
+    gcn = MYSQL_GCN_NULL;
+
+    csr = MYSQL_CSR_NONE;
+  } else {
+    found = lizard::xa::trx_slot_get_trx_info_by_xid(&xid, &info);
+    if (found) {
+      /** Case 2: Finish state. */
+      switch (info.state) {
+        case lizard::xa::TRANS_STATE_COMMITTED:
+          xa_status = XA_status::COMMIT;
+          break;
+        case lizard::xa::TRANS_STATE_ROLLBACK:
+          xa_status = XA_status::ROLLBACK;
+          break;
+        case lizard::xa::TRANS_STATE_UNKNOWN:
+          xa_status = XA_status::NOT_SUPPORT;
+          break;
+      };
+
+      gcn = info.my_gcn.get_gcn();
+
+      csr = info.my_gcn.get_csr();
+    } else {
+      /** Case 3: Not ever start or already forget. */
+      xa_status = XA_status::NOTSTART_OR_FORGET;
+
+      gcn = MYSQL_GCN_NULL;
+
+      csr = MYSQL_CSR_NONE;
+    }
   }
 
   if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
 
-  found =
-      lizard::xa::trx_slot_get_trx_info_by_gtrid(gtrid, gtrid_length, &info);
+  protocol->start_row();
 
-  if (found) {
-    protocol->start_row();
-    protocol->store((ulonglong)info.my_gcn.get_gcn());
+  protocol->store_string(xa_status_str[xa_status],
+                         strlen(xa_status_str[xa_status]), system_charset_info);
 
-    const char *state = lizard::xa::trx_slot_trx_state_to_str(info.state);
-    protocol->store_string(state, strlen(state), system_charset_info);
+  protocol->store((ulonglong)gcn);
 
-    const char *csr =
-        lizard::xa::trx_slot_trx_gcn_csr_to_str(info.my_gcn.get_csr());
-    protocol->store_string(csr, strlen(csr), system_charset_info);
+  const char *csr_msg = lizard::xa::trx_slot_trx_gcn_csr_to_str(csr);
+  protocol->store_string(csr_msg, strlen(csr_msg), system_charset_info);
 
-    if (protocol->end_row()) DBUG_VOID_RETURN;
-  }
+  if (protocol->end_row()) DBUG_VOID_RETURN;
 
   my_eof(thd);
   DBUG_VOID_RETURN;

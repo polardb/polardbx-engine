@@ -96,14 +96,13 @@ extern bool thd_get_transaction_group(THD *thd);
 namespace lizard {
 namespace xa {
 /**
-  Hash the GTRID to an integer.
+  Hash the XID to an integer.
 
-  @params[in] in_gtrid gtird
-  @params[in] in_len   length
+  @params[in] in_xid   in_xid key
 
   @retval hash value.
 */
-uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len);
+uint64_t hash_xid(const XID *in_xid);
 
 /** Check validity of the XID status of the trx.
 @param[in]      trx   innodb transaction

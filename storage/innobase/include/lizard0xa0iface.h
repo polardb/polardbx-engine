@@ -63,16 +63,14 @@ struct Transaction_info {
 bool start_and_register_rw_trx_for_xa(THD *thd);
 
 /**
-  Find transactions in the finalized state by GTRID.
+  Find transactions in the finalized state by XID
 
-  @params[in] in_gtrid          gtird
-  @params[in] in_len            length
+  @params[in] XID               xid
   @param[out] Transaction_info  Corresponding transaction info
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool trx_slot_get_trx_info_by_gtrid(const char *gtrid, unsigned len,
-                                    Transaction_info *info);
+bool trx_slot_get_trx_info_by_xid(const XID *xid, Transaction_info *info);
 
 /**
   Alloc transaction slot in innodb

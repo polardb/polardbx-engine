@@ -40,9 +40,9 @@ select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '1'
+--let $my_xid= '1','',1
 --let $expect_csr= ASSIGNED_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 2
@@ -69,9 +69,9 @@ select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '2'
+--let $my_xid= '2','',1
 --let $expect_csr= AUTOMATIC_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # cleanup

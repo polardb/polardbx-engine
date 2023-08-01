@@ -43,8 +43,8 @@ xa commit '1';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '1'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '1','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 --echo ###############################
 --echo # case 2
@@ -63,8 +63,8 @@ xa commit '2';
 
 --let $expect_gcn=
 --let $expect_state= COMMIT
---let $gtrid= '2'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '2','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 --echo ###############################
 --echo # case 3
@@ -83,8 +83,8 @@ xa commit '3';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '3'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '3','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 --echo ###############################
 --echo # case 4
@@ -103,8 +103,8 @@ xa commit '4';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '4'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '4','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 --echo ###############################
 --echo # case 5
@@ -123,8 +123,8 @@ xa commit '5';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '5'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '5','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 --echo ###############################
 --echo # case 6
@@ -156,8 +156,8 @@ xa commit '6', 'b1';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '6'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '6','b1',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 connection conn1_b;
 --disable_query_log
@@ -167,8 +167,8 @@ xa commit '6', 'b2';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '6'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '6','b2',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 disconnect conn1_b;
 
 --echo ###############################
@@ -187,8 +187,8 @@ xa commit '7';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '7'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '7','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 connection conn1;
 xa start '7';
@@ -202,8 +202,8 @@ xa commit '7';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '7'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '7','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 connection conn1;
 xa start '7';
@@ -217,8 +217,8 @@ xa commit '7';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '7'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '7','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 connection conn1;
 --let $commit_gcn = `select @base_seq + 700`
@@ -232,8 +232,8 @@ xa commit '7' one phase;
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '7'
---source suite/xcluster/t/xa_proc_find_by_gtrid_verify_for_xcluster.inc
+--let $my_xid= '7','',1
+--source suite/xcluster/t/xa_proc_find_by_xid_verify_for_xcluster.inc
 
 connection conn1;
 drop table t1;

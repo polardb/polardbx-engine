@@ -24,9 +24,9 @@ xa commit '1';
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '1'
+--let $my_xid= '1','',1
 --let $expect_csr= ASSIGNED_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 2
@@ -48,9 +48,9 @@ xa commit '2';
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '2'
+--let $my_xid= '2','',1
 --let $expect_csr= AUTOMATIC_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 3
@@ -64,9 +64,9 @@ xa commit '3';
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '3'
+--let $my_xid= '3','',1
 --let $expect_csr= AUTOMATIC_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 4
@@ -79,9 +79,9 @@ xa commit '4' one phase;
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '4'
+--let $my_xid= '4','',1
 --let $expect_csr= AUTOMATIC_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 5
@@ -122,9 +122,9 @@ XA COMMIT '5';
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '5'
+--let $my_xid= '5','',1
 --let $expect_csr= ASSIGNED_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 6
@@ -170,9 +170,9 @@ XA COMMIT '6';
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '6'
+--let $my_xid= '6','',1
 --let $expect_csr= ASSIGNED_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 7
@@ -199,9 +199,9 @@ connection default;
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '7'
+--let $my_xid= '7','',1
 --let $expect_csr= ASSIGNED_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 8
@@ -227,9 +227,9 @@ xa commit '8';
 
 --let $expect_gcn= $my_gcn
 --let $expect_state= COMMIT
---let $gtrid= '8'
+--let $my_xid= '8','',1
 --let $expect_csr= ASSIGNED_GCN
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # cleanup

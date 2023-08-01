@@ -29,6 +29,7 @@ xa start '3';
 insert into t1 values (1);
 xa end '3';
 xa prepare '3';
+include/assert.inc [expect_state == actual_state]
 xa commit '3';
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
@@ -39,27 +40,32 @@ xa start '4';
 xa end '4';
 xa prepare '4';
 xa commit '4';
+include/assert.inc [expect_state == actual_state]
 ###############################
 # case 5
 ###############################
 xa start '5';
-call dbms_xa.find_by_gtrid('5');
-GCN	State	CSR
+call dbms_xa.find_by_xid('5', '', 1);
+Status	GCN	CSR
+ATTACHED	18446744073709551615	NONE
 insert into t1 values (1);
-call dbms_xa.find_by_gtrid('5');
-GCN	State	CSR
+call dbms_xa.find_by_xid('5', '', 1);
+Status	GCN	CSR
+ATTACHED	18446744073709551615	NONE
 xa end '5';
-call dbms_xa.find_by_gtrid('5');
-GCN	State	CSR
+call dbms_xa.find_by_xid('5', '', 1);
+Status	GCN	CSR
+ATTACHED	18446744073709551615	NONE
 xa prepare '5';
-call dbms_xa.find_by_gtrid('5');
-GCN	State	CSR
+call dbms_xa.find_by_xid('5', '', 1);
+Status	GCN	CSR
+ATTACHED	18446744073709551615	NONE
 xa commit '5';
 ###############################
 # case 6
 ###############################
-call dbms_xa.find_by_gtrid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-ERROR HY000: Wrong GTRID for dbms_xa. Please check the format of the GTRID. For example, gtrid cannot exceed 64 bytes.
+call dbms_xa.find_by_xid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '', 1);
+ERROR HY000: Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed 64 bytes, and bqual cannot exceed 64 bytes.
 ###############################
 # case 7
 ###############################
