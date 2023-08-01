@@ -112,8 +112,8 @@ typedef void (*set_gcn_if_bigger_t)(my_gcn_t gcn);
 
 typedef bool (*start_trx_for_xa_t)(handlerton *hton, THD *thd, bool rw);
 typedef bool (*assign_slot_for_xa_t)(THD *thd, my_slot_ptr_t *slot_ptr);
-typedef bool (*search_trx_by_gtrid_t)(const char *gtrid, unsigned len,
-                                      lizard::xa::Transaction_info *info);
+typedef bool (*search_trx_by_xid_t)(const XID *xid,
+                                    lizard::xa::Transaction_info *info);
 typedef int (*convert_timestamp_to_scn_t)(THD *thd, my_utc_t utc,
                                           my_scn_t *scn);
 template <typename T>
@@ -135,7 +135,7 @@ struct handlerton_ext {
   set_gcn_if_bigger_t set_gcn_if_bigger;
   start_trx_for_xa_t start_trx_for_xa;
   assign_slot_for_xa_t assign_slot_for_xa;
-  search_trx_by_gtrid_t search_trx_by_gtrid;
+  search_trx_by_xid_t search_trx_by_xid;
   convert_timestamp_to_scn_t convert_timestamp_to_scn;
   search_up_limit_tid_t<lizard::Snapshot_scn_vision>
       search_up_limit_tid_for_scn;

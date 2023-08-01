@@ -123,58 +123,93 @@ void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
 
 namespace lizard {
 namespace xa {
+
+template <class T>
+struct my_hash {};
+
 /** This one is based on splitmix64, which seems to be based on the blog article
 Better Bit Mixing (mix 13) */
-uint64_t hash_u64(uint64_t x) {
-  x = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
-  x = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
-  x = x ^ (x >> 31);
-  return x;
-}
+template <>
+struct my_hash<uint64_t> {
+  uint64_t operator()(const uint64_t key) {
+    uint64_t x = key;
+    x = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+    x = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
+    x = x ^ (x >> 31);
+    return x;
+  }
+};
+
+/** See https://github.com/gcc-mirror/gcc/blob/master/intl/hash-string.h */
+/* We assume to have `unsigned long int' value with at least 32 bits.  */
+#define HASHWORDBITS 32
+template <>
+struct my_hash<char [XIDDATASIZE]> {
+  uint64_t operator()(const char key[XIDDATASIZE]) {
+    uint64_t hval, g;
+    const char *str = key;
+    const char *end = key + XIDDATASIZE;
+
+    /* Compute the hash value for the given string.  */
+    hval = 0;
+    while (str < end && *str != '\0') {
+      hval <<= 4;
+      hval += (unsigned long int)*str++;
+      g = hval & ((unsigned long int)0xf << (HASHWORDBITS - 4));
+      if (g != 0) {
+        hval ^= g >> (HASHWORDBITS - 8);
+        hval ^= g;
+      }
+    }
+    return hval;
+  }
+};
 
 /** The following function, which is really good to hash different fields, is
 copyed from boost::hash_combine. */
-static inline void hash_combine(uint64_t &s, const uint64_t &v) {
-  s ^= hash_u64(v) + 0x9e3779b9 + (s << 6) + (s >> 2);
+template <class T>
+static inline void hash_combine(uint64_t &s, const T &v) {
+  my_hash<T> h;
+  s ^= h(v) + 0x9e3779b9 + (s << 6) + (s >> 2);
 }
 
-uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len) {
+uint64_t hash_xid(const XID *xid) {
   uint64_t res = 0;
-  char gtrid[MAXGTRIDSIZE];
-  const char *gtrid_ptr;
-  const char *end = gtrid + MAXGTRIDSIZE;
+  char xid_data[XIDDATASIZE];
+  size_t xid_data_len = xid->get_gtrid_length() + xid->get_bqual_length();
+  size_t remain = XIDDATASIZE - xid_data_len;
 
-  memset(gtrid, 0, sizeof(gtrid));
-  memcpy(gtrid, in_gtrid, in_len);
+  memcpy(xid_data, xid->get_data(),
+         xid->get_gtrid_length() + xid->get_bqual_length());
+  memset(xid_data + xid_data_len, 0, remain);
 
-  for (gtrid_ptr = gtrid; gtrid_ptr < end; gtrid_ptr += sizeof(uint64_t)) {
-    ut_ad(gtrid_ptr + sizeof(uint64_t) <= end);
-    hash_combine(res, *(uint64_t *)gtrid_ptr);
-  }
+  hash_combine(res, xid_data);
+  hash_combine(res, (uint64_t)xid->get_bqual_length());
+  hash_combine(res, (uint64_t)xid->get_gtrid_length());
+  hash_combine(res, (uint64_t)xid->get_format_id());
 
   return res;
 }
 
 /**
-  Find transactions in the finalized state by GTRID.
+  Find transactions in the finalized state by XID.
 
-  @params[in] in_gtrid          gtird
-  @params[in] in_len            length
+  @params[in] xid               XID
   @param[out] Transaction_info  Corresponding transaction info
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool trx_search_by_gtrid(const char *gtrid, unsigned len,
-                         Transaction_info *info) {
+bool trx_search_by_xid(const XID *xid, Transaction_info *info) {
   trx_rseg_t *rseg;
   txn_undo_hdr_t txn_hdr;
   bool found;
 
-  rseg = get_txn_rseg_by_gtrid(gtrid, len);
+  rseg = get_txn_rseg_by_xid(xid);
 
   ut_ad(rseg);
 
-  found = txn_rseg_find_trx_info_by_gtrid(rseg, gtrid, len, &txn_hdr);
+  found = txn_rseg_find_trx_info_by_xid(rseg, xid, &txn_hdr);
+
   if (found) {
     switch (txn_hdr.state) {
       case TXN_UNDO_LOG_COMMITED:
@@ -241,7 +276,7 @@ bool trx_slot_check_validity(const trx_t *trx) {
 
   /** 3. Check the rseg must be mapped by xid_for_hash. */
   ut_ad(trx_is_txn_rseg_updated(trx));
-  ut_a(txn_check_gtrid_rseg_mapping(&undo_ptr->xid_for_hash, undo_ptr->rseg));
+  ut_a(txn_check_xid_rseg_mapping(&undo_ptr->xid_for_hash, undo_ptr->rseg));
 
   /** 4. Check trx_t::xid and xid_for_hash. */
   if (!trx->xid->is_null()) {

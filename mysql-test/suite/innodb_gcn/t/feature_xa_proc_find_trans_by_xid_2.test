@@ -1,0 +1,91 @@
+source include/have_debug.inc;
+set global innodb_undo_retention = 900;
+
+create table tt (id int);
+insert into tt values (1);
+
+connect (con_a, localhost, root, , );
+connect (con_b, localhost, root, , );
+connection con_a;
+
+--echo ######################################
+--echo # Case 1: NOT_SUPPORT becase of old txn format
+--echo ######################################
+set session debug = "+d, sim_old_txn_undo_hdr";
+xa start '1';
+update tt set id = id + 1;
+xa end '1';
+xa prepare '1';
+xa commit '1';
+
+set session debug = "-d, sim_old_txn_undo_hdr";
+--replace_column 2 #
+call dbms_xa.find_by_xid('1', '', 1);
+
+--echo ######################################
+--echo # Case 2: Attached
+--echo ######################################
+set xa_detach_on_prepare = 0;
+xa start '2';
+update tt set id = id + 1;
+xa end '2';
+xa prepare '2';
+
+connection con_b;
+call dbms_xa.find_by_xid('2', '', 1);
+set xa_detach_on_prepare = default;
+
+--echo ######################################
+--echo # Case 3: Detached
+--echo ######################################
+connection con_a;
+disconnect con_a;
+--source include/wait_until_disconnected.inc
+
+connection con_b;
+call dbms_xa.find_by_xid('2', '', 1);
+disconnect con_b;
+
+--echo ######################################
+--echo # Case 4: Commit
+--echo ######################################
+connection default;
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+--let $commit_gcn = `select @base_seq + 100`
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+xa commit '2';
+
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '2','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ######################################
+--echo # Case 5: NOTSTART_OR_FORGET
+--echo ######################################
+call dbms_xa.find_by_xid('5', '', 1);
+
+--echo ######################################
+--echo # Case 6: 128 Bytes XID
+--echo ######################################
+--let $commit_gcn = `select @base_seq + 600`
+xa start 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+update tt set id = id + 1;
+xa end 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+xa prepare 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+xa commit 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+--let $expect_gcn= $commit_gcn
+--let $expect_state= COMMIT
+--let $my_xid= 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo # cleanup
+set global innodb_undo_retention = default;
+drop table tt;
+

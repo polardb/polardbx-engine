@@ -864,7 +864,7 @@ static trx_rseg_t *get_next_txn_rseg() {
 }
 
 /**
-  Map(Hash) GTRID to {txn_space_slot, rseg_slot}.
+  Map(Hash) XID to {txn_space_slot, rseg_slot}.
 
   NOTES: If truncate TXN, this mapping relationship will be destroyed.
          Fortunately, truncate of TXN tablespace is not supported for
@@ -872,11 +872,11 @@ static trx_rseg_t *get_next_txn_rseg() {
 
   @retval     {txn_space_slot, rseg_slot}
 */
-static txn_space_rseg_slot_t get_txn_space_and_rseg_slot_by_gtrid(
-    const char *gtrid, unsigned len) {
+static txn_space_rseg_slot_t get_txn_space_and_rseg_slot_by_xid(
+    const XID *xid) {
   ut_ad(undo::spaces->own_latch());
 
-  size_t current = xa::hash_gtrid(gtrid, len);
+  size_t current = xa::hash_xid(xid);
 
   size_t n_rollback_segments = srv_rollback_segments;
   /** Lizard : didn't support variable of rollback segment count */
@@ -894,18 +894,18 @@ static txn_space_rseg_slot_t get_txn_space_and_rseg_slot_by_gtrid(
 }
 
 /**
-  Get a TXN rseg by GTRID.
+  Get a TXN rseg by XID.
 
   @retval     rollback segment
 */
-trx_rseg_t *get_txn_rseg_by_gtrid(const char *gtrid, unsigned len) {
+trx_rseg_t *get_txn_rseg_by_xid(const XID *xid) {
   txn_space_rseg_slot_t txn_slot;
 
   /* The number of undo tablespaces cannot be changed while
   we have this s_lock. */
   undo::spaces->s_lock();
 
-  txn_slot = get_txn_space_and_rseg_slot_by_gtrid(gtrid, len);
+  txn_slot = get_txn_space_and_rseg_slot_by_xid(xid);
 
   undo::Tablespace *undo_space;
   trx_rseg_t *rseg = nullptr;
@@ -926,15 +926,14 @@ trx_rseg_t *get_txn_rseg_by_gtrid(const char *gtrid, unsigned len) {
 }
 
 /**
-  If during an external XA, check whether the mapping relationship between gtrid
+  If during an external XA, check whether the mapping relationship between xid
   and rollback segment is as expected.
 
   @param[in]        trx         current transaction
 
   @return           true        if success
 */
-bool txn_check_gtrid_rseg_mapping(const XID *xid,
-                                  const trx_rseg_t *expect_rseg) {
+bool txn_check_xid_rseg_mapping(const XID *xid, const trx_rseg_t *expect_rseg) {
   txn_space_rseg_slot_t txn_slot;
   bool match;
 
@@ -944,8 +943,7 @@ bool txn_check_gtrid_rseg_mapping(const XID *xid,
   we have this s_lock. */
   undo::spaces->s_lock();
 
-  txn_slot = get_txn_space_and_rseg_slot_by_gtrid(xid->get_data(),
-                                                  xid->get_gtrid_length());
+  txn_slot = get_txn_space_and_rseg_slot_by_xid(xid);
 
   undo::Tablespace *undo_space;
 
@@ -992,9 +990,9 @@ dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr) {
   return err;
 }
 
-struct Find_transaction_info_by_gtrid {
-  Find_transaction_info_by_gtrid(const char *_gtrid, unsigned _gtrid_len)
-      : gtrid(_gtrid), gtrid_len(_gtrid_len), found(false), txn_hdr() {}
+struct Find_transaction_info_by_xid {
+  Find_transaction_info_by_xid(const XID *in_xid)
+      : xid(in_xid), found(false), txn_hdr() {}
 
   bool operator()(const page_t *undo_page, const trx_ulogf_t *log_hdr,
                   mtr_t *mtr) {
@@ -1010,8 +1008,7 @@ struct Find_transaction_info_by_gtrid {
 
     trx_undo_read_xid(const_cast<trx_ulogf_t *>(log_hdr), &read_xid);
 
-    if (read_xid.get_gtrid_length() == gtrid_len &&
-        !memcmp(read_xid.get_data(), gtrid, gtrid_len)) {
+    if (read_xid.eq(xid)) {
       trx_undo_hdr_read_txn(undo_page, log_hdr, mtr, &txn_hdr);
       ut_ad(txn_hdr.state == TXN_UNDO_LOG_COMMITED ||
             txn_hdr.state == TXN_UNDO_LOG_PURGED);
@@ -1021,8 +1018,7 @@ struct Find_transaction_info_by_gtrid {
     return found;
   }
 
-  const char *gtrid;
-  unsigned gtrid_len;
+  const XID *xid;
   bool found;
   txn_undo_hdr_t txn_hdr;
 };
@@ -1079,24 +1075,19 @@ static void txn_rseg_iterate_history_list(trx_rseg_t *rseg, Functor &func) {
 }
 
 /**
-  Find transactions in the finalized state by GTRID.
+  Find transactions in the finalized state by XID.
 
   @param[in]  rseg         The rollseg where the transaction is being looked up.
-  @params[in] gtrid        gtird
-  @params[in] len          length
+  @params[in] xid          xid
   @param[out] txn_undo_hdr Corresponding txn undo header
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool txn_rseg_find_trx_info_by_gtrid(trx_rseg_t *rseg, const char *gtrid,
-                                     unsigned len,
-                                     txn_undo_hdr_t *txn_undo_hdr) {
-  Find_transaction_info_by_gtrid finder(gtrid, len);
+bool txn_rseg_find_trx_info_by_xid(trx_rseg_t *rseg, const XID *xid,
+                                   txn_undo_hdr_t *txn_undo_hdr) {
+  Find_transaction_info_by_xid finder(xid);
 
-  ut_ad(gtrid != nullptr);
-  ut_ad(len <= MAXGTRIDSIZE);
-
-  txn_rseg_iterate_history_list<Find_transaction_info_by_gtrid>(rseg, finder);
+  txn_rseg_iterate_history_list<Find_transaction_info_by_xid>(rseg, finder);
 
   if (finder.found) {
     *txn_undo_hdr = finder.txn_hdr;
@@ -1131,8 +1122,7 @@ void trx_assign_txn_rseg(trx_t *trx) {
   } else if (xid.is_null()) {
     trx->rsegs.m_txn.rseg = get_next_txn_rseg();
   } else {
-    trx->rsegs.m_txn.rseg =
-        get_txn_rseg_by_gtrid(xid.get_data(), xid.get_gtrid_length());
+    trx->rsegs.m_txn.rseg = get_txn_rseg_by_xid(&xid);
   }
 }
 

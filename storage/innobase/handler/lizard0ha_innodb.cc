@@ -107,9 +107,9 @@ bool innobase_assign_slot_for_xa(THD *thd, my_slot_ptr_t *slot_ptr_arg) {
   return false;
 }
 
-static bool innobase_search_trx_by_gtrid(const char *gtrid, unsigned len,
-                                         lizard::xa::Transaction_info *info) {
-  return lizard::xa::trx_search_by_gtrid(gtrid, len, info);
+static bool innobase_search_trx_by_xid(const XID *xid,
+                                       lizard::xa::Transaction_info *info) {
+  return lizard::xa::trx_search_by_xid(xid, info);
 }
 template <typename T>
 static my_trx_id_t innobase_search_up_limit_tid(const T &lhs) {
@@ -165,7 +165,7 @@ void innobase_set_gcn_if_bigger(my_gcn_t gcn_arg) {
 }
 
 int innobase_conver_timestamp_to_scn(THD *thd, my_utc_t utc_arg,
-		my_scn_t *scn_arg) {
+                                     my_scn_t *scn_arg) {
   utc_t utc = static_cast<utc_t>(utc_arg);
   scn_t *scn = static_cast<scn_t *>(scn_arg);
   return lizard::convert_timestamp_to_scn(thd, utc, scn);
@@ -189,7 +189,7 @@ void innobase_init_ext(handlerton *hton) {
   hton->ext.set_gcn_if_bigger = innobase_set_gcn_if_bigger;
   hton->ext.start_trx_for_xa = innobase_start_trx_for_xa;
   hton->ext.assign_slot_for_xa = innobase_assign_slot_for_xa;
-  hton->ext.search_trx_by_gtrid = innobase_search_trx_by_gtrid;
+  hton->ext.search_trx_by_xid = innobase_search_trx_by_xid;
   hton->ext.convert_timestamp_to_scn = innobase_conver_timestamp_to_scn;
   hton->ext.search_up_limit_tid_for_scn =
       innobase_search_up_limit_tid<lizard::Snapshot_scn_vision>;

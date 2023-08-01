@@ -23,8 +23,8 @@ xa commit '1';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '1'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '1','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 2
@@ -41,8 +41,8 @@ xa rollback '2';
 
 --let $expect_gcn=
 --let $expect_state= ROLLBACK
---let $gtrid= '2'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '2','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 3
@@ -59,9 +59,9 @@ xa end '3';
 xa prepare '3';
 
 connection conn1;
---let $expect_none=1
---let $gtrid='3'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $expect_state=ATTACHED
+--let $my_xid='3','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 connection default;
 --disable_query_log
@@ -72,8 +72,8 @@ xa commit '3';
 connection conn1;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '3'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '3','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 connection default;
 
 --echo ###############################
@@ -88,22 +88,22 @@ xa prepare '4';
 --enable_query_log
 xa commit '4';
 
---let $expect_none=1
---let $gtrid='4'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $expect_state=NOTSTART_OR_FORGET
+--let $my_xid='4','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 5
 --echo ###############################
 --let $commit_gcn = `select @base_seq + 500`
 xa start '5';
-call dbms_xa.find_by_gtrid('5');
+call dbms_xa.find_by_xid('5', '', 1);
 insert into t1 values (1);
-call dbms_xa.find_by_gtrid('5');
+call dbms_xa.find_by_xid('5', '', 1);
 xa end '5';
-call dbms_xa.find_by_gtrid('5');
+call dbms_xa.find_by_xid('5', '', 1);
 xa prepare '5';
-call dbms_xa.find_by_gtrid('5');
+call dbms_xa.find_by_xid('5', '', 1);
 
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
@@ -113,8 +113,8 @@ xa commit '5';
 --echo ###############################
 --echo # case 6
 --echo ###############################
---error ER_XA_PROC_WRONG_GTRID
-call dbms_xa.find_by_gtrid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+--error ER_XA_PROC_WRONG_XID
+call dbms_xa.find_by_xid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '', 1);
 
 --echo ###############################
 --echo # case 7
@@ -131,8 +131,8 @@ xa commit 'drds-13ef7e97bbc00000@e394da2fea20da21', 'DRDS_POLARX1_QATEST_APP_000
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= 'drds-13ef7e97bbc00000@e394da2fea20da21'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= 'drds-13ef7e97bbc00000@e394da2fea20da21','DRDS_POLARX1_QATEST_APP_000003_GROUP@0004',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # case 8
@@ -148,8 +148,8 @@ xa commit '8' one phase;
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '8'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '8','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 drop table t1;
 

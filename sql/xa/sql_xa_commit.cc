@@ -148,6 +148,7 @@ bool Sql_cmd_xa_commit::process_attached_xa_commit(THD *thd) const {
     } else {
       CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_commit_xa_trx");
       DEBUG_SYNC(thd, "trans_xa_commit_after_acquire_commit_lock");
+      DBUG_EXECUTE_IF("simulate_crash_on_commit_xa_trx", DBUG_SUICIDE(););
 
       if (tc_log != nullptr)
         res = tc_log->commit(thd, /* all */ true);

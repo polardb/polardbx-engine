@@ -1,0 +1,2 @@
+--binlog_format='row'
+--xa_detach_on_prepare=0

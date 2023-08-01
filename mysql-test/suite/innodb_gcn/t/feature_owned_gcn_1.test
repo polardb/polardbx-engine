@@ -1,0 +1,235 @@
+call mtr.add_suppression("Found 1 prepared XA transactions");
+
+--source include/have_debug.inc
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+set global innodb_purge_rseg_truncate_frequency = 1;
+
+create table tt (id int);
+
+--source include/wait_innodb_all_purged.inc
+
+set global innodb_undo_retention = 9000;
+
+--echo ###############################
+--echo # case 1
+--echo ###############################
+--let $my_gcn = `select @base_seq + 100`
+xa start '1';
+insert into tt values (1);
+xa end '1';
+xa prepare '1';
+
+--disable_query_log
+--eval set innodb_commit_seq = $my_gcn
+--enable_query_log
+xa commit '1';
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '1','',1
+--let $expect_csr= ASSIGNED_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 2
+--echo ###############################
+--let $my_gcn = `select @base_seq + 200`
+xa start '2';
+
+--echo # push up gcn by innodb_snapshot_seq
+--disable_query_log
+--eval set innodb_snapshot_seq = $my_gcn
+--enable_query_log
+select * from tt;
+
+insert into tt values (2);
+xa end '2';
+
+xa prepare '2';
+xa commit '2';
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '2','',1
+--let $expect_csr= AUTOMATIC_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 3
+--echo ###############################
+--let $my_gcn = `select @base_seq + 200`
+xa start '3';
+insert into tt values (3);
+xa end '3';
+xa prepare '3';
+xa commit '3';
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '3','',1
+--let $expect_csr= AUTOMATIC_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 4
+--echo ###############################
+--let $my_gcn = `select @base_seq + 200`
+xa start '4';
+insert into tt values (4);
+xa end '4';
+xa commit '4' one phase;
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '4','',1
+--let $expect_csr= AUTOMATIC_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 5
+--echo ###############################
+set xa_detach_on_prepare = 0;
+--let $my_gcn = `select @base_seq + 500`
+xa start '5';
+insert into tt values (5);
+xa end '5';
+
+xa prepare '5';
+
+--disable_query_log
+--eval set innodb_commit_seq = $my_gcn
+--enable_query_log
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET @@SESSION.DEBUG= '+d, simulate_crash_on_commit_xa_trx';
+--error 2013
+xa commit '5';
+
+# restart and reconnect.
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+--echo # Restart the master server
+--exec echo "restart: --innodb_undo_retention=9000 --innodb_purge_rseg_truncate_frequency=1" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+--let $diff = 10
+--expr $my_gcn = $my_gcn + $diff
+--disable_query_log
+--eval set innodb_commit_seq = $my_gcn
+--enable_query_log
+
+XA COMMIT '5';
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '5','',1
+--let $expect_csr= ASSIGNED_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 6
+--echo ###############################
+--let $my_gcn = `select @base_seq + 600`
+xa start '6';
+insert into tt values (6);
+xa end '6';
+
+xa prepare '6';
+
+--disable_query_log
+--eval set innodb_commit_seq = $my_gcn
+--enable_query_log
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+SET @@SESSION.DEBUG= '+d, simulate_crash_between_ib_commit_and_binlog_commit';
+--error 2013
+xa commit '6';
+
+# restart and reconnect.
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+--echo # Restart the master server
+--exec echo "restart: --innodb_undo_retention=9000 --innodb_purge_rseg_truncate_frequency=1" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/wait_until_connected_again.inc
+--disable_reconnect
+
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+# TODO: IN 8.0.18, if crash before innodb commit but after binlog commit,
+# the "prepare" state transaction will not be commited after restart.
+# However in 8.0.32, it will.
+# After fix such a xa bug, the testcases should also be fixed.
+xa recover;
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '6','',1
+--let $expect_csr= ASSIGNED_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 7
+--echo ###############################
+--let $my_gcn = `select @base_seq + 700`
+connect(con1,localhost,root,,);
+connection con1;
+xa start '7';
+insert into tt values (7);
+xa end '7';
+xa prepare '7';
+disconnect con1;
+
+connect(con2,localhost,root,,);
+connection con2;
+xa recover;
+--disable_query_log
+--eval set innodb_commit_seq = $my_gcn
+--enable_query_log
+xa commit '7';
+disconnect con2;
+
+connection default;
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '7','',1
+--let $expect_csr= ASSIGNED_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # case 8
+--echo ###############################
+--let $my_gcn = `select @base_seq + 810`
+xa start '8';
+
+--echo # push up gcn by innodb_snapshot_seq
+--disable_query_log
+--eval set innodb_snapshot_seq = $my_gcn
+--enable_query_log
+select * from tt;
+
+insert into tt values (8);
+xa end '8';
+xa prepare '8';
+
+--disable_query_log
+--let $my_gcn = `select @base_seq + 800`
+--eval set innodb_commit_seq = $my_gcn
+--enable_query_log
+xa commit '8';
+
+--let $expect_gcn= $my_gcn
+--let $expect_state= COMMIT
+--let $my_xid= '8','',1
+--let $expect_csr= ASSIGNED_GCN
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
+
+--echo ###############################
+--echo # cleanup
+--echo ###############################
+drop table tt;
+
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;

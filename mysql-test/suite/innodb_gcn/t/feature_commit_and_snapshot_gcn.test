@@ -5,7 +5,7 @@
 create table t1 (n int);
 
 set global innodb_undo_retention = 100;
-show status like "lizard_current_gcn";
+show variables like "innodb_commit_seq";
 
 # Test innodb_commit_seq for statement when autocommit.
 set innodb_commit_seq = @base_seq + 1;

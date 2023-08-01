@@ -30,7 +30,7 @@
 /**
   XA procedures (dbms_xa package)
 
-  1) find_by_gtrid(gtrid)
+  1) find_by_xid(xid)
   2) prepare_with_trx_slot(gtrid, bqual, formatID)
   3) send_heartbeat()
 */
@@ -84,14 +84,14 @@ class Sql_cmd_xa_proc_trans_base : public Sql_cmd_admin_proc {
 };
 
 /**
-  1) dbms_xa.find_by_gtrid(gtrid)
+  1) dbms_xa.find_by_xid(xid)
 
   Find transactions status in the finalized state by XID.
 */
-class Sql_cmd_xa_proc_find_by_gtrid : public Sql_cmd_xa_proc_base {
+class Sql_cmd_xa_proc_find_by_xid: public Sql_cmd_xa_proc_base {
  public:
-  explicit Sql_cmd_xa_proc_find_by_gtrid(THD *thd, mem_root_deque<Item *> *list,
-                                         const Proc *proc)
+  explicit Sql_cmd_xa_proc_find_by_xid(THD *thd, mem_root_deque<Item *> *list,
+                                       const Proc *proc)
       : Sql_cmd_xa_proc_base(thd, list, proc) {}
 
   /**
@@ -108,28 +108,38 @@ class Sql_cmd_xa_proc_find_by_gtrid : public Sql_cmd_xa_proc_base {
   virtual void send_result(THD *thd, bool error) override;
 };
 
-class Xa_proc_find_by_gtrid : public Xa_proc_base {
-  using Sql_cmd_type = Sql_cmd_xa_proc_find_by_gtrid;
+class Xa_proc_find_by_xid: public Xa_proc_base {
+  using Sql_cmd_type = Sql_cmd_xa_proc_find_by_xid;
 
   enum enum_parameter {
     XA_PARAM_GTRID = 0,
+    XA_PARAM_BQUAL,
+    XA_PARAM_FORMATID,
     XA_PARAM_LAST
   };
 
   enum_field_types get_field_type(enum_parameter param) {
     switch (param) {
       case XA_PARAM_GTRID:
+      case XA_PARAM_BQUAL:
         return MYSQL_TYPE_VARCHAR;
+      case XA_PARAM_FORMATID:
+        return MYSQL_TYPE_LONGLONG;
       case XA_PARAM_LAST:
         assert(0);
     }
     return MYSQL_TYPE_LONGLONG;
   }
 
-  enum enum_column { COLUMN_GCN = 0, COLUMN_STATE, COLUMN_CSR, COLUMN_LAST };
+  enum enum_column {
+    COLUMN_STATUS = 0,
+    COLUMN_GCN = 1,
+    COLUMN_CSR = 2,
+    COLUMN_LAST = 3
+  };
 
  public:
-  explicit Xa_proc_find_by_gtrid(PSI_memory_key key) : Xa_proc_base(key) {
+  explicit Xa_proc_find_by_xid(PSI_memory_key key) : Xa_proc_base(key) {
     /* 1. Init parameters */
     for (size_t i = XA_PARAM_GTRID; i < XA_PARAM_LAST; i++) {
       m_parameters.assign_at(
@@ -140,8 +150,8 @@ class Xa_proc_find_by_gtrid : public Xa_proc_base {
     m_result_type = Result_type::RESULT_SET;
 
     Column_element elements[COLUMN_LAST] = {
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("Status"), 16},
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("GCN"), 0},
-        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("State"), 16},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("CSR"), 16},
     };
 
@@ -150,20 +160,20 @@ class Xa_proc_find_by_gtrid : public Xa_proc_base {
     }
   }
 
-  /* Singleton instance for find_by_gtrid */
+  /* Singleton instance for find_by_xid */
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for find_by_gtrid() proc.
+    Evoke the sql_cmd object for find_by_xid() proc.
   */
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Xa_proc_find_by_gtrid() {}
+  virtual ~Xa_proc_find_by_xid() {}
 
   /* Proc name */
   virtual const std::string str() const override {
-    return std::string("find_by_gtrid");
+    return std::string("find_by_xid");
   }
 };
 
@@ -248,7 +258,7 @@ class Xa_proc_prepare_with_trx_slot : public Xa_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for find_by_gtrid() proc.
+    Evoke the sql_cmd object for find_by_xid() proc.
   */
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;

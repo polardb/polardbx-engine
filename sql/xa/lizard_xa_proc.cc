@@ -24,34 +24,57 @@
 #include "sql/protocol.h"
 #include "sql/sql_parse.h"  // sql_command_flags...
 #include "sql/xa/sql_xa_prepare.h"
+#include "sql/xa/transaction_cache.h" // xa::Transaction_cache::find...
 
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/xa/lizard_xa_trx.h"
 #include "sql/lizard_binlog.h"
 
 namespace im {
+enum XA_status {
+  /** Another seesion has attached XA. */
+  ATTACHED,
+  /** Detached XA, the real state of the XA can't be ACTIVE. */
+  DETACHED,
+  /** The XA has been erased from transaction cache, and also has been
+  committed. */
+  COMMIT,
+  /** The XA has been erased from transaction cache, and also has been
+  rollbacked. */
+  ROLLBACK,
+  /** Can't find such a XA in transaction cache and in transaction slots, it
+  might never exist or has been forgotten. */
+  NOTSTART_OR_FORGET,
+  /** Found the XA in transaction slots, but the real state (commit/rollback)
+  of the transaction can't be confirmed (using the old TXN format.). */
+  NOT_SUPPORT,
+};
+
 /* All concurrency control system memory usage */
 PSI_memory_key key_memory_xa_proc;
 
 /* The uniform schema name for xa */
 const LEX_CSTRING XA_PROC_SCHEMA = {C_STRING_WITH_LEN("dbms_xa")};
 
-const LEX_CSTRING transaction_state_str[] = {{STRING_WITH_LEN("COMMIT")},
-                                             {STRING_WITH_LEN("ROLLBACK")},
-                                             {STRING_WITH_LEN("UNKNOWN")}};
-
 const LEX_CSTRING transaction_csr_str[] = {{C_STRING_WITH_LEN("AUTOMATIC_GCN")},
                                            {C_STRING_WITH_LEN("ASSIGNED_GCN")},
                                            {C_STRING_WITH_LEN("NONE")}};
 
-/* Singleton instance for find_by_gtrid */
-Proc *Xa_proc_find_by_gtrid::instance() {
-  static Proc *proc = new Xa_proc_find_by_gtrid(key_memory_xa_proc);
+const LEX_CSTRING xa_status_str[] = {{C_STRING_WITH_LEN("ATTACHED")},
+                                     {C_STRING_WITH_LEN("DETACHED")},
+                                     {C_STRING_WITH_LEN("COMMIT")},
+                                     {C_STRING_WITH_LEN("ROLLBACK")},
+                                     {C_STRING_WITH_LEN("NOTSTART_OR_FORGET")},
+                                     {C_STRING_WITH_LEN("NOT_SUPPORT")}};
+
+/* Singleton instance for find_by_xid */
+Proc *Xa_proc_find_by_xid::instance() {
+  static Proc *proc = new Xa_proc_find_by_xid(key_memory_xa_proc);
   return proc;
 }
 
-Sql_cmd *Xa_proc_find_by_gtrid::evoke_cmd(THD *thd,
-                                          mem_root_deque<Item *> *list) const {
+Sql_cmd *Xa_proc_find_by_xid::evoke_cmd(THD *thd,
+                                        mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -125,8 +148,8 @@ bool get_xid(const mem_root_deque<Item *> *list, XID *xid) {
   return false;
 }
 
-bool Sql_cmd_xa_proc_find_by_gtrid::pc_execute(THD *) {
-  DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::pc_execute");
+bool Sql_cmd_xa_proc_find_by_xid::pc_execute(THD *) {
+  DBUG_ENTER("Sql_cmd_xa_proc_find_by_xid::pc_execute");
   DBUG_RETURN(false);
 }
 
@@ -138,17 +161,19 @@ static const LEX_CSTRING get_csr_str(const enum my_csr_t my_csr) {
   }
 }
 
-void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
-  DBUG_ENTER("Sql_cmd_xa_proc_find_by_gtrid::send_result");
+void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
+  DBUG_ENTER("Sql_cmd_xa_proc_find_by_xid::send_result");
   handlerton *ttse = innodb_hton;
   assert(ttse);
 
   Protocol *protocol;
   XID xid;
+  XID_STATE *xs;
+  XA_status xa_status;
   lizard::xa::Transaction_info info;
   bool found;
-  char gtrid[MAXGTRIDSIZE];
-  unsigned gtrid_length;
+  my_gcn_t gcn;
+  enum my_csr_t csr;
 
   protocol = thd->get_protocol();
 
@@ -157,27 +182,66 @@ void Sql_cmd_xa_proc_find_by_gtrid::send_result(THD *thd, bool error) {
     DBUG_VOID_RETURN;
   }
 
-  if (get_gtrid(m_list, gtrid, gtrid_length)) {
-    my_error(ER_XA_PROC_WRONG_GTRID, MYF(0), MAXGTRIDSIZE);
+  if (get_xid(m_list, &xid)) {
+    my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
     DBUG_VOID_RETURN;
+  }
+
+  std::shared_ptr<Transaction_ctx> transaction = xa::Transaction_cache::find(&xid);
+  if (transaction) {
+    /** Case 1: DETACHED or ATTACHED. */
+    xs = transaction->xid_state();
+
+    xa_status =
+        xs->is_detached() ? XA_status::DETACHED : XA_status::ATTACHED;
+
+    gcn = MYSQL_GCN_NULL;
+
+    csr = MYSQL_CSR_NONE;
+  } else {
+    found = ttse->ext.search_trx_by_xid(&xid, &info);
+    if (found) {
+      /** Case 2: Finish state. */
+      switch (info.state) {
+        case lizard::xa::TRANS_STATE_COMMITTED:
+          xa_status = XA_status::COMMIT;
+          break;
+        case lizard::xa::TRANS_STATE_ROLLBACK:
+          xa_status = XA_status::ROLLBACK;
+          break;
+        default:
+          assert(info.state == lizard::xa::TRANS_STATE_UNKNOWN);
+          xa_status = XA_status::NOT_SUPPORT;
+          break;
+      };
+
+      gcn = info.gcn.get_gcn();
+
+      csr = info.gcn.get_csr();
+    } else {
+      /** Case 3: Not ever start or already forget. */
+      xa_status = XA_status::NOTSTART_OR_FORGET;
+
+      gcn = MYSQL_GCN_NULL;
+
+      csr = MYSQL_CSR_NONE;
+    }
   }
 
   if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
 
-  found = ttse->ext.search_trx_by_gtrid(gtrid, gtrid_length, &info);
-  if (found) {
-    protocol->start_row();
-    protocol->store((ulonglong)info.gcn.get_gcn());
+  protocol->start_row();
 
-    protocol->store_string(transaction_state_str[info.state].str,
-                           transaction_state_str[info.state].length,
-                           system_charset_info);
+  const LEX_CSTRING xa_status_msg = xa_status_str[xa_status];
+  protocol->store_string(xa_status_msg.str, xa_status_msg.length,
+                         system_charset_info);
 
-    const LEX_CSTRING csr_str = get_csr_str(info.gcn.get_csr());
-    protocol->store_string(csr_str.str, csr_str.length, system_charset_info);
+  protocol->store((ulonglong)gcn);
 
-    if (protocol->end_row()) DBUG_VOID_RETURN;
-  }
+  const LEX_CSTRING csr_str = get_csr_str(csr);
+  protocol->store_string(csr_str.str, csr_str.length, system_charset_info);
+
+  if (protocol->end_row()) DBUG_VOID_RETURN;
 
   my_eof(thd);
   DBUG_VOID_RETURN;

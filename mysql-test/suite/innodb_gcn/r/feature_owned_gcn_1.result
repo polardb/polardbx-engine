@@ -1,0 +1,127 @@
+call mtr.add_suppression("Found 1 prepared XA transactions");
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+set global innodb_purge_rseg_truncate_frequency = 1;
+create table tt (id int);
+set global innodb_undo_retention = 9000;
+###############################
+# case 1
+###############################
+xa start '1';
+insert into tt values (1);
+xa end '1';
+xa prepare '1';
+xa commit '1';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 2
+###############################
+xa start '2';
+# push up gcn by innodb_snapshot_seq
+select * from tt;
+id
+1
+insert into tt values (2);
+xa end '2';
+xa prepare '2';
+xa commit '2';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 3
+###############################
+xa start '3';
+insert into tt values (3);
+xa end '3';
+xa prepare '3';
+xa commit '3';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 4
+###############################
+xa start '4';
+insert into tt values (4);
+xa end '4';
+xa commit '4' one phase;
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 5
+###############################
+set xa_detach_on_prepare = 0;
+xa start '5';
+insert into tt values (5);
+xa end '5';
+xa prepare '5';
+SET @@SESSION.DEBUG= '+d, simulate_crash_on_commit_xa_trx';
+xa commit '5';
+ERROR HY000: Lost connection to MySQL server during query
+# Restart the master server
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+XA COMMIT '5';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 6
+###############################
+xa start '6';
+insert into tt values (6);
+xa end '6';
+xa prepare '6';
+SET @@SESSION.DEBUG= '+d, simulate_crash_between_ib_commit_and_binlog_commit';
+xa commit '6';
+ERROR HY000: Lost connection to MySQL server during query
+# Restart the master server
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+xa recover;
+formatID	gtrid_length	bqual_length	data
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 7
+###############################
+xa start '7';
+insert into tt values (7);
+xa end '7';
+xa prepare '7';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	1	0	7
+xa commit '7';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# case 8
+###############################
+xa start '8';
+# push up gcn by innodb_snapshot_seq
+select * from tt;
+id
+1
+2
+3
+4
+5
+6
+7
+insert into tt values (8);
+xa end '8';
+xa prepare '8';
+xa commit '8';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_csr == actual_csr]
+###############################
+# cleanup
+###############################
+drop table tt;
+set global innodb_undo_retention = default;
+set global innodb_purge_rseg_truncate_frequency = default;

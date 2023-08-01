@@ -198,7 +198,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
   ut_ad(trx_can_be_handled_by_current_thread_or_is_hp_victim(trx));
 
   mtr_t mtr;
-  ut_d(lsn_t lsn);
+  lsn_t lsn;
   lizard::Mtr_wrapper mtr_wrapper(&mtr);
 
   switch (trx->state.load(std::memory_order_relaxed)) {

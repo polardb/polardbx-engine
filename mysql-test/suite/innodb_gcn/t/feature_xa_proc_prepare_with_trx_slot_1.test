@@ -26,8 +26,8 @@ xa commit '1';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '1'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '1','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # Case 2

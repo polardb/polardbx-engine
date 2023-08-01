@@ -21,8 +21,8 @@ xa commit '1';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '1'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '1','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # Case 2: rollback detached XA
@@ -43,8 +43,8 @@ xa rollback '2';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= ROLLBACK
---let $gtrid= '2'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '2','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # Case 3: commit attached XA
@@ -65,8 +65,8 @@ xa commit '3';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $gtrid= '3'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '3','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # Case 4: rollback attached XA
@@ -87,8 +87,8 @@ xa rollback '4';
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= ROLLBACK
---let $gtrid= '4'
---source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+--let $my_xid= '4','',1
+--source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
 --echo # cleanup

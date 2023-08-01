@@ -104,14 +104,13 @@ extern bool thd_get_transaction_group(THD *thd);
 namespace lizard {
 namespace xa {
 /**
-  Hash the GTRID to an integer.
+  Hash the XID to an integer.
 
-  @params[in] in_gtrid gtird
-  @params[in] in_len   length
+  @params[in] in_xid   in_xid key
 
   @retval hash value.
 */
-uint64_t hash_gtrid(const char *in_gtrid, unsigned in_len);
+uint64_t hash_xid(const XID *in_xid);
 
 /** Check validity of the XID status of the trx.
 @param[in]      trx   innodb transaction
@@ -124,16 +123,14 @@ extern bool trx_slot_check_validity(const trx_t *trx);
 extern const XID *trx_slot_get_xa_xid_from_thd(THD *thd);
 
 /**
-  Find transactions in the finalized state by GTRID.
+  Find transactions in the finalized state by XID.
 
-  @params[in] in_gtrid          gtird
-  @params[in] in_len            length
+  @params[in] xid               XID
   @param[out] Transaction_info  Corresponding transaction info
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool trx_search_by_gtrid(const char *gtrid, unsigned len,
-                         Transaction_info *info);
+bool trx_search_by_xid(const XID *xid, Transaction_info *info);
 }  // namespace xa
 }  // namespace lizard
 
