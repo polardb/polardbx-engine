@@ -341,9 +341,11 @@ class Disable_reprepare_observer {
   @retval         true      Failure
 */
 bool Sql_cmd_create_sequence::execute(THD *thd) {
+#ifndef NDEBUG
   LEX *const lex = thd->lex;
   DBUG_ENTER("Sql_cmd_create_sequence::execute");
   assert(lex->sequence_info);
+#endif
 
   /**
     When after sequence being created, we insert a row into the table.

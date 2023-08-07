@@ -2474,7 +2474,7 @@ void Log_event::print_timestamp(IO_CACHE *file, time_t *ts) const {
 #endif /* !MYSQL_SERVER */
 
 #if defined(MYSQL_SERVER)
-inline Log_event::enum_skip_reason Log_event::continue_group(
+Log_event::enum_skip_reason Log_event::continue_group(
     Relay_log_info *rli) {
   if (rli->slave_skip_counter == 1) return Log_event::EVENT_SKIP_IGNORE;
   return Log_event::do_shall_skip(rli);
@@ -2630,7 +2630,9 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
   Slave_committed_queue *gaq = rli->gaq;
   lizard::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
       rli->get_b_events_before_gtid_mgr();
+#ifndef NDEBUG
   size_t b_ev_before_gtid_size = b_events_before_gtid_mgr.get_size();
+#endif
   DBUG_TRACE;
 
   if (lizard::is_b_events_before_gtid(this)) {

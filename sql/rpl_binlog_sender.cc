@@ -1349,7 +1349,7 @@ inline int Binlog_sender::flush_net() {
   return 0;
 }
 
-inline int Binlog_sender::send_packet() {
+int Binlog_sender::send_packet() {
   DBUG_TRACE;
   DBUG_PRINT("info",
              ("Sending event of type %s",
@@ -1375,7 +1375,7 @@ inline int Binlog_sender::send_packet_and_flush() {
   return (send_packet() || flush_net());
 }
 
-inline int Binlog_sender::before_send_hook(const char *log_file,
+int Binlog_sender::before_send_hook(const char *log_file,
                                            my_off_t log_pos) {
   if (m_observe_transmission &&
       RUN_HOOK(binlog_transmit, before_send_event,
@@ -1386,7 +1386,7 @@ inline int Binlog_sender::before_send_hook(const char *log_file,
   return 0;
 }
 
-inline int Binlog_sender::after_send_hook(const char *log_file,
+int Binlog_sender::after_send_hook(const char *log_file,
                                           my_off_t log_pos) {
   if (m_observe_transmission &&
       RUN_HOOK(binlog_transmit, after_send_event,

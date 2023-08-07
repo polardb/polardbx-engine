@@ -198,7 +198,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
   ut_ad(trx_can_be_handled_by_current_thread_or_is_hp_victim(trx));
 
   mtr_t mtr;
-  lsn_t lsn;
+  ut_d(lsn_t lsn);
   lizard::Mtr_wrapper mtr_wrapper(&mtr);
 
   switch (trx->state.load(std::memory_order_relaxed)) {
@@ -269,6 +269,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
         log_write_up_to(*log_sys, lsn, true);
         ut_ad(0);
       };);
+      (void)lsn;
 
 #ifdef ENABLED_DEBUG_SYNC
       if (trx->mysql_thd == nullptr) {

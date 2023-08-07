@@ -114,7 +114,7 @@ struct gp_wait_t {
   }
 
   void release(trx_t *trx) {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     auto it = blocked_trxs.find(trx);
     ut_ad(it != blocked_trxs.end());
 #endif

@@ -151,7 +151,7 @@ static void close_share(Sequence_share *share) {
   DBUG_ENTER("close_share");
 
   mysql_mutex_lock(&LOCK_sequence_open_shares_hash);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   Sequence_shares_hash::const_iterator it =
       sequence_shares_hash->find(std::string(share->m_name));
   assert(it != sequence_shares_hash->end() && it->second == share);
@@ -1464,6 +1464,7 @@ int ha_sequence::scroll_sequence(
               cache_request == Sequence_cache_request::CACHE_REQUEST_ROUND_OUT);
   assert(m_share->m_cache_state !=
               Sequence_cache_state::CACHE_STATE_LOADING);
+  (void)(cache_request);
   helper->loading();
 
   /* Sequence transaction do the reload */

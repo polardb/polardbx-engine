@@ -27,6 +27,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef LIZARD_LIZARD_RPL_GCN_INCLUDED
 #define LIZARD_LIZARD_RPL_GCN_INCLUDED
 
+#include <string>
 #include "my_dbug.h"
 
 typedef uint64_t my_scn_t;

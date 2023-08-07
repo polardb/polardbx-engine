@@ -72,10 +72,13 @@ bool apply_trx_for_xa(THD *thd, const XID *xid, my_slot_ptr_t *slot_ptr) {
   /** Take innodb as transaction slot storage engine. */
   handlerton *ttse = innodb_hton;
 
+#ifndef NDEBUG
   XID_STATE *xid_state = thd->get_transaction()->xid_state();
   assert(xid_state->has_state(XID_STATE::XA_IDLE));
   assert(xid_state->get_xid()->eq(xid));
   assert(ttse);
+#endif
+  (void)xid;
 
   /**
     Lizard: In the past, the binlog can only be registered in the XA ACTIVE
