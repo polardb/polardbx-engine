@@ -258,3 +258,4 @@ extra/curl/curl-7.86.0/generated/
 extra/curl/curl-7.86.0/libcurl.pc
 
 mysql-test/var*
+.cache/clangd
