@@ -19,7 +19,7 @@ SELECT * FROM t1 WHERE k = 1;
 id	k	c
 1	1	first
 2	1	second
-SELECT * FROM information_schema.INDEX_STATISTICS WHERE TABLE_NAME = 't1' order by INDEX_NAME;
+SELECT * FROM information_schema.INDEX_STATISTICS WHERE TABLE_SCHEMA ='test' and TABLE_NAME = 't1' order by INDEX_NAME;
 TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	ROWS_READ	SCAN_USED
 test	t1	k_1	2	1
 test	t1	PRIMARY	4	2

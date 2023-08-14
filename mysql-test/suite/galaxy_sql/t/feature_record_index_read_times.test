@@ -18,6 +18,6 @@ SELECT * FROM t1 WHERE id = 1;
 
 SELECT * FROM t1 WHERE k = 1;
 
-SELECT * FROM information_schema.INDEX_STATISTICS WHERE TABLE_NAME = 't1' order by INDEX_NAME;
+SELECT * FROM information_schema.INDEX_STATISTICS WHERE TABLE_SCHEMA ='test' and TABLE_NAME = 't1' order by INDEX_NAME;
 
 DROP TABLE t1;
