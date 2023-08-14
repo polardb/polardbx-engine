@@ -3863,6 +3863,7 @@ SET PERSIST_ONLY sync_source_info = 123456;
 ==== R2.1. Server restart with both old and new name in file ====
 
 # restart
+include/assert_error_log.inc [server: 1, pattern: NONE]
 sysvar:
 - name=init_replica
 - alias=init_slave
@@ -4287,6 +4288,7 @@ include/assert.inc [sync_master_info should have value 123456 in the persist fil
 ==== R2.2. Server restart with only new name in file ====
 
 # restart
+include/assert_error_log.inc [server: 1, pattern: NONE]
 sysvar:
 - name=log_slow_replica_statements
 - alias=log_slow_slave_statements
@@ -5055,6 +5057,28 @@ include/assert.inc [sync_master_info should have value 123456 in the persist fil
 * R5.3: no deprecation warnings up till now
 # restart
 * R4.2: deprecation warnings when loading file containing only old names
+include/assert_error_log.inc [server: 1, pattern: 
+.*The variable init_slave has been renamed to init_replica, and the old name deprecated.*
+.*The variable log_slave_updates has been renamed to log_replica_updates, and the old name deprecated.*
+.*The variable log_slow_slave_statements has been renamed to log_slow_replica_statements, and the old name deprecated.*
+.*The variable slave_allow_batching has been renamed to replica_allow_batching, and the old name deprecated.*
+.*The variable slave_checkpoint_group has been renamed to replica_checkpoint_group, and the old name deprecated.*
+.*The variable slave_checkpoint_period has been renamed to replica_checkpoint_period, and the old name deprecated.*
+.*The variable slave_compressed_protocol has been renamed to replica_compressed_protocol, and the old name deprecated.*
+.*The variable slave_exec_mode has been renamed to replica_exec_mode, and the old name deprecated.*
+.*The variable slave_max_allowed_packet has been renamed to replica_max_allowed_packet, and the old name deprecated.*
+.*The variable slave_net_timeout has been renamed to replica_net_timeout, and the old name deprecated.*
+.*The variable slave_parallel_workers has been renamed to replica_parallel_workers, and the old name deprecated.*
+.*The variable slave_pending_jobs_size_max has been renamed to replica_pending_jobs_size_max, and the old name deprecated.*
+.*The variable slave_preserve_commit_order has been renamed to replica_preserve_commit_order, and the old name deprecated.*
+.*The variable slave_skip_errors has been renamed to replica_skip_errors, and the old name deprecated.*
+.*The variable slave_sql_verify_checksum has been renamed to replica_sql_verify_checksum, and the old name deprecated.*
+.*The variable slave_transaction_retries has been renamed to replica_transaction_retries, and the old name deprecated.*
+.*The variable slave_type_conversions has been renamed to replica_type_conversions, and the old name deprecated.*
+.*The variable rpl_stop_slave_timeout has been renamed to rpl_stop_replica_timeout, and the old name deprecated.*
+.*The variable master_verify_checksum has been renamed to source_verify_checksum, and the old name deprecated.*
+.*The variable sql_slave_skip_counter has been renamed to sql_replica_skip_counter, and the old name deprecated.*
+.*The variable sync_master_info has been renamed to sync_source_info, and the old name deprecated.*]
 sysvar:
 - name=log_slow_replica_statements
 - alias=log_slow_slave_statements
@@ -5822,9 +5846,29 @@ include/assert.inc [sync_master_info should have value 123456 in the persist fil
 * Also checking R4.3 (deprecation warning for old name on command line)
 
 RESET PERSIST;
- --init_replica=SELECT(3) --log_replica_updates=1 --log_slow_replica_statements=1 --replica_allow_batching=1 --replica_checkpoint_group=2000 --replica_checkpoint_period=12323 --replica_compressed_protocol=1 --replica_exec_mode=IDEMPOTENT --replica_max_allowed_packet=65536 --replica_net_timeout=65536 --replica_parallel_workers=100 --replica_pending_jobs_size_max=4096 --replica_preserve_commit_order=1 --replica_skip_errors=1,2 --replica_sql_verify_checksum=1 --replica_transaction_retries=99 --replica_type_conversions= --rpl_stop_replica_timeout=3 --source_verify_checksum=1 --sync_source_info=123456  --init_slave=SELECT(3) --log_slave_updates=1 --log_slow_slave_statements=1 --slave_allow_batching=1 --slave_checkpoint_group=2000 --slave_checkpoint_period=12323 --slave_compressed_protocol=1 --slave_exec_mode=IDEMPOTENT --slave_max_allowed_packet=65536 --slave_net_timeout=65536 --slave_parallel_workers=100 --slave_pending_jobs_size_max=4096 --slave_preserve_commit_order=1 --slave_skip_errors=1,2 --slave_sql_verify_checksum=1 --slave_transaction_retries=99 --slave_type_conversions= --rpl_stop_slave_timeout=3 --master_verify_checksum=1 --sync_master_info=123456
 # restart
 * R4.3: deprecation warnings when using old names on command line
+include/assert_error_log.inc [server: 1, pattern: 
+.*The syntax .init_slave. is deprecated and will be removed in a future release. Please use init_replica instead.
+.*The syntax .log_slave_updates. is deprecated and will be removed in a future release. Please use log_replica_updates instead.
+.*The syntax .log_slow_slave_statements. is deprecated and will be removed in a future release. Please use log_slow_replica_statements instead.
+.*The syntax .slave_allow_batching. is deprecated and will be removed in a future release. Please use replica_allow_batching instead.
+.*The syntax .slave_checkpoint_group. is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
+.*The syntax .slave_checkpoint_period. is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
+.*The syntax .slave_compressed_protocol. is deprecated and will be removed in a future release. Please use replica_compressed_protocol instead.
+.*The syntax .slave_exec_mode. is deprecated and will be removed in a future release. Please use replica_exec_mode instead.
+.*The syntax .slave_max_allowed_packet. is deprecated and will be removed in a future release. Please use replica_max_allowed_packet instead.
+.*The syntax .slave_net_timeout. is deprecated and will be removed in a future release. Please use replica_net_timeout instead.
+.*The syntax .slave_parallel_workers. is deprecated and will be removed in a future release. Please use replica_parallel_workers instead.
+.*The syntax .slave_pending_jobs_size_max. is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
+.*The syntax .slave_preserve_commit_order. is deprecated and will be removed in a future release. Please use replica_preserve_commit_order instead.
+.*The syntax .slave_skip_errors. is deprecated and will be removed in a future release. Please use replica_skip_errors instead.
+.*The syntax .slave_sql_verify_checksum. is deprecated and will be removed in a future release. Please use replica_sql_verify_checksum instead.
+.*The syntax .slave_transaction_retries. is deprecated and will be removed in a future release. Please use replica_transaction_retries instead.
+.*The syntax .slave_type_conversions. is deprecated and will be removed in a future release. Please use replica_type_conversions instead.
+.*The syntax .rpl_stop_slave_timeout. is deprecated and will be removed in a future release. Please use rpl_stop_replica_timeout instead.
+.*The syntax .master_verify_checksum. is deprecated and will be removed in a future release. Please use source_verify_checksum instead.
+.*The syntax .sync_master_info. is deprecated and will be removed in a future release. Please use sync_source_info instead.]
 sysvar:
 - name=log_slow_replica_statements
 - alias=log_slow_slave_statements
@@ -6200,6 +6244,7 @@ include/assert.inc [sync_master_info should not exist in the persist file]
 
 RESET PERSIST;
 # restart
+include/assert_error_log.inc [server: 1, pattern: NONE]
 sysvar:
 - name=log_slow_replica_statements
 - alias=log_slow_slave_statements
@@ -6577,6 +6622,27 @@ include/assert.inc [sync_master_info should not exist in the persist file]
 RESET PERSIST;
 # restart
 * R4.3: deprecation warnings when using old names on command line
+include/assert_error_log.inc [server: 1, pattern: 
+.*The syntax .init_slave. is deprecated and will be removed in a future release. Please use init_replica instead.
+.*The syntax .log_slave_updates. is deprecated and will be removed in a future release. Please use log_replica_updates instead.
+.*The syntax .log_slow_slave_statements. is deprecated and will be removed in a future release. Please use log_slow_replica_statements instead.
+.*The syntax .slave_allow_batching. is deprecated and will be removed in a future release. Please use replica_allow_batching instead.
+.*The syntax .slave_checkpoint_group. is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
+.*The syntax .slave_checkpoint_period. is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
+.*The syntax .slave_compressed_protocol. is deprecated and will be removed in a future release. Please use replica_compressed_protocol instead.
+.*The syntax .slave_exec_mode. is deprecated and will be removed in a future release. Please use replica_exec_mode instead.
+.*The syntax .slave_max_allowed_packet. is deprecated and will be removed in a future release. Please use replica_max_allowed_packet instead.
+.*The syntax .slave_net_timeout. is deprecated and will be removed in a future release. Please use replica_net_timeout instead.
+.*The syntax .slave_parallel_workers. is deprecated and will be removed in a future release. Please use replica_parallel_workers instead.
+.*The syntax .slave_pending_jobs_size_max. is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
+.*The syntax .slave_preserve_commit_order. is deprecated and will be removed in a future release. Please use replica_preserve_commit_order instead.
+.*The syntax .slave_skip_errors. is deprecated and will be removed in a future release. Please use replica_skip_errors instead.
+.*The syntax .slave_sql_verify_checksum. is deprecated and will be removed in a future release. Please use replica_sql_verify_checksum instead.
+.*The syntax .slave_transaction_retries. is deprecated and will be removed in a future release. Please use replica_transaction_retries instead.
+.*The syntax .slave_type_conversions. is deprecated and will be removed in a future release. Please use replica_type_conversions instead.
+.*The syntax .rpl_stop_slave_timeout. is deprecated and will be removed in a future release. Please use rpl_stop_replica_timeout instead.
+.*The syntax .master_verify_checksum. is deprecated and will be removed in a future release. Please use source_verify_checksum instead.
+.*The syntax .sync_master_info. is deprecated and will be removed in a future release. Please use sync_source_info instead.]
 sysvar:
 - name=log_slow_replica_statements
 - alias=log_slow_slave_statements

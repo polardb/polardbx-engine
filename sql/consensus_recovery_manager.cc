@@ -226,8 +226,7 @@ int Consensus_recovery_manager::truncate_not_confirmed_pending_recovering_trxs(
   return 0;
 }
 
-int Consensus_recovery_manager::commit_by_start_apply_index() {
-  DBUG_ENTER("commit_by_start_apply_index");
+int Consensus_recovery_manager::recover_remaining_pending_recovering_trxs() {
   uint64 recover_start_apply_index =
       consensus_log_manager.get_consensus_info()->get_start_apply_index();
 
@@ -241,10 +240,12 @@ int Consensus_recovery_manager::commit_by_start_apply_index() {
         iter.first <= recover_start_apply_index) {
       iter.second->recover();
     } else {
+      // this is not possible
+      assert(0);
       iter.second->withdraw();
     }
   }
-
+  Pending_Recovering_trxs.clear();
   return 0;
 }
 
@@ -260,10 +261,10 @@ int Pending_recovering_trx::withdraw() {
   assert(is_state_legal());
 
   if (type == xid_type::INTERNAL) {
-    ret = ht.rollback_by_xid(&ht, xid, &xa_spec);
+    ret = ht.rollback_by_xid(&ht, xid, xa_spec);
   } else if (type == xid_type::EXTERNAL) {
     if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
-      ret = ht.rollback_by_xid(&ht, xid, &xa_spec);
+      ret = ht.rollback_by_xid(&ht, xid, xa_spec);
     } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
       // do nothing
     }
@@ -284,19 +285,19 @@ int Pending_recovering_trx::recover() {
   assert(is_state_legal());
 
   if (type == xid_type::INTERNAL) {
-    ret = ht.commit_by_xid(&ht, xid, &xa_spec);
+    ret = ht.commit_by_xid(&ht, xid, xa_spec);
   } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_SE) {
     if (next_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
-      ret = ht.set_prepared_in_tc_by_xid(&ht, xid, &xa_spec);
+      ret = ht.set_prepared_in_tc_by_xid(&ht, xid, xa_spec);
     } else if (next_state ==
                enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE) {
-      ret = ht.commit_by_xid(&ht, xid, &xa_spec);
+      ret = ht.commit_by_xid(&ht, xid, xa_spec);
     }
   } else if (current_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
     if (next_state == enum_ha_recover_xa_state::COMMITTED) {
-      ret = ht.commit_by_xid(&ht, xid, &xa_spec);
+      ret = ht.commit_by_xid(&ht, xid, xa_spec);
     } else if (next_state == enum_ha_recover_xa_state::ROLLEDBACK) {
-      ret = ht.rollback_by_xid(&ht, xid, &xa_spec);
+      ret = ht.rollback_by_xid(&ht, xid, xa_spec);
     }
   }
   return ret;
@@ -312,12 +313,24 @@ Pending_recovering_trx::Pending_recovering_trx(
       current_state(current_state),
       next_state(next_state),
       xid(xid),
-      xa_spec(xa_spec),
+      xa_spec(xa_spec.clone()),
       consensus_index(consensus_index) {}
 
 Pending_recovering_trx::~Pending_recovering_trx() {
+  if (!immutable) {
+    raft::error(ER_RAFT_RECOVERY)
+        << "XID = [" << xid->get_my_xid() << "] "
+        << "is not recover or withdraw at "
+           "Pending_recovering_trx::~Pending_recovering_trx";
+  }
+
   if (xid != nullptr) {
     my_free(xid);
+    xid = nullptr;
+  }
+  if (xa_spec != nullptr) {
+    delete xa_spec;
+    xa_spec = nullptr;
   }
 }
 

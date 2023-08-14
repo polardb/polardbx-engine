@@ -2,13 +2,15 @@ let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
 
 #add consensus_learner '$learner_cluster_info';
---replace_result $learner_cluster_info $learner_cluster_info
+--replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);
+--sleep 5
 # wait learner get log
 let $wait_condition= select count(distinct match_index)=1 from information_schema.alisql_cluster_global;
 --source include/wait_condition.inc
 
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
+--sleep 5
 
 --source include/kill_and_restart_mysqld.inc
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
@@ -16,12 +18,19 @@ select count(*) from information_schema.alisql_cluster_global where role='LEARNE
 let $wait_condition= select count(distinct match_index)=1 from information_schema.alisql_cluster_global;
 --source include/wait_condition.inc
 
+--sleep 5
 --source include/kill_and_restart_mysqld.inc
+
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
 
+let $wait_condition= select count(distinct match_index)=1 from information_schema.alisql_cluster_global;
+--source include/wait_condition.inc
+
+
 #drop consensus_learner $learner_cluster_info;
---replace_result $learner_cluster_info $learner_cluster_info
-call dbms_consensus.drop_learner($learner_cluster_info);
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info);
+--sleep 5
 
 --source include/stop_new_learner.inc
 

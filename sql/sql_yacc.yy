@@ -13983,9 +13983,11 @@ show_consensus_logs_stmt:
         ;
 
 show_consensuslog_events_stmt:
-          SHOW CONSENSUSLOG_SYM EVENTS_SYM FROM opt_consensus_log_index
+          SHOW CONSENSUSLOG_SYM EVENTS_SYM FROM opt_consensus_log_index opt_limit_clause
           {
             $$ = NEW_PTN PT_show_consensuslog_events(@$, $5);
+            if ($6 != NULL)
+              CONTEXTUALIZE($6);
           }
         ;
 

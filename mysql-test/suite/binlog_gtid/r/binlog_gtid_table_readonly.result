@@ -34,8 +34,6 @@ SET DEBUG = "d,gtid_executed_readonly,simulate_max_binlog_size";
 include/rpl_log_file_max_number.inc
 FLUSH BINARY LOGS;
 ERROR HY000: Binary logging not possible. Message: Gtid table is not ready to be used. Table 'mysql.gtid_executed' cannot be opened., while rotating the binlog. Aborting the server
-include/rpl_log_file_max_number.inc
-include/assert.inc ['FLUSH BINARY LOGS' failed to rotate binlog but as the server restarts, the binary log is rotated]
 include/assert_grep.inc [ER_BINLOG_LOGGING_IMPOSSIBLE found in server log]
 SET DEBUG = INITIAL_DEBUG;
 SET GLOBAL binlog_error_action = INITIAL_ERROR_ACTION;

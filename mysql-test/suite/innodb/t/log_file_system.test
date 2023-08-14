@@ -21,8 +21,6 @@ write_file $BOOTSTRAP_SQL;
   CREATE SCHEMA test;
 EOF
 
---source include/make_consensus_args.inc
-
 --source include/shutdown_mysqld.inc
 --exec $MYSQLD $extra_args --initialize-insecure --datadir=$DATADIR --init-file=$BOOTSTRAP_SQL > $MYSQLTEST_VARDIR/bootstrap.log 2>&1
 --exec echo "restart: --datadir=$DATADIR" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -136,7 +134,9 @@ let SEARCH_FILE= $MYSQLTEST_VARDIR/log/my_restart.err;
 
 --echo # Recovery and shutdown with innodb-force-recovery (ignore unknown file)
 --error 1
---exec $old_mysqld --innodb-force-recovery=1 --innodb-fast-shutdown=0 --innodb-nonexistent-option
+#not support innodb-force-recovery
+#--exec $old_mysqld --innodb-force-recovery=1 --innodb-fast-shutdown=0 --innodb-nonexistent-option
+--exec $old_mysqld --innodb-fast-shutdown=0 --innodb-nonexistent-option
 
 let SEARCH_PATTERN= \[ERROR\] \[[^]]*\] \[[^]]*\] unknown option '--innodb-nonexistent-option';
 --source include/search_pattern.inc

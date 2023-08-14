@@ -376,6 +376,7 @@ int Slave_worker::init_worker(Relay_log_info *rli, ulong i) {
   jobs.capacity = c_rli->mts_slave_worker_queue_len_max;
   jobs.inited_queue = true;
   curr_group_seen_gtid = false;
+  curr_group_seen_gcn = false;
   m_b_events_before_gtid_mgr.reset_seen_status();
 #ifndef NDEBUG
   curr_group_seen_sequence_number = false;
@@ -1326,6 +1327,7 @@ void Slave_worker::slave_worker_ends_group(Log_event *ev, int error) {
 #endif
   }
   curr_group_seen_gtid = false;
+  curr_group_seen_gcn = false;
   m_b_events_before_gtid_mgr.reset_seen_status();
 }
 

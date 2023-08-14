@@ -19,10 +19,10 @@ Handler_commit	14
 Handler_external_lock	195
 Handler_prepare	4
 Handler_read_first	3
-Handler_read_key	30
+Handler_read_key	32
 Handler_read_next	6
-Handler_update	16
-Handler_write	21
+Handler_update	18
+Handler_write	23
 SELECT * FROM t2 ORDER by a;
 a	b
 0	First row, p0
@@ -35,10 +35,10 @@ VARIABLE_NAME	VARIABLE_VALUE
 Handler_commit	14
 Handler_external_lock	195
 Handler_prepare	4
-Handler_read_key	40
+Handler_read_key	42
 Handler_read_next	5
-Handler_update	16
-Handler_write	23
+Handler_update	18
+Handler_write	25
 SELECT * FROM t2 ORDER BY a;
 a	b
 0	First row, p0
@@ -57,10 +57,10 @@ Handler_commit	13
 Handler_external_lock	193
 Handler_prepare	4
 Handler_read_first	2
-Handler_read_key	26
+Handler_read_key	28
 Handler_read_rnd_next	4
-Handler_update	14
-Handler_write	20
+Handler_update	16
+Handler_write	22
 SELECT * FROM t2;
 a
 1
@@ -75,10 +75,10 @@ Handler_commit	13
 Handler_external_lock	193
 Handler_prepare	4
 Handler_read_first	2
-Handler_read_key	26
+Handler_read_key	28
 Handler_read_rnd_next	4
-Handler_update	14
-Handler_write	19
+Handler_update	16
+Handler_write	21
 SELECT * FROM t2;
 a
 1

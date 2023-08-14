@@ -687,6 +687,7 @@ MySQL clients support the protocol:
 /* clang-format on */
 
 #include <memory>
+#include "consensus_admin.h"
 #define LOG_SUBSYSTEM_TAG "Server"
 
 #include "sql/mysqld.h"
@@ -1048,6 +1049,7 @@ void my_server_abort();
 
 /* Constants */
 
+#include "sql/raii/read_write_lock_guard.h"
 #include "welcome_copyright_notice.h"  // ORACLE_WELCOME_COPYRIGHT_NOTICE
 
 const char *show_comp_option_name[] = {"YES", "NO", "DISABLED"};
@@ -6940,44 +6942,10 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
-  if (!raft::Recovery_manager::instance().is_raft_instance_recovering()) {
-    if (ha_recover(0)) {
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-  }
-
-  if (dd::reset_tables_and_tablespaces()) {
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  }
-  ha_post_recover();
-
-  /*
-    Add prepared XA transactions into the cache of XA transactions and acquire
-    mdl lock for every table involved in any of these prepared XA transactions.
-    This step moved away from the function ha_recover() in order to avoid
-    possible suspending on acquiring EXCLUSIVE mdl lock on tables inside the
-    function dd::reset_tables_and_tablespaces() when table cache being reset.
-  */
-  if (Recovered_xa_transactions::instance()
-          .recover_prepared_xa_transactions()) {
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  }
-
-  if (global_gtid_mode.get() == Gtid_mode::ON &&
-      _gtid_consistency_mode != GTID_CONSISTENCY_MODE_ON) {
-    LogErr(ERROR_LEVEL, ER_RPL_GTID_MODE_REQUIRES_ENFORCE_GTID_CONSISTENCY_ON);
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  }
-
-  if (rpl_encryption.initialize()) {
-    LogErr(ERROR_LEVEL, ER_SERVER_RPL_ENCRYPTION_UNABLE_TO_INITIALIZE);
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  }
-
   if (opt_bin_log) {
     if (!opt_consensus_force_recovery) {
-          std::vector<std::string> binlog_file_list;
-          mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
+      std::vector<std::string> binlog_file_list;
+      mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
 
       if (binlog_file_list.empty()) {
         /*
@@ -7003,6 +6971,64 @@ static int init_server_components() {
         unireg_abort(MYSQLD_ABORT_EXIT);
       }
     }
+  }
+
+  ReplicaInitializer replica_initializer(opt_initialize, /*opt_skip_replica_start*/ true,
+                                         rpl_channel_filters,
+                                         &opt_replica_skip_errors);
+
+  /* If running with --initialize, do not start replication. */
+  if (!opt_initialize &&
+      !opt_consensus_force_recovery &&
+      consensus_log_manager.init_consensus_info())
+    unireg_abort(MYSQLD_ABORT_EXIT);
+
+  int consensus_error = consensus_log_manager.init_service();
+  if (consensus_error < 0)
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  else if (consensus_error > 0)
+    unireg_abort(MYSQLD_SUCCESS_EXIT);
+
+  if (!raft::Recovery_manager::instance().is_raft_instance_recovering()) {
+    if (ha_recover(0)) {
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
+  }
+
+  if (dd::reset_tables_and_tablespaces()) {
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+  ha_post_recover();
+
+  if (!opt_initialize) {
+    if (!opt_consensus_force_recovery) {
+      if (!opt_cluster_log_type_instance) {
+        start_consensus_apply_threads();
+      }
+    }
+  }
+
+  /*
+    Add prepared XA transactions into the cache of XA transactions and acquire
+    mdl lock for every table involved in any of these prepared XA transactions.
+    This step moved away from the function ha_recover() in order to avoid
+    possible suspending on acquiring EXCLUSIVE mdl lock on tables inside the
+    function dd::reset_tables_and_tablespaces() when table cache being reset.
+  */
+  if (Recovered_xa_transactions::instance()
+          .recover_prepared_xa_transactions()) {
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
+  if (global_gtid_mode.get() == Gtid_mode::ON &&
+      _gtid_consistency_mode != GTID_CONSISTENCY_MODE_ON) {
+    LogErr(ERROR_LEVEL, ER_RPL_GTID_MODE_REQUIRES_ENFORCE_GTID_CONSISTENCY_ON);
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
+  if (rpl_encryption.initialize()) {
+    LogErr(ERROR_LEVEL, ER_SERVER_RPL_ENCRYPTION_UNABLE_TO_INITIALIZE);
+    unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
   /*
@@ -8248,28 +8274,27 @@ int mysqld_main(int argc, char **argv)
 
   binlog_unsafe_map_init();
 
-  ReplicaInitializer replica_initializer(opt_initialize, opt_skip_replica_start,
-                                         rpl_channel_filters,
-                                         &opt_replica_skip_errors);
-
-  /* If running with --initialize, do not start replication. */
-  if (!opt_initialize &&
-      !opt_consensus_force_recovery &&
-      consensus_log_manager.init_consensus_info())
-    unireg_abort(MYSQLD_ABORT_EXIT);
-
+//  ReplicaInitializer replica_initializer(opt_initialize, opt_skip_replica_start,
+//                                         rpl_channel_filters,
+//                                         &opt_replica_skip_errors);
+//
+//  /* If running with --initialize, do not start replication. */
+//  if (!opt_initialize &&
+//      !opt_consensus_force_recovery &&
+//      consensus_log_manager.init_consensus_info())
+//    unireg_abort(MYSQLD_ABORT_EXIT);
+//
+//  int consensus_error = consensus_log_manager.init_service();
+//  if (consensus_error < 0)
+//    unireg_abort(MYSQLD_ABORT_EXIT);
+//  else if (consensus_error > 0)
+//    unireg_abort(MYSQLD_SUCCESS_EXIT);
 
 #ifdef WITH_LOCK_ORDER
   if (!opt_initialize) {
     LO_activate();
   }
 #endif /* WITH_LOCK_ORDER */
-
-  int consensus_error = consensus_log_manager.init_service();
-  if (consensus_error < 0)
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  else if (consensus_error > 0)
-    unireg_abort(MYSQLD_SUCCESS_EXIT);
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
   initialize_performance_schema_acl(opt_initialize);

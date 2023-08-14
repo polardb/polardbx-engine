@@ -286,10 +286,24 @@ void Consensus_binlog_recovery::process_external_xid(
     auto found = this->m_external_xids.find(xid);
     if (found != this->m_external_xids.end()) {
       assert(found->second != enum_ha_recover_xa_state::PREPARED_IN_SE);
-      if (found->second != enum_ha_recover_xa_state::PREPARED_IN_TC) {
-        // If it was found already, it needs to be in prepared in TC state
-        this->m_is_malformed = true;
-        return;
+      if (state == enum_ha_recover_xa_state::PREPARED_IN_TC ||
+          state == enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE) {
+        // XA PREPARE EVENT
+        if (found->second == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+          // If it was found already, must have been committed or rolled back, it
+          // can't be in prepared state
+          this->m_is_malformed = true;
+          this->m_failure_message.assign(
+              "XA_prepare_log_event holds an invalid XID");
+          return;
+        }
+      } else {
+        // XA COMMIT OR XA ROLLBACK EVENT
+        if (found->second != enum_ha_recover_xa_state::PREPARED_IN_TC) {
+          // If it was found already, it needs to be in prepared in TC state
+          this->m_is_malformed = true;
+          return;
+        }
       }
     }
     m_external_xids[xid] = state;
@@ -389,12 +403,18 @@ void Consensus_binlog_recovery::process_xa_prepare_event(
   xid = ev.get_xid();
   auto state = ev.is_one_phase()
                    ? enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE
-                   : enum_ha_recover_xa_state::PREPARED_IN_SE;
+                   : enum_ha_recover_xa_state::PREPARED_IN_TC;
   m_xa_spec.m_source =
       ev.is_one_phase()
           ? binlog::Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE
           : binlog::Binlog_xa_specification::Source::XA_PREPARE;
   process_external_xid(ev.common_header->unmasked_server_id, xid, state);
+}
+
+void Consensus_binlog_recovery::process_query_event(const Query_log_event &ev) {
+  m_query_ev = &ev;
+  Binlog_recovery::process_query_event(ev);
+  m_query_ev = nullptr;
 }
 
 }  // namespace raft

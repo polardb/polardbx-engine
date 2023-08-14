@@ -1185,9 +1185,9 @@ class Relay_log_info : public Rpl_info {
   Prealloced_array<Slave_job_item, 8> curr_group_da;
 
   bool curr_group_seen_gtid;   // current group started with Gtid-event or not
- private:
   /** TODO: Cons_log_index <12-07-23, zanye.zjy> */
   bool curr_group_seen_gcn;    // Lizard: current group started with Gcn-event or not
+
  public:
   bool curr_group_seen_begin;  // current group started with B-event or not
   bool curr_group_isolated;    // current group requires execution in isolation

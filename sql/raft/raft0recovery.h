@@ -84,6 +84,8 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
   Binlog_recovery &recover() override;
 
  private:
+  void process_query_event(Query_log_event const &ev) override;
+
   void process_xa_commit(const std::string &query) override;
 
   void process_xa_rollback(const std::string &query) override;

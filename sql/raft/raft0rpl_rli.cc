@@ -31,6 +31,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/consensus_log_manager.h"
 #include "sql/bl_consensus_log.h"
 #include "sql/rpl_rli_pdb.h"
+#include "sql/raft/raft0err.h"
+#include "sql/log.h"
+
+Raft_relay_log_info::~Raft_relay_log_info()
+{
+  consensus_log_manager.set_relay_log_info(nullptr);
+}
 
 /**
  * Overwrite log name and index log name if needed.

@@ -20,13 +20,12 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
-#include "my_sys.h"
-#include "sql/item.h"
-#include "sql/auth/auth_acls.h"
-#include "mysql/components/services/log_builtins.h"
 #include "sql/consensus/consensus_proc.h"
+#include "my_sys.h"
+#include "mysql/components/services/log_builtins.h"
+#include "sql/auth/auth_acls.h"
 #include "sql/consensus/consensus_common.h"
+#include "sql/item.h"
 #include "sql/protocol.h"
 
 /**
@@ -86,8 +85,8 @@ Proc *Consensus_proc_force_single_mode::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_force_single_mode::evoke_cmd(THD *thd,
-                                                     mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_force_single_mode::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -109,8 +108,8 @@ Proc *Consensus_proc_show_global::instance() {
   static Proc *proc = new Consensus_proc_show_global(key_memory_package);
   return proc;
 }
-Sql_cmd *Consensus_proc_show_global::evoke_cmd(THD *thd,
-                                               mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_show_global::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -160,8 +159,8 @@ Proc *Consensus_proc_show_local::instance() {
   static Proc *proc = new Consensus_proc_show_local(key_memory_package);
   return proc;
 }
-Sql_cmd *Consensus_proc_show_local::evoke_cmd(THD *thd,
-                                              mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_show_local::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -209,7 +208,8 @@ Proc *Consensus_proc_show_logs::instance() {
   static Proc *proc = new Consensus_proc_show_logs(key_memory_package);
   return proc;
 }
-Sql_cmd *Consensus_proc_show_logs::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_show_logs::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -339,8 +339,8 @@ Proc *Consensus_proc_change_leader::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_change_leader::evoke_cmd(THD *thd,
-                                                 mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_change_leader::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -352,7 +352,8 @@ bool Sql_cmd_consensus_proc_change_leader::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   uint64_t node_id =
-      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
+          m_list->front());
 
   res = consensus_ptr->leaderTransfer(node_id);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -371,8 +372,8 @@ Proc *Consensus_proc_add_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_add_learner::evoke_cmd(THD *thd,
-                                               mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_add_learner::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -384,7 +385,8 @@ bool Sql_cmd_consensus_proc_add_learner::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   const auto &addr =
-      consensus_proc_params[consensus_proc_params_idx++]->get_string(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_string(
+          m_list->front());
 
   std::vector<std::string> info_vector;
   info_vector.emplace_back(addr);
@@ -416,8 +418,8 @@ Proc *Consensus_proc_add_follower::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_add_follower::evoke_cmd(THD *thd,
-                                                mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_add_follower::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -426,8 +428,8 @@ bool Sql_cmd_consensus_proc_add_follower::pc_execute(THD *thd) {
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
-  auto addr =
-      consensus_proc_params[consensus_proc_params_idx++]->get_string(m_list->front());
+  auto addr = consensus_proc_params[consensus_proc_params_idx++]->get_string(
+      m_list->front());
 
   res = consensus_ptr->changeMember(
       alisql::Paxos::CCOpType::CCAddLearnerAutoChange, addr);
@@ -457,8 +459,8 @@ Proc *Consensus_proc_drop_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_drop_learner::evoke_cmd(THD *thd,
-                                                mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_drop_learner::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -468,7 +470,8 @@ bool Sql_cmd_consensus_proc_drop_learner::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   const auto &addr =
-      consensus_proc_params[consensus_proc_params_idx++]->get_string(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_string(
+          m_list->front());
 
   std::vector<std::string> info_vector;
   info_vector.push_back(addr);
@@ -490,8 +493,8 @@ Proc *Consensus_proc_upgrade_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_upgrade_learner::evoke_cmd(THD *thd,
-                                                   mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_upgrade_learner::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -500,8 +503,8 @@ bool Sql_cmd_consensus_proc_upgrade_learner::pc_execute(THD *thd) {
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
-  auto addr =
-      consensus_proc_params[consensus_proc_params_idx++]->get_string(m_list->front());
+  auto addr = consensus_proc_params[consensus_proc_params_idx++]->get_string(
+      m_list->front());
 
   res = consensus_ptr->changeMember(alisql::Paxos::CCOpType::CCAddNode, addr);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -520,8 +523,8 @@ Proc *Consensus_proc_downgrade_follower::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_downgrade_follower::evoke_cmd(THD *thd,
-                                                      mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_downgrade_follower::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -531,7 +534,8 @@ bool Sql_cmd_consensus_proc_downgrade_follower::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   const auto &addr =
-      consensus_proc_params[consensus_proc_params_idx++]->get_string(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_string(
+          m_list->front());
 
   res = consensus_ptr->downgradeMember(addr);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -550,8 +554,8 @@ Proc *Consensus_proc_configure_follower::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_configure_follower::evoke_cmd(THD *thd,
-                                                      mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_configure_follower::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -566,8 +570,9 @@ bool Sql_cmd_consensus_proc_configure_follower::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
   uint64_t election_weight =
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
-  bool force_sync =
-      consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++);
+  bool force_sync = (m_list->size() != 3 ?
+      false :
+      consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++));
 
   res = consensus_ptr->configureMember(node_id, force_sync, election_weight);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -586,8 +591,8 @@ Proc *Consensus_proc_configure_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_configure_learner::evoke_cmd(THD *thd,
-                                                     mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_configure_learner::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -601,8 +606,9 @@ bool Sql_cmd_consensus_proc_configure_learner::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
   uint64_t source_node_id =
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
-  bool use_applied =
-      consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++);
+  bool use_applied = (m_list->size() != 3 ?
+      false :
+      consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++));
 
   res = consensus_ptr->configureLearner(target_node_id, source_node_id,
                                         use_applied);
@@ -622,8 +628,8 @@ Proc *Consensus_proc_fix_cluster_id::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_fix_cluster_id::evoke_cmd(THD *thd,
-                                                  mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_fix_cluster_id::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -633,7 +639,8 @@ bool Sql_cmd_consensus_proc_fix_cluster_id::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   uint64_t cluster_id =
-      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
+          m_list->front());
 
   res = consensus_ptr->setClusterId(cluster_id);
   opt_cluster_id = cluster_id;
@@ -653,8 +660,8 @@ Proc *Consensus_proc_fix_matchindex::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_fix_matchindex::evoke_cmd(THD *thd,
-                                                  mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_fix_matchindex::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -686,7 +693,8 @@ Proc *Consensus_proc_purge_log::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_purge_log::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_purge_log::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -696,7 +704,8 @@ bool Sql_cmd_consensus_proc_purge_log::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   uint64 index =
-      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
+          m_list->front());
 
   res = consensus_ptr->forcePurgeLog(false /* local */, index);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -716,8 +725,8 @@ Proc *Consensus_proc_local_purge_log::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_local_purge_log::evoke_cmd(THD *thd,
-                                                   mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_local_purge_log::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -727,7 +736,8 @@ bool Sql_cmd_consensus_proc_local_purge_log::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   uint64 index =
-      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
+          m_list->front());
 
   res = consensus_ptr->forcePurgeLog(true /* local */, index);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -747,8 +757,8 @@ Proc *Consensus_proc_force_purge_log::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_force_purge_log::evoke_cmd(THD *thd,
-                                                   mem_root_deque<Item *> *list) const {
+Sql_cmd *Consensus_proc_force_purge_log::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -758,7 +768,8 @@ bool Sql_cmd_consensus_proc_force_purge_log::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   uint64 index =
-      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
+          m_list->front());
 
   res = consensus_log_manager.purge_log(index);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -790,7 +801,8 @@ bool Sql_cmd_consensus_proc_drop_prefetch_channel::pc_execute(THD *thd) {
   int consensus_proc_params_idx = 0;
 
   uint64 channel_id =
-      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(m_list->front());
+      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
+          m_list->front());
 
   res = consensus_log_manager.get_prefetch_manager()->drop_prefetch_channel(
       channel_id);

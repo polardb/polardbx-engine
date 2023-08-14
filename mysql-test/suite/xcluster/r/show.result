@@ -14,13 +14,6 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	#	#	#	#
 #	#	#	#	#	#
 #	#	#	#	#	#
-#	#	#	#	#	#
-#	#	#	#	#	#
-#	#	#	#	#	#
-#	#	#	#	#	#
-#	#	#	#	#	#
-#	#	#	#	#	#
-#	#	#	#	#	#
 flush local logs;
 call dbms_consensus.force_purge_log(10000);
 insert into t values(3);

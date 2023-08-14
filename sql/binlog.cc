@@ -4660,7 +4660,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
        lost_gtids, lost_gtids == nullptr ? "relay" : "binary", is_relay_log));
 
   Checkable_rwlock *sid_lock =
-      is_relay_log ? all_gtids->get_sid_map()->get_sid_lock() : global_sid_lock;
+      (is_relay_log && all_gtids != NULL) ? all_gtids->get_sid_map()->get_sid_lock() : global_sid_lock;
   /*
     If this is a relay log, we must have the IO thread Master_info trx_parser
     in order to correctly feed it with relay log events.
@@ -6762,9 +6762,10 @@ int MYSQL_BIN_LOG::new_file_impl(
       snprintf(close_on_error_msg, sizeof close_on_error_msg,
                ER_THD(current_thd, ER_ERROR_ON_WRITE), name, errno,
                my_strerror(errbuf, sizeof(errbuf), errno));
+
       my_printf_error(ER_ERROR_ON_WRITE, ER_THD(current_thd, ER_ERROR_ON_WRITE),
-                      MYF(ME_FATALERROR), name, errno,
-                      my_strerror(errbuf, sizeof(errbuf), errno));
+                MYF(ME_FATALERROR), name, errno,
+                my_strerror(errbuf, sizeof(errbuf), errno));
       goto end;
     }
 
@@ -8975,7 +8976,8 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
   auto all = thd->get_transaction()->m_flags.real_commit;
   auto committed_low = thd->get_transaction()->m_flags.commit_low;
 
-  assert(thd->commit_error != THD::CE_COMMIT_ERROR);
+  assert(thd->commit_error != THD::CE_COMMIT_ERROR
+        || thd->consensus_error != THD::CSS_NONE);
   ::finish_transaction_in_engines(thd, all, false);
 
   // If the ordered commit didn't updated the GTIDs for this thd yet

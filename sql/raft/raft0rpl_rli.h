@@ -55,7 +55,7 @@ class Raft_relay_log_info final : public Relay_log_info {
                        param_id, param_channel, is_rli_fake) {
   }
 
-  virtual ~Raft_relay_log_info() {}
+  virtual ~Raft_relay_log_info();
 
   virtual Channel_style style() const override { return Channel_style::Raft; }
 

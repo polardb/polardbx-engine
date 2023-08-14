@@ -65,7 +65,7 @@ source $passwd_file;
 --echo # Restart the server against DDIR
 --exec echo "restart:--datadir=$DDIR " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --enable_reconnect
---source include/wait_until_connected_again.inc
+--source include/wait_until_connected_again_old.inc
 
 --echo # connect as root
 connect(root_con,localhost,root,$new_pwd,mysql);

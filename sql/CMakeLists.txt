@@ -712,7 +712,7 @@ SET(SQL_SHARED_SOURCES
   consensus/consensus_common.cc
   consensus/consensus_proc.cc
   consensus_log_index.cc
-  consensus_recovery_manager.cpp
+  consensus_recovery_manager.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

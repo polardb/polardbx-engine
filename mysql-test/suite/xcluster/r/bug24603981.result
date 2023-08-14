@@ -5,6 +5,8 @@ flush engine logs;
 flush error logs;
 flush general logs;
 flush hosts;
+Warnings:
+Warning	1287	'FLUSH HOSTS' is deprecated and will be removed in a future release. Please use TRUNCATE TABLE performance_schema.host_cache instead
 flush logs;
 flush privileges;
 flush optimizer_costs;
@@ -77,6 +79,8 @@ flush engine logs;
 flush error logs;
 flush general logs;
 flush hosts;
+Warnings:
+Warning	1287	'FLUSH HOSTS' is deprecated and will be removed in a future release. Please use TRUNCATE TABLE performance_schema.host_cache instead
 flush logs;
 flush privileges;
 flush optimizer_costs;

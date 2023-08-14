@@ -497,7 +497,7 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term)
         << " cannot found last log term index, term is " << term;
     }
   }
-  raft::warn(ER_RAFT_BLCOMMIT) << "last log term is " << term << ", last log term index is " << consensus_log_manager.get_recovery_manager()->get_last_leader_term_index();
+  raft::info(ER_RAFT_BLCOMMIT) << "last log term is " << term << ", last log term index is " << consensus_log_manager.get_recovery_manager()->get_last_leader_term_index();
   return !found;
 }
 

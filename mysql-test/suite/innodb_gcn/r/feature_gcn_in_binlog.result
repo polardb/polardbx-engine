@@ -29,17 +29,17 @@ xa commit 'x2';
 alter table t1 engine='innodb';
 show binlog events limit 2, 6;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-binlog.000001	221	Gcn	1	253	#
-binlog.000001	253	Anonymous_Gtid	1	332	#
-binlog.000001	332	Query	1	407	#
-binlog.000001	407	Table_map	1	456	#
-binlog.000001	456	Write_rows	1	500	#
-binlog.000001	500	Xid	1	531	#
+binlog.000001	221	Previous_gtids	1	252	#
+binlog.000001	252	Consensus_log	1	311	#
+binlog.000001	311	Gcn	1	32	#
+binlog.000001	343	Anonymous_Gtid	1	111	#
+binlog.000001	422	Query	1	186	#
+binlog.000001	497	Table_map	1	235	#
 show binlog events limit 8, 3;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-binlog.000001	531	Gcn	1	563	#
-binlog.000001	563	Anonymous_Gtid	1	642	#
-binlog.000001	642	Query	1	734	#
+binlog.000001	546	Write_rows	1	279	#
+binlog.000001	590	Xid	1	310	#
+binlog.000001	621	Consensus_log	1	680	#
 delete from t1;
 flush logs;
 # restart: --gcn_write_event=false
@@ -62,16 +62,16 @@ xa commit 'x2';
 alter table t1 engine='innodb';
 show binlog events limit 2, 6;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-binlog.000001	221	Anonymous_Gtid	1	300	#
-binlog.000001	300	Query	1	375	#
-binlog.000001	375	Table_map	1	424	#
-binlog.000001	424	Write_rows	1	468	#
-binlog.000001	468	Xid	1	499	#
-binlog.000001	499	Anonymous_Gtid	1	578	#
+binlog.000001	221	Previous_gtids	1	252	#
+binlog.000001	252	Consensus_log	1	311	#
+binlog.000001	311	Anonymous_Gtid	1	79	#
+binlog.000001	390	Query	1	154	#
+binlog.000001	465	Table_map	1	203	#
+binlog.000001	514	Write_rows	1	247	#
 show binlog events limit 7,3;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-binlog.000001	499	Anonymous_Gtid	1	578	#
-binlog.000001	578	Query	1	670	#
-binlog.000001	670	Table_map	1	719	#
+binlog.000001	514	Write_rows	1	247	#
+binlog.000001	558	Xid	1	278	#
+binlog.000001	589	Consensus_log	1	648	#
 # restart:
 drop database mydb;

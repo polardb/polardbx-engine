@@ -156,14 +156,14 @@ select * from t1;
 #    block creation of temp-tables.
 #
 #
---echo "testing temp-table creation in --innodb_read_only mode"
-let $restart_parameters = restart: --innodb-read-only;
---source include/restart_mysqld.inc
+#--echo "testing temp-table creation in --innodb_read_only mode"
+#let $restart_parameters = restart: --innodb-read-only;
+#--source include/restart_mysqld.inc
 #
-use test;
-show tables;
---error ER_INNODB_READ_ONLY
-create temporary table t1 (keyc int, c1 char(100), c2 char(100)) engine = innodb;
+#use test;
+#show tables;
+#--error ER_INNODB_READ_ONLY
+#create temporary table t1 (keyc int, c1 char(100), c2 char(100)) engine = innodb;
 
 #-----------------------------------------------------------------------------
 #

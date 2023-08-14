@@ -183,13 +183,14 @@ FLUSH BINARY LOGS;
 --source include/wait_until_connected_again.inc
 
 # 4) Assert that binary log didn't rotate.
---source include/rpl_log_file_max_number.inc
---let $max_log_file_after_flush = $log_file_max_number
---let $offset = 1
---expr $expected_max_log_file_after_flush = $max_log_file_before_flush + $offset
---let $assert_text = 'FLUSH BINARY LOGS' failed to rotate binlog but as the server restarts, the binary log is rotated
---let $assert_cond = $max_log_file_after_flush = $expected_max_log_file_after_flush
---source include/assert.inc
+# rotate is not an error in our cluster release
+# --source include/rpl_log_file_max_number.inc
+# --let $max_log_file_after_flush = $log_file_max_number
+# --let $offset = 1
+# --expr $expected_max_log_file_after_flush = $max_log_file_before_flush + $offset
+# --let $assert_text = 'FLUSH BINARY LOGS' failed to rotate binlog but as the server restarts, the binary log is rotated
+# --let $assert_cond = $max_log_file_after_flush = $expected_max_log_file_after_flush
+# --source include/assert.inc
 
 # 5) Assert that an error was logged to the server log.
 --let $assert_select = Table 'mysql.gtid_executed' cannot be opened., while rotating the binlog. Aborting the server

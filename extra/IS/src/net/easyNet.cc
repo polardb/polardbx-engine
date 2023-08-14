@@ -88,6 +88,7 @@ int EasyNet::start(int port) {
 }
 
 int EasyNet::shutdown() {
+  if (isShutdown_) return 0;
   lock_.lock();
   isShutdown_ = true;
   lock_.unlock();

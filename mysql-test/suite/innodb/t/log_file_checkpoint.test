@@ -8,6 +8,9 @@
 --source include/have_perl_64bit_int.inc
 
 let $MYSQLD_SOCKET= `SELECT @@socket`;
+
+--source include/make_consensus_args.inc
+
 --source include/stop_mysqld.inc
 
 let $tmp_dir = $MYSQLTEST_VARDIR/tmp;

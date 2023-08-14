@@ -66,6 +66,7 @@ flush tables test.t1;
 unlock tables;
 flush tables with read lock;
 unlock tables;
+--sleep 5
 flush tables test.t1 with read lock;
 unlock tables;
 flush tables test.t1 for export;

@@ -154,7 +154,6 @@ show master status;
 flush logs;
 insert into t values(2);
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 --disable_reconnect

@@ -23,9 +23,11 @@ flush logs;
 
 --connect (learner,127.0.0.1,root,,mysql,$learner_port)
 --connection learner
---echo # kill learner
---shutdown_server 0
+--source include/wait_apply_catchup.inc
 --disconnect learner
+
+# cleanup
+--source include/stop_new_learner.inc
 
 --connection leader
 --replace_column 2 # 3 #
@@ -54,6 +56,3 @@ call dbms_consensus.force_purge_log(100);
 --replace_column 2 # 3 #
 show consensus logs;
 drop table t1;
-
-# cleanup
---source include/stop_new_learner.inc

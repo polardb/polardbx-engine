@@ -18,5 +18,7 @@ test_shutdown_signal_udf(1)
 Pattern "Received SHUTDOWN from user .internal signal component service" found
 # restart server.
 # Stop DB server which was created by MTR default
+# Search for the message in the log
+Pattern "Received SHUTDOWN from user .internal signal component service" found
 # restart server.
 UNINSTALL PLUGIN test_services_host_application_signal;

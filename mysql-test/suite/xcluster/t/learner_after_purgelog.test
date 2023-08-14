@@ -28,6 +28,8 @@ let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 #eval add consensus_learner $learner_cluster_info;
 --replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);
+--sleep 5
+
 insert into t1 values (9);
 insert into t1 values (10);
 insert into t1 values (11);
@@ -43,5 +45,6 @@ drop table t1;
 select ROLE from information_schema.alisql_cluster_global where role='LEARNER';
 
 # cleanup
+let $check_connection=0;
 --source include/stop_new_learner.inc
 

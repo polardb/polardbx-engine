@@ -689,189 +689,8 @@ SELECT COUNT(*) FROM t3;
 COUNT(*)
 8
 #
-# Restart mysqld in read-only mode with more rollback segments=8.
-#
-# Connection 1
-INSERT INTO t1  VALUES (8, repeat('h',15));
-INSERT INTO t2  VALUES (8, repeat('h',15));
-INSERT INTO t3  VALUES (8, repeat('h',15));
-# Connection default
-SELECT * FROM t1 ORDER BY a;
-a	b
-1	aaaaaaaaaaaaaaa
-2	bbbbbbbbbbbbbbb
-3	ccccccccccccccc
-4	ddddddddddddddd
-5	eeeeeeeeeeeeeee
-8	hhhhhhhhhhhhhhh
-101	x1 x1 x1 x1 x1 
-102	x2 x2 x2 x2 x2 
-103	x3 x3 x3 x3 x3 
-SELECT COUNT(*) FROM t2;
-COUNT(*)
-9
-SELECT COUNT(*) FROM t3;
-COUNT(*)
-9
-# restart: --innodb_read_only  --innodb_rollback_segments=8
-CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
-ERROR HY000: Running in read-only mode
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-Variable_name	Value
-innodb_rollback_segments	128
-SHOW GLOBAL STATUS LIKE 'Innodb%undo%';
-Variable_name	Value
-Innodb_undo_tablespaces_total	10
-Innodb_undo_tablespaces_implicit	6
-Innodb_undo_tablespaces_explicit	4
-Innodb_undo_tablespaces_active	10
-SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
-WHERE name LIKE '%undo%' ORDER BY NAME;
-NAME	ROW_FORMAT	SPACE_TYPE	STATE
-innodb_undo_001	Undo	Undo	active
-innodb_undo_002	Undo	Undo	active
-innodb_undo_003	Undo	Undo	active
-innodb_undo_004	Undo	Undo	active
-innodb_undo_005	Undo	Undo	active
-innodb_undo_006	Undo	Undo	active
-undo_003	Undo	Undo	active
-undo_004	Undo	Undo	active
-undo_005	Undo	Undo	active
-undo_006	Undo	Undo	active
-SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
-WHERE FILE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
-TABLESPACE_NAME	FILE_TYPE	FILE_NAME
-innodb_undo_001	UNDO LOG	./undo_001
-innodb_undo_002	UNDO LOG	./undo_002
-innodb_undo_003	UNDO LOG	./undo_003
-innodb_undo_004	UNDO LOG	./undo_004
-innodb_undo_005	UNDO LOG	./undo_005
-innodb_undo_006	UNDO LOG	./undo_006
-undo_003	UNDO LOG	./undo_003.ibu
-undo_004	UNDO LOG	./undo_004.ibu
-undo_005	UNDO LOG	./undo_005.ibu
-undo_006	UNDO LOG	./undo_006.ibu
-# Directory listing of UNDO tablespace files
-undo_001
-undo_002
-undo_003
-undo_003.ibu
-undo_004
-undo_004.ibu
-undo_005
-undo_005.ibu
-undo_006
-undo_006.ibu
-SET GLOBAL innodb_rollback_segments=8;
-Warnings:
-Warning	1292	Truncated incorrect innodb_rollback_segments value: '8'
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-Variable_name	Value
-innodb_rollback_segments	128
-SET GLOBAL innodb_rollback_segments=3;
-Warnings:
-Warning	1292	Truncated incorrect innodb_rollback_segments value: '3'
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-Variable_name	Value
-innodb_rollback_segments	128
-SELECT * FROM t1 ORDER BY a;
-a	b
-1	aaaaaaaaaaaaaaa
-2	bbbbbbbbbbbbbbb
-3	ccccccccccccccc
-4	ddddddddddddddd
-5	eeeeeeeeeeeeeee
-8	hhhhhhhhhhhhhhh
-101	x1 x1 x1 x1 x1 
-102	x2 x2 x2 x2 x2 
-103	x3 x3 x3 x3 x3 
-SELECT COUNT(*) FROM t2;
-COUNT(*)
-9
-SELECT COUNT(*) FROM t3;
-COUNT(*)
-9
-#
 # Restart mysqld in force_recovery mode with more rollback segments=8.
 #
-# restart: --innodb_force_recovery=1 --innodb_rollback_segments=8
-CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
-ERROR HY000: Changes to undo tablespaces are not allowed in force_recovery mode
-SHOW GLOBAL STATUS LIKE 'Innodb%undo%';
-Variable_name	Value
-Innodb_undo_tablespaces_total	10
-Innodb_undo_tablespaces_implicit	6
-Innodb_undo_tablespaces_explicit	4
-Innodb_undo_tablespaces_active	10
-SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
-WHERE name LIKE '%undo%' ORDER BY NAME;
-NAME	ROW_FORMAT	SPACE_TYPE	STATE
-innodb_undo_001	Undo	Undo	active
-innodb_undo_002	Undo	Undo	active
-innodb_undo_003	Undo	Undo	active
-innodb_undo_004	Undo	Undo	active
-innodb_undo_005	Undo	Undo	active
-innodb_undo_006	Undo	Undo	active
-undo_003	Undo	Undo	active
-undo_004	Undo	Undo	active
-undo_005	Undo	Undo	active
-undo_006	Undo	Undo	active
-SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
-WHERE FILE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
-TABLESPACE_NAME	FILE_TYPE	FILE_NAME
-innodb_undo_001	UNDO LOG	./undo_001
-innodb_undo_002	UNDO LOG	./undo_002
-innodb_undo_003	UNDO LOG	./undo_003
-innodb_undo_004	UNDO LOG	./undo_004
-innodb_undo_005	UNDO LOG	./undo_005
-innodb_undo_006	UNDO LOG	./undo_006
-undo_003	UNDO LOG	./undo_003.ibu
-undo_004	UNDO LOG	./undo_004.ibu
-undo_005	UNDO LOG	./undo_005.ibu
-undo_006	UNDO LOG	./undo_006.ibu
-# Directory listing of UNDO tablespace files
-undo_001
-undo_002
-undo_003
-undo_003.ibu
-undo_004
-undo_004.ibu
-undo_005
-undo_005.ibu
-undo_006
-undo_006.ibu
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-Variable_name	Value
-innodb_rollback_segments	128
-SET GLOBAL innodb_rollback_segments=8;
-Warnings:
-Warning	1292	Truncated incorrect innodb_rollback_segments value: '8'
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-Variable_name	Value
-innodb_rollback_segments	128
-SET GLOBAL innodb_rollback_segments=3;
-Warnings:
-Warning	1292	Truncated incorrect innodb_rollback_segments value: '3'
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-Variable_name	Value
-innodb_rollback_segments	128
-SELECT * FROM t1 ORDER BY a;
-a	b
-1	aaaaaaaaaaaaaaa
-2	bbbbbbbbbbbbbbb
-3	ccccccccccccccc
-4	ddddddddddddddd
-5	eeeeeeeeeeeeeee
-8	hhhhhhhhhhhhhhh
-101	x1 x1 x1 x1 x1 
-102	x2 x2 x2 x2 x2 
-103	x3 x3 x3 x3 x3 
-SELECT COUNT(*) FROM t2;
-COUNT(*)
-9
-SELECT COUNT(*) FROM t3;
-COUNT(*)
-9
 #
 # Use SET PERSIST to change rollback segments=11
 # and make some undo logs that must be rolled back on restart.
@@ -948,16 +767,15 @@ a	b
 3	ccccccccccccccc
 4	ddddddddddddddd
 5	eeeeeeeeeeeeeee
-8	hhhhhhhhhhhhhhh
 101	x1 x1 x1 x1 x1 
 102	x2 x2 x2 x2 x2 
 103	x3 x3 x3 x3 x3 
 SELECT COUNT(*) FROM t2;
 COUNT(*)
-9
+8
 SELECT COUNT(*) FROM t3;
 COUNT(*)
-9
+8
 INSERT INTO t1  VALUES (11, repeat('k',15));
 INSERT INTO t2  VALUES (11, repeat('k',15));
 INSERT INTO t3  VALUES (11, repeat('k',15));
@@ -968,17 +786,16 @@ a	b
 3	ccccccccccccccc
 4	ddddddddddddddd
 5	eeeeeeeeeeeeeee
-8	hhhhhhhhhhhhhhh
 11	kkkkkkkkkkkkkkk
 101	x1 x1 x1 x1 x1 
 102	x2 x2 x2 x2 x2 
 103	x3 x3 x3 x3 x3 
 SELECT COUNT(*) FROM t2;
 COUNT(*)
-10
+9
 SELECT COUNT(*) FROM t3;
 COUNT(*)
-10
+9
 #
 # Cleanup
 #

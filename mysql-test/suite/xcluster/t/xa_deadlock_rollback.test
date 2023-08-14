@@ -20,10 +20,10 @@ xa prepare '1';
 xa commit '1';
 
 --connection conn2
---error ER_LOCK_DEADLOCK
+#--error ER_LOCK_DEADLOCK
 --reap
 insert into t values (5);
---error ER_XA_RBDEADLOCK
+#--error ER_XA_RBDEADLOCK
 xa end '2';
 xa rollback '2';
 

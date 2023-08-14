@@ -107,7 +107,7 @@ void Paxos::shutdown() {
     config_->forEach(&Server::stop, NULL);
     config_->forEachLearners(&Server::stop, NULL);
   }
-  srv_->closeThreadPool();
+  srv_->shutdown();
   /* When Service::shutdown return, there is not backend worker left, so we can
    * release config_ now. */
   config_.reset();
@@ -129,7 +129,7 @@ void Paxos::changeState_(enum State newState) {
   if (state_ == newState)
     return;
   */
-  easy_error_log("Server %d : Paxos state change from %s to %s !!\n",
+  easy_log_common("Server %d : Paxos state change from %s to %s !!\n",
                  localServer_->serverId, stateString[state_],
                  stateString[newState]);
   /* only leader run purge log timer */
@@ -535,8 +535,8 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
     else {
       easy_error_log(
           "Server %d : skip send cmd LeaderTransfer because the pos is not "
-          "catch up. commitIndex(%llu), lli(%llu), target matchIndex(%llu)",
-          localServer_->serverId, commitIndex_, log_->getLastLogIndex(),
+          "catch up. commitIndex(%llu), lli(%llu), li(%llu), target matchIndex(%llu)",
+          localServer_->serverId, commitIndex_, log_->getLastLogIndex(), logIndex,
           server->matchIndex.load());
     }
     // TODO we also need to call leaderCommand in tryUpdateCommitIndex_
@@ -1173,7 +1173,7 @@ void Paxos::becameLeader_() {
     log_->getEntry(lastLogIndex, entry, false);  // ignore error
     uint64_t lastLogTerm = entry.term();
 
-    easy_error_log(
+    easy_log_common(
         "Server %d : become Leader (currentTerm %ld, lli:%ld, llt:%ld)!!\n",
         localServer_->serverId, currentTerm_.load(), lastLogIndex, lastLogTerm);
   }
@@ -1394,7 +1394,7 @@ int Paxos::requestVote(bool force) {
     epochTimer_->restart();
     votedFor_ = localServer_->serverId;
     log_->setMetaData(keyVoteFor, votedFor_);
-    easy_error_log("Server %d : Start new requestVote: new term(%ld)\n",
+    easy_log_common("Server %d : Start new requestVote: new term(%ld)\n",
                    localServer_->serverId, currentTerm_.load());
 
     PaxosMsg msg;

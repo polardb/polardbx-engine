@@ -813,7 +813,7 @@ let $wait_condition = SELECT count(*) = 3 from
 --source include/wait_condition.inc
 
 SELECT object_schema, object_name, lock_type, lock_status
-  FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S');
+  FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S') order by 1, 2;
 SET DEBUG_SYNC = 'now SIGNAL continue';
 
 --echo # Verify that the statements complete. Note deadlock for the insert
@@ -848,7 +848,7 @@ let $wait_condition = SELECT count(*) = 3
 --source include/wait_condition.inc
 
 SELECT object_schema, object_name, lock_type, lock_status
-  FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S');
+  FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S') order by 1, 2;
 SET DEBUG_SYNC = 'now SIGNAL continue';
 
 --echo # Verify that the statements complete.

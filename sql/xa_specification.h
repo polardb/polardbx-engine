@@ -72,6 +72,10 @@ class XA_specification {
   void set_gcn(const MyGCN &gcn) { m_gcn = gcn; }
   const MyGCN& gcn() const { return m_gcn; }
 
+  [[nodiscard]] virtual XA_specification *clone() const {
+    return new XA_specification(*this);
+  }
+
  private:
   /** All TC_LOGs can have GCN. */
   MyGCN m_gcn;

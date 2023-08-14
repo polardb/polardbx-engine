@@ -63,7 +63,8 @@ let SEARCH_PATTERN=Received SHUTDOWN from user .internal signal component servic
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --source include/shutdown_mysqld.inc
 
---echo # Trying the shutdown at init option
+#--echo # Trying the shutdown at init option
+#not support test_services_host_application_signal_shutdown_at_init
 --exec $MYSQLD $extra_opts $TEST_SERVICES_HOST_APPLICATION_SIGNAL_PLUGIN_OPT --test_services_host_application_signal_shutdown_at_init=1
 
 --echo # Search for the message in the log

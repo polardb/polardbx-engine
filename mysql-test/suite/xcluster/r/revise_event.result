@@ -26,8 +26,8 @@ shutdown;
 insert into t1 values(1);
 set global consensus_flow_control="";
 insert into t1 values(1);
-77290
-77290
-77290
+77304
+77304
+77304
 drop table t1;
 drop table t2;

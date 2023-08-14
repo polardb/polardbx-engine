@@ -8,8 +8,7 @@ let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_lo
 --source include/wait_condition.inc
 select server_id, role, instance_type from information_schema.alisql_cluster_local;
 
-start slave;
-stop slave;
+STOP REPLICA;
 
 --error ER_CONSENSUS_LOG_TYPE_NODE
 #add consensus_learner "127.0.0.1:20001";
@@ -41,7 +40,7 @@ start xpaxos_replication;
 --error ER_CONSENSUS_LOG_TYPE_NODE
 stop xpaxos_replication;
 --error ER_CONSENSUS_LOG_TYPE_NODE
-change master to master_host='127.0.0.1';
+CHANGE REPLICATION SOURCE to source_host='127.0.0.1';
 set force_revise=ON;
 --error ER_CONSENSUS_SERVER_NOT_READY
 start xpaxos_replication;
@@ -70,7 +69,8 @@ set force_revise=OFF;
 --let $master_pos= query_get_value(SHOW MASTER STATUS, Position, 1)
 --exec $MYSQL_BINLOG --read-from-remote-master=BINLOG-DUMP-NON-GTIDS --user=root --host=127.0.0.1 --port=$MYPORT_3 --start-position=$master_pos $master_binlog | wc -l
 --error 1
---exec $MYSQL_BINLOG --read-from-remote-master=BINLOG-DUMP-GTIDS --user=root --host=127.0.0.1 --port=$MYPORT_3 --start-position=$master_pos $master_binlog
+--exec $MYSQL_BINLOG --read-from-remote-master=BINLOG-DUMP-GTIDS --user=root --host=127.0.0.1 --port=$MYPORT_3 --start-position=$master_pos $master_binlog > $MYSQLTEST_VARDIR/tmp/logger.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/logger.sql
 
 #change consensus_leader to 1;
 --replace_result $PAXOS_PORT_1 PAXOS_PORT_1

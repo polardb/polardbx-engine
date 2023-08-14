@@ -19,6 +19,7 @@ insert into t1 values (1);
 --sleep 2
 
 --connect (learner,127.0.0.1,root,,test,$learner_port)
+--connection learner
 --source include/wait_apply_catchup.inc
 
 --connection default
@@ -35,8 +36,8 @@ let $wait_condition= select role='Leader' and server_ready_for_rw='Yes' from inf
 --source include/wait_condition.inc
 
 --replace_result $MYPORT_1 MYPORT_1 $MASTER_BINLOG MASTER_BINLOG $MASTER_POS MASTER_POS
-eval CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=$MYPORT_1, MASTER_USER='root', MASTER_PASSWORD='', MASTER_LOG_FILE='$MASTER_BINLOG', MASTER_LOG_POS=$MASTER_POS, MASTER_AUTO_POSITION=0 FOR CHANNEL 'testsync';
-start slave for channel "testsync";
+eval CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=$MYPORT_1, SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_LOG_FILE='$MASTER_BINLOG', SOURCE_LOG_POS=$MASTER_POS, SOURCE_AUTO_POSITION=0 FOR CHANNEL 'testsync';
+STOP REPLICA for channel "testsync";
 
 --connection default
 insert into t1 values (2);
@@ -46,7 +47,7 @@ select * from t1;
 
 --connection learner
 --replace_result $MASTER_BINLOG MASTER_BINLOG $MASTER_POS MASTER_POS
-eval SELECT MASTER_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
+eval SELECT SOURCE_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
 select * from t1;
 
 --connection default
@@ -64,9 +65,9 @@ select * from t1;
 
 --connection learner
 --replace_result $MASTER_BINLOG MASTER_BINLOG $MASTER_POS MASTER_POS
-eval SELECT MASTER_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
+eval SELECT SOURCE_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
 select * from t1;
-stop slave for channel "testsync";
+stop replica for channel "testsync";
 
 --echo #
 --echo # ---- test Follower ----
@@ -86,6 +87,7 @@ insert into t1 values (1);
 --sleep 2
 
 --connect (learner2,127.0.0.1,root,,test,$learner_port)
+--connection learner2
 --source include/wait_apply_catchup.inc
 
 --connection default
@@ -107,8 +109,8 @@ let $wait_condition= select role='Leader' and server_ready_for_rw='Yes' from inf
 --source include/wait_condition.inc
 
 --replace_result $MYPORT_2 MYPORT_2 $MASTER_BINLOG MASTER_BINLOG $MASTER_POS MASTER_POS
-eval CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=$MYPORT_2, MASTER_USER='root', MASTER_PASSWORD='', MASTER_LOG_FILE='$MASTER_BINLOG', MASTER_LOG_POS=$MASTER_POS, MASTER_AUTO_POSITION=0 FOR CHANNEL 'testsync';
-start slave for channel "testsync";
+eval CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=$MYPORT_2, SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_LOG_FILE='$MASTER_BINLOG', SOURCE_LOG_POS=$MASTER_POS, SOURCE_AUTO_POSITION=0 FOR CHANNEL 'testsync';
+STOP REPLICA for channel "testsync";
 
 --connection default
 insert into t1 values (3);
@@ -121,7 +123,7 @@ select * from t1;
 
 --connection learner2
 --replace_result $MASTER_BINLOG MASTER_BINLOG $MASTER_POS MASTER_POS
-eval SELECT MASTER_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
+eval SELECT SOURCE_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
 select * from t1;
 
 --connection default
@@ -155,16 +157,16 @@ select * from t1;
 
 --connection learner2
 --replace_result $MASTER_BINLOG MASTER_BINLOG $MASTER_POS MASTER_POS
-eval SELECT MASTER_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
+eval SELECT SOURCE_POS_WAIT('$MASTER_BINLOG', $MASTER_POS, 0, "testsync") >= 0;
 select * from t1;
 
 --connection default
 drop table t1;
 
+--sleep 5
 let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/stop_new_learner.inc
 
+--sleep 5
 let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
 --source include/stop_new_learner.inc
-
-

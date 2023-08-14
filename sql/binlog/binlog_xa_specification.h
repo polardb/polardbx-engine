@@ -107,6 +107,10 @@ class Binlog_xa_specification : public XA_specification {
   /**TODO: */
   virtual std::string print() override { return "Gtid:"; }
 
+  [[nodiscard]] XA_specification *clone() const override {
+    return new Binlog_xa_specification(*this);
+  }
+
  public:
   Source m_source;
   Gtid m_gtid;

@@ -196,26 +196,27 @@ my %visited_suite_names;
 
 # xcluster port offset
 # you can't change this offset for now
-# if you want to change it, you need to change all the test in xcluster suite,
+# if you want to change it, you need to change all test cases in xcluster suite,
 # becase port use in test is hard code.
 my %xcluster_port_offset;
 $xcluster_port_offset{'mysqld'} = 0;
 $xcluster_port_offset{'mysqlx'} = 10;
-$xcluster_port_offset{'galaxyx_port'} = 20;
+$xcluster_port_offset{'galaxyx'} = 20;
 $xcluster_port_offset{'polarx_rpc'} = 30;
 $xcluster_port_offset{'consensus'} = 40;
-# |                              mtr0                                   | mtr1 |
-# |                   node                        |       learner       |
-# | mysqld | mysqlx | galaxyx | rpc   | consensus | almost same as node |
-# | 0~9    | 10~19  | 20~29   | 30~39 | 40~49     |                     |
-# 0~39 xcluster node instance
+# |                              thread0                                     | thread1 |
+# |                 xclusters                     |       learners           |         |
+# | mysqld | mysqlx | galaxyx | rpc   | consensus | almost same as xclusters |         |
+# | 0~9    | 10~19  | 20~29   | 30~39 | 40~49     |                          |         |
+# 0~49 xcluster instances
   # 0~10 port
-  # 11~39 x & galaxyx share same range for now (this is a hack)
+  # 11~39 mysqlx & galaxyx share same range for now (this is a hack)
   # 30~39 rpc
   # 40~49 cluster
-  # 50~99 xcluster learner
+# 50~99 learner instances
   # same as above
   # but x & galaxyx not share the same ports range
+# the number of ports used by xcluster and learner instances of each worker thread is 50 + 50
 my $ports_per_thread = 100;
 
 # Global variables
@@ -297,6 +298,7 @@ our @DEFAULT_SUITES = qw(
   rds
   lizard
   innodb_gcn
+  xcluster
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;

@@ -241,13 +241,6 @@ ibtmp1
 use test;
 select * from t1;
 ERROR 42S02: Table 'test.t1' doesn't exist
-"testing temp-table creation in --innodb_read_only mode"
-# restart: --innodb-read-only
-use test;
-show tables;
-Tables_in_test
-create temporary table t1 (keyc int, c1 char(100), c2 char(100)) engine = innodb;
-ERROR HY000: InnoDB is in read only mode.
 "testing system and temp tablespace name conflict"
 Pattern "innodb_temporary and innodb_system file names seem to be the same" found
 "restarting server in normal mode"

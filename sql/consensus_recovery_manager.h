@@ -82,7 +82,7 @@ class Pending_recovering_trx {
   const enum_ha_recover_xa_state current_state;
   const enum_ha_recover_xa_state next_state;
   XID *xid;
-  XA_specification xa_spec;
+  XA_specification *xa_spec;
   const uint64 consensus_index;
 };
 
@@ -128,7 +128,7 @@ class Consensus_recovery_manager {
   int truncate_not_confirmed_pending_recovering_trxs(
       uint64 max_index_in_binlog_file);
 
-  int commit_by_start_apply_index();
+  int recover_remaining_pending_recovering_trxs();
 
  private:
   bool inited;

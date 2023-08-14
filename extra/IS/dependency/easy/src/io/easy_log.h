@@ -23,8 +23,8 @@ typedef enum {
     EASY_LOG_ALL
 } easy_log_level_t;
 
-#define easy_log_common(file, line, format, args...)                            \
-    easy_log_format_default(EASY_LOG_OFF, file, line, __FUNCTION__, format, ## args)
+#define easy_log_common(format, args...) \
+        easy_log_format_default(EASY_LOG_OFF, __FILE__, __LINE__, __FUNCTION__, format, ## args)
 #define easy_fatal_log(format, args...) if(easy_log_level>=EASY_LOG_FATAL)      \
         easy_log_format(EASY_LOG_FATAL, __FILE__, __LINE__, __FUNCTION__, format, ## args)
 #define easy_error_log(format, args...) if(easy_log_level>=EASY_LOG_ERROR)      \

@@ -55,7 +55,7 @@ source $passwd_file;
 --echo # Restart the server against DDIR
 --exec echo "restart:--datadir=$DDIR " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --enable_reconnect
---source include/wait_until_connected_again.inc
+--source include/wait_until_connected_again_old.inc
 
 --echo # connect as root
 connect(root_con,localhost,root,$new_pwd,mysql);
@@ -280,7 +280,7 @@ CREATE DATABASE test;
 EOF
 
 --echo # Run the server with --initialize-insecure and 4K pages.
---exec $MYSQLD --no-defaults --initialize-insecure --innodb_page_size=4K --datadir=$DDIR --init-file=$BOOTSTRAP_SQL >$MYSQLD_LOG 2>&1
+--exec $MYSQLD --no-defaults $consensus_args --initialize-insecure --innodb_page_size=4K --datadir=$DDIR --init-file=$BOOTSTRAP_SQL >$MYSQLD_LOG 2>&1
 
 --echo # Look for error messages from my_message_stderr (there should be none)
 --perl

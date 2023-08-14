@@ -703,7 +703,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
     recover_status = consensus_log_manager.get_consensus_info()->get_recover_status();
     assert(consensus_log_manager.get_status() == RELAY_LOG_WORKING);
     start_apply_index = consensus_log_manager.get_consensus_info()->get_start_apply_index();
-    raft::warn(ER_RAFT_APPLIER) << "Apply thread start, recover status = " << recover_status
+    raft::info(ER_RAFT_APPLIER) << "Apply thread start, recover status = " << recover_status
                                 << ", start apply index = " << start_apply_index
                                 << ", rli consensus index " << rli->get_consensus_apply_index();
 
@@ -722,7 +722,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        raft::warn(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+        raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
                                     << ", rli apply index = " << recover_index;
         rli->set_group_relay_log_name(log_name);
@@ -747,7 +747,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        raft::warn(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+        raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
                                     << ", rli apply index = " << start_index;
         rli->set_group_relay_log_name(log_name);
@@ -778,7 +778,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
             raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
             abort();
           }
-          raft::warn(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+          raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                       << "', pos = " << log_pos
                                       << ", rli apply index = " << start_index;
           rli->set_group_relay_log_name(log_name);
@@ -797,7 +797,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
             raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
             abort();
           }
-          raft::warn(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+          raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                       << "', pos = " << log_pos
                                       << ", rli apply index = " << start_index;
 
@@ -817,7 +817,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        raft::warn(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+        raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
                                     << ", rli apply index = " << start_index;
         rli->set_group_relay_log_name(log_name);

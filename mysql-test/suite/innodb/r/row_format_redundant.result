@@ -31,7 +31,6 @@ row_format=redundant;
 insert into t3 values(444, 'dddd', 'bbbbb', 'aaaaa');
 insert into t3 values(555, 'eeee', 'ccccc', 'aaaaa');
 SET GLOBAL innodb_fast_shutdown=0;
-# restart: --innodb-read-only
 SELECT COUNT(*) FROM t1;
 COUNT(*)
 4096

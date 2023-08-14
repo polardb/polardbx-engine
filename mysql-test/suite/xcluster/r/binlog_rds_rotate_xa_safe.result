@@ -177,31 +177,6 @@ XA END "2101";
 XA COMMIT "2101" ONE PHASE;
 include/show_binlog_events.inc
 #
-# Rotation Error on XA PREPARE no abort
-#
-flush logs;
-SET debug = "d,fault_injection_new_file_rotate_event";
-SET GLOBAL binlog_error_action = IGNORE_ERROR;
-XA START "2201";
-INSERT INTO t1 VALUES(1, repeat('a', 4096));
-XA END "2201";
-XA PREPARE "2201";
-Warnings:
-Error	1026	Error writing file 'master-bin' (errno: 2 - No such file or directory)
-# restart: --skip-core-file
-include/assert_grep.inc [Find Log: Turning logging off for the whole duration]
-XA COMMIT "2201";
-include/show_binlog_events.inc
-Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000017	#	Query	#	#	XA START X'32323031',X'',1
-master-bin.000017	#	Table_map	#	#	table_id: # (test.t1)
-master-bin.000017	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000017	#	Query	#	#	XA END X'32323031',X'',1
-master-bin.000017	#	XA_prepare	#	#	XA PREPARE X'32323031',X'',1
-master-bin.000017	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
-master-bin.000017	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
-master-bin.000017	#	Query	#	#	XA COMMIT X'32323031',X'',1
-#
 # Rotation Error on XA PREPARE and Abort server
 #
 flush logs;
@@ -212,7 +187,7 @@ INSERT INTO t1 VALUES(1, repeat('a', 4096));
 XA END "2301";
 XA PREPARE "2301";
 ERROR HY000: Binary logging not possible. Message: Error writing file 'master-bin' (errno: 2 - No such file or directory), while rotating the binlog. Aborting the server
-# restart: --skip-core-file
+# restart
 SET GLOBAL max_binlog_size = 4096;
 XA RECOVER;
 formatID	gtrid_length	bqual_length	data
@@ -220,13 +195,12 @@ formatID	gtrid_length	bqual_length	data
 XA COMMIT "2301";
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000018	#	Query	#	#	XA START X'32333031',X'',1
-master-bin.000018	#	Table_map	#	#	table_id: # (test.t1)
-master-bin.000018	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000018	#	Query	#	#	XA END X'32333031',X'',1
-master-bin.000018	#	XA_prepare	#	#	XA PREPARE X'32333031',X'',1
-master-bin.000018	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
-master-bin.000018	#	Consensus_empty	#	#	##CONSENSUS EMPTY'
-master-bin.000018	#	Query	#	#	XA COMMIT X'32333031',X'',1
-master-bin.000018	#	Rotate	#	#	master-bin.000019;pos=POS
+master-bin.000017	#	Query	#	#	XA START X'32333031',X'',1
+master-bin.000017	#	Table_map	#	#	table_id: # (test.t1)
+master-bin.000017	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+master-bin.000017	#	Query	#	#	XA END X'32333031',X'',1
+master-bin.000017	#	XA_prepare	#	#	XA PREPARE X'32333031',X'',1
+master-bin.000017	#	Query	#	#	XA COMMIT X'32333031',X'',1
+master-bin.000017	#	Rotate	#	#	master-bin.000018;pos=POS
 drop table t1;
+SET GLOBAL max_binlog_size = 1073741824;

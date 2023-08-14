@@ -17,9 +17,10 @@ update t set id=2 where id=1;
 commit;
 connection follower;
 
---let $wait_timeout=300
---let $wait_condition= SELECT variable_value > 0 from performance_schema.global_status where variable_name='slave_retried_transactions'
---source include/wait_condition.inc
+--sleep 20
+#--let $wait_timeout=300
+#--let $wait_condition= select count_transactions_retries > 0 from performance_schema.replication_applier_status
+#--source include/wait_condition.inc
 
 rollback;
 

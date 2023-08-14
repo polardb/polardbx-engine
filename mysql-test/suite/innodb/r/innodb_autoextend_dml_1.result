@@ -78,7 +78,7 @@ count(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%t2%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-test/t2	138412032	4194304
+test/t2	134217728	4194304
 DROP TABLE t2;
 #
 # Scenario-3: Create a table without autoextend_size and alter it later on to add autoextend_size property

@@ -76,7 +76,7 @@ void easy_log_format_default(int level, const char *file, int line, const char *
       strcpy(level_str, "[Trace]");
       break;
     default:
-      strcpy(level_str, "[Default]");
+      strcpy(level_str, "[System]");
       break;
     }
 

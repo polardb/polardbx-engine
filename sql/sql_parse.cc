@@ -3206,6 +3206,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
   }
 
   if (consensus_command_limit(thd)) {
+    raft::error() << "command could not be executed because of consensus command limit";
     return 1;
   }
 

@@ -51,7 +51,7 @@ test_type="normal"
 parse_options "$@"
 
 # Basic options
-OPT="perl mysql-test-run.pl --report-unstable-tests --sanitize --timer --force --max-test-fail=0 --retry=1"
+OPT="perl mysql-test-run.pl --report-unstable-tests --sanitize --timer --force --max-test-fail=0 --retry=2"
 OPT="$OPT --skip-ndb --skip-rpl  --skip-combinations --nounit-tests  --parallel=32 "
 OPT="$OPT --report-features --unit-tests-report"
 

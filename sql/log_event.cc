@@ -3089,6 +3089,7 @@ int Log_event::apply_gtid_event(Relay_log_info *rli) {
 
   rli->curr_group_da.clear();
   rli->curr_group_seen_gtid = false;
+  rli->curr_group_seen_gcn = false;
   b_events_before_gtid_mgr.reset_seen_status();
   /*
     Removes the job from the (G)lobal (A)ssigned (Q)ueue after

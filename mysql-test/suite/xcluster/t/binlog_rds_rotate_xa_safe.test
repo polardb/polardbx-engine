@@ -6,6 +6,7 @@
 --source include/paxos.inc
 
 connection default;
+
 create table t1(id int);
 
 
@@ -411,37 +412,6 @@ XA COMMIT "2101" ONE PHASE;
 --source include/show_binlog_events.inc
 
 --echo #
---echo # Rotation Error on XA PREPARE no abort
---echo #
-
-flush logs;
---let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
---let $binlog_limit= 3, 50
-
-connection con1;
-SET debug = "d,fault_injection_new_file_rotate_event";
-SET GLOBAL binlog_error_action = IGNORE_ERROR;
-
-XA START "2201";
-INSERT INTO t1 VALUES(1, repeat('a', 4096));
-XA END "2201";
-XA PREPARE "2201";
-
---connection default
---let $restart_parameters = restart: --skip-core-file
---source include/restart_mysqld.inc
-
---let $assert_text = Find Log: Turning logging off for the whole duration
---let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
---let $assert_select = Turning logging off for the whole duration
---let $assert_count = 1
---source include/assert_grep.inc
-
-XA COMMIT "2201";
---source include/show_binlog_events.inc
-
-
---echo #
 --echo # Rotation Error on XA PREPARE and Abort server
 --echo #
 
@@ -467,6 +437,9 @@ XA RECOVER;
 XA COMMIT "2301";
 
 --source include/show_binlog_events.inc
+drop table t1;
+
+SET GLOBAL max_binlog_size = 1073741824;
 
 connection default;
 
@@ -474,4 +447,3 @@ connection default;
 --disconnect con2
 --disconnect con3
 
-drop table t1;

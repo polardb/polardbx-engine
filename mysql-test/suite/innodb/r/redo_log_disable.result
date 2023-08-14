@@ -692,7 +692,6 @@ SELECT * FROM performance_schema.global_status WHERE variable_name like 'Innodb_
 VARIABLE_NAME	VARIABLE_VALUE
 Innodb_redo_log_enabled	OFF
 #3C. Check shutdown and restart with innodb-read-only
-# restart: --innodb-read-only
 SELECT * FROM performance_schema.global_status WHERE variable_name like 'Innodb_redo_log_enabled';
 VARIABLE_NAME	VARIABLE_VALUE
 Innodb_redo_log_enabled	OFF

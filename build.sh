@@ -147,64 +147,65 @@ initialize()
   echo "
   [mysqld]
   port = 3306
+  mysqlx_port = 3406
   basedir = $dest_dir
-  datadir = $dest_dir/data
-  socket = $dest_dir/mysql.sock
+  datadir = $dest_dir/node1/data
+  tmpdir = $dest_dir/node1/temp
+  socket = $dest_dir/node1/temp/mysql.sock
   log_error_verbosity=3
-  log_error=$dest_dir/mysql-err.log
+  log_error=$dest_dir/mysql-err1.log
 
-  sql_mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
   default_authentication_plugin = 'mysql_native_password'
   #debug=+d,query,info,error,enter,exit:t:i:A,$dest_dir/mysqld.trace
 
-  #gtid:
   gtid_mode = on
   enforce_gtid_consistency = on
-
-  #binlog
   log_bin = mysql-binlog
-  log_slave_updates = on
   binlog_format = row
-  binlog-ignore-db=sys
-  binlog-ignore-db=information_schema
-  binlog-ignore-db=performance_schema
-  binlog-do-db=test
+  binlog_row_image = FULL
+  master_info_repository = TABLE
+  relay_log_info_repository = TABLE
 
   consensus_log_level=1
 
   server_id = 1
-  " > $HOME/my.cnf
+  cluster_id=1
+  " > $dest_dir/my1.cnf
 
-  cat $HOME/my.cnf > $HOME/my2.cnf
+  cat $dest_dir/my1.cnf > $dest_dir/my2.cnf
   echo "
   port = 3307
-  datadir = $dest_dir/data2
-  socket = $dest_dir/mysql2.sock
+  mysqlx_port = 3407
+  datadir = $dest_dir/node2/data
+  tmpdir = $dest_dir/node2/temp
+  socket = $dest_dir/node2/temp/mysql.sock
   log_error=$dest_dir/mysql-err2.log
-  " >> $HOME/my2.cnf
+  " >> $dest_dir/my2.cnf
 
-  cat $HOME/my.cnf > $HOME/my3.cnf
+  cat $dest_dir/my1.cnf > $dest_dir/my3.cnf
   echo "
   port = 3308
-  datadir = $dest_dir/data3
-  socket = $dest_dir/mysql3.sock
+  mysqlx_port = 3408
+  datadir = $dest_dir/node3/data
+  tmpdir = $dest_dir/node3/temp
+  socket = $dest_dir/node3/temp/mysql.sock
   log_error=$dest_dir/mysql-err3.log
-  " >> $HOME/my3.cnf
+  " >> $dest_dir/my3.cnf
 
   if [ x$initialize_type == x"raft" ]; then
-    rm -rf $dest_dir/data $dest_dir/data2 $dest_dir/data3
-    mkdir -p $dest_dir/data  $dest_dir/data2  $dest_dir/data3
-    ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@1'
-    ./runtime_output_directory/mysqld --defaults-file=$HOME/my2.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@2'
-    ./runtime_output_directory/mysqld --defaults-file=$HOME/my3.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@3'
-    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf &
-    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my2.cnf &
-    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my3.cnf &
+    rm -rf $dest_dir/node1 $dest_dir/node2 $dest_dir/node3
+    mkdir -p $dest_dir/node1/temp  $dest_dir/node2/temp  $dest_dir/node3/temp
+    $dest_dir/bin/mysqld --defaults-file=$dest_dir/my1.cnf --initialize-insecure  --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@1'
+    $dest_dir/bin/mysqld --defaults-file=$dest_dir/my2.cnf --initialize-insecure  --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@2'
+    $dest_dir/bin/mysqld --defaults-file=$dest_dir/my3.cnf --initialize-insecure  --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@3'
+    nohup $dest_dir/bin/mysqld --defaults-file=$dest_dir/my1.cnf &
+    nohup $dest_dir/bin/mysqld --defaults-file=$dest_dir/my2.cnf &
+    nohup $dest_dir/bin/mysqld --defaults-file=$dest_dir/my3.cnf &
   else
-    rm -rf $dest_dir/data
-    mkdir -p $dest_dir/data
-    ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:23451@1'
-    nohup ./runtime_output_directory/mysqld --defaults-file=$HOME/my.cnf & #--debug='+d,query,info,error,enter,exit:t:i:A,/home/mysql/tmp_run/mysqld.trace'
+    rm -rf $dest_dir/node1
+    mkdir -p $dest_dir/node1/temp
+    ./runtime_output_directory/mysqld --defaults-file=$dest_dir/my1.cnf --initialize-insecure  --cluster-info='127.0.0.1:23451@1'
+    nohup ./runtime_output_directory/mysqld --defaults-file=$dest_dir/my1.cnf & #--debug='+d,query,info,error,enter,exit:t:i:A,/home/mysql/tmp_run/mysqld.trace'
   fi
 }
 
@@ -375,10 +376,7 @@ if [ x$initialize_type != x"none" ]; then
   make -j `getconf _NPROCESSORS_ONLN` install
   initialize
   echo "use follow cmd to login mysql:"
-  echo "./runtime_output_directory/mysql -uroot -S /home/mysql/tmp_run/mysql.sock -p"
-  echo ""
-  echo "use follow sql to modify password:"
-  echo "alter user 'root'@'localhost' identified WITH mysql_native_password by '';"
+  echo -e "./runtime_output_directory/mysql -uroot -S $dest_dir/node1/temp/mysql.sock \n"
 fi
 
 # end of file

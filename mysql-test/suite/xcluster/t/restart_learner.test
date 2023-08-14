@@ -34,7 +34,7 @@ show databases like '%aaa%';
 drop database aaa;
 
 --echo # restart learner
---exec $MYSQLD $extra_args --datadir=$DDIR $init_args --port=$learner_port >> $MYSQLD_LOG 2>&1 &
+--exec $MYSQLD $extra_args --datadir=$DDIR --port=$learner_port >> $MYSQLD_LOG 2>&1 &
 
 # wait learner get log
 --connection leader
@@ -48,8 +48,9 @@ let $wait_condition= select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_sch
 --source include/wait_condition.inc
 show databases like '%aaa%';
 --connection leader
-#drop consensus_learner '127.0.0.1:24400';
-call dbms_consensus.drop_learner("127.0.0.1:24400");
+# drop consensus_learner $learner_cluster_info;
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info);
 
 # cleanup
 --source include/stop_new_learner.inc

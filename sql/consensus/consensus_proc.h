@@ -59,13 +59,23 @@ class Consensus_proc_type {
  public:
   virtual ~Consensus_proc_type() = default;
   virtual bool check(Item *item) const = 0;
-  virtual enum_field_types mysql_field_type() const = 0;
-  virtual Consensus_proc_type_enum consensus_field_type_enum() const = 0;
+  [[nodiscard]] virtual enum_field_types mysql_field_type() const = 0;
+  [[nodiscard]] virtual Consensus_proc_type_enum consensus_field_type_enum()
+      const = 0;
 
   // output
-  virtual uint64_t get_uint64_t(Item *) const {  assert(0); return 0; }
-  virtual std::string get_string(Item *) const {  assert(0); return ""; }
-  virtual bool get_bool(Item *) const {  assert(0); return false; }
+  virtual uint64_t get_uint64_t(Item *) const {
+    assert(0);
+    return 0;
+  }
+  virtual std::string get_string(Item *) const {
+    assert(0);
+    return "";
+  }
+  virtual bool get_bool(Item *) const {
+    assert(0);
+    return false;
+  }
 
  protected:
   Consensus_proc_type() = default;
@@ -78,10 +88,11 @@ class Consensus_proc_type_ip_port : public Consensus_proc_type {
     return &instance;
   }
   bool check(Item *item) const override;
-  enum_field_types mysql_field_type() const override {
+  [[nodiscard]] enum_field_types mysql_field_type() const override {
     return MYSQL_TYPE_VARCHAR;
   }
-  Consensus_proc_type_enum consensus_field_type_enum() const override {
+  [[nodiscard]] Consensus_proc_type_enum consensus_field_type_enum()
+      const override {
     return Consensus_proc_type_enum::IP_PORT;
   }
   std::string get_string(Item *item) const override;
@@ -94,10 +105,11 @@ class Consensus_proc_type_node : public Consensus_proc_type {
     return &instance;
   }
   bool check(Item *item) const override;
-  enum_field_types mysql_field_type() const override {
+  [[nodiscard]] enum_field_types mysql_field_type() const override {
     return MYSQL_TYPE_VARCHAR;
   }
-  Consensus_proc_type_enum consensus_field_type_enum() const override {
+  [[nodiscard]] Consensus_proc_type_enum consensus_field_type_enum()
+      const override {
     return Consensus_proc_type_enum::NODE;
   }
   uint64_t get_uint64_t(Item *item) const override;
@@ -111,10 +123,11 @@ class Consensus_proc_type_uint : public Consensus_proc_type {
     return &instance;
   }
   bool check(Item *item) const override;
-  enum_field_types mysql_field_type() const override {
+  [[nodiscard]] enum_field_types mysql_field_type() const override {
     return MYSQL_TYPE_LONGLONG;
   }
-  Consensus_proc_type_enum consensus_field_type_enum() const override {
+  [[nodiscard]] Consensus_proc_type_enum consensus_field_type_enum()
+      const override {
     return Consensus_proc_type_enum::UINT;
   }
   uint64_t get_uint64_t(Item *item) const override;
@@ -127,10 +140,11 @@ class Consensus_proc_type_bool : public Consensus_proc_type {
     return &instance;
   }
   bool check(Item *item) const override;
-  enum_field_types mysql_field_type() const override {
+  [[nodiscard]] enum_field_types mysql_field_type() const override {
     return MYSQL_TYPE_LONGLONG;
   }
-  Consensus_proc_type_enum consensus_field_type_enum() const override {
+  [[nodiscard]] Consensus_proc_type_enum consensus_field_type_enum()
+      const override {
     return Consensus_proc_type_enum::BOOL;
   }
   bool get_bool(Item *item) const override;
@@ -163,8 +177,8 @@ class Consensus_proc : public Proc, public Disable_copy_base {
     return ss.str();
   }
 
-  const std::vector<const Consensus_proc_type *> &consensus_proc_params()
-      const {
+  [[nodiscard]] const std::vector<const Consensus_proc_type *> &
+  consensus_proc_params() const {
     return m_consensus_proc_params;
   }
 
@@ -201,7 +215,8 @@ class Sql_cmd_consensus_proc : public Sql_cmd_admin_proc {
   const Consensus_proc *m_consensus_proc;
 
  public:
-  Sql_cmd_consensus_proc(THD *thd, mem_root_deque<Item *> *list, const Consensus_proc *proc)
+  Sql_cmd_consensus_proc(THD *thd, mem_root_deque<Item *> *list,
+                         const Consensus_proc *proc)
       : Sql_cmd_admin_proc(thd, list, proc), m_consensus_proc(proc) {}
 
   bool pc_execute(THD *) override { return false; }
@@ -243,7 +258,8 @@ class Sql_cmd_consensus_no_logger_proc : public Sql_cmd_consensus_proc {
 class Sql_cmd_consensus_option_last_no_logger_proc
     : public Sql_cmd_consensus_option_last_proc {
  public:
-  Sql_cmd_consensus_option_last_no_logger_proc(THD *thd, mem_root_deque<Item *> *list,
+  Sql_cmd_consensus_option_last_no_logger_proc(THD *thd,
+                                               mem_root_deque<Item *> *list,
                                                const Consensus_proc *proc)
       : Sql_cmd_consensus_option_last_proc(thd, list, proc) {}
   bool check_access(THD *thd) override;
@@ -384,13 +400,15 @@ class Consensus_proc_upgrade_learner final : public Consensus_proc_node_param {
 class Sql_cmd_consensus_proc_downgrade_follower
     : public Sql_cmd_consensus_no_logger_proc {
  public:
-  Sql_cmd_consensus_proc_downgrade_follower(THD *thd, mem_root_deque<Item *> *list,
+  Sql_cmd_consensus_proc_downgrade_follower(THD *thd,
+                                            mem_root_deque<Item *> *list,
                                             const Consensus_proc *proc)
       : Sql_cmd_consensus_no_logger_proc(thd, list, proc) {}
   bool pc_execute(THD *thd) override;
 };
 
-class Consensus_proc_downgrade_follower final : public Consensus_proc_node_param {
+class Consensus_proc_downgrade_follower final
+    : public Consensus_proc_node_param {
   using Sql_cmd_type = Sql_cmd_consensus_proc_downgrade_follower;
 
  public:
@@ -410,7 +428,8 @@ class Consensus_proc_downgrade_follower final : public Consensus_proc_node_param
 class Sql_cmd_consensus_proc_refresh_learner_meta
     : public Sql_cmd_consensus_proc {
  public:
-  Sql_cmd_consensus_proc_refresh_learner_meta(THD *thd, mem_root_deque<Item *> *list,
+  Sql_cmd_consensus_proc_refresh_learner_meta(THD *thd,
+                                              mem_root_deque<Item *> *list,
                                               const Consensus_proc *proc)
       : Sql_cmd_consensus_proc(thd, list, proc) {}
   bool pc_execute(THD *thd) override;
@@ -436,7 +455,8 @@ class Consensus_proc_refresh_learner_meta final : public Consensus_proc {
 class Sql_cmd_consensus_proc_configure_follower
     : public Sql_cmd_consensus_option_last_no_logger_proc {
  public:
-  Sql_cmd_consensus_proc_configure_follower(THD *thd, mem_root_deque<Item *> *list,
+  Sql_cmd_consensus_proc_configure_follower(THD *thd,
+                                            mem_root_deque<Item *> *list,
                                             const Consensus_proc *proc)
       : Sql_cmd_consensus_option_last_no_logger_proc(thd, list, proc) {}
 
@@ -470,7 +490,8 @@ class Consensus_proc_configure_follower final : public Consensus_proc {
 class Sql_cmd_consensus_proc_configure_learner
     : public Sql_cmd_consensus_option_last_no_logger_proc {
  public:
-  Sql_cmd_consensus_proc_configure_learner(THD *thd, mem_root_deque<Item *> *list,
+  Sql_cmd_consensus_proc_configure_learner(THD *thd,
+                                           mem_root_deque<Item *> *list,
                                            const Consensus_proc *proc)
       : Sql_cmd_consensus_option_last_no_logger_proc(thd, list, proc) {}
 
@@ -503,7 +524,8 @@ class Consensus_proc_configure_learner final : public Consensus_proc {
 */
 class Sql_cmd_consensus_proc_force_single_mode : public Sql_cmd_consensus_proc {
  public:
-  Sql_cmd_consensus_proc_force_single_mode(THD *thd, mem_root_deque<Item *> *list,
+  Sql_cmd_consensus_proc_force_single_mode(THD *thd,
+                                           mem_root_deque<Item *> *list,
                                            const Consensus_proc *proc)
       : Sql_cmd_consensus_proc(thd, list, proc) {}
   virtual bool pc_execute(THD *thd) override;
@@ -848,7 +870,8 @@ class Consensus_proc_force_purge_log final : public Consensus_proc {
 class Sql_cmd_consensus_proc_drop_prefetch_channel
     : public Sql_cmd_consensus_proc {
  public:
-  Sql_cmd_consensus_proc_drop_prefetch_channel(THD *thd, mem_root_deque<Item *> *list,
+  Sql_cmd_consensus_proc_drop_prefetch_channel(THD *thd,
+                                               mem_root_deque<Item *> *list,
                                                const Consensus_proc *proc)
       : Sql_cmd_consensus_proc(thd, list, proc) {}
 

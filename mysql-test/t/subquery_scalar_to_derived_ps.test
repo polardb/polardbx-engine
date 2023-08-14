@@ -1,4 +1,4 @@
---source include/no_ps_protocol.inc
+--source include/have_ps_protocol.inc
 
 # Enable transformations for InnoDB for ease of testing
 SET optimizer_switch='subquery_to_derived=on';

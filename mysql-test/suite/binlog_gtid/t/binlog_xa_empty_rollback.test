@@ -371,10 +371,10 @@ XA ROLLBACK 'trx';
 --echo #
 --echo # S9. Check GTID_EXECUTED for the executed UUID (should be found).
 --echo #
---let $event_no = 17
+--let $event_no = 22
 if (`SELECT @@session.binlog_transaction_compression`)
 {
-  --let $event_no = 18
+  --let $event_no = 23
 }
 --let $gtid_set= query_get_value("SHOW BINLOG EVENTS LIMIT $event_no,1", Info, 1)
 --let $gtid_split= `SELECT SUBSTRING_INDEX("$gtid_set", "'", -2)`

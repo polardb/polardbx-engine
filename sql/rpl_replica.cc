@@ -811,7 +811,7 @@ bool start_slave_cmd(THD *thd) {
       goto err;
     }
 
-    const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
+    const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_START_XPAXOS_REPLICATION;
 
     if (mi && is_raft_replication_cmd == Multisource_info::is_raft_channel(mi))
       res = start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
@@ -919,7 +919,7 @@ bool stop_slave_cmd(THD *thd) {
       return true;
     }
 
-    const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_START_XPAXOS_REPLICATION;
+    const bool is_raft_replication_cmd = thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
 
     if (mi && is_raft_replication_cmd == Multisource_info::is_raft_channel(mi))
       res = stop_slave(thd, mi, true /*net report */, true /*for_one_channel*/,
@@ -6709,6 +6709,7 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
   rli->mts_last_online_stat = time(nullptr);
   rli->mts_group_status = Relay_log_info::MTS_NOT_IN_GROUP;
   clear_gtid_monitoring_info = true;
+  rli->curr_group_seen_gcn = false;
 
   if (init_hash_workers(rli))  // MTS: mapping_db_to_worker
   {
@@ -8956,7 +8957,6 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
   if (Multisource_info::is_raft_channel(mi)) {
     assert(
         Multisource_info::is_raft_replication_channel_name(mi->get_channel()));
-    thread_mask_input &= ~SLAVE_IO;
   } else {
     assert(
         !Multisource_info::is_raft_replication_channel_name(mi->get_channel()));
@@ -8997,6 +8997,10 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
   if (thread_mask_input) {
     thread_mask &= thread_mask_input;
   }
+  if (Multisource_info::is_raft_channel(mi)) {
+    thread_mask &= ~SLAVE_IO;
+  }
+
   if (thread_mask)  // some threads are stopped, start them
   {
     if (load_mi_and_rli_from_repositories(mi, false, thread_mask)) {

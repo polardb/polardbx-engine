@@ -1,5 +1,0 @@
-!include suite/xcluster/my.cnf
-
-[mysqld.2]
-slave-pr-mode='TABLE'
-slave-parallel-workers=2

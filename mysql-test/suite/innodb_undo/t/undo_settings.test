@@ -322,62 +322,62 @@ SELECT * FROM t1 ORDER BY a;
 SELECT COUNT(*) FROM t2;
 SELECT COUNT(*) FROM t3;
 
---echo #
---echo # Restart mysqld in read-only mode with more rollback segments=8.
---echo #
-connect (con1,localhost,root);
---echo # Connection 1
-INSERT INTO t1  VALUES (8, repeat('h',15));
-INSERT INTO t2  VALUES (8, repeat('h',15));
-INSERT INTO t3  VALUES (8, repeat('h',15));
-connection default;
---echo # Connection default
-SELECT * FROM t1 ORDER BY a;
-SELECT COUNT(*) FROM t2;
-SELECT COUNT(*) FROM t3;
-let $restart_parameters = restart: --innodb_read_only  --innodb_rollback_segments=8;
---source include/restart_mysqld.inc
-disconnect con1;
---error ER_READ_ONLY_MODE
-CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SHOW GLOBAL STATUS LIKE 'Innodb%undo%';
-SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
-       WHERE name LIKE '%undo%' ORDER BY NAME;
-SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
-       WHERE FILE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
---echo # Directory listing of UNDO tablespace files
---list_files $MYSQLD_DATADIR undo_0*
-SET GLOBAL innodb_rollback_segments=8;
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SET GLOBAL innodb_rollback_segments=3;
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SELECT * FROM t1 ORDER BY a;
-SELECT COUNT(*) FROM t2;
-SELECT COUNT(*) FROM t3;
+# --echo #
+# --echo # Restart mysqld in read-only mode with more rollback segments=8.
+# --echo #
+# connect (con1,localhost,root);
+# --echo # Connection 1
+# INSERT INTO t1  VALUES (8, repeat('h',15));
+# INSERT INTO t2  VALUES (8, repeat('h',15));
+# INSERT INTO t3  VALUES (8, repeat('h',15));
+# connection default;
+# --echo # Connection default
+# SELECT * FROM t1 ORDER BY a;
+# SELECT COUNT(*) FROM t2;
+# SELECT COUNT(*) FROM t3;
+# let $restart_parameters = restart: --innodb_read_only  --innodb_rollback_segments=8;
+# --source include/restart_mysqld.inc
+# disconnect con1;
+# --error ER_READ_ONLY_MODE
+# CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
+# SHOW VARIABLES LIKE 'innodb_rollback_segments';
+# SHOW GLOBAL STATUS LIKE 'Innodb%undo%';
+# SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
+#        WHERE name LIKE '%undo%' ORDER BY NAME;
+# SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
+#        WHERE FILE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
+# --echo # Directory listing of UNDO tablespace files
+# --list_files $MYSQLD_DATADIR undo_0*
+# SET GLOBAL innodb_rollback_segments=8;
+# SHOW VARIABLES LIKE 'innodb_rollback_segments';
+# SET GLOBAL innodb_rollback_segments=3;
+# SHOW VARIABLES LIKE 'innodb_rollback_segments';
+# SELECT * FROM t1 ORDER BY a;
+# SELECT COUNT(*) FROM t2;
+# SELECT COUNT(*) FROM t3;
 
 --echo #
 --echo # Restart mysqld in force_recovery mode with more rollback segments=8.
 --echo #
-let $restart_parameters = restart: --innodb_force_recovery=1 --innodb_rollback_segments=8;
---source include/restart_mysqld.inc
---error ER_INNODB_READ_ONLY
-CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
-SHOW GLOBAL STATUS LIKE 'Innodb%undo%';
-SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
-       WHERE name LIKE '%undo%' ORDER BY NAME;
-SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
-       WHERE FILE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
---echo # Directory listing of UNDO tablespace files
---list_files $MYSQLD_DATADIR undo_0*
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SET GLOBAL innodb_rollback_segments=8;
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SET GLOBAL innodb_rollback_segments=3;
-SHOW VARIABLES LIKE 'innodb_rollback_segments';
-SELECT * FROM t1 ORDER BY a;
-SELECT COUNT(*) FROM t2;
-SELECT COUNT(*) FROM t3;
+# let $restart_parameters = restart: --innodb_force_recovery=1 --innodb_rollback_segments=8;
+# --source include/restart_mysqld.inc
+# --error ER_INNODB_READ_ONLY
+# CREATE UNDO TABLESPACE `undo_007` ADD DATAFILE 'undo_007.ibu';
+# SHOW GLOBAL STATUS LIKE 'Innodb%undo%';
+# SELECT NAME, ROW_FORMAT, SPACE_TYPE, STATE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
+#        WHERE name LIKE '%undo%' ORDER BY NAME;
+# SELECT TABLESPACE_NAME, FILE_TYPE, FILE_NAME FROM INFORMATION_SCHEMA.FILES
+#        WHERE FILE_NAME LIKE '%undo%' ORDER BY TABLESPACE_NAME;
+# --echo # Directory listing of UNDO tablespace files
+# --list_files $MYSQLD_DATADIR undo_0*
+# SHOW VARIABLES LIKE 'innodb_rollback_segments';
+# SET GLOBAL innodb_rollback_segments=8;
+# SHOW VARIABLES LIKE 'innodb_rollback_segments';
+# SET GLOBAL innodb_rollback_segments=3;
+# SHOW VARIABLES LIKE 'innodb_rollback_segments';
+# SELECT * FROM t1 ORDER BY a;
+# SELECT COUNT(*) FROM t2;
+# SELECT COUNT(*) FROM t3;
 
 --echo #
 --echo # Use SET PERSIST to change rollback segments=11

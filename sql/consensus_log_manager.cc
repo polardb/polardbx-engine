@@ -357,7 +357,7 @@ int ConsensusLogManager::init_service() {
         return -1;
       }
       if (consensus_log_manager.get_recovery_manager()
-              ->commit_by_start_apply_index()) {
+              ->recover_remaining_pending_recovering_trxs()) {
         return -1;
       }
       recovery_manager->clear();
@@ -463,12 +463,12 @@ int ConsensusLogManager::init_service() {
 
       if (!opt_cluster_log_type_instance) {
          if (consensus_log_manager.get_recovery_manager()
-                ->commit_by_start_apply_index()) {
+                ->recover_remaining_pending_recovering_trxs()) {
            return -1;
          }
          get_recovery_manager()->clear();
 
-        start_consensus_apply_threads();
+        // start_consensus_apply_threads();
       } else {
         assert(get_recovery_manager()->is_pending_recovering_trx_empty());
       }
@@ -1050,7 +1050,7 @@ void ConsensusLogManager::wait_replay_log_finished()
 
 void ConsensusLogManager::wait_apply_threads_start()
 {
-  while (!rli_info->slave_running)
+  while (rli_info && !rli_info->slave_running)
   {
     my_sleep(200);
   }
@@ -1058,7 +1058,7 @@ void ConsensusLogManager::wait_apply_threads_start()
 
 void ConsensusLogManager::wait_apply_threads_stop()
 {
-  while (rli_info->slave_running)
+  while (rli_info && rli_info->slave_running)
   {
     my_sleep(200);
   }
@@ -1152,6 +1152,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
 {
   raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_follower_upgraded, consensus term: " << term << ", consensus index: " << index;
   int error = 0;
+  mysql_mutex_t *log_lock = nullptr;
 
   assert(this->status == Consensus_Log_System_Status::RELAY_LOG_WORKING);
 
@@ -1183,13 +1184,19 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
 
   mysql_rwlock_wrlock(&LOCK_consensuslog_status);
 
+  if (rli_info == nullptr)
+  {
+    mysql_rwlock_unlock(&LOCK_consensuslog_status);
+    goto end;
+  }
+
   mysql_mutex_lock(&rli_info->data_lock);
 
   rli_info->end_info();
   mysql_mutex_unlock(&rli_info->data_lock);
 
   // open binlog index and file
-  mysql_mutex_t *log_lock = binlog->get_log_lock();
+  log_lock = binlog->get_log_lock();
   if (binlog->open_index_file(opt_binlog_index_name, opt_bin_logname, TRUE))
   {
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
