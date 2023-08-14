@@ -1301,7 +1301,10 @@ dberr_t row_import::match_table_columns(THD *thd) UNIV_NOTHROW {
 
     if ((strcmp(col_name, "DB_ROW_ID") == 0) ||
         (strcmp(col_name, "DB_TRX_ID") == 0) ||
-        (strcmp(col_name, "DB_ROLL_PTR") == 0)) {
+        (strcmp(col_name, "DB_ROLL_PTR") == 0) || 
+        (strcmp(col_name, "DB_SCN_ID") == 0) || 
+        (strcmp(col_name, "DB_UNDO_PTR") == 0) ||
+        (strcmp(col_name, "DB_GCN_ID") == 0)) {
       n_sys_cols += 1;
     }
 
