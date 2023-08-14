@@ -256,6 +256,11 @@ static dberr_t trx_rollback_low(trx_t *trx) {
         rseg_mutex_wrapper.release_mutex();
       }
 
+      DBUG_EXECUTE_IF("simulate_crash_after_make_active_when_rollback", {
+        log_write_up_to(*log_sys, log_get_lsn(*log_sys), true);
+        DBUG_SUICIDE();
+      };);
+
 #ifdef ENABLED_DEBUG_SYNC
       if (trx->mysql_thd == NULL) {
         /* We could be executing XA ROLLBACK after
@@ -588,6 +593,14 @@ static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
   roll_node_t *roll_node;
   int64_t rows_to_undo;
   const char *unit = "";
+
+#ifdef UNIV_DEBUG
+  if (!trx->ddl_operation) {
+    while (DBUG_EVALUATE_IF("simulate_rollback_large_trx", true, false)) {
+      os_thread_sleep(1000);
+    }
+  }
+#endif
 
   heap = mem_heap_create(512);
 

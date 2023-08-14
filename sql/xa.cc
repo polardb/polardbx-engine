@@ -761,6 +761,8 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
     return true;
   }
 
+  xs->attach_again();
+
   DEBUG_SYNC(thd, "external_xa_commit_after_acquire_commit_lock");
 
   /* Do not execute gtid wrapper whenever 'res' is true (rm error) */

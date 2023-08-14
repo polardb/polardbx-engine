@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <list>
 #include <mutex>
+#include <atomic>
 
 #include "lex_string.h"
 #include "my_dbug.h"
@@ -430,6 +431,11 @@ class XID_STATE {
   */
   bool m_is_binlogged;
 
+  /** Only for call dbms_xa.find_by_xid(...). The XA transaction might have been
+  attached by a user seesion but still be recognized as detached (in_recovery
+  = true). m_is_real_attched reflects the real state of the transaction. */
+  std::atomic<bool> m_is_real_attched;
+
  public:
   XID_context m_ctx;
 
@@ -437,7 +443,8 @@ class XID_STATE {
       : xa_state(XA_NOTR),
         in_recovery(false),
         rm_error(0),
-        m_is_binlogged(false) {
+        m_is_binlogged(false),
+        m_is_real_attched(false) {
     m_xid.null();
   }
 
@@ -480,6 +487,7 @@ class XID_STATE {
     m_xid.null();
     in_recovery = false;
     m_is_binlogged = false;
+    m_is_real_attched = false;
   }
 
   void start_normal_xa(const XID *xid) {
@@ -488,6 +496,7 @@ class XID_STATE {
     m_xid.set(xid);
     in_recovery = false;
     rm_error = 0;
+    m_is_real_attched = true;
   }
 
   void start_recovery_xa(const XID *xid, bool binlogged_arg = false) {
@@ -496,11 +505,19 @@ class XID_STATE {
     in_recovery = true;
     rm_error = 0;
     m_is_binlogged = binlogged_arg;
+    m_is_real_attched = false;
   }
+
+  bool is_real_attached() const { return m_is_real_attched.load(); }
 
   bool is_in_recovery() const { return in_recovery; }
 
   bool is_binlogged() const { return m_is_binlogged; }
+
+  void attach_again() {
+    DBUG_ASSERT(m_is_real_attched == false);
+    m_is_real_attched = true;
+  }
 
   void set_binlogged() { m_is_binlogged = true; }
 

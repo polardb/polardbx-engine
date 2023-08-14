@@ -46,7 +46,8 @@ typedef uint64_t TSA;
 enum Transaction_state {
   TRANS_STATE_COMMITTED = 0,
   TRANS_STATE_ROLLBACK = 1,
-  TRANS_STATE_UNKNOWN = 2,
+  TRANS_STATE_ROLLBACKING_BACKGROUND = 2,
+  TRANS_STATE_UNKNOWN = 3,
 };
 
 struct Transaction_info {
@@ -70,7 +71,7 @@ bool start_and_register_rw_trx_for_xa(THD *thd);
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool trx_slot_get_trx_info_by_xid(const XID *xid, Transaction_info *info);
+bool search_trx_by_xid(const XID *xid, Transaction_info *info);
 
 /**
   Alloc transaction slot in innodb
