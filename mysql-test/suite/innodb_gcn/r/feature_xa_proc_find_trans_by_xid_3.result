@@ -1,0 +1,20 @@
+create table t1 (id int);
+insert into t1 values (1);
+xa start '1';
+update t1 set id = id + 1;
+xa end '1';
+xa prepare '1';
+# Setup the mysqld to crash at certain point
+set debug = "+d,simulate_crash_when_xa_rollback_in_innodb";
+# Write file to make mysql-test-run.pl expect crash
+xa rollback '1';
+ERROR HY000: Lost connection to MySQL server during query
+# Write file to make mysql-test-run.pl start the server
+# Turn on reconnect
+# Call script that will poll the server waiting for
+# it to be back online again
+call dbms_xa.find_by_xid('1', '', 1);
+Status	GCN	CSR
+ATTACHED	18446744073709551615	NONE
+set @@global.debug= "-d";
+drop table t1;

@@ -95,6 +95,7 @@ xa commit '4';
 --echo ###############################
 --echo # case 5
 --echo ###############################
+--disable_ps_protocol
 --let $commit_gcn = `select @base_seq + 500`
 xa start '5';
 call dbms_xa.find_by_xid('5', '', 1);
@@ -115,6 +116,7 @@ xa commit '5';
 --echo ###############################
 --error ER_XA_PROC_WRONG_XID
 call dbms_xa.find_by_xid('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '', 1);
+--enable_ps_protocol
 
 --echo ###############################
 --echo # case 7

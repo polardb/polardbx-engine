@@ -170,7 +170,8 @@ namespace xa {
 enum Transaction_state {
   TRANS_STATE_COMMITTED = 0,
   TRANS_STATE_ROLLBACK = 1,
-  TRANS_STATE_UNKNOWN = 2,
+  TRANS_STATE_ROLLBACKING_BACKGROUND = 2,
+  TRANS_STATE_UNKNOWN = 3,
 };
 
 struct Transaction_info {

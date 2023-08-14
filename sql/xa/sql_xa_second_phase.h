@@ -123,7 +123,7 @@ class Sql_cmd_xa_second_phase : public Sql_cmd {
 
     @return false if all necessary locks were acquired, true otherwise.
    */
-  bool acquire_locks(THD *thd);
+  bool acquire_locks_and_attach_again(THD *thd);
   /**
     Release any locks acquires in `acquire_locks` still needing
     to be released.

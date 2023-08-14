@@ -189,11 +189,14 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
 
   std::shared_ptr<Transaction_ctx> transaction = xa::Transaction_cache::find(&xid);
   if (transaction) {
-    /** Case 1: DETACHED or ATTACHED. */
+    /** Case 1: Found in transaction cache. */
     xs = transaction->xid_state();
 
+    /** There is no lock held to access this state, so the judgment of this
+    state is not always accurate. It's OK for the procedure, but can't be
+    used to do other thing. */
     xa_status =
-        xs->is_detached() ? XA_status::DETACHED : XA_status::ATTACHED;
+        xs->is_real_attached() ? XA_status::ATTACHED: XA_status::DETACHED;
 
     gcn = MYSQL_GCN_NULL;
 
@@ -201,14 +204,20 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
   } else {
     found = ttse->ext.search_trx_by_xid(&xid, &info);
     if (found) {
-      /** Case 2: Finish state. */
+      /** Case 2: Found in innodb engine. */
       switch (info.state) {
+        /** Case 2.1: Normal cases. COMMIT / ROLLBACK */
         case lizard::xa::TRANS_STATE_COMMITTED:
           xa_status = XA_status::COMMIT;
           break;
         case lizard::xa::TRANS_STATE_ROLLBACK:
           xa_status = XA_status::ROLLBACK;
           break;
+        /** Case 2.2: Being rollbacked in backgroud. Attached by background. */
+        case lizard::xa::TRANS_STATE_ROLLBACKING_BACKGROUND:
+          xa_status = XA_status::ATTACHED;
+          break;
+        /** Case 2.3: Sepecial case. Found old TXN format. */
         default:
           assert(info.state == lizard::xa::TRANS_STATE_UNKNOWN);
           xa_status = XA_status::NOT_SUPPORT;

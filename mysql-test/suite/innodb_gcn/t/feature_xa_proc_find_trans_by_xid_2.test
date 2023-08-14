@@ -32,7 +32,9 @@ xa end '2';
 xa prepare '2';
 
 connection con_b;
+--disable_ps_protocol
 call dbms_xa.find_by_xid('2', '', 1);
+--enable_ps_protocol
 set xa_detach_on_prepare = default;
 
 --echo ######################################
@@ -43,7 +45,9 @@ disconnect con_a;
 --source include/wait_until_disconnected.inc
 
 connection con_b;
+--disable_ps_protocol
 call dbms_xa.find_by_xid('2', '', 1);
+--enable_ps_protocol
 disconnect con_b;
 
 --echo ######################################
@@ -65,7 +69,9 @@ xa commit '2';
 --echo ######################################
 --echo # Case 5: NOTSTART_OR_FORGET
 --echo ######################################
+--disable_ps_protocol
 call dbms_xa.find_by_xid('5', '', 1);
+--enable_ps_protocol
 
 --echo ######################################
 --echo # Case 6: 128 Bytes XID

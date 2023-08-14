@@ -271,7 +271,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
       /** Debug crash. */
       DBUG_EXECUTE_IF("simulate_crash_when_xa_rollback_in_innodb", {
         log_write_up_to(*log_sys, lsn, true);
-        ut_ad(0);
+        DBUG_SUICIDE();
       };);
       (void)lsn;
 
@@ -618,6 +618,14 @@ static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
   roll_node_t *roll_node;
   int64_t rows_to_undo;
   const char *unit = "";
+
+#ifdef UNIV_DEBUG
+  if (!trx->ddl_operation) {
+    while (DBUG_EVALUATE_IF("simulate_rollback_large_trx", true, false)) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  }
+#endif
 
   heap = mem_heap_create(512, UT_LOCATION_HERE);
 

@@ -191,6 +191,59 @@ uint64_t hash_xid(const XID *xid) {
   return res;
 }
 
+struct TrxSysLockable {
+  static TrxSysLockable& instance() {
+    static TrxSysLockable m_instance;
+    return m_instance;
+  }
+  void lock() { trx_sys_mutex_enter(); }
+  void unlock() { trx_sys_mutex_exit(); }
+};
+
+static bool search_recovery_rollback_trx_by_xid(const XID *xid,
+                                                Transaction_info *info) {
+  bool is_recovered;
+  trx_state_t state;
+
+  if (!srv_thread_is_active(srv_threads.m_trx_recovery_rollback)) {
+    return false;
+  }
+
+  std::lock_guard<TrxSysLockable> lock_guard(TrxSysLockable::instance());
+  for (auto trx : trx_sys->rw_trx_list) {
+    assert_trx_in_rw_list(trx);
+    ut_ad(trx_sys_mutex_own());
+
+    trx_mutex_enter(trx);
+    is_recovered = trx->is_recovered;
+    state = trx->state.load(std::memory_order_relaxed);
+    trx_mutex_exit(trx);
+
+    /** The trx that (is_recovered = 1 && state == TRX_STATE_ACTIVE) must being
+    rollbacked. */
+    if (trx->xid->eq(xid) && is_recovered) {
+      switch (state) {
+        case TRX_STATE_COMMITTED_IN_MEMORY:
+        case TRX_STATE_ACTIVE:
+          info->state = TRANS_STATE_ROLLBACKING_BACKGROUND;
+          info->gcn.set(MYSQL_GCN_NULL, MYSQL_CSR_NONE);
+          return true;
+        case TRX_STATE_PREPARED:
+          /** In actual use, the transaction_cache will be searched first, and
+          then the transaction information will be searched in the engine. So
+          actually can't come into here. */
+          return false;
+        case TRX_STATE_NOT_STARTED:
+        case TRX_STATE_FORCED_ROLLBACK:
+          ut_error;
+          break;
+      }
+    }
+  }
+
+  return false;
+}
+
 /**
   Find transactions in the finalized state by XID.
 
@@ -199,7 +252,7 @@ uint64_t hash_xid(const XID *xid) {
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool trx_search_by_xid(const XID *xid, Transaction_info *info) {
+static bool serach_history_trx_by_xid(const XID *xid, Transaction_info *info) {
   trx_rseg_t *rseg;
   txn_undo_hdr_t txn_hdr;
   bool found;
@@ -230,6 +283,20 @@ bool trx_search_by_xid(const XID *xid, Transaction_info *info) {
     txn_hdr.image.copy_to_my_gcn(&info->gcn);
   }
   return found;
+}
+
+bool trx_search_by_xid(const XID *xid, Transaction_info *info) {
+  info->state = TRANS_STATE_UNKNOWN;
+  info->gcn.set(MYSQL_GCN_NULL, MYSQL_CSR_NONE);
+
+  /** 1. Search trx that being rollbacked by backgroud thread in trx active
+  list. */
+  if (search_recovery_rollback_trx_by_xid(xid, info)) {
+    return true;
+  }
+
+  /** 2. Search history transaction in the rseg history list. */
+  return serach_history_trx_by_xid(xid, info);
 }
 
 const XID *trx_slot_get_xa_xid_from_thd(THD *thd) {
