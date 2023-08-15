@@ -112,8 +112,8 @@ class Gcn_event : public Binary_log_event {
 #ifndef HAVE_MYSYS
   // TODO(WL#7684): Implement the method print_event_info and print_long_info
   //               for all the events supported  in  MySQL Binlog
-  void print_event_info(std::ostream &) {}
-  void print_long_info(std::ostream &) {}
+  void print_event_info(std::ostream &) override {}
+  void print_long_info(std::ostream &) override {}
 #endif
 
   bool have_commit_gcn() const { return flags & FLAG_HAVE_COMMITTED_GCN; }

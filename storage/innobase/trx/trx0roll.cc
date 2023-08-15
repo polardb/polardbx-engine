@@ -220,19 +220,20 @@ static dberr_t trx_rollback_low(trx_t *trx) {
       trx_undo_gtid_add_update_undo(trx, false, true);
       ut_ad(!trx_is_autocommit_non_locking(trx));
 
+      {
+      /* Acquire rseg mutex in order in advance */
+      lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+
       /** Lizard: Deal with txn undo firstly under one mtr */
-      if (trx->rsegs.m_txn.rseg != nullptr &&
-          lizard::trx_is_txn_rseg_updated(trx)) {
+      if (rseg_mutex_wrapper.txn_rseg_updated()) {
         txn_undo_ptr_t *undo_ptr = &trx->rsegs.m_txn;
 
         mtr_wrapper.start();
 
-        trx->rsegs.m_txn.rseg->latch();
         trx_undo_set_state_at_prepare(trx, undo_ptr->txn_undo, true, &mtr);
-        trx->rsegs.m_txn.rseg->unlatch();
       }
 
-      if (trx->rsegs.m_redo.rseg != nullptr && trx_is_redo_rseg_updated(trx)) {
+      if (rseg_mutex_wrapper.redo_rseg_updated()) {
         /* Change the undo log state back from
         TRX_UNDO_PREPARED to TRX_UNDO_ACTIVE
         so that if the system gets killed,
@@ -241,7 +242,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
 
         mtr_wrapper.start();
 
-        trx->rsegs.m_redo.rseg->latch();
+        // trx->rsegs.m_redo.rseg->latch();
 
         if (undo_ptr->insert_undo != nullptr) {
           ut_ad(lizard::trx_is_txn_rseg_updated(trx));
@@ -254,7 +255,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
           trx_undo_gtid_set(trx, undo_ptr->update_undo, false);
           trx_undo_set_state_at_prepare(trx, undo_ptr->update_undo, true, &mtr);
         }
-        trx->rsegs.m_redo.rseg->unlatch();
+        // trx->rsegs.m_redo.rseg->unlatch();
 
         /* Persist the XA ROLLBACK, so that crash
         recovery will replay the rollback in case
@@ -263,6 +264,9 @@ static dberr_t trx_rollback_low(trx_t *trx) {
         // ut_ad(mtr.commit_lsn() > 0 || !mtr_t::s_logging.is_enabled());
       }
       lsn = mtr_wrapper.commit();
+
+      rseg_mutex_wrapper.release_mutex();
+      }
 
       /** Debug crash. */
       DBUG_EXECUTE_IF("simulate_crash_when_xa_rollback_in_innodb", {
