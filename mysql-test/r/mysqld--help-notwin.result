@@ -972,19 +972,12 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
-<<<<<<< HEAD
-<<<<<<< HEAD
  --opt-enable-rds-priv-strategy 
  When this option is enabled,it will protect reserved
  account and privileges
-=======
-<<<<<<< HEAD
->>>>>>> [Raft] fix mysql test case bugs
-=======
  --opt-force-index-pct-cached 
  force cached table index in memory when estimate query
  cost
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
@@ -2231,8 +2224,8 @@ old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
 only-report-warning-when-skip-sequence TRUE
-<<<<<<< HEAD
 opt-enable-rds-priv-strategy FALSE
+<<<<<<< HEAD
 <<<<<<< HEAD
 opt-indexstat TRUE
 opt-outline-enabled TRUE
@@ -2240,8 +2233,9 @@ opt-tablestat TRUE
 =======
 >>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 =======
+=======
+>>>>>>> [Raft] fix case after rebase feature_mix_binlog_relaylog on master-8.0.32 49ddaafb
 opt-force-index-pct-cached FALSE
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 opt-indexstat TRUE
 opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000

@@ -59,15 +59,15 @@ extra_mtr_option=""
 if [ x"$test_type" = x"normal" ]; then
   extra_mtr_option=""
   $OPT $extra_mtr_option --vardir=var_normal  &>all.normal
-  #$OPT $extra_mtr_option --vardir=var_normal_ps --ps-protocol  &>all.normal_ps
+  $OPT $extra_mtr_option --vardir=var_normal_ps --ps-protocol  &>all.normal_ps
 elif [ x"$test_type" = x"big" ]; then
   extra_mtr_option="--only-big-test --testcase-timeout=45"
-  $OPT $extra_mtr_option --vardir=var_normal  &>all.normal
-  $OPT $extra_mtr_option --vardir=var_normal_ps --ps-protocol &>all.normal_ps
+  $OPT $extra_mtr_option --vardir=var_big  &>all.big
+  $OPT $extra_mtr_option --vardir=var_big_ps --ps-protocol &>all.big_ps
 elif [ x"$test_type" = x"all" ]; then
   extra_mtr_option="--big-test --testcase-timeout=45"
-  $OPT $extra_mtr_option --vardir=var_normal &>all.normal
-  $OPT $extra_mtr_option --vardir=var_normal_ps --ps-protocol &>all.normal_ps
+  $OPT $extra_mtr_option --vardir=var_all &>all.all
+  $OPT $extra_mtr_option --vardir=var_all_ps --ps-protocol &>all.all_ps
 elif [ x"$test_type" = x"push" ] || [ x"$test_type" = x"daily" ] || [ x"$test_type" = x"weekly" ] || [ x"$test_type" = x"release" ]; then
   export PB2WORKDIR=`pwd`
   export PRODUCT_ID=el7-x86-64bit

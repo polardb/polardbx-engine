@@ -302,13 +302,10 @@ max_length_for_sort_data
 max_length_for_sort_data
 only_report_warning_when_skip_sequence
 only_report_warning_when_skip_sequence
-<<<<<<< HEAD
 opt_enable_rds_priv_strategy
 opt_enable_rds_priv_strategy
-=======
 opt_force_index_pct_cached
 opt_force_index_pct_cached
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
 opt_indexstat
 opt_indexstat
 opt_outline_enabled
@@ -362,17 +359,10 @@ rds_audit_log_strategy
 rds_audit_log_strategy
 rds_audit_log_version
 rds_audit_log_version
-<<<<<<< HEAD
-<<<<<<< HEAD
 rds_kill_connections
 rds_kill_connections
 rds_kill_user_list
 rds_kill_user_list
-=======
-<<<<<<< HEAD
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
-=======
->>>>>>> [Raft] fix compile error after rebase feature_mix_binlog_relaylog on master-8.0.32 181647e53
 rds_release_date
 rds_release_date
 rds_version

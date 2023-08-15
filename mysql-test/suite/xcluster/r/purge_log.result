@@ -32,7 +32,6 @@ master-bin.000004	#	#
 call dbms_consensus.local_purge_log(100);
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000002	#	#
 master-bin.000003	#	#
 master-bin.000004	#	#
 call dbms_consensus.drop_learner(learner_cluster_info);

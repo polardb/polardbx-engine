@@ -9356,6 +9356,10 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
 
   leave_mutex_before_commit_stage = nullptr;
 
+  DBUG_EXECUTE_IF("simulate_crash_between_ib_commit_and_binlog_commit", {
+      DBUG_SUICIDE();
+  });
+
   /*
     Stage #3: Commit all transactions in order.
 
