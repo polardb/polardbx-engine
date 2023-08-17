@@ -34,10 +34,10 @@ WHERE	t.table_id = i.table_id
 AND	t.name LIKE 'test%'
 	ORDER BY t.name, i.name;
 table_name	n_cols	table_flags	index_name	root_page	type	n_fields	merge_threshold
-test/t1	5	0	PRIMARY	4	3	4	50
-test/t2	5	1	PRIMARY	4	3	4	50
-test/t3	5	41	PRIMARY	4	3	4	50
-test/t4	5	33	PRIMARY	4	3	4	50
+test/t1	8	0	PRIMARY	4	3	7	50
+test/t2	8	1	PRIMARY	4	3	7	50
+test/t3	8	41	PRIMARY	4	3	7	50
+test/t4	8	33	PRIMARY	4	3	7	50
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
 mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/asserted_test_suppressions.ibd
@@ -73,7 +73,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(211)
+c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(178)
 ) charset latin1 ROW_FORMAT=redundant;
 DROP TABLE t1;
 CREATE TABLE t1 (
@@ -84,7 +84,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(212)
+c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(188)
 ) charset latin1 ROW_FORMAT=redundant;
 ERROR 42000: Row size too large (> 8123). Changing some columns to TEXT or BLOB or using ROW_FORMAT=DYNAMIC or ROW_FORMAT=COMPRESSED may help. In current row format, BLOB prefix of 768 bytes is stored inline.
 CREATE TABLE t1 (
@@ -95,7 +95,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(246)
+c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(222)
 ) charset latin1 ROW_FORMAT=compact;
 DROP TABLE t1;
 CREATE TABLE t1 (
@@ -106,7 +106,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(247)
+c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(223)
 ) charset latin1 ROW_FORMAT=compact;
 ERROR 42000: Row size too large (> 8126). Changing some columns to TEXT or BLOB or using ROW_FORMAT=DYNAMIC or ROW_FORMAT=COMPRESSED may help. In current row format, BLOB prefix of 768 bytes is stored inline.
 CREATE TABLE t1 (
@@ -117,7 +117,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(157)
+c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(133)
 ) ROW_FORMAT=compressed;
 DROP TABLE t1;
 CREATE TABLE t1 (
@@ -128,7 +128,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(160)
+c36 char(200), c37 char(200), c38 char(200), c39 char(200), c40 char(136)
 ) charset latin1 ROW_FORMAT=compressed;
 ERROR 42000: Row size too large (> 8126). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 CREATE TABLE t1 (
@@ -139,7 +139,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(246)
+c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(222)
 ) ROW_FORMAT=dynamic;
 DROP TABLE t1;
 CREATE TABLE t1 (
@@ -150,7 +150,7 @@ c16 char(200), c17 char(200), c18 char(200), c19 char(200), c20 char(200),
 c21 char(200), c22 char(200), c23 char(200), c24 char(200), c25 char(200),
 c26 char(200), c27 char(200), c28 char(200), c29 char(200), c30 char(200),
 c31 char(200), c32 char(200), c33 char(200), c34 char(200), c35 char(200),
-c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(247)
+c36 char(200), c37 char(200), c38 char(200), c39 char(250), c40 char(223)
 ) charset latin1 ROW_FORMAT=dynamic;
 ERROR 42000: Row size too large (> 8126). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 CREATE TABLE t1 (a varchar(255) character set utf8,
@@ -685,7 +685,7 @@ ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 Warnings:
 Warning	139	Row size too large (> 8126). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 DROP TABLE t1;
-CREATE TABLE t1(c text, PRIMARY KEY (c(438)))
+CREATE TABLE t1(c text, PRIMARY KEY (c(423)))
 ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 CHARSET=ASCII;
 INSERT INTO t1 VALUES(REPEAT('A',512)),(REPEAT('B',512));
 DROP TABLE t1;
