@@ -811,6 +811,7 @@ bool Sql_cmd_xa_commit::process_external_xa_commit(THD *thd,
   gtid_state_commit_or_rollback(thd, need_clear_owned_gtid, !gtid_error);
 
   xid_state->reset();
+  DBUG_ASSERT(xs->is_real_attached());
   return res;
 }
 
@@ -1026,6 +1027,8 @@ bool Sql_cmd_xa_rollback::process_external_xa_rollback(THD *thd,
     return true;
   }
 
+  xs->attach_again();
+
   bool need_clear_owned_gtid = false;
   bool gtid_error = commit_owned_gtids(thd, true, &need_clear_owned_gtid, xs);
   if (gtid_error) my_error(ER_XA_RBROLLBACK, MYF(0));
@@ -1036,7 +1039,7 @@ bool Sql_cmd_xa_rollback::process_external_xa_rollback(THD *thd,
   else
     xid_state->unset_binlogged();
 
-	/*
+  /*
     It is rolling back from another session. Set it to XA_PREPARED,
     otherwise innodb would not store its gtid into undo log.
   */
@@ -1053,6 +1056,7 @@ bool Sql_cmd_xa_rollback::process_external_xa_rollback(THD *thd,
   gtid_state_commit_or_rollback(thd, need_clear_owned_gtid, !gtid_error);
 
   xid_state->reset();
+  DBUG_ASSERT(xs->is_real_attached());
   return res || gtid_error;
 }
 

@@ -34,8 +34,8 @@ my $record_offset  =  unpack("n*", $_);
 # die unless $record_offset == 135;
 # Lizard fix: In redundant format, the offsets of all fields are recorded
 # in the offset array, and every field takes up one byte of space. We add
-# two fields so the $record_offset should be 137.
-die unless $record_offset == 137;
+# three fields so the $record_offset should be 138.
+die unless $record_offset == 138;
 
 my $trx_id_of_rec = 4*$page_size + $record_offset + 6;
 

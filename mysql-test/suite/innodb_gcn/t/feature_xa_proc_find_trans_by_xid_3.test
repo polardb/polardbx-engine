@@ -27,7 +27,9 @@ xa rollback '1';
 --echo # it to be back online again
 --source include/wait_until_connected_again.inc
 
+--disable_ps_protocol
 call dbms_xa.find_by_xid('1', '', 1);
+--enable_ps_protocol
 
 set @@global.debug= "-d";
 
