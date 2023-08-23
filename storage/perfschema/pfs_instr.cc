@@ -1377,6 +1377,7 @@ PFS_metadata_lock *create_metadata_lock(void *identity, const MDL_key *mdl_key,
     pfs->m_src_line = src_line;
     pfs->m_owner_thread_id = 0;
     pfs->m_owner_event_id = 0;
+    pfs->m_owner_processlist_id = 0;
     pfs->m_lock.dirty_to_allocated(&dirty_state);
   }
 

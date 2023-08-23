@@ -60,6 +60,7 @@ Plugin_table table_metadata_locks::m_table_def(
     "  SOURCE VARCHAR(64),\n"
     "  OWNER_THREAD_ID BIGINT unsigned,\n"
     "  OWNER_EVENT_ID BIGINT unsigned,\n"
+    "  OWNER_PROCESSLIST_ID BIGINT unsigned,\n"
     "  PRIMARY KEY (OBJECT_INSTANCE_BEGIN) USING HASH,\n"
     "  KEY (OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, COLUMN_NAME) USING HASH,\n"
     "  KEY (OWNER_THREAD_ID, OWNER_EVENT_ID) USING HASH\n",
@@ -246,6 +247,7 @@ int table_metadata_locks::make_row(PFS_metadata_lock *pfs) {
 
   m_row.m_owner_thread_id = static_cast<ulong>(pfs->m_owner_thread_id);
   m_row.m_owner_event_id = static_cast<ulong>(pfs->m_owner_event_id);
+  m_row.m_owner_processlist_id = static_cast<ulong>(pfs->m_owner_processlist_id);
 
   if (m_row.m_object.make_row(&pfs->m_mdl_key)) {
     return HA_ERR_RECORD_DELETED;
@@ -304,6 +306,13 @@ int table_metadata_locks::read_row_values(TABLE *table, unsigned char *buf,
             f->set_null();
           }
           break;
+        case 11: /* OWNER_PROCESSLIST_ID */
+          if (m_row.m_owner_processlist_id != 0) {
+            set_field_ulonglong(f, m_row.m_owner_processlist_id);
+          } else {
+            f->set_null();
+          }
+          break;          
         default:
           DBUG_ASSERT(false);
       }

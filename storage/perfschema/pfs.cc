@@ -7645,6 +7645,7 @@ PSI_metadata_lock *pfs_create_metadata_lock_v1(
   if (pfs != NULL) {
     pfs->m_owner_thread_id = pfs_thread->m_thread_internal_id;
     pfs->m_owner_event_id = pfs_thread->m_event_id;
+    pfs->m_owner_processlist_id = pfs_thread->m_processlist_id;
   }
 
   return reinterpret_cast<PSI_metadata_lock *>(pfs);

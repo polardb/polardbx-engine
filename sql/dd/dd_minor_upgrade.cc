@@ -49,15 +49,28 @@ static const uint EXTRA_IS_DD_VERSION = 2;
   PLS increase it if update PFS table structure.
 
 
-  Historical I_S version number published:
+  Historical P_S version number published:
 
   1. Published in Issue 51139
   ---------------------------
   Top SQL statistics:
 
   PERFORMANCE_SCHEMA.EVENTS_STATEMENTS_SUMMARY_BY_DIGEST_SUPPLEMENT
+
+  2. Published
+  ---------------------------
+  Semisync network delay statistics:
+
+  Add SEMISYNC_DELAY_TIME in PERFORMANCE_SCHEMA.
+    EVENTS_STATEMENTS_SUMMARY_BY_DIGEST_SUPPLEMENT
+
+  3. Published
+  ---------------------------
+  Owner processlist id of meta data locks:
+
+  Add OWNER_PROCESSLIST_ID in PERFORMANCE_SCHEMA.METADATA_LOCKS    
 */
-static const uint EXTRA_PS_DD_VERSION = 1;
+static const uint EXTRA_PS_DD_VERSION = 3;
 
 static const String_type EXTRA_IS_DD_VERSION_STRING("EXTRA_IS_VERSION");
 

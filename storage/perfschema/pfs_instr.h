@@ -294,6 +294,7 @@ struct PFS_ALIGNED PFS_metadata_lock : public PFS_instr {
   uint m_src_line;
   ulonglong m_owner_thread_id;
   ulonglong m_owner_event_id;
+  ulonglong m_owner_processlist_id;
 };
 
 /**

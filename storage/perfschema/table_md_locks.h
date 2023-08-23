@@ -62,6 +62,8 @@ struct row_metadata_lock {
   ulong m_owner_thread_id;
   /** Column OWNER_EVENT_ID. */
   ulong m_owner_event_id;
+  /** Column OWNER_PROCESSLIST_ID. */
+  ulong m_owner_processlist_id;
   /** Columns OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, COLUMN_NAME. */
   PFS_column_row m_object;
 };
