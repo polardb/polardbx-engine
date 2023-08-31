@@ -19,9 +19,9 @@ SET @@global.binlog_transaction_compression=FALSE;
 --source include/rpl_connection_master.inc
 --source include/rpl_reset.inc
 
---let $event_sequence_no_compression=!Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid
+--let $event_sequence_no_compression=!GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid
 
---let $event_sequence_compression=!Gtid_or_anon # Transaction_payload # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid
+--let $event_sequence_compression=!GCN # !Gtid_or_anon # Transaction_payload # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid
 
 --let $i=1
 while($i < 3)

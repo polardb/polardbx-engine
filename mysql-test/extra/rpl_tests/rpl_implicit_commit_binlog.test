@@ -60,7 +60,8 @@ while ($ddl_cases >= 1)
   #
   if (`select @@binlog_format = 'STATEMENT' || @@binlog_format = 'MIXED'`)
   {
-    let $commit_event_row_number= 4;
+    # let $commit_event_row_number= 4;
+    let $commit_event_row_number= 5;
   }
   #
   # In RBR mode, the commit event is usually the 5th event in the binary log:
@@ -74,7 +75,8 @@ while ($ddl_cases >= 1)
   #
   if (`select @@binlog_format = 'ROW'`)
   {
-    let $commit_event_row_number= 5;
+    # let $commit_event_row_number= 5;
+    let $commit_event_row_number= 6;
   }
   #
   # In NDB (RBR and MIXED modes), the commit event is usually the 9th event
@@ -92,7 +94,8 @@ while ($ddl_cases >= 1)
   #
   if ($engine == NDB)
   {
-    let $commit_event_row_number= 9;
+    # let $commit_event_row_number= 9;
+    let $commit_event_row_number= 11;
   }
 
   let $first_binlog_position= query_get_value("SHOW MASTER STATUS", Position, 1);
@@ -308,7 +311,8 @@ while ($ddl_cases >= 1)
     #
     if (`select @@binlog_format = 'ROW' && '$engine' != 'NDB'`)
     {
-      let $commit_event_row_number= 6;
+      # let $commit_event_row_number= 6;
+      let $commit_event_row_number= 7;
     }
   }
   if ($ddl_cases == 22)
@@ -414,7 +418,8 @@ while ($ddl_cases >= 1)
     #
     if (`select @@binlog_format = 'STATEMENT'` )
     {
-      let $commit_event_row_number= 5;
+      # let $commit_event_row_number= 5;
+      let $commit_event_row_number= 6;
     }
     #
     # In MIXED mode, the DDL statement is not written to the binary log and
@@ -427,7 +432,8 @@ while ($ddl_cases >= 1)
     #
     if (`select @@binlog_format = 'MIXED'` )
     {
-      let $commit_event_row_number= 4;
+      # let $commit_event_row_number= 4;
+      let $commit_event_row_number= 5;
     }
     #
 
@@ -481,11 +487,13 @@ while ($ddl_cases >= 1)
     #
     if (`select @@binlog_format = 'MIXED'`)
     {
-      let $commit_event_row_number= 5;
+      # let $commit_event_row_number= 5;
+      let $commit_event_row_number= 7;
       # Since this alter is done on a temp table in MIXED, it will not be
       # binlogged at all, so explicitly commit.
       let $in_temporary= yes;
-      let $commit_event_row_number= 4;
+      # let $commit_event_row_number= 4;
+      let $commit_event_row_number= 6;
     }
     #
     # In NDB (RBR and MIXED modes), the commit event is the 7th event
@@ -517,11 +525,13 @@ while ($ddl_cases >= 1)
     #
     if (`select @@binlog_format = 'MIXED'`)
     {
-      let $commit_event_row_number= 5;
+      # let $commit_event_row_number= 5;
+      let $commit_event_row_number= 6;
       # Since this alter is done on a temp table in MIXED, it will not be
       # binlogged at all, so explicitly commit.
       let $in_temporary= yes;
-      let $commit_event_row_number= 4;
+      # let $commit_event_row_number= 4;
+      let $commit_event_row_number= 5;
     }
     #
     # In NDB (RBR and MIXED modes), the commit event is the sixth event
@@ -573,15 +583,18 @@ while ($ddl_cases >= 1)
     # 4: COMMIT
     if (`select @@binlog_format = 'STATEMENT'`)
     {
-      let $commit_event_row_number= 5;
+      # let $commit_event_row_number= 5;
+      let $commit_event_row_number= 6;
     }
     if (`select @@binlog_format = 'ROW'`)
     {
-      let $commit_event_row_number= 5;
+      # let $commit_event_row_number= 5;
+      let $commit_event_row_number= 6;
     }
     if (`select @@binlog_format = 'MIXED'`)
     {
-      let $commit_event_row_number= 4;
+      # let $commit_event_row_number= 4;
+      let $commit_event_row_number= 5;
     }
     #
     # In NDB (RBR and MIXED modes), the commit event is the sixth event

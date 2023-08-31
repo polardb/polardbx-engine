@@ -33,10 +33,10 @@ SET @@SESSION.BINLOG_ROW_VALUE_OPTIONS= PARTIAL_JSON;
 UPDATE t SET a= 3;
 ==== Verify requirements ===
 # Assert that master's binlog is written according to master's option
-include/assert_binlog_events.inc [!Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit # !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit]
 include/sync_slave_sql_with_master.inc
 # Assert that slave's binlog is written according to slave's option
-include/assert_binlog_events.inc [!Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit # !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit # !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit]
 include/diff_tables.inc [master:test.t, slave:test.t]
 ==== Clean up ====
 [connection master]

@@ -64,8 +64,10 @@ INSERT INTO mem_t2 VALUES(1),(2),(3);
 --source include/save_binlog_position.inc
 CREATE TABLE t3 SELECT * FROM mem_t1 UNION SELECT 10;
 
---let $limit= 0,4
---let $event_sequence= #Anonymous_Gtid # !Q(TRUNCATE.*) #Anonymous_Gtid # !Q(CREATE.*)
+# --let $limit= 0,4
+# --let $event_sequence= #Anonymous_Gtid # !Q(TRUNCATE.*) #Anonymous_Gtid # !Q(CREATE.*)
+--let $limit= 0,6
+--let $event_sequence= !GCN #Anonymous_Gtid # !Q(TRUNCATE.*) # !GCN #Anonymous_Gtid # !Q(CREATE.*)
 --source include/assert_binlog_events.inc
 
 --source include/sync_slave_sql_with_master.inc
@@ -81,8 +83,10 @@ SELECT * FROM mem_t1;
 # mem_t2 is empty, the UNION makes sure that a row event is binlogged.
 INSERT INTO t2 SELECT * FROM mem_t2 UNION SELECT 10;
 
---let $limit= 0,4
---let $event_sequence= #Anonymous_Gtid # !Q(TRUNCATE.*) #Anonymous_Gtid # !Begin
+# --let $limit= 0,4
+# --let $event_sequence= #Anonymous_Gtid # !Q(TRUNCATE.*) #Anonymous_Gtid # !Begin
+--let $limit= 0,6
+--let $event_sequence= !GCN #Anonymous_Gtid # !Q(TRUNCATE.*) # !GCN #Anonymous_Gtid # !Begin
 --source include/assert_binlog_events.inc
 
 --source include/sync_slave_sql_with_master.inc

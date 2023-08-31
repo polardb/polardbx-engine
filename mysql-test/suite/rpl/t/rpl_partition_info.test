@@ -111,7 +111,7 @@ while ($iteration <= 2)
   INSERT INTO employees VALUES(4), (5);
 
   --let $dont_print_pattern= 1
-  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
+  --let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
   --source include/assert_binlog_events.inc
 
   # Check if the partition_id is correctly logged for this event.
@@ -122,7 +122,7 @@ while ($iteration <= 2)
   --source include/save_binlog_position.inc
   INSERT INTO employees VALUES(7), (15);
 
-  --let $event_sequence =!Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # !Commit
+  --let $event_sequence =!GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # !Commit
   --source include/assert_binlog_events.inc
 
   # Check if the partition_id is correctly logged for this event.
@@ -135,7 +135,7 @@ while ($iteration <= 2)
   --source include/save_binlog_position.inc
   UPDATE employees SET store_id = 9 WHERE store_id < 6;
 
-  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
+  --let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
   --source include/assert_binlog_events.inc
 
   # Check if the partition_id is correctly logged for this event.
@@ -147,7 +147,7 @@ while ($iteration <= 2)
   --source include/save_binlog_position.inc
   UPDATE employees SET store_id = 12 WHERE store_id < 25 AND store_id > 10;
 
-  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
+  --let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
   --source include/assert_binlog_events.inc
 
   # Check if the partition_id is correctly logged for this event.
@@ -159,7 +159,7 @@ while ($iteration <= 2)
   --source include/save_binlog_position.inc
   UPDATE employees SET store_id = store_id + 2 WHERE store_id < 10;
 
-  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
+  --let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
   --source include/assert_binlog_events.inc
 
   # Check if the partition_id is correctly logged for this event.
@@ -172,7 +172,7 @@ while ($iteration <= 2)
   --source include/save_binlog_position.inc
   DELETE FROM employees where store_id < 10;
 
-  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
+  --let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
   --source include/assert_binlog_events.inc
 
   # Check if the partition_id is correctly logged for this event.
@@ -183,7 +183,7 @@ while ($iteration <= 2)
   --source include/save_binlog_position.inc
   DELETE FROM employees where store_id < 40;
 
-  --let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # Delete_rows # !Commit
+  --let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Delete_rows # Delete_rows # !Commit
   --source include/assert_binlog_events.inc
 
   # Check if the partition_id is correctly logged for this event.
@@ -302,7 +302,7 @@ INSERT INTO sp VALUES (102, 32);
 INSERT INTO sp VALUES(103, 31), (105, 32);
 
 # Test that only one Write_rows_event is logged
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if the partition_id is correctly logged for this event.
@@ -315,7 +315,7 @@ INSERT INTO sp VALUES(103, 31), (105, 32);
 INSERT INTO sp VALUES(104, 32), (105, 32);
 
 # Test that two Write_rows_event is logged
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if the partition_id is correctly logged for this event.
@@ -330,7 +330,7 @@ INSERT INTO sp VALUES(104, 32), (105, 32);
 UPDATE sp set age=31 where id = 102 or id=104;
 
 # Test that only one Update_rows_event is logged
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if the old and new partition_id is correctly logged for this event.
@@ -343,7 +343,7 @@ UPDATE sp set age=31 where id = 102 or id=104;
 UPDATE sp set age=29 where id = 102 or id=103;
 
 # Test that two Update_rows_event is logged
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # Update_rows # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if the old and new partition_id is correctly logged for this event.
@@ -358,7 +358,7 @@ UPDATE sp set age=29 where id = 102 or id=103;
 DELETE FROM sp where id = 101 or id=105;
 
 # Test that only one Delete_rows_event is logged
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if the partition_id is correctly logged for this event.
@@ -371,7 +371,7 @@ DELETE FROM sp where id = 101 or id=105;
 DELETE FROM sp where id = 102 or id=103;
 
 # Test that two Delete_rows_event is logged
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # Delete_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Delete_rows # Delete_rows # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if the partition_id is correctly logged for this event.
@@ -390,7 +390,7 @@ INSERT INTO t VALUES (13, 4);
 # Test that only one Write_rows_event is logged
 --source include/save_binlog_position.inc
 INSERT INTO t VALUES (10, 1), (11, 20);
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # !Commit
 --source include/assert_binlog_events.inc
 
 --echo -----UPDATE-----
@@ -398,7 +398,7 @@ INSERT INTO t VALUES (10, 1), (11, 20);
 --source include/save_binlog_position.inc
 UPDATE t SET s= 7 WHERE x > 3;
 
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows # !Commit
 --source include/assert_binlog_events.inc
 
 --echo -----DELETE------
@@ -406,7 +406,7 @@ UPDATE t SET s= 7 WHERE x > 3;
 --source include/save_binlog_position.inc
 DELETE from t where x < 4;
 
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Delete_rows # !Commit
 --source include/assert_binlog_events.inc
 
 --echo #####10.Sync with slave and check if all the tables are replicated correctly#####
@@ -446,7 +446,7 @@ CREATE TABLE t1 (store_id INT NOT NULL) PARTITION BY RANGE (store_id) ( PARTITIO
 INSERT INTO t1 VALUES (1), (11), (15);
 
 # Test that three Write_rows_event is logged
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # Write_rows # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Write_rows # Write_rows # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if the partition_id is correctly logged for this event.
@@ -472,7 +472,7 @@ SET @@SESSION.BINLOG_ROW_VALUE_OPTIONS= PARTIAL_JSON;
 
 --source include/save_binlog_position.inc
 UPDATE t1 SET  store_id = 8 WHERE store_id = 11;
---let $event_sequence = !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit
+--let $event_sequence = !GCN # !Gtid_or_anon # !Begin # Table_map # Update_rows_partial # !Commit
 --source include/assert_binlog_events.inc
 
 --let $partition_id = 1 0

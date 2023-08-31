@@ -152,7 +152,7 @@ COMMIT;
 --let $update_pattern= # Table_map # Update_rows
 --let $delete_pattern= # Table_map # Delete_rows
 --let $dont_print_pattern= 1
---let $event_sequence = $gtid_event  # !Begin $insert_pattern $update_pattern $delete_pattern # !Commit
+--let $event_sequence = !GCN # $gtid_event  # !Begin $insert_pattern $update_pattern $delete_pattern # !Commit
 --source include/assert_binlog_events.inc
 # Verify Table_map and event_type for Insert Update Delete within a single transaction on multiple partitions
 --source include/save_binlog_position.inc
@@ -161,7 +161,7 @@ INSERT INTO trans VALUES(101,46),(102,23);
 UPDATE trans SET id=id+100;
 DELETE FROM trans WHERE id=201;
 COMMIT;
---let $event_sequence = $gtid_event  # !Begin $insert_pattern # Write_rows $update_pattern # Update_rows $delete_pattern # !Commit
+--let $event_sequence = !GCN # $gtid_event  # !Begin $insert_pattern # Write_rows $update_pattern # Update_rows $delete_pattern # !Commit
 --source include/assert_binlog_events.inc
 # Verify Table_map and event_type for Insert Update Delete within a single transaction on partitioned and non-partitioned table
 CREATE TABLE t2(a INT);
@@ -174,7 +174,7 @@ UPDATE t2 SET a=a+10;
 DELETE FROM trans WHERE id=11;
 DELETE FROM t2 WHERE a=20;
 COMMIT;
---let $event_sequence = $gtid_event  # !Begin $insert_pattern $insert_pattern $update_pattern # Update_rows $update_pattern $delete_pattern # !Commit
+--let $event_sequence = !GCN # $gtid_event  # !Begin $insert_pattern $insert_pattern $update_pattern # Update_rows $update_pattern $delete_pattern # !Commit
 --source include/assert_binlog_events.inc
 
 # Check if data is replicated properly across master and slave

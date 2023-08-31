@@ -97,7 +97,7 @@ INSERT INTO t1 VALUES (1);
 # 5.b. The `XA ROLLBACK` is present in the binary log.
 #
 --source include/rpl_connection_slave.inc
---let $event_sequence = Gtid # $xa_start_end # XA_prepare/XA PREPARE $xid # Gtid # Query/XA ROLLBACK $xid
+--let $event_sequence = !GCN # Gtid # $xa_start_end # XA_prepare/XA PREPARE $xid # !GCN # Gtid # Query/XA ROLLBACK $xid
 --source include/assert_binlog_events.inc
 
 # 5.c. The GTID_EXECUTED variable was updated.

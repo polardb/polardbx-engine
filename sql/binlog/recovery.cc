@@ -25,10 +25,11 @@
 #include "sql/binlog/tools/iterators.h"  // binlog::tools::Iterator
 #include "sql/raii/sentry.h"             // raii::Sentry<>
 #include "sql/xa/xid_extract.h"          // xa::XID_extractor
-	
+
 #include "mysql/components/services/log_builtins.h"
 
 #include "sql/binlog/lizard0recovery.h"
+#include "sql/lizard_rpl_rli.h"
 
 binlog::Binlog_recovery::Binlog_recovery(Binlog_file_reader &binlog_file_reader)
     : m_reader{binlog_file_reader},
@@ -99,6 +100,7 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
     // Whenever the current position is at a transaction boundary, save it
     // to m_valid_pos
     if (!this->m_is_malformed && !this->m_in_transaction &&
+        !lizard::is_b_events_before_gtid(ev) &&
         !is_gtid_event(ev) && !is_session_control_event(ev))
       this->m_valid_pos = this->m_reader.position();
 

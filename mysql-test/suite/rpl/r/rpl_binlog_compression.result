@@ -42,17 +42,17 @@ INSERT INTO t1 VALUES (2, REPEAT('a', 1000000));
 INSERT INTO t1 VALUES (1, REPEAT('a', 1000000));
 COMMIT;
 BINLOG EVENTS on master ['NONE']
-include/assert_binlog_events.inc [!Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
 [connection master]
 include/sync_slave_io_with_master.inc
 RELAY LOG EVENTS for 'NONE'
-include/assert_binlog_events.inc [!Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
 include/start_slave_sql.inc
 [connection master]
 include/sync_slave_sql_with_master.inc
 include/assert.inc [Assert that master and slave tables have the same content]
 BINLOG EVENTS on slave ['NONE'] (no compression, since slave applier has binlog_transaction_compression = NONE)
-include/assert_binlog_events.inc [!Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
 [connection master]
 DROP TABLE t1;
 include/sync_slave_sql_with_master.inc
@@ -88,17 +88,17 @@ INSERT INTO t1 VALUES (2, REPEAT('a', 1000000));
 INSERT INTO t1 VALUES (1, REPEAT('a', 1000000));
 COMMIT;
 BINLOG EVENTS on master ['ZSTD']
-include/assert_binlog_events.inc [!Gtid_or_anon # Transaction_payload # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # Transaction_payload # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
 [connection master]
 include/sync_slave_io_with_master.inc
 RELAY LOG EVENTS for 'ZSTD'
-include/assert_binlog_events.inc [!Gtid_or_anon # Transaction_payload # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # Transaction_payload # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
 include/start_slave_sql.inc
 [connection master]
 include/sync_slave_sql_with_master.inc
 include/assert.inc [Assert that master and slave tables have the same content]
 BINLOG EVENTS on slave ['ZSTD'] (no compression, since slave applier has binlog_transaction_compression = NONE)
-include/assert_binlog_events.inc [!Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
+include/assert_binlog_events.inc [!GCN # !Gtid_or_anon # !Begin # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Table_map # Write_rows # Xid]
 [connection master]
 DROP TABLE t1;
 include/sync_slave_sql_with_master.inc

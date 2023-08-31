@@ -75,6 +75,8 @@ XA COMMIT '1';
 --echo #
 --eval SET GTID_NEXT='AUTOMATIC'
 FLUSH LOGS;
+# Lizard-3.0: Sleep to wait for gtid merge.
+--sleep 5
 --replace_result $master_uuid MASTER_UUID
 SELECT * FROM mysql.gtid_executed;
 

@@ -40,7 +40,7 @@ include/execute_from_conditional_timestamp_sync_point.inc [3@before_wait_on_tick
 [connection master]
 # Removing debug point 'set_commit_parent_100' from @@GLOBAL.debug
 include/sync_slave_sql_with_master.inc
-include/assert_binlog_events.inc [Gtid/.*GTID_NEXT= '435aeb3e-cc91-11ec-a715-6ba04eb9487e:2' # !Begin # !Insert # !Commit # Gtid/.*GTID_NEXT= '435aeb3e-cc91-11ec-a715-6ba04eb9487e:3' # !Begin # !Insert # !Commit # Gtid/.*GTID_NEXT= '435aeb3e-cc91-11ec-a715-6ba04eb9487e:1' # !Begin # !Insert # !Commit]
+include/assert_binlog_events.inc [!GCN # Gtid/.*GTID_NEXT= '435aeb3e-cc91-11ec-a715-6ba04eb9487e:2' # !Begin # !Insert # !Commit # !GCN # Gtid/.*GTID_NEXT= '435aeb3e-cc91-11ec-a715-6ba04eb9487e:3' # !Begin # !Insert # !Commit # !GCN # Gtid/.*GTID_NEXT= '435aeb3e-cc91-11ec-a715-6ba04eb9487e:1' # !Begin # !Insert # !Commit]
 include/stop_slave.inc
 include/restore_sysvars.inc
 include/start_slave.inc

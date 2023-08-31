@@ -19,7 +19,7 @@ include/start_slave.inc
 [connection master]
 include/save_binlog_position.inc
 CREATE TABLE t3 SELECT * FROM mem_t1 UNION SELECT 10;
-include/assert_binlog_events.inc [#Anonymous_Gtid # !Q(TRUNCATE.*) #Anonymous_Gtid # !Q(CREATE.*)]
+include/assert_binlog_events.inc [!GCN #Anonymous_Gtid # !Q(TRUNCATE.*) # !GCN #Anonymous_Gtid # !Q(CREATE.*)]
 include/sync_slave_sql_with_master.inc
 SELECT * FROM mem_t1;
 c1
@@ -29,7 +29,7 @@ c1
 [connection master]
 include/save_binlog_position.inc
 INSERT INTO t2 SELECT * FROM mem_t2 UNION SELECT 10;
-include/assert_binlog_events.inc [#Anonymous_Gtid # !Q(TRUNCATE.*) #Anonymous_Gtid # !Begin]
+include/assert_binlog_events.inc [!GCN #Anonymous_Gtid # !Q(TRUNCATE.*) # !GCN #Anonymous_Gtid # !Begin]
 include/sync_slave_sql_with_master.inc
 SELECT * FROM mem_t2;
 c1

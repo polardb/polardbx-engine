@@ -230,7 +230,7 @@ DROP TABLE aux_table_to_sync;
 --source include/sync_slave_sql_with_master.inc
 
 --source include/rpl_connection_slave.inc
---let event_sequence = Gtid # Query/.*DROP.*t3.* # Gtid # Query/.*CREATE.*aux.* # Gtid # Query/.*DROP.*aux.*
+--let event_sequence = !GCN # Gtid # Query/.*DROP.*t3.* # !GCN # Gtid # Query/.*CREATE.*aux.* # !GCN # Gtid # Query/.*DROP.*aux.*
 --source include/assert_binlog_events.inc
 
 # We expect 3 GTIDs: one for the DROP, one for CREATE TABLE, and one
@@ -267,7 +267,7 @@ SET @@global.super_read_only = 1;
 # Wait for the disconnected session to log DROP
 --source include/rpl_connection_slave.inc
 --let $wait_for_binlog_events = 1
---let $event_sequence = Gtid # Query(.*DROP.*)
+--let $event_sequence = !GCN # Gtid # Query(.*DROP.*)
 --source include/assert_binlog_events.inc
 --let $wait_for_binlog_events = 0
 

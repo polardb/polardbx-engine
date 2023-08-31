@@ -90,8 +90,10 @@ INSERT INTO mem_t8 VALUES (1), (2), (3), (4);
 INSERT INTO mem_t1 VALUES (1), (2), (3), (4);
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_master.inc
---let $limit= 0,7
---let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Begin # !Insert # !Commit
+# --let $limit= 0,7
+# --let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Begin # !Insert # !Commit
+--let $limit= 0,9
+--let $event_sequence= !GCN #Gtid # !Q(TRUNCATE.*) # !GCN #Gtid # !Begin # !Insert # !Commit
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -99,8 +101,10 @@ INSERT INTO mem_t1 VALUES (1), (2), (3), (4);
 ALTER TABLE mem_t2 ADD COLUMN (c2 INT);
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_master.inc
---let $limit= 0,4
---let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Q(ALTER.*)
+# --let $limit= 0,4
+# --let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Q(ALTER.*)
+--let $limit= 0,6
+--let $event_sequence= !GCN #Gtid # !Q(TRUNCATE.*) # !GCN #Gtid # !Q(ALTER.*)
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -108,8 +112,10 @@ ALTER TABLE mem_t2 ADD COLUMN (c2 INT);
 CREATE TABLE mem_t9 LIKE mem_t3;
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_master.inc
---let $limit= 0,4
---let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Q(CREATE.*)
+# --let $limit= 0,4
+# --let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Q(CREATE.*)
+--let $limit= 0,6
+--let $event_sequence= !GCN #Gtid # !Q(TRUNCATE.*) # !GCN  #Gtid # !Q(CREATE.*)
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -120,8 +126,10 @@ INSERT INTO mem_t5 VALUES (1), (2), (3), (4);
 COMMIT;
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_master.inc
---let $limit= 0,14
---let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Begin # !Insert # !Commit #Gtid # !Q(TRUNCATE.*) #Gtid # !Begin # !Insert # !Commit
+# --let $limit= 0,14
+# --let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Begin # !Insert # !Commit #Gtid # !Q(TRUNCATE.*) #Gtid # !Begin # !Insert # !Commit
+--let $limit= 0,18
+--let $event_sequence= !GCN #Gtid # !Q(TRUNCATE.*) # !GCN #Gtid # !Begin # !Insert # !Commit # !GCN #Gtid # !Q(TRUNCATE.*) # !GCN #Gtid # !Begin # !Insert # !Commit
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -129,8 +137,10 @@ COMMIT;
 UPDATE mem_t6, mem_t7 SET mem_t6.c1 = mem_t6.c1 + 1, mem_t7.c1 = mem_t7.c1 + 1;
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_master.inc
---let $limit= 0,4
---let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Q(TRUNCATE.*)
+# --let $limit= 0,4
+# --let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid # !Q(TRUNCATE.*)
+--let $limit= 0,6
+--let $event_sequence= !GCN #Gtid # !Q(TRUNCATE.*) # !GCN #Gtid # !Q(TRUNCATE.*)
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -141,8 +151,10 @@ INSERT INTO mem_t8 VALUES (1), (2), (3), (4);
 SET @@session.gtid_next = 'AUTOMATIC';
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_master.inc
---let $limit= 0,7
---let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid/(.*'$explicit_gtid')# !Begin # !Insert # !Commit
+# --let $limit= 0,7
+# --let $event_sequence= #Gtid # !Q(TRUNCATE.*) #Gtid/(.*'$explicit_gtid')# !Begin # !Insert # !Commit
+--let $limit= 0,9
+--let $event_sequence= !GCN #Gtid # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$explicit_gtid')# !Begin # !Insert # !Commit
 --source include/assert_binlog_events.inc
 
 # Cleanup
@@ -187,8 +199,10 @@ INSERT INTO mem_t8 VALUES (1), (2), (3), (4);
 INSERT INTO mem_t1 VALUES (1), (2), (3), (4);
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_slave.inc
---let $limit= 0,7
---let $event_sequence= #Gtid/(.*'$replica_uuid:1') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:17') # !Begin # !Insert # !Commit
+# --let $limit= 0,7
+# --let $event_sequence= #Gtid/(.*'$replica_uuid:1') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:17') # !Begin # !Insert # !Commit
+--let $limit= 0,9
+--let $event_sequence= !GCN #Gtid/(.*'$replica_uuid:1') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$master_uuid:17') # !Begin # !Insert # !Commit
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -197,8 +211,10 @@ INSERT INTO mem_t1 VALUES (1), (2), (3), (4);
 ALTER TABLE mem_t2 ADD COLUMN (c2 INT);
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_slave.inc
---let $limit= 0,4
---let $event_sequence= #Gtid/(.*'$replica_uuid:2') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:18') # !Q(ALTER.*)
+# --let $limit= 0,4
+# --let $event_sequence= #Gtid/(.*'$replica_uuid:2') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:18') # !Q(ALTER.*)
+--let $limit= 0,6
+--let $event_sequence= !GCN #Gtid/(.*'$replica_uuid:2') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$master_uuid:18') # !Q(ALTER.*)
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -207,8 +223,10 @@ ALTER TABLE mem_t2 ADD COLUMN (c2 INT);
 CREATE TABLE mem_t9 LIKE mem_t3;
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_slave.inc
---let $limit= 0,4
---let $event_sequence= #Gtid/(.*'$replica_uuid:3') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:19') # !Q(CREATE.*)
+# --let $limit= 0,4
+# --let $event_sequence= #Gtid/(.*'$replica_uuid:3') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:19') # !Q(CREATE.*)
+--let $limit= 0,6
+--let $event_sequence= !GCN #Gtid/(.*'$replica_uuid:3') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$master_uuid:19') # !Q(CREATE.*)
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -220,8 +238,10 @@ INSERT INTO mem_t5 VALUES (1), (2), (3), (4);
 COMMIT;
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_slave.inc
---let $limit= 0,14
---let $event_sequence= #Gtid/(.*'$replica_uuid:4') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:20') # !Begin # !Insert # !Commit #Gtid/(.*'$replica_uuid:5') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:21') # !Begin # !Insert # !Commit
+# --let $limit= 0,14
+# --let $event_sequence= #Gtid/(.*'$replica_uuid:4') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:20') # !Begin # !Insert # !Commit #Gtid/(.*'$replica_uuid:5') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:21') # !Begin # !Insert # !Commit
+--let $limit= 0,18
+--let $event_sequence= !GCN #Gtid/(.*'$replica_uuid:4') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$master_uuid:20') # !Begin # !Insert # !Commit # !GCN #Gtid/(.*'$replica_uuid:5') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$master_uuid:21') # !Begin # !Insert # !Commit
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -236,8 +256,10 @@ DELIMITER ;|
 INSERT INTO mem_t7 VALUES (f());
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_slave.inc
---let $limit= 2,12
---let $event_sequence= #Gtid/(.*'$replica_uuid:6') # !Q(TRUNCATE.*) #Gtid/(.*'$replica_uuid:7') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:23') # !Begin # !Multi_DML # !Commit
+# --let $limit= 2,12
+# --let $event_sequence= #Gtid/(.*'$replica_uuid:6') # !Q(TRUNCATE.*) #Gtid/(.*'$replica_uuid:7') # !Q(TRUNCATE.*) #Gtid/(.*'$master_uuid:23') # !Begin # !Multi_DML # !Commit
+--let $limit= 3,15
+--let $event_sequence= !GCN #Gtid/(.*'$replica_uuid:6') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$replica_uuid:7') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$master_uuid:23') # !Begin # !Multi_DML # !Commit
 --source include/assert_binlog_events.inc
 --source include/save_binlog_position.inc
 
@@ -248,8 +270,10 @@ INSERT INTO mem_t8 VALUES (1), (2), (3), (4);
 SET @@session.gtid_next = 'AUTOMATIC';
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_connection_slave.inc
---let $limit= 0,7
---let $event_sequence= #Gtid/(.*'$replica_uuid:8') # !Q(TRUNCATE.*) #Gtid/(.*'$explicit_gtid')# !Begin # !Insert # !Commit
+# --let $limit= 0,7
+# --let $event_sequence= #Gtid/(.*'$replica_uuid:8') # !Q(TRUNCATE.*) #Gtid/(.*'$explicit_gtid')# !Begin # !Insert # !Commit
+--let $limit= 0,9
+--let $event_sequence= !GCN #Gtid/(.*'$replica_uuid:8') # !Q(TRUNCATE.*) # !GCN #Gtid/(.*'$explicit_gtid')# !Begin # !Insert # !Commit
 --source include/assert_binlog_events.inc
 
 # Cleanup

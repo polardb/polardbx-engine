@@ -43,7 +43,7 @@ DELIMITER ;|
 --let $binlog_start= $saved_master_pos
 # skip two events, print the one next event if it exists
 # (it should not exists in the case).
---let $binlog_limit= 2, 1
+--let $binlog_limit= 3, 1
 --source include/show_binlog_events.inc
 
 --source include/sync_slave_sql_with_master.inc
@@ -72,7 +72,7 @@ DELIMITER ;|
 --let $binlog_start= $saved_master_pos
 # skip two events, print the one next event if it exists
 # (it should not exists in the case).
---let $binlog_limit= 2, 1
+--let $binlog_limit= 3, 1
 --source include/show_binlog_events.inc
 
 CREATE TABLE t1 (i INT);
@@ -96,7 +96,7 @@ DELIMITER ;|
 --sleep $naptime
 --let $binlog_start= $saved_master_pos
 # print the top five events.
---let $binlog_limit= 5
+--let $binlog_limit= 6
 if (`SELECT @@session.binlog_transaction_compression = TRUE`)
 {
   --let $binlog_limit = `SELECT $binlog_limit + 1`
@@ -131,7 +131,7 @@ DELIMITER ;|
 --let $binlog_start= $saved_master_pos
 # skip two events, print the one next event if it exists
 # (it should not exists in the case).
---let $binlog_limit= 2, 1
+--let $binlog_limit= 3, 1
 --source include/show_binlog_events.inc
 
 --source include/sync_slave_sql_with_master.inc

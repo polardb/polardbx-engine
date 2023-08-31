@@ -22,6 +22,8 @@
 --source include/have_binlog_format_row.inc
 --source include/master-slave.inc
 
+--skip Filter + XA might produce empty XA transaction, which is permitted in lizard-3.0
+
 --let $gtid_mode_value= `SELECT @@GLOBAL.GTID_MODE = "ON"`
 
 --source include/rpl_connection_master.inc

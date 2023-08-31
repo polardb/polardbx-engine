@@ -126,11 +126,12 @@ bool Sql_cmd_xa_rollback::process_detached_xa_rollback(THD *thd) {
 
   raii::Sentry<> dispose_guard{[this]() -> void { this->dispose(); }};
   if (this->find_and_initialize_xa_context(thd)) return true;
-  if (this->acquire_locks_and_attach_again(thd)) return true;
+  if (this->acquire_locks(thd)) return true;
   raii::Sentry<> acquired_locks_guard{
       [this]() -> void { this->release_locks(); }};
   this->setup_thd_context(thd);
   if (this->enter_commit_order(thd)) return true;
+  this->attach_again();
 
   CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_rollback_xa_trx");
   this->assign_xid_to_thd(thd);

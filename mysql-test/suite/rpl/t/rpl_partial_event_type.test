@@ -75,7 +75,7 @@ UPDATE t SET a= 3;
 
 --echo ==== Verify requirements ===
 
---let $before= !Gtid_or_anon # !Begin # Table_map #
+--let $before= !GCN # !Gtid_or_anon # !Begin # Table_map #
 --let $after= # !Commit
 --let $partial= $before Update_rows_partial $after
 --let $full= $before Update_rows $after

@@ -80,7 +80,7 @@ while ($j > 0) {
 
     # assert that we have transactions were compressed
     --let $include_trx_payload_events=1
-    --let $event_sequence = Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare
+    --let $event_sequence = !GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare
     --source include/assert_binlog_events.inc
     --let $include_trx_payload_events=0
 
@@ -108,7 +108,7 @@ while ($j > 0) {
     # assert that we have the expected event sequence in the
     # slave's binary log
     --let $include_trx_payload_events=1
-    --let $event_sequence = Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # Gtid # Query/XA COMMIT.*
+    --let $event_sequence = !GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # !GCN # Gtid # Query/XA COMMIT.*
     --source include/assert_binlog_events.inc
 
     # assert that the tables have the same content

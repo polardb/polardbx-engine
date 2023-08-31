@@ -52,7 +52,7 @@ parse_options "$@"
 
 # Basic options
 OPT="perl mysql-test-run.pl --report-unstable-tests --sanitize --timer --force --max-test-fail=0"
-OPT="$OPT --skip-ndb --skip-rpl  --skip-combinations --nounit-tests  --parallel=32 "
+OPT="$OPT --skip-ndb --skip-combinations --nounit-tests --parallel=32 "
 OPT="$OPT --report-features --unit-tests-report"
 
 extra_mtr_option=""

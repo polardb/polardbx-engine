@@ -560,12 +560,18 @@ while ($id <= $max_id)
         --let $assert_text= Something was written to the binlog
         --source include/assert.inc
 
+        # let $assert_cond=
+        #   "[SHOW BINLOG EVENTS IN
+        #     "[server_1_$connection:SELECT @binlog_file_before]"
+        #     FROM [server_1_$connection:SELECT @binlog_pos_before]
+        #     LIMIT 1, Event_type, 1]" = "Gtid";
+        # --let $assert_text= The first added event in the binlog should be a Gtid_log_event
         let $assert_cond=
           "[SHOW BINLOG EVENTS IN
             "[server_1_$connection:SELECT @binlog_file_before]"
             FROM [server_1_$connection:SELECT @binlog_pos_before]
-            LIMIT 1, Event_type, 1]" = "Gtid";
-        --let $assert_text= The first added event in the binlog should be a Gtid_log_event
+            LIMIT 1, Event_type, 1]" = "GCN";
+        --let $assert_text= The first added event in the binlog should be a GCN_LOG_EVENT
         --source include/assert.inc
         #--let $assert_cond= "[SHOW BINLOG EVENTS IN "$binlog_file_before" FROM $binlog_pos_before LIMIT 1, Info, 1]" = "SET GTID_NEXT = "
       }

@@ -34,14 +34,14 @@ XA START 'xa1';
 INSERT INTO t1 SET a = 10, b = 1;
 XA END 'xa1';
 XA PREPARE 'xa1';
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
 [connection slave]
 [connection slave1]
 ROLLBACK;
 [connection master]
 XA COMMIT 'xa1';
 include/sync_slave_sql_with_master.inc
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # Gtid # Query/XA COMMIT.*]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # !GCN # Gtid # Query/XA COMMIT.*]
 include/diff_tables.inc [master:test.t1,slave:test.t1]
 [connection master]
 DROP TABLE t1;
@@ -64,14 +64,14 @@ XA START 'xa1';
 INSERT INTO t1 SET a = 10, b = 1;
 XA END 'xa1';
 XA PREPARE 'xa1';
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
 [connection slave]
 [connection slave1]
 ROLLBACK;
 [connection master]
 XA COMMIT 'xa1';
 include/sync_slave_sql_with_master.inc
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # Gtid # Query/XA COMMIT.*]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # !GCN # Gtid # Query/XA COMMIT.*]
 include/diff_tables.inc [master:test.t1,slave:test.t1]
 [connection master]
 DROP TABLE t1;
@@ -97,14 +97,14 @@ XA START 'xa1';
 INSERT INTO t1 SET a = 10, b = 1;
 XA END 'xa1';
 XA PREPARE 'xa1';
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
 [connection slave]
 [connection slave1]
 ROLLBACK;
 [connection master]
 XA COMMIT 'xa1';
 include/sync_slave_sql_with_master.inc
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # Gtid # Query/XA COMMIT.*]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # !GCN # Gtid # Query/XA COMMIT.*]
 include/diff_tables.inc [master:test.t1,slave:test.t1]
 [connection master]
 DROP TABLE t1;
@@ -127,14 +127,14 @@ XA START 'xa1';
 INSERT INTO t1 SET a = 10, b = 1;
 XA END 'xa1';
 XA PREPARE 'xa1';
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
 [connection slave]
 [connection slave1]
 ROLLBACK;
 [connection master]
 XA COMMIT 'xa1';
 include/sync_slave_sql_with_master.inc
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # Gtid # Query/XA COMMIT.*]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # !GCN # Gtid # Query/XA COMMIT.*]
 include/diff_tables.inc [master:test.t1,slave:test.t1]
 [connection master]
 DROP TABLE t1;
@@ -162,14 +162,14 @@ XA START 'xa1';
 INSERT INTO t1 SET a = 10, b = 1;
 XA END 'xa1';
 XA PREPARE 'xa1';
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
 [connection slave]
 [connection slave1]
 ROLLBACK;
 [connection master]
 XA COMMIT 'xa1';
 include/sync_slave_sql_with_master.inc
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # Gtid # Query/XA COMMIT.*]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # !GCN # Gtid # Query/XA COMMIT.*]
 include/diff_tables.inc [master:test.t1,slave:test.t1]
 [connection master]
 DROP TABLE t1;
@@ -192,14 +192,14 @@ XA START 'xa1';
 INSERT INTO t1 SET a = 10, b = 1;
 XA END 'xa1';
 XA PREPARE 'xa1';
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare]
 [connection slave]
 [connection slave1]
 ROLLBACK;
 [connection master]
 XA COMMIT 'xa1';
 include/sync_slave_sql_with_master.inc
-include/assert_binlog_events.inc [Gtid # Query # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # Gtid # Query/XA COMMIT.*]
+include/assert_binlog_events.inc [!GCN # Gtid # Query # !GCN # Gtid # Transaction_payload # Query # Table_map # Write_rows # Xid # !GCN # Gtid # Transaction_payload # Query/XA START.* # Table_map # Write_rows # Query/XA END.* # XA_prepare # !GCN # Gtid # Query/XA COMMIT.*]
 include/diff_tables.inc [master:test.t1,slave:test.t1]
 [connection master]
 DROP TABLE t1;

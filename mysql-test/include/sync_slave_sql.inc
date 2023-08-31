@@ -36,6 +36,8 @@
 --let $include_filename= sync_slave_sql.inc
 --source include/begin_include_file.inc
 
+# --let $rpl_debug= 1
+
 --let $_sss_slave_timeout= $slave_timeout
 if (!$_sss_slave_timeout)
 {

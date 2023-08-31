@@ -123,7 +123,7 @@ class Sql_cmd_xa_second_phase : public Sql_cmd {
 
     @return false if all necessary locks were acquired, true otherwise.
    */
-  bool acquire_locks_and_attach_again(THD *thd);
+  bool acquire_locks(THD *thd);
   /**
     Release any locks acquires in `acquire_locks` still needing
     to be released.
@@ -202,6 +202,12 @@ class Sql_cmd_xa_second_phase : public Sql_cmd {
     memory is disposed as a all block).
    */
   void dispose();
+
+  /**
+    Attach a XA transaction again, must be in detach state before this.
+    NOTES: The state is only used for dbms_xa.find_by_xid(...).
+  */
+  void attach_again();
 };
 
 #endif  // XA_SQL_CMD_XA_SECOND_PHASE

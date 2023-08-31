@@ -155,6 +155,9 @@ ROLLBACK/*!*/;
 # # server id #  end_log_pos # CRC32 # 	Previous-GTIDs
 # [empty]
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -178,6 +181,9 @@ SET @@session.collation_database=DEFAULT/*!*/;
 /*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
 create table t1(a int, b int) engine= myisam
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -214,6 +220,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -248,6 +257,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -279,6 +291,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -292,6 +307,9 @@ SET TIMESTAMP=#/*!*/;
 /*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
 create table t2(a int, b int) engine=innodb
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -360,6 +378,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -391,6 +412,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -421,6 +445,9 @@ BEGIN
 SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -463,6 +490,9 @@ BEGIN
 # # server id #  end_log_pos # CRC32 # 	Xid = #
 COMMIT/*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -476,6 +506,9 @@ SET TIMESTAMP=#/*!*/;
 DROP TABLE `t1` /* generated by server */
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -488,6 +521,9 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 DROP TABLE `t2` /* generated by server */
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -503,6 +539,9 @@ SET TIMESTAMP=#/*!*/;
 create table t3(a int, b int) engine= myisam
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -517,6 +556,9 @@ SET TIMESTAMP=#/*!*/;
 create table t4(a int, b int) engine= myisam
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -530,6 +572,9 @@ SET TIMESTAMP=#/*!*/;
 /*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
 create table t5(a int, b int) engine= myisam
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -562,6 +607,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -592,6 +640,9 @@ BEGIN
 SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -639,6 +690,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -669,6 +723,9 @@ BEGIN
 SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -707,6 +764,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -719,6 +779,9 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 FLUSH TABLES
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -733,6 +796,9 @@ SET TIMESTAMP=#/*!*/;
 /*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
 create table t6(a VARCHAR(60)) engine= myisam
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=yes	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 /*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
@@ -973,6 +1039,9 @@ SET TIMESTAMP=#/*!*/;
 COMMIT
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -985,6 +1054,9 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 DROP TABLE `t3` /* generated by server */
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -999,6 +1071,9 @@ SET TIMESTAMP=#/*!*/;
 DROP TABLE `t6` /* generated by server */
 /*!*/;
 # at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
+# at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
 # immediate_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)
@@ -1011,6 +1086,9 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 DROP TABLE `t4` /* generated by server */
 /*!*/;
+# at #
+# # server id #  end_log_pos # CRC32 # 	Gcn	have_snapshot_seq=false	have_commit_seq=false	GCN_ASSIGNED=false
+SET @@session.innodb_commit_seq=##/*!*/;
 # at #
 # # server id #  end_log_pos # CRC32 # 	Anonymous_GTID	last_committed=#	sequence_number=#	rbr_only=no	original_committed_timestamp=#   immediate_commit_timestamp=#	transaction_length=#
 # original_commit_timestamp= MICROSECONDS-FROM-EPOCH (YYYY-MM-DD HOURS:MINUTES:SECONDS TZ)

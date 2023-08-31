@@ -29,6 +29,6 @@ XA END 'trx';
 XA COMMIT 'trx' ONE PHASE;
 SET @@SESSION.GTID_NEXT= 'AUTOMATIC';
 include/assert.inc [Transaction is present in GTID_EXECUTED]
-include/assert_binlog_events.inc [Gtid/SET.* # Query/BEGIN # Query/COMMIT]
+include/assert_binlog_events.inc [!GCN # Gtid/SET.* # Query/BEGIN # Query/COMMIT]
 include/sync_slave_sql_with_master.inc
 include/rpl_end.inc

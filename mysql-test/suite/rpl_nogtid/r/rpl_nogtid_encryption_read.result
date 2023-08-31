@@ -3,6 +3,7 @@ Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
 Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
+call mtr.add_suppression("Binlog file version .* is lower than XA specification recovery");
 FLUSH LOCAL LOGS;
 include/assert.inc [Master status shall point to master-bin.000002]
 include/rpl_stop_server.inc [server_number=1]

@@ -4690,6 +4690,7 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
       if (ev->starts_group()) {
         rli->mts_recovery_group_seen_begin = true;
       } else if ((ev->ends_group() || !rli->mts_recovery_group_seen_begin) &&
+                 !lizard::is_b_events_before_gtid(ev) &&
                  !is_gtid_event(ev)) {
         rli->mts_recovery_index++;
         if (--rli->mts_recovery_group_cnt == 0) {
@@ -6264,7 +6265,8 @@ bool mts_recovery_groups(Relay_log_info *rli) {
         if (ev->starts_group()) {
           flag_group_seen_begin = true;
         } else if ((ev->ends_group() || !flag_group_seen_begin) &&
-                   !is_gtid_event(ev)) {
+                   !is_gtid_event(ev) &&
+                   !lizard::is_b_events_before_gtid(ev)) {
           int ret = 0;
           LOG_POS_COORD ev_coord = {
               const_cast<char *>(rli->get_group_master_log_name()),

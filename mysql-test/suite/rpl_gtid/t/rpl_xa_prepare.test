@@ -89,7 +89,7 @@ if (`SELECT @@BINLOG_FORMAT = 'STATEMENT'`)
 --source include/rpl_receive_event_count.inc
 
 # Assert that the XA_PREPARE is in the expected relay log file
---let $binlog_limit= 2, 3
+--let $binlog_limit= 3, 4
 --let $binlog_file=slave-relay-bin.000005
 --source include/show_relaylog_events.inc
 

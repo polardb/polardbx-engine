@@ -2640,6 +2640,8 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
     return nullptr;
   }
 
+  rli->mts_group_status = Relay_log_info::MTS_IN_GROUP;
+
   /* checking partitioning properties and perform corresponding actions */
 
   // Beginning of a group designated explicitly with BEGIN or GTID
@@ -3035,19 +3037,30 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
 
 int Log_event::apply_gtid_event(Relay_log_info *rli) {
   DBUG_TRACE;
+  lizard::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
+      rli->get_b_events_before_gtid_mgr();
+  size_t b_ev_before_gtid_size = b_events_before_gtid_mgr.get_size();
 
   int error = 0;
-  if (rli->curr_group_da.size() < 1) return 1;
+  if (rli->curr_group_da.size() < 1 + b_ev_before_gtid_size) return 1;
 
-  Log_event *ev = rli->curr_group_da[0].data;
+  Log_event *ev = rli->curr_group_da[b_ev_before_gtid_size].data;
   assert(ev->get_type_code() == binary_log::GTID_LOG_EVENT ||
          ev->get_type_code() == binary_log::ANONYMOUS_GTID_LOG_EVENT);
 
   error = ev->do_apply_event(rli);
   /* Clean up */
   delete ev;
+
+  if (b_ev_before_gtid_size > 0) {
+    ev = rli->curr_group_da[0].data;
+    assert(ev->get_type_code() == binary_log::GCN_LOG_EVENT);
+    delete ev;
+  }
+
   rli->curr_group_da.clear();
   rli->curr_group_seen_gtid = false;
+  b_events_before_gtid_mgr.reset_seen_status();
   /*
     Removes the job from the (G)lobal (A)ssigned (Q)ueue after
     applying it.
@@ -3083,6 +3096,11 @@ int Log_event::apply_event(Relay_log_info *rli) {
   bool parallel = false;
   enum enum_mts_event_exec_mode actual_exec_mode = EVENT_EXEC_PARALLEL;
   THD *rli_thd = rli->info_thd;
+  lizard::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
+      rli->get_b_events_before_gtid_mgr();
+#ifndef NDEBUG
+  size_t b_ev_before_gtid_size = b_events_before_gtid_mgr.get_size();
+#endif
 
   worker = rli;
 
@@ -3157,10 +3175,14 @@ int Log_event::apply_event(Relay_log_info *rli) {
             rli->current_mts_submode->get_type() ==
                 MTS_PARALLEL_TYPE_LOGICAL_CLOCK) {
 #ifndef NDEBUG
-          assert(rli->curr_group_da.size() == 1);
-          Log_event *ev = rli->curr_group_da[0].data;
+          assert(rli->curr_group_da.size() == 1 + b_ev_before_gtid_size);
+          Log_event *ev = rli->curr_group_da[b_ev_before_gtid_size].data;
           assert(ev->get_type_code() == binary_log::GTID_LOG_EVENT ||
                  ev->get_type_code() == binary_log::ANONYMOUS_GTID_LOG_EVENT);
+          if (b_ev_before_gtid_size > 0) {
+            ev =  rli->curr_group_da[0].data;
+            assert(ev->get_type_code() == binary_log::GCN_LOG_EVENT);
+          }
 #endif
           /*
             With MTS logical clock mode, when coordinator is applying an
@@ -3268,7 +3290,13 @@ int Log_event::apply_event(Relay_log_info *rli) {
           binary_log::DELETE_FILE_EVENT));
 
   worker = nullptr;
-  rli->mts_group_status = Relay_log_info::MTS_IN_GROUP;
+  /**
+    Lizard:
+    Delay set rli->mts_group_status as Relay_log_info::MTS_IN_GROUP,
+    Because only when the gtid event is recognized can it be determined
+    whether the group can be executed.
+  */
+  // rli->mts_group_status = Relay_log_info::MTS_IN_GROUP;
 
   worker =
       (Relay_log_info *)(rli->last_assigned_worker = get_slave_worker(rli));

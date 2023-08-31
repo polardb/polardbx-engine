@@ -88,8 +88,8 @@ xa commit '1';
 if ($check_gcn) {
   --let $expect_gcn= $commit_gcn
   --let $expect_state= COMMIT
-  --let $gtrid= '1'
-  --source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+  --let $my_xid= '1','',1
+  --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 }
 
 --echo ###############################
@@ -114,8 +114,8 @@ xa rollback '2';
 if ($check_gcn) {
   --let $expect_gcn= $commit_gcn
   --let $expect_state= ROLLBACK
-  --let $gtrid= '2'
-  --source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+  --let $my_xid= '2','',1
+  --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 }
 
 --echo ###############################
@@ -139,8 +139,8 @@ xa commit '3' one phase;
 if ($check_gcn) {
   --let $expect_gcn= $commit_gcn
   --let $expect_state= COMMIT
-  --let $gtrid= '3'
-  --source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+  --let $my_xid= '3','',1
+  --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 }
 
 --source include/rpl_connection_master.inc
@@ -167,8 +167,8 @@ xa commit '4';
 if ($check_gcn) {
   --let $expect_gcn= $commit_gcn
   --let $expect_state= COMMIT
-  --let $gtrid= '4'
-  --source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+  --let $my_xid= '4','',1
+  --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 }
 
 --echo ###############################
@@ -193,8 +193,8 @@ xa rollback '5';
 if ($check_gcn) {
   --let $expect_gcn= $commit_gcn
   --let $expect_state= ROLLBACK
-  --let $gtrid= '5'
-  --source suite/innodb_gcn/include/xa_proc_find_by_gtrid_verify.inc
+  --let $my_xid= '5','',1
+  --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 }
 
 --echo ###############################

@@ -47,7 +47,7 @@ bool Sql_cmd_xa_second_phase::find_and_initialize_xa_context(THD *thd) {
   return false;
 }
 
-bool Sql_cmd_xa_second_phase::acquire_locks_and_attach_again(THD *thd) {
+bool Sql_cmd_xa_second_phase::acquire_locks(THD *thd) {
   assert(this->m_detached_trx_context != nullptr);
   auto thd_xs = thd->get_transaction()->xid_state();
   auto detached_xs = this->m_detached_trx_context->xid_state();
@@ -101,8 +101,6 @@ bool Sql_cmd_xa_second_phase::acquire_locks_and_attach_again(THD *thd) {
     return (this->m_result = true);
   }
 
-  detached_xs->attach_again();
-
   DEBUG_SYNC(thd, "detached_xa_commit_after_acquire_commit_lock");
 
   return false;
@@ -112,6 +110,12 @@ void Sql_cmd_xa_second_phase::release_locks() const {
   assert(this->m_detached_trx_context != nullptr);
   auto detached_xs = this->m_detached_trx_context->xid_state();
   detached_xs->get_xa_lock().unlock();
+}
+
+void Sql_cmd_xa_second_phase::attach_again() {
+  assert(this->m_detached_trx_context != nullptr);
+  auto detached_xs = this->m_detached_trx_context->xid_state();
+  detached_xs->attach_again();
 }
 
 void Sql_cmd_xa_second_phase::setup_thd_context(THD *thd) {
