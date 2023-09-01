@@ -717,6 +717,7 @@ The documentation is based on the source files such as:
 #include "sql/outline/outline_interface.h"
 #include "sql/package/package_interface.h"
 #include "sql/sequence_common.h"
+#include "sys_vars_ext.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -10220,6 +10221,7 @@ static void set_server_version(void) {
       static_cast<int>(sizeof("-tsan")))
     end = my_stpcpy(end, "-tsan");
 #endif
+  customize_server_version();
 }
 
 static const char *get_relative_path(const char *path) {
