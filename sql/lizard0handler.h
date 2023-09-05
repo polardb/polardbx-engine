@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/xa_specification.h"
 #include "lizard_iface.h"
+#include "sql_string.h"
 
 class THD;
 
@@ -116,6 +117,17 @@ typedef bool (*search_trx_by_xid_t)(const XID *xid,
                                     lizard::xa::Transaction_info *info);
 typedef int (*convert_timestamp_to_scn_t)(THD *thd, my_utc_t utc,
                                           my_scn_t *scn);
+
+typedef void (*get_undo_purge_status_t)(uint64_t *undo_used_size,
+                                        uint64_t *undo_file_size,
+                                        uint64_t *retained_time,
+                                        String *undo_blocked_cause,
+                                        uint64_t *undo_blocked_utc);
+
+typedef void (*get_undo_retention_config_t)(uint64_t *retention_time,
+                                            uint64_t *retention_space_reserve,
+                                            uint64_t *retention_space_limit);
+
 template <typename T>
 using search_up_limit_tid_t = my_trx_id_t (*)(const T &lhs);
 
@@ -141,5 +153,7 @@ struct handlerton_ext {
       search_up_limit_tid_for_scn;
   search_up_limit_tid_t<lizard::Snapshot_gcn_vision>
       search_up_limit_tid_for_gcn;
+  get_undo_purge_status_t get_undo_purge_status;
+  get_undo_retention_config_t get_undo_retention_config;
 };
 #endif

@@ -39,6 +39,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0purge.h"
 #include "trx0rseg.h"
 
+#ifdef UNIV_PFS_MUTEX
+/* lizard purge blocked stat mutex PFS key */
+mysql_pfs_key_t purge_blocked_stat_mutex_key;
+#endif
+
 namespace lizard {
 
 /** Sentinel value */
@@ -307,6 +312,86 @@ bool purged_scn_validation() {
   return ret;
 }
 #endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
+
+void Purge_blocked_stat::get(String *blocked_cause, ulint *utc) {
+  mutex_enter(&m_mutex);
+  *utc = m_utc;
+  switch (m_blocked_cause) {
+    case purge_blocked_cause_t::BLOCKED_BY_VISION:
+      blocked_cause->set_ascii(
+          C_STRING_WITH_LEN("The purge sys is blocked by an active vision."));
+      break;
+    case purge_blocked_cause_t::RETENTION_BY_SPACE:
+      snprintf(detailed_cause, sizeof(detailed_cause),
+               "Undo retention is triggered by space. The current size of undo "
+               "is %lu MB, which is less than the configured "
+               "innodb_undo_space_reserved_size of %lu MB.",
+               m_undo_used_size, m_retention_reserved_size);
+      blocked_cause->copy(detailed_cause, strlen(detailed_cause),
+                          blocked_cause->charset());
+      break;
+    case purge_blocked_cause_t::RETENTION_BY_TIME:
+      snprintf(detailed_cause, sizeof(detailed_cause),
+               "Undo retention is triggered by time. The undo has been "
+               "retained for %lu seconds, which is less than the configured "
+               "innodb_undo_retention of %lu seconds.",
+               m_undo_retained_time, m_retention_time);
+      blocked_cause->copy(detailed_cause, strlen(detailed_cause),
+                          blocked_cause->charset());
+      break;
+    case purge_blocked_cause_t::BLOCKED_BY_HB:
+      blocked_cause->set_ascii(
+          C_STRING_WITH_LEN("The purge sys is blocked because no heartbeat has "
+                            "been received for a long time."));
+      break;
+    case purge_blocked_cause_t::NO_UNDO_LEFT:
+      blocked_cause->set_ascii(
+          C_STRING_WITH_LEN("No undo logs left in the history list."));
+      break;
+    default:
+      blocked_cause->set_ascii(
+          C_STRING_WITH_LEN("The purge sys is not blocked."));
+      break;
+  }
+  mutex_exit(&m_mutex);
+}
+
+void Purge_blocked_stat::set(purge_blocked_cause_t cause, ulint utc) {
+  mutex_enter(&m_mutex);
+  m_blocked_cause = cause;
+  m_utc = utc;
+  m_undo_used_size = 0;
+  m_retention_reserved_size = 0;
+  m_undo_retained_time = 0;
+  m_retention_time = 0;
+  mutex_exit(&m_mutex);
+}
+
+void Purge_blocked_stat::retained_by_space(purge_blocked_cause_t cause,
+                                           ulint utc, ulint used_size,
+                                           ulint undo_retention_reserved_size) {
+  mutex_enter(&m_mutex);
+  m_blocked_cause = cause;
+  m_utc = utc;
+  m_undo_used_size = used_size;
+  m_retention_reserved_size = undo_retention_reserved_size;
+  m_undo_retained_time = 0;
+  m_retention_time = 0;
+  mutex_exit(&m_mutex);
+}
+
+void Purge_blocked_stat::retained_by_time(purge_blocked_cause_t cause,
+                                          ulint utc, ulint retained_time,
+                                          ulint undo_retention_time) {
+  mutex_enter(&m_mutex);
+  m_blocked_cause = cause;
+  m_utc = utc;
+  m_undo_retained_time = retained_time;
+  m_retention_time = undo_retention_time;
+  m_undo_used_size = 0;
+  m_retention_reserved_size = 0;
+  mutex_exit(&m_mutex);
+}
 
 }  // namespace lizard
 

@@ -1141,6 +1141,9 @@ struct trx_purge_t {
 
   /** Similar with purged_scn */
   Purged_gcn purged_gcn;
+
+  /** Blocked reason of purge sys */
+  lizard::Purge_blocked_stat blocked_stat;
 };
 
 #include "trx0purge.ic"

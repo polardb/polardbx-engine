@@ -838,6 +838,9 @@ static monitor_info_t innodb_counter_info[] = {
      MONITOR_NONE, MONITOR_DEFAULT_START,
      MONITOR_PURGE_TRUNCATE_HISTORY_MICROSECOND},
 
+    {"purge_retention", "purge", "Number of times undo retation blocked purge",
+     MONITOR_NONE, MONITOR_DEFAULT_START, MONITOR_PURGE_RETENTION},
+
     /* ========== Counters for Undo Tablespace Truncation ========== */
     {"module_undo", "undo", "Undo Truncation", MONITOR_MODULE,
      MONITOR_DEFAULT_START, MONITOR_UNDO_TRUNCATE},

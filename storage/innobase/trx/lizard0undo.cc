@@ -2665,6 +2665,7 @@ void Undo_retention::refresh_stat_data() {
   }
 
   m_total_used_size = used_size;
+  m_total_file_size = file_size;
 
   m_stat_done = true;
 
@@ -2700,11 +2701,20 @@ bool Undo_retention::purge_advise() {
   }
 
   /* Rule_2: retention time not satisfied, block purge */
-  if ((m_last_top_utc + retention_time) > current_utc()) return true;
+  auto cur_utc = current_utc();
+  if ((m_last_top_utc + retention_time) > cur_utc) {
+    purge_sys->blocked_stat.retained_by_time(
+        purge_blocked_cause_t::RETENTION_BY_TIME, ut_time_system_us(),
+        cur_utc - m_last_top_utc, retention_time);
+    return true;
+  }
 
-  if (space_reserve > 0) {
-    /* Rule_3: below reserved size yet, can hold more history data */
-    if (used_size < mb_to_pages(space_reserve)) return true;
+  /* Rule_3: below reserved size yet, can hold more history data */
+  if (space_reserve > 0 && used_size < mb_to_pages(space_reserve)) {
+    purge_sys->blocked_stat.retained_by_space(
+        purge_blocked_cause_t::RETENTION_BY_SPACE, ut_time_system_us(),
+        used_size, space_reserve);
+    return true;
   }
 
   /* Rule_4: time satisfied and exceeded the reserved, just do purge */
@@ -2719,6 +2729,12 @@ void undo_retention_init() {
 
   /* Force to refrese once at starting */
   Undo_retention::instance()->refresh_stat_data();
+}
+
+void Undo_retention::get_stat_data(ulint *used_size, ulint *file_size, ulint *retained_time) {
+  *used_size = pages_to_mb(m_total_used_size.load());
+  *file_size = pages_to_mb(m_total_file_size.load());
+  *retained_time = current_utc() - m_last_top_utc;
 }
 
 /**

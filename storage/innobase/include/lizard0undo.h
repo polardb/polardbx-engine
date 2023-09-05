@@ -929,11 +929,13 @@ class Undo_retention {
   volatile ulint m_last_top_utc; // to output status
 
   std::atomic<ulint> m_total_used_size;
+  std::atomic<ulint> m_total_file_size;
 
   Undo_retention () :
       m_stat_done(false),
       m_last_top_utc(0),
-      m_total_used_size(0) {}
+      m_total_used_size(0),
+      m_total_file_size(0) {}
 
   Undo_retention &operator=(const Undo_retention&) = delete;
   Undo_retention(const Undo_retention&) = delete;
@@ -944,6 +946,10 @@ class Undo_retention {
 
   static ulint mb_to_pages(ulint size) {
     return (ulint)(1024.0 * 1024.0 / univ_page_size.physical() * size);
+  }
+
+  static ulint pages_to_mb(ulint n_pages) {
+    return (ulint)(univ_page_size.physical() * n_pages / (1024.0 * 1024.0));
   }
 
  public:
@@ -966,6 +972,7 @@ class Undo_retention {
   /* Free the lizard undo retention mutex. */
   static inline void destroy() { mutex_free(&(instance()->m_mutex)); }
 
+  void get_stat_data(ulint *used_size, ulint *file_size, ulint *retained_time);
 };
 
 /* Init undo_retention */

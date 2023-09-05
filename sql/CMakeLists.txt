@@ -649,6 +649,7 @@ SET(SQL_SHARED_SOURCES
   trans_proc/common.cc
   trans_proc/returning.cc
   trans_proc/returning_parse.cc
+  package/proc_undo_purge.cc
   daemon_proxy_keyring/daemon_proxy_keyring.cc
   sql_statistics.cc
   ppi/ppi.cc

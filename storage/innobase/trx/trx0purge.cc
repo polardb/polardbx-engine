@@ -190,6 +190,7 @@ void trx_purge_sys_initialize(uint32_t n_purge_threads,
 
   new (&purge_sys->purged_gcn) Purged_gcn;
   purge_sys->purged_gcn.init();
+  new (&purge_sys->blocked_stat) lizard::Purge_blocked_stat();
 }
 
 void trx_purge_sys_close() {
@@ -227,6 +228,7 @@ void trx_purge_sys_close() {
   call_destructor(&purge_sys->rsegs_queue);
 
   call_destructor(&purge_sys->purged_gcn);
+  call_destructor(&purge_sys->blocked_stat);
 
   ut::free(purge_sys);
 
@@ -2188,21 +2190,30 @@ void Purge_groups_t::distribute_if_needed() {
     vision. That is to say, there are logs left in the history list */
     if (!purge_sys->next_stored && !keep_top) {
       DBUG_PRINT("ib_purge", ("no logs left in the history list"));
+      purge_sys->blocked_stat.set(lizard::purge_blocked_cause_t::NO_UNDO_LEFT,
+                                  ut_time_system_us());
       return nullptr;
     }
   }
 
   if (purge_sys->iter.scn > purge_sys->vision.snapshot_scn() || keep_top) {
+    purge_sys->blocked_stat.set(
+        lizard::purge_blocked_cause_t::BLOCKED_BY_VISION, ut_time_system_us());
     return nullptr;
   }
 
   if (lizard::Undo_retention::instance()->purge_advise()) {
+    MONITOR_INC_VALUE(MONITOR_PURGE_RETENTION, 1);
     return &trx_purge_blocked_rec;
   }
 
   if (lizard::xa::hb_freezer_determine_freeze()) {
+    purge_sys->blocked_stat.set(lizard::purge_blocked_cause_t::BLOCKED_BY_HB,
+                                ut_time_system_us());
     return &trx_purge_blocked_rec;
   }
+
+  purge_sys->blocked_stat.set(lizard::purge_blocked_cause_t::UNBLOCKED, 0);
 
   *roll_ptr = trx_undo_build_roll_ptr(false, purge_sys->rseg->space_id,
                                       purge_sys->page_no, purge_sys->offset);
@@ -2283,7 +2294,6 @@ static ulint trx_purge_attach_undo_recs(const ulint n_purge_threads,
 
     if (rec.undo_rec == &trx_purge_ignore_rec) {
       continue;
-
     } else if (rec.undo_rec == nullptr) {
       break;
     } else if (rec.undo_rec == &trx_purge_blocked_rec) {

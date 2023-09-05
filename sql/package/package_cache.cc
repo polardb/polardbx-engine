@@ -37,6 +37,7 @@
 #endif
 
 #include "sql/xa/lizard_xa_proc.h"
+#include "sql/package/proc_undo_purge.h"
 
 namespace im {
 
@@ -138,6 +139,9 @@ void package_context_init() {
   register_package<Proc, Xa_proc_advance_gcn_no_flush>(XA_PROC_SCHEMA);
   /* dbms_trans.returning() */
   register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
+
+ /* dbms_undo.get_undo_purge_status() */
+  register_package<Proc, Proc_get_undo_purge_status>(PROC_UNDO_SCHEMA);
 }
 
 } /* namespace im */

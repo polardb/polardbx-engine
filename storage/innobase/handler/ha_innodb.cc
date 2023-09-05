@@ -814,7 +814,8 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(undo_retention_mutex, 0, 0, PSI_DOCUMENT_ME)};
+    PSI_MUTEX_KEY(undo_retention_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(purge_blocked_stat_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK

@@ -171,6 +171,23 @@ int innobase_conver_timestamp_to_scn(THD *thd, my_utc_t utc_arg,
   return lizard::convert_timestamp_to_scn(thd, utc, scn);
 }
 
+void innobase_get_undo_purge_status(ulint *undo_used_size,
+                                    ulint *undo_file_size, ulint *retained_time,
+                                    String *undo_blocked_cause,
+                                    ulint *undo_blocked_utc) {
+  lizard::Undo_retention::instance()->get_stat_data(
+      undo_used_size, undo_file_size, retained_time);
+  purge_sys->blocked_stat.get(undo_blocked_cause, undo_blocked_utc);
+}
+
+void innobase_get_undo_retention_config(uint64_t *retention_time,
+                                        uint64_t *retention_space_reserve,
+                                        uint64_t *retention_space_limit) {
+  *retention_time = lizard::Undo_retention::retention_time;
+  *retention_space_reserve = lizard::Undo_retention::space_reserve;
+  *retention_space_limit = lizard::Undo_retention::space_limit;
+}
+
 /**
   Initialize innobase extension.
 
@@ -195,4 +212,6 @@ void innobase_init_ext(handlerton *hton) {
       innobase_search_up_limit_tid<lizard::Snapshot_scn_vision>;
   hton->ext.search_up_limit_tid_for_gcn =
       innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>;
+  hton->ext.get_undo_purge_status = innobase_get_undo_purge_status;
+  hton->ext.get_undo_retention_config = innobase_get_undo_retention_config;
 }

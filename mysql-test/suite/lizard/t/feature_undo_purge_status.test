@@ -1,0 +1,94 @@
+set @saved_innodb_undo_retention = @@global.innodb_undo_retention;
+set @saved_innodb_undo_space_reserved_size = @@global.innodb_undo_space_reserved_size;
+set @saved_innodb_undo_space_supremum_size = @@global.innodb_undo_space_supremum_size; 
+
+connect (con1,localhost,root,,);
+
+connection default;
+create table foo (id int, sec int, primary key(id), index sec (sec));
+
+--echo ###########################################
+--echo undo purge no logs left 
+--echo ###########################################
+set global INNODB_UNDO_RETENTION=0;
+
+begin;
+insert into foo values (1, 10);
+insert into foo values (2, 20);
+insert into foo values (3, 30);
+insert into foo values (4, 40);
+insert into foo values (5, 50);
+insert into foo values (6, 60);
+update foo set sec = sec + 1;
+commit;
+
+sleep 1;
+--replace_column 1 # 2 # 3 # 8 #
+call dbms_undo.get_undo_purge_status();
+
+--echo ###########################################
+--echo undo purge retained by time
+--echo ###########################################
+set global INNODB_UNDO_RETENTION=100;
+set global INNODB_UNDO_SPACE_RESERVED_SIZE=50;
+
+delete from foo where id = 2;
+update foo set id = 3 where id = 2;
+
+sleep 1;
+--replace_column 1 # 2 # 3 # 8 #
+--replace_regex /The undo has been retained for \d+/The undo has been retained for #/
+call dbms_undo.get_undo_purge_status();
+
+--echo ###########################################
+--echo undo purge retained by space
+--echo ###########################################
+set global INNODB_UNDO_RETENTION=1;
+set global INNODB_UNDO_SPACE_RESERVED_SIZE=50;
+
+delete from foo where id = 3;
+update foo set id = 4 where id = 3;
+
+sleep 1;
+--replace_column 1 # 2 # 3 # 8 #
+--replace_regex /The current size of undo is \d+/The current size of undo is #/
+call dbms_undo.get_undo_purge_status();
+
+set global INNODB_UNDO_SPACE_RESERVED_SIZE=1;
+set global INNODB_UNDO_SPACE_SUPREMUM_SIZE=10;
+
+sleep 1;
+--replace_column 1 # 2 # 3 # 8 #
+call dbms_undo.get_undo_purge_status();
+
+--echo ###########################################
+--echo undo purge blocked by active vision
+--echo ###########################################
+set global INNODB_UNDO_RETENTION=0;
+connection con1;
+set session transaction_isolation = 'REPEATABLE-READ';
+begin;
+select * from foo;
+
+connection default;
+insert into foo values (7, 70);
+insert into foo values (8, 80);
+update foo set sec = 7 where id = 7;
+update foo set sec = 8 where id = 8;
+sleep 1;
+--replace_column 1 # 2 # 3 # 8 #
+call dbms_undo.get_undo_purge_status();
+
+
+connection con1;
+commit;
+
+connection default;
+sleep 1;
+--replace_column 1 # 2 # 3 # 8 #
+call dbms_undo.get_undo_purge_status();
+
+drop table foo;
+set global innodb_undo_retention = @saved_innodb_undo_retention;
+set global innodb_undo_space_reserved_size = @saved_innodb_undo_space_reserved_size;
+set global innodb_undo_space_supremum_size = @saved_innodb_undo_space_supremum_size; 

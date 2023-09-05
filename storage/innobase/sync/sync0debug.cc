@@ -1524,6 +1524,9 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
   LATCH_ADD_MUTEX(UNDO_RETENTION, SYNC_NO_ORDER_CHECK,
                   undo_retention_mutex_key);
 
+  LATCH_ADD_MUTEX(PURGE_BLOCKED_STAT, SYNC_NO_ORDER_CHECK,
+                  purge_blocked_stat_mutex_key);
+
   LATCH_ADD_RWLOCK(COMMIT_SNAPSHOT_RW_LOCK, SYNC_NO_ORDER_CHECK,
                    commit_snapshot_rw_lock_key);
 

@@ -1,0 +1,72 @@
+set @saved_innodb_undo_retention = @@global.innodb_undo_retention;
+set @saved_innodb_undo_space_reserved_size = @@global.innodb_undo_space_reserved_size;
+set @saved_innodb_undo_space_supremum_size = @@global.innodb_undo_space_supremum_size;
+create table foo (id int, sec int, primary key(id), index sec (sec));
+###########################################
+undo purge no logs left 
+###########################################
+set global INNODB_UNDO_RETENTION=0;
+begin;
+insert into foo values (1, 10);
+insert into foo values (2, 20);
+insert into foo values (3, 30);
+insert into foo values (4, 40);
+insert into foo values (5, 50);
+insert into foo values (6, 60);
+update foo set sec = sec + 1;
+commit;
+call dbms_undo.get_undo_purge_status();
+UNDO_USED_SIZE(MB)	UNDO_TABLESPACE_SIZE(MB)	RETAINED_TIME(sec)	INNODB_UNDO_RETENTION(sec)	INNODB_UNDO_SPACE_RESERVED_SIZE(MB)	INNODB_UNDO_SPACE_SUPREMUM_SIZE(MB)	LAST_BLOCKED_REASON	LAST_BLOCKED_UTC
+#	#	#	0	0	102400	No undo logs left in the history list.	#
+###########################################
+undo purge retained by time
+###########################################
+set global INNODB_UNDO_RETENTION=100;
+set global INNODB_UNDO_SPACE_RESERVED_SIZE=50;
+delete from foo where id = 2;
+update foo set id = 3 where id = 2;
+call dbms_undo.get_undo_purge_status();
+UNDO_USED_SIZE(MB)	UNDO_TABLESPACE_SIZE(MB)	RETAINED_TIME(sec)	INNODB_UNDO_RETENTION(sec)	INNODB_UNDO_SPACE_RESERVED_SIZE(MB)	INNODB_UNDO_SPACE_SUPREMUM_SIZE(MB)	LAST_BLOCKED_REASON	LAST_BLOCKED_UTC
+#	#	#	100	50	102400	Undo retention is triggered by time. The undo has been retained for # seconds, which is less than the configured innodb_undo_retention of 100 seconds.	#
+###########################################
+undo purge retained by space
+###########################################
+set global INNODB_UNDO_RETENTION=1;
+set global INNODB_UNDO_SPACE_RESERVED_SIZE=50;
+delete from foo where id = 3;
+update foo set id = 4 where id = 3;
+call dbms_undo.get_undo_purge_status();
+UNDO_USED_SIZE(MB)	UNDO_TABLESPACE_SIZE(MB)	RETAINED_TIME(sec)	INNODB_UNDO_RETENTION(sec)	INNODB_UNDO_SPACE_RESERVED_SIZE(MB)	INNODB_UNDO_SPACE_SUPREMUM_SIZE(MB)	LAST_BLOCKED_REASON	LAST_BLOCKED_UTC
+#	#	#	1	50	102400	Undo retention is triggered by space. The current size of undo is # MB, which is less than the configured innodb_undo_space_reserved_size of 50 MB.	#
+set global INNODB_UNDO_SPACE_RESERVED_SIZE=1;
+set global INNODB_UNDO_SPACE_SUPREMUM_SIZE=10;
+call dbms_undo.get_undo_purge_status();
+UNDO_USED_SIZE(MB)	UNDO_TABLESPACE_SIZE(MB)	RETAINED_TIME(sec)	INNODB_UNDO_RETENTION(sec)	INNODB_UNDO_SPACE_RESERVED_SIZE(MB)	INNODB_UNDO_SPACE_SUPREMUM_SIZE(MB)	LAST_BLOCKED_REASON	LAST_BLOCKED_UTC
+#	#	#	1	1	10	No undo logs left in the history list.	#
+###########################################
+undo purge blocked by active vision
+###########################################
+set global INNODB_UNDO_RETENTION=0;
+set session transaction_isolation = 'REPEATABLE-READ';
+begin;
+select * from foo;
+id	sec
+1	11
+4	41
+5	51
+6	61
+insert into foo values (7, 70);
+insert into foo values (8, 80);
+update foo set sec = 7 where id = 7;
+update foo set sec = 8 where id = 8;
+call dbms_undo.get_undo_purge_status();
+UNDO_USED_SIZE(MB)	UNDO_TABLESPACE_SIZE(MB)	RETAINED_TIME(sec)	INNODB_UNDO_RETENTION(sec)	INNODB_UNDO_SPACE_RESERVED_SIZE(MB)	INNODB_UNDO_SPACE_SUPREMUM_SIZE(MB)	LAST_BLOCKED_REASON	LAST_BLOCKED_UTC
+#	#	#	0	1	10	The purge sys is blocked by an active vision.	#
+commit;
+call dbms_undo.get_undo_purge_status();
+UNDO_USED_SIZE(MB)	UNDO_TABLESPACE_SIZE(MB)	RETAINED_TIME(sec)	INNODB_UNDO_RETENTION(sec)	INNODB_UNDO_SPACE_RESERVED_SIZE(MB)	INNODB_UNDO_SPACE_SUPREMUM_SIZE(MB)	LAST_BLOCKED_REASON	LAST_BLOCKED_UTC
+#	#	#	0	1	10	No undo logs left in the history list.	#
+drop table foo;
+set global innodb_undo_retention = @saved_innodb_undo_retention;
+set global innodb_undo_space_reserved_size = @saved_innodb_undo_space_reserved_size;
+set global innodb_undo_space_supremum_size = @saved_innodb_undo_space_supremum_size;
