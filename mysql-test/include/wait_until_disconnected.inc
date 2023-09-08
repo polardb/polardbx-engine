@@ -22,7 +22,7 @@ while (!$mysql_errno)
       --source include/show_rpl_debug_info.inc
       --echo current_connectio= $CURRENT_CONNECTION
     }
-    --die Server failed to dissapear
+    --die Server failed to disapear
   }
   --sleep 0.1
 }

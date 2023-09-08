@@ -16,11 +16,15 @@ create database db_crash_9;
 create table db_crash_9.t(id int);
 insert into db_crash_9.t values(0);
 
+create table db_crash_9.t2(id int);
+insert into db_crash_9.t2 values(0);
+
 --let $iter=1
 while ($iter <= 2)
 {
 	if ($iter == 1)
 	{
+	--let $sql0=insert into db_crash_9.t2 values(1)
 	--let $sql=insert into db_crash_9.t values(1)
 	}
 	if ($iter == 2)
@@ -34,303 +38,59 @@ while ($iter <= 2)
 	xa recover;
 
 	--echo # 0$iter. succ
-
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
 	--source suite/binlog_gtid/t/flush_and_load_data.inc
 
-	SET GLOBAL debug="";
+	flush logs;
+	show consensus logs;
+	--eval $sql0
+	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
+	--eval call dbms_consensus.purge_log($last_log_index);
+
+	xa recover;
+	show consensus logs;
+	xa commit 'xx';
 	disconnect conn1;
-	--sleep 2
-	connect (conn1,localhost,root,,);
-	connection conn1;
-
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-	--echo # 1$iter. crash_purge_before_update_index
-	--exec echo "restart: --debug='+d,crash_purge_before_update_index'" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
-	disconnect conn1
-	--sleep 2
-
-	connect (conn1,localhost,root,,);
-	connection conn1;
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
-
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-	--echo # 2$iter. crash_purge_before_remove_logs_from_index
-	--exec echo "restart: --debug='+d,crash_purge_before_remove_logs_from_index'" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
-	connect (conn1,localhost,root,,);
-	connection conn1;
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
-
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
+	connection default;
 
 
-	--echo # 3$iter. fault_injection_copy_part_file
-	--exec echo "restart: --debug='+d,fault_injection_copy_part_file'" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--let $debug_hook=crash_purge_before_update_index
+	--echo # 1$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
-	connect (conn1,localhost,root,,);
-	connection conn1;
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
+	--let $debug_hook=crash_purge_before_remove_logs_from_index
+	--echo # 2$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
+	#--let $debug_hook=fault_injection_copy_part_file
+	#--echo # 3$iter. $debug_hook
+	#--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
---exit
-	--echo # 4$iter. crash_create_before_rename_index_file
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
-	SET GLOBAL debug="+d,crash_create_before_rename_index_file";
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-	disconnect conn1;
-	--sleep 2
-	connect (conn1,localhost,root,,);
-	connection conn1;
+	--let $debug_hook=crash_create_before_rename_index_file
+	--echo # 4$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
 
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
+	--let $debug_hook=crash_create_after_rename_index_file
+	--echo # 5$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-	--echo # 5$iter. crash_create_after_rename_index_file
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--let $debug_hook=crash_purge_before_truncate_before
+	--echo # 6$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
 
-	SET GLOBAL debug="+d,crash_create_after_rename_index_file";
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-	disconnect conn1;
-	--sleep 2
-	connect (conn1,localhost,root,,);
-	connection conn1;
+	--let $debug_hook=crash_purge_before_update_index_after_truncate
+	--echo # 7$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
+
+	--let $debug_hook=crash_purge_critical_after_update_index
+	--echo # 8$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
 
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
-
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-
-	--echo # 6$iter. crash_purge_before_truncate_before
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
-	SET GLOBAL debug="+d,crash_purge_before_truncate_before";
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-	disconnect conn1;
-	--sleep 2
-	connect (conn1,localhost,root,,);
-	connection conn1;
-
-
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
-
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-	--echo # 7$iter. crash_purge_before_update_index_after_truncate
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
-	SET GLOBAL debug="+d,crash_purge_before_update_index_after_truncate";
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-	disconnect conn1;
-	--sleep 2
-	connect (conn1,localhost,root,,);
-	connection conn1;
-
-
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
-
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-
-	--echo # 8$iter. crash_purge_critical_after_update_index
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
-	SET GLOBAL debug="+d,crash_purge_critical_after_update_index";
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-	disconnect conn1;
-	--sleep 2
-	connect (conn1,localhost,root,,);
-	connection conn1;
-
-
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
-
-
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-	--echo # 9$iter. crash_purge_non_critical_after_update_index
-	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
-
-	SET GLOBAL debug="+d,crash_purge_non_critical_after_update_index";
-	disconnect conn1;
-	--sleep 2
-	connect (conn1,localhost,root,,);
-	connection conn1;
-
-
-	flush logs;
-	show consensus logs;
-	--eval $sql
-	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
-	--eval call dbms_consensus.purge_log($last_log_index);
-	--error 2013
-	show consensus logs;
-
-
-	--source include/wait_until_disconnected.inc
-	--enable_reconnect
-	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
-	--source include/wait_until_connected_again.inc
-	--disable_reconnect
-
-	connection conn1;
-	xa recover;
-	show consensus logs;
-	xa commit 'xx';
-
-	disconnect conn1;
+	--let $debug_hook=crash_purge_non_critical_after_update_index
+	--echo # 9$iter. $debug_hook
+	--source suite/binlog_gtid/t/crash_druing_pruge_commin.sql
 
 	--inc $iter
 }
@@ -338,4 +98,5 @@ connection default;
 SET GLOBAL debug="";
 
 drop table db_crash_9.t;
+drop table db_crash_9.t2;
 drop database db_crash_9;
