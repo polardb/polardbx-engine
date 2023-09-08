@@ -60,6 +60,9 @@ while ($iter <= 2)
 	--source include/wait_until_connected_again.inc
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
+	disconnect conn1
+	--sleep 2
+
 	connect (conn1,localhost,root,,);
 	connection conn1;
 	--source suite/binlog_gtid/t/flush_and_load_data.inc

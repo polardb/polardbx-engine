@@ -1824,7 +1824,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
   if (thd->owned_gtid.sidno > 0) {
     assert(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
-    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || !thd->raft_replication_channel))) {
+    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || thd->raft_replication_channel))) {
       /*
         If the binary log is disabled for this thread (either by
         log_bin=0 or sql_log_bin=0 or by log_replica_updates=0 for a
