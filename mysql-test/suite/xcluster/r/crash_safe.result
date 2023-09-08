@@ -1,0 +1,15 @@
+create table t (id int);
+set debug="+d,crash_after_commit_before_update_pos";
+xa begin 'xa1';
+insert into t values (1);
+xa end 'xa1';
+xa prepare 'xa1';
+call dbms_consensus.change_leader(2);
+xa commit 'xa1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select * from t;
+id
+1
+call dbms_consensus.change_leader(1);
+drop table t;

@@ -257,10 +257,11 @@ extra/curl/curl-7.86.0/curl-config
 extra/curl/curl-7.86.0/generated/
 extra/curl/curl-7.86.0/libcurl.pc
 
-mysql-test/var*
 .cache/clangd
 extra/IS/dependency/easy/src/libmyeasy.a
 extra/IS/src/libaliconsensus.a
+extra/IS/dependency/easy/src/libmyeasy_internal.a
+extra/IS/src/libaliconsensus_no_easy.a
 install_manifest.txt
 
 mysql-test/run_query.log
