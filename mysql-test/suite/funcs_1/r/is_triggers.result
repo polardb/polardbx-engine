@@ -88,13 +88,13 @@ def	mtr	gs_insert	INSERT	def	mtr	global_suppressions	1	NULL	BEGIN
   SET GLOBAL regexp_time_limit = 0;
   SELECT "" REGEXP NEW.pattern INTO dummy;
   SET GLOBAL regexp_time_limit = DEFAULT;
-END	ROW	BEFORE	NULL	NULL	OLD	NEW	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci
+END	ROW	BEFORE	NULL	NULL	OLD	NEW	#		root@localhost	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci
 def	mtr	ts_insert	INSERT	def	mtr	test_suppressions	1	NULL	BEGIN
   DECLARE dummy INT;
   SET GLOBAL regexp_time_limit = 0;
   SELECT "" REGEXP NEW.pattern INTO dummy;
   SET GLOBAL regexp_time_limit = DEFAULT;
-END	ROW	BEFORE	NULL	NULL	OLD	NEW	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci
+END	ROW	BEFORE	NULL	NULL	OLD	NEW	#		root@localhost	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci
 def	sys	sys_config_insert_set_user	INSERT	def	sys	sys_config	1	NULL	BEGIN
     IF @sys.ignore_sys_config_triggers != true AND NEW.set_by IS NULL THEN
         SET NEW.set_by = USER();

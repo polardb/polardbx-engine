@@ -20,7 +20,7 @@ create table db_tc.t(id int);
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 begin;
 insert into db_tc.t values(1);
@@ -35,7 +35,7 @@ commit;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 begin;
 update db_tc.t set id = 2;
@@ -50,7 +50,7 @@ commit;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 insert into db_tc.t values(1);
@@ -69,7 +69,7 @@ xa commit 'xx';
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 update db_tc.t set id = 2;
@@ -88,7 +88,7 @@ xa commit 'xx';
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 insert into db_tc.t values(1);
@@ -105,7 +105,7 @@ xa commit 'xx' one phase;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 update db_tc.t set id = 2;
@@ -127,7 +127,7 @@ insert into db_tc.t values(1);
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --error 2013
 xa commit 'xx';
@@ -147,7 +147,7 @@ update db_tc.t set id = 2;
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --error 2013
 xa commit 'xx';
@@ -166,7 +166,7 @@ insert into db_tc.t values(1);
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --error 2013
 xa rollback 'xx';
@@ -187,7 +187,7 @@ update db_tc.t set id = 2;
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --error 2013
 xa rollback 'xx';

@@ -1,0 +1,117 @@
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+create database db_crash_4;
+create table db_crash_4.t(id int);
+insert into db_crash_4.t values(0);
+# run cmd: insert into db_crash_4.t values(1)
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 01. normal commit + simulate_crash_after_consensus_append_log
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+begin;
+insert into db_crash_4.t values(1);
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+insert into db_crash_4.t values(1);
+# 11. xa prepare + simulate_crash_after_consensus_append_log
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa start 'xx';
+insert into db_crash_4.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa rollback 'xx';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+insert into db_crash_4.t values(1);
+# 21. xa commit one phase + simulate_crash_after_consensus_append_log
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa start 'xx';
+insert into db_crash_4.t values(1);
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+insert into db_crash_4.t values(1);
+# 31. xa commit + simulate_crash_after_consensus_append_log
+xa start 'xx';
+insert into db_crash_4.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'xx';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+insert into db_crash_4.t values(1);
+# 41. xa rollback + simulate_crash_after_consensus_append_log
+xa start 'xx';
+insert into db_crash_4.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa rollback 'xx';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+insert into db_crash_4.t values(1);
+# run cmd: update db_crash_4.t set id = id+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 02. normal commit + simulate_crash_after_consensus_append_log
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+begin;
+update db_crash_4.t set id = id+1;
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+update db_crash_4.t set id = id+1;
+# 12. xa prepare + simulate_crash_after_consensus_append_log
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa start 'xx';
+update db_crash_4.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa rollback 'xx';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+update db_crash_4.t set id = id+1;
+# 22. xa commit one phase + simulate_crash_after_consensus_append_log
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa start 'xx';
+update db_crash_4.t set id = id+1;
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+update db_crash_4.t set id = id+1;
+# 32. xa commit + simulate_crash_after_consensus_append_log
+xa start 'xx';
+update db_crash_4.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'xx';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+update db_crash_4.t set id = id+1;
+# 42. xa rollback + simulate_crash_after_consensus_append_log
+xa start 'xx';
+update db_crash_4.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+xa rollback 'xx';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+update db_crash_4.t set id = id+1;
+drop table db_crash_4.t;
+drop database db_crash_4;

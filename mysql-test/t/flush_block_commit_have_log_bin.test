@@ -1,5 +1,3 @@
---source include/have_debug.inc
-
 # Let's see if FLUSH TABLES WITH READ LOCK blocks COMMIT of existing
 # transactions.
 # We verify that we did not introduce a deadlock.

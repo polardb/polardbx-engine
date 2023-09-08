@@ -30,7 +30,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/binlog/recovery.h"
 #include "sql/log_event.h"
 
-#define RAFT_RECOVERY_HIDDEN
 namespace raft {
 
 // Recovery_manager is a singleton class that manages the recovery process

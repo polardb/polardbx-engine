@@ -287,7 +287,7 @@ ENDIF()
 IF(LINUX_INSTALL_RPATH_ORIGIN)
   SET(RPATH_OPTION " -Wl,-R,$pkglibdir")    # for mysql_config
   SET(RPATH_OPTION_PC " -Wl,-R,\${libdir}") # for pkg_config
-# Do not use STRING_APPEND, it may eval the $.
+  # Do not use STRING_APPEND, it may eval the $.
   SET(RPATH_OPTION "${RPATH_OPTION} -L$pkglibdir/private")
   SET(RPATH_OPTION_PC "${RPATH_OPTION_PC} -L\${libdir}/private")
   SET(RPATH_OPTION "${RPATH_OPTION} -Wl,-R,$pkglibdir/private")
@@ -513,7 +513,7 @@ ELSE()
       PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
     )
 
-#MySQL Router
+    #MySQL Router
     IF(WITH_ROUTER)
       CONFIGURE_FILE(systemd/mysqlrouter.service.in
         ${CMAKE_CURRENT_BINARY_DIR}/mysqlrouter.service

@@ -87,7 +87,6 @@ CREATE TABLE db_a.t1
 SET GLOBAL innodb_ddl_log_crash_reset_debug = 1;
 SET SESSION DEBUG = '+d,ddl_log_crash_before_rename_space_log_12';
 RENAME TABLE db_a.t1 to db_b.t2;
-Timeout in wait_condition.inc for select count(*)=1 from information_schema.alisql_cluster_local where role='leader'
 SET SESSION DEBUG = '-d,ddl_log_crash_before_rename_space_log_12';
 DROP TABLE db_a.t1;
 CREATE TABLE db_a.t1
@@ -124,7 +123,6 @@ CREATE TABLE db_a.t1
 SET GLOBAL innodb_ddl_log_crash_reset_debug = 1;
 SET SESSION DEBUG = '+d,ddl_log_crash_after_rename_space_log_4';
 RENAME TABLE db_a.t1 to db_b.t2;
-Timeout in wait_condition.inc for select count(*)=1 from information_schema.alisql_cluster_local where role='leader'
 SET SESSION DEBUG = '-d,ddl_log_crash_after_rename_space_log_4';
 DROP TABLE db_a.t1;
 CREATE TABLE db_a.t1

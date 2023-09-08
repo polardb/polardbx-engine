@@ -1,5 +1,3 @@
---source include/have_debug.inc
-
 # ==== Requirements ====
 #
 # mysqlbinlog should decode rows containing JSON values correctly:

@@ -1073,7 +1073,7 @@ enum enum_session_state_type {
   SESSION_TRACK_GTIDS,            /**< See also: session_track_gtids */
   SESSION_TRACK_TRANSACTION_CHARACTERISTICS, /**< Transaction chistics */
   SESSION_TRACK_TRANSACTION_STATE,            /**< Transaction state */
-  SESSION_TRACK_INDEX = 30
+  SESSION_TRACK_INDEX = 30      /* use large number */
 };
 
 /** start of ::enum_session_state_type */

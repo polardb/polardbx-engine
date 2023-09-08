@@ -1,4 +1,4 @@
-SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_commit_gcn');
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 #
 # leader insert and follower select
 #
@@ -52,7 +52,6 @@ set innodb_snapshot_seq = @base_seq +  10020;
 select * from t1;
 a	b
 10011	10011
-10021	10021
 xa end 'f2';
 xa commit 'f2' one phase;
 set innodb_snapshot_seq = @base_seq +  10030;
@@ -60,6 +59,7 @@ select * from t1;
 a	b
 10011	10011
 10021	10021
+10031	10031
 set innodb_snapshot_seq = @base_seq +  10040;
 select * from t1;
 a	b
@@ -78,13 +78,13 @@ set innodb_snapshot_seq = @base_seq +  20020;
 select * from t2;
 a	b
 20011	1988-12-12
-20021	1991-12-12
 xa end 'f3';
 xa commit 'f3' one phase;
 set innodb_snapshot_seq = @base_seq +  20030;
 select * from t2;
 a	b
 20011	1988-12-12
+20031	1995-12-12
 20021	1991-12-12
 set innodb_snapshot_seq = @base_seq +  20040;
 select * from t2;

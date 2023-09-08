@@ -1,0 +1,324 @@
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+create database db_crash_7;
+create table db_crash_7.t(id int);
+insert into db_crash_7.t values(0);
+# run cmd: insert into db_crash_7.t values(1)
+select * from db_crash_7.t order by id;
+id
+0
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 01. normal commit + force_rotate
+SET SESSION debug="+d,force_rotate";
+begin;
+insert into db_crash_7.t values(1);
+commit;
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+0
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 11. xa prepare + force_rotate
+SET SESSION debug="+d,force_rotate";
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+xa commit 'xx';
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 21. xa commit one phase + force_rotate
+SET SESSION debug="+d,force_rotate";
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa commit 'xx' one phase;
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 31. xa commit + force_rotate
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate";
+xa commit 'xx';
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 41. xa rollback + force_rotate
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate";
+xa rollback 'xx';
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+delete from db_crash_7.t;
+insert into db_crash_7.t values(0);
+# 01. normal commit + force_rotate + crash
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+begin;
+insert into db_crash_7.t values(1);
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+0
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 11. xa prepare + force_rotate + crash
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+0
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+xa commit 'xx';
+# 21. xa commit one phase + force_rotate + crash
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 31. xa commit + force_rotate + crash
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 41. xa rollback + force_rotate + crash
+xa start 'xx';
+insert into db_crash_7.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# run cmd: update db_crash_7.t set id = id+1
+select * from db_crash_7.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 02. normal commit + force_rotate
+SET SESSION debug="+d,force_rotate";
+begin;
+update db_crash_7.t set id = id+1;
+commit;
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+1
+2
+2
+2
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 12. xa prepare + force_rotate
+SET SESSION debug="+d,force_rotate";
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+xa commit 'xx';
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+2
+3
+3
+3
+3
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 22. xa commit one phase + force_rotate
+SET SESSION debug="+d,force_rotate";
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa commit 'xx' one phase;
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+3
+4
+4
+4
+4
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 32. xa commit + force_rotate
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate";
+xa commit 'xx';
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+4
+5
+5
+5
+5
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 42. xa rollback + force_rotate
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate";
+xa rollback 'xx';
+SET SESSION debug="";
+select * from db_crash_7.t order by id;
+id
+4
+5
+5
+5
+5
+xa recover;
+formatID	gtrid_length	bqual_length	data
+delete from db_crash_7.t;
+insert into db_crash_7.t values(0);
+# 02. normal commit + force_rotate + crash
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+begin;
+update db_crash_7.t set id = id+1;
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 12. xa prepare + force_rotate + crash
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+xa commit 'xx';
+# 22. xa commit one phase + force_rotate + crash
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+3
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 32. xa commit + force_rotate + crash
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+4
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 42. xa rollback + force_rotate + crash
+xa start 'xx';
+update db_crash_7.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,force_rotate,simulate_crash_after_rotate";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_7.t order by id;
+id
+4
+xa recover;
+formatID	gtrid_length	bqual_length	data
+drop table db_crash_7.t;
+drop database db_crash_7;

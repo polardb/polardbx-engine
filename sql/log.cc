@@ -2382,6 +2382,8 @@ char *get_backtrace_str()
   int size = backtrace(addrs, sizeof(addrs)/sizeof(addrs[0]));
   int i = 0;
   int pos = 0;
+  pos += snprintf(buf + pos, LOCAL_BUF_LEN - pos, ", tid-%lld ", my_thread_os_id());
+
   for (i = 0; i < size && pos < LOCAL_BUF_LEN; i++)
     pos += snprintf(buf + pos, LOCAL_BUF_LEN - pos, " %p", addrs[i]);
   if (pos >= LOCAL_BUF_LEN)

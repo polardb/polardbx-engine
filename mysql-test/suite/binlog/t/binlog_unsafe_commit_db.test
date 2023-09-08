@@ -1,5 +1,3 @@
---source include/have_debug.inc
-
 ################################################################################
 # BUG#27165446 PARALLEL REPLICATION OF CREATE/ALTER/DROP DATABASE DEADLOCK,
 # EARLY MDL RELEASE

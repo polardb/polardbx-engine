@@ -1,5 +1,3 @@
---source include/have_debug.inc
-
 #
 # BUG#20414559: WL7083: ER1787, ER1785 NOT GENERATED ALWAYS WHEN ENFORCE_GTID_CONSISTENCY=WARN
 # WL#7083: GTIDs: set gtid_mode=ON online

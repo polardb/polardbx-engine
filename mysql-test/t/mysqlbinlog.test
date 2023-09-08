@@ -1,5 +1,3 @@
---source include/have_debug.inc
-
 # We are using .opt file since we need small binlog size
 # TODO: Need to look at making a row based version once the new row based client is completed. [jbm]
 # Forced the statement binlog format at .opt file

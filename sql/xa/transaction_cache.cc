@@ -63,6 +63,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+#include "storage/innobase/include/ut0log.h"
 
 #include <iostream>
 
@@ -95,11 +96,18 @@ xa::Transaction_cache::Transaction_cache()
 }
 #endif /* HAVE_PSI_INTERFACE */
 
-bool xa::Transaction_cache::detach(Transaction_ctx *transaction) {
+bool xa::Transaction_cache::detach(Transaction_ctx *transaction, bool force_logged) {
   bool res = false;
   XID_STATE *xs = transaction->xid_state();
   XID xid = *(xs->get_xid());
-  bool was_logged = xs->is_binlogged();
+
+  // detached XA transaction should always be binlogged. Consider the situation,
+  // Peer0[Leader] crashed after XA PREPARE, but before XA COMMIT.
+  // Peer1[Follower] replay the XA PREPARE event and because of mixed binlog
+  // and relay log, this XA transaction was marked as not binlogged, but it has
+  // been already written to binlog. So this flag should be set to true when
+  // detached XA transaction start.
+  bool was_logged = xs->is_binlogged() || force_logged;
 
   assert(xs->has_state(XID_STATE::XA_PREPARED));
 
@@ -110,7 +118,6 @@ bool xa::Transaction_cache::detach(Transaction_ctx *transaction) {
   instance.m_transaction_cache.erase(to_string(xid));
   res = xa::Transaction_cache::create_and_insert_new_transaction(
       &xid, was_logged, transaction);
-
   return res;
 }
 
@@ -132,6 +139,7 @@ bool xa::Transaction_cache::insert(XID *xid, Transaction_ctx *transaction) {
     std::shared_ptr<Transaction_ctx> ptr{transaction, transaction_free_hash{}};
     res = !instance.m_transaction_cache.emplace(to_string(*xid), std::move(ptr))
                .second;
+
   }
   if (res) {
     my_error(ER_XAER_DUPID, MYF(0));

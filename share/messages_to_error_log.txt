@@ -12196,8 +12196,8 @@ ER_RAFT_PREFETCH
 ER_RAFT_APPLIER
   eng "[Applier] %s"
 
-ER_RAFT_BLCOMMIT
-  eng "[BLCommit] %s"
+ER_RAFT_COMMIT
+  eng "[Commit] %s"
 
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for

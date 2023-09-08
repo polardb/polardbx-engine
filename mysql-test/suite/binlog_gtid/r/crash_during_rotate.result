@@ -1,0 +1,455 @@
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+create database db_crash_8;
+create table db_crash_8.t(id int);
+insert into db_crash_8.t values(0);
+# run cmd: insert into db_crash_8.t values(1)
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 01. succ
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	292	7
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3486	7
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+flush logs;
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	292	15
+xa commit 'xx';
+# 11. crash_before_rotate_binlog
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	292	16
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3486	16
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_before_rotate_binlog";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3568	16
+xa commit 'xx';
+# 21. crash_before_rotate_event_appended
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	292	26
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3486	26
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_before_rotate_event_appended";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3568	26
+xa commit 'xx';
+# 31. crash_after_rotate_event_appended
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	292	36
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3486	36
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_after_rotate_event_appended";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3612	36
+xa commit 'xx';
+# 41. crash_binlog_rotate_between_close_and_open
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	292	46
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3486	46
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_binlog_rotate_between_close_and_open";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3612	46
+xa commit 'xx';
+# run cmd: update db_crash_8.t set id = id+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 02. succ
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	292	56
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5076	56
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+flush logs;
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	292	64
+xa commit 'xx';
+# 12. crash_before_rotate_binlog
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	292	65
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5076	65
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_before_rotate_binlog";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5158	65
+xa commit 'xx';
+# 22. crash_before_rotate_event_appended
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	292	75
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5076	75
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_before_rotate_event_appended";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5158	75
+xa commit 'xx';
+# 32. crash_after_rotate_event_appended
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5463	75
+binlog.000012	292	85
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5463	75
+binlog.000012	5076	85
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_after_rotate_event_appended";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5463	75
+binlog.000012	5202	85
+xa commit 'xx';
+# 42. crash_binlog_rotate_between_close_and_open
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5463	75
+binlog.000012	5507	85
+binlog.000013	292	95
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5463	75
+binlog.000012	5507	85
+binlog.000013	5076	95
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+SET SESSION debug="+d,crash_binlog_rotate_between_close_and_open";
+flush logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	2129	1
+binlog.000002	3530	7
+binlog.000003	597	15
+binlog.000004	3873	16
+binlog.000005	3873	26
+binlog.000006	3917	36
+binlog.000007	3917	46
+binlog.000008	5120	56
+binlog.000009	597	64
+binlog.000010	5463	65
+binlog.000011	5463	75
+binlog.000012	5507	85
+binlog.000013	5202	95
+xa commit 'xx';
+drop table db_crash_8.t;
+drop database db_crash_8;

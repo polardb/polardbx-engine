@@ -370,10 +370,9 @@ else
       -DWITH_UNIT_TESTS=0
 fi
 
-make -j `getconf _NPROCESSORS_ONLN`
+make -j 40 install
 
 if [ x$initialize_type != x"none" ]; then
-  make -j `getconf _NPROCESSORS_ONLN` install
   initialize
   echo "use follow cmd to login mysql:"
   echo -e "./runtime_output_directory/mysql -uroot -S $dest_dir/node1/temp/mysql.sock \n"

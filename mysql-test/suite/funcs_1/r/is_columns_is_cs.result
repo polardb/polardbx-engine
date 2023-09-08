@@ -15,6 +15,62 @@ def	information_schema	ADMINISTRABLE_ROLE_AUTHORIZATIONS	ROLE_HOST	6	NULL	YES	va
 def	information_schema	ADMINISTRABLE_ROLE_AUTHORIZATIONS	IS_GRANTABLE	7		NO	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
 def	information_schema	ADMINISTRABLE_ROLE_AUTHORIZATIONS	IS_DEFAULT	8	NULL	YES	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
 def	information_schema	ADMINISTRABLE_ROLE_AUTHORIZATIONS	IS_MANDATORY	9		NO	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	TIME	1		NO	varchar	10	32	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(32)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	COMMAND	2		NO	varchar	170	512	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(512)			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_APPEND_LOG	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_REQUEST_VOTE	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_HEARTBEAT	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_APPEND_LOG	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_REQUEST_VOTE	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_HEARTBEAT	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_REPLICATE_LOG	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_IN_CACHE	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_TOTAL	10		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	IP_PORT	2		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	MATCH_INDEX	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	NEXT_INDEX	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	ROLE	5		NO	varchar	3	10	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	HAS_VOTED	6		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	FORCE_SYNC	7		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	ELECTION_WEIGHT	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	LEARNER_SOURCE	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	APPLIED_INDEX	10		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	PIPELINING	11		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_GLOBAL	SEND_APPLIED	12		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	IP_PORT	2		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	ROLE	3		NO	varchar	3	10	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	CONNECTED	4		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	LOG_DELAY_NUM	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_HEALTH	APPLY_DELAY_NUM	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_IP_PORT	2		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_SERVER_ID	3		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_IP_PORT	4		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_LAST_INDEX	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_COMMIT_INDEX	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_MATCH_INDEX	7		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_NEXT_INDEX	8		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_APPLIED_INDEX	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_ID	1		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_TERM	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_LEADER	3		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	COMMIT_INDEX	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_TERM	5		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_INDEX	6		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	ROLE	7		NO	varchar	3	10	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	VOTED_FOR	8		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	LAST_APPLY_INDEX	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_READY_FOR_RW	10		NO	varchar	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
+def	information_schema	ALISQL_CLUSTER_LOCAL	INSTANCE_TYPE	11		NO	varchar	3	10	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(10)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CHANNEL_ID	1		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	FIRST_INDEX	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	LAST_INDEX	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CACHE_SIZE	4		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CURRENT_REQUEST	5		NO	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
+def	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	STOP_FLAG	6		NO	varchar	3	10	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(10)			select			NULL
 def	information_schema	APPLICABLE_ROLES	USER	1	NULL	YES	varchar	97	291	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(97)			select			NULL
 def	information_schema	APPLICABLE_ROLES	HOST	2	NULL	YES	varchar	256	768	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(256)			select			NULL
 def	information_schema	APPLICABLE_ROLES	GRANTEE	3	NULL	YES	varchar	97	388	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(97)			select			NULL
@@ -80,6 +136,9 @@ def	information_schema	COLUMN_STATISTICS	SCHEMA_NAME	1	NULL	NO	varchar	64	192	NU
 def	information_schema	COLUMN_STATISTICS	TABLE_NAME	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	COLUMN_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
 def	information_schema	COLUMN_STATISTICS	HISTOGRAM	4	NULL	NO	json	NULL	NULL	NULL	NULL	NULL	NULL	NULL	json			select			NULL
+def	information_schema	CONSENSUS_COMMIT_POSITION	LOGNAME	1		NO	varchar	170	512	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(512)			select			NULL
+def	information_schema	CONSENSUS_COMMIT_POSITION	POSITION	2		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
+def	information_schema	CONSENSUS_COMMIT_POSITION	INDEX	3		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_NAME	1	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_HOST	2	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
 def	information_schema	ENABLED_ROLES	IS_DEFAULT	3	NULL	YES	varchar	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(3)			select			NULL
@@ -582,6 +641,62 @@ COL_CML	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	C
 3.0000	information_schema	ADMINISTRABLE_ROLE_AUTHORIZATIONS	IS_GRANTABLE	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)
 3.0000	information_schema	ADMINISTRABLE_ROLE_AUTHORIZATIONS	IS_DEFAULT	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)
 3.0000	information_schema	ADMINISTRABLE_ROLE_AUTHORIZATIONS	IS_MANDATORY	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.2000	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	TIME	varchar	10	32	utf8mb3	utf8mb3_general_ci	varchar(32)
+3.0118	information_schema	ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE	COMMAND	varchar	170	512	utf8mb3	utf8mb3_general_ci	varchar(512)
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	SERVER_ID	int	NULL	NULL	NULL	NULL	int
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_APPEND_LOG	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_MSG_REQUEST_VOTE	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_HEARTBEAT	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_APPEND_LOG	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_MSG_REQUEST_VOTE	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_ON_HEARTBEAT	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_REPLICATE_LOG	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_IN_CACHE	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_CONSENSUS_STATUS	COUNT_LOG_META_GET_TOTAL	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	SERVER_ID	int	NULL	NULL	NULL	NULL	int
+3.0476	information_schema	ALISQL_CLUSTER_GLOBAL	IP_PORT	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	MATCH_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	NEXT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+3.3333	information_schema	ALISQL_CLUSTER_GLOBAL	ROLE	varchar	3	10	utf8mb3	utf8mb3_general_ci	varchar(10)
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	HAS_VOTED	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	FORCE_SYNC	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	ELECTION_WEIGHT	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	LEARNER_SOURCE	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_GLOBAL	APPLIED_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	PIPELINING	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.0000	information_schema	ALISQL_CLUSTER_GLOBAL	SEND_APPLIED	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+NULL	information_schema	ALISQL_CLUSTER_HEALTH	SERVER_ID	int	NULL	NULL	NULL	NULL	int
+3.0476	information_schema	ALISQL_CLUSTER_HEALTH	IP_PORT	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+3.3333	information_schema	ALISQL_CLUSTER_HEALTH	ROLE	varchar	3	10	utf8mb3	utf8mb3_general_ci	varchar(10)
+3.0000	information_schema	ALISQL_CLUSTER_HEALTH	CONNECTED	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+NULL	information_schema	ALISQL_CLUSTER_HEALTH	LOG_DELAY_NUM	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_HEALTH	APPLY_DELAY_NUM	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_SERVER_ID	int	NULL	NULL	NULL	NULL	int
+3.0476	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_IP_PORT	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_SERVER_ID	int	NULL	NULL	NULL	NULL	int
+3.0476	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_IP_PORT	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_LAST_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	SOURCE_COMMIT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_MATCH_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_NEXT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LEARNER_SOURCE	LEARNER_APPLIED_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_ID	int	NULL	NULL	NULL	NULL	int
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_TERM	bigint	NULL	NULL	NULL	NULL	bigint
+3.0476	information_schema	ALISQL_CLUSTER_LOCAL	CURRENT_LEADER	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	COMMIT_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_TERM	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	LAST_LOG_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+3.3333	information_schema	ALISQL_CLUSTER_LOCAL	ROLE	varchar	3	10	utf8mb3	utf8mb3_general_ci	varchar(10)
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	VOTED_FOR	int	NULL	NULL	NULL	NULL	int
+NULL	information_schema	ALISQL_CLUSTER_LOCAL	LAST_APPLY_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+3.0000	information_schema	ALISQL_CLUSTER_LOCAL	SERVER_READY_FOR_RW	varchar	1	3	utf8mb3	utf8mb3_general_ci	varchar(3)
+3.3333	information_schema	ALISQL_CLUSTER_LOCAL	INSTANCE_TYPE	varchar	3	10	utf8mb3	utf8mb3_general_ci	varchar(10)
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CHANNEL_ID	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	FIRST_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	LAST_INDEX	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CACHE_SIZE	bigint	NULL	NULL	NULL	NULL	bigint
+3.0476	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	CURRENT_REQUEST	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
+3.3333	information_schema	ALISQL_CLUSTER_PREFETCH_CHANNEL	STOP_FLAG	varchar	3	10	utf8mb3	utf8mb3_general_ci	varchar(10)
 3.0000	information_schema	APPLICABLE_ROLES	USER	varchar	97	291	utf8mb3	utf8mb3_general_ci	varchar(97)
 3.0000	information_schema	APPLICABLE_ROLES	HOST	varchar	256	768	utf8mb3	utf8mb3_general_ci	varchar(256)
 4.0000	information_schema	APPLICABLE_ROLES	GRANTEE	varchar	97	388	utf8mb4	utf8mb4_0900_ai_ci	varchar(97)
@@ -647,6 +762,9 @@ NULL	information_schema	COLUMNS_EXTENSIONS	SECONDARY_ENGINE_ATTRIBUTE	json	NULL	
 3.0000	information_schema	COLUMN_STATISTICS	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	COLUMN_STATISTICS	COLUMN_NAME	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
 NULL	information_schema	COLUMN_STATISTICS	HISTOGRAM	json	NULL	NULL	NULL	NULL	json
+3.0118	information_schema	CONSENSUS_COMMIT_POSITION	LOGNAME	varchar	170	512	utf8mb3	utf8mb3_general_ci	varchar(512)
+NULL	information_schema	CONSENSUS_COMMIT_POSITION	POSITION	bigint	NULL	NULL	NULL	NULL	bigint unsigned
+NULL	information_schema	CONSENSUS_COMMIT_POSITION	INDEX	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 4.0000	information_schema	ENABLED_ROLES	ROLE_NAME	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
 4.0000	information_schema	ENABLED_ROLES	ROLE_HOST	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
 3.0000	information_schema	ENABLED_ROLES	IS_DEFAULT	varchar	3	9	utf8mb3	utf8mb3_general_ci	varchar(3)

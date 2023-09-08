@@ -93,7 +93,7 @@ Format_description_event::Format_description_event(uint8_t binlog_ver,
         This will be used to initialize the post_header_len,
         for binlog version 4.
       */
-      static uint8_t server_event_header_length[ENUM_END_EVENT] = {
+      static uint8_t server_event_header_length[] = {
           0, QUERY_HEADER_LEN, STOP_HEADER_LEN, ROTATE_HEADER_LEN,
           INTVAR_HEADER_LEN, 0,
           /*
@@ -183,7 +183,7 @@ Format_description_event::Format_description_event(uint8_t binlog_ver,
           0,                                       /* for log_event_type 105 (Gcn) */
       };
       static_assert((sizeof(server_event_header_length) /
-                     sizeof(server_event_header_length[0])) == ENUM_END_EVENT,
+                     sizeof(server_event_header_length[0])) == LOG_EVENT_TYPES,
                     "Attention: it might result in memory overflow");
       /*
         Allows us to sanity-check that all events initialized their

@@ -6384,21 +6384,20 @@ static int init_server_components() {
       name would be used in following call path,
         Relay_log_info::rli_init_info() -> MYSQL_BIN_LOG::open_index_file()
     */
-#ifndef RAFT_RECOVERY_HIDDEN
-    if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
-        log_bin_index) {
-      strmake(default_binlog_index_name,
-              log_bin_index + dirname_length(log_bin_index),
-              FN_REFLEN + index_ext_length - 1);
-      opt_binlog_index_name = default_binlog_index_name;
-    }
+    // if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
+    //     log_bin_index) {
+    //   strmake(default_binlog_index_name,
+    //           log_bin_index + dirname_length(log_bin_index),
+    //           FN_REFLEN + index_ext_length - 1);
+    //   opt_binlog_index_name = default_binlog_index_name;
+    // }
 
-    if (log_bin_basename == nullptr || log_bin_index == nullptr) {
-      LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN, (int)FN_LEN);
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-#endif
+    // if (log_bin_basename == nullptr || log_bin_index == nullptr) {
+    //   LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN, (int)FN_LEN);
+    //   unireg_abort(MYSQLD_ABORT_EXIT);
+    // }
   }
+
   DBUG_PRINT("debug",
              ("opt_bin_logname: %s, opt_relay_logname: %s, pidfile_name: %s",
               opt_bin_logname, opt_relay_logname, pidfile_name));
@@ -8060,12 +8059,17 @@ int mysqld_main(int argc, char **argv)
 
     purged_gtids_from_binlog.dbug_print("purged_gtids_from_binlog");
     gtids_in_binlog.dbug_print("gtids_in_binlog");
+    binlog::log_gtid_set(&purged_gtids_from_binlog, false, "purged_gtids_from_binlog");
+    binlog::log_gtid_set(&gtids_in_binlog, false, "gtids_in_binlog");
 
     if (!gtids_in_binlog.is_empty() &&
         !gtids_in_binlog.is_subset(executed_gtids)) {
       gtids_in_binlog_not_in_table.add_gtid_set(&gtids_in_binlog);
       if (!executed_gtids->is_empty())
         gtids_in_binlog_not_in_table.remove_gtid_set(executed_gtids);
+
+      binlog::log_gtid_set(&gtids_in_binlog_not_in_table, false, "gtids_in_binlog_not_in_table");
+
       /*
         Save unsaved GTIDs into gtid_executed table, in the following
         four cases:
@@ -8453,7 +8457,7 @@ int mysqld_main(int argc, char **argv)
     Save set of GTIDs of the last binlog into gtid_executed table
     on server shutdown.
   */
-  if (opt_bin_log)
+  if (opt_bin_log && !raft::Recovery_manager::instance().is_raft_instance_recovering())
     if (gtid_state->save_gtids_of_last_binlog_into_table())
       LogErr(WARNING_LEVEL, ER_CANT_SAVE_GTIDS);
 

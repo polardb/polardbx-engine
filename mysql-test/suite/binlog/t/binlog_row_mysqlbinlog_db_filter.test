@@ -1,5 +1,3 @@
---source include/have_debug.inc
-
 # BUG#42941: --database parameter to mysqlbinlog fails with RBR
 #
 # WHAT

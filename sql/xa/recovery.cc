@@ -250,6 +250,9 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
   XA_specification *xa_spec =
       (info.spec_list ? info.spec_list->find(xid) : nullptr);
 
+  raft::system(ER_RAFT_RECOVERY) << "recover_one_internal_trx "
+                          << ", xid " << xa_trx.id;
+
   if (info.commit_list ? info.commit_list->count(xid) != 0
                        : tc_heuristic_recover == TC_HEURISTIC_RECOVER_COMMIT) {
     enum xa_status_code exec_status;
@@ -266,7 +269,7 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
           ->add_pending_recovering_trx<
               Pending_recovering_trx::xid_type::INTERNAL>(
               ht, enum_ha_recover_xa_state::PREPARED_IN_SE,
-              enum_ha_recover_xa_state::COMMITTED, xa_trx.id,
+              enum_ha_recover_xa_state::COMMITTED, &xa_trx,
               *info.spec_list->find(xid));
     }
 
@@ -316,6 +319,11 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
   if (info.xa_list_in_ht != nullptr) {
     state_in_ht = info.xa_list_in_ht->find(xa_trx.id);
   }
+
+  raft::system(ER_RAFT_RECOVERY) << "recover_one_external_trx "
+                          << ", state: " << (int)state
+                          << ", state_in_ht: " << (int)state_in_ht
+                          << ", xid: " << xa_trx.id;
 
   switch (state) {
     case enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE:
@@ -371,8 +379,9 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
       break;
     }
     case enum_ha_recover_xa_state::PREPARED_IN_TC: {
-      if (!Recovered_xa_transactions::instance().add_prepared_xa_transaction(
-              &xa_trx)) {
+//      if (!Recovered_xa_transactions::instance().add_prepared_xa_transaction(
+//              &xa_trx))
+      {
         if (ht.set_prepared_in_tc_by_xid != nullptr) {
           enum xa_status_code exec_status;
           if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
@@ -406,8 +415,14 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
     consensus_log_manager.get_recovery_manager()
         ->add_pending_recovering_trx<
             Pending_recovering_trx::xid_type::EXTERNAL>(
-            ht, state_in_ht, state, xa_trx.id,
+            ht, state_in_ht, state, &xa_trx,
             *info.spec_list->find(xa_trx.id));
+  } else if (state == state_in_ht &&
+             state_in_ht == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+    if (Recovered_xa_transactions::instance().add_prepared_xa_transaction(&xa_trx)) {
+      raft::fatal(ER_RAFT_RECOVERY) << "add prepared xa trx failed in collecting";
+      abort();
+    }
   }
 }
 

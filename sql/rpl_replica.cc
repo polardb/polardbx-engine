@@ -6451,6 +6451,7 @@ bool mta_checkpoint_routine(Relay_log_info *rli, bool force) {
   ulong cnt;
   bool error = false;
   time_t ts = 0;
+
   DBUG_TRACE;
 
 #ifndef NDEBUG
@@ -7027,10 +7028,6 @@ extern "C" void *handle_slave_sql(void *arg) {
     else
       rli->current_mts_submode = new Mts_submode_database();
 
-    //TODO @yanhua, need is_raft_channel?
-    // if (opt_slave_preserve_commit_order &&
-    // rli->opt_slave_parallel_workers > 0 && opt_bin_log &&
-    // (opt_log_slave_updates && !is_xpaxos_channel))
     // Only use replica preserve commit order if more than 1 worker exists
     if (opt_replica_preserve_commit_order && !rli->is_parallel_exec() &&
         rli->opt_replica_parallel_workers > 1 && !Multisource_info::is_raft_channel(rli))

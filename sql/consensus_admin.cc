@@ -666,6 +666,13 @@ void update_consensus_apply_pos(Relay_log_info *rli,
       }
       consensus_log_manager.set_real_apply_index(consensus_index);
       consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
+
+      // @todo figure out why we need to update applied index here
+      consensus_ptr->updateAppliedIndex(consensus_index);
+      raft::info(ER_RAFT_APPLIER) << "set_real_apply_index: " << consensus_index
+                            << ", consensus_term: " << consensus_term
+                            << ", consensus_index: " << consensus_index
+                            << ", consensus_index_end_pos: " << consensus_index_end_pos;
     }
 
     ev->consensus_index = consensus_log_manager.get_apply_index();
@@ -724,6 +731,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         }
         raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
+                                    << "', next_index = " << next_index
                                     << ", rli apply index = " << recover_index;
         rli->set_group_relay_log_name(log_name);
         rli->set_group_relay_log_pos(log_pos);
@@ -749,6 +757,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         }
         raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
+                                    << "', next_index = " << next_index
                                     << ", rli apply index = " << start_index;
         rli->set_group_relay_log_name(log_name);
         rli->set_group_relay_log_pos(log_pos);
@@ -780,6 +789,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           }
           raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                       << "', pos = " << log_pos
+                                      << "', next_index = " << next_index
                                       << ", rli apply index = " << start_index;
           rli->set_group_relay_log_name(log_name);
           rli->set_group_relay_log_pos(log_pos);
@@ -799,6 +809,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           }
           raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                       << "', pos = " << log_pos
+                                      << "', next_index = " << next_index
                                       << ", rli apply index = " << start_index;
 
           rli->set_group_relay_log_name(log_name);

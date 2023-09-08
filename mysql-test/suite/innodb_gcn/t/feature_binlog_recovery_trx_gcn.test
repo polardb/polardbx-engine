@@ -24,7 +24,7 @@ create table db_tc.t(id int);
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 begin;
 insert into db_tc.t values(1);
@@ -60,7 +60,7 @@ select * from db_tc.t;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 begin;
 update db_tc.t set id = 2;
@@ -96,7 +96,7 @@ select * from db_tc.t;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 insert into db_tc.t values(1);
@@ -127,7 +127,7 @@ connection default;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 update db_tc.t set id = 2;
@@ -159,7 +159,7 @@ connection default;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 insert into db_tc.t values(1);
@@ -188,7 +188,7 @@ connection default;
 connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 xa start 'xx';
 update db_tc.t set id = 2;
@@ -223,7 +223,7 @@ insert into db_tc.t values(1);
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --expr $commit_gcn = $commit_gcn + $step_gcn
 --disable_query_log
@@ -253,7 +253,7 @@ update db_tc.t set id = 2;
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --expr $commit_gcn = $commit_gcn + $step_gcn
 --disable_query_log
@@ -283,7 +283,7 @@ insert into db_tc.t values(1);
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --expr $commit_gcn = $commit_gcn + $step_gcn
 --disable_query_log
@@ -314,7 +314,7 @@ update db_tc.t set id = 2;
 xa end 'xx';
 xa prepare 'xx';
 
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
 --expr $commit_gcn = $commit_gcn + $step_gcn
 --disable_query_log

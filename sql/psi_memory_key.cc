@@ -392,7 +392,7 @@ static PSI_memory_info all_server_memory[] = {
      "Persisted_variables::unordered_set", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
      "Memory allocated for in-memory sets for persisted variables"},
 
-    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0, PSI_DOCUMENT_ME}
 };
 
 void register_server_memory_keys() {

@@ -35,6 +35,7 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+
 #include "sql/binlog.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
@@ -47,6 +48,7 @@
 #include "sql/sql_error.h"
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
+#include "sql/raft/raft0err.h"
 
 class Table_ref;
 

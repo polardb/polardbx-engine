@@ -1,1 +1,2 @@
 --gcn_write_event=true
+--innodb_undo_retention=900

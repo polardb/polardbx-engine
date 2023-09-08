@@ -1,0 +1,190 @@
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+create database db_crash_5;
+create table db_crash_5.t(id int);
+insert into db_crash_5.t values(0);
+# run cmd: insert into db_crash_5.t values(1)
+select * from db_crash_5.t order by id;
+id
+0
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 01. normal commit + simulate_crash_before_commit_stage
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+begin;
+insert into db_crash_5.t values(1);
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+0
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 11. xa prepare + simulate_crash_before_commit_stage
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa start 'xx';
+insert into db_crash_5.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+0
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+xa commit 'xx';
+# 21. xa commit one phase + simulate_crash_before_commit_stage
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa start 'xx';
+insert into db_crash_5.t values(1);
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+0
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 31. xa commit + simulate_crash_before_commit_stage
+xa start 'xx';
+insert into db_crash_5.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+xa commit 'xx';
+ERROR XAE04: XAER_NOTA: Unknown XID
+# 41. xa rollback + simulate_crash_before_commit_stage
+xa start 'xx';
+insert into db_crash_5.t values(1);
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+xa commit 'xx';
+ERROR XAE04: XAER_NOTA: Unknown XID
+# run cmd: update db_crash_5.t set id = id+1
+select * from db_crash_5.t order by id;
+id
+0
+1
+1
+1
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 02. normal commit + simulate_crash_before_commit_stage
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+begin;
+update db_crash_5.t set id = id+1;
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+1
+2
+2
+2
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 12. xa prepare + simulate_crash_before_commit_stage
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa start 'xx';
+update db_crash_5.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+1
+2
+2
+2
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+xa commit 'xx';
+# 22. xa commit one phase + simulate_crash_before_commit_stage
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa start 'xx';
+update db_crash_5.t set id = id+1;
+xa end 'xx';
+xa commit 'xx' one phase;
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+3
+4
+4
+4
+4
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 32. xa commit + simulate_crash_before_commit_stage
+xa start 'xx';
+update db_crash_5.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa commit 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+4
+5
+5
+5
+5
+xa recover;
+formatID	gtrid_length	bqual_length	data
+xa commit 'xx';
+ERROR XAE04: XAER_NOTA: Unknown XID
+# 42. xa rollback + simulate_crash_before_commit_stage
+xa start 'xx';
+update db_crash_5.t set id = id+1;
+xa end 'xx';
+xa prepare 'xx';
+SET SESSION debug="+d,simulate_crash_before_commit_stage";
+xa rollback 'xx';
+ERROR HY000: Lost connection to MySQL server during query
+select * from db_crash_5.t order by id;
+id
+4
+5
+5
+5
+5
+xa recover;
+formatID	gtrid_length	bqual_length	data
+xa commit 'xx';
+ERROR XAE04: XAER_NOTA: Unknown XID
+drop table db_crash_5.t;
+drop database db_crash_5;

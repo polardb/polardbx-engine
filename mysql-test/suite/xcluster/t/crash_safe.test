@@ -1,0 +1,44 @@
+--source include/paxos.inc
+
+create table t (id int);
+
+--connect (con1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (con2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (con3,127.0.0.1,root,,test,$MYPORT_3)
+
+connection con2;
+set debug="+d,crash_after_commit_before_update_pos";
+
+connection con1;
+xa begin 'xa1';
+insert into t values (1);
+xa end 'xa1';
+xa prepare 'xa1';
+
+connection con2;
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+connection con1;
+call dbms_consensus.change_leader(2);
+
+connection con2;
+let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
+--source include/wait_condition.inc
+xa commit 'xa1';
+xa recover;
+select * from t;
+call dbms_consensus.change_leader(1);
+
+connection con1;
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
+--source include/wait_condition.inc
+drop table t;
+
+--disconnect con1
+--disconnect con2
+--disconnect con3

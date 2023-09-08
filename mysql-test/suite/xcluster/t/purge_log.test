@@ -44,6 +44,7 @@ show consensus logs;
 #drop consensus_learner '$learner_cluster_info';
 --replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.drop_learner($learner_cluster_info);
+--sleep 5
 #purge consensus_log before 100;
 call dbms_consensus.purge_log(100);
 --replace_column 2 # 3 #

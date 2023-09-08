@@ -870,14 +870,6 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
   prefetch_manager->trunc_log_from_prefetch_cache(consensus_index);
   mysql_mutex_unlock(log->get_log_lock());
 
-  mysql_mutex_lock(&rli_info->data_lock);
-  // reset the previous_gtid_set_of_relaylog after truncate log
-  //TODO @yanhua  recovery @xiedao
-  // if (!error) {
-  //   error = rli_info->reset_previous_gtid_set_of_relaylog();
-  // }
-  mysql_mutex_unlock(&rli_info->data_lock);
-
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
     raft::error(ER_RAFT_0) << "ConsensusLogManager::truncate_log error, consensus index: " << consensus_index;
@@ -1113,16 +1105,6 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index)
   // log type instance do not to recover start index
   if (!opt_cluster_log_type_instance) {
     consensus_info->set_start_apply_index(index);
-    //TODO @yanhua  recovery @xiedao
-    // /* XCLUSTER_RESOLVE : GTID related stuff, may need review later */
-    // // leader to follower need save the gtids of the binlog to table
-    // if (gtid_state->save_gtids_of_last_binlog_into_table() ||
-    //     gtid_state->set_previous_logged_gtids_relaylog(rli_info->get_gtid_set(), rli_info->get_sid_lock())) {
-    //   mysql_rwlock_unlock(&LOCK_consensuslog_status);
-    //   raft::error(ER_RAFT_0) << "Failed in save last binlog gtid into table.";
-    //   error = 1;
-    //   goto end;
-    // }
   }
   if (consensus_info->flush_info(true, true))
   {
@@ -1245,7 +1227,6 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
       Actually in xdb cluster, binlog previous gtid set are always equivalent to
       executed gtid set, we disable adjusting temporarily.
     */
-   //TODO @yanhua  recovery @xiedao
     //if (index > 0 && binlog->reset_previous_gtids_logged(index)) {
     //  raft::error(ER_RAFT_0) << "Failed to reset previous gtids logged.";
     //}

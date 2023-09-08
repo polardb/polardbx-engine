@@ -19,7 +19,7 @@ call mtr.add_suppression("Plugin mysqlx reported: .Setup of socket: '' failed, t
 -->stmtsql show processlist;
 -->recvresult Id User Host db Command State Info
 -->sql
-SELECT id,user,command,state FROM information_schema.processlist ORDER BY id;
+SELECT id,user,command,state FROM information_schema.processlist where User != "event_scheduler" ORDER BY id;
 -->endsql
 EOF
 --replace_regex /localhost:[0-9]*/localhost/ /	[12]	/	0	/ /[0-9]+	root(.+)Sleep/$PROC_1_ID	root\1Sleep/ /[0-9]+	x_root(.+)Query/$PROC_2_ID	x_root\1Query/ /Execute/Query/ 

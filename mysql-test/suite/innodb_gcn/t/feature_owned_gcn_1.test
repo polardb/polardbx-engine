@@ -144,7 +144,7 @@ xa prepare '6';
 --enable_query_log
 
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET @@SESSION.DEBUG= '+d, simulate_crash_between_ib_commit_and_binlog_commit';
+SET @@SESSION.DEBUG= '+d, simulate_crash_after_consensus_append_log';
 --error 2013
 xa commit '6';
 

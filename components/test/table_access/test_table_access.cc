@@ -870,9 +870,8 @@ mysql_service_status_t test_table_access_init() {
     a component init function as well.
     Ignore errors when the table is not present.
   */
-  // consensus module is not available at startup
-  // (void)test_math_insert_utf8mb3(nullptr);
-  // (void)test_math_insert_utf8mb4(nullptr);
+  (void)test_math_insert_utf8mb3(nullptr);
+  (void)test_math_insert_utf8mb4(nullptr);
   if (test_native_thread()) return 1;
 
   return 0;

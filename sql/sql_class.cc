@@ -775,6 +775,7 @@ THD::THD(bool enable_plugins)
   is_killable = false;
   binlog_evt_union.do_union = false;
   enable_slow_log = false;
+  consensus_error = CSS_NONE;
   commit_error = CE_NONE;
   tx_commit_pending = false;
   durability_property = HA_REGULAR_DURABILITY;
@@ -1268,7 +1269,7 @@ void THD::cleanup(void) {
             &mdl_context, xs->get_xid()->key(), xs->get_xid()->key_length())) {
       LogErr(ERROR_LEVEL, ER_XA_CANT_CREATE_MDL_BACKUP);
     }
-    xa::Transaction_cache::detach(trn_ctx);
+    xa::Transaction_cache::detach(trn_ctx, this->raft_replication_channel);
   } else {
     xs->set_state(XID_STATE::XA_NOTR);
     trans_rollback(this);

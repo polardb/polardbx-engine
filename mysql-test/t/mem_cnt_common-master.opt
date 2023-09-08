@@ -1,2 +1,2 @@
 --nowarnings --global-connection-memory-tracking
-
+--consensus_disable_fifo_cache=true

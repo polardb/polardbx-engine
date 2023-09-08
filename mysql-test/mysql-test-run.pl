@@ -6146,6 +6146,10 @@ sub check_expected_crash_and_restart($$) {
           mtr_milli_sleep(1000);
         }
 
+        # It's not mysqltest that has exited, kill it
+        #mtr_report("Killing mysqltest pid $proc");
+        #$proc->kill();
+
         # Start server with same settings as last time
         mysqld_start($mysqld, $mysqld->{'started_opts'},
                      $tinfo, $bootstrap_opts);

@@ -53,7 +53,8 @@ class Pending_recovering_trx {
 
   Pending_recovering_trx(handlerton &ht, xid_type type,
                          enum_ha_recover_xa_state current_state,
-                         enum_ha_recover_xa_state next_state, XID *xid,
+                         enum_ha_recover_xa_state next_state,
+                         const XA_recover_txn *xa_trx,
                          const XA_specification &xa_spec,
                          uint64 consensus_index);
 
@@ -65,7 +66,8 @@ class Pending_recovering_trx {
   Pending_recovering_trx(Pending_recovering_trx &&other) = delete;
   Pending_recovering_trx &operator=(Pending_recovering_trx &&other) = delete;
 
-  [[nodiscard]] std::string name() const { return xid->get_data(); }
+  [[nodiscard]] std::string name() const { return xa_trx->id.get_data(); }
+  [[nodiscard]] XID &get_xid() const { return xa_trx->id; }
 
   int withdraw();
 
@@ -75,13 +77,14 @@ class Pending_recovering_trx {
   bool is_state_legal();
 
  private:
-  bool immutable;
+  bool processed;
 
   handlerton &ht;
   const xid_type type;
   const enum_ha_recover_xa_state current_state;
   const enum_ha_recover_xa_state next_state;
-  XID *xid;
+  enum_ha_recover_xa_state final_state;
+  XA_recover_txn *xa_trx;
   XA_specification *xa_spec;
   const uint64 consensus_index;
 };
@@ -117,7 +120,7 @@ class Consensus_recovery_manager {
   void add_pending_recovering_trx(handlerton &ht,
                                   enum_ha_recover_xa_state current_state,
                                   enum_ha_recover_xa_state next_state,
-                                  const XID &xid,
+                                  const XA_recover_txn *xa_trx,
                                   const XA_specification &xa_spec);
 
   void clear();
@@ -138,11 +141,11 @@ class Consensus_recovery_manager {
   uint64 last_leader_term_index;
   //<xid, consensusIndex> for save relation between index and my_xid when
   // recovering
-  std::map<uint64, uint64> internal_xids_in_binlog;
-  std::map<XID, uint64> external_xids_in_binlog;
+  std::map<uint64, uint64> internal_xids_in_binlog{};
+  std::map<XID, uint64> external_xids_in_binlog{};
 
   std::map<uint64, std::unique_ptr<Pending_recovering_trx>>
-      Pending_Recovering_trxs;
+      Pending_Recovering_trxs{};
 
  public:
   void clear_trx_in_binlog();
@@ -152,7 +155,7 @@ class Consensus_recovery_manager {
                                   Pending_recovering_trx::xid_type type,
                                   enum_ha_recover_xa_state prepare_state,
                                   enum_ha_recover_xa_state committed_state,
-                                  const XID &xid,
+                                  const XA_recover_txn *xa_trx,
                                   const XA_specification &xa_spec,
                                   uint64 consensus_index);
 };

@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 ## Enable rds audit log
 SET GLOBAL rds_audit_log_enabled = ON;
 

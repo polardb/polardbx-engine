@@ -135,6 +135,7 @@ bool trx_coordinator::rollback_detached_by_xid(THD *thd) {
 
 bool trx_coordinator::commit_in_engines(THD *thd, bool all,
                                         bool run_after_commit) {
+  DBUG_TRACE;
   if (all) {
     CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_commit_in_engines");
   }
@@ -147,6 +148,7 @@ bool trx_coordinator::commit_in_engines(THD *thd, bool all,
 }
 
 bool trx_coordinator::rollback_in_engines(THD *thd, bool all) {
+  DBUG_TRACE;
   if (all) {
     CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_rollback_in_engines");
   }

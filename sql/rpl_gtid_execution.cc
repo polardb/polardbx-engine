@@ -312,16 +312,8 @@ bool is_already_logged_transaction(const THD *thd) {
 
   if (gtid_next_list == nullptr) {
     if (gtid_next->type == ASSIGNED_GTID) {
-      if (thd->owned_gtid.sidno == 0) {
-        if (thd->raft_replication_channel) {
-          raft::warn(ER_RAFT_APPLIER) << "the gtid(" << gtid_next->gtid.sidno
-                                      << ", " << gtid_next->gtid.gno
-                                      << ") is already logged in paxos channel";
-          return false;
-        }
-        else
-          return true;
-      }
+      if (thd->owned_gtid.sidno == 0)
+        return true;
       else
         assert(thd->owned_gtid.equals(gtid_next->gtid));
     } else
@@ -332,14 +324,7 @@ bool is_already_logged_transaction(const THD *thd) {
     if (gtid_next->type == ASSIGNED_GTID) {
       assert(gtid_next_list->contains_gtid(gtid_next->gtid));
       if (!thd->owned_gtid_set.contains_gtid(gtid_next->gtid))
-        if (thd->raft_replication_channel) {
-          raft::warn(ER_RAFT_APPLIER) << "the gtid(" << gtid_next->gtid.sidno
-                                      << ", " << gtid_next->gtid.gno
-                                      << ") is already logged in paxos channel";
-          return false;
-        }
-        else
-          return true;
+        return true;
     }
 #else
     assert(0); /*NOTREACHED*/

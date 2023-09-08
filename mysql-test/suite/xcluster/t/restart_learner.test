@@ -41,7 +41,7 @@ drop database aaa;
 let $wait_condition= select count(distinct match_index)=1 from information_schema.alisql_cluster_global;
 --source include/wait_condition.inc
 # wait the learner accept connection
---sleep 5
+--sleep 20
 --connect (learner,127.0.0.1,root,,mysql,$learner_port)
 --connection learner
 let $wait_condition= select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local;

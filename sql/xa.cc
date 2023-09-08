@@ -84,6 +84,7 @@
 #include "thr_mutex.h"
 
 #include "sql/lizard0handler.h"
+#include "sql/raft/raft0err.h"
 
 const char *XID_STATE::xa_state_names[] = {"NON-EXISTING", "ACTIVE", "IDLE",
                                            "PREPARED", "ROLLBACK ONLY"};
@@ -587,7 +588,7 @@ bool applier_reset_xa_trans(THD *thd) {
     trn_ctx->reset_unsafe_rollback_flags(Transaction_ctx::STMT);
     thd->server_status &= ~SERVER_STATUS_IN_TRANS;
     /* Server transaction ctx is detached from THD */
-    xa::Transaction_cache::detach(trn_ctx);
+    xa::Transaction_cache::detach(trn_ctx, thd->raft_replication_channel);
     xid_state->reset();
   }
   /*

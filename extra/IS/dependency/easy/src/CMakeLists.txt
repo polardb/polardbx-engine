@@ -50,13 +50,15 @@ SET(PRJ_SRC
   #io/easy_ssl.c
   io/easy_message.c
   io/easy_client.c
-  io/easy_log.c
   io/easy_connection.c
   io/ev.c
   packet/easy_kfc_handler.c
   packet/http/easy_http_handler.c
   packet/http/http_parser.c
   )
+
+LIST(APPEND PRJ_SRC_INTERNAL ${PRJ_SRC} io/easy_log.c)
+LIST(APPEND PRJ_SRC io/easy_log.cc)
 
 IF (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DEASY_SPIN_USE_SYS")
@@ -66,6 +68,6 @@ INCLUDE_DIRECTORIES(include io packet thread util packet/http)
 
 add_library(myeasy STATIC ${PRJ_SRC})
 TARGET_LINK_LIBRARIES(myeasy -pthread)
-
-install(TARGETS myeasy DESTINATION lib)
-install(FILES ${HEADER_FILE} DESTINATION include/easy)
+add_dependencies(myeasy GenError)
+add_library(myeasy_internal STATIC ${PRJ_SRC_INTERNAL})
+TARGET_LINK_LIBRARIES(myeasy_internal -pthread)

@@ -1,5 +1,3 @@
---source include/have_debug.inc
-
 #################################################################
 # Bug#18258933 CONCATENATION OF MYSQLBINLOG OUTPUT DOES NOT
 # WORK WITH GTID

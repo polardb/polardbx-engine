@@ -1,0 +1,268 @@
+#
+# Test recover xa specification.
+#
+source include/have_log_bin.inc;
+--source include/have_binlog_format_row.inc
+--source include/not_valgrind.inc
+source include/have_debug.inc;
+--source include/not_crashrep.inc
+
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+
+connection default;
+
+create database db_crash_1;
+create table db_crash_1.t(id int);
+insert into db_crash_1.t values(0);
+
+
+--let $iter=1
+while ($iter <= 2)
+{
+	if ($iter == 1)
+	{
+	--let $sql=insert into db_crash_1.t values(1)
+	}
+	if ($iter == 2)
+	{
+	--let $sql=update db_crash_1.t set id = id+1
+	}
+
+	--echo # run cmd: $sql
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+
+
+	--echo # 0$iter. normal commit + crash_before_flush_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,crash_before_flush_binlog";
+	begin;
+	--eval $sql
+	--error 2013
+	commit;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+
+
+	--echo # 1$iter. xa prepare + crash_before_flush_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,crash_before_flush_binlog";
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+
+	--error 2013
+	xa prepare 'xx';
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+	--error ER_XAER_RMFAIL
+	xa prepare 'xx';
+
+
+
+	--echo # 2$iter. xa commit one phase + crash_before_flush_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,crash_before_flush_binlog";
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+
+	--error 2013
+	xa commit 'xx' one phase;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+
+
+
+	--echo # 3$iter. xa commit + crash_before_flush_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+	xa prepare 'xx';
+
+	SET SESSION debug="+d,crash_before_flush_binlog";
+	--error 2013
+	xa commit 'xx';
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+	xa commit 'xx';
+
+
+	--echo # 4$iter. xa rollback + crash_before_flush_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+	xa prepare 'xx';
+
+	SET SESSION debug="+d,crash_before_flush_binlog";
+	--error 2013
+	xa rollback 'xx';
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+	xa rollback 'xx';
+
+
+	delete from db_crash_1.t;
+	insert into db_crash_1.t values(0);
+
+	--echo # 0$iter. normal commit + crash_commit_before_log
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,crash_commit_before_log";
+	begin;
+	--eval $sql
+	--error 2013
+	commit;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+
+	--echo # 1$iter. xa prepare + crash_commit_before_log
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,crash_commit_before_log";
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+
+	--error 2013
+	xa prepare 'xx';
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+	--error ER_XAER_RMFAIL
+	xa prepare 'xx';
+
+
+	--echo # 2$iter. xa commit one phase + crash_commit_before_log
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,crash_commit_before_log";
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+
+	--error 2013
+	xa commit 'xx' one phase;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+
+	--echo # 3$iter. xa commit + crash_commit_before_log
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+	xa prepare 'xx';
+
+	SET SESSION debug="+d,crash_commit_before_log";
+	--error 2013
+	xa commit 'xx';
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+	xa commit 'xx';
+
+	--echo # 4$iter. xa rollback + crash_commit_before_log
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+	xa prepare 'xx';
+
+	SET SESSION debug="+d,crash_commit_before_log";
+	--error 2013
+	xa rollback 'xx';
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--disable_reconnect
+	connection default;
+	select * from db_crash_1.t order by id;
+	xa recover;
+	xa rollback 'xx';
+
+
+	delete from db_crash_1.t;
+	insert into db_crash_1.t values(0);
+
+	--inc $iter
+}
+
+connection default;
+drop table db_crash_1.t;
+drop database db_crash_1;

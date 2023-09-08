@@ -75,6 +75,7 @@ def	mysql	PRIMARY	def	mysql	columns_priv	Host
 def	mysql	PRIMARY	def	mysql	columns_priv	Table_name
 def	mysql	PRIMARY	def	mysql	columns_priv	User
 def	mysql	PRIMARY	def	mysql	component	component_id
+def	mysql	PRIMARY	def	mysql	consensus_info	number_of_lines
 def	mysql	PRIMARY	def	mysql	db	Db
 def	mysql	PRIMARY	def	mysql	db	Host
 def	mysql	PRIMARY	def	mysql	db	User
@@ -96,6 +97,7 @@ def	mysql	PRIMARY	def	mysql	help_keyword	help_keyword_id
 def	mysql	PRIMARY	def	mysql	help_relation	help_keyword_id
 def	mysql	PRIMARY	def	mysql	help_relation	help_topic_id
 def	mysql	PRIMARY	def	mysql	help_topic	help_topic_id
+def	mysql	PRIMARY	def	mysql	innodb_flashback_snapshot	scn
 def	mysql	PRIMARY	def	mysql	innodb_index_stats	database_name
 def	mysql	PRIMARY	def	mysql	innodb_index_stats	index_name
 def	mysql	PRIMARY	def	mysql	innodb_index_stats	stat_name

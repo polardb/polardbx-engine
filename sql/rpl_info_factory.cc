@@ -1171,10 +1171,8 @@ bool Rpl_info_factory::create_slave_info_objects(
   for (std::vector<std::string>::iterator it = channel_list.begin();
        it != channel_list.end(); ++it) {
     const char *cname = (*it).c_str();
-    /*
-    bool is_default_channel =
-        !strcmp(cname, pchannel_map->get_default_channel());
-    */
+    // bool is_default_channel =
+    //     !strcmp(cname, pchannel_map->get_default_channel());
     channel_error =
         !(mi = create_mi_and_rli_objects(
               mi_option, rli_option, cname,

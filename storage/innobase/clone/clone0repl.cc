@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/rpl_gtid_persist.h"
 #include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
+#include "sql/raft/raft0recovery.h"
 
 #include "lizard0undo.h"
 
@@ -379,7 +380,7 @@ void Clone_persist_gtid::get_gtid_info(trx_t *trx, Gtid_desc &gtid_desc) {
 
 int Clone_persist_gtid::write_other_gtids() {
   int err = 0;
-  if (opt_bin_log) {
+  if (opt_bin_log && !raft::Recovery_manager::instance().is_raft_instance_recovering()) {
     err = gtid_state->save_gtids_of_last_binlog_into_table();
   }
   return (err);
@@ -521,6 +522,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
     trx_sys_gtids_mem_mutex_exit();
     err = write_to_table(flush_list_number, table_gtid_set, sid_map);
     m_flush_in_progress.store(false);
+
     /* Compress always after recovery, if GTIDs are added. */
     if (!m_thread_active.load()) {
       compress_recovery = true;
@@ -554,8 +556,9 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
     m_compression_counter = 0;
     m_compression_gtid_counter = 0;
     /* Write non-innodb GTIDs before compression. */
-    write_other_gtids();
-    err = gtid_table_persistor->compress(thd);
+    err = write_other_gtids();
+    if (err == 0)
+      err = gtid_table_persistor->compress(thd);
   }
   if (err != 0) {
     ib::error(ER_IB_CLONE_GTID_PERSIST) << "Error persisting GTIDs to table";

@@ -1595,7 +1595,7 @@ int binlog_cache_data::write_event(Log_event *ev) {
   if (opt_consensus_check_large_event) {
     if (newpos - oldpos > opt_consensus_large_event_limit ||
         DBUG_EVALUATE_IF("force_large_event", 1, 0)) {
-      raft::warn(ER_RAFT_BLCOMMIT)
+      raft::warn(ER_RAFT_COMMIT)
           << "Log event too large, event type " << ev->get_type_str()
           << ", event size " << newpos - oldpos;
       mark_as_rollback = true;
@@ -1824,7 +1824,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
   if (thd->owned_gtid.sidno > 0) {
     assert(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
-    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || thd->raft_replication_channel))) {
+    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || !thd->raft_replication_channel))) {
       /*
         If the binary log is disabled for this thread (either by
         log_bin=0 or sql_log_bin=0 or by log_replica_updates=0 for a
@@ -1835,7 +1835,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
         (This only happens for DDL, since DML will save the GTID into
         table and release ownership inside ha_commit_trans.)
       */
-      if (gtid_state->save(thd) != 0) {
+      if (gtid_state->save(thd) != 0 && !thd->raft_replication_channel) {
         gtid_state->update_on_rollback(thd);
         return 1;
       } else if (!has_commit_order_manager(thd)) {
@@ -2288,10 +2288,6 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
     DBUG_EXECUTE_IF("fault_injection_reinit_io_cache_while_flushing_to_file",
                     { DBUG_SET("+d,fault_injection_reinit_io_cache"); });
 
-    if (!error) {
-      // TODO write gcn event
-    }
-
     if (!error)
       if ((error = mysql_bin_log.gcn_mgr->write_gcn(thd, &writer)))
         thd->commit_error = THD::CE_FLUSH_ERROR;
@@ -2303,12 +2299,12 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
     DBUG_EXECUTE_IF("fault_injection_reinit_io_cache_while_flushing_to_file",
                     { DBUG_SET("-d,fault_injection_reinit_io_cache"); });
 
-    if (flags.with_xid && error == 0) *wrote_xid = true;
-
     if (!error) {
       error = flush_consensus_log(thd, this, &writer, mark_as_rollback,
                                   bytes_in_cache);
     }
+
+    if (flags.with_xid && error == 0) *wrote_xid = true;
 
     /*
       Reset have to be after the if above, since it clears the
@@ -2428,6 +2424,7 @@ static int binlog_prepare(handlerton *, THD *thd, bool all) {
 static int binlog_set_prepared_in_tc(handlerton *, THD *) { return 0; }
 
 int MYSQL_BIN_LOG::write_xa_to_cache(THD *thd) {
+  DBUG_TRACE;
   assert(thd->lex->sql_command == SQLCOM_XA_COMMIT ||
          thd->lex->sql_command == SQLCOM_XA_ROLLBACK);
 
@@ -4357,6 +4354,7 @@ static enum_read_gtids_from_binlog_status read_gtids_from_binlog(
       case binary_log::FORMAT_DESCRIPTION_EVENT:
       case binary_log::ROTATE_EVENT:
       case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
+      case binary_log::CONSENSUS_LOG_EVENT:
         // do nothing; just accept this event and go to next
         break;
       case binary_log::PREVIOUS_GTIDS_LOG_EVENT: {
@@ -4391,18 +4389,6 @@ static enum_read_gtids_from_binlog_status read_gtids_from_binlog(
             done = false;
           }
         });
-        break;
-      }
-      case binary_log::CONSENSUS_LOG_EVENT:
-      {
-        //TODO @yanhua unused from gtid
-        // if (last_term != 0) {
-        //   Consensus_log_event * r_ev = (Consensus_log_event*)ev;
-        //   uint64 consensus_term = r_ev->get_term();
-        //   if (consensus_term > last_term) {
-        //     done = true;
-        //   }
-        // }
         break;
       }
       case binary_log::GTID_LOG_EVENT: {
@@ -5309,7 +5295,7 @@ int MYSQL_BIN_LOG::move_crash_safe_index_file_to_index_file(
         /* This simulation causes the delete to fail */
         static char first_char = index_file_name[0];
         index_file_name[0] = 0;
-        raft::info(ER_RAFT_BLCOMMIT) << "Retrying delete";
+        raft::info(ER_RAFT_COMMIT) << "Retrying delete";
         if (failure_trials == 1) index_file_name[0] = first_char;
       };);
       file_delete_status = !(mysql_file_delete(key_file_binlog_index,
@@ -5353,7 +5339,7 @@ int MYSQL_BIN_LOG::move_crash_safe_index_file_to_index_file(
       /* This simulation causes the rename to fail */
       static char first_char = index_file_name[0];
       index_file_name[0] = 0;
-      raft::info(ER_RAFT_BLCOMMIT) << "Retrying rename";
+      raft::info(ER_RAFT_COMMIT) << "Retrying rename";
       if (failure_trials == 1) index_file_name[0] = first_char;
     };);
     file_rename_status =
@@ -6007,6 +5993,7 @@ int MYSQL_BIN_LOG::close_crash_safe_index_file() {
 */
 int MYSQL_BIN_LOG::remove_logs_from_index(LOG_INFO *log_info,
                                           bool need_update_threads) {
+  DBUG_TRACE;
   if (open_crash_safe_index_file()) {
     LogErr(ERROR_LEVEL, ER_BINLOG_CANT_OPEN_TMP_INDEX,
            "MYSQL_BIN_LOG::remove_logs_from_index");
@@ -6142,15 +6129,21 @@ int MYSQL_BIN_LOG::purge_logs(const char *to_log, bool included,
     goto err;
   }
 
+  DBUG_EXECUTE_IF("crash_purge_before_remove_logs_from_index", DBUG_SUICIDE(););
+
   /* We know how many files to delete. Update index file. */
   if ((error = remove_logs_from_index(&log_info, need_update_threads))) {
     LogErr(ERROR_LEVEL, ER_BINLOG_PURGE_LOGS_CANT_UPDATE_INDEX_FILE);
     goto err;
   }
 
+  DBUG_EXECUTE_IF("crash_purge_before_truncate_before", DBUG_SUICIDE(););
+
   // truncate consensus log file index
   file_name = std::string(log_info.log_file_name);
   consensus_log_manager.get_log_file_index()->truncate_before(file_name);
+
+  DBUG_EXECUTE_IF("crash_purge_before_update_index_after_truncate", DBUG_SUICIDE(););
 
   // Update gtid_state->lost_gtids
   if (!is_relay_log || is_raft_log) {
@@ -6683,6 +6676,8 @@ int MYSQL_BIN_LOG::new_file_impl(
     goto end;
   }
 
+  DBUG_EXECUTE_IF("crash_before_rotate_binlog", DBUG_SUICIDE(););
+
   if (!is_relay_log) {
     /* Save set of GTIDs of the last binlog into table on binlog rotation */
     if ((error = gtid_state->save_gtids_of_last_binlog_into_table())) {
@@ -6738,6 +6733,8 @@ int MYSQL_BIN_LOG::new_file_impl(
     goto end;
   }
 
+  DBUG_EXECUTE_IF("crash_before_rotate_event_appended", DBUG_SUICIDE(););
+
   /*
     Make sure that the log_file is initialized before writing
     Rotate_log_event into it.
@@ -6762,10 +6759,9 @@ int MYSQL_BIN_LOG::new_file_impl(
       snprintf(close_on_error_msg, sizeof close_on_error_msg,
                ER_THD(current_thd, ER_ERROR_ON_WRITE), name, errno,
                my_strerror(errbuf, sizeof(errbuf), errno));
-
       my_printf_error(ER_ERROR_ON_WRITE, ER_THD(current_thd, ER_ERROR_ON_WRITE),
-                MYF(ME_FATALERROR), name, errno,
-                my_strerror(errbuf, sizeof(errbuf), errno));
+                      MYF(ME_FATALERROR), name, errno,
+                      my_strerror(errbuf, sizeof(errbuf), errno));
       goto end;
     }
 
@@ -6778,6 +6774,7 @@ int MYSQL_BIN_LOG::new_file_impl(
   }
 
   DEBUG_SYNC(current_thd, "after_rotate_event_appended");
+  DBUG_EXECUTE_IF("crash_after_rotate_event_appended", DBUG_SUICIDE(););
 
   old_name = name;
   name = nullptr;  // Don't free name
@@ -6795,6 +6792,8 @@ int MYSQL_BIN_LOG::new_file_impl(
   */
 
   DEBUG_SYNC(current_thd, "binlog_rotate_between_close_and_open");
+  DBUG_EXECUTE_IF("crash_binlog_rotate_between_close_and_open", DBUG_SUICIDE(););
+
   /*
     new_file() is only used for rotation (in FLUSH LOGS or because size >
     max_binlog_size or max_relay_log_size).
@@ -7980,8 +7979,7 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
   }
 
   // build consensus log index from all the exist log files
-  if (build_consensus_log_index())
-  {
+  if (build_consensus_log_index()) {
     cleanup();
     return 1;
   }
@@ -8266,7 +8264,15 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
     the transaction.
    */
   if (cache_mngr == nullptr) {
-    if (!skip_commit && trx_coordinator::commit_in_engines(thd, all))
+    if (!skip_commit) {
+      if (trx_coordinator::commit_in_engines(thd, all))
+        return RESULT_ABORTED;
+      return RESULT_SUCCESS;
+    }
+
+    //raft apply not use 2pc for xa prepare, no prepare undo saved. we need fix it
+    if (thd->raft_replication_channel
+        && trx_coordinator::set_prepared_in_tc_in_engines(thd, all))
       return RESULT_ABORTED;
     return RESULT_SUCCESS;
   }
@@ -8470,7 +8476,7 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
       if (thd && thd->lex &&
           (thd->lex->sql_command == SQLCOM_XA_COMMIT ||
            thd->lex->sql_command == SQLCOM_XA_ROLLBACK)) {
-        raft::warn(ER_RAFT_BLCOMMIT) << "xa commit/rollback fail, restart to recover";
+        raft::warn(ER_RAFT_COMMIT) << "xa commit/rollback fail, restart to recover";
         flush_error_log_messages();
         abort();
       }
@@ -8671,7 +8677,7 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     for (THD *head = first_seen; head; head = head->next_to_commit) {
       binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(head);
       cache_mngr->reset();
-      raft::warn(ER_RAFT_BLCOMMIT) << "Failed to commit ,because leadership changed, "
+      raft::warn(ER_RAFT_COMMIT) << "Failed to commit ,because leadership changed, "
                                "replicate log or check term failed";
       head->mark_transaction_to_rollback(true);
       head->commit_error = THD::CE_COMMIT_ERROR;
@@ -8692,7 +8698,6 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   ha_flush_logs(true);
   DBUG_EXECUTE_IF("crash_after_flush_engine_log", DBUG_SUICIDE(););
   CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_write_binlog");
-
   assign_automatic_gtids_to_flush_group(first_seen);
   /** Prepare gcn. */
   gcn_mgr->assign_gcn_to_flush_group(first_seen);
@@ -8702,9 +8707,8 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     Thd_backup_and_restore switch_thd(current_thd, head);
 
     head->consensus_term = term;
-
-    std::pair<int, my_off_t> result = flush_thread_caches(head);
     // stmt or trx cache flush will generate a consensus index and set thd's consensus_index
+    std::pair<int, my_off_t> result = flush_thread_caches(head);
     total_bytes += result.second;
     if (flush_error == 1) flush_error = result.first;
 #ifndef NDEBUG
@@ -9224,6 +9228,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     });
     flush_error = flush_cache_to_file(&flush_end_pos);
   }
+
   DBUG_EXECUTE_IF("crash_after_flush_binlog", DBUG_SUICIDE(););
 
   update_binlog_end_pos_after_sync = (get_sync_period() == 1);
@@ -9293,10 +9298,12 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     std::pair<bool, bool> result = sync_binlog_file(false);
     sync_error = result.first;
 
-    DBUG_EXECUTE_IF("simulate_crash_when_sync_binlog", DBUG_SUICIDE(););
+    DBUG_EXECUTE_IF("simulate_crash_after_sync_binlog", DBUG_SUICIDE(););
   }
 
-  if (update_binlog_end_pos_after_sync && flush_error == 0 && sync_error == 0) {
+  //TODO @yanha, raft will not use binlog_sender, so leader no need do this
+  // && thd->slave_thread
+  if (update_binlog_end_pos_after_sync && flush_error == 0 && sync_error == 0 ) {
     THD *tmp_thd = final_queue;
     const char *binlog_file = nullptr;
     my_off_t pos = 0;
@@ -9339,16 +9346,14 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   mysql_mutex_unlock(&LOCK_sync);
 
   // set last index and write log done out of order is supported
-  for (THD *head = final_queue; head; head = head->next_to_commit)
-  {
+  for (THD *head = final_queue; head; head = head->next_to_commit) {
     // find last sync log index
-    if (head->consensus_index > group_max_log_index)
-    {
+    if (head->consensus_index > group_max_log_index) {
       group_max_log_index = head->consensus_index;
     }
   }
-  if (group_max_log_index > 0)
-  {
+
+  if (group_max_log_index > 0) {
     consensus_log_manager.set_sync_index_if_greater(group_max_log_index);
     if (!opt_initialize)
       alisql_server->writeLogDone(group_max_log_index);
@@ -9356,7 +9361,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
 
   leave_mutex_before_commit_stage = nullptr;
 
-  DBUG_EXECUTE_IF("simulate_crash_between_ib_commit_and_binlog_commit", {
+  DBUG_EXECUTE_IF("simulate_crash_after_consensus_append_log", {
       DBUG_SUICIDE();
   });
 
@@ -9448,6 +9453,8 @@ commit_stage:
     assert(!debug_sync_set_action(thd, STRING_WITH_LEN(action)));
   };);
 
+  DBUG_EXECUTE_IF("simulate_crash_before_commit_stage", { DBUG_SUICIDE(); });
+
   /*
     Finish the commit before executing a rotate, or run the risk of a
     deadlock. We don't need the return value here since it is in
@@ -9455,6 +9462,8 @@ commit_stage:
   */
   (void)finish_commit(thd);
   DEBUG_SYNC(thd, "bgc_after_commit_stage_before_rotation");
+
+  DBUG_EXECUTE_IF("simulate_crash_after_commit_stage", { DBUG_SUICIDE(); });
 
   /*
     If we need to rotate, we do it without commit error.
@@ -9502,9 +9511,12 @@ commit_stage:
         mysql_mutex_lock(&LOCK_rotate);
         rotating = FALSE;
         mysql_mutex_unlock(&LOCK_rotate);
+
+        DBUG_EXECUTE_IF("simulate_crash_after_rotate", { DBUG_SUICIDE(); });
       }
     }
     consensus_log_manager.unlock_consensus();
+
   }
   /*
     flush or sync errors are handled above (using binlog_error_action).

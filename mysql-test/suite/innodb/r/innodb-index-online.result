@@ -281,10 +281,12 @@ NAME	POS
 SELECT name, count FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE
 subsystem = 'ddl' and count > 16;
 name	count
+ddl_sort_file_alter_table	19
 SET GLOBAL innodb_monitor_reset = module_ddl;
 SELECT name, count FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE
 subsystem = 'ddl' and count > 16;
 name	count
+ddl_sort_file_alter_table	19
 SET GLOBAL innodb_monitor_reset = module_ddl;
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -300,6 +302,7 @@ ALTER TABLE t1 DROP INDEX c2d, DROP INDEX c2f;
 SELECT name, count FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE
 subsystem = 'ddl' and count > 16;
 name	count
+ddl_sort_file_alter_table	19
 SET GLOBAL innodb_monitor_reset = module_ddl;
 ALTER TABLE t1 ADD INDEX c2h(c22f), ALGORITHM = INPLACE;
 ALTER TABLE t1 ADD INDEX c2h(c22f), ALGORITHM = COPY;

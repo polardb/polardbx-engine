@@ -3,7 +3,7 @@ call mtr.add_suppression('Found .*');
 SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 create database db_tc;
 create table db_tc.t(id int);
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 begin;
 insert into db_tc.t values(1);
 commit;
@@ -13,7 +13,7 @@ id
 select * from db_tc.t;
 id
 1
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 begin;
 update db_tc.t set id = 2;
 commit;
@@ -24,7 +24,7 @@ id
 select * from db_tc.t;
 id
 2
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa start 'xx';
 insert into db_tc.t values(1);
 xa end 'xx';
@@ -33,7 +33,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'xx';
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa start 'xx';
 update db_tc.t set id = 2;
 xa end 'xx';
@@ -42,7 +42,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'xx';
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa start 'xx';
 insert into db_tc.t values(1);
 xa end 'xx';
@@ -50,7 +50,7 @@ xa commit 'xx' one phase;
 ERROR HY000: Lost connection to MySQL server during query
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa start 'xx';
 update db_tc.t set id = 2;
 xa end 'xx';
@@ -62,7 +62,7 @@ xa start 'xx';
 insert into db_tc.t values(1);
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa commit 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 include/assert.inc [expect_gcn == actual_gcn]
@@ -71,7 +71,7 @@ xa start 'xx';
 update db_tc.t set id = 2;
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa commit 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 include/assert.inc [expect_gcn == actual_gcn]
@@ -80,7 +80,7 @@ xa start 'xx';
 insert into db_tc.t values(1);
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa rollback 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 include/assert.inc [expect_gcn == actual_gcn]
@@ -90,7 +90,7 @@ insert into db_tc.t values(1);
 update db_tc.t set id = 2;
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_when_sync_binlog";
+SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 xa rollback 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 include/assert.inc [expect_gcn == actual_gcn]

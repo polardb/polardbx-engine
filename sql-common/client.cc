@@ -1396,8 +1396,8 @@ bool cli_advanced_command(MYSQL *mysql, enum enum_server_command command,
         if (cli_safe_read(mysql, nullptr) == packet_error) {
           if (!mysql->reconnect) goto end;
         }
-        /* Can this happen in any other case than COM_QUIT? */
-        if (!mysql->reconnect) assert(command == COM_QUIT);
+        /* Can this happen in any other case than COM_QUIT/COM_STMT_CLOSE */
+        if (!mysql->reconnect) assert(command == COM_QUIT || command == COM_STMT_CLOSE);
       }
     }
     end_server(mysql);

@@ -74,7 +74,7 @@ xa start '6';
 insert into tt values (6);
 xa end '6';
 xa prepare '6';
-SET @@SESSION.DEBUG= '+d, simulate_crash_between_ib_commit_and_binlog_commit';
+SET @@SESSION.DEBUG= '+d, simulate_crash_after_consensus_append_log';
 xa commit '6';
 ERROR HY000: Lost connection to MySQL server during query
 # Restart the master server

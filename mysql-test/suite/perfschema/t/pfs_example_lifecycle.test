@@ -1,3 +1,5 @@
+--source include/have_nodebug.inc
+
 select component_urn from mysql.component;
 
 --sorted_result

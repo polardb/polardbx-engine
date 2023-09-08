@@ -35,9 +35,10 @@ endforeach ()
 set(UT_LIBS
   gtest
   gtest_main
-  aliconsensus
   mysqlclient
   rocksdb
+  aliconsensus_no_easy
+  myeasy_internal
   )
 add_executable(merge_tests-t ${UT_SRC})
 target_link_libraries(merge_tests-t ${UT_LIBS})

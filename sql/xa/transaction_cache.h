@@ -78,7 +78,7 @@ class Transaction_cache {
                        for this XID value
       @retval  true    failure
   */
-  static bool detach(Transaction_ctx *transaction);
+  static bool detach(Transaction_ctx *transaction, bool force_logged);
   /**
     Remove information about transaction from a cache.
 
