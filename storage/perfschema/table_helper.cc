@@ -696,6 +696,16 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
   static_assert(MDL_key::NAMESPACE_END == 18,
                 "Adjust performance schema when changing enum_mdl_namespace");
 
+  /** Create a local copy of mdl to prevent inconsistencies that could arise if
+   * the original mdl is set to another value during the process */
+  MDL_key local_mdl;
+  local_mdl.mdl_key_init(mdl);
+  if (!local_mdl.is_equal(mdl) ||
+      local_mdl.db_name_length() != mdl->db_name_length() ||
+      local_mdl.name_length() != mdl->name_length()) {
+    return 1;
+  }
+
   bool with_schema = false;
   bool with_object = false;
   bool with_column = false;
@@ -704,7 +714,7 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
   m_object_name_length = 0;
   m_column_name_length = 0;
 
-  switch (mdl->mdl_namespace()) {
+  switch (local_mdl.mdl_namespace()) {
     case MDL_key::GLOBAL:
       m_object_type = OBJECT_TYPE_GLOBAL;
       break;
@@ -794,35 +804,46 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
   }
 
   if (with_schema) {
-    m_schema_name_length = mdl->db_name_length();
+    m_schema_name_length = local_mdl.db_name_length();
     if (m_schema_name_length > sizeof(m_schema_name)) {
       assert(false);
       return 1;
     }
     if (m_schema_name_length > 0) {
-      memcpy(m_schema_name, mdl->db_name(), m_schema_name_length);
+      memcpy(m_schema_name, local_mdl.db_name(), m_schema_name_length);
     }
   }
 
   if (with_object) {
-    m_object_name_length = mdl->name_length();
+    m_object_name_length = local_mdl.name_length();
     if (m_object_name_length > sizeof(m_object_name)) {
       assert(false);
       return 1;
     }
     if (m_object_name_length > 0) {
-      memcpy(m_object_name, mdl->name(), m_object_name_length);
+      memcpy(m_object_name, local_mdl.name(), m_object_name_length);
     }
   }
 
   if (with_column) {
-    m_column_name_length = mdl->col_name_length();
+    m_column_name_length = local_mdl.col_name_length();
     if (m_column_name_length > sizeof(m_column_name)) {
       assert(false);
       return 1;
     }
     if (m_column_name_length > 0) {
-      memcpy(m_column_name, mdl->col_name(), m_column_name_length);
+      /** check column name length */
+      uint db_name_len = strlen(local_mdl.db_name());
+      uint name_len = strlen(local_mdl.name());
+      uint col_name_len = 0;
+      if (db_name_len + name_len + 3 < local_mdl.length()) {
+        col_name_len = local_mdl.length() - db_name_len - name_len - 4;
+      }
+      if (local_mdl.db_name_length() == db_name_len &&
+          local_mdl.name_length() == name_len &&
+          local_mdl.col_name_length() == col_name_len) {
+        memcpy(m_column_name, local_mdl.col_name(), m_column_name_length);
+      }
     }
   }
 
