@@ -1835,7 +1835,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
         (This only happens for DDL, since DML will save the GTID into
         table and release ownership inside ha_commit_trans.)
       */
-      if (!thd->raft_replication_channel && gtid_state->save(thd) != 0) {
+      if (gtid_state->save(thd) != 0) {
         gtid_state->update_on_rollback(thd);
         return 1;
       } else if (!has_commit_order_manager(thd)) {

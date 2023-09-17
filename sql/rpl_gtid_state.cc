@@ -677,6 +677,7 @@ int Gtid_state::save(THD *thd) {
   DBUG_TRACE;
   assert(gtid_table_persistor != nullptr);
   assert(thd->owned_gtid.sidno > 0);
+  assert(thd->se_persists_gtid());
   int error = 0;
 
   int ret = gtid_table_persistor->save(thd, &thd->owned_gtid);
