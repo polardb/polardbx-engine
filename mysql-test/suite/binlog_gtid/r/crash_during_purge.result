@@ -125,7 +125,7 @@ binlog.000005	1131	28
 binlog.000006	3530	32
 binlog.000007	744	40
 xa commit 'xx';
-# 41. crash_create_before_rename_index_file
+# 31. fault_injection_copy_part_file
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -172,19 +172,37 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000003	1049	17
+binlog.000004	3530	20
+binlog.000005	1131	28
+binlog.000006	3530	32
+binlog.000007	1131	40
+binlog.000008	3530	44
 binlog.000009	744	52
 xa commit 'xx';
-# 51. crash_create_after_rename_index_file
+# 41. crash_create_before_rename_index_file
 set @@debug='';
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000003	1049	17
+binlog.000004	3530	20
+binlog.000005	1131	28
+binlog.000006	3530	32
+binlog.000007	1131	40
+binlog.000008	3530	44
 binlog.000009	1131	52
 binlog.000010	292	56
 xa recover;
 formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000003	1049	17
+binlog.000004	3530	20
+binlog.000005	1131	28
+binlog.000006	3530	32
+binlog.000007	1131	40
+binlog.000008	3530	44
 binlog.000009	1131	52
 binlog.000010	3486	56
 xa recover;
@@ -194,6 +212,12 @@ finish load
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000003	1049	17
+binlog.000004	3530	20
+binlog.000005	1131	28
+binlog.000006	3530	32
+binlog.000007	1131	40
+binlog.000008	3530	44
 binlog.000009	1131	52
 binlog.000010	3530	56
 binlog.000011	292	64
@@ -211,7 +235,7 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000011	744	64
 xa commit 'xx';
-# 61. crash_purge_before_truncate_before
+# 51. crash_create_after_rename_index_file
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -248,7 +272,7 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000013	744	76
 xa commit 'xx';
-# 71. crash_purge_before_update_index_after_truncate
+# 61. crash_purge_before_truncate_before
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -285,7 +309,7 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000015	744	88
 xa commit 'xx';
-# 81. crash_purge_critical_after_update_index
+# 71. crash_purge_before_update_index_after_truncate
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -322,7 +346,7 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000017	744	100
 xa commit 'xx';
-# 91. crash_purge_non_critical_after_update_index
+# 81. crash_purge_critical_after_update_index
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -359,53 +383,19 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000019	744	112
 xa commit 'xx';
-# run cmd: update db_crash_9.t set id = id+1
-xa recover;
-formatID	gtrid_length	bqual_length	data
-# 02. succ
-flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-binlog.000019	1049	112
-binlog.000020	292	115
-xa recover;
-formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-binlog.000019	1049	112
-binlog.000020	6276	115
-xa recover;
-formatID	gtrid_length	bqual_length	data
-1	2	0	xx
-finish load
-flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-binlog.000019	1049	112
-binlog.000020	6320	115
-binlog.000021	292	123
-insert into db_crash_9.t2 values(1);
-call dbms_consensus.purge_log(123);;
-xa recover;
-formatID	gtrid_length	bqual_length	data
-1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-binlog.000021	662	123
-xa commit 'xx';
-# 12. crash_purge_before_update_index
+# 91. crash_purge_non_critical_after_update_index
 set @@debug='';
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	292	126
+binlog.000019	1131	112
+binlog.000020	292	116
 xa recover;
 formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6276	126
+binlog.000019	1131	112
+binlog.000020	3486	116
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -413,14 +403,14 @@ finish load
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	292	134
+binlog.000019	1131	112
+binlog.000020	3530	116
+binlog.000021	292	124
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(134);;
+call dbms_consensus.purge_log(124);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -428,27 +418,23 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	744	134
+binlog.000021	744	124
 xa commit 'xx';
-# 22. crash_purge_before_remove_logs_from_index
-set @@debug='';
+# run cmd: update db_crash_9.t set id = id+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+# 02. succ
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	1131	134
-binlog.000024	292	138
+binlog.000021	1049	124
+binlog.000022	292	127
 xa recover;
 formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	1131	134
-binlog.000024	6276	138
+binlog.000021	1049	124
+binlog.000022	6576	127
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -456,10 +442,40 @@ finish load
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	1131	134
-binlog.000024	6320	138
+binlog.000021	1049	124
+binlog.000022	6620	127
+binlog.000023	292	135
+insert into db_crash_9.t2 values(1);
+call dbms_consensus.purge_log(135);;
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000023	662	135
+xa commit 'xx';
+# 12. crash_purge_before_update_index
+set @@debug='';
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	292	138
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6576	138
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
 binlog.000025	292	146
 insert into db_crash_9.t2 values(1);
 select @@debug;
@@ -473,33 +489,27 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	1131	134
-binlog.000024	6320	138
+binlog.000023	1049	135
+binlog.000024	6620	138
 binlog.000025	744	146
 xa commit 'xx';
-# 42. crash_create_before_rename_index_file
+# 22. crash_purge_before_remove_logs_from_index
 set @@debug='';
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	1131	134
-binlog.000024	6320	138
+binlog.000023	1049	135
+binlog.000024	6620	138
 binlog.000025	1131	146
 binlog.000026	292	150
 xa recover;
 formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	1131	134
-binlog.000024	6320	138
+binlog.000023	1049	135
+binlog.000024	6620	138
 binlog.000025	1131	146
-binlog.000026	6276	150
+binlog.000026	6576	150
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -507,12 +517,10 @@ finish load
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-binlog.000021	1049	123
-binlog.000022	6320	126
-binlog.000023	1131	134
-binlog.000024	6320	138
+binlog.000023	1049	135
+binlog.000024	6620	138
 binlog.000025	1131	146
-binlog.000026	6320	150
+binlog.000026	6620	150
 binlog.000027	292	158
 insert into db_crash_9.t2 values(1);
 select @@debug;
@@ -526,21 +534,33 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
 binlog.000027	744	158
 xa commit 'xx';
-# 52. crash_create_after_rename_index_file
+# 32. fault_injection_copy_part_file
 set @@debug='';
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
 binlog.000027	1131	158
 binlog.000028	292	162
 xa recover;
 formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
 binlog.000027	1131	158
-binlog.000028	6276	162
+binlog.000028	6576	162
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -548,8 +568,12 @@ finish load
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
 binlog.000027	1131	158
-binlog.000028	6320	162
+binlog.000028	6620	162
 binlog.000029	292	170
 insert into db_crash_9.t2 values(1);
 select @@debug;
@@ -563,21 +587,39 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
+binlog.000027	1131	158
+binlog.000028	6620	162
 binlog.000029	744	170
 xa commit 'xx';
-# 62. crash_purge_before_truncate_before
+# 42. crash_create_before_rename_index_file
 set @@debug='';
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
+binlog.000027	1131	158
+binlog.000028	6620	162
 binlog.000029	1131	170
 binlog.000030	292	174
 xa recover;
 formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
+binlog.000027	1131	158
+binlog.000028	6620	162
 binlog.000029	1131	170
-binlog.000030	6276	174
+binlog.000030	6576	174
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -585,8 +627,14 @@ finish load
 flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
+binlog.000023	1049	135
+binlog.000024	6620	138
+binlog.000025	1131	146
+binlog.000026	6620	150
+binlog.000027	1131	158
+binlog.000028	6620	162
 binlog.000029	1131	170
-binlog.000030	6320	174
+binlog.000030	6620	174
 binlog.000031	292	182
 insert into db_crash_9.t2 values(1);
 select @@debug;
@@ -602,7 +650,7 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000031	744	182
 xa commit 'xx';
-# 72. crash_purge_before_update_index_after_truncate
+# 52. crash_create_after_rename_index_file
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -614,7 +662,7 @@ formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000031	1131	182
-binlog.000032	6276	186
+binlog.000032	6576	186
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -623,7 +671,7 @@ flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000031	1131	182
-binlog.000032	6320	186
+binlog.000032	6620	186
 binlog.000033	292	194
 insert into db_crash_9.t2 values(1);
 select @@debug;
@@ -639,7 +687,7 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000033	744	194
 xa commit 'xx';
-# 82. crash_purge_critical_after_update_index
+# 62. crash_purge_before_truncate_before
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -651,7 +699,7 @@ formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000033	1131	194
-binlog.000034	6276	198
+binlog.000034	6576	198
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -660,7 +708,7 @@ flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000033	1131	194
-binlog.000034	6320	198
+binlog.000034	6620	198
 binlog.000035	292	206
 insert into db_crash_9.t2 values(1);
 select @@debug;
@@ -676,7 +724,7 @@ show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000035	744	206
 xa commit 'xx';
-# 92. crash_purge_non_critical_after_update_index
+# 72. crash_purge_before_update_index_after_truncate
 set @@debug='';
 flush logs;
 show consensus logs;
@@ -688,7 +736,7 @@ formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000035	1131	206
-binlog.000036	6276	210
+binlog.000036	6576	210
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -697,7 +745,7 @@ flush logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000035	1131	206
-binlog.000036	6320	210
+binlog.000036	6620	210
 binlog.000037	292	218
 insert into db_crash_9.t2 values(1);
 select @@debug;
@@ -712,6 +760,80 @@ formatID	gtrid_length	bqual_length	data
 show consensus logs;
 Log_name	File_size	Start_log_index
 binlog.000037	744	218
+xa commit 'xx';
+# 82. crash_purge_critical_after_update_index
+set @@debug='';
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000037	1131	218
+binlog.000038	292	222
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000037	1131	218
+binlog.000038	6576	222
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000037	1131	218
+binlog.000038	6620	222
+binlog.000039	292	230
+insert into db_crash_9.t2 values(1);
+select @@debug;
+@@debug
+
+call dbms_consensus.purge_log(230);;
+show consensus logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000039	744	230
+xa commit 'xx';
+# 92. crash_purge_non_critical_after_update_index
+set @@debug='';
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000039	1131	230
+binlog.000040	292	234
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000039	1131	230
+binlog.000040	6576	234
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+finish load
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000039	1131	230
+binlog.000040	6620	234
+binlog.000041	292	242
+insert into db_crash_9.t2 values(1);
+select @@debug;
+@@debug
+
+call dbms_consensus.purge_log(242);;
+show consensus logs;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	xx
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000041	744	242
 xa commit 'xx';
 SET GLOBAL debug="";
 drop table db_crash_9.t;

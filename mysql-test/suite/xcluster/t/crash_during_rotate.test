@@ -1,0 +1,140 @@
+#
+# Test recover xa specification.
+#
+source include/have_log_bin.inc;
+--source include/have_binlog_format_row.inc
+--source include/not_valgrind.inc
+source include/have_debug.inc;
+--source include/not_crashrep.inc
+
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+
+connection default;
+
+create database db_crash_8;
+create table db_crash_8.t(id int);
+insert into db_crash_8.t values(0);
+
+
+--let $iter=1
+while ($iter <= 2)
+{
+	if ($iter == 1)
+	{
+	--let $sql=insert into db_crash_8.t values(1)
+	}
+	if ($iter == 2)
+	{
+	--let $sql=update db_crash_8.t set id = id+1
+	}
+
+	--echo # run cmd: $sql
+	connection default;
+	xa recover;
+
+	--echo # 0$iter. succ
+
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+	--source suite/binlog_gtid/t/flush_and_load_data.inc
+
+	flush logs;
+
+	xa recover;
+	show consensus logs;
+	xa commit 'xx';
+
+
+	--echo # 1$iter. crash_before_rotate_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	--source suite/binlog_gtid/t/flush_and_load_data.inc
+
+	SET SESSION debug="+d,crash_before_rotate_binlog";
+	--error 2013
+	flush logs;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--source include/wait_leader_apply_catchup.inc
+	--disable_reconnect
+
+	connection default;
+	xa recover;
+	show consensus logs;
+	xa commit 'xx';
+
+
+	--echo # 2$iter. crash_before_rotate_event_appended
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	--source suite/binlog_gtid/t/flush_and_load_data.inc
+
+	SET SESSION debug="+d,crash_before_rotate_event_appended";
+	--error 2013
+	flush logs;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--source include/wait_leader_apply_catchup.inc
+	--disable_reconnect
+
+	connection default;
+	xa recover;
+	show consensus logs;
+	xa commit 'xx';
+
+
+	--echo # 3$iter. crash_after_rotate_event_appended
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	--source suite/binlog_gtid/t/flush_and_load_data.inc
+
+	SET SESSION debug="+d,crash_after_rotate_event_appended";
+	--error 2013
+	flush logs;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--source include/wait_leader_apply_catchup.inc
+	--disable_reconnect
+
+	connection default;
+	xa recover;
+	show consensus logs;
+	xa commit 'xx';
+
+
+	--echo # 4$iter. crash_binlog_rotate_between_close_and_open
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	--source suite/binlog_gtid/t/flush_and_load_data.inc
+
+	SET SESSION debug="+d,crash_binlog_rotate_between_close_and_open";
+	--error 2013
+	flush logs;
+
+	--source include/wait_until_disconnected.inc
+	--enable_reconnect
+	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
+	--source include/wait_until_connected_again.inc
+	--source include/wait_leader_apply_catchup.inc
+	--disable_reconnect
+
+	connection default;
+	xa recover;
+	show consensus logs;
+	xa commit 'xx';
+
+	--inc $iter
+}
+
+connection default;
+drop table db_crash_8.t;
+drop database db_crash_8;
