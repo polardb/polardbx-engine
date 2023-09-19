@@ -36,7 +36,7 @@ while ($iter <= 2)
 	--echo # 0$iter. succ
 
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
+	--source include/flush_and_load_data.inc
 
 	flush logs;
 
@@ -48,7 +48,7 @@ while ($iter <= 2)
 	--echo # 1$iter. crash_before_rotate_binlog
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
+	--source include/flush_and_load_data.inc
 
 	SET SESSION debug="+d,crash_before_rotate_binlog";
 	--error 2013
@@ -70,7 +70,7 @@ while ($iter <= 2)
 	--echo # 2$iter. crash_before_rotate_event_appended
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
+	--source include/flush_and_load_data.inc
 
 	SET SESSION debug="+d,crash_before_rotate_event_appended";
 	--error 2013
@@ -92,7 +92,7 @@ while ($iter <= 2)
 	--echo # 3$iter. crash_after_rotate_event_appended
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
+	--source include/flush_and_load_data.inc
 
 	SET SESSION debug="+d,crash_after_rotate_event_appended";
 	--error 2013
@@ -114,7 +114,7 @@ while ($iter <= 2)
 	--echo # 4$iter. crash_binlog_rotate_between_close_and_open
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	--source suite/binlog_gtid/t/flush_and_load_data.inc
+	--source include/flush_and_load_data.inc
 
 	SET SESSION debug="+d,crash_binlog_rotate_between_close_and_open";
 	--error 2013

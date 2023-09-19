@@ -5,6 +5,7 @@
 --exec echo "restart:--debug=+d,$debug_hook" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --enable_reconnect
 --source include/wait_until_connected_again.inc
+--source include/wait_leader_apply_catchup.inc
 -- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --sleep 10
 
@@ -12,7 +13,7 @@ connect (conn1,localhost,root,,);
 connection conn1;
 set @@debug='';
 
---source suite/binlog_gtid/t/flush_and_load_data.inc
+--source include/flush_and_load_data.inc
 
 flush logs;
 show consensus logs;
@@ -31,6 +32,7 @@ connection default;
 --enable_reconnect
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --source include/wait_until_connected_again.inc
+--source include/wait_leader_apply_catchup.inc
 --disable_reconnect
 
 connect (conn1,localhost,root,,);

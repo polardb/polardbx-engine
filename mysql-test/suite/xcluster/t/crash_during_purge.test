@@ -55,42 +55,42 @@ while ($iter <= 2)
 
 	--let $debug_hook=crash_purge_before_update_index
 	--echo # 1$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 	--let $debug_hook=crash_purge_before_remove_logs_from_index
 	--echo # 2$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 	--let $debug_hook=fault_injection_copy_part_file
 	--echo # 3$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 	--let $debug_hook=crash_create_before_rename_index_file
 	--echo # 4$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 
 	--let $debug_hook=crash_create_after_rename_index_file
 	--echo # 5$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 	--let $debug_hook=crash_purge_before_truncate_before
 	--echo # 6$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 
 	--let $debug_hook=crash_purge_before_update_index_after_truncate
 	--echo # 7$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 	--let $debug_hook=crash_purge_critical_after_update_index
 	--echo # 8$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 
 	--let $debug_hook=crash_purge_non_critical_after_update_index
 	--echo # 9$iter. $debug_hook
-	--source suite/binlog_gtid/t/crash_druing_pruge_common.inc
+	--source suite/xcluster/t/crash_druing_pruge_common.inc
 
 	--inc $iter
 }
