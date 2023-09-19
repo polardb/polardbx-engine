@@ -3,4 +3,4 @@
 [mysqld]
 consensus_large_trx=ON
 consensus_check_large_event=ON
-slave_parallel_workers=0
+replica_parallel_workers=0
