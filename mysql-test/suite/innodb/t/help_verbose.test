@@ -13,7 +13,8 @@ let SEARCH_FILE = $bugdir/mysqld.log;
 let $args=--no-defaults --innodb_dedicated_server=OFF --lc_messages_dir=$MYSQL_SHAREDIR --datadir=$datadir --skip-grant-tables --secure-file-priv=$bugdir>$SEARCH_FILE 2>&1 ;
 
 --echo # Initialize
---exec $MYSQLD $args --initialize --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29220@1'
+--source include/make_cluster_args.inc
+--exec $MYSQLD $args --initialize $CLUSTER_ARGS
 
 --echo # Start with 64M buffer pool
 --exec $MYSQLD $args --innodb_buffer_pool_size=64M --help --verbose

@@ -35,12 +35,13 @@ write_file $SHUTDOWN_SQL;
 EOF
 
 --echo # Run -I on a new datadir
---exec $MYSQLD $DEFARGS -I --log-error=$MYSQLD_LOG --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:25200@1'
+--source include/make_cluster_args.inc
+--exec $MYSQLD $DEFARGS -I --log-error=$MYSQLD_LOG $CLUSTER_ARGS
 
 
 --echo #
 --echo # Deduce --basedir when using full path to mysqld
---exec $MYSQLD $INIT_FILE_ARGS --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:25200@1'
+--exec $MYSQLD $INIT_FILE_ARGS $CLUSTER_ARGS
 #--exec $MYSQLD $INIT_FILE_ARGS
 
 --perl
@@ -117,7 +118,7 @@ EOF
 --echo #
 --echo # Try invalid --log-error
 --error 1
---exec $MYSQLD $DEFARGS --log-error=$MYSQL_TMP_DIR/no_such_dir/bad_err_log.err --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:28200@1' >$MYSQLD_OUT 2>&1
+--exec $MYSQLD $DEFARGS --log-error=$MYSQL_TMP_DIR/no_such_dir/bad_err_log.err $CLUSTER_ARGS >$MYSQLD_OUT 2>&1
 
 --echo # Look for expected error in output:
 --perl
@@ -144,7 +145,8 @@ EOF
 --echo #
 --echo # Try -D as shortcut for --daemonize option with invalid --log-error
 --error 1
---exec $MYSQLD $DEFARGS -D --log-error=$MYSQL_TMP_DIR/no_such_dir/bad_err_log.err --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29200@1' >$MYSQLD_OUT 2>&1
+--source include/make_cluster_args.inc
+--exec $MYSQLD $DEFARGS -D --log-error=$MYSQL_TMP_DIR/no_such_dir/bad_err_log.err $CLUSTER_ARGS >$MYSQLD_OUT 2>&1
 
 --echo # Look for expected errors in output from launcher and daemon:
 --perl

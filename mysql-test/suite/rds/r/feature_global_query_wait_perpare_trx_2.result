@@ -32,6 +32,7 @@ XA PREPARE 'xatest';
 set session innodb_global_query_wait_timeout=2;
 XA COMMIT 'xatest';
 ERROR HY000: Prepare wait timeout exceeded; try restarting global query
+INSERT INTO t VALUES(4, 1);
 set global innodb_rds_flashback_enabled=default;
 drop table t;
 set global innodb_undo_retention = default;

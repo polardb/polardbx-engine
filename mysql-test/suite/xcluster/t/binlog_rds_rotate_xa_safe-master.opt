@@ -1,3 +1,2 @@
 --gtid-mode=ON
---recovery-apply-binlog=ON
 --enforce-gtid-consistency=ON

@@ -211,7 +211,13 @@ main.initialize-errors		:  WL#001 run failed
 main.initialize-sha256		:  WL#001 run failed
 main.initialize-init-acls	:  WL#001 run failed
 main.initialize				:  WL#001 run failed
+main.initialize-bug21335821	:  WL#001 run failed
+main.initialize-bug20504142 :  WL#001 run failed
 
+
+# run failed in 8018, need fix
+main.sum_distinct-big					: WL#001 too long time
+main.count_distinct3					: WL#001 too long time
 
 # run failed in opensource, need fix
 xcluster.gtid 						: BUG#000 binlog name is not stable

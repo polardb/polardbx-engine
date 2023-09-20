@@ -15,8 +15,8 @@
 
 
 --source include/have_binlog_format_row.inc
---source include/have_debug.inc
---source include/have_debug_sync.inc
+--source include/have_debug_new.inc
+--source include/have_debug_sync_new.inc
 
 --eval CREATE TABLE t1 (c1 INT) ENGINE = $engine
 INSERT INTO t1 VALUES (1);

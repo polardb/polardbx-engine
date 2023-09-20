@@ -2,6 +2,7 @@
 
 let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
+--let $learner1_pid_file= $learner_pid_file
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
 #add consensus_learner $learner_cluster_info;

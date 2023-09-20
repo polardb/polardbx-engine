@@ -34,7 +34,6 @@ insert into t1 values (11);
 insert into t1 values (12);
 # test drop learner deadlock bug #11443498
 select ROLE from information_schema.alisql_cluster_global where role='LEARNER';
-
 #eval drop consensus_learner $learner_cluster_info;
 --disable_query_log
 eval call dbms_consensus.drop_learner($learner_cluster_info);

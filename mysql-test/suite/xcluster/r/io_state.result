@@ -1,0 +1,22 @@
+set global io_state_check_interval=1;
+set global io_state_retry_times=2;
+set global io_state=OFF;
+set global debug="+d,simulate_disk_error_on_io_state";
+set global debug="-d,simulate_disk_error_on_io_state";
+set global debug="+d,simulate_disk_error_on_io_state";
+set global io_state=ON;
+set global io_state_mode=none;
+set global debug="-d,simulate_disk_error_on_io_state";
+set global debug="+d,simulate_disk_error_on_io_state";
+set global io_state_mode=leader;
+set global debug="-d,simulate_disk_error_on_io_state";
+set global io_state_check_interval=1;
+set global io_state_retry_times=2;
+set global debug="+d,simulate_disk_error_on_io_state";
+set global debug="-d,simulate_disk_error_on_io_state";
+set global io_state_check_interval=1;
+set global io_state_retry_times=2;
+set global debug="+d,simulate_disk_error_on_io_state";
+set global io_state_mode=follower;
+set global debug="-d,simulate_disk_error_on_io_state";
+# restart

@@ -6,7 +6,8 @@
 let BASEDIR= `select @@basedir`;
 let DDIR=$MYSQL_TMP_DIR/installdb_test;
 let outfile=$MYSQLTEST_VARDIR/log/ddir_perm.err;
-let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-skip-auto_generate_certs --loose-skip-sha256_password_auto_generate_rsa_keys --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR;
+--source include/make_cluster_args.inc
+let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-skip-auto_generate_certs --loose-skip-sha256_password_auto_generate_rsa_keys --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR $CLUSTER_ARGS;
 
 --echo # We don't care about innodb warnings at this point
 --echo #
@@ -14,7 +15,8 @@ let extra_args=--no-defaults --innodb_dedicated_server=OFF --console --loose-ski
 
 --echo #
 --echo # Initialize the server with --initialize-insecure
---exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --log-error-verbosity=1 --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:24200@1' > $outfile 2>&1
+
+--exec $MYSQLD $extra_args --initialize-insecure --datadir=$DDIR --log-error-verbosity=1 > $outfile 2>&1
 
 --echo # Check data directory permission. Expected value : 0750
 --perl

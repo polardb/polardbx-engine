@@ -2611,3 +2611,15 @@ scripts/query_trace_dump
 server_unittest_library.c
 support-files/mysqlrouter-log-rotate
 extra/IS/dependency/protobuf-3.6.1
+mysql-test/var_normal/
+mysql-test/var_normal_ps/
+mysql-test/var_normal_tp_ps/
+mysql-test/var_xcluster/
+plugin/polarx_rpc/libpolarx_rpc.a
+plugin/polarx_rpc/libpolarx_rpc_client.a
+plugin/polarx_rpc/libpolarx_rpc_protobuf_full.a
+plugin/polarx_rpc/protobuf/
+plugin/polarx_rpc/protobuf_lite/
+extra/IS/consensus/bu/
+extra/IS/consensus/output/
+extra/IS/dependency/easy/src/bu/

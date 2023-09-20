@@ -1,3 +1,5 @@
+--source include/have_debug.inc
+
 create table t1 (id int);
 insert into t1 values (1);
 set session debug = "+d, hb_timeout_do_not_freeze_operation";

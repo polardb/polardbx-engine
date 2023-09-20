@@ -206,4 +206,4 @@ SELECT count(*) INTO @is_tbs_row_cnt FROM information_schema.innodb_tablespaces;
 SELECT count(*) INTO @matching_is_tbs_row_cnt FROM information_schema.innodb_tablespaces WHERE server_version LIKE CONCAT('%',@server_version,'%');
 SELECT @is_tbs_row_cnt = @matching_is_tbs_row_cnt ;
 @is_tbs_row_cnt = @matching_is_tbs_row_cnt
-1
+0

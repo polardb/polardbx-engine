@@ -49,7 +49,8 @@ let $wait_condition= select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_sch
 show databases like '%aaa%';
 --connection leader
 #drop consensus_learner '127.0.0.1:24400';
-call dbms_consensus.drop_learner("127.0.0.1:24400");
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info);
 
 # cleanup
 --source include/stop_new_learner.inc

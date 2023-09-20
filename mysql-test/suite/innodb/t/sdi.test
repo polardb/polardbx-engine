@@ -38,7 +38,8 @@ CREATE DATABASE test;
 EOF
 
 # Set the bootstrap parameters with undo log encryption enabled
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --secure-file-priv="" --innodb_log_file_size=$LOG_FILE_SIZE --innodb_page_size=$START_PAGE_SIZE --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29211@1' </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+--source include/make_cluster_args.inc
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --secure-file-priv="" --innodb_log_file_size=$LOG_FILE_SIZE --innodb_page_size=$START_PAGE_SIZE --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL $CLUSTER_ARGS </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Stop the MTR default DB server
 --source include/shutdown_mysqld.inc

@@ -95,8 +95,7 @@ XA COMMIT 'xatest';
 connection con2;
 --error ER_GP_WAIT_TIMEOUT
 --reap;
-
-
+INSERT INTO t VALUES(4, 1);
 
 connection con1;
 set global innodb_rds_flashback_enabled=default;

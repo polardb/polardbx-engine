@@ -26,6 +26,7 @@ call mtr.add_suppression("ERROR 1118 \\(42000\\) at line 106: Row size too large
 
 # Stop the MTR default datadir, as it was started with default 16k page size
 --echo # Stop DB server which was created by MTR default
+--source include/make_cluster_args.inc
 --source include/shutdown_mysqld.inc
 
 let BOOTSTRAP_SQL=$MYSQL_TMP_DIR/boot.sql;
@@ -41,7 +42,7 @@ EOF
 # time to create redo log files.
 
 # Set the bootstrap parameter page size 32k for datadir1
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=32K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29240@1' </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=32K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" $CLUSTER_ARGS </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Run the bootstrap command with page size 32k
 --exec $NEW_CMD
@@ -158,6 +159,7 @@ SELECT count(*) FROM tab3;
 
 DROP DATABASE test;
 
+--source include/make_cluster_args.inc
 # Stop the server which was started with page size 32K
 --source include/shutdown_mysqld.inc
 
@@ -168,7 +170,7 @@ DROP DATABASE test;
 --mkdir $MYSQL_TMP_DIR/datadir1/data
 
 # Set the bootstrap parameter page size 16k for datadir1
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=16K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29241@1' </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=16K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" $CLUSTER_ARGS </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Run the bootstrap command with page size 16k
 --exec $NEW_CMD
@@ -220,6 +222,7 @@ SELECT count(*) FROM tab3;
 # cleanup
 DROP DATABASE test;
 
+--source include/make_cluster_args.inc
 # Stop the server which was started with page size 16K
 --source include/shutdown_mysqld.inc
 
@@ -230,7 +233,7 @@ DROP DATABASE test;
 --mkdir $MYSQL_TMP_DIR/datadir1/data
 
 # Set the bootstrap parameter page size 64k for datadir1
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=64K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" --cluster-id=1 --cluster-start-index=1 --cluster-info='127.0.0.1:29242@1' </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --lc_messages_dir=$MYSQL_SHAREDIR --innodb_page_size=64K --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --innodb_log_file_size=15M --innodb_log_files_in_group=2 --init-file=$BOOTSTRAP_SQL  --secure-file-priv="" $CLUSTER_ARGS </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Run the bootstrap command with page size 64k
 --exec $NEW_CMD

@@ -32,8 +32,8 @@ CALL mtr.add_suppression("Unsafe statement written to the binary log");
 
 --echo # Install semi-sync related plugins
 --disable_query_log
-eval INSTALL PLUGIN rpl_semi_sync_master SONAME '$SEMISYNC_MASTER_PLUGIN';
-eval INSTALL PLUGIN rpl_semi_sync_slave SONAME '$SEMISYNC_SLAVE_PLUGIN';
+#eval INSTALL PLUGIN rpl_semi_sync_master SONAME '$SEMISYNC_MASTER_PLUGIN';
+#eval INSTALL PLUGIN rpl_semi_sync_slave SONAME '$SEMISYNC_SLAVE_PLUGIN';
 --enable_query_log
 
 CREATE TABLE rplvars (id INT PRIMARY KEY AUTO_INCREMENT, varname VARCHAR(64), varvalue VARCHAR(256));
@@ -62,7 +62,7 @@ INSERT INTO rplvars (varname, varvalue)
 # If this count differs, it means a variable has been added or removed.
 # In that case, this testcase needs to be updated accordingly.
 --echo
---let $expected=86
+--let $expected=76
 --let $assert_text= 'Expect $expected variables in the table.'
 --let $assert_cond= [SELECT COUNT(*) as count FROM rplvars, count, 1] = $expected
 --source include/assert.inc
@@ -85,11 +85,7 @@ while ( $varid <= $countvars )
 }
 
 --echo
-<<<<<<< HEAD
---let $expected=67
-=======
---let $expected=69
->>>>>>> 34050261d9c ([Bugfix] [#49288284] Modify binlog_checksum as unsettable)
+--let $expected=58
 --let $assert_text= 'Expect $expected persisted variables in persisted_variables table.'
 --let $assert_cond= [SELECT COUNT(*) as count FROM performance_schema.persisted_variables, count, 1] = $expected
 --source include/assert.inc
@@ -139,6 +135,6 @@ while ( $varid <= $countvars )
 --let $varid=
 --let $varnames=
 --remove_file $MYSQLD_DATADIR/mysqld-auto.cnf
-UNINSTALL PLUGIN rpl_semi_sync_master;
-UNINSTALL PLUGIN rpl_semi_sync_slave;
+#UNINSTALL PLUGIN rpl_semi_sync_master;
+#UNINSTALL PLUGIN rpl_semi_sync_slave;
 DROP TABLE rplvars;

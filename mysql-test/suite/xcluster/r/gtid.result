@@ -68,14 +68,14 @@ create table t(id int);
 insert into t values(0);
 show master status;
 File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
-master-bin.000003	#			#
+master-bin.000004	#			#
 set global debug="+d, skip_consensus_fifo_cache";
 set global debug="+d, crash_before_large_trx_commit_early";
 insert into t values(1);
 ERROR HY000: Lost connection to MySQL server during query
 show master status;
 File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
-master-bin.000003	#			#
+master-bin.000004	#			#
 flush logs;
 insert into t values(2);
 0
