@@ -3033,9 +3033,9 @@ bool THD::is_current_stmt_binlog_disabled() const {
 }
 
 bool THD::is_current_stmt_binlog_log_replica_updates_disabled() const {
-  return ((!opt_bin_log || (slave_thread &&
-          (!opt_log_replica_updates || this->raft_replication_channel))) ||
-          !mysql_bin_log.is_open());
+  return (!opt_bin_log 
+          || (slave_thread && (!opt_log_replica_updates || this->raft_replication_channel))
+          || !mysql_bin_log.is_open());
 }
 
 bool THD::is_current_stmt_binlog_enabled_and_caches_empty() const {

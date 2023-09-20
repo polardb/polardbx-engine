@@ -543,7 +543,7 @@ int start_consensus_apply_threads()
 
       // Todo: mi must be itself
       /* If server id is not set, start_slave_thread() will say it */
-      if (mi && channel_map.is_xpaxos_replication_channel_name(mi->get_channel()))
+      if (mi && channel_map.is_raft_replication_channel_name(mi->get_channel()))
       {
         /* same as in start_slave() cache the global var values into rli's members */
         mi->rli->opt_replica_parallel_workers = opt_mts_replica_parallel_workers;

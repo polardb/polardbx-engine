@@ -678,6 +678,8 @@ int Gtid_state::save(THD *thd) {
   assert(gtid_table_persistor != nullptr);
   assert(thd->owned_gtid.sidno > 0);
   assert(thd->se_persists_gtid());
+  //raft should not arrive here
+  assert(false);
   int error = 0;
 
   int ret = gtid_table_persistor->save(thd, &thd->owned_gtid);
@@ -697,6 +699,8 @@ int Gtid_state::save(THD *thd) {
 
 int Gtid_state::save(const Gtid_set *gtid_set) {
   DBUG_TRACE;
+  //raft should not arrive here
+  assert(false);
   int ret = gtid_table_persistor->save(gtid_set);
   return ret;
 }
@@ -884,8 +888,7 @@ void Gtid_state::update_gtids_impl_own_gtid(THD *thd, bool is_commit) {
     executed_gtids._add_gtid(thd->owned_gtid);
     thd->rpl_thd_ctx.session_gtids_ctx().notify_after_gtid_executed_update(thd);
     /* paxos replay thread can't add executed gtid to lost and not in table set */
-    if (thd->slave_thread && opt_bin_log && !opt_log_replica_updates &&
-        !thd->raft_replication_channel) {
+    if (thd->slave_thread && opt_bin_log && !opt_log_replica_updates && !thd->raft_replication_channel) {
       lost_gtids._add_gtid(thd->owned_gtid);
       gtids_only_in_table._add_gtid(thd->owned_gtid);
     }

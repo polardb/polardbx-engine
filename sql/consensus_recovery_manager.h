@@ -70,6 +70,7 @@ class Pending_recovering_trx {
   [[nodiscard]] XID &get_xid() const { return xa_trx->id; }
 
   int withdraw();
+  void clear_xa_spec() { xa_spec->clear(); }
 
   int recover();
 

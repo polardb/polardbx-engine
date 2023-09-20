@@ -1824,7 +1824,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
   if (thd->owned_gtid.sidno > 0) {
     assert(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
-    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || thd->raft_replication_channel))) {
+    if (!opt_bin_log || (thd->slave_thread && !opt_log_replica_updates)) {
       /*
         If the binary log is disabled for this thread (either by
         log_bin=0 or sql_log_bin=0 or by log_replica_updates=0 for a
@@ -1835,7 +1835,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
         (This only happens for DDL, since DML will save the GTID into
         table and release ownership inside ha_commit_trans.)
       */
-      if (gtid_state->save(thd) != 0) {
+      if (!thd->raft_replication_channel && gtid_state->save(thd) != 0) {
         gtid_state->update_on_rollback(thd);
         return 1;
       } else if (!has_commit_order_manager(thd)) {

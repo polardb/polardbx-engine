@@ -1999,7 +1999,7 @@ int flush_consensus_log(THD *thd, binlog_cache_data *,
   uint flag = 0;
   bool is_large_trx = false;
   // alloc the buffer
-  //TODO @yanhua, already write in MYSQL_BIN_LOG::write_transaction
+  // NOTE: already write_cache in MYSQL_BIN_LOG::write_transaction
   // error = mysql_bin_log.write_cache(thd, binlog_cache, writer);
   buf_size = my_b_tell(consensus_log_manager.get_cache());
   // determine whether log is too large

@@ -6277,6 +6277,11 @@ static int init_server_components() {
   */
   if (delegates_init()) unireg_abort(MYSQLD_ABORT_EXIT);
 
+  /* need to configure logging for raft */
+  if (!opt_bin_log && raft::Recovery_manager::instance().is_raft_instance_recovering()) {
+    LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--log-bin");
+  }
+
   /* need to configure logging before initializing storage engines */
   if (opt_log_replica_updates && !opt_bin_log) {
     LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--log-replica-updates");

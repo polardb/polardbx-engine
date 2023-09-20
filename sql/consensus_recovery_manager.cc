@@ -185,7 +185,8 @@ int Consensus_recovery_manager::truncate_pending_recovering_trxs(
           << iter->first << "]"
           << " is rollback since index large than " << consensus_index
           << " at Consensus_recovery_manager::truncate_pending_recovering_trxs ";
-
+      //need clear gtid in xa_spec
+      iter->second->clear_xa_spec();
       iter->second->withdraw();
       Pending_Recovering_trxs.erase(iter++);
     } else {
