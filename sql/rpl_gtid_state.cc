@@ -699,8 +699,6 @@ int Gtid_state::save(THD *thd) {
 
 int Gtid_state::save(const Gtid_set *gtid_set) {
   DBUG_TRACE;
-  //raft should not arrive here
-  assert(false);
   int ret = gtid_table_persistor->save(gtid_set);
   return ret;
 }
