@@ -667,8 +667,6 @@ void update_consensus_apply_pos(Relay_log_info *rli,
       consensus_log_manager.set_real_apply_index(consensus_index);
       consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
 
-      // @todo figure out why we need to update applied index here
-      consensus_ptr->updateAppliedIndex(consensus_index);
       raft::info(ER_RAFT_APPLIER) << "set_real_apply_index: " << consensus_index
                             << ", consensus_term: " << consensus_term
                             << ", consensus_index: " << consensus_index
