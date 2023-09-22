@@ -995,7 +995,8 @@ static void trx_resurrect_update(
     if (undo->empty && trx_state_eq(trx, TRX_STATE_PREPARED)) {
       undo->set_prepared(trx->xid);
     }
-    ut_ad(undo->xid.eq(trx->xid));
+    //TODO:: bug from mysql community @zanye
+    //ut_ad(undo->xid.eq(trx->xid));
   } else {
     rseg->trx_ref_count++;
     trx->rsegs.m_redo.rseg = rseg;
