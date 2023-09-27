@@ -3143,13 +3143,6 @@ int Log_event::apply_event(Relay_log_info *rli) {
       return 0;
     } else {
       int error = do_apply_event(rli);
-      if (error == 0) {
-        /** 
-         * update consensus apply index if   
-         *  coordinator apply event; 
-        */
-        update_consensus_apply_index(rli, this);
-      }
       if (rli->is_processing_trx()) {
         // needed to identify DDL's; uses the same logic as in
         // get_slave_worker()
@@ -3273,7 +3266,19 @@ int Log_event::apply_event(Relay_log_info *rli) {
       }
     }
 
+    DBUG_EXECUTE_IF("xpaxos_apply_prapare_xa_crash", {
+      if(get_type_code() == binary_log::XA_PREPARE_LOG_EVENT)
+        DBUG_SUICIDE();
+    });
+
     int error = do_apply_event(rli);
+    if (error == 0) {
+      /**
+        * update consensus apply index if
+        *  coordinator apply event;
+      */
+      update_consensus_apply_index(rli, this);
+    }
     if (rli->is_processing_trx()) {
       // needed to identify DDL's; uses the same logic as in get_slave_worker()
       if (starts_group() && get_type_code() == binary_log::QUERY_EVENT) {

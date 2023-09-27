@@ -133,7 +133,7 @@ void Consensus_recovery_manager::add_pending_recovering_trx(
     const XA_recover_txn *xa_trx, const XA_specification &xa_spec,
     uint64 consensus_index) {
   raft::system(ER_RAFT_RECOVERY) << "add pending recovering trx" <<
-      xa_trx->id.key();
+      xa_trx->id;
   Pending_Recovering_trxs[consensus_index] =
       std::make_unique<Pending_recovering_trx>(ht, type, current_state,
                                                next_state, xa_trx, xa_spec,
@@ -257,10 +257,6 @@ int Consensus_recovery_manager::recover_remaining_pending_recovering_trxs() {
     if (recover_start_apply_index == 0 ||
         iter.first <= recover_start_apply_index) {
       iter.second->recover();
-    } else {
-      // this is not possible
-      assert(0);
-      iter.second->withdraw();
     }
   }
   Pending_Recovering_trxs.clear();

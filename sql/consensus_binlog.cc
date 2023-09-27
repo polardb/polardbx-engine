@@ -97,7 +97,7 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size, Log_event *
     else
       flag |= Consensus_log_event_flag::FLAG_BLOB;
     thd->consensus_index = consensus_log_manager.get_current_index();
-    raft::info(ER_RAFT_COMMIT) << "Large event batch_size " << blen
+    raft::info(ER_RAFT_COMMIT) << "large_event_flush batch_size " << blen
         << ", total_batch_size " << total_batch_size
         << ", original buf_size " << total_size
         << ", consensus_index " << thd->consensus_index;
@@ -180,7 +180,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size)
       flag = Consensus_log_event_flag::FLAG_LARGE_TRX;
       assert(total_batch_size < total_size);
       thd->consensus_index = consensus_log_manager.get_current_index();
-      raft::info(ER_RAFT_COMMIT) << "Large event batch_size " << batch_size
+      raft::info(ER_RAFT_COMMIT) << "large_trx_flush batch_size " << batch_size
           << ", total_batch_size " << total_batch_size
           << ", original buf_size " << total_size
           << ", consensus_index " << thd->consensus_index;
@@ -240,7 +240,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size)
     total_batch_size += batch_size;
     flag = Consensus_log_event_flag::FLAG_LARGE_TRX_END;
     thd->consensus_index = consensus_log_manager.get_current_index();
-    raft::info(ER_RAFT_COMMIT) << "Large event batch_size " << batch_size
+    raft::info(ER_RAFT_COMMIT) << "large_trx_flush batch_size " << batch_size
         << ", total_batch_size " << total_batch_size
         << ", original buf_size " << total_size
         << ", consensus_index " << thd->consensus_index;

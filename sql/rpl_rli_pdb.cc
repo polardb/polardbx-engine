@@ -2511,9 +2511,7 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
            ev->get_type_code() == binary_log::QUERY_EVENT ||
            is_mts_db_partitioned(rli) || worker->id == 0 || seen_gtid);
 
-    if (error == 0) {
-      mts_advance_consensus_apply_index(rli, ev);
-    }
+    mts_advance_consensus_apply_index(rli, ev);
 
     if (ev->ends_group() || (!seen_begin && !is_gtid_event(ev) &&
                              !lizard::is_b_events_before_gtid(ev) &&
