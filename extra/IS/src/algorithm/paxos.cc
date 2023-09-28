@@ -2103,9 +2103,10 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     if (msg->entries_size() > 0) {
       easy_warn_log(
           "Server %d : msgId(%llu) receive log has %ld entries, plt:%ld, "
-          "pli:%ld, commitIndex:%ld\n",
+          "pli:%ld, commitIndex:%ld, lli:%ld, pli2:%ld\n",
           localServer_->serverId, msg->msgid(), msg->entries_size(),
-          msg->prevlogterm(), msg->prevlogindex(), msg->commitindex());
+          msg->prevlogterm(), msg->prevlogindex(), msg->commitindex(),
+          log_->getLastLogIndex(), prevLogIndex);
       bool appendDone = false;
       if (msg->entries_size() != 0 && log_->getLastLogIndex() == prevLogIndex) {
         /* no need truncate */

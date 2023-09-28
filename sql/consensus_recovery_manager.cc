@@ -132,7 +132,7 @@ void Consensus_recovery_manager::add_pending_recovering_trx(
     enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
     const XA_recover_txn *xa_trx, const XA_specification &xa_spec,
     uint64 consensus_index) {
-  raft::system(ER_RAFT_RECOVERY) << "add pending recovering trx" <<
+  raft::system(ER_RAFT_RECOVERY) << "add pending recovering trx " <<
       xa_trx->id;
   Pending_Recovering_trxs[consensus_index] =
       std::make_unique<Pending_recovering_trx>(ht, type, current_state,
@@ -257,6 +257,10 @@ int Consensus_recovery_manager::recover_remaining_pending_recovering_trxs() {
     if (recover_start_apply_index == 0 ||
         iter.first <= recover_start_apply_index) {
       iter.second->recover();
+    } else {
+      raft::system(ER_RAFT_RECOVERY)
+          << "XID = [" << iter.second->get_xid() << "] "
+          << " will not withdraw here";
     }
   }
   Pending_Recovering_trxs.clear();
@@ -349,10 +353,14 @@ Pending_recovering_trx::~Pending_recovering_trx() {
     raft::error(ER_RAFT_RECOVERY)
         << "XID = [" << xa_trx->id << "] "
         << "is not recover or withdraw at "
-           "Pending_recovering_trx::~Pending_recovering_trx";
+           "Pending_recovering_trx::~Pending_recovering_trx: "
+        << ", type: " << (int)type 
+        << ", current_state: " << (int)current_state
+        << ", next_state: " << (int)next_state;
   }
 
-  if (final_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+  if (final_state == enum_ha_recover_xa_state::PREPARED_IN_TC
+      || (!processed && current_state == enum_ha_recover_xa_state::PREPARED_IN_TC)) {
     if (Recovered_xa_transactions::instance().add_prepared_xa_transaction(
             xa_trx)) {
       raft::error(ER_RAFT_RECOVERY)
