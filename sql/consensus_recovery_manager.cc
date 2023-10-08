@@ -254,14 +254,7 @@ int Consensus_recovery_manager::recover_remaining_pending_recovering_trxs() {
   }
 
   for (auto &iter : Pending_Recovering_trxs) {
-    if (recover_start_apply_index == 0 ||
-        iter.first <= recover_start_apply_index) {
-      iter.second->recover();
-    } else {
-      raft::system(ER_RAFT_RECOVERY)
-          << "XID = [" << iter.second->get_xid() << "] "
-          << " will not withdraw here";
-    }
+    iter.second->recover();
   }
   Pending_Recovering_trxs.clear();
   return 0;
@@ -357,6 +350,7 @@ Pending_recovering_trx::~Pending_recovering_trx() {
         << ", type: " << (int)type 
         << ", current_state: " << (int)current_state
         << ", next_state: " << (int)next_state;
+    abort();
   }
 
   if (final_state == enum_ha_recover_xa_state::PREPARED_IN_TC
