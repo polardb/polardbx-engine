@@ -189,4 +189,12 @@ extern PSI_memory_key key_memory_string_service_iterator;
 extern PSI_memory_key key_memory_ConsensusLogManager;
 extern PSI_memory_key key_memory_ConsensusPreFetchManager;
 
+extern PSI_memory_key key_memory_IA_mem;
+
+/* for polarx changeset */
+extern PSI_memory_key key_memory_CS_PRIMARY_KEY_CACHE;
+extern PSI_memory_key key_memory_CS_PRIMARY_KEY;
+extern PSI_memory_key key_memory_CS_RESULT_BUFFER;
+extern PSI_memory_key key_memory_CS_FILE_NAME;
+
 #endif  // PSI_MEMORY_KEY_INCLUDED

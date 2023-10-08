@@ -1,0 +1,75 @@
+--disable_warnings
+DROP TABLE IF EXISTS c2;
+--enable_warnings
+
+CREATE TABLE c2 (
+id INT NOT NULL,
+str VARCHAR(20) NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, str)
+) ENGINE=InnoDB;
+
+connect (conn1,localhost,root,,);
+connect (conn2,localhost,root,,);
+
+connection conn1;
+xa begin "tt";
+insert into c2 values (1, "abc", "a");
+select * from c2;
+
+connection conn2;
+call polarx.changeset_start('c2');
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+
+connection conn1;
+insert into c2 values (2, "bcd", "b");
+update c2 set str = "efg" where id = 1;
+
+connection conn2;
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+
+connection conn1;
+xa end "tt";
+
+connection conn2;
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+
+connection conn1;
+xa prepare "tt";
+
+connection conn2;
+call polarx.changeset_fetch('c2');
+
+connection conn1;
+xa commit "tt";
+
+connection conn2;
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+call polarx.changeset_stats('c2');
+
+connection conn1;
+xa begin "tt2";
+
+connection conn2;
+call polarx.changeset_fetch('c2');
+
+connection conn1;
+insert into c2 values (3, "hijk", "h");
+xa end "tt2";
+
+connection conn2;
+call polarx.changeset_fetch('c2');
+
+connection conn1;
+xa commit "tt2" one phase;
+
+connection conn2;
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+call polarx.changeset_stats('c2');
+call polarx.changeset_finish('c2');
+DROP TABLE IF EXISTS c2;

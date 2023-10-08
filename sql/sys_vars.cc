@@ -157,6 +157,7 @@
 #include "storage/xengine/util/logger.h"
 #include "rpl_slave.h"              // rotate_relay_log
 #include "consensus_log_manager.h"
+#include "sql/polarx_proc/changeset_manager.h"
 
 TYPELIB bool_typelib = {array_elements(bool_values) - 1, "", bool_values,
                         nullptr};
@@ -6824,6 +6825,20 @@ static Sys_var_bool Sys_sequence_read_skip_cache(
     "Skip sequence cache, read the based table directly.",
     SESSION_ONLY(sequence_read_skip_cache), NO_CMD_LINE, DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
+
+static bool handle_enable_changeset(sys_var *self, THD *thd, enum_var_type type) {
+  if (!enable_changeset) {
+    im::gChangesetManager.erase_all_changeset();
+  }
+	return false;
+}
+
+static Sys_var_bool Sys_enable_changeset(
+       "enable_changeset",
+       "Whether open the polarx changeset proc",
+       GLOBAL_VAR(enable_changeset), CMD_LINE(OPT_ARG), DEFAULT(true),
+       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(handle_enable_changeset)
+);
 
 #include "sys_vars_ext.cc"
 #include "sys_vars_consensus.cc"

@@ -141,6 +141,8 @@
 #include "xa_handler.h"
 #include "sql/binlog_ext.h"
 
+#include "polarx_proc/changeset_manager.h"
+
 /**
   @def MYSQL_TABLE_IO_WAIT
   Instrumentation helper for table io_waits.
@@ -1900,6 +1902,12 @@ int ha_commit_low(THD *thd, bool all, bool run_after_commit) {
     }
     trn_ctx->reset_scope(trx_scope);
   }
+
+  /* commit changeset */
+  if (thd->get_transaction()->m_flags.commit_low || all) {
+    im::gChangesetManager.commit_change(thd);
+  }
+
   /* Free resources and perform other cleanup even for 'empty' transactions. */
   if (all) trn_ctx->cleanup();
   /*
@@ -1962,6 +1970,9 @@ int ha_rollback_low(THD *thd, bool all) {
     trn_ctx->reset_scope(trx_scope);
   }
 
+  if (all) {
+    im::gChangesetManager.rollback_change(thd);
+  }
   /*
     Thanks to possibility of MDL deadlock rollback request can come even if
     transaction hasn't been started in any transactional storage engine.

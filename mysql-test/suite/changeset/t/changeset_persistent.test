@@ -1,0 +1,49 @@
+--disable_warnings
+DROP TABLE IF EXISTS c3;
+--enable_warnings
+
+CREATE TABLE c3 (
+id INT NOT NULL AUTO_INCREMENT,
+str VARCHAR(40) NOT NULL,
+value VARCHAR(40) NOT NULL,
+PRIMARY KEY (id, str)
+) ENGINE=InnoDB;
+
+insert into c3(str, value) values
+("changeset", "test"),
+("changeset1", "test1"),
+("changeset2", "test2"),
+("changeset3", "test3");
+
+insert into c3(str, value) select str, value from c3;
+insert into c3(str, value) select str, value from c3;
+insert into c3(str, value) select str, value from c3;
+
+call polarx.changeset_start('c3', 1024);
+
+insert into c3(str, value) select str, value from c3;
+
+call polarx.changeset_stats('c3');
+
+insert into c3(str, value) values ("changeset4", "test4");
+
+call polarx.changeset_times('c3');
+
+call polarx.changeset_stats('c3');
+call polarx.changeset_fetch('c3');
+
+call polarx.changeset_stats('c3');
+call polarx.changeset_fetch('c3', 1);
+
+call polarx.changeset_stats('c3');
+call polarx.changeset_fetch('c3');
+
+call polarx.changeset_stats('c3');
+call polarx.changeset_fetch('c3', 1);
+
+call polarx.changeset_stats('c3');
+call polarx.changeset_fetch('c3');
+
+call polarx.changeset_stats('c3');
+call polarx.changeset_finish('c3');
+DROP TABLE IF EXISTS c3;

@@ -1207,6 +1207,8 @@ bool physical_backfill_opt = true;
   Is necessary to protect the server against out-of-memory attacks.
 */
 ulong max_prepared_stmt_count;
+
+bool enable_changeset;
 /**
   Current total number of prepared statements in the server. This number
   is exact, and therefore may not be equal to the difference between

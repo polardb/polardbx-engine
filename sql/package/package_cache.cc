@@ -42,6 +42,8 @@
 
 #include "sql/xa/xa_proc.h"
 
+#include "sql/polarx_proc/changeset_proc.h"
+
 namespace im {
 
 /* All package memory usage aggregation point */
@@ -213,6 +215,17 @@ void package_context_init() {
 
   /* dbms_xa.Xa_proc_advance_gcn_no_flush() */
   register_package<Proc, Xa_proc_advance_gcn_no_flush>(XA_PROC_SCHEMA);
+
+  /* xrpc.perf_hist() */
+  register_package<Proc, Proc_perf_hist>(XRPC_PROC_SCHEMA);
+
+  /* procedures: polarx.changeset_* */
+  register_package<Proc, Changeset_proc_start>(POLARX_PROC_SCHEMA);
+  register_package<Proc, Changeset_proc_stats>(POLARX_PROC_SCHEMA);
+  register_package<Proc, Changeset_proc_fetch>(POLARX_PROC_SCHEMA);
+  register_package<Proc, Changeset_proc_stop>(POLARX_PROC_SCHEMA);
+  register_package<Proc, Changeset_proc_finish>(POLARX_PROC_SCHEMA);
+  register_package<Proc, Changeset_proc_times>(POLARX_PROC_SCHEMA);
 }
 
 } /* namespace im */

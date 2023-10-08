@@ -9415,6 +9415,10 @@ ER_POLARX_TRX_LOG_ERROR
 ER_GP_WAIT_TIMEOUT
   eng "Prepare wait timeout exceeded; try restarting global query"
 
+##### ChangeSet error messages
+ER_CHANGESET_COMMAND_ERROR
+  eng "ChangeSet command error : %s"
+
 ### physical backfill
 start-error-number 8100
 

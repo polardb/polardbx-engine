@@ -142,6 +142,8 @@ extern CHARSET_INFO *character_set_filesystem;
 extern bool support_bloomfilter_xxhash;
 
 extern bool physical_backfill_opt;
+/* enable polarx changeset udf */
+extern bool enable_changeset;
 
 enum enum_server_operational_state {
   SERVER_BOOTING,      /* Server is not operational. It is starting */

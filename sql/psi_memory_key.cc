@@ -165,6 +165,11 @@ PSI_memory_key key_memory_sp_cache;
 PSI_memory_key key_memory_write_set_extraction;
 PSI_memory_key key_memory_IA_mem;
 
+PSI_memory_key key_memory_CS_PRIMARY_KEY_CACHE;
+PSI_memory_key key_memory_CS_PRIMARY_KEY;
+PSI_memory_key key_memory_CS_RESULT_BUFFER;
+PSI_memory_key key_memory_CS_FILE_NAME;
+
 #ifdef HAVE_PSI_INTERFACE
 
 static PSI_memory_info all_server_memory[] = {
@@ -406,8 +411,12 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_log_error_stack, "log_error_stack", PSI_FLAG_ONLY_GLOBAL_STAT,
      0, PSI_DOCUMENT_ME},
     {&key_memory_histograms, "histograms", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_IA_mem, "internal_account", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_hash_join, "hash_join", 0, 0, PSI_DOCUMENT_ME},
-    {&key_memory_IA_mem, "internal_account", 0, 0, PSI_DOCUMENT_ME}};
+    { &key_memory_CS_PRIMARY_KEY_CACHE, "changeset_primary_key_cache", 0 },
+    { &key_memory_CS_PRIMARY_KEY, "changeset_primary_key", 0 },
+    { &key_memory_CS_RESULT_BUFFER, "changeset_result_buffer", 0 },
+    { &key_memory_CS_FILE_NAME, "changeset_file_name", 0 }};
 
 void register_server_memory_keys() {
   const char *category = "sql";

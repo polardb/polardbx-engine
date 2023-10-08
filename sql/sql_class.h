@@ -116,6 +116,8 @@
 
 #include "sql/lizard/lizard_rpl_gcn.h" // struct MyGCN...
 
+#include "polarx_proc/changeset_common.h"
+
 namespace im {
 namespace recycle_bin {
 class Recycle_state;
@@ -960,6 +962,11 @@ class THD : public MDL_context_owner,
   Relay_log_info *rli_fake;
   /* Slave applier execution context */
   Relay_log_info *rli_slave;
+
+  /**
+    * changeset cache
+  */
+  std::unordered_map<im::DBTableName, std::unique_ptr<im::ChangeSetCache>> changeset_map;
 
   /* Is transaction commit still pending */
   bool tx_commit_pending;
