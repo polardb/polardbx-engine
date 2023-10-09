@@ -2050,6 +2050,7 @@ written */
   } else {
     assert_trx_in_recovery(trx);
 
+    lizard::cleanout_rows_at_commit(trx);
     trx_release_impl_and_expl_locks(trx, serialised);
 
     /* Remove the transaction from the list of active
@@ -2094,8 +2095,6 @@ written */
   /* Reset flag that SE persists GTID. */
   auto &gtid_persistor = clone_sys->get_gtid_persistor();
   gtid_persistor.set_persist_gtid(trx, false);
-
-  lizard::cleanout_rows_at_commit(trx);
 
   if (mtr != NULL) {
     if (trx->rsegs.m_redo.insert_undo != NULL) {
