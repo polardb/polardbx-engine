@@ -56,6 +56,12 @@ void cleanout_rows_at_commit(trx_t *trx) {
     return;
   }
 
+  /** Skip cleanout as the transaction is a full rollback. */
+  if (trx->is_rollback) {
+    trx->cleanout_cursors->init();
+    return;
+  } 
+
   auto undo_ptr = trx->txn_desc.undo_ptr;
   ut_ad(!undo_ptr_is_active(trx->txn_desc.undo_ptr));
 

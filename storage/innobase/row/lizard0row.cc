@@ -47,6 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0row.h"
 #include "row0upd.h"
 #include "row0mysql.h"
+#include "lock0lock.h"
 
 #ifdef UNIV_DEBUG
 extern void page_zip_header_cmp(const page_zip_des_t *, const byte *);
@@ -1109,9 +1110,17 @@ ulint row_cleanout_after_read(row_prebuilt_t *prebuilt) {
   @param[in]        thr             current session
   @param[in]        cursor          btr cursor
   @param[in]        rec             current rec
+  @param[in]        flags           mode flags for btr_cur operations
 */
-void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor, rec_t *rec) {
+void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor, rec_t *rec,
+                             ulint flags) {
   if (commit_cleanout_max_rows == 0) {
+    return;
+  }
+
+  /** Skip the collection if the transaction does not require undo logging or if
+   * system fields should be retained. */
+  if ((flags & BTR_KEEP_SYS_FLAG) || (flags & BTR_NO_UNDO_LOG_FLAG)) {
     return;
   }
 
@@ -1142,6 +1151,11 @@ void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor, rec_t *rec) {
           rec == page_rec_get_next(btr_cur_get_rec(cursor)) /* insert */);
     ut_ad(page_rec_is_user_rec(rec));
     ut_ad(trx->cleanout_cursors != nullptr);
+
+    /** Ensure that the commit cleanout operation is under the protection of the
+     * transaction table locks, unless the table is permanent in dict sys. */
+    ut_ad(dict_sys->is_permanent_table(index->table) ||
+          lock_table_has_locks(index->table));
 
     if (trx->cleanout_cursors->cursor_count() < commit_cleanout_max_rows) {
       Cursor cursor(block->get_page_id());

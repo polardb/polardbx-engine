@@ -1088,6 +1088,14 @@ struct dict_sys_t {
     return (s_dd_table_ids.find(id) != s_dd_table_ids.end());
   }
 
+  /** Check if a table is permanent in dict sys.
+  @param[in]    table      table object
+  @retval true  if the table is permanent in dict sys, otherwise false */
+  bool is_permanent_table(dict_table_t *table) {
+    return (table == table_stats || table == index_stats || table == ddl_log ||
+            table == dynamic_metadata || table == scn_hist);
+  }
+
   /** The first ID of the redo log pseudo-tablespace */
   static constexpr space_id_t s_log_space_id = 0xFFFFFFF0UL;
 

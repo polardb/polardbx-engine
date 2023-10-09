@@ -2934,7 +2934,7 @@ dberr_t btr_cur_optimistic_insert(
 
   *big_rec = big_rec_vec;
 
-  lizard::commit_cleanout_collect(thr, cursor, *rec);
+  lizard::commit_cleanout_collect(thr, cursor, *rec, flags);
 
   return (DB_SUCCESS);
 }
@@ -3083,7 +3083,7 @@ dberr_t btr_cur_pessimistic_insert(
 
   *big_rec = big_rec_vec;
 
-  lizard::commit_cleanout_collect(thr, cursor, *rec);
+  lizard::commit_cleanout_collect(thr, cursor, *rec, flags);
 
   return (DB_SUCCESS);
 }
@@ -3513,7 +3513,7 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     btr_ctx.unmark_extern_fields();
   }
 
-  lizard::commit_cleanout_collect(thr, cursor, rec);
+  lizard::commit_cleanout_collect(thr, cursor, rec, flags);
 
   ut_ad(err == DB_SUCCESS);
 
@@ -3804,7 +3804,7 @@ dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
   }
 
   page_cur_move_to_next(page_cursor);
-  lizard::commit_cleanout_collect(thr, cursor, rec);
+  lizard::commit_cleanout_collect(thr, cursor, rec, flags);
   ut_ad(err == DB_SUCCESS);
 
 func_exit:
@@ -4116,7 +4116,7 @@ dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
   if (rec) {
     page_cursor->rec = rec;
 
-    lizard::commit_cleanout_collect(thr, cursor, rec);
+    lizard::commit_cleanout_collect(thr, cursor, rec, flags);
 
     if (!dict_table_is_locking_disabled(index->table)) {
       lock_rec_restore_from_page_infimum(btr_cur_get_block(cursor), rec, block);
@@ -4504,7 +4504,7 @@ dberr_t btr_cur_del_mark_set_clust_rec(
 
   btr_cur_t cleanout_cursor;
   btr_cur_position(index, rec, block, &cleanout_cursor);
-  lizard::commit_cleanout_collect(thr, &cleanout_cursor, rec);
+  lizard::commit_cleanout_collect(thr, &cleanout_cursor, rec, flags);
 
   return (err);
 }

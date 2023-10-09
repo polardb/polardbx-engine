@@ -375,9 +375,10 @@ bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
   @param[in]        thr             current session
   @param[in]        cursor          btr cursor
   @param[in]        rec             current rec
+  @param[in]        flags           mode flags for btr_cur operations
 */
 extern void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor,
-                                    rec_t *rec);
+                                    rec_t *rec, ulint flags);
 
 /**
   Cleanout rows at transaction commit.
