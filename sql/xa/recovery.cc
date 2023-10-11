@@ -421,7 +421,6 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
              state_in_ht == enum_ha_recover_xa_state::PREPARED_IN_TC) {
     if (Recovered_xa_transactions::instance().add_prepared_xa_transaction(&xa_trx)) {
       raft::fatal(ER_RAFT_RECOVERY) << "add prepared xa trx failed in collecting";
-      abort();
     }
   }
 }

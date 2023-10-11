@@ -15,6 +15,8 @@
  *
  **/
 
+#include <algorithm>
+
 #include "consensus_recovery_manager.h"
 
 #include "consensus_log_manager.h"
@@ -37,7 +39,7 @@ int Consensus_recovery_manager::init() {
       key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
   mysql_mutex_init(key_LOCK_consensus_log_recover_hash,
                    &LOCK_consensuslog_recover_hash, MY_MUTEX_INIT_FAST);
-  inited = TRUE;
+  inited = true;
   last_leader_term_index = 0;
   return 0;
 }
@@ -132,12 +134,16 @@ void Consensus_recovery_manager::add_pending_recovering_trx(
     enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
     const XA_recover_txn *xa_trx, const XA_specification &xa_spec,
     uint64 consensus_index) {
-  raft::system(ER_RAFT_RECOVERY) << "add pending recovering trx " <<
-      xa_trx->id;
-  Pending_Recovering_trxs[consensus_index] =
-      std::make_unique<Pending_recovering_trx>(ht, type, current_state,
-                                               next_state, xa_trx, xa_spec,
-                                               consensus_index);
+  raft::system(ER_RAFT_RECOVERY) << "add pending recovering trx " << xa_trx->id;
+
+  if (std::count(Pending_recovering_trxs.begin(), Pending_recovering_trxs.end(),
+                 consensus_index)) {
+    raft::fatal(ER_RAFT_RECOVERY) << "same index = [" << consensus_index << "] "
+                                  << "is already in pending recovering trxs";
+  }
+
+  Pending_recovering_trxs.insert(std::make_unique<Pending_recovering_trx>(
+      ht, type, current_state, next_state, xa_trx, xa_spec, consensus_index));
 }
 
 void Consensus_recovery_manager::clear_trx_in_binlog() {
@@ -151,112 +157,67 @@ void Consensus_recovery_manager::clear() {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   internal_xids_in_binlog.clear();
   external_xids_in_binlog.clear();
-  Pending_Recovering_trxs.clear();
+  Pending_recovering_trxs.clear();
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
 uint64 Consensus_recovery_manager::
     get_max_consensus_index_from_pending_recovering_trxs() {
-  uint64 max_consensus_index;
+  uint64 res = 0;
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  auto iter = Pending_Recovering_trxs.rbegin();
-  if (iter == Pending_Recovering_trxs.rend()) {
-    max_consensus_index = 0;
-  } else {
-    max_consensus_index = iter->first;
+  if (!Pending_recovering_trxs.empty()) {
+    res = (*Pending_recovering_trxs.rbegin())->index();
   }
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 
   raft::system(ER_RAFT_RECOVERY)
-      << "Found max consensus index = [" << max_consensus_index << "] at "
+      << "Found max consensus index = [" << res << "] at "
       << "Consensus_recovery_manager::get_max_consensus_index_from_recover_trx_"
          "hash";
-  return max_consensus_index;
+  return res;
 }
 
 int Consensus_recovery_manager::truncate_pending_recovering_trxs(
     uint64 consensus_index) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  for (auto iter = Pending_Recovering_trxs.begin();
-       iter != Pending_Recovering_trxs.end();) {
-    if (iter->first >= consensus_index) {
-      raft::system(ER_RAFT_RECOVERY)
-          << "XID = [" << iter->second->get_xid() << "] Index = ["
-          << iter->first << "]"
-          << " is rollback since index large than " << consensus_index
-          << " at Consensus_recovery_manager::truncate_pending_recovering_trxs ";
-      //need clear gtid in xa_spec
-      iter->second->clear_xa_spec();
-      iter->second->withdraw();
-      Pending_Recovering_trxs.erase(iter++);
-    } else {
-      iter++;
-    }
-  }
+
+  auto lower_bound =
+      std::lower_bound(Pending_recovering_trxs.begin(),
+                       Pending_recovering_trxs.end(), consensus_index);
+
+  std::for_each(
+      lower_bound, Pending_recovering_trxs.end(),
+      [&](const std::unique_ptr<Pending_recovering_trx> &trx) {
+        assert(trx->index() >= consensus_index);
+        raft::system(ER_RAFT_RECOVERY)
+            << "XID = [" << trx->xid() << "] Index = [" << trx->index()
+            << "]"
+            << " is rollback since index large than " << consensus_index
+            << " at "
+               "Consensus_recovery_manager::truncate_pending_recovering_trxs ";
+        trx->truncate();
+        trx->withdraw();
+      });
+
+  Pending_recovering_trxs.erase(lower_bound, Pending_recovering_trxs.end());
+
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
   return 0;
 }
 
 bool Consensus_recovery_manager::is_pending_recovering_trx_empty() {
-  bool empty = FALSE;
+  bool empty = false;
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
-  empty = Pending_Recovering_trxs.empty();
+  empty = Pending_recovering_trxs.empty();
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
   return empty;
 }
 
-// truncate the continuous xids of the prepared xids
-int Consensus_recovery_manager::truncate_not_confirmed_pending_recovering_trxs(
-    uint64 max_index_in_binlog_file) {
-  auto iter = Pending_Recovering_trxs.rbegin();
-  uint64 index = max_index_in_binlog_file;
-
-  raft::system(ER_RAFT_RECOVERY)
-      << "Consensus_recovery_manager::truncate_not_confirmed_pending_"
-         "recovering_trxs "
-      << max_index_in_binlog_file << ", ";
-
-  while (iter != Pending_Recovering_trxs.rend() && iter->first == index) {
-    raft::system(ER_RAFT_RECOVERY)
-        << "XID = [" << iter->second->get_xid() << "] Index = [" << iter->first
-        << "]"
-        << " is truncate_not_confirmed_pending_recovering_trxs ";
-    iter++;
-    index--;
-  }
-
-  index++;
-  if (index <= max_index_in_binlog_file) {
-    raft::system(ER_RAFT_RECOVERY)
-        << "Last leader term index to = [" << index - 1 << "] but max index = ["
-        << max_index_in_binlog_file << "] in binlog file at "
-        << "Consensus_recovery_manager::truncate_not_confirmed_pending_"
-           "recovering_trxs ";
-    truncate_pending_recovering_trxs(index);
-    set_last_leader_term_index(index - 1);
-  }
-
-  return 0;
-}
-
 int Consensus_recovery_manager::recover_remaining_pending_recovering_trxs() {
-  uint64 recover_start_apply_index =
-      consensus_log_manager.get_consensus_info()->get_start_apply_index();
-
-  raft::system(ER_RAFT_RECOVERY)
-      << "Consensus_recovery_manager::recover_remaining_pending_recovering_"
-         "trxs "
-      << recover_start_apply_index;
-
-  if (opt_recover_snapshot && recover_start_apply_index == 0) {
-    truncate_not_confirmed_pending_recovering_trxs(
-        get_last_leader_term_index());
+  for (auto &trx : Pending_recovering_trxs) {
+    trx->recover();
   }
-
-  for (auto &iter : Pending_Recovering_trxs) {
-    iter.second->recover();
-  }
-  Pending_Recovering_trxs.clear();
+  Pending_recovering_trxs.clear();
   return 0;
 }
 
@@ -283,7 +244,6 @@ int Pending_recovering_trx::withdraw() {
       final_state = enum_ha_recover_xa_state::PREPARED_IN_TC;
     }
   }
-
   return ret;
 }
 
@@ -343,24 +303,26 @@ Pending_recovering_trx::Pending_recovering_trx(
 
 Pending_recovering_trx::~Pending_recovering_trx() {
   if (!processed) {
-    raft::error(ER_RAFT_RECOVERY)
+    raft::fatal(ER_RAFT_RECOVERY)
         << "XID = [" << xa_trx->id << "] "
-        << "is not recover or withdraw at "
+        << "is not recover or withdraw before "
            "Pending_recovering_trx::~Pending_recovering_trx: "
-        << ", type: " << (int)type 
-        << ", current_state: " << (int)current_state
+        << ", type: " << (int)type << ", current_state: " << (int)current_state
         << ", next_state: " << (int)next_state;
-    abort();
   }
 
-  if (final_state == enum_ha_recover_xa_state::PREPARED_IN_TC
-      || (!processed && current_state == enum_ha_recover_xa_state::PREPARED_IN_TC)) {
+  // final_state of a trx should be stable state, there are three stable
+  // states: NOT_FOUND, COMMITTED, PREPARED_IN_TC
+  assert(final_state == enum_ha_recover_xa_state::NOT_FOUND ||
+         final_state == enum_ha_recover_xa_state::COMMITTED ||
+         final_state == enum_ha_recover_xa_state::PREPARED_IN_TC);
+
+  if (final_state == enum_ha_recover_xa_state::PREPARED_IN_TC) {
     if (Recovered_xa_transactions::instance().add_prepared_xa_transaction(
             xa_trx)) {
-      raft::error(ER_RAFT_RECOVERY)
+      raft::fatal(ER_RAFT_RECOVERY)
           << "Failed to add prepared xa transaction in "
              "Pending_recovering_trx::~Pending_recovering_trx";
-      abort();
     }
   }
 

@@ -701,7 +701,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
   uint recover_flag = 0;
   uint64 recover_checksum = 0;
   uint64 rli_appliedindex = 0;
-  uint64 log_pos = 0;;
+  uint64 log_pos = 0;
   char log_name[FN_REFLEN];
 
   if (is_xpaxos_channel) {
@@ -722,7 +722,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         // care whether truncate log
         uint64 recover_index = consensus_log_manager.get_recovery_manager()->get_last_leader_term_index();
         uint64 next_index = consensus_log_manager.get_next_trx_index(recover_index);
-        if (consensus_log_manager.get_log_position(next_index, FALSE, log_name, &log_pos))
+        if (consensus_log_manager.get_log_position(next_index, false, log_name, &log_pos))
         {
           raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
@@ -747,6 +747,9 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
       {
         // role already degraded to follower ,but log status is still binlog working
         uint64 start_index = max(start_apply_index, rli->get_consensus_apply_index());
+
+        start_index = std::max(start_index, consensus_ptr->getCommitIndex());
+
         uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
         if (consensus_log_manager.get_log_position(next_index, FALSE, log_name, &log_pos))
         {
@@ -817,6 +820,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
       }
       else
       {
+        raft::fatal(ER_RAFT_RECOVERY) << "should not reach here";
         // these code will not reached anymore
         // start_apply_index != 0 && recover_status == RELAYLOG_WORKING is impossible
         uint64 start_index = max(start_apply_index, rli->get_consensus_apply_index());
@@ -839,14 +843,10 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         }
         rli->set_consensus_apply_index(start_index);
         consensus_log_manager.set_apply_term(recover_term);
-        rli->flush_info(TRUE);
+        rli->flush_info(true);
       }
     }
-    if (opt_recover_snapshot)
-    {
-      raft::info(ER_RAFT_APPLIER) << "Get the snapshot consensus index " << rli->get_consensus_apply_index();
-      return -1; // let caller return early
-    }
+
     // deal with appliedindex
     rli_appliedindex = rli->get_consensus_apply_index();
     rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex? 0: rli_appliedindex - opt_appliedindex_force_delay;

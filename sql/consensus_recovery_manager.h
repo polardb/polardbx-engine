@@ -39,7 +39,8 @@ extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
  * Internal_xid: PREPARE_IN_SE ---recover--> COMMITTED
  *                             ---withdraw--> NOT_FOUND
  *
- * External_xid: PREPARE_IN_SE ---recover--> PREPARE_IN_TC/COMMITTED_WITH_ONEPHASE
+ * External_xid: PREPARE_IN_SE ---recover--> PREPARE_IN_TC/
+ *                                           COMMITTED_WITH_ONEPHASE
  *                             ---withdraw--> NOT_FOUND
  *               PREPARE_IN_TC ---recover--> COMMITTED/ROLLBACK
  *                             ---withdraw--> PREPARE_IN_TC
@@ -66,11 +67,16 @@ class Pending_recovering_trx {
   Pending_recovering_trx(Pending_recovering_trx &&other) = delete;
   Pending_recovering_trx &operator=(Pending_recovering_trx &&other) = delete;
 
-  [[nodiscard]] std::string name() const { return xa_trx->id.get_data(); }
-  [[nodiscard]] XID &get_xid() const { return xa_trx->id; }
+  bool operator<(const Pending_recovering_trx &rhs) const {
+    return index() < rhs.index();
+  }
 
+  [[nodiscard]] std::string name() const { return xa_trx->id.get_data(); }
+  [[nodiscard]] XID &xid() const { return xa_trx->id; }
+  [[nodiscard]] uint64 index() const { return consensus_index; }
+
+  void truncate() { xa_spec->clear(); }
   int withdraw();
-  void clear_xa_spec() { xa_spec->clear(); }
 
   int recover();
 
@@ -80,7 +86,7 @@ class Pending_recovering_trx {
  private:
   bool processed;
 
-  handlerton &ht;
+  handlerton & ht;
   const xid_type type;
   const enum_ha_recover_xa_state current_state;
   const enum_ha_recover_xa_state next_state;
@@ -90,15 +96,57 @@ class Pending_recovering_trx {
   const uint64 consensus_index;
 };
 
+static inline bool operator<(const Pending_recovering_trx &lhs, uint64 rhs) {
+  return lhs.index() < rhs;
+}
+
+static inline bool operator<(uint64 lhs, const Pending_recovering_trx &rhs) {
+  return lhs < rhs.index();
+}
+
+static inline bool operator==(uint64 lhs, const Pending_recovering_trx &rhs) {
+  return !(lhs < rhs) && !(rhs < lhs);
+}
+
+static inline bool operator==(const Pending_recovering_trx &lhs, uint64 rhs) {
+  return !(lhs < rhs) && !(rhs < lhs);
+}
+
+static inline bool operator<(const std::unique_ptr<Pending_recovering_trx> &lhs,
+                             uint64 rhs) {
+  return *lhs < rhs;
+}
+
+static inline bool operator<(
+    uint64 lhs, const std::unique_ptr<Pending_recovering_trx> &rhs) {
+  return lhs < *rhs;
+}
+
+static inline bool operator==(
+    const std::unique_ptr<Pending_recovering_trx> &lhs, uint64 rhs) {
+  return !(lhs < rhs) && !(rhs < lhs);
+}
+
+static inline bool operator==(
+    uint64 lhs, const std::unique_ptr<Pending_recovering_trx> &rhs) {
+  return !(lhs < rhs) && !(rhs < lhs);
+}
+
+static inline bool operator<(
+    const std::unique_ptr<Pending_recovering_trx> &lhs,
+    const std::unique_ptr<Pending_recovering_trx> &rhs) {
+  return *lhs < *rhs;
+}
+
 class Consensus_recovery_manager {
  public:
   Consensus_recovery_manager()
       : inited(false),
         key_LOCK_consensus_log_recover_hash(),
-        LOCK_consensuslog_recover_hash(),
         last_leader_term_index(0),
         internal_xids_in_binlog(),
-        Pending_Recovering_trxs() {}
+        external_xids_in_binlog(),
+        Pending_recovering_trxs() {}
   ~Consensus_recovery_manager() = default;
 
   int init();
@@ -112,11 +160,11 @@ class Consensus_recovery_manager {
     last_leader_term_index = last_leader_term_index_arg;
   }
 
-  // for recover
+  // step 1: collect trx in binlog
   void add_trx_in_binlog(uint64 consensus_index, uint64 xid);
-
   void add_trx_in_binlog(uint64 consensus_index, const XID &xid);
 
+  // step 2: collect pending recovering trx in engine
   template <Pending_recovering_trx::xid_type XID_TYPE>
   void add_pending_recovering_trx(handlerton &ht,
                                   enum_ha_recover_xa_state current_state,
@@ -124,32 +172,26 @@ class Consensus_recovery_manager {
                                   const XA_recover_txn *xa_trx,
                                   const XA_specification &xa_spec);
 
-  void clear();
-  uint64 get_max_consensus_index_from_pending_recovering_trxs();
+  // step 3: truncate pending recovering trx after commit idx
   int truncate_pending_recovering_trxs(uint64 consensus_index);
-  bool is_pending_recovering_trx_empty();
-  // truncate the continuous prepared xids from the map
-  int truncate_not_confirmed_pending_recovering_trxs(
-      uint64 max_index_in_binlog_file);
 
+  // step 4: recovering remaining pending recovering trx after truncation
   int recover_remaining_pending_recovering_trxs();
+
+  void clear();
+  void clear_trx_in_binlog();
+  uint64 get_max_consensus_index_from_pending_recovering_trxs();
+  bool is_pending_recovering_trx_empty();
 
  private:
   bool inited;
   PSI_mutex_key key_LOCK_consensus_log_recover_hash;
-  // used to protect commit hash map
   mysql_mutex_t LOCK_consensuslog_recover_hash;
+
   uint64 last_leader_term_index;
-  //<xid, consensusIndex> for save relation between index and my_xid when
-  // recovering
-  std::map<uint64, uint64> internal_xids_in_binlog{};
-  std::map<XID, uint64> external_xids_in_binlog{};
-
-  std::map<uint64, std::unique_ptr<Pending_recovering_trx>>
-      Pending_Recovering_trxs{};
-
- public:
-  void clear_trx_in_binlog();
+  std::map<uint64, uint64> internal_xids_in_binlog;
+  std::map<XID, uint64> external_xids_in_binlog;
+  std::set<std::unique_ptr<Pending_recovering_trx>> Pending_recovering_trxs;
 
  private:
   void add_pending_recovering_trx(handlerton &ht,
