@@ -824,6 +824,9 @@ bool Srv_session::open() {
     return true;
   }
 
+  /// reset with empty thread
+  thd.real_id = 0;
+
   return false;
 }
 
@@ -841,11 +844,18 @@ bool Srv_session::attach() {
 
   if (is_attached()) {
     if (!my_thread_equal(thd.real_id, my_thread_self())) {
+      sql_print_error("FATAL: attach different thread! %lu %lu", thd.real_id,
+                      my_thread_self());
       DBUG_PRINT("error", ("Attached to different thread. Detach in it"));
       return true;
     }
     /* As it is attached, no need to do anything */
     return false;
+  }
+
+  if (thd.real_id != 0 || current_thd != nullptr) {
+    sql_print_error("FATAL: attach before detach! %lu %p", thd.real_id,
+                    current_thd);
   }
 
   // Since we now set current_thd during open(), we need to do complete
@@ -919,9 +929,14 @@ bool Srv_session::detach() {
   if (!is_attached()) return false;
 
   if (!my_thread_equal(thd.real_id, my_thread_self())) {
+    sql_print_error("FATAL: detach different thread! %lu %lu", thd.real_id,
+                    my_thread_self());
     DBUG_PRINT("error", ("Attached to a different thread. Detach in it"));
     return true;
   }
+
+  /// clear thread id
+  thd.real_id = 0;
 
   DBUG_PRINT("info",
              ("Session=%p THD=%p current_thd=%p", this, &thd, current_thd));

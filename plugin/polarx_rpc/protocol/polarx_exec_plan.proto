@@ -3,7 +3,7 @@ syntax = "proto2";
 
 // ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
-package Polarx.ExecPlan;
+package PolarXRPC.ExecPlan;
 option java_package = "com.mysql.cj.x.protobuf";
 
 import "polarx.proto"; // comment_out_if PROTOBUF_LITE
@@ -41,12 +41,12 @@ message SessionInfos {
 
 message TableInfo {
     optional int64 version = 1; // Multi-version?
-    required Polarx.Datatypes.Scalar name = 2; // Need support string and place holder.
-    optional Polarx.Datatypes.Scalar schema_name = 3; // Need support string and place holder.
+    required PolarXRPC.Datatypes.Scalar name = 2; // Need support string and place holder.
+    optional PolarXRPC.Datatypes.Scalar schema_name = 3; // Need support string and place holder.
 }
 
 message IndexInfo {
-    required Polarx.Datatypes.Scalar name = 1; // Need support string and place holder.
+    required PolarXRPC.Datatypes.Scalar name = 1; // Need support string and place holder.
     optional int32 use_parts = 2;
 }
 
@@ -72,14 +72,26 @@ message ResultTSO {
   required uint64 ts = 2;
 }
 
+//Client send AutoSp message to Server
+message AutoSp {
+    enum Operation {
+        SET = 0;
+        RELEASE = 1;
+        ROLLBACK = 2;
+    }
+    required Operation op = 1;
+    required bytes sp_name = 2;
+    optional bool reset_error = 3;
+}
+
 //
 // Exec plan.
 //
 
 // 单个列条件
 message KeyExpr {
-    required Polarx.Datatypes.Scalar field = 1; // 需要能处理列名或列id，列id从0开始
-    required Polarx.Datatypes.Scalar value = 2; // 需要能处理动态参数
+    required PolarXRPC.Datatypes.Scalar field = 1; // 需要能处理列名或列id，列id从0开始
+    required PolarXRPC.Datatypes.Scalar value = 2; // 需要能处理动态参数
 }
 
 // 完整的行条件，可包含多个列条件，and关系
@@ -104,7 +116,7 @@ message KeyOnlyRangeScan {
     optional Transaction snapshot = 1;                   // 读取快照，只有作为 top plan 时填写
     optional TableInfo table_info = 3;                // 读取的目标 table
     optional IndexInfo index_info = 4;                // 读取的目标 index
-    // optional Polarx.Expr.Expr key_expr = 5;           // scan 的条件
+    // optional PolarXRPC.Expr.Expr key_expr = 5;           // scan 的条件
     // 这里写的应该是是索引列中的条件，类似
     // idx_field1 > 5 and idx_field2 > 1
 
@@ -118,7 +130,7 @@ message RangeScan {
     optional Transaction snapshot = 1;                   // 读取快照，只有作为 top plan 时填写
     optional TableInfo table_info = 3;                // 读取的目标 table
     optional IndexInfo index_info = 4;                // 读取的目标 index
-    // optional Polarx.Expr.Expr key_expr = 5;           // scan 的条件
+    // optional PolarXRPC.Expr.Expr key_expr = 5;           // scan 的条件
     // 这里写的应该是是索引列中的条件，类似
     // idx_field1 > 5 and idx_field2 > 1
 
@@ -130,18 +142,18 @@ message RangeScan {
 
 message TableProject {
     required AnyPlan sub_read_plan = 1; // 只支持GET和SCAN两种就行
-    repeated Polarx.Datatypes.Scalar fields = 2; // 支持列名和列id（int uint），从0开始
+    repeated PolarXRPC.Datatypes.Scalar fields = 2; // 支持列名和列id（int uint），从0开始
 }
 
 message Project {
     required AnyPlan sub_read_plan = 1;
-    repeated Polarx.Datatypes.Scalar fields = 2; // 输出列名
-    repeated Polarx.Expr.Expr exprs = 3; // 支持使用Expr全部功能，包括新增的ref，引用sub_read_plan的输出
+    repeated PolarXRPC.Datatypes.Scalar fields = 2; // 输出列名
+    repeated PolarXRPC.Expr.Expr exprs = 3; // 支持使用Expr全部功能，包括新增的ref，引用sub_read_plan的输出
 }
 
 message Filter {
     required AnyPlan sub_read_plan = 1;
-    required Polarx.Expr.Expr expr = 2;
+    required PolarXRPC.Expr.Expr expr = 2;
 }
 
 message Aggr {
@@ -158,8 +170,8 @@ message Aggr {
 
     required AnyPlan sub_read_plan = 1;
     required AggrType type = 2;  //聚集函数类型
-    required Polarx.Datatypes.Scalar field = 3;  //列名
-    required Polarx.Expr.Expr expr = 4; //聚集函数对应的表达式 
+    required PolarXRPC.Datatypes.Scalar field = 3;  //列名
+    required PolarXRPC.Expr.Expr expr = 4; //聚集函数对应的表达式
 }
 
 message AnyPlan {
@@ -194,9 +206,9 @@ message ExecPlan {
   optional Transaction transaction = 1;
   optional AnyPlan plan = 2;
   optional bytes plan_digest = 3;
-  repeated Polarx.Datatypes.Scalar parameters = 4; // 动态参数记录在这，从0开始 **有修改**
+  repeated PolarXRPC.Datatypes.Scalar parameters = 4; // 动态参数记录在这，从0开始 **有修改**
 
-  repeated Polarx.Datatypes.SessionVariable session_variables = 5;
+  repeated PolarXRPC.Datatypes.SessionVariable session_variables = 5;
   optional int32 token = 6;
   optional bool reset_error = 7;
   optional bool compact_metadata = 8 [ default = false ];
@@ -206,5 +218,10 @@ message ExecPlan {
 
   optional bool chunk_result = 11 [default = false];
   optional bool feed_back = 13 [default = false];
+  optional bytes trace_id = 14;
+  optional bytes audit_str = 15;
+
+  // capabilities
+  optional uint64 capabilities = 16;
 }
 

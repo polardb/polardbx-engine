@@ -10,11 +10,11 @@ RUN use xtest
 RUN create table mytable (pk int primary key auto_increment, data varchar(100))
 
 0 rows affected
-send Polarx.Session.NewSession {
+send PolarXRPC.Session.NewSession {
 }
 
 RUN recvok
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'one\')"
   schema_name: "xtest"
 }
@@ -22,26 +22,26 @@ send Polarx.Sql.StmtExecute {
 
 1 rows affected
 last insert id: 1
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'two\')"
 }
 
 
 1 rows affected
 last insert id: 2
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'three\')"
 }
 
 
 1 rows affected
 last insert id: 3
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "select * from mytable"
   token: 10000
 }
 
-Polarx.Resultset.ColumnMetaData {
+PolarXRPC.Resultset.ColumnMetaData {
   type: SINT
   original_type: MYSQL_TYPE_LONG
   name: "pk"
@@ -56,7 +56,7 @@ Polarx.Resultset.ColumnMetaData {
   original_flags: 16899
 }
 
-Polarx.Resultset.ColumnMetaData {
+PolarXRPC.Resultset.ColumnMetaData {
   type: BYTES
   original_type: MYSQL_TYPE_VARCHAR
   name: "data"
@@ -70,54 +70,54 @@ Polarx.Resultset.ColumnMetaData {
   original_flags: 0
 }
 
-Polarx.Resultset.Row {
+PolarXRPC.Resultset.Row {
   field: "\002"
   field: "one\000"
 }
 
-Polarx.Resultset.Row {
+PolarXRPC.Resultset.Row {
   field: "\004"
   field: "two\000"
 }
 
-Polarx.Resultset.Row {
+PolarXRPC.Resultset.Row {
   field: "\006"
   field: "three\000"
 }
 
-Polarx.Resultset.FetchDone {
+PolarXRPC.Resultset.FetchDone {
 }
 
-Polarx.Notice.Frame {
+PolarXRPC.Notice.Frame {
   type: 3
   scope: LOCAL
-  payload: "Polarx.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
+  payload: "PolarXRPC.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
 }
 
-Polarx.Sql.StmtExecuteOk {
+PolarXRPC.Sql.StmtExecuteOk {
 }
 
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "drop table if exists `not_exist`"
   token: 10000
 }
 
-Polarx.Notice.Frame {
+PolarXRPC.Notice.Frame {
   type: 1
   scope: LOCAL
-  payload: "Polarx.Notice.Warning { level: NOTE\ncode: 1051\nmsg: \"Unknown table \\\'xtest.not_exist\\\'\"\n }"
+  payload: "PolarXRPC.Notice.Warning { level: NOTE\ncode: 1051\nmsg: \"Unknown table \\\'xtest.not_exist\\\'\"\n }"
 }
 
-Polarx.Notice.Frame {
+PolarXRPC.Notice.Frame {
   type: 3
   scope: LOCAL
-  payload: "Polarx.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
+  payload: "PolarXRPC.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
 }
 
-Polarx.Sql.StmtExecuteOk {
+PolarXRPC.Sql.StmtExecuteOk {
 }
 
-send Polarx.Session.Close {
+send PolarXRPC.Session.Close {
 }
 
 RUN recvok

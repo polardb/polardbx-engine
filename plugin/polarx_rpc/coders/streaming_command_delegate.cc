@@ -16,6 +16,7 @@
 #include <memory>
 
 #include "../common_define.h"
+#include "../helper/str_converter.h"
 #include "../polarx_rpc.h"
 #include "../session/session_base.h"
 
@@ -24,59 +25,13 @@
 
 namespace polarx_rpc {
 
-inline bool is_value_charset_valid(const CHARSET_INFO *resultset_cs,
-                                   const CHARSET_INFO *value_cs) {
-  return !resultset_cs || !value_cs ||
-         my_charset_same(resultset_cs, value_cs) ||
-         (resultset_cs == &my_charset_bin) || (value_cs == &my_charset_bin);
-}
-
-inline uint get_valid_charset_collation(const CHARSET_INFO *resultset_cs,
-                                        const CHARSET_INFO *value_cs) {
-  const CHARSET_INFO *cs =
-      is_value_charset_valid(resultset_cs, value_cs) ? value_cs : resultset_cs;
-  return cs ? cs->number : 0;
-}
-
-class CconvertIfNecessary {
-public:
-  CconvertIfNecessary(const CHARSET_INFO *resultset_cs, const char *value,
-                      const size_t value_length, const CHARSET_INFO *value_cs) {
-    if (is_value_charset_valid(resultset_cs, value_cs)) {
-      m_ptr = value;
-      m_len = value_length;
-      return;
-    }
-    size_t result_length =
-        resultset_cs->mbmaxlen * value_length / value_cs->mbminlen + 1;
-    m_buff.reset(new char[result_length]());
-    uint errors = 0;
-    result_length = my_convert(m_buff.get(), result_length, resultset_cs, value,
-                               value_length, value_cs, &errors);
-    if (errors) {
-      m_ptr = value;
-      m_len = value_length;
-    } else {
-      m_ptr = m_buff.get();
-      m_len = result_length;
-      m_buff[m_len] = 0;
-    }
-  }
-  const char *get_ptr() const { return m_ptr; }
-  size_t get_length() const { return m_len; }
-
-private:
-  const char *m_ptr;
-  size_t m_len;
-  std::unique_ptr<char[]> m_buff;
-};
-
 CstreamingCommandDelegate::CstreamingCommandDelegate(
     CsessionBase &session, CpolarxEncoder &encoder,
-    std::function<bool()> &&flush, bool compact_metadata)
+    std::function<bool()> &&flush, bool compact_metadata, ulong capabilities)
     : session_(session), encoder_(encoder),
       flush_(std::forward<std::function<bool()>>(flush)),
-      compact_metadata_(compact_metadata), row_enc_(&encoder.message_encoder()),
+      compact_metadata_(compact_metadata), capabilities_(capabilities),
+      row_enc_(&encoder.message_encoder()),
       chunk_enc_(&encoder.message_encoder()) {}
 
 constexpr int k_number_of_pages_that_trigger_flush = 5;
@@ -84,22 +39,24 @@ constexpr int k_number_of_pages_that_trigger_flush = 5;
 /// return true if error occurs
 int CstreamingCommandDelegate::trigger_on_message(uint8_t msg_type) {
   const auto can_buffer =
-      ((msg_type == Polarx::ServerMessages::RESULTSET_COLUMN_META_DATA) ||
-       (msg_type == Polarx::ServerMessages::RESULTSET_ROW) ||
-       (msg_type == Polarx::ServerMessages::NOTICE) ||
-       (msg_type == Polarx::ServerMessages::RESULTSET_FETCH_DONE) ||
+      ((msg_type == PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA) ||
+       (msg_type == PolarXRPC::ServerMessages::RESULTSET_ROW) ||
+       (msg_type == PolarXRPC::ServerMessages::NOTICE) ||
+       (msg_type == PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE) ||
        (msg_type ==
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS) ||
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS) ||
        (msg_type ==
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS) ||
-       (msg_type == Polarx::ServerMessages::RESULTSET_FETCH_SUSPENDED));
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS) ||
+       (msg_type == PolarXRPC::ServerMessages::RESULTSET_FETCH_SUSPENDED));
 
   auto buffer_too_big = false;
   auto probe = encoder_.encoding_buffer().m_front;
   auto page_cnt = k_number_of_pages_that_trigger_flush;
   while (probe != nullptr) {
-    if (--page_cnt <= 0)
+    if (--page_cnt <= 0) {
       buffer_too_big = true;
+      break;
+    }
     probe = probe->m_next_page;
   }
 
@@ -130,7 +87,7 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
     return iret;
 
   /// build protobuf inplace
-  Polarx::Resultset::ColumnMetaData_FieldType xtype{};
+  PolarXRPC::Resultset::ColumnMetaData_FieldType xtype{};
   uint64_t collation;
   uint64_t *collation_ptr = nullptr;
   uint32_t decimals;
@@ -180,9 +137,9 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
     length_ptr = &length;
 
     if (field->flags & UNSIGNED_FLAG)
-      xtype = Polarx::Resultset::ColumnMetaData::UINT;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::UINT;
     else
-      xtype = Polarx::Resultset::ColumnMetaData::SINT;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::SINT;
 
     if (field->flags & ZEROFILL_FLAG)
       flags |= POLARX_COLUMN_FLAGS_UINT_ZEROFILL;
@@ -195,7 +152,7 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
     decimals_ptr = &decimals;
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::FLOAT;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::FLOAT;
     break;
 
   case MYSQL_TYPE_DOUBLE:
@@ -205,7 +162,7 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
     decimals_ptr = &decimals;
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::DOUBLE;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::DOUBLE;
     break;
 
   case MYSQL_TYPE_DECIMAL:
@@ -216,13 +173,13 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
     decimals_ptr = &decimals;
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::DECIMAL;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::DECIMAL;
     break;
 
   case MYSQL_TYPE_STRING:
     is_string = true;
     flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
-    xtype = Polarx::Resultset::ColumnMetaData::BYTES;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
     length = field->length;
     length_ptr = &length;
     break;
@@ -230,7 +187,7 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
   case MYSQL_TYPE_SET:
     is_string = true;
     flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
-    xtype = Polarx::Resultset::ColumnMetaData::SET;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::SET;
     length = field->length;
     length_ptr = &length;
     break;
@@ -248,12 +205,12 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
     }
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::BYTES;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
     break;
 
   case MYSQL_TYPE_JSON:
     is_string = true;
-    xtype = Polarx::Resultset::ColumnMetaData::BYTES;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
     content_type = POLARX_COLUMN_BYTES_CONTENT_TYPE_JSON;
     content_type_ptr = &content_type;
     length = field->length;
@@ -261,7 +218,7 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
     break;
 
   case MYSQL_TYPE_GEOMETRY:
-    xtype = Polarx::Resultset::ColumnMetaData::BYTES;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
     content_type = POLARX_COLUMN_BYTES_CONTENT_TYPE_GEOMETRY;
     content_type_ptr = &content_type;
     break;
@@ -270,7 +227,7 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
   case MYSQL_TYPE_TIME2:
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::TIME;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::TIME;
     decimals = field->decimals;
     decimals_ptr = &decimals;
     break;
@@ -284,7 +241,7 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
   case MYSQL_TYPE_DATETIME2:
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::DATETIME;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::DATETIME;
     decimals = field->decimals;
     decimals_ptr = &decimals;
     break;
@@ -292,25 +249,25 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
   case MYSQL_TYPE_YEAR:
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::UINT;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::UINT;
     break;
 
   case MYSQL_TYPE_ENUM:
     is_string = true;
     flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
-    xtype = Polarx::Resultset::ColumnMetaData::ENUM;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::ENUM;
     length = field->length;
     length_ptr = &length;
     break;
 
   case MYSQL_TYPE_NULL:
-    xtype = Polarx::Resultset::ColumnMetaData::BYTES;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
     break;
 
   case MYSQL_TYPE_BIT:
     length = field->length;
     length_ptr = &length;
-    xtype = Polarx::Resultset::ColumnMetaData::BIT;
+    xtype = PolarXRPC::Resultset::ColumnMetaData::BIT;
     break;
 
   default:
@@ -361,7 +318,8 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
         collation_ptr, decimals_ptr, length_ptr, flags != 0 ? &flags : nullptr,
         content_type_ptr, &field->flags);
   }
-  return trigger_on_message(Polarx::ServerMessages::RESULTSET_COLUMN_META_DATA);
+  return trigger_on_message(
+      PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA);
 }
 
 int CstreamingCommandDelegate::end_result_metadata(uint server_status,
@@ -393,21 +351,24 @@ bool CstreamingCommandDelegate::send_row() {
   else
     row_enc_.end_row();
 
-  /// do flow control
-  if (UNLIKELY(flow_control_ != nullptr && !flow_control_->flow_consume(1))) {
-    /// flush chunk buffer
-    if (chunk_result_ && !chunk_enc_.chunk_empty())
-      chunk_enc_.send_chunk();
+  /// collect sent size and do flow control consume
+  const auto sent = encoder_.get_flushed_bytes();
+  encoder_.reset_flushed_bytes();
 
+  /// do flow control
+  if (sent > 0 && UNLIKELY(flow_control_ != nullptr &&
+                           !flow_control_->flow_consume(sent))) {
+    /// sent > 0 only when data actually sent, so no need to send chunk
     msg_enc().encode_token_done();
-    if (trigger_on_message(::Polarx::ServerMessages::RESULTSET_TOKEN_DONE) != 0)
+    if (trigger_on_message(::PolarXRPC::ServerMessages::RESULTSET_TOKEN_DONE) !=
+        0)
       return false; /// IO error
     /// now do wait
     if (!flow_control_->flow_wait())
       return false; /// IO error
   }
 
-  return 0 == trigger_on_message(Polarx::ServerMessages::RESULTSET_ROW);
+  return 0 == trigger_on_message(PolarXRPC::ServerMessages::RESULTSET_ROW);
 }
 
 int CstreamingCommandDelegate::end_row() {
@@ -429,8 +390,7 @@ void CstreamingCommandDelegate::abort_row() {
 }
 
 ulong CstreamingCommandDelegate::get_client_capabilities() {
-  return CLIENT_FOUND_ROWS | CLIENT_MULTI_RESULTS | CLIENT_DEPRECATE_EOF |
-         CLIENT_PS_MULTI_RESULTS;
+  return capabilities_;
 }
 
 /****** Getting data ******/
@@ -598,7 +558,7 @@ void CstreamingCommandDelegate::handle_ok(uint32_t server_status,
 #ifndef MYSQL8
     if (feedback_) {
       auto thd = current_thd;
-      Polarx::Resultset::FetchDone msg;
+      PolarXRPC::Resultset::FetchDone msg;
       if (thd->feed_back_index_len > 0) {
         std::string chosen_index(thd->feed_back_index_buf,
                                  thd->feed_back_index_len);
@@ -610,14 +570,14 @@ void CstreamingCommandDelegate::handle_ok(uint32_t server_status,
     } else
 #endif
       msg_enc().encode_fetch_done();
-    trigger_on_message(Polarx::ServerMessages::RESULTSET_FETCH_DONE);
+    trigger_on_message(PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE);
   }
 
   if (!handle_ok_received_ && !wait_for_fetch_done_ &&
       try_send_notices(server_status, statement_warn_count, affected_rows,
                        last_insert_id, message)) {
     msg_enc().encode_stmt_execute_ok();
-    trigger_on_message(Polarx::ServerMessages::SQL_STMT_EXECUTE_OK);
+    trigger_on_message(PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK);
   }
 }
 
@@ -627,7 +587,7 @@ void CstreamingCommandDelegate::handle_error(uint sql_errno,
   if (handle_ok_received_) {
     msg_enc().encode_fetch_more_resultsets();
     trigger_on_message(
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS);
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS);
   }
   handle_ok_received_ = false;
 
@@ -653,7 +613,7 @@ void CstreamingCommandDelegate::on_destruction() {
                      info_.affected_rows, info_.last_insert_id,
                      info_.message.c_str());
     msg_enc().encode_stmt_execute_ok();
-    trigger_on_message(Polarx::ServerMessages::SQL_STMT_EXECUTE_OK);
+    trigger_on_message(PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK);
     send_notice_deferred_ = false;
   }
 }
@@ -675,7 +635,7 @@ bool CstreamingCommandDelegate::defer_on_warning(
     }
   } else {
     send_warnings(session_, encoder_);
-    trigger_on_message(Polarx::ServerMessages::NOTICE);
+    trigger_on_message(PolarXRPC::ServerMessages::NOTICE);
   }
   return false;
 }
@@ -686,7 +646,7 @@ void CstreamingCommandDelegate::handle_fetch_done_more_results(
   if (handle_ok_received_ && !out_params) {
     msg_enc().encode_fetch_more_resultsets();
     trigger_on_message(
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS);
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS);
   }
 }
 
@@ -695,7 +655,7 @@ void CstreamingCommandDelegate::end_result_metadata_handle_fetch(
   if ((server_status & SERVER_PS_OUT_PARAMS) != 0) {
     msg_enc().encode_fetch_out_params();
     trigger_on_message(
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS);
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS);
   }
   handle_fetch_done_more_results(server_status);
 }

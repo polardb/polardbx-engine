@@ -97,6 +97,8 @@ constexpr const char *Fil_path::DOT_SLASH;
 constexpr const char *Fil_path::DOT_DOT_SLASH;
 constexpr const char *Fil_path::SLASH_DOT_DOT_SLASH;
 
+extern unsigned long long int import_tablespace_iterator_interval;
+
 /** Used for collecting the data in boot_tablespaces() */
 namespace dd_fil {
 
@@ -8259,6 +8261,9 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
 
         return (err);
       }
+    }
+    if (import_tablespace_iterator_interval > 0) {
+      os_thread_sleep(import_tablespace_iterator_interval);
     }
   }
 

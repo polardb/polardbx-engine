@@ -55,6 +55,8 @@ static char *polardbx_engine_version_ptr = NULL;
 int32 rpc_port = DEFAULT_RPC_PORT;
 bool new_rpc = false;
 
+ulonglong import_tablespace_iterator_interval = DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL;
+
 static Sys_var_ulong Sys_ccl_wait_timeout(
     "ccl_wait_timeout", "Timeout in seconds to wait when concurrency control.",
     GLOBAL_VAR(im::ccl_wait_timeout), CMD_LINE(REQUIRED_ARG),
@@ -391,6 +393,22 @@ static Sys_var_bool Sys_new_rpc("new_rpc", "Use new open PolarDB-X RPC",
                                 CMD_LINE(OPT_ARG), DEFAULT(false),
                                 NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
                                 ON_UPDATE(0));
+
+static Sys_var_ulonglong sys_import_tablespace_iterator_interval(
+    "import_tablespace_iterator_interval",
+    "The interval sleep between each import tablespace iterator in microseconds",
+    GLOBAL_VAR(import_tablespace_iterator_interval), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, 1000000),
+    DEFAULT(10),
+    BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(0));
+static Sys_var_bool Sys_physical_backfill_opt(
+    "physical_backfill_opt",
+    "Whether support x-proto physical backfill, readonly option",
+    READ_ONLY GLOBAL_VAR(physical_backfill_opt), NO_CMD_LINE, DEFAULT(TRUE),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0)
+);
 
 static Sys_var_ulonglong Sys_replica_read_timeout(
       "replica_read_timeout",

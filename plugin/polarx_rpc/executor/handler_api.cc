@@ -12,6 +12,9 @@
 #include "sql/sql_class.h"
 #include "sql/sql_base.h"
 #include "sql/sql_lex.h"
+#ifndef MYSQL8
+#include "sql/rds_audit_log.h"
+#endif
 
 #include "handler_api.h"
 #include "log.h"
@@ -116,21 +119,41 @@ void handler_set_thd_source(THD *thd,
   thd->m_main_security_ctx.set_user_ptr(user, strlen(user));
 }
 
-void handler_begin_read(THD *thd) {
-  THD *current_stack = thd;
-  thd->thread_stack = reinterpret_cast<char *>(&current_stack);
-  thd->store_globals();
+void handler_begin_read(THD *thd, const char *query, uint len) {
+  /// mark start query
   THD_STAGE_INFO(thd, stage_starting);
   thd->set_time();
   thd->lex->sql_command = SQLCOM_SELECT;
+
+  /// clear rewrite query and set current query
+  if (thd->rewritten_query.length())
+    thd->rewritten_query.mem_free();
+  thd->set_query(query, len);
 }
 
 void handler_end(THD *thd) {
+  /// record stat
+  ++thd->status_var.questions;
+  ++thd->status_var.com_stat[SQLCOM_SELECT];
+
+  /// end select
+  thd->set_row_count_func(-1);
+
+#ifndef MYSQL8
+  /// write audit log before exit
+  thd->update_server_status();
+  mysql_rds_audit_log.write_log(thd, thd->query().str, thd->query().length,
+                                RDS_SQLCOM_NORMAL);
+  log_slow_statement(thd);
+#endif
+
+  /// end query
+  if (thd->rewritten_query.length())
+    thd->rewritten_query.mem_free();
   thd->reset_query();
   thd->set_command(COM_SLEEP);
   thd->proc_info = 0;
   thd->lex->sql_command = SQLCOM_END;
-  // thd->restore_globals();
 }
 
 int handler_open_table(THD *thd,
@@ -270,6 +293,7 @@ int handler_index_read_impl(THD *thd,
       log_exec_error("handler index read failed, ret: %d, flags: %d",
                      ret, read_flags);
     } else {
+      thd->inc_examined_row_count(1);
       found = true;
     }
   }
@@ -325,6 +349,7 @@ int handler_index_first(THD *thd,
       log_exec_error("handler index read failed, ret: %d", ret);
     }
   } else {
+    thd->inc_examined_row_count(1);
     found = true;
   }
   return ret;
@@ -348,6 +373,7 @@ int handler_index_next(THD *thd,
       }
       // else this is an error
     } else {
+      thd->inc_examined_row_count(1);
       found = true;
     }
   }
@@ -375,6 +401,7 @@ int handler_next_same(THD *thd,
       }
       // else this is an error
     } else {
+      thd->inc_examined_row_count(1);
       found = true;
     }
   }
@@ -431,6 +458,7 @@ int handler_seek(THD *thd,
         log_exec_error("handler range first failed, ret: %d, idx_to_use: %d",
                       ret, idx_to_use);
       } else {
+        thd->inc_examined_row_count(1);
         found = true;
       }
     }
@@ -460,6 +488,7 @@ int handler_range_next(THD *thd, ExecTable *exec_table, bool &found) {
       }
       // else this is an error
     } else {
+      thd->inc_examined_row_count(1);
       found = true;
     }
   }

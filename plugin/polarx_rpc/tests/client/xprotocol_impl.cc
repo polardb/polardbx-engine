@@ -105,8 +105,8 @@ bool has_data(ZeroCopyInputStream *stream) {
   return false;
 }
 
-XError make_xerror(const Polarx::Error &error) {
-  bool is_fatal = error.severity() == Polarx::Error::FATAL;
+XError make_xerror(const PolarXRPC::Error &error) {
+  bool is_fatal = error.severity() == PolarXRPC::Error::FATAL;
   return XError{static_cast<int>(error.code()), error.msg(), is_fatal,
                 error.sql_state()};
 }
@@ -144,7 +144,7 @@ Protocol_impl::Protocol_impl(std::shared_ptr<Context> context,
 }
 
 XError Protocol_impl::execute_set_capability(
-    const Polarx::Connection::CapabilitiesSet &capabilities_set) {
+    const PolarXRPC::Connection::CapabilitiesSet &capabilities_set) {
   auto result = send(capabilities_set);
 
   if (result) return result;
@@ -173,21 +173,21 @@ XError Protocol_impl::execute_authenticate(const std::string &user,
 
 std::unique_ptr<XProtocol::Capabilities>
 Protocol_impl::execute_fetch_capabilities(XError *out_error) {
-  *out_error = send(Polarx::Connection::CapabilitiesGet());
+  *out_error = send(PolarXRPC::Connection::CapabilitiesGet());
 
   if (*out_error) return {};
 
   std::unique_ptr<Message> message(
-      recv_id(Polarx::ServerMessages::CONN_CAPABILITIES, out_error));
+      recv_id(PolarXRPC::ServerMessages::CONN_CAPABILITIES, out_error));
 
   if (*out_error) return {};
 
   return std::unique_ptr<XProtocol::Capabilities>{
-      static_cast<Polarx::Connection::Capabilities *>(message.release())};
+      static_cast<PolarXRPC::Connection::Capabilities *>(message.release())};
 }
 
 XError Protocol_impl::execute_close() {
-  XError error = send(Polarx::Connection::Close());
+  XError error = send(PolarXRPC::Connection::Close());
 
   if (error) return error;
 
@@ -226,7 +226,7 @@ std::unique_ptr<XQuery_result> Protocol_impl::execute_with_resultset(
 }
 
 std::unique_ptr<XQuery_result> Protocol_impl::execute_stmt(
-    const Polarx::Sql::StmtExecute &m, XError *out_error) {
+    const PolarXRPC::Sql::StmtExecute &m, XError *out_error) {
   return execute(m, out_error);
 }
 
@@ -242,11 +242,11 @@ XError Protocol_impl::authenticate_mysql41(const std::string &user,
 
     XError operator()(
         const std::string &user, const std::string &pass, const std::string &db,
-        const Polarx::Session::AuthenticateContinue &auth_continue) {
+        const PolarXRPC::Session::AuthenticateContinue &auth_continue) {
       std::string data;
       std::string password_hash;
 
-      Polarx::Session::AuthenticateContinue auth_continue_response;
+      PolarXRPC::Session::AuthenticateContinue auth_continue_response;
 
       if (pass.length()) {
         password_hash = password_hasher::scramble(
@@ -286,8 +286,8 @@ XError Protocol_impl::authenticate_sha256_memory(const std::string &user,
 
     XError operator()(
         const std::string &user, const std::string &pass, const std::string &db,
-        const Polarx::Session::AuthenticateContinue &auth_continue) {
-      Polarx::Session::AuthenticateContinue auth_continue_response;
+        const PolarXRPC::Session::AuthenticateContinue &auth_continue) {
+      PolarXRPC::Session::AuthenticateContinue auth_continue_response;
 
       auto nonce = auth_continue.auth_data();
       char sha256_scramble[32] = {0};
@@ -325,7 +325,7 @@ XError Protocol_impl::authenticate_plain(const std::string &user,
   XError error;
 
   {
-    Polarx::Session::AuthenticateStart auth;
+    PolarXRPC::Session::AuthenticateStart auth;
 
     auth.set_mech_name("PLAIN");
     std::string data;
@@ -335,12 +335,12 @@ XError Protocol_impl::authenticate_plain(const std::string &user,
     data.append(pass);                  // pass
 
     auth.set_auth_data(data);
-    error = send(Polarx::ClientMessages::SESS_AUTHENTICATE_START, auth);
+    error = send(PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START, auth);
   }
 
   if (error) return error;
 
-  return recv_id(Polarx::ServerMessages::SESS_AUTHENTICATE_OK);
+  return recv_id(PolarXRPC::ServerMessages::SESS_AUTHENTICATE_OK);
 }
 
 XError Protocol_impl::send(const Header_message_type_id mid,
@@ -531,8 +531,8 @@ XError Protocol_impl::dispatch_received(const Server_message_type_id id,
     return XError{CR_X_INTERNAL_ABORTED, ER_TEXT_RECEIVE_HANDLER_FAILED};
   }
 
-  if (Polarx::ServerMessages::NOTICE == id) {
-    auto frame = static_cast<const Polarx::Notice::Frame *>(&message);
+  if (PolarXRPC::ServerMessages::NOTICE == id) {
+    auto frame = static_cast<const PolarXRPC::Notice::Frame *>(&message);
     const Handler_result notice_ext_handled = dispatch_received_notice(*frame);
 
     if (Handler_result::Consumed == notice_ext_handled) {
@@ -549,11 +549,11 @@ XError Protocol_impl::dispatch_received(const Server_message_type_id id,
 }
 
 Handler_result Protocol_impl::dispatch_received_notice(
-    const Polarx::Notice::Frame &frame) {
+    const PolarXRPC::Notice::Frame &frame) {
   for (const auto &holder : m_notice_handlers) {
     const Handler_result result = holder.m_handler(
-        this, frame.scope() == Polarx::Notice::Frame_Scope_GLOBAL,
-        static_cast<Polarx::Notice::Frame::Type>(frame.type()),
+        this, frame.scope() == PolarXRPC::Notice::Frame_Scope_GLOBAL,
+        static_cast<PolarXRPC::Notice::Frame::Type>(frame.type()),
         frame.has_payload() ? frame.payload().c_str() : nullptr,
         frame.has_payload() ? static_cast<uint32>(frame.payload().length())
                             : 0);
@@ -584,7 +584,7 @@ void Protocol_impl::dispatch_send_message(const Client_message_type_id id,
 
 XError Protocol_impl::recv_ok() {
 
-  return recv_id(Polarx::ServerMessages::OK);
+  return recv_id(PolarXRPC::ServerMessages::OK);
 }
 
 XError Protocol_impl::recv_header(Header_message_type_id *out_mid,
@@ -789,49 +789,59 @@ std::unique_ptr<Protocol_impl::Message> Protocol_impl::alloc_message(
     const Header_message_type_id mid) {
   std::unique_ptr<Message> ret_val;
 
-  switch (static_cast<Polarx::ServerMessages::Type>(mid)) {
-    case Polarx::ServerMessages::OK:
-      ret_val.reset(new Polarx::Ok());
+  switch (static_cast<PolarXRPC::ServerMessages::Type>(mid)) {
+    case PolarXRPC::ServerMessages::OK:
+      ret_val.reset(new PolarXRPC::Ok());
       break;
-    case Polarx::ServerMessages::ERROR:
-      ret_val.reset(new Polarx::Error());
+    case PolarXRPC::ServerMessages::ERROR:
+      ret_val.reset(new PolarXRPC::Error());
       break;
-    case Polarx::ServerMessages::NOTICE:
-      ret_val.reset(new Polarx::Notice::Frame());
+    case PolarXRPC::ServerMessages::NOTICE:
+      ret_val.reset(new PolarXRPC::Notice::Frame());
       break;
-    case Polarx::ServerMessages::CONN_CAPABILITIES:
-      ret_val.reset(new Polarx::Connection::Capabilities());
+    case PolarXRPC::ServerMessages::CONN_CAPABILITIES:
+      ret_val.reset(new PolarXRPC::Connection::Capabilities());
       break;
-    case Polarx::ServerMessages::SESS_AUTHENTICATE_CONTINUE:
-      ret_val.reset(new Polarx::Session::AuthenticateContinue());
+    case PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE:
+      ret_val.reset(new PolarXRPC::Session::AuthenticateContinue());
       break;
-    case Polarx::ServerMessages::SESS_AUTHENTICATE_OK:
-      ret_val.reset(new Polarx::Session::AuthenticateOk());
+    case PolarXRPC::ServerMessages::SESS_AUTHENTICATE_OK:
+      ret_val.reset(new PolarXRPC::Session::AuthenticateOk());
       break;
-    case Polarx::ServerMessages::RESULTSET_COLUMN_META_DATA:
-      ret_val.reset(new Polarx::Resultset::ColumnMetaData());
+    case PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA:
+      ret_val.reset(new PolarXRPC::Resultset::ColumnMetaData());
       break;
-    case Polarx::ServerMessages::RESULTSET_ROW:
-      ret_val.reset(new Polarx::Resultset::Row());
+    case PolarXRPC::ServerMessages::RESULTSET_ROW:
+      ret_val.reset(new PolarXRPC::Resultset::Row());
       break;
-    case Polarx::ServerMessages::RESULTSET_FETCH_DONE:
-      ret_val.reset(new Polarx::Resultset::FetchDone());
+    case PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE:
+      ret_val.reset(new PolarXRPC::Resultset::FetchDone());
       break;
-    case Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS:
-      ret_val.reset(new Polarx::Resultset::FetchDoneMoreResultsets());
+    case PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS:
+      ret_val.reset(new PolarXRPC::Resultset::FetchDoneMoreResultsets());
       break;
-    case Polarx::ServerMessages::SQL_STMT_EXECUTE_OK:
-      ret_val.reset(new Polarx::Sql::StmtExecuteOk());
+    case PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK:
+      ret_val.reset(new PolarXRPC::Sql::StmtExecuteOk());
       break;
-    case Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS:
-      ret_val.reset(new Polarx::Resultset::FetchDoneMoreOutParams());
+    case PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS:
+      ret_val.reset(new PolarXRPC::Resultset::FetchDoneMoreOutParams());
       break;
-    case Polarx::ServerMessages::RESULTSET_TSO:
-      ret_val.reset(new Polarx::ExecPlan::ResultTSO);
+    case PolarXRPC::ServerMessages::RESULTSET_TSO:
+      ret_val.reset(new PolarXRPC::ExecPlan::ResultTSO);
       break;
-    case Polarx::ServerMessages::RESULTSET_TOKEN_DONE:
-      ret_val.reset(new Polarx::Resultset::TokenDone());
+    case PolarXRPC::ServerMessages::RESULTSET_TOKEN_DONE:
+      ret_val.reset(new PolarXRPC::Resultset::TokenDone());
       break;
+
+     case PolarXRPC::ServerMessages::RESULTSET_GET_FILE_INFO_OK:
+         ret_val.reset(new PolarXRPC::PhysicalBackfill::GetFileInfoOperator());
+         break;
+     case PolarXRPC::ServerMessages::RESULTSET_TRANSFER_FILE_DATA_OK:
+         ret_val.reset(new PolarXRPC::PhysicalBackfill::TransferFileDataOperator());
+         break;
+     case PolarXRPC::ServerMessages::RESULTSET_FILE_MANAGE_OK:
+         ret_val.reset(new PolarXRPC::PhysicalBackfill::FileManageOperatorResponse());
+         break;
     default:
       break;
   }
@@ -847,8 +857,8 @@ XError Protocol_impl::recv_id(
 
   if (out_error) return out_error;
 
-  if (Polarx::ServerMessages::ERROR == out_mid) {
-    const ::Polarx::Error &error = *static_cast<Polarx::Error *>(msg.get());
+  if (PolarXRPC::ServerMessages::ERROR == out_mid) {
+    const ::PolarXRPC::Error &error = *static_cast<PolarXRPC::Error *>(msg.get());
 
     return details::make_xerror(error);
   }
@@ -869,8 +879,8 @@ XProtocol::Message *Protocol_impl::recv_id(
 
   if (*out_error) return nullptr;
 
-  if (Polarx::ServerMessages::ERROR == out_mid) {
-    const ::Polarx::Error &error = *static_cast<Polarx::Error *>(msg.get());
+  if (PolarXRPC::ServerMessages::ERROR == out_mid) {
+    const ::PolarXRPC::Error &error = *static_cast<PolarXRPC::Error *>(msg.get());
 
     *out_error = details::make_xerror(error);
     return nullptr;

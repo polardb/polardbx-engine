@@ -43,4 +43,7 @@ static constexpr uint DEFAULT_RPC_PORT = 33660;
 extern int32 rpc_port;
 extern bool new_rpc;
 
+static constexpr ulonglong DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL = 0;
+extern ulonglong import_tablespace_iterator_interval;
+
 #endif /* SYS_VARS_EXT_H_INCLUDED */

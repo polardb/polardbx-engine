@@ -24,41 +24,38 @@
 
 #pragma once
 
-#include <assert.h>
 #include <algorithm>
+#include <assert.h>
 #include <cassert>
 #include <cstdint>
 
 #include "encoding_buffer.h"
 #include "encoding_primitives_base.h"
 
+namespace polarx_rpc {
 namespace protocol {
 
 class Primitives_encoder {
- private:
+private:
   using Helper = primitives::base::Helper;
   template <uint64_t length, uint64_t value>
   using Varint_length_value =
       primitives::base::Varint_length_value<length, value>;
 
- public:
+public:
   explicit Primitives_encoder(Encoding_buffer *buffer) : m_buffer(buffer) {
     m_page = m_buffer->m_current;
   }
 
-  virtual ~Primitives_encoder() {
-    m_page = nullptr;
-  }
+  virtual ~Primitives_encoder() { m_page = nullptr; }
 
-  template <uint64_t value>
-  void encode_const_var_uint() {
+  template <uint64_t value> void encode_const_var_uint() {
     using Varint_length_value_length =
         Varint_length_value<Helper::get_varint_length(value, 0x80, 1), value>;
     Varint_length_value_length::encode(m_page->m_current_data);
   }
 
-  template <uint64_t value>
-  void encode_const_var_enum() {
+  template <uint64_t value> void encode_const_var_enum() {
     using Varint_length_value_length =
         Varint_length_value<Helper::get_varint_length(value, 0x80, 1), value>;
     Varint_length_value_length::encode(m_page->m_current_data);
@@ -85,8 +82,7 @@ class Primitives_encoder {
     Varint_length_value_length::encode(m_page->m_current_data, value);
   }
 
-  template <int64_t value>
-  void encode_const_var_sint() {
+  template <int64_t value> void encode_const_var_sint() {
     encode_const_var_uint<Helper::encode_zigzag(value)>();
   }
 
@@ -141,7 +137,8 @@ class Primitives_encoder {
 
   void encode_raw(const uint8_t *source, uint32_t source_size) {
     while (source_size) {
-      if (m_page->is_full()) m_page = m_buffer->get_next_page();
+      if (m_page->is_full())
+        m_page = m_buffer->get_next_page();
 
       const auto to_copy = std::min(source_size, m_page->get_free_bytes());
       encode_raw_no_boundry_check(source, to_copy);
@@ -161,4 +158,5 @@ class Primitives_encoder {
   Page *m_page;
 };
 
-}  // namespace protocol
+} // namespace protocol
+} // namespace polarx_rpc

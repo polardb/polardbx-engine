@@ -36,7 +36,7 @@ namespace xcl {
 
 class Capabilities_builder {
  public:
-  using CapabilitiesSet = ::Polarx::Connection::CapabilitiesSet;
+  using CapabilitiesSet = ::PolarXRPC::Connection::CapabilitiesSet;
 
  public:
   Capabilities_builder &clear() {

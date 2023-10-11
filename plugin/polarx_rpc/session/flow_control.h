@@ -21,7 +21,7 @@ public:
   inline bool flow_consume(int32_t token) {
     auto before = flow_counter_.fetch_sub(token);
     auto after = before - token;
-    return after > 0;
+    return after >= 0;
   }
 
   inline bool flow_wait() {
@@ -30,7 +30,7 @@ public:
     {
       std::unique_lock<std::mutex> lck(mutex_);
       while (!(exit = exit_.load(std::memory_order_acquire)) &&
-             flow_counter_.load(std::memory_order_acquire) <= 0)
+             flow_counter_.load(std::memory_order_acquire) < 0)
         /// use 1s timeout to prevent missing notify
         cv_.wait_for(lck, std::chrono::seconds(1));
     }

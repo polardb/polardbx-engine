@@ -104,7 +104,7 @@ class SearchKey {
 public:
 
   int init(ExecKeyMeta *exec_key,
-           const Polarx::ExecPlan::GetExpr &mysqlx_key) {
+           const PolarXRPC::ExecPlan::GetExpr &mysqlx_key) {
     int ret = HA_EXEC_SUCCESS;
     used_part_map_ = EMPTY_MAP;
     used_length_ = 0;
@@ -154,8 +154,8 @@ private:
 
 
 struct RangeInfo {
-  const Polarx::ExecPlan::GetExpr *begin_key_;
-  const Polarx::ExecPlan::GetExpr *end_key_;
+  const PolarXRPC::ExecPlan::GetExpr *begin_key_;
+  const PolarXRPC::ExecPlan::GetExpr *end_key_;
   bool include_begin_;
   bool include_end_;
 };

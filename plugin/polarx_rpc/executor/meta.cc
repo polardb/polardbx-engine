@@ -9,7 +9,7 @@
 #include "meta.h"
 #include "log.h"
 
-using namespace Polarx;
+using namespace PolarXRPC;
 
 namespace rpc_executor {
 

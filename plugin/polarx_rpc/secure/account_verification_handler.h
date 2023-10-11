@@ -41,14 +41,14 @@ class Account_verification_handler {
 public:
   explicit Account_verification_handler(CtcpConnection &tcp)
       : m_tcp(tcp), m_session(0) {
-    m_session.init(0);
+    m_err = m_session.init(0);
   }
   Account_verification_handler(
       CtcpConnection &tcp,
       const Account_verification_interface::Account_type account_type,
       Account_verification_interface *verificator)
       : m_tcp(tcp), m_session(0), m_account_type(account_type) {
-    m_session.init(0);
+    m_err = m_session.init(0);
     add_account_verificator(account_type, verificator);
   }
 
@@ -104,6 +104,7 @@ private:
 
   CtcpConnection &m_tcp;
   CsessionBase m_session; /// internal session for auth
+  err_t m_err;
   Account_verificator_list m_verificators;
   Account_verification_interface::Account_type m_account_type =
       Account_verification_interface::Account_unsupported;

@@ -47,7 +47,12 @@ namespace polarx_rpc {
 
 class Query_formatter {
 public:
-  Query_formatter(std::string &query, CHARSET_INFO &charser);
+  Query_formatter(std::string &query);
+
+  inline void set_charset(const CHARSET_INFO *charset) {
+    m_charset = charset;
+    assert(m_charset != nullptr);
+  }
 
   template <typename Value_type> class No_escape {
   public:
@@ -107,7 +112,7 @@ private:
   void put_ident_and_escape(const char *value, std::size_t length);
 
   std::string &m_query;
-  CHARSET_INFO &m_charset;
+  const CHARSET_INFO *m_charset; /// target sql charset
   std::size_t m_last_tag_position;
   std::size_t m_prev_start_position{0};
 

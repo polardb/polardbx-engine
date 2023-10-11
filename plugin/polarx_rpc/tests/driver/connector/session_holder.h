@@ -84,7 +84,7 @@ struct Connection_options {
 
 class Session_holder {
  private:
-  using Frame_type = Polarx::Notice::Frame::Type;
+  using Frame_type = PolarXRPC::Notice::Frame::Type;
 
  public:
   Session_holder(std::unique_ptr<xcl::XSession> session, const Console &console,

@@ -24,64 +24,64 @@ create table mytable (pk int primary key auto_increment, data varchar(100));
 -->switchsid 1
 
 ## first start new session
-Polarx.Session.NewSession {
+PolarXRPC.Session.NewSession {
 }
-## expect Polarx.Ok
+## expect PolarXRPC.Ok
 -->recvok
 
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'one\')"
   schema_name: "xtest"
 }
-## expect Polarx.Sql.StmtExecuteOk
+## expect PolarXRPC.Sql.StmtExecuteOk
 -->recvresult
 
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'two\')"
 }
-## expect Polarx.Sql.StmtExecuteOk
+## expect PolarXRPC.Sql.StmtExecuteOk
 -->recvresult
 
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'three\')"
 }
-## expect Polarx.Sql.StmtExecuteOk
+## expect PolarXRPC.Sql.StmtExecuteOk
 -->recvresult
 
 ## switch to another session and lock the record
 -->switchsid 2
 
-Polarx.Session.NewSession {
+PolarXRPC.Session.NewSession {
 }
-## expect Polarx.Ok
+## expect PolarXRPC.Ok
 -->recvok
 
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "begin"
   schema_name: "xtest"
   token: 10000
 }
-## expect Polarx.Sql.StmtExecuteOk
+## expect PolarXRPC.Sql.StmtExecuteOk
 -->recvresult
 
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "select data from mytable where pk=1 for update"
   token: 10000
 }
-## expect Polarx.Sql.StmtExecuteOk
+## expect PolarXRPC.Sql.StmtExecuteOk
 -->recvresult
 
 ## Now data is locked, switch back to session 1 and read.
 -->switchsid 1
 
 ## Test pipeline and cancel, enqueue blocking query first.
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "select data from mytable where pk=1 for update"
   token: 10000
 }
 
 ## Then enqueue normal query.
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "select * from mytable"
   token: 10000
 }
@@ -90,47 +90,47 @@ Polarx.Sql.StmtExecute {
 -->sleep 0.1
 
 ## Do cancel on first request.
-Polarx.Session.KillSession {
+PolarXRPC.Session.KillSession {
   type: QUERY
   x_session_id: 1
 }
 
 ## expect Notice warning Query execution was interrupted(5.7 will get this)
--->recvtype Polarx.Notice.Frame
+-->recvtype PolarXRPC.Notice.Frame
 ## expect Notice warning Got error 168 from storage engine(5.7 will get this)
--->recvtype Polarx.Notice.Frame
+-->recvtype PolarXRPC.Notice.Frame
 -->recverror ER_QUERY_INTERRUPTED
 
 ## But next request will continue.
 
--->recvtype Polarx.Resultset.ColumnMetaData
--->recvtype Polarx.Resultset.ColumnMetaData
--->recvtype Polarx.Resultset.Row
--->recvtype Polarx.Resultset.Row
--->recvtype Polarx.Resultset.Row
--->recvtype Polarx.Resultset.FetchDone
--->recvtype Polarx.Notice.Frame
--->recvtype Polarx.Sql.StmtExecuteOk
+-->recvtype PolarXRPC.Resultset.ColumnMetaData
+-->recvtype PolarXRPC.Resultset.ColumnMetaData
+-->recvtype PolarXRPC.Resultset.Row
+-->recvtype PolarXRPC.Resultset.Row
+-->recvtype PolarXRPC.Resultset.Row
+-->recvtype PolarXRPC.Resultset.FetchDone
+-->recvtype PolarXRPC.Notice.Frame
+-->recvtype PolarXRPC.Sql.StmtExecuteOk
 
 ## close session.
-Polarx.Session.Close {
+PolarXRPC.Session.Close {
 }
-## expect Polarx.Ok
+## expect PolarXRPC.Ok
 -->recvok
 
 ## Close session 2.
 -->switchsid 2
 
-Polarx.Sql.StmtExecute {
+PolarXRPC.Sql.StmtExecute {
   stmt: "rollback"
   token: 10000
 }
-## expect Polarx.Sql.StmtExecuteOk
+## expect PolarXRPC.Sql.StmtExecuteOk
 -->recvresult
 
-Polarx.Session.Close {
+PolarXRPC.Session.Close {
 }
-## expect Polarx.Ok
+## expect PolarXRPC.Ok
 -->recvok
 
 

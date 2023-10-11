@@ -11,7 +11,7 @@
 #include "handler_api.h"
 #include "log.h"
 
-using namespace Polarx;
+using namespace PolarXRPC;
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *files_charset_info;
 
@@ -35,17 +35,17 @@ void debug_print_request(const ExecPlan::GetPlan &get_plan) {
               get_plan.keys().Get(k).keys().size());
     for (int64_t i = 0; i < get_plan.keys(k).keys().size(); ++i) {
       switch (get_plan.keys(k).keys(i).value().type()) {
-        case Polarx::Datatypes::Scalar::V_SINT:
+        case PolarXRPC::Datatypes::Scalar::V_SINT:
           log_debug("key[%ld] %s:%ld", i,
                     pb2ptr(get_plan.keys(k).keys(i).field()),
                     get_plan.keys(k).keys(i).value().v_signed_int());
           break;
-        case Polarx::Datatypes::Scalar::V_UINT:
+        case PolarXRPC::Datatypes::Scalar::V_UINT:
           log_debug("key[%ld] %s:%lu", i,
                     pb2ptr(get_plan.keys(k).keys(i).field()),
                     get_plan.keys(k).keys(i).value().v_unsigned_int());
           break;
-        case Polarx::Datatypes::Scalar::V_STRING:
+        case PolarXRPC::Datatypes::Scalar::V_STRING:
           log_debug("key[%ld] %s:%s", i,
                     pb2ptr(get_plan.keys(k).keys(i).field()),
                     get_plan.keys(k).keys(i).value().v_string().value().data());
@@ -69,7 +69,7 @@ void convert_name_to_lowercase(const Datatypes::Scalar &name,
   output = std::move(temp);
 }
 
-int create_search_key(const Polarx::ExecPlan::GetExpr &mysqlx_key,
+int create_search_key(const PolarXRPC::ExecPlan::GetExpr &mysqlx_key,
                       ExecKeyMeta *key_meta,
                       SearchKey &search_key) {
   return search_key.init(key_meta, mysqlx_key);
@@ -252,7 +252,7 @@ int InlineScanNode::finish(int error) {
   return ret;
 }
 
-int ScanNode::init(const Polarx::ExecPlan::RangeScan &scan_msg,
+int ScanNode::init(const PolarXRPC::ExecPlan::RangeScan &scan_msg,
                    InternalDataSet &dataset,
                    THD *thd) {
   first_next_ = true;
@@ -274,7 +274,7 @@ int ScanNode::finish(int error) {
   return inline_scan_node_.finish(error);
 }
 
-int TableScanNode::init(const Polarx::ExecPlan::TableScanPlan &scan_msg,
+int TableScanNode::init(const PolarXRPC::ExecPlan::TableScanPlan &scan_msg,
                    InternalDataSet &dataset,
                    THD *thd) {
   first_next_ = true;
@@ -296,33 +296,20 @@ int TableScanNode::finish(int error) {
   return inline_scan_node_.finish(error);
 }
 
-int Executor::execute(const ExecPlan::ExecPlan &plan_wrapper,
-                      polarx_rpc::CcommandDelegate &resultset,
-                      THD *thd) {
-  const ExecPlan::ExecPlan local_plan(std::move(plan_wrapper));
-//  bool compact_meta = local_plan.has_compact_metadata() &&
-//                      local_plan.compact_metadata();
-  // fixme resultset.get_callbacks().set_compact_metadata(compact_meta);
-  return execute(local_plan.plan(),
-                 local_plan.parameters(),
-                 resultset, thd);
-}
-
-int Executor::execute(const ExecPlan::AnyPlan &plan,
-                      const ParamsList &params,
-                      polarx_rpc::CcommandDelegate &resultset,
-                      THD *thd) {
+int Executor::execute(const ExecPlan::AnyPlan &plan, const ParamsList &params,
+                      polarx_rpc::CcommandDelegate &resultset, THD *thd,
+                      const char *query, uint query_len) {
   int ret = HA_EXEC_SUCCESS;
   tls_params = &params;
   thd->reset_for_next_command();
-  handler_begin_read(thd);
+  handler_begin_read(thd, query, query_len);
   switch (plan.plan_type()) {
-    case  Polarx::ExecPlan::AnyPlan::GET:
+    case  PolarXRPC::ExecPlan::AnyPlan::GET:
       ret = execute_get(plan.get_plan(),
                         resultset,
                         thd);
       break;
-    case Polarx::ExecPlan::AnyPlan::RANGE_SCAN:
+    case PolarXRPC::ExecPlan::AnyPlan::RANGE_SCAN:
       ret = execute_scan(plan.range_scan(),
                          resultset,
                          thd);
@@ -883,11 +870,11 @@ int ProjectNode::finish(int error) {
   return left_tree_->finish(error);
 }
 
-bool AggrNode::is_type_valid(Polarx::ExecPlan::Aggr::AggrType type) {
+bool AggrNode::is_type_valid(PolarXRPC::ExecPlan::Aggr::AggrType type) {
   bool ret = true;
 
-  if (type < Polarx::ExecPlan::Aggr::COUNT_FUNC ||
-      type > Polarx::ExecPlan::Aggr::MAX_FUNC) {
+  if (type < PolarXRPC::ExecPlan::Aggr::COUNT_FUNC ||
+      type > PolarXRPC::ExecPlan::Aggr::MAX_FUNC) {
     log_exec_error("type is invalid");
     ret = false;
   }
@@ -895,7 +882,7 @@ bool AggrNode::is_type_valid(Polarx::ExecPlan::Aggr::AggrType type) {
   return ret;
 }
 
-int AggrNode::init(const Polarx::ExecPlan::Aggr &aggr_msg, InternalDataSet &dataset) {
+int AggrNode::init(const PolarXRPC::ExecPlan::Aggr &aggr_msg, InternalDataSet &dataset) {
   int ret = HA_EXEC_SUCCESS;
 
   auto &expr_parser = ExprParser::instance();
@@ -917,7 +904,7 @@ int AggrNode::init(const Polarx::ExecPlan::Aggr &aggr_msg, InternalDataSet &data
   return ret;
 }
 
-int AggrNode::init_aggr_expr(Polarx::ExecPlan::Aggr::AggrType type, ExprItem *item) {
+int AggrNode::init_aggr_expr(PolarXRPC::ExecPlan::Aggr::AggrType type, ExprItem *item) {
 #ifdef MYSQL8
   return HA_EXEC_FAILURE;
 #else
@@ -930,27 +917,27 @@ int AggrNode::init_aggr_expr(Polarx::ExecPlan::Aggr::AggrType type, ExprItem *it
      add free at ~InternalDataSet.
   */
   switch(type) {
-    case Polarx::ExecPlan::Aggr::COUNT_FUNC:
+    case PolarXRPC::ExecPlan::Aggr::COUNT_FUNC:
     {
       aggr_expr_ = new Item_sum_count(pos_, item);
       break;
     }
-    case Polarx::ExecPlan::Aggr::SUM_FUNC:
+    case PolarXRPC::ExecPlan::Aggr::SUM_FUNC:
     {
       aggr_expr_ = new Item_sum_sum(pos_, item, false);
       break;
     }
-    case Polarx::ExecPlan::Aggr::AVG_FUNC:
+    case PolarXRPC::ExecPlan::Aggr::AVG_FUNC:
     {
       aggr_expr_ = new Item_sum_avg(pos_, item, false);
       break;
     }
-    case Polarx::ExecPlan::Aggr::MIN_FUNC:
+    case PolarXRPC::ExecPlan::Aggr::MIN_FUNC:
     {
       aggr_expr_ = new Item_sum_min(pos_, item);
       break;
     }
-    case Polarx::ExecPlan::Aggr::MAX_FUNC:
+    case PolarXRPC::ExecPlan::Aggr::MAX_FUNC:
     {
       aggr_expr_ = new Item_sum_max(pos_, item);
       break;

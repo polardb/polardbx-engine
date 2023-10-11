@@ -33,6 +33,14 @@ static int polarx_rpc_init(MYSQL_PLUGIN info) {
     return 0;
   }
 
+  /// check reinitialize
+  if (plugin_info.exit.load(std::memory_order_acquire)) {
+    my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+                          "PolarX RPC already exit, and can't init again.");
+    unireg_abort(MYSQLD_ABORT_EXIT);
+    return 1;
+  }
+
   /// show log
   my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
                         "polarx_rpc start up");
@@ -54,12 +62,16 @@ static int polarx_rpc_init(MYSQL_PLUGIN info) {
 }
 
 static int polarx_rpc_deinit(void *arg MY_ATTRIBUTE((unused))) {
+  plugin_info.exit.store(true, std::memory_order_release);
+  plugin_info.server.reset(); /// un-initialize
+  /// listener and cache never free
+
+  my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                        "polarx_rpc exit");
   {
     std::lock_guard<std::mutex> lck(plugin_info.mutex);
     plugin_info.plugin_info = nullptr;
   }
-  plugin_info.server.reset(); /// uninitialize
-  /// cache never free
   return 0;
 }
 

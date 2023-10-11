@@ -12,13 +12,17 @@
 namespace polarx_rpc {
 class CsessionBase;
 
+static constexpr ulong DEFAULT_CAPABILITIES =
+    CLIENT_FOUND_ROWS | CLIENT_MULTI_RESULTS | CLIENT_DEPRECATE_EOF |
+    CLIENT_PS_MULTI_RESULTS;
+
 class CstmtCommandDelegate : public CstreamingCommandDelegate {
 public:
   template <class T>
   CstmtCommandDelegate(CsessionBase &session, CpolarxEncoder &encoder,
-                       T &&flush, bool compact_metadata)
+                       T &&flush, bool compact_metadata, ulong capabilities)
       : CstreamingCommandDelegate(session, encoder, std::forward<T>(flush),
-                                  compact_metadata) {}
+                                  compact_metadata, capabilities) {}
   ~CstmtCommandDelegate() override { on_destruction(); }
 
   bool try_send_notices(const uint32_t server_status,
@@ -31,16 +35,16 @@ public:
       return false;
 
     msg_enc().encode_notice_rows_affected(affected_rows);
-    trigger_on_message(Polarx::ServerMessages::NOTICE);
+    trigger_on_message(PolarXRPC::ServerMessages::NOTICE);
 
     if (last_insert_id > 0) {
       msg_enc().encode_notice_generated_insert_id(last_insert_id);
-      trigger_on_message(Polarx::ServerMessages::NOTICE);
+      trigger_on_message(PolarXRPC::ServerMessages::NOTICE);
     }
 
     if (message && strlen(message) != 0) {
       msg_enc().encode_notice_text_message(message);
-      trigger_on_message(Polarx::ServerMessages::NOTICE);
+      trigger_on_message(PolarXRPC::ServerMessages::NOTICE);
     }
     return true;
   }

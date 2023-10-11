@@ -37,52 +37,52 @@
 namespace details {
 
 static xcl::Column_metadata unwrap_column_metadata(
-    const Polarx::Resultset::ColumnMetaData *column_data) {
+    const PolarXRPC::Resultset::ColumnMetaData *column_data) {
   xcl::Column_metadata column;
 
   column.original_type = column_data->original_type();
   switch (column_data->type()) {
-    case Polarx::Resultset::ColumnMetaData::SINT:
+    case PolarXRPC::Resultset::ColumnMetaData::SINT:
       column.type = xcl::Column_type::SINT;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::UINT:
+    case PolarXRPC::Resultset::ColumnMetaData::UINT:
       column.type = xcl::Column_type::UINT;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::DOUBLE:
+    case PolarXRPC::Resultset::ColumnMetaData::DOUBLE:
       column.type = xcl::Column_type::DOUBLE;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::FLOAT:
+    case PolarXRPC::Resultset::ColumnMetaData::FLOAT:
       column.type = xcl::Column_type::FLOAT;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::BYTES:
+    case PolarXRPC::Resultset::ColumnMetaData::BYTES:
       column.type = xcl::Column_type::BYTES;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::TIME:
+    case PolarXRPC::Resultset::ColumnMetaData::TIME:
       column.type = xcl::Column_type::TIME;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::DATETIME:
+    case PolarXRPC::Resultset::ColumnMetaData::DATETIME:
       column.type = xcl::Column_type::DATETIME;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::SET:
+    case PolarXRPC::Resultset::ColumnMetaData::SET:
       column.type = xcl::Column_type::SET;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::ENUM:
+    case PolarXRPC::Resultset::ColumnMetaData::ENUM:
       column.type = xcl::Column_type::ENUM;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::BIT:
+    case PolarXRPC::Resultset::ColumnMetaData::BIT:
       column.type = xcl::Column_type::BIT;
       break;
 
-    case Polarx::Resultset::ColumnMetaData::DECIMAL:
+    case PolarXRPC::Resultset::ColumnMetaData::DECIMAL:
       column.type = xcl::Column_type::DECIMAL;
       break;
   }
@@ -141,7 +141,7 @@ Query_result::Query_result(std::shared_ptr<XProtocol> protocol,
       m_context(context) {
   m_notice_handler_id = m_protocol->add_notice_handler(
       [this](XProtocol *protocol MY_ATTRIBUTE((unused)), const bool is_global,
-             const Polarx::Notice::Frame::Type type, const char *payload,
+             const PolarXRPC::Notice::Frame::Type type, const char *payload,
              const uint32_t payload_size) -> Handler_result {
         if (is_global) return Handler_result::Continue;
 
@@ -196,21 +196,21 @@ bool Query_result::next_resultset(XError *out_error) {
   }
 
   const bool is_end_result_msg = m_holder.is_one_of(
-      {::Polarx::ServerMessages::RESULTSET_FETCH_DONE,
-       ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
-       ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
-       ::Polarx::ServerMessages::RESULTSET_FETCH_SUSPENDED});
+      {::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE,
+       ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
+       ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
+       ::PolarXRPC::ServerMessages::RESULTSET_FETCH_SUSPENDED});
 
   if (!is_end_result_msg) {
     check_error(m_holder.read_until_expected_msg_received(
-        {::Polarx::ServerMessages::SQL_STMT_EXECUTE_OK,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_SUSPENDED},
-        {::Polarx::ServerMessages::NOTICE,
-         ::Polarx::ServerMessages::RESULTSET_COLUMN_META_DATA,
-         ::Polarx::ServerMessages::RESULTSET_ROW}));
+        {::PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_SUSPENDED},
+        {::PolarXRPC::ServerMessages::NOTICE,
+         ::PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA,
+         ::PolarXRPC::ServerMessages::RESULTSET_ROW}));
   }
 
   // Accept another series of
@@ -224,13 +224,13 @@ bool Query_result::next_resultset(XError *out_error) {
   }
 
   if (m_holder.is_one_of(
-          {::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS})) {
+          {::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS})) {
     m_is_out_param_resultset = true;
   }
 
-  if (!m_holder.is_one_of({::Polarx::ServerMessages::RESULTSET_COLUMN_META_DATA,
-                           ::Polarx::ServerMessages::RESULTSET_ROW,
-                           ::Polarx::ServerMessages::SQL_STMT_EXECUTE_OK})) {
+  if (!m_holder.is_one_of({::PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA,
+                           ::PolarXRPC::ServerMessages::RESULTSET_ROW,
+                           ::PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK})) {
     m_holder.clear_cached_message();
   }
 
@@ -246,11 +246,11 @@ bool Query_result::next_resultset(XError *out_error) {
 }
 
 Handler_result Query_result::handle_notice(
-    const Polarx::Notice::Frame::Type type, const char *payload,
+    const PolarXRPC::Notice::Frame::Type type, const char *payload,
     const uint32_t payload_size) {
   switch (type) {
-    case Polarx::Notice::Frame_Type_WARNING: {
-      Polarx::Notice::Warning warning;
+    case PolarXRPC::Notice::Frame_Type_WARNING: {
+      PolarXRPC::Notice::Warning warning;
       warning.ParseFromArray(payload, payload_size);
 
       if (!warning.IsInitialized()) return Handler_result::Error;
@@ -260,27 +260,27 @@ Handler_result Query_result::handle_notice(
       return Handler_result::Consumed;
     }
 
-    case Polarx::Notice::Frame_Type_SESSION_STATE_CHANGED: {
-      Polarx::Notice::SessionStateChanged change;
+    case PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED: {
+      PolarXRPC::Notice::SessionStateChanged change;
       change.ParseFromArray(payload, payload_size);
       if (!change.IsInitialized()) return Handler_result::Error;
 
       switch (change.param()) {
-        case Polarx::Notice::SessionStateChanged::GENERATED_INSERT_ID:
+        case PolarXRPC::Notice::SessionStateChanged::GENERATED_INSERT_ID:
           if (change.has_value() &&
-              change.value().type() == Polarx::Datatypes::Scalar::V_UINT)
+              change.value().type() == PolarXRPC::Datatypes::Scalar::V_UINT)
             m_last_insert_id = change.value().v_unsigned_int();
           break;
 
-        case Polarx::Notice::SessionStateChanged::ROWS_AFFECTED:
+        case PolarXRPC::Notice::SessionStateChanged::ROWS_AFFECTED:
           if (change.has_value() &&
-              change.value().type() == Polarx::Datatypes::Scalar::V_UINT)
+              change.value().type() == PolarXRPC::Datatypes::Scalar::V_UINT)
             m_affected_rows = change.value().v_unsigned_int();
           break;
 
-        case Polarx::Notice::SessionStateChanged::PRODUCED_MESSAGE:
+        case PolarXRPC::Notice::SessionStateChanged::PRODUCED_MESSAGE:
           if (change.has_value() &&
-              change.value().type() == Polarx::Datatypes::Scalar::V_STRING)
+              change.value().type() == PolarXRPC::Datatypes::Scalar::V_STRING)
             m_producted_message = change.value().v_string().value();
           break;
 
@@ -298,12 +298,12 @@ Handler_result Query_result::handle_notice(
 void Query_result::check_if_stmt_ok() {
   const auto message_id = m_holder.get_cached_message_id();
   if (!m_error &&
-      (Polarx::ServerMessages::RESULTSET_FETCH_DONE == message_id ||
-       Polarx::ServerMessages::RESULTSET_FETCH_SUSPENDED == message_id)) {
+      (PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE == message_id ||
+       PolarXRPC::ServerMessages::RESULTSET_FETCH_SUSPENDED == message_id)) {
     m_holder.clear_cached_message();
     check_error(m_holder.read_until_expected_msg_received(
-        {Polarx::ServerMessages::SQL_STMT_EXECUTE_OK},
-        {Polarx::ServerMessages::NOTICE}));
+        {PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK},
+        {PolarXRPC::ServerMessages::NOTICE}));
   }
 
   if (m_error) return;
@@ -374,12 +374,12 @@ void Query_result::read_if_needed_metadata() {
   if (!m_error && m_read_metadata) {
     m_read_metadata = false;
     check_error(m_holder.read_until_expected_msg_received(
-        {Polarx::ServerMessages::SQL_STMT_EXECUTE_OK,
-         Polarx::ServerMessages::RESULTSET_ROW,
-         Polarx::ServerMessages::RESULTSET_FETCH_DONE,
-         Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
-         Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
-         Polarx::ServerMessages::RESULTSET_FETCH_SUSPENDED},
+        {PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK,
+         PolarXRPC::ServerMessages::RESULTSET_ROW,
+         PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE,
+         PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
+         PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
+         PolarXRPC::ServerMessages::RESULTSET_FETCH_SUSPENDED},
         [this](const XProtocol::Server_message_type_id message_id,
                std::unique_ptr<XProtocol::Message> &message) -> XError {
           return read_metadata(message_id, message);
@@ -388,31 +388,31 @@ void Query_result::read_if_needed_metadata() {
 }
 
 Query_result::Row_ptr Query_result::read_row() {
-  std::unique_ptr<Polarx::Resultset::Row> row;
+  std::unique_ptr<PolarXRPC::Resultset::Row> row;
 
   if (!m_holder.has_cached_message()) {
     check_error(m_holder.read_until_expected_msg_received(
-        {::Polarx::ServerMessages::SQL_STMT_EXECUTE_OK,
-         ::Polarx::ServerMessages::RESULTSET_ROW,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_SUSPENDED},
-        {::Polarx::ServerMessages::NOTICE}));
+        {::PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK,
+         ::PolarXRPC::ServerMessages::RESULTSET_ROW,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_SUSPENDED},
+        {::PolarXRPC::ServerMessages::NOTICE}));
   }
 
-  if (!m_error && Polarx::ServerMessages::RESULTSET_ROW ==
+  if (!m_error && PolarXRPC::ServerMessages::RESULTSET_ROW ==
                       m_holder.get_cached_message_id()) {
     details::unique_ptr_cast(m_holder.m_message, row);
 
     check_error(m_holder.read_until_expected_msg_received(
-        {::Polarx::ServerMessages::SQL_STMT_EXECUTE_OK,
-         ::Polarx::ServerMessages::RESULTSET_ROW,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
-         ::Polarx::ServerMessages::RESULTSET_FETCH_SUSPENDED},
-        {::Polarx::ServerMessages::NOTICE}));
+        {::PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK,
+         ::PolarXRPC::ServerMessages::RESULTSET_ROW,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
+         ::PolarXRPC::ServerMessages::RESULTSET_FETCH_SUSPENDED},
+        {::PolarXRPC::ServerMessages::NOTICE}));
   }
 
   return row;
@@ -421,9 +421,9 @@ Query_result::Row_ptr Query_result::read_row() {
 XError Query_result::read_metadata(
     const XProtocol::Server_message_type_id msg_id,
     std::unique_ptr<XProtocol::Message> &msg) {
-  if (Polarx::ServerMessages::RESULTSET_COLUMN_META_DATA == msg_id) {
+  if (PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA == msg_id) {
     auto column_metadata =
-        reinterpret_cast<Polarx::Resultset::ColumnMetaData *>(msg.get());
+        reinterpret_cast<PolarXRPC::Resultset::ColumnMetaData *>(msg.get());
 
     m_metadata.push_back(details::unwrap_column_metadata(column_metadata));
   }
@@ -457,7 +457,7 @@ void Query_result::check_error(const XError &error) {
 
 bool Query_result::check_if_fetch_done() {
   if (!m_error && !m_received_fetch_done) {
-    if (m_holder.is_one_of({Polarx::ServerMessages::SQL_STMT_EXECUTE_OK})) {
+    if (m_holder.is_one_of({PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK})) {
       m_query_instances->instances_fetch_end();
       m_protocol->remove_notice_handler(m_notice_handler_id);
       m_received_fetch_done = true;

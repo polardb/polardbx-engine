@@ -117,7 +117,7 @@ class Result_fetcher {
     for (const auto &warning : m_query->get_warnings()) {
       result.emplace_back(
           warning.msg(), warning.code(),
-          warning.level() == ::Polarx::Notice::Warning_Level_NOTE);
+          warning.level() == ::PolarXRPC::Notice::Warning_Level_NOTE);
     }
 
     return result;

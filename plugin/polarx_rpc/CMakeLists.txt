@@ -41,6 +41,7 @@ ELSE ()
     "${POLARX_RPC_PROJECT_DIR}/protocol/polarx_notice.proto"
     "${POLARX_RPC_PROJECT_DIR}/protocol/polarx_resultset.proto"
     "${POLARX_RPC_PROJECT_DIR}/protocol/polarx_exec_plan.proto"
+    "${POLARX_RPC_PROJECT_DIR}/protocol/polarx_physical_backfill.proto"
     )
 
   SET(GENERATED_LITE_PROTO_FILES)
@@ -121,6 +122,7 @@ ELSE ()
     "executor/murmurhash3.cc"
     "executor/parse.cc"
     "executor/protocol.cc"
+    "executor/physical_backfill.cc"
     "utility/perf.cc"
     "sql_query/query_formatter.cc"
     "sql_query/query_string_builder.cc"

@@ -27,6 +27,7 @@ protected:
   CpolarxEncoder &encoder_;
   std::function<bool()> flush_;
   const bool compact_metadata_;
+  const ulong capabilities_;
 
   protocol::PolarX_Row_encoder row_enc_;
   protocol::PolarX_Chunk_encoder chunk_enc_;
@@ -108,7 +109,7 @@ protected:
 public:
   CstreamingCommandDelegate(CsessionBase &session, CpolarxEncoder &encoder,
                             std::function<bool()> &&flush,
-                            bool compact_metadata);
+                            bool compact_metadata, ulong capabilities);
   ~CstreamingCommandDelegate() override { on_destruction(); }
 
   void reset() override;

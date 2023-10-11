@@ -75,8 +75,8 @@ namespace xcl {
 */
 class XQuery_result {
  public:
-  using Warning = ::Polarx::Notice::Warning;
-  using Row = ::Polarx::Resultset::Row;
+  using Warning = ::PolarXRPC::Notice::Warning;
+  using Row = ::PolarXRPC::Resultset::Row;
   using Metadata = std::vector<Column_metadata>;
   using Warnings = std::vector<Warning>;
 

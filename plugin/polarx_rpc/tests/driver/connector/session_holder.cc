@@ -255,7 +255,7 @@ xcl::Handler_result Session_holder::count_received_messages(
     const xcl::XProtocol::Message &msg) {
   const auto protobuf_message_name = msg.GetDescriptor()->full_name();
   const auto server_message_name =
-      Polarx::ServerMessages::descriptor()->full_name();
+      PolarXRPC::ServerMessages::descriptor()->full_name();
   const bool is_empty_message = (protobuf_message_name == server_message_name);
   const std::string &msg_name = !is_empty_message
                                     ? msg.GetDescriptor()->full_name()
@@ -263,16 +263,16 @@ xcl::Handler_result Session_holder::count_received_messages(
 
   ++m_received_msg_counters[msg_name];
 
-  if (msg_name != Polarx::Notice::Frame::descriptor()->full_name())
+  if (msg_name != PolarXRPC::Notice::Frame::descriptor()->full_name())
     return xcl::Handler_result::Continue;
 
   static const std::string notice_type_id[] = {
-      Polarx::Notice::Warning::descriptor()->full_name(),
-      Polarx::Notice::SessionVariableChanged::descriptor()->full_name(),
-      Polarx::Notice::SessionStateChanged::descriptor()->full_name()};
+      PolarXRPC::Notice::Warning::descriptor()->full_name(),
+      PolarXRPC::Notice::SessionVariableChanged::descriptor()->full_name(),
+      PolarXRPC::Notice::SessionStateChanged::descriptor()->full_name()};
 
   const auto notice_type =
-      static_cast<const Polarx::Notice::Frame *>(&msg)->type() - 1u;
+      static_cast<const PolarXRPC::Notice::Frame *>(&msg)->type() - 1u;
   if (notice_type < array_elements(notice_type_id))
     ++m_received_msg_counters[notice_type_id[notice_type]];
 
@@ -286,7 +286,7 @@ xcl::Handler_result Session_holder::dump_notices(const xcl::XProtocol *protocol,
                                                  const char *data,
                                                  const uint32_t data_length) {
   if (type == Frame_type::Frame_Type_SESSION_STATE_CHANGED) {
-    Polarx::Notice::SessionStateChanged change;
+    PolarXRPC::Notice::SessionStateChanged change;
 
     change.ParseFromArray(data, data_length);
 
@@ -295,7 +295,7 @@ xcl::Handler_result Session_holder::dump_notices(const xcl::XProtocol *protocol,
                             change.InitializationErrorString(), '\n');
     } else {
       if (change.param() ==
-          Polarx::Notice::SessionStateChanged::ACCOUNT_EXPIRED) {
+          PolarXRPC::Notice::SessionStateChanged::ACCOUNT_EXPIRED) {
         m_console.print("NOTICE: Account password expired\n");
 
         return xcl::Handler_result::Consumed;

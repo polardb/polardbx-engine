@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <map>
 
 #include "../common_define.h"
@@ -42,15 +42,21 @@ public:
   };
 
   static std::map<int, cpu_info_t> get_cpu_info() {
-    FILE *cmd =
-        ::popen("grep -E \"processor|physical id|core id\" /proc/cpuinfo", "r");
-    if (cmd == nullptr)
+    /// ::popen("grep -E \"processor|physical id|core id\" /proc/cpuinfo", "r");
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    if (!cpuinfo.is_open())
       return {};
     std::map<int, cpu_info_t> result;
-    char buf[0x100]; /// 256
+    std::string line;
     auto processor = -1, physical_id = -1, core_id = -1;
-    while (::fgets(buf, sizeof(buf) - 1, cmd) != nullptr) {
-      buf[sizeof(buf) - 1] = '\0';
+    while (std::getline(cpuinfo, line)) {
+      /// ignore unnecessary info
+      if (line.find("processor") != 0 && line.find("physical id") != 0 &&
+          line.find("core id") != 0)
+        continue;
+
+      /// build cpu info
+      const auto buf = line.c_str();
       if (0 == ::strncmp("processor", buf, 9)) {
         auto i = ::strchr(buf + 9, ':');
         if (i != nullptr) {
@@ -72,14 +78,13 @@ public:
       }
 
       if (processor >= 0 && physical_id >= 0 && core_id >= 0) {
-        result.emplace(std::make_pair(
-            processor, cpu_info_t{processor, physical_id, core_id}));
+        result.emplace(processor, cpu_info_t{processor, physical_id, core_id});
         processor = -1;
         physical_id = -1;
         core_id = -1;
       }
     }
-    pclose(cmd);
+    cpuinfo.close();
     return result;
   }
 };

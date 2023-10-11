@@ -64,11 +64,11 @@ class Message_holder {
 
       if (error) return error;
 
-      if (Polarx::ServerMessages::ERROR == m_message_id) {
-        auto error_msg = reinterpret_cast<Polarx::Error *>(m_message.get());
+      if (PolarXRPC::ServerMessages::ERROR == m_message_id) {
+        auto error_msg = reinterpret_cast<PolarXRPC::Error *>(m_message.get());
 
         return XError{static_cast<int>(error_msg->code()), error_msg->msg(),
-                      error_msg->severity() == Polarx::Error::FATAL,
+                      error_msg->severity() == PolarXRPC::Error::FATAL,
                       error_msg->sql_state()};
       }
 
@@ -93,11 +93,11 @@ class Message_holder {
 
       if (error) return error;
 
-      if (Polarx::ServerMessages::ERROR == m_message_id) {
-        auto error_msg = reinterpret_cast<Polarx::Error *>(m_message.get());
+      if (PolarXRPC::ServerMessages::ERROR == m_message_id) {
+        auto error_msg = reinterpret_cast<PolarXRPC::Error *>(m_message.get());
 
         return XError{static_cast<int>(error_msg->code()), error_msg->msg(),
-                      error_msg->severity() == Polarx::Error::FATAL,
+                      error_msg->severity() == PolarXRPC::Error::FATAL,
                       error_msg->sql_state()};
       }
 

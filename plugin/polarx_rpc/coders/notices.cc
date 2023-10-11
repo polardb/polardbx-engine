@@ -28,7 +28,7 @@ private:
   std::string last_error_;
   uint32_t num_errors_{0u};
 
-  using Warning = ::Polarx::Notice::Warning;
+  using Warning = ::PolarXRPC::Notice::Warning;
 
   Row *start_row() {
     row_.clear();
@@ -48,8 +48,8 @@ private:
   bool end_row(Row *row) {
     if (!last_error_.empty()) {
       encoder_.message_encoder().encode_notice(
-          ::Polarx::Notice::Frame_Type_WARNING,
-          ::Polarx::Notice::Frame_Scope_LOCAL, last_error_);
+          ::PolarXRPC::Notice::Frame_Type_WARNING,
+          ::PolarXRPC::Notice::Frame_Scope_LOCAL, last_error_);
       last_error_.clear();
     }
 
@@ -77,8 +77,8 @@ private:
     }
 
     encoder_.message_encoder().encode_notice(
-        ::Polarx::Notice::Frame_Type_WARNING,
-        ::Polarx::Notice::Frame_Scope_LOCAL, data);
+        ::PolarXRPC::Notice::Frame_Type_WARNING,
+        ::PolarXRPC::Notice::Frame_Scope_LOCAL, data);
     return true;
   }
 

@@ -218,6 +218,28 @@ class Srv_session {
                       void *callbacks_context);
 
   /**
+    Set a savepoint.
+  */
+  int set_savepoint(const LEX_CSTRING &sp_name) {
+    // TODO impl this
+    return 1;
+  }
+  /**
+    Release a savepoint.
+  */
+  int release_savepoint(const LEX_CSTRING &sp_name) {
+    // TODO impl this
+    return 1;
+  }
+  /**
+    Rollback a savepoint.
+  */
+  int rollback_savepoint(const LEX_CSTRING &sp_name) {
+    // TODO impl this
+    return 1;
+  }
+
+  /**
     Returns the internal THD object
   */
   inline THD *get_thd() { return &thd; }

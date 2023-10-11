@@ -38,7 +38,7 @@ bool get_name_and_body_from_text(const std::string &text_message,
                                  const bool is_body_full = false);
 
 xcl::XProtocol::Message *get_notice_message_from_text(
-    const Polarx::Notice::Frame_Type type, const std::string &text_payload,
+    const PolarXRPC::Notice::Frame_Type type, const std::string &text_payload,
     std::string *out_error, const bool allow_partial_messaged = false);
 
 xcl::XProtocol::Message *get_client_message_from_text(

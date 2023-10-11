@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../coders/protocol_fwd.h"
@@ -17,14 +18,21 @@ namespace polarx_rpc {
 class CrequestCache final {
   NO_COPY_MOVE(CrequestCache);
 
+public:
+  struct plan_store_t final {
+    std::string audit_str;
+    std::shared_ptr<PolarXRPC::ExecPlan::AnyPlan> plan;
+
+    plan_store_t() : audit_str(), plan() {}
+  };
+
 private:
   const size_t hash_slots_;
   std::vector<
       std::unique_ptr<CcopyableLru<std::string, std::shared_ptr<std::string>>>>
-      sql_cache_;
-  std::vector<std::unique_ptr<
-      CcopyableLru<std::string, std::shared_ptr<Polarx::ExecPlan::AnyPlan>>>>
-      plan_cache_;
+      sql_cache_; /// digest -> sql
+  std::vector<std::unique_ptr<CcopyableLru<std::string, plan_store_t>>>
+      plan_cache_; /// digest -> <audit_str, plan>
   std::hash<std::string> hasher_;
 
 public:
@@ -40,9 +48,7 @@ public:
           new CcopyableLru<std::string, std::shared_ptr<std::string>>(
               cache_per_slot));
       plan_cache_.emplace_back(
-          new CcopyableLru<std::string,
-                           std::shared_ptr<Polarx::ExecPlan::AnyPlan>>(
-              cache_per_slot));
+          new CcopyableLru<std::string, plan_store_t>(cache_per_slot));
     }
   }
 
@@ -62,20 +68,18 @@ public:
     plugin_info.sql_evict.fetch_add(evicted, std::memory_order_release);
   }
 
-  std::shared_ptr<Polarx::ExecPlan::AnyPlan> get_plan(const std::string &key) {
-    auto ptr = plan_cache_[hasher_(key) % hash_slots_]->get(key);
-    if (LIKELY(ptr))
+  plan_store_t get_plan(const std::string &key) {
+    auto store = plan_cache_[hasher_(key) % hash_slots_]->get(key);
+    if (LIKELY(store.plan))
       plugin_info.plan_hit.fetch_add(1, std::memory_order_release);
     else
       plugin_info.plan_miss.fetch_add(1, std::memory_order_release);
-    return std::move(ptr);
+    return std::move(store);
   }
 
-  void set_plan(std::string &&key,
-                std::shared_ptr<Polarx::ExecPlan::AnyPlan> &&val) {
+  void set_plan(std::string &&key, plan_store_t &&store) {
     auto evicted = plan_cache_[hasher_(key) % hash_slots_]->put(
-        std::forward<std::string>(key),
-        std::forward<std::shared_ptr<Polarx::ExecPlan::AnyPlan>>(val));
+        std::forward<std::string>(key), std::forward<plan_store_t>(store));
     plugin_info.plan_evict.fetch_add(evicted, std::memory_order_release);
   }
 };

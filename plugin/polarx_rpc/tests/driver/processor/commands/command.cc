@@ -453,8 +453,8 @@ Command::Result Command::cmd_recvok(std::istream &input,
     return Result::Stop_with_failure;
   }
 
-  if (Polarx::ServerMessages::OK != out_msgid) {
-    if (Polarx::ServerMessages::ERROR != out_msgid) {
+  if (PolarXRPC::ServerMessages::OK != out_msgid) {
+    if (PolarXRPC::ServerMessages::ERROR != out_msgid) {
       context->print("Got unexpected message:\n");
       context->print(formatter::message_to_text(*msg), "\n");
 
@@ -462,7 +462,7 @@ Command::Result Command::cmd_recvok(std::istream &input,
                                                : Result::Continue;
     }
 
-    auto msg_error = static_cast<Polarx::Error *>(msg.get());
+    auto msg_error = static_cast<PolarXRPC::Error *>(msg.get());
 
     if (!context->m_expected_error.check_error(
             xcl::XError(msg_error->code(), msg_error->msg())))
@@ -567,9 +567,9 @@ Command::Result Command::cmd_recverror(std::istream &input,
   bool failed = false;
   try {
     const int expected_error_code = mysqlxtest::get_error_code_by_text(args);
-    if (msg->GetDescriptor()->full_name() != "Polarx.Error" ||
+    if (msg->GetDescriptor()->full_name() != "PolarXRPC.Error" ||
         expected_error_code !=
-            static_cast<int>(static_cast<Polarx::Error *>(msg.get())->code())) {
+            static_cast<int>(static_cast<PolarXRPC::Error *>(msg.get())->code())) {
       context->print_error(context->m_script_stack, "Was expecting Error ",
                            args, ", but got:\n");
       failed = true;
@@ -787,7 +787,7 @@ Command::Result Command::cmd_recvuntil(std::istream &input,
 
     if (msg.get()) {
       if (msg->GetDescriptor()->full_name() == argl[0] ||
-          msgid == Polarx::ServerMessages::ERROR) {
+          msgid == PolarXRPC::ServerMessages::ERROR) {
         show = true;
         stop = true;
       }
@@ -803,8 +803,8 @@ Command::Result Command::cmd_recvuntil(std::istream &input,
 
   context->m_variables->clear_unreplace();
 
-  if (Polarx::ServerMessages::ERROR == msgid &&
-      Polarx::ServerMessages::ERROR != expected_msg_id)
+  if (PolarXRPC::ServerMessages::ERROR == msgid &&
+      PolarXRPC::ServerMessages::ERROR != expected_msg_id)
     return Result::Stop_with_failure;
 
   return Result::Continue;
@@ -826,7 +826,7 @@ Command::Result Command::cmd_stmtsql(std::istream &input,
     return Result::Stop_with_failure;
   }
 
-  Polarx::Sql::StmtExecute stmt;
+  PolarXRPC::Sql::StmtExecute stmt;
 
   std::string command = args;
   context->m_variables->replace(&command);
@@ -861,7 +861,7 @@ Command::Result Command::cmd_stmtadmin(std::istream &input,
 
   aux::trim(params[0]);
 
-  Polarx::Sql::StmtExecute stmt;
+  PolarXRPC::Sql::StmtExecute stmt;
   stmt.set_stmt(params[0]);
   stmt.set_namespace_("mysqlx");
 

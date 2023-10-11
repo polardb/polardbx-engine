@@ -33,6 +33,7 @@
 
 #include "encoding_protobuf.h"
 
+namespace polarx_rpc {
 namespace protocol {
 
 /**
@@ -183,3 +184,4 @@ public:
 };
 
 } // namespace protocol
+} // namespace polarx_rpc

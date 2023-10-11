@@ -26,7 +26,7 @@
 
 bool Json_to_any_handler::Key(const char *str, rapidjson::SizeType length,
                               bool copy) {
-  typedef ::Polarx::Datatypes::Object_ObjectField Field;
+  typedef ::PolarXRPC::Datatypes::Object_ObjectField Field;
   Field *f = m_stack.top()->mutable_obj()->add_fld();
   f->set_key(str, length);
   m_stack.push(f->mutable_value());
@@ -34,43 +34,43 @@ bool Json_to_any_handler::Key(const char *str, rapidjson::SizeType length,
 }
 
 bool Json_to_any_handler::Null() {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_NULL);
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_NULL);
   return true;
 }
 
 bool Json_to_any_handler::Bool(bool b) {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_BOOL)->set_v_bool(b);
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_BOOL)->set_v_bool(b);
   return true;
 }
 
 bool Json_to_any_handler::Int(int i) {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_SINT)->set_v_signed_int(i);
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_SINT)->set_v_signed_int(i);
   return true;
 }
 
 bool Json_to_any_handler::Uint(unsigned u) {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_UINT)->set_v_unsigned_int(u);
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_UINT)->set_v_unsigned_int(u);
   return true;
 }
 
 bool Json_to_any_handler::Int64(int64_t i) {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_SINT)->set_v_signed_int(i);
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_SINT)->set_v_signed_int(i);
   return true;
 }
 
 bool Json_to_any_handler::Uint64(uint64_t u) {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_UINT)->set_v_unsigned_int(u);
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_UINT)->set_v_unsigned_int(u);
   return true;
 }
 
 bool Json_to_any_handler::Double(double d, bool) {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_DOUBLE)->set_v_double(d);
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_DOUBLE)->set_v_double(d);
   return true;
 }
 
 bool Json_to_any_handler::String(const char *str, rapidjson::SizeType length,
                                  bool) {
-  get_scalar(::Polarx::Datatypes::Scalar_Type_V_STRING)
+  get_scalar(::PolarXRPC::Datatypes::Scalar_Type_V_STRING)
       ->mutable_v_string()
       ->set_value(str, length);
   return true;
@@ -78,9 +78,9 @@ bool Json_to_any_handler::String(const char *str, rapidjson::SizeType length,
 
 bool Json_to_any_handler::StartObject() {
   Any *any = m_stack.top();
-  if (any->has_type() && any->type() == ::Polarx::Datatypes::Any_Type_ARRAY)
+  if (any->has_type() && any->type() == ::PolarXRPC::Datatypes::Any_Type_ARRAY)
     m_stack.push(any->mutable_array()->add_value());
-  m_stack.top()->set_type(::Polarx::Datatypes::Any_Type_OBJECT);
+  m_stack.top()->set_type(::PolarXRPC::Datatypes::Any_Type_OBJECT);
   m_stack.top()->mutable_obj();
   return true;
 }
@@ -91,7 +91,7 @@ bool Json_to_any_handler::EndObject(rapidjson::SizeType /*member_count*/) {
 }
 
 bool Json_to_any_handler::StartArray() {
-  m_stack.top()->set_type(::Polarx::Datatypes::Any_Type_ARRAY);
+  m_stack.top()->set_type(::PolarXRPC::Datatypes::Any_Type_ARRAY);
   m_stack.top()->mutable_array();
   return true;
 }
@@ -104,11 +104,11 @@ bool Json_to_any_handler::EndArray(rapidjson::SizeType /*element_count*/) {
 Json_to_any_handler::Scalar *Json_to_any_handler::get_scalar(
     Scalar::Type scalar_type) {
   Any *any = m_stack.top();
-  if (any->has_type() && any->type() == ::Polarx::Datatypes::Any_Type_ARRAY)
+  if (any->has_type() && any->type() == ::PolarXRPC::Datatypes::Any_Type_ARRAY)
     any = any->mutable_array()->add_value();
   else
     m_stack.pop();
-  any->set_type(::Polarx::Datatypes::Any_Type_SCALAR);
+  any->set_type(::PolarXRPC::Datatypes::Any_Type_SCALAR);
   Scalar *s = any->mutable_scalar();
   s->set_type(scalar_type);
   return s;

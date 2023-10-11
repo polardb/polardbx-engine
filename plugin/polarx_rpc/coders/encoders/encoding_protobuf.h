@@ -32,6 +32,7 @@
 
 #include "encoding_primitives.h"
 
+namespace polarx_rpc {
 namespace protocol {
 
 class Delayed_fixed_varuint32 {
@@ -375,3 +376,4 @@ public:
 };
 
 } // namespace protocol
+} // namespace polarx_rpc

@@ -16,8 +16,8 @@ namespace polarx_rpc {
 
 namespace defaults {
 static constexpr my_bool auto_cpu_affinity = true;
-/// allow bind to multi core in group, set to true in aliyun
-static constexpr my_bool multi_affinity_in_group = false;
+/// allow bind to multi core in group
+static constexpr my_bool multi_affinity_in_group = true;
 static constexpr my_bool force_all_cores = false;
 /// auto calculate by core numbers
 static constexpr uint32_t epoll_groups = 0;

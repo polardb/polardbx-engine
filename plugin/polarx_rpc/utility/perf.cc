@@ -13,7 +13,12 @@ static constexpr auto HIST_MAX_VALUE = 99.;  /// 99s
 Chistogram g_work_queue_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
 Chistogram g_recv_first_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
 Chistogram g_recv_all_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+Chistogram g_decode_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
 Chistogram g_schedule_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
 Chistogram g_run_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+Chistogram g_timer_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+Chistogram g_cleanup_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+Chistogram g_fin_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+Chistogram g_auth_hist(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
 
 } // namespace polarx_rpc

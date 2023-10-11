@@ -22,6 +22,7 @@
 #include "../xdecimal.h"
 #include "encoding_polarx_messages.h"
 
+namespace polarx_rpc {
 namespace protocol {
 
 const int k_block_size = 1024 * 4;
@@ -293,6 +294,9 @@ public:
   void end_row() {
     if (m_row_processing) {
       ++m_chunk.row_count;
+      /// send it before null bitmap full
+      if (m_chunk.row_count >= k_block_size)
+        m_chunk.is_full = true;
       if (m_chunk.is_full) {
         send_chunk();
       }
@@ -313,6 +317,8 @@ public:
   uint32_t get_num_fields() const { return m_num_fields; }
 
   void field_null() {
+    /// caution: null bitmap overflow check!
+    assert(m_chunk.row_count / 8 < k_bitmap_size);
     *(m_chunk.null_bitmap + m_num_fields * k_bitmap_size +
       m_chunk.row_count / 8) |= 1 << (7 - (m_chunk.row_count & 7));
     ++m_num_fields;
@@ -583,3 +589,4 @@ public:
 };
 
 } // namespace protocol
+} // namespace polarx_rpc

@@ -10,7 +10,6 @@
 #include <string>
 
 #include "mysql/service_command.h"
-#include "mysql/service_ssl_wrapper.h"
 
 #include "../coders/polarx_encoder.h"
 #include "../common_define.h"
@@ -75,9 +74,9 @@ public:
   void wait_end(THD *thd);
   void post_kill(THD *thd);
 
-  inline void shutdown() {
+  inline void shutdown(bool log) {
     shutdown_.store(true, std::memory_order_release);
-    remote_kill();
+    remote_kill(log);
   }
 
   bool flush();
@@ -86,8 +85,15 @@ public:
 
   void dispatch(msg_t &&msg, bool &run);
 
-  err_t sql_stmt_execute(const Polarx::Sql::StmtExecute &msg);
-  err_t sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg);
+  err_t sql_stmt_execute(const PolarXRPC::Sql::StmtExecute &msg);
+  err_t sql_plan_execute(const PolarXRPC::ExecPlan::ExecPlan &msg);
+
+  err_t table_space_file_info(
+      const PolarXRPC::PhysicalBackfill::GetFileInfoOperator &msg);
+  err_t table_space_file_transfer(
+      const PolarXRPC::PhysicalBackfill::TransferFileDataOperator &msg);
+  err_t table_space_file_manage(
+      const PolarXRPC::PhysicalBackfill::FileManageOperator &msg, bool &run);
 
   inline bool push_message(msg_t &&msg, bool &need_notify) {
     CautoMcsSpinLock lck(queue_lock_, mcs_spin_cnt);
@@ -99,24 +105,6 @@ public:
       return false;
     message_queue_.emplace(std::forward<msg_t>(msg));
     return true;
-  }
-
-  static void init_thread_for_session() {
-    {
-      std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
-      if (plugin_info.plugin_info != nullptr)
-        srv_session_init_thread(plugin_info.plugin_info);
-    }
-#if defined(__APPLE__)
-    pthread_setname_np("polarx_rpc");
-#elif defined(HAVE_PTHREAD_SETNAME_NP)
-    pthread_setname_np(pthread_self(), "polarx_rpc");
-#endif
-  }
-
-  static void deinit_thread_for_session() {
-    ssl_wrapper_thread_cleanup();
-    srv_session_deinit_thread();
   }
 };
 

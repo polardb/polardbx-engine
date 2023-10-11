@@ -38,7 +38,7 @@ int handler_close_table(THD *thd,
                         ExecTable *&exec_table,
                         int mode);
 
-void handler_begin_read(THD *thd);
+void handler_begin_read(THD *thd, const char *query, uint len);
 void handler_end(THD *thd);
 
 int handler_set_key_read_only(ExecTable *exec_table);

@@ -7,7 +7,7 @@
 
 namespace rpc_executor {
 
-using MysqlxScalar = ::Polarx::Datatypes::Scalar;
+using MysqlxScalar = ::PolarXRPC::Datatypes::Scalar;
 using ScalarList = ::google::protobuf::RepeatedPtrField<MysqlxScalar>;
 using ParamsList = ScalarList;
 using Placeholder = ::google::protobuf::uint32;
@@ -108,7 +108,7 @@ public:
 // Convert the array to a map
 class ExecKeyMap {
 public:
-  int init(const Polarx::ExecPlan::GetExpr &mysqlx_key) {
+  int init(const PolarXRPC::ExecPlan::GetExpr &mysqlx_key) {
     int ret = HA_EXEC_SUCCESS;
     int32_t key_parts_offered = mysqlx_key.keys().size();
     key_field_map_.reserve(key_parts_offered);

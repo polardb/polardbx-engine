@@ -9,6 +9,7 @@
 #ifndef MYSQL8
 #define MYSQL_SERVER
 #endif
+#include "m_string.h"
 #include "mysql/service_command.h"
 #include "sql/conn_handler/connection_handler_manager.h"
 #include "sql/sql_class.h"
@@ -19,11 +20,14 @@
 #include "../coders/custom_command_delegates.h"
 #include "../coders/notices.h"
 #include "../executor/executor.h"
+#include "../helper/to_string.h"
 #include "../polarx_rpc.h"
 #include "../server/server_variables.h"
 #include "../server/tcp_connection.h"
+#include "../sql_query/raw_binary.h"
 #include "../sql_query/sql_statement_builder.h"
 
+#include "executor/physical_backfill.h"
 #include "request_cache.h"
 #include "session.h"
 #include "session_manager.h"
@@ -134,10 +138,12 @@ public:
 
   ~CautoDetacher() {
     auto thd = session_.get_thd();
-    if (thd != nullptr)
+    if (LIKELY(thd != nullptr))
       thd->clear_polarx_rpc_monitor();
     if (run_)
       session_.detach();
+    if (UNLIKELY(!session_.is_detach_and_tls_cleared()))
+      sql_print_error("FATAL: polarx_rpc session not detach and cleared!");
   }
 
   void set_run() { run_ = true; }
@@ -176,7 +182,7 @@ _retry:
               /// safe to access it because we check shutdown before
               tcp_.session_manager().remove_and_shutdown(
                   tcp_.epoll().session_count(),
-                  encoder_.message_encoder().sid());
+                  encoder_.message_encoder().sid(), true);
               /// ignore all unfinished messages and free by smarter pointer.
               success_enter = false; /// no recheck needed
               break;
@@ -184,7 +190,7 @@ _retry:
 
             /// do execute one msg
             auto &msg = msgs.front();
-            if (Polarx::ClientMessages::SESS_CLOSE == msg.type) {
+            if (PolarXRPC::ClientMessages::SESS_CLOSE == msg.type) {
               /// send ok first
               encoder_.message_encoder().encode_ok();
               flush();
@@ -193,7 +199,7 @@ _retry:
               if (!shutdown_.load(std::memory_order_acquire)) {
                 tcp_.session_manager().remove_and_shutdown(
                     tcp_.epoll().session_count(),
-                    encoder_.message_encoder().sid());
+                    encoder_.message_encoder().sid(), false);
               }
 
               /// Ignore other msgs. No recheck needed.
@@ -228,7 +234,7 @@ _retry:
         /// do detach on any error
         detacher.set_run();
         encoder_.message_encoder().encode_error(
-            Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
+            PolarXRPC::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
             "Session unexpected killed.", "HY000");
         flush();
       }
@@ -259,8 +265,8 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
 
   err_t err;
   switch (msg.type) {
-  case ::Polarx::ClientMessages::EXEC_SQL: {
-    auto &m = static_cast<const Polarx::Sql::StmtExecute &>(*msg.msg);
+  case ::PolarXRPC::ClientMessages::EXEC_SQL: {
+    auto &m = static_cast<const PolarXRPC::Sql::StmtExecute &>(*msg.msg);
 
     /// check cascade error
     if (m.has_reset_error() && !m.reset_error() && last_error_)
@@ -274,8 +280,8 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
     }
   } break;
 
-  case ::Polarx::ClientMessages::EXEC_PLAN_READ: {
-    auto &m = static_cast<const Polarx::ExecPlan::ExecPlan &>(*msg.msg);
+  case ::PolarXRPC::ClientMessages::EXEC_PLAN_READ: {
+    auto &m = static_cast<const PolarXRPC::ExecPlan::ExecPlan &>(*msg.msg);
 
     /// check cascade error
     if (m.has_reset_error() && !m.reset_error() && last_error_)
@@ -286,6 +292,79 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
       /// note: cache miss is not an error
       if (err.error != ER_POLARX_RPC_CACHE_MISS)
         last_error_ = err;
+    }
+  } break;
+
+  case ::PolarXRPC::ClientMessages::AUTO_SP: {
+    auto &auto_sp_req =
+        static_cast<const PolarXRPC::ExecPlan::AutoSp &>(*msg.msg);
+    if (auto_sp_req.has_reset_error() && !auto_sp_req.reset_error() &&
+        last_error_)
+      err = last_error_;
+    else {
+      run = true;
+      auto err_no = 0;
+
+      LEX_CSTRING sp_name = {auto_sp_req.sp_name().data(),
+                             auto_sp_req.sp_name().length()};
+
+      /// attach psi, and thd attach will be invoked internally
+      attach_psi();
+
+      switch (auto_sp_req.op()) {
+      case PolarXRPC::ExecPlan::AutoSp_Operation_SET:
+        err_no = mysql_session_->set_savepoint(sp_name);
+        break;
+      case PolarXRPC::ExecPlan::AutoSp_Operation_RELEASE:
+        err_no = mysql_session_->release_savepoint(sp_name);
+        break;
+      case PolarXRPC::ExecPlan::AutoSp_Operation_ROLLBACK:
+        err_no = mysql_session_->rollback_savepoint(sp_name);
+        break;
+      default:
+        err_no = 2;
+        break;
+      }
+
+      if (err_no) {
+        err = err_t(ER_POLARX_RPC_ERROR_MSG, "Handle auto savepoint failed.");
+      } else {
+        encoder_.message_encoder().encode_ok();
+        flush();
+      }
+
+      last_error_ = err;
+    }
+  } break;
+
+  case ::PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO: {
+    // thd io flag
+    auto &file_info_msg =
+        static_cast<const PolarXRPC::PhysicalBackfill::GetFileInfoOperator &>(
+            *msg.msg);
+    err = table_space_file_info(file_info_msg);
+    if (!err) {
+      flush();
+    }
+  } break;
+
+  case ::PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA: {
+    auto &transfer_info_msg = static_cast<
+        const PolarXRPC::PhysicalBackfill::TransferFileDataOperator &>(
+        *msg.msg);
+    err = table_space_file_transfer(transfer_info_msg);
+    if (!err) {
+      flush();
+    }
+  } break;
+
+  case ::PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE: {
+    auto &file_info_msg =
+        static_cast<const PolarXRPC::PhysicalBackfill::FileManageOperator &>(
+            *msg.msg);
+    err = table_space_file_manage(file_info_msg, run);
+    if (!err) {
+      flush();
     }
   } break;
 
@@ -301,7 +380,7 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
   }
 }
 
-err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
+err_t Csession::sql_stmt_execute(const PolarXRPC::Sql::StmtExecute &msg) {
   ///
   /// dealing cache
   ///
@@ -347,10 +426,15 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
     thd->reset_gcn_variables();
   if (msg.has_use_cts_transaction() && msg.use_cts_transaction())
     thd->variables.innodb_current_snapshot_gcn = true;
-  if (msg.has_snapshot_seq())
+  if (msg.has_snapshot_seq()) {
     thd->variables.innodb_snapshot_gcn = msg.snapshot_seq();
-  else if (msg.has_commit_seq())
+    thd->owned_vision_gcn.set(
+        MYSQL_CSR_ASSIGNED, thd->variables.innodb_snapshot_gcn, MYSQL_SCN_NULL);
+  } else if (msg.has_commit_seq()) {
     thd->variables.innodb_commit_gcn = msg.commit_seq();
+    thd->owned_commit_gcn.set(thd->variables.innodb_commit_gcn,
+                              MYSQL_CSR_ASSIGNED);
+  }
 #else
   /// 5.7 specific CTS timestamp
   if (!thd_in_active_multi_stmt_transaction(thd))
@@ -366,27 +450,39 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
   /// token reset
   auto flow_control_enabled = false;
   if (msg.has_token()) {
-    if (msg.token() > 0) {
-      flow_control_.flow_reset(msg.token());
-      flow_control_enabled = true;
+    /// for size flow control, token can be 0
+    if (msg.token() >= -1) {
+      if (msg.token() >= 0) {
+        auto flow_size = msg.token() * 1024; /// unit is KB
+        if (flow_size < 0 || flow_size < msg.token())
+          flow_size = INT32_MAX; /// set to max when overflow
+        flow_control_.flow_reset(flow_size);
+        flow_control_enabled = true;
+      }
     } else
       return err_t(ER_POLARX_RPC_ERROR_MSG, "Invalid Token");
   }
 
   /// build query
+  const auto charset = thd->variables.character_set_results != nullptr
+                           ? thd->variables.character_set_results
+                           : &my_charset_utf8mb4_general_ci;
   qb_.clear();
   Sql_statement_builder builder(&qb_);
   try {
     if (msg.has_hint())
-      builder.build(*stmt_ptr, msg.args(), msg.hint());
+      builder.build(*stmt_ptr, msg.args(), *charset, msg.hint());
     else
-      builder.build(*stmt_ptr, msg.args());
+      builder.build(*stmt_ptr, msg.args(), *charset);
   } catch (const err_t &e) {
     return e;
   }
 
+  const auto caps =
+      msg.has_capabilities() ? msg.capabilities() : DEFAULT_CAPABILITIES;
   CstmtCommandDelegate delegate(
-      *this, encoder_, [this]() { return flush(); }, msg.compact_metadata());
+      *this, encoder_, [this]() { return flush(); }, msg.compact_metadata(),
+      caps);
   if (flow_control_enabled)
     delegate.set_flow_control(&flow_control_); /// enable flow control
   /// chunk?
@@ -395,6 +491,10 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
   /// feedback?
   if (msg.has_feed_back())
     delegate.set_feedback(msg.feed_back());
+
+  /// attach psi, and thd attach will be invoked internally
+  attach_psi();
+
   // sql_print_information("sid %lu run %s", sid_, qb_.get().c_str());
   const auto err = execute_sql(qb_.get().data(), qb_.get().length(), delegate);
   // sql_print_information("sid %lu run %s done err %d sqlerr %d", sid_,
@@ -407,30 +507,141 @@ err_t Csession::sql_stmt_execute(const Polarx::Sql::StmtExecute &msg) {
   return err;
 }
 
-err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
+std::string plan_param_audit_str_builder(
+    THD *thd,
+    const ::google::protobuf::RepeatedPtrField<::PolarXRPC::Datatypes::Scalar>
+        &params) {
+  thread_local std::ostringstream oss;
+  oss.str(""); /// clear it
+
+  std::vector<std::string> tb_db_names;
+
+  for (auto it = params.begin(); it != params.end(); ++it) {
+    if (it->type() != PolarXRPC::Datatypes::Scalar_Type_V_IDENTIFIER)
+      oss << ", ";
+
+    switch (it->type()) {
+    case PolarXRPC::Datatypes::Scalar_Type_V_SINT:
+      oss << it->v_signed_int();
+      break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_UINT:
+      oss << it->v_unsigned_int();
+      break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_NULL:
+      oss << "null";
+      break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_OCTETS: {
+      RawBinary binary(it->v_octets().value());
+      oss << binary.to_hex_string();
+    } break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_DOUBLE:
+      oss << std::setprecision(std::numeric_limits<double>::max_digits10)
+          << it->v_double();
+      break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_FLOAT:
+      oss << std::setprecision(std::numeric_limits<float>::max_digits10)
+          << it->v_float();
+      break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_BOOL:
+      oss << (it->v_bool() ? "true" : "false");
+      break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_STRING: {
+      const CHARSET_INFO *thd_charset = thd->variables.character_set_client;
+
+      const auto &str = it->v_string().value();
+      const std::size_t length_maximum = 2 * str.length() + 1 + 2;
+      std::string value_escaped(length_maximum, '\0');
+
+      std::size_t length_escaped = escape_string_for_mysql(
+          nullptr == thd_charset ? &my_charset_utf8mb4_general_ci : thd_charset,
+          &value_escaped[1], length_maximum, str.data(), str.length());
+      value_escaped[0] = value_escaped[1 + length_escaped] = '\'';
+
+      value_escaped.resize(length_escaped + 2);
+
+      oss << value_escaped;
+    } break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_PLACEHOLDER:
+      oss << "\'placeholder:" << it->v_position() << '\'';
+      break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_IDENTIFIER: {
+      const CHARSET_INFO *thd_charset = thd->variables.character_set_client;
+
+      const auto &str = it->has_v_identifier() ? it->v_identifier().value()
+                                               : it->v_string().value();
+      const std::size_t length_maximum = 2 * str.length() + 1 + 2;
+      std::string value_escaped(length_maximum, '\0');
+
+      std::size_t length_escaped = escape_string_for_mysql(
+          nullptr == thd_charset ? &my_charset_utf8mb4_general_ci : thd_charset,
+          &value_escaped[1], length_maximum, str.data(), str.length());
+      value_escaped[0] = value_escaped[1 + length_escaped] = '`';
+
+      value_escaped.resize(length_escaped + 2);
+
+      tb_db_names.emplace_back(value_escaped);
+    } break;
+
+    case PolarXRPC::Datatypes::Scalar_Type_V_RAW_STRING:
+      oss << it->v_string().value();
+      break;
+    }
+  }
+
+  /// generate from str
+  if (tb_db_names.size() >= 2)
+    oss << " from ";
+  auto first = true;
+  for (size_t idx = 0; idx + 1 < tb_db_names.size(); idx += 2) {
+    if (first)
+      first = false;
+    else
+      oss << ", ";
+    oss << tb_db_names[idx + 1] << '.' << tb_db_names[idx];
+  }
+  return oss.str();
+}
+
+err_t Csession::sql_plan_execute(const PolarXRPC::ExecPlan::ExecPlan &msg) {
   ///
   /// dealing cache
   ///
   /// just for life cycle control, never touch it
-  std::shared_ptr<Polarx::ExecPlan::AnyPlan> plan;
+  CrequestCache::plan_store_t plan_store;
   /// use this to get real plan
-  const Polarx::ExecPlan::AnyPlan *plan_ptr = nullptr;
+  const PolarXRPC::ExecPlan::AnyPlan *plan_ptr = nullptr;
+  /// plan audit str
+  std::string audit_str;
   if (msg.has_plan() && msg.has_plan_digest()) {
     /// copy, move and put into LRU
     auto digest(msg.plan_digest());
+    audit_str = msg.audit_str();      /// copy one
+    plan_store.audit_str = audit_str; /// copy one
+    plan_store.plan =
+        std::make_shared<PolarXRPC::ExecPlan::AnyPlan>(msg.plan());
     // TODO check plan store size?
-    plan = std::make_shared<Polarx::ExecPlan::AnyPlan>(msg.plan());
-    plugin_info.cache->set_plan(std::move(digest), std::move(plan));
+    plugin_info.cache->set_plan(std::move(digest), std::move(plan_store));
     plan_ptr = &msg.plan(); /// use original in msg
   } else if (msg.has_plan_digest()) {
-    plan = plugin_info.cache->get_plan(msg.plan_digest());
-    if (!plan)
+    plan_store = std::move(plugin_info.cache->get_plan(msg.plan_digest()));
+    if (!plan_store.plan)
       /// not found?
       return err_t(ER_POLARX_RPC_CACHE_MISS, "do not exist plan!");
-    plan_ptr = plan.get();
-  } else if (msg.has_plan())
+    plan_ptr = plan_store.plan.get();
+    audit_str = std::move(plan_store.audit_str);
+  } else if (msg.has_plan()) {
     plan_ptr = &msg.plan();
-  else
+    audit_str = msg.audit_str();
+  } else
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Neither stmt nor digest exist.");
 
   auto thd = get_thd();
@@ -440,10 +651,15 @@ err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
     thd->reset_gcn_variables();
   if (msg.has_use_cts_transaction() && msg.use_cts_transaction())
     thd->variables.innodb_current_snapshot_gcn = true;
-  if (msg.has_snapshot_seq())
+  if (msg.has_snapshot_seq()) {
     thd->variables.innodb_snapshot_gcn = msg.snapshot_seq();
-  else if (msg.has_commit_seq())
+    thd->owned_vision_gcn.set(
+        MYSQL_CSR_ASSIGNED, thd->variables.innodb_snapshot_gcn, MYSQL_SCN_NULL);
+  } else if (msg.has_commit_seq()) {
     thd->variables.innodb_commit_gcn = msg.commit_seq();
+    thd->owned_commit_gcn.set(thd->variables.innodb_commit_gcn,
+                              MYSQL_CSR_ASSIGNED);
+  }
 #else
   /// 5.7 specific CTS timestamp
   if (!thd_in_active_multi_stmt_transaction(thd))
@@ -459,15 +675,24 @@ err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
   /// token reset
   auto flow_control_enabled = false;
   if (msg.has_token()) {
-    if (msg.token() > 0 || msg.token() == -1) {
-      flow_control_.flow_reset(msg.token());
-      flow_control_enabled = true;
+    /// for size flow control, token can be 0
+    if (msg.token() >= -1) {
+      if (msg.token() >= 0) {
+        auto flow_size = msg.token() * 1024; /// unit is KB
+        if (flow_size < 0 || flow_size < msg.token())
+          flow_size = INT32_MAX; /// set to max when overflow
+        flow_control_.flow_reset(flow_size);
+        flow_control_enabled = true;
+      }
     } else
       return err_t(ER_POLARX_RPC_ERROR_MSG, "Invalid Token");
   }
 
+  const auto caps =
+      msg.has_capabilities() ? msg.capabilities() : DEFAULT_CAPABILITIES;
   CstmtCommandDelegate delegate(
-      *this, encoder_, [this]() { return flush(); }, msg.compact_metadata());
+      *this, encoder_, [this]() { return flush(); }, msg.compact_metadata(),
+      caps);
   if (flow_control_enabled)
     delegate.set_flow_control(&flow_control_); /// enable flow control
   /// chunk?
@@ -476,11 +701,138 @@ err_t Csession::sql_plan_execute(const Polarx::ExecPlan::ExecPlan &msg) {
   /// feedback?
   if (msg.has_feed_back())
     delegate.set_feedback(msg.feed_back());
+
+  /// build audit string
+  std::string full_audit;
+  full_audit.reserve(1024);
+  if (msg.has_trace_id()) {
+    full_audit += msg.trace_id();
+    full_audit += '\n';
+  }
+  if (msg.has_plan_digest()) {
+    RawBinary bin(msg.plan_digest());
+    full_audit += "/*xplan ";
+    full_audit += bin.to_hex_string();
+    full_audit += '\n';
+  } else
+    full_audit += "/*xplan\n";
+  full_audit += audit_str;
+  full_audit += "*/\nselect xplan";
+  full_audit += plan_param_audit_str_builder(thd, msg.parameters());
+
+  /// attach first
+  auto err = attach();
+  if (UNLIKELY(err))
+    return err;
+  /// and psi
+  attach_psi();
+
   auto iret = rpc_executor::Executor::instance().execute(
-      *plan_ptr, msg.parameters(), delegate, thd);
+      *plan_ptr, msg.parameters(), delegate, thd, full_audit.c_str(),
+      full_audit.length());
+  /// detach via auto detacher in session::run
   if (iret != 0)
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Executor error");
   return err_t::Success();
+}
+
+err_t Csession::table_space_file_info(
+    const PolarXRPC::PhysicalBackfill::GetFileInfoOperator &msg) {
+  err_t ret = err_t::Success();
+  PolarXRPC::PhysicalBackfill::GetFileInfoOperator out_msg;
+  switch (msg.operator_type()) {
+  case PolarXRPC::PhysicalBackfill::GetFileInfoOperator::
+      CHECK_SRC_FILE_EXISTENCE:
+  case PolarXRPC::PhysicalBackfill::GetFileInfoOperator::
+      CHECK_TAR_FILE_EXISTENCE: {
+    out_msg.set_operator_type(
+        PolarXRPC::PhysicalBackfill::
+            GetFileInfoOperator_Type_CHECK_SRC_FILE_EXISTENCE);
+    ret = rpc_executor::Physical_backfill::instance().check_file_existence(
+        msg, out_msg);
+  }; break;
+  default:
+    return err_t(ER_POLARX_RPC_ERROR_MSG, "unsupported command");
+  }
+  if (ret) {
+    return ret;
+  } else {
+    encoder_.message_encoder()
+        .encode_protobuf_message<protocol::tags::GetFileInfoOK::server_id>(
+            out_msg);
+    return err_t::Success();
+  }
+}
+
+err_t Csession::table_space_file_manage(
+    const PolarXRPC::PhysicalBackfill::FileManageOperator &msg, bool &run) {
+  err_t ret = err_t::Success();
+  switch (msg.operator_type()) {
+  case PolarXRPC::PhysicalBackfill::FileManageOperator::
+      COPY_IBD_TO_TEMP_DIR_IN_SRC: {
+    auto thd = get_thd();
+
+    run = true;
+    /// attach first
+    auto err = attach();
+    if (UNLIKELY(err))
+      return err;
+    /// and psi
+    attach_psi();
+
+    ret = rpc_executor::Physical_backfill::instance().clone_file(msg, thd);
+  } break;
+  case PolarXRPC::PhysicalBackfill::FileManageOperator::
+      DELETE_IBD_FROM_TEMP_DIR_IN_SRC: {
+    ret = rpc_executor::Physical_backfill::instance().delete_file(msg);
+  } break;
+  case PolarXRPC::PhysicalBackfill::FileManageOperator::FALLOCATE_IBD: {
+    ret = rpc_executor::Physical_backfill::instance().pre_allocate(msg);
+  } break;
+  default:
+    return err_t(ER_POLARX_RPC_ERROR_MSG, "unsupported command");
+  }
+  if (!ret) {
+    PolarXRPC::PhysicalBackfill::FileManageOperatorResponse out_msg;
+    out_msg.set_result(true);
+    encoder_.message_encoder()
+        .encode_protobuf_message<protocol::tags::FileManageOK::server_id>(
+            out_msg);
+    return err_t::Success();
+  } else {
+    return ret;
+  }
+}
+
+err_t Csession::table_space_file_transfer(
+    const PolarXRPC::PhysicalBackfill::TransferFileDataOperator &msg) {
+  err_t ret = err_t::Success();
+  PolarXRPC::PhysicalBackfill::TransferFileDataOperator out_msg;
+  switch (msg.operator_type()) {
+  case PolarXRPC::PhysicalBackfill::TransferFileDataOperator::
+      GET_DATA_FROM_SRC_IBD: {
+    out_msg.set_operator_type(
+        PolarXRPC::PhysicalBackfill::TransferFileDataOperator::
+            GET_DATA_FROM_SRC_IBD);
+    ret = rpc_executor::Physical_backfill::instance().read_buffer(msg, out_msg);
+  } break;
+  case PolarXRPC::PhysicalBackfill::TransferFileDataOperator::
+      PUT_DATA_TO_TAR_IBD: {
+    out_msg.set_operator_type(
+        PolarXRPC::PhysicalBackfill::TransferFileDataOperator::
+            PUT_DATA_TO_TAR_IBD);
+    ret =
+        rpc_executor::Physical_backfill::instance().write_buffer(msg, out_msg);
+  } break;
+  }
+  if (!ret) {
+    encoder_.message_encoder()
+        .encode_protobuf_message<protocol::tags::TransferFileDataOK::server_id>(
+            out_msg);
+    return err_t::Success();
+  } else {
+    return ret;
+  }
 }
 
 } // namespace polarx_rpc

@@ -37,6 +37,7 @@
 
 #include "encoding_polarx_messages.h"
 
+namespace polarx_rpc {
 namespace protocol {
 
 template <typename Encoder_type> class XRow_encoder_base {
@@ -288,3 +289,4 @@ public:
 };
 
 } // namespace protocol
+} // namespace polarx_rpc

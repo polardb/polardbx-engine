@@ -35,14 +35,16 @@ class Sql_statement_builder {
 public:
   static const char *const k_sql_namespace;
 
-  using Arg_list = google::protobuf::RepeatedPtrField<::Polarx::Datatypes::Any>;
+  using Arg_list =
+      google::protobuf::RepeatedPtrField<::PolarXRPC::Datatypes::Any>;
 
   explicit Sql_statement_builder(Query_string_builder *qb) : m_qb(qb) {}
 
   void build(const std::string &query, const Arg_list &args,
-             const std::string &hint) const;
+             const CHARSET_INFO &charset, const std::string &hint) const;
 
-  void build(const std::string &query, const Arg_list &args) const;
+  void build(const std::string &query, const Arg_list &args,
+             const CHARSET_INFO &charset) const;
 
 private:
   Query_string_builder *m_qb;

@@ -47,21 +47,21 @@ bool has_field(const Message &msg, const FieldDescriptor *field) {
 
 bool match_field_value(const Message &expected_msg, const Message &msg,
                        const FieldDescriptor *field) {
-  if (expected_msg.GetTypeName() == Polarx::Notice::Frame().GetTypeName() &&
+  if (expected_msg.GetTypeName() == PolarXRPC::Notice::Frame().GetTypeName() &&
       field->name() == "payload") {
     auto expected_notice =
-        reinterpret_cast<const Polarx::Notice::Frame *>(&expected_msg);
-    auto notice = reinterpret_cast<const Polarx::Notice::Frame *>(&msg);
+        reinterpret_cast<const PolarXRPC::Notice::Frame *>(&expected_msg);
+    auto notice = reinterpret_cast<const PolarXRPC::Notice::Frame *>(&msg);
 
     if (expected_notice->has_type() && notice->has_type() &&
         expected_notice->type() == notice->type()) {
       std::unique_ptr<Message> expected_notice_payload{
           parser::get_notice_message_from_text(
-              static_cast<Polarx::Notice::Frame_Type>(expected_notice->type()),
+              static_cast<PolarXRPC::Notice::Frame_Type>(expected_notice->type()),
               "", nullptr, true)};
       std::unique_ptr<Message> actual_notice_payload{
           parser::get_notice_message_from_text(
-              static_cast<Polarx::Notice::Frame_Type>(expected_notice->type()),
+              static_cast<PolarXRPC::Notice::Frame_Type>(expected_notice->type()),
               "", nullptr, true)};
 
       if (nullptr == expected_notice_payload.get()) {

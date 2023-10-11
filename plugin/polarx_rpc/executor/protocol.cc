@@ -121,6 +121,8 @@ int Protocol::write_row(InternalDataSet &dataset) {
   }
   // TODO: check again if we need to end_row when failed
   xprotocol_.end_row();
+  /// add row sent
+  thd->inc_sent_row_count(1);
   return ret;
 }
 

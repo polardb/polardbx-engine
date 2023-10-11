@@ -28,7 +28,10 @@
 #include <string>
 #include <vector>
 
+#include "m_ctype.h"
+
 #include "../coders/protocol_fwd.h"
+#include "../helper/str_converter.h"
 #include "../utility/error.h"
 
 #include "identifier.h"
@@ -37,18 +40,34 @@
 
 namespace polarx_rpc {
 
+static inline std::string
+covert_if_needed(const ::PolarXRPC::Datatypes::Scalar_String &string,
+                 const CHARSET_INFO &charset) {
+  CHARSET_INFO *src_charset;
+  if (string.has_collation() && string.collation() != charset.number &&
+      (src_charset = get_charset(string.collation(), MYF(0))) != nullptr) {
+    /// need convert
+    const auto &org_str = string.value();
+    CconvertIfNecessary converted(&charset, org_str.data(), org_str.length(),
+                                  src_charset);
+    return {converted.get_ptr(), converted.get_length()};
+  } else
+    return string.value();
+}
+
 class Getter_any {
 public:
   template <typename Functor>
-  static void put_scalar_value_to_functor(const ::Polarx::Datatypes::Any &any,
-                                          Functor &functor) {
+  static void
+  put_scalar_value_to_functor(const ::PolarXRPC::Datatypes::Any &any,
+                              Functor &functor, const CHARSET_INFO &charset) {
     if (!any.has_type())
       throw err_t(ER_POLARX_RPC_ERROR_MSG, "Invalid data, expecting type");
 
-    if (::Polarx::Datatypes::Any::SCALAR != any.type())
+    if (::PolarXRPC::Datatypes::Any::SCALAR != any.type())
       throw err_t(ER_POLARX_RPC_ERROR_MSG, "Invalid data, expecting scalar");
 
-    using ::Polarx::Datatypes::Scalar;
+    using ::PolarXRPC::Datatypes::Scalar;
     const Scalar &scalar = any.scalar();
 
     switch (scalar.type()) {
@@ -90,25 +109,21 @@ public:
 
     case Scalar::V_IDENTIFIER: {
       throw_invalid_type_if_false(scalar, scalar.has_v_identifier());
-      Identifier identifier(scalar.v_identifier().value());
+      Identifier identifier(covert_if_needed(scalar.v_identifier(), charset));
       functor(identifier);
     } break;
 
     case Scalar::V_RAW_STRING: {
       throw_invalid_type_if_false(scalar, scalar.has_v_string() &&
                                               scalar.v_string().has_value());
-      RawString raw_string(scalar.v_string().value());
+      RawString raw_string(covert_if_needed(scalar.v_string(), charset));
       functor(raw_string);
     } break;
 
     case Scalar::V_STRING: {
-      // XXX
-      // implement char-set handling
-      const bool is_valid =
-          scalar.has_v_string() && scalar.v_string().has_value();
-
-      throw_invalid_type_if_false(scalar, is_valid);
-      functor(scalar.v_string().value());
+      throw_invalid_type_if_false(scalar, scalar.has_v_string() &&
+                                              scalar.v_string().has_value());
+      functor(covert_if_needed(scalar.v_string(), charset));
     } break;
 
     default:
@@ -119,7 +134,7 @@ public:
 
 private:
   static void
-  throw_invalid_type_if_false(const ::Polarx::Datatypes::Scalar &scalar,
+  throw_invalid_type_if_false(const ::PolarXRPC::Datatypes::Scalar &scalar,
                               const bool is_valid) {
     if (!is_valid)
       throw err_t::Error(ER_POLARX_RPC_ERROR_MSG,

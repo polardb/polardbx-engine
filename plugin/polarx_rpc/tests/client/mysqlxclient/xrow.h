@@ -115,7 +115,7 @@ struct Column_metadata {
 class XRow {
  public:
   /** Alias for Row protobuf message. */
-  using Row = ::Polarx::Resultset::Row;
+  using Row = ::PolarXRPC::Resultset::Row;
   /** Alias for set of strings used for MySQL "SET" type. */
   using String_set = std::set<std::string>;
 

@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <vector>
 
+namespace polarx_rpc {
 namespace protocol {
 
 class Page {
@@ -119,3 +120,4 @@ private:
 };
 
 } // namespace protocol
+} // namespace polarx_rpc

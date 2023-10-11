@@ -28,7 +28,7 @@ syntax = "proto2";
 //
 // * is sent from the server to the client
 // * may be global or relate to the current message sequence
-package Polarx.Notice;
+package PolarXRPC.Notice;
 option java_package = "com.mysql.cj.polarx.protobuf";
 
 import "polarx_datatypes.proto";
@@ -38,9 +38,9 @@ import "polarx_datatypes.proto";
 // ===================================================== =====
 // .type                                                 value
 // ===================================================== =====
-// :protobuf:msg:`Polarx.Notice::Warning`                1
-// :protobuf:msg:`Polarx.Notice::SessionVariableChanged` 2
-// :protobuf:msg:`Polarx.Notice::SessionStateChanged`    3
+// :protobuf:msg:`PolarXRPC.Notice::Warning`                1
+// :protobuf:msg:`PolarXRPC.Notice::SessionVariableChanged` 2
+// :protobuf:msg:`PolarXRPC.Notice::SessionStateChanged`    3
 // ===================================================== =====
 //
 // :param type: the type of the payload
@@ -81,7 +81,7 @@ message Frame {
 //   * schema or table dropped
 //
 // ========================================== =======================
-// :protobuf:msg:`Polarx.Notice::Frame` field value
+// :protobuf:msg:`PolarXRPC.Notice::Frame` field value
 // ========================================== =======================
 // ``.type``                                  1
 // ``.scope``                                 ``local`` or ``global``
@@ -110,7 +110,7 @@ message Warning {
 //   SHOW SESSION VARIABLES
 //
 // ========================================== =========
-// :protobuf:msg:`Polarx.Notice::Frame` field value
+// :protobuf:msg:`PolarXRPC.Notice::Frame` field value
 // ========================================== =========
 // ``.type``                                  2
 // ``.scope``                                 ``local``
@@ -121,14 +121,14 @@ message Warning {
 // :param value: the changed value of param
 message SessionVariableChanged {
   required string param = 1;
-  optional Polarx.Datatypes.Scalar value = 2;
+  optional PolarXRPC.Datatypes.Scalar value = 2;
 }
 
 
 // Notify clients about changes to the internal session state
 //
 // ========================================== =========
-// :protobuf:msg:`Polarx.Notice::Frame` field value
+// :protobuf:msg:`PolarXRPC.Notice::Frame` field value
 // ========================================== =========
 // ``.type``                                  3
 // ``.scope``                                 ``local``
@@ -151,6 +151,6 @@ message SessionStateChanged {
      // .. more to be added
   }
   required Parameter param = 1;
-  optional Polarx.Datatypes.Scalar value = 2;
+  optional PolarXRPC.Datatypes.Scalar value = 2;
 }
 

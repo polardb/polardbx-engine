@@ -47,6 +47,7 @@
 #include "protobuf/polarx_resultset.pb.h"
 #include "protobuf/polarx_session.pb.h"
 #include "protobuf/polarx_sql.pb.h"
+#include "protobuf/polarx_physical_backfill.pb.h"
 
 #ifdef WIN32
 #pragma warning(pop)

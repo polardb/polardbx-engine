@@ -262,7 +262,7 @@ void Connection_manager::close_active(const bool shutdown,
       if (active_xconnection()->state().is_connected()) {
 /* no close needed
         // send a close message and wait for the corresponding Ok message
-        active_xprotocol()->send(Polarx::Connection::Close());
+        active_xprotocol()->send(PolarXRPC::Connection::Close());
         xcl::XProtocol::Server_message_type_id msgid;
         xcl::XError error;
         Message_ptr msg{
@@ -271,13 +271,13 @@ void Connection_manager::close_active(const bool shutdown,
         if (error) throw error;
 
         if (!be_quiet) m_console.print(*msg);
-        if (Polarx::ServerMessages::OK != msgid)
+        if (PolarXRPC::ServerMessages::OK != msgid)
           throw xcl::XError(CR_COMMANDS_OUT_OF_SYNC,
                             "Disconnect was expecting Mysqlx.Ok(bye!), but "
                             "got the one above (one or more calls to -->recv "
                             "are probably missing)");
 
-        std::string text = static_cast<Polarx::Ok *>(msg.get())->msg();
+        std::string text = static_cast<PolarXRPC::Ok *>(msg.get())->msg();
         if (text != "bye!" && text != "tchau!")
           throw xcl::XError(CR_COMMANDS_OUT_OF_SYNC,
                             "Disconnect was expecting Mysqlx.Ok(bye!), but "

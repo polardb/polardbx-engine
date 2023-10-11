@@ -175,8 +175,9 @@ private:
   uint8_t m_escape_chars;
 };
 
-Query_formatter::Query_formatter(std::string &query, CHARSET_INFO &charset)
-    : m_query(query), m_charset(charset), m_last_tag_position(0) {}
+Query_formatter::Query_formatter(std::string &query)
+    : m_query(query), m_charset(&my_charset_utf8mb4_general_ci),
+      m_last_tag_position(0) {}
 
 Query_formatter &Query_formatter::operator%(const char *value) {
   validate_next_tag();
@@ -228,7 +229,7 @@ void Query_formatter::put_value_and_escape(const char *value,
   std::string value_escaped(length_maximum, '\0');
 
   std::size_t length_escaped = escape_string_for_mysql(
-      &m_charset, &value_escaped[1], length_maximum, value, length);
+      m_charset, &value_escaped[1], length_maximum, value, length);
   value_escaped[0] = value_escaped[1 + length_escaped] = '\'';
 
   value_escaped.resize(length_escaped + 2);
@@ -257,7 +258,7 @@ void Query_formatter::put_ident_and_escape(const char *value,
   std::string value_escaped(length_maximum, '\0');
 
   std::size_t length_escaped = escape_string_for_mysql(
-      &m_charset, &value_escaped[1], length_maximum, value, length);
+      m_charset, &value_escaped[1], length_maximum, value, length);
   value_escaped[0] = value_escaped[1 + length_escaped] = '`';
 
   value_escaped.resize(length_escaped + 2);

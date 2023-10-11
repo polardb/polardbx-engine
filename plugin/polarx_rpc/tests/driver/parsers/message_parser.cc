@@ -91,7 +91,7 @@ Message *parse_serialize_message(const std::string &text_payload,
   return msg.release();
 }
 
-bool get_notice_payload_from_text(const Polarx::Notice::Frame_Type type,
+bool get_notice_payload_from_text(const PolarXRPC::Notice::Frame_Type type,
                                   const std::string &text_payload,
                                   std::string *out_binary_payload,
                                   const bool allow_partial_messaged) {
@@ -112,21 +112,21 @@ bool get_notice_payload_from_text(const Polarx::Notice::Frame_Type type,
 
 }  // namespace details
 
-Message *get_notice_message_from_text(const Polarx::Notice::Frame_Type type,
+Message *get_notice_message_from_text(const PolarXRPC::Notice::Frame_Type type,
                                       const std::string &text_payload,
                                       std::string *out_error,
                                       const bool allow_partial_messaged) {
   switch (type) {
-    case Polarx::Notice::Frame_Type_WARNING:
-      return details::parse_serialize_message<Polarx::Notice::Warning>(
+    case PolarXRPC::Notice::Frame_Type_WARNING:
+      return details::parse_serialize_message<PolarXRPC::Notice::Warning>(
           text_payload, out_error, allow_partial_messaged);
-    case Polarx::Notice::Frame_Type_SESSION_VARIABLE_CHANGED:
+    case PolarXRPC::Notice::Frame_Type_SESSION_VARIABLE_CHANGED:
       return details::parse_serialize_message<
-          Polarx::Notice::SessionVariableChanged>(text_payload, out_error,
+          PolarXRPC::Notice::SessionVariableChanged>(text_payload, out_error,
                                                   allow_partial_messaged);
-    case Polarx::Notice::Frame_Type_SESSION_STATE_CHANGED:
+    case PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED:
       return details::parse_serialize_message<
-          Polarx::Notice::SessionStateChanged>(text_payload, out_error,
+          PolarXRPC::Notice::SessionStateChanged>(text_payload, out_error,
                                                allow_partial_messaged);
     default:
       return nullptr;
@@ -238,12 +238,12 @@ Message *get_server_message_from_text(
     return nullptr;
   }
 
-  if (Polarx::ServerMessages::NOTICE == *msg_id) {
-    auto notice = reinterpret_cast<Polarx::Notice::Frame *>(message);
+  if (PolarXRPC::ServerMessages::NOTICE == *msg_id) {
+    auto notice = reinterpret_cast<PolarXRPC::Notice::Frame *>(message);
 
     std::string out_payload;
     if (!details::get_notice_payload_from_text(
-            static_cast<Polarx::Notice::Frame_Type>(notice->type()),
+            static_cast<PolarXRPC::Notice::Frame_Type>(notice->type()),
             notice->payload(), &out_payload, allow_partial_messaged)) {
       *out_error = "Invalid notice payload: " + notice->payload();
       return nullptr;

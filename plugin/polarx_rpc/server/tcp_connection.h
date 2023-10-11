@@ -145,6 +145,10 @@ private:
     if (LIKELY(fd_ > 0)) {
       std::lock_guard<std::mutex> lck(exit_lock_);
       if (LIKELY(fd_ > 0)) {
+        int64_t fin_start_time = 0;
+        if (enable_perf_hist)
+          fin_start_time = Ctime::steady_ns();
+
         Csocket::shutdown(fd_);
         if (LIKELY(registered_)) {
           auto err = epoll_.del_fd(fd_);
@@ -167,6 +171,12 @@ private:
         sessions_.shutdown(epoll_.session_count());
 
         fd_ = -1;
+
+        if (fin_start_time != 0) {
+          auto fin_end_time = Ctime::steady_ns();
+          auto fin_time = fin_end_time - fin_start_time;
+          g_fin_hist.update(static_cast<double>(fin_time) / 1e9);
+        }
       }
     }
   }
@@ -285,52 +295,68 @@ private:
                                           size_t length) {
     std::unique_ptr<ProtoMsg> msg;
     switch (type) {
-    case Polarx::ClientMessages::CON_CAPABILITIES_GET:
-      msg.reset(new Polarx::Connection::CapabilitiesGet());
+    case PolarXRPC::ClientMessages::CON_CAPABILITIES_GET:
+      msg.reset(new PolarXRPC::Connection::CapabilitiesGet());
       break;
 
-    case Polarx::ClientMessages::SESS_AUTHENTICATE_START:
-      msg.reset(new Polarx::Session::AuthenticateStart());
+    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START:
+      msg.reset(new PolarXRPC::Session::AuthenticateStart());
       break;
 
-    case Polarx::ClientMessages::SESS_AUTHENTICATE_CONTINUE:
-      msg.reset(new Polarx::Session::AuthenticateContinue());
+    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE:
+      msg.reset(new PolarXRPC::Session::AuthenticateContinue());
       break;
 
-    case Polarx::ClientMessages::EXPECT_OPEN:
-      msg.reset(new Polarx::Expect::Open());
+    case PolarXRPC::ClientMessages::EXPECT_OPEN:
+      msg.reset(new PolarXRPC::Expect::Open());
       break;
 
-    case Polarx::ClientMessages::EXPECT_CLOSE:
-      msg.reset(new Polarx::Expect::Close());
+    case PolarXRPC::ClientMessages::EXPECT_CLOSE:
+      msg.reset(new PolarXRPC::Expect::Close());
       break;
 
-    case Polarx::ClientMessages::EXEC_PLAN_READ:
-      msg.reset(new Polarx::ExecPlan::ExecPlan());
+    case PolarXRPC::ClientMessages::EXEC_PLAN_READ:
+      msg.reset(new PolarXRPC::ExecPlan::ExecPlan());
       break;
 
-    case Polarx::ClientMessages::EXEC_SQL:
-      msg.reset(new Polarx::Sql::StmtExecute());
+    case PolarXRPC::ClientMessages::EXEC_SQL:
+      msg.reset(new PolarXRPC::Sql::StmtExecute());
       break;
 
-    case Polarx::ClientMessages::SESS_NEW:
-      msg.reset(new Polarx::Session::NewSession());
+    case PolarXRPC::ClientMessages::SESS_NEW:
+      msg.reset(new PolarXRPC::Session::NewSession());
       break;
 
-    case Polarx::ClientMessages::SESS_KILL:
-      msg.reset(new Polarx::Session::KillSession());
+    case PolarXRPC::ClientMessages::SESS_KILL:
+      msg.reset(new PolarXRPC::Session::KillSession());
       break;
 
-    case Polarx::ClientMessages::SESS_CLOSE:
-      msg.reset(new Polarx::Session::Close());
+    case PolarXRPC::ClientMessages::SESS_CLOSE:
+      msg.reset(new PolarXRPC::Session::Close());
       break;
 
-    case Polarx::ClientMessages::TOKEN_OFFER:
-      msg.reset(new Polarx::Sql::TokenOffer());
+    case PolarXRPC::ClientMessages::TOKEN_OFFER:
+      msg.reset(new PolarXRPC::Sql::TokenOffer());
       break;
 
-    case Polarx::ClientMessages::GET_TSO:
-      msg.reset(new Polarx::ExecPlan::GetTSO());
+    case PolarXRPC::ClientMessages::GET_TSO:
+      msg.reset(new PolarXRPC::ExecPlan::GetTSO());
+      break;
+
+    case PolarXRPC::ClientMessages::AUTO_SP:
+      msg.reset(new PolarXRPC::ExecPlan::AutoSp());
+      break;
+
+    case PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO:
+      msg.reset(new PolarXRPC::PhysicalBackfill::GetFileInfoOperator);
+      break;
+
+    case PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE:
+      msg.reset(new PolarXRPC::PhysicalBackfill::FileManageOperator());
+      break;
+
+    case PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA:
+      msg.reset(new PolarXRPC::PhysicalBackfill::TransferFileDataOperator());
       break;
 
     default: {
@@ -370,11 +396,11 @@ private:
       /// reset handler and send success notify
       auth_handler_.reset();
 
-      ::Polarx::Session::AuthenticateOk msg;
+      ::PolarXRPC::Session::AuthenticateOk msg;
       msg.set_auth_data(r.data);
       msg_enc()
           .encode_protobuf_message<
-              ::Polarx::ServerMessages::SESS_AUTHENTICATE_OK>(msg);
+              ::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_OK>(msg);
     } break;
 
     case Authentication_interface::Failed:
@@ -382,17 +408,17 @@ private:
       auth_handler_.reset();
       /// send error message
       msg_enc().reset_sid(sid);
-      msg_enc().encode_error(Polarx::Error::ERROR, r.error_code, r.data,
+      msg_enc().encode_error(PolarXRPC::Error::ERROR, r.error_code, r.data,
                              "HY000");
       break;
 
     default:
       /// send continue challenge
-      ::Polarx::Session::AuthenticateContinue msg;
+      ::PolarXRPC::Session::AuthenticateContinue msg;
       msg.set_auth_data(r.data);
       msg_enc()
           .encode_protobuf_message<
-              ::Polarx::ServerMessages::SESS_AUTHENTICATE_CONTINUE>(msg);
+              ::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE>(msg);
     }
 
     /// flush buffer
@@ -401,29 +427,30 @@ private:
 
   inline void auth_routine(const uint64_t &sid, msg_t &&msg) {
     switch (msg.type) {
-    case Polarx::ClientMessages::CON_CAPABILITIES_GET: {
+    case PolarXRPC::ClientMessages::CON_CAPABILITIES_GET: {
       /// for alive probe
-      ::Polarx::Connection::Capabilities caps;
+      ::PolarXRPC::Connection::Capabilities caps;
       auto cap = caps.add_capabilities();
       cap->set_name("polarx_rpc");
       auto v = cap->mutable_value();
-      v->set_type(::Polarx::Datatypes::Any::SCALAR);
+      v->set_type(::PolarXRPC::Datatypes::Any::SCALAR);
       auto s = v->mutable_scalar();
-      s->set_type(::Polarx::Datatypes::Scalar::V_UINT);
+      s->set_type(::PolarXRPC::Datatypes::Scalar::V_UINT);
       s->set_v_unsigned_int(1);
 
       /// send to client
       msg_enc().reset_sid(sid);
       msg_enc()
-          .encode_protobuf_message<::Polarx::ServerMessages::CONN_CAPABILITIES>(
-              caps);
+          .encode_protobuf_message<
+              ::PolarXRPC::ServerMessages::CONN_CAPABILITIES>(caps);
       encoder().flush(*this);
     } break;
 
-    case Polarx::ClientMessages::SESS_AUTHENTICATE_START: {
+    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START: {
       /// start auth
       const auto &authm =
-          static_cast<const ::Polarx::Session::AuthenticateStart &>(*msg.msg);
+          static_cast<const ::PolarXRPC::Session::AuthenticateStart &>(
+              *msg.msg);
       Authentication_interface::Response r;
       if (LIKELY(!auth_handler_)) {
         auth_handler_ = Sasl_mysql41_auth::create(*this, nullptr);
@@ -437,15 +464,15 @@ private:
       send_auth_result(sid, r);
     } break;
 
-    case Polarx::ClientMessages::SESS_AUTHENTICATE_CONTINUE: {
+    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE: {
       /// continue auth
       const auto &authm =
-          static_cast<const ::Polarx::Session::AuthenticateContinue &>(
+          static_cast<const ::PolarXRPC::Session::AuthenticateContinue &>(
               *msg.msg);
       Authentication_interface::Response r;
       if (LIKELY(auth_handler_)) {
         r = auth_handler_->handle_continue(authm.auth_data());
-        tcp_info(0, "continue auth");
+        tcp_info(0, "continue auth", r.data.empty() ? nullptr : r.data.c_str());
       } else {
         r.status = Authentication_interface::Error,
         r.error_code = ER_NET_PACKETS_OUT_OF_ORDER;
@@ -499,6 +526,12 @@ private:
       /// read event
       std::map<uint64_t, bool> notify_set;
 
+      /// recode decode time
+      int64_t decode_start_time = 0;
+      if (enable_perf_hist)
+        decode_start_time = Ctime::steady_ns();
+
+      /// start decode routine
       do {
         if (UNLIKELY(!read_lock_.try_lock())) {
           recheck_.store(true, std::memory_order_release);
@@ -554,6 +587,12 @@ private:
                     buf_ptr_ + start_pos);
                 /// version check first
                 if (hdr->version != gx_ver_) {
+                  /// warn
+                  char extra[0x100];
+                  ::snprintf(extra, sizeof(extra), "expected: %u, now: %u",
+                             gx_ver_, hdr->version);
+                  tcp_warn(0, "bad protocol version", extra);
+                  /// shutdown
                   fin("bad protocol version");
                   /// fatal error and drop all data
                   buf_pos_ = start_pos = 0;
@@ -578,12 +617,17 @@ private:
               if (extra_data > max_pkt) {
                 /// send fatal message before shutdown
                 msg_enc().reset_sid(sid);
-                msg_enc().encode_error(Polarx::Error::FATAL,
+                msg_enc().encode_error(PolarXRPC::Error::FATAL,
                                        ER_NET_PACKET_TOO_LARGE,
                                        "Got a packet bigger than "
                                        "'polarx_rpc_max_allowed_packet' bytes",
                                        "S1000");
                 encoder().flush(*this);
+                /// warn
+                char extra[0x100];
+                ::snprintf(extra, sizeof(extra), "max: %u, now: %u", max_pkt,
+                           extra_data);
+                tcp_warn(0, "max allowed packet size exceeded", extra);
                 /// shutdown
                 fin("max allowed packet size exceeded");
                 /// fatal error and drop all data
@@ -634,10 +678,22 @@ private:
 
                 if (LIKELY(authed_) &&
                     LIKELY(msg.type !=
-                           Polarx::ClientMessages::CON_CAPABILITIES_GET))
+                           PolarXRPC::ClientMessages::CON_CAPABILITIES_GET))
                   sessions_.execute(*this, sid, std::move(msg), notify_set);
-                else /// do auth routine
+                else {
+                  /// do auth routine
+                  int64_t auth_start_time = 0;
+                  if (enable_perf_hist)
+                    auth_start_time = Ctime::steady_ns();
+
                   auth_routine(sid, std::move(msg));
+
+                  if (auth_start_time != 0) {
+                    auto auth_end_time = Ctime::steady_ns();
+                    auto auth_time = auth_end_time - auth_start_time;
+                    g_auth_hist.update(static_cast<double>(auth_time) / 1e9);
+                  }
+                }
 
                 start_pos += static_cast<int>(full_pkt_size);
               } else {
@@ -693,8 +749,15 @@ private:
           } else {
             auto err = errno;
             if (err != EAGAIN && err != EWOULDBLOCK) {
+              /// ignore case of free and invoke concurrently
+              bool ignore;
+              {
+                std::lock_guard<std::mutex> lck(exit_lock_);
+                ignore = -1 == fd_ && !registered_;
+              }
+              if (!ignore)
+                tcp_err(err, "recv error");
               /// fatal error
-              tcp_err(err, "recv error");
               fin("fatal error");
             }
             /// would block error, just leave it
@@ -706,54 +769,61 @@ private:
         std::atomic_thread_fence(std::memory_order_seq_cst);
       } while (UNLIKELY(recheck_.load(std::memory_order_acquire)));
 
+      /// recode decode time
+      if (decode_start_time != 0) {
+        auto decode_end_time = Ctime::steady_ns();
+        auto decode_time = decode_end_time - decode_start_time;
+        g_decode_hist.update(static_cast<double>(decode_time) / 1e9);
+      }
+
       /// dealing notify or direct run outside the read lock.
       if (!notify_set.empty()) {
         /// last one in event queue and the last one in notify set,
         /// can run directly, or the trx session in last event(if exists)
         /// record the sid which is in trx
-        uint64_t trx_sid = UINT64_C(0xFFFFFFFFFFFFFFFF);
+        uint64_t direct_run_sid = UINT64_C(0xFFFFFFFFFFFFFFFF);
         auto cnt = notify_set.size();
         for (const auto &pair : notify_set) {
           const auto &sid = pair.first;
           const auto &in_trx = pair.second;
+          --cnt;
           /// record it if empty
-          if (UINT64_C(0xFFFFFFFFFFFFFFFF) == trx_sid && in_trx) {
-            trx_sid = sid;
-            continue; /// deferred
-          }
           if (index + 1 == total &&
-              (0 == --cnt && UINT64_C(0xFFFFFFFFFFFFFFFF) == trx_sid)) {
-            /// last one in set and no trx session so run directly
-            DBG_LOG(("tcp_conn run last session %lu directly", sid));
-            auto s = sessions_.get_session(sid);
-            if (s)
-              s->run();
+              UINT64_C(0xFFFFFFFFFFFFFFFF) == direct_run_sid &&
+              (in_trx || 0 == cnt)) {
+            /// in last event and no other direct run
+            /// in trx or last one in set
+            assert(sid != UINT64_C(0xFFFFFFFFFFFFFFFF));
+            direct_run_sid = sid;
           } else {
             /// schedule in work task
             DBG_LOG(("tcp_conn schedule task session %lu", sid));
             std::unique_ptr<CdelayedTask> task(new CdelayedTask(sid, this));
             auto bret = epoll_.push_work(task->gen_task());
             if (LIKELY(bret))
-              task.release(); /// release the owner of queue
+              task.release(); /// release the owner to queue
             else {
               /// queue is full, try and kill if timeout
               task.reset();
               if (LIKELY(sessions_.remove_and_shutdown(epoll_.session_count(),
-                                                       sid))) {
+                                                       sid, true))) {
                 /// send fatal msg()(not lock protected so new one)
                 CpolarxEncoder enc(sid);
                 enc.message_encoder().encode_error(
-                    Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
-                    "Work queue overflow.", "70100");
+                    PolarXRPC::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
+                    "Work queue overflow. Larger "
+                    "'polarx_rpc_epoll_work_queue_capacity' needed.",
+                    "70100");
                 enc.flush(*this);
               }
             }
           }
         }
         /// run session in trx directly
-        if (trx_sid != UINT64_C(0xFFFFFFFFFFFFFFFF)) {
-          DBG_LOG(("tcp_conn run trx session %lu directly", sid));
-          auto s = sessions_.get_session(trx_sid);
+        if (direct_run_sid != UINT64_C(0xFFFFFFFFFFFFFFFF)) {
+          DBG_LOG(("tcp_conn run session %lu directly", direct_run_sid));
+          assert(index + 1 == total); /// must be last event
+          auto s = sessions_.get_session(direct_run_sid);
           if (s)
             s->run();
         }

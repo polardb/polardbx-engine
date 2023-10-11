@@ -112,25 +112,25 @@ class Protocol_factory_default : public Protocol_factory {
   }
 };
 
-bool scalar_get_v_uint(const Polarx::Datatypes::Scalar &scalar,
+bool scalar_get_v_uint(const PolarXRPC::Datatypes::Scalar &scalar,
                        uint64_t *out_value) {
-  if (scalar.type() != Polarx::Datatypes::Scalar::V_UINT) return false;
+  if (scalar.type() != PolarXRPC::Datatypes::Scalar::V_UINT) return false;
 
   *out_value = scalar.v_unsigned_int();
 
   return true;
 }
 
-bool get_array_of_strings_from_any(const Polarx::Datatypes::Any &any,
+bool get_array_of_strings_from_any(const PolarXRPC::Datatypes::Any &any,
                                    std::vector<std::string> *out_strings) {
   out_strings->clear();
 
-  if (!any.has_type() || Polarx::Datatypes::Any_Type_ARRAY != any.type())
+  if (!any.has_type() || PolarXRPC::Datatypes::Any_Type_ARRAY != any.type())
     return false;
 
   for (const auto &element : any.array().value()) {
     if (!element.has_type() ||
-        Polarx::Datatypes::Any_Type_SCALAR != element.type())
+        PolarXRPC::Datatypes::Any_Type_SCALAR != element.type())
       return false;
 
     const auto &scalar = element.scalar();
@@ -138,11 +138,11 @@ bool get_array_of_strings_from_any(const Polarx::Datatypes::Any &any,
     if (!scalar.has_type()) return false;
 
     switch (scalar.type()) {
-      case Polarx::Datatypes::Scalar_Type_V_STRING:
+      case PolarXRPC::Datatypes::Scalar_Type_V_STRING:
         out_strings->push_back(scalar.v_string().value());
         break;
 
-      case Polarx::Datatypes::Scalar_Type_V_OCTETS:
+      case PolarXRPC::Datatypes::Scalar_Type_V_OCTETS:
         out_strings->push_back(scalar.v_octets().value());
         break;
 
@@ -321,10 +321,10 @@ class Notice_server_hello_ignore {
   Notice_server_hello_ignore(const Notice_server_hello_ignore &) = default;
 
   Handler_result operator()(XProtocol *, const bool is_global,
-                            const Polarx::Notice::Frame::Type type,
+                            const PolarXRPC::Notice::Frame::Type type,
                             const char *, const uint32_t) {
     const bool is_hello_notice =
-        Polarx::Notice::Frame_Type_SERVER_HELLO == type;
+        PolarXRPC::Notice::Frame_Type_SERVER_HELLO == type;
 
     if (!is_global) return Handler_result::Continue;
     if (!is_hello_notice) return Handler_result::Continue;
@@ -537,7 +537,7 @@ XError Session_impl::reauthenticate(const char *user, const char *pass,
   if (!is_connected())
     return XError{CR_CONNECTION_ERROR, ER_TEXT_NOT_CONNECTED};
 
-  auto error = get_protocol().send(::Polarx::Session::Reset());
+  auto error = get_protocol().send(::PolarXRPC::Session::Reset());
 
   if (error) return error;
 
@@ -560,7 +560,7 @@ std::unique_ptr<XQuery_result> Session_impl::execute_sql(const std::string &sql,
     return {};
   }
 
-  ::Polarx::Sql::StmtExecute stmt;
+  ::PolarXRPC::Sql::StmtExecute stmt;
 
   stmt.set_stmt(sql);
   return m_protocol->execute_stmt(stmt, out_error);
@@ -575,7 +575,7 @@ std::unique_ptr<XQuery_result> Session_impl::execute_stmt(
     return {};
   }
 
-  ::Polarx::Sql::StmtExecute stmt;
+  ::PolarXRPC::Sql::StmtExecute stmt;
 
   stmt.set_stmt(sql);
   stmt.set_namespace_(ns);
@@ -609,7 +609,7 @@ void Session_impl::setup_general_notices_handler() {
   m_protocol->add_notice_handler(
       [context](XProtocol *p MY_ATTRIBUTE((unused)),
                 const bool is_global MY_ATTRIBUTE((unused)),
-                const Polarx::Notice::Frame::Type type MY_ATTRIBUTE((unused)),
+                const PolarXRPC::Notice::Frame::Type type MY_ATTRIBUTE((unused)),
                 const char *payload MY_ATTRIBUTE((unused)),
                 const uint32_t payload_size MY_ATTRIBUTE(
                     (unused))) -> Handler_result {
@@ -625,7 +625,7 @@ void Session_impl::setup_session_notices_handler() {
   m_protocol->add_notice_handler(
       [context](XProtocol *p MY_ATTRIBUTE((unused)),
                 const bool is_global MY_ATTRIBUTE((unused)),
-                const Polarx::Notice::Frame::Type type, const char *payload,
+                const PolarXRPC::Notice::Frame::Type type, const char *payload,
                 const uint32_t payload_size) -> Handler_result {
         return handle_notices(context, type, payload, payload_size);
       },
@@ -633,7 +633,7 @@ void Session_impl::setup_session_notices_handler() {
 }
 
 void Session_impl::setup_server_supported_features(
-    const Polarx::Connection::Capabilities *capabilities) {
+    const PolarXRPC::Connection::Capabilities *capabilities) {
 
   for (const auto &capability : capabilities->capabilities()) {
     if ("authentication.mechanisms" == capability.name()) {
@@ -763,7 +763,7 @@ XError Session_impl::authenticate(const char *user, const char *pass,
 
     // Also we should stop the authentication sequence on fatal error.
     // Still it would break compatibility with servers that wrongly mark
-    // Polarx::Error message with fatal flag.
+    // PolarXRPC::Error message with fatal flag.
     //
     // To workaround the problem of backward compatibility, we should
     // remember that fatal error was received and try to continue the
@@ -866,15 +866,15 @@ Session_impl::validate_and_adjust_auth_methods(std::vector<Auth> auth_methods,
 }
 
 Handler_result Session_impl::handle_notices(
-    std::shared_ptr<Context> context, const Polarx::Notice::Frame::Type type,
+    std::shared_ptr<Context> context, const PolarXRPC::Notice::Frame::Type type,
     const char *payload, const uint32_t payload_size) {
 
-  if (Polarx::Notice::Frame_Type_SESSION_STATE_CHANGED == type) {
-    Polarx::Notice::SessionStateChanged session_changed;
+  if (PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED == type) {
+    PolarXRPC::Notice::SessionStateChanged session_changed;
 
     if (session_changed.ParseFromArray(payload, payload_size) &&
         session_changed.IsInitialized() && session_changed.has_value()) {
-      if (Polarx::Notice::SessionStateChanged::CLIENT_ID_ASSIGNED ==
+      if (PolarXRPC::Notice::SessionStateChanged::CLIENT_ID_ASSIGNED ==
           session_changed.param()) {
         return details::scalar_get_v_uint(session_changed.value(),
                                           &context->m_client_id)
@@ -979,15 +979,15 @@ static void initialize_xmessages() {
 
      This should have be changed to a proper fix.
    */
-  Polarx::ServerMessages::default_instance();
-  Polarx::Sql::StmtExecute::default_instance();
-  Polarx::Session::AuthenticateStart::default_instance();
-  Polarx::Resultset::ColumnMetaData::default_instance();
-  Polarx::Notice::Warning::default_instance();
-  Polarx::Expr::Expr::default_instance();
-  Polarx::Expect::Open::default_instance();
-  Polarx::Datatypes::Any::default_instance();
-  Polarx::Connection::Capabilities::default_instance();
+  PolarXRPC::ServerMessages::default_instance();
+  PolarXRPC::Sql::StmtExecute::default_instance();
+  PolarXRPC::Session::AuthenticateStart::default_instance();
+  PolarXRPC::Resultset::ColumnMetaData::default_instance();
+  PolarXRPC::Notice::Warning::default_instance();
+  PolarXRPC::Expr::Expr::default_instance();
+  PolarXRPC::Expect::Open::default_instance();
+  PolarXRPC::Datatypes::Any::default_instance();
+  PolarXRPC::Connection::Capabilities::default_instance();
 }
 
 std::unique_ptr<XSession> create_session(const char *host, const uint16_t port,

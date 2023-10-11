@@ -39,12 +39,13 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
   }
 
   switch (msg.type) {
-  case ::Polarx::ClientMessages::SESS_NEW: {
+  case ::PolarXRPC::ClientMessages::SESS_NEW: {
     /// check limits first
     auto now_sessions = g_session_count.load(std::memory_order_acquire);
     if (static_cast<ulong>(now_sessions) > max_connections * 9 / 10) {
       tcp.msg_enc().reset_sid(sid);
-      tcp.msg_enc().encode_error(Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
+      tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL,
+                                 ER_POLARX_RPC_ERROR_MSG,
                                  "max_connections limit exceed", "HY000");
       tcp.encoder().flush(tcp);
     } else {
@@ -52,8 +53,8 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
       auto err = new_session(tcp, sid, s);
       tcp.msg_enc().reset_sid(sid);
       if (UNLIKELY(static_cast<bool>(err)))
-        tcp.msg_enc().encode_error(Polarx::Error::FATAL, err.error, err.message,
-                                   err.sql_state);
+        tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL, err.error,
+                                   err.message, err.sql_state);
       else {
         s->detach(); /// detach and clear TLS thd anyway
         tcp.msg_enc().encode_ok();
@@ -62,9 +63,13 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
     }
   } break;
 
-  case ::Polarx::ClientMessages::SESS_CLOSE:
-  case ::Polarx::ClientMessages::EXEC_SQL:
-  case ::Polarx::ClientMessages::EXEC_PLAN_READ: {
+  case ::PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO:
+  case ::PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA:
+  case ::PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE:
+  case ::PolarXRPC::ClientMessages::AUTO_SP:
+  case ::PolarXRPC::ClientMessages::SESS_CLOSE:
+  case ::PolarXRPC::ClientMessages::EXEC_SQL:
+  case ::PolarXRPC::ClientMessages::EXEC_PLAN_READ: {
     /// normal session request
     auto session = get_session(sid);
     if (LIKELY(session)) {
@@ -82,22 +87,24 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
         /// Send the fatal message first before any killed message.
         tcp.msg_enc().reset_sid(sid);
         tcp.msg_enc().encode_error(
-            Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
+            PolarXRPC::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
             "Session max_queued_messages limit exceed.", "HY000");
         tcp.encoder().flush(tcp);
         /// remove and shutdown session
-        remove_and_shutdown(tcp.epoll().session_count(), sid);
+        remove_and_shutdown(tcp.epoll().session_count(), sid, true);
       }
     } else {
       tcp.msg_enc().reset_sid(sid);
-      tcp.msg_enc().encode_error(Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
-                                 "Session not found.", "HY000");
+      tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL,
+                                 ER_POLARX_RPC_ERROR_MSG, "Session not found.",
+                                 "HY000");
       tcp.encoder().flush(tcp);
     }
   } break;
 
-  case ::Polarx::ClientMessages::GET_TSO: {
-    auto &tso_req = static_cast<const ::Polarx::ExecPlan::GetTSO &>(*msg.msg);
+  case ::PolarXRPC::ClientMessages::GET_TSO: {
+    auto &tso_req =
+        static_cast<const ::PolarXRPC::ExecPlan::GetTSO &>(*msg.msg);
 
     err_t err;
     uint64_t ts = 0;
@@ -129,26 +136,27 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
                                  ER_POLARX_RPC_ERROR_MSG, err.message,
                                  err.sql_state);
     } else {
-      ::Polarx::ExecPlan::ResultTSO tso_msg;
+      ::PolarXRPC::ExecPlan::ResultTSO tso_msg;
       tso_msg.set_error_no(err_no);
       tso_msg.set_ts(ts);
       tcp.msg_enc()
-          .encode_protobuf_message<::Polarx::ServerMessages::RESULTSET_TSO>(
+          .encode_protobuf_message<::PolarXRPC::ServerMessages::RESULTSET_TSO>(
               tso_msg);
     }
     tcp.encoder().flush(tcp);
   } break;
 
-  case ::Polarx::ClientMessages::SESS_KILL: {
+  case ::PolarXRPC::ClientMessages::SESS_KILL: {
     auto &kill_msg =
-        static_cast<const ::Polarx::Session::KillSession &>(*msg.msg);
+        static_cast<const ::PolarXRPC::Session::KillSession &>(*msg.msg);
     auto not_found = false;
-    if (::Polarx::Session::KillSession_KillType_CONNECTION == kill_msg.type()) {
+    if (::PolarXRPC::Session::KillSession_KillType_CONNECTION ==
+        kill_msg.type()) {
       /// Note: when kill, should release the session to ensure session freed
-      if (LIKELY(remove_and_shutdown(tcp.epoll().session_count(), sid))) {
+      if (LIKELY(remove_and_shutdown(tcp.epoll().session_count(), sid, true))) {
         /// send fatal msg()
         tcp.msg_enc().reset_sid(sid);
-        tcp.msg_enc().encode_error(Polarx::Error::FATAL,
+        tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL,
                                    ER_POLARX_RPC_ERROR_MSG,
                                    "Session is killing.", "70100");
         tcp.encoder().flush(tcp);
@@ -163,28 +171,36 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
     }
     if (UNLIKELY(not_found)) {
       tcp.msg_enc().reset_sid(sid);
-      tcp.msg_enc().encode_error(Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
-                                 "Session not found.", "HY000");
+      tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL,
+                                 ER_POLARX_RPC_ERROR_MSG, "Session not found.",
+                                 "HY000");
       tcp.encoder().flush(tcp);
     }
   } break;
 
-  case ::Polarx::ClientMessages::TOKEN_OFFER: {
+  case ::PolarXRPC::ClientMessages::TOKEN_OFFER: {
     auto session = get_session(sid);
     if (LIKELY(session)) {
-      session->flow_control().flow_offer(
-          static_cast<const ::Polarx::Sql::TokenOffer &>(*msg.msg).token());
+      const auto token =
+          static_cast<const ::PolarXRPC::Sql::TokenOffer &>(*msg.msg).token();
+      if (token >= 0) {
+        auto flow_size = token * 1024; /// unit is KB
+        if (flow_size < 0 || flow_size < token)
+          flow_size = INT32_MAX; /// set to max when overflow
+        session->flow_control().flow_offer(flow_size);
+      }
     } else {
       tcp.msg_enc().reset_sid(sid);
-      tcp.msg_enc().encode_error(Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
-                                 "Session not found.", "HY000");
+      tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL,
+                                 ER_POLARX_RPC_ERROR_MSG, "Session not found.",
+                                 "HY000");
       tcp.encoder().flush(tcp);
     }
   } break;
 
   default:
     tcp.msg_enc().reset_sid(sid);
-    tcp.msg_enc().encode_error(Polarx::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
+    tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
                                "Unexpected message for polarx rpc.", "HY000");
     tcp.encoder().flush(tcp);
   }
@@ -206,26 +222,24 @@ err_t CsessionManager::get_tso_mysql80(CtcpConnection &tcp, uint64_t &ts,
     auto err = s->session.init(0);
     if (UNLIKELY(err))
       return err;
-    /// mark host with epoll group info
-    char buf[0x100];
-    ::snprintf(buf, sizeof(buf), "xG%02u_shared_session",
-               tcp.epoll().group_id());
-    err = s->session.switch_to_user(user_.c_str(), buf, nullptr, nullptr);
+    err = s->session.switch_to_user(user_.c_str(), "shared_session", nullptr,
+                                    nullptr);
     if (UNLIKELY(err))
       return err;
   }
 
   /// attach
+  auto err = s->session.attach();
+  if (UNLIKELY(err))
+    return err; /// will auto free session
+
+  /// mark start
   auto thd = s->session.get_thd();
-  THD *current_stack = thd;
-  thd->thread_stack = reinterpret_cast<char *>(&current_stack);
-  thd->store_globals();
   THD_STAGE_INFO(thd, stage_starting);
   thd->set_time();
   thd->lex->sql_command = SQLCOM_SELECT;
 
   /// get tso
-  err_t err;
   TimestampService ts_service(s->session.get_thd(), SYS_GTS_DB, SYS_GTS_TABLE);
   if (ts_service.init()) {
     err = err_t(ER_POLARX_RPC_ERROR_MSG, "Failed to init GTS table.");
@@ -243,6 +257,8 @@ err_t CsessionManager::get_tso_mysql80(CtcpConnection &tcp, uint64_t &ts,
 
   /// detach
   s->session.detach();
+  if (UNLIKELY(!s->session.is_detach_and_tls_cleared()))
+    sql_print_error("FATAL: polarx_rpc tso session not detach and cleared!");
 
   /// try recycle
   if (UNLIKELY(err ||
@@ -263,8 +279,8 @@ void CsessionManager::execute_locally(CtcpConnection &tcp, const uint64_t &sid,
   tcp.msg_enc().reset_sid(sid);
 
   /// check type
-  if (UNLIKELY(msg.type != ::Polarx::ClientMessages::EXEC_SQL)) {
-    tcp.msg_enc().encode_error(Polarx::Error::ERROR, ER_POLARX_RPC_ERROR_MSG,
+  if (UNLIKELY(msg.type != ::PolarXRPC::ClientMessages::EXEC_SQL)) {
+    tcp.msg_enc().encode_error(PolarXRPC::Error::ERROR, ER_POLARX_RPC_ERROR_MSG,
                                "Not support for polarx rpc.", "HY000");
     tcp.encoder().flush(tcp);
     return;
@@ -284,11 +300,8 @@ void CsessionManager::execute_locally(CtcpConnection &tcp, const uint64_t &sid,
       tcp.encoder().flush(tcp);
       return;
     }
-    /// mark host with epoll group info
-    char buf[0x100];
-    ::snprintf(buf, sizeof(buf), "xG%02u_shared_session",
-               tcp.epoll().group_id());
-    err = s->session.switch_to_user(user_.c_str(), buf, nullptr, nullptr);
+    err = s->session.switch_to_user(user_.c_str(), "shared_session", nullptr,
+                                    nullptr);
     if (UNLIKELY(err)) {
       tcp.msg_enc().encode_error(err.get_protocol_severity(),
                                  ER_POLARX_RPC_ERROR_MSG, err.message,
@@ -298,9 +311,18 @@ void CsessionManager::execute_locally(CtcpConnection &tcp, const uint64_t &sid,
     }
   }
 
+  /// attach psi, and thd attach will be invoked internally
+  s->session.attach_psi();
+
   /// dealing it
   auto err = sql_stmt_execute_locally(
-      tcp, *s, static_cast<const ::Polarx::Sql::StmtExecute &>(*msg.msg));
+      tcp, *s, static_cast<const ::PolarXRPC::Sql::StmtExecute &>(*msg.msg));
+
+  /// detach session anyway
+  s->session.detach();
+  if (UNLIKELY(!s->session.is_detach_and_tls_cleared()))
+    sql_print_error("FATAL: polarx_rpc local session not detach and cleared!");
+
   /// try recycle
   if (UNLIKELY(err ||
                Ctime::steady_ms() - s->start_time_ms > shared_session_lifetime))
@@ -320,7 +342,7 @@ void CsessionManager::execute_locally(CtcpConnection &tcp, const uint64_t &sid,
 
 err_t CsessionManager::sql_stmt_execute_locally(
     CtcpConnection &tcp, reusable_session_t &s,
-    const Polarx::Sql::StmtExecute &msg) {
+    const PolarXRPC::Sql::StmtExecute &msg) {
   /// reset first
   auto err = s.session.reset();
   if (UNLIKELY(err))
@@ -346,20 +368,26 @@ err_t CsessionManager::sql_stmt_execute_locally(
   }
 
   /// execute query
+  const auto thd = s.session.get_thd();
+  const auto charset = thd->variables.character_set_results != nullptr
+                           ? thd->variables.character_set_results
+                           : &my_charset_utf8mb4_general_ci;
   s.qb.clear();
   Sql_statement_builder builder(&s.qb);
   try {
     if (msg.has_hint())
-      builder.build(msg.stmt(), msg.args(), msg.hint());
+      builder.build(msg.stmt(), msg.args(), *charset, msg.hint());
     else
-      builder.build(msg.stmt(), msg.args());
+      builder.build(msg.stmt(), msg.args(), *charset);
   } catch (const err_t &e) {
     return e;
   }
 
+  const auto caps =
+      msg.has_capabilities() ? msg.capabilities() : DEFAULT_CAPABILITIES;
   CstmtCommandDelegate delegate(
       s.session, tcp.encoder(), [&tcp]() { return tcp.encoder().flush(tcp); },
-      msg.compact_metadata());
+      msg.compact_metadata(), caps);
   err = s.session.execute_sql(s.qb.get().data(), s.qb.get().length(), delegate);
   if (err) {
     /// send warning
@@ -371,14 +399,11 @@ err_t CsessionManager::sql_stmt_execute_locally(
   s.session.reset();
 
   /// mark sleep
-  auto thd = s.session.get_thd();
   thd->reset_query();
   thd->set_command(COM_SLEEP);
   thd->proc_info = nullptr;
   thd->lex->sql_command = SQLCOM_END;
 
-  /// detach
-  s.session.detach();
   return err;
 }
 
@@ -391,11 +416,6 @@ err_t CsessionManager::new_session(CtcpConnection &tcp, const uint64_t &sid,
   err = session->switch_to_user(user_.c_str(), host_.c_str(), nullptr, nullptr);
   if (UNLIKELY(err))
     return err;
-  /// concat host with epoll group id
-  char buf[0x100];
-  ::snprintf(buf, sizeof(buf), "xG%02u_%s", tcp.epoll().group_id(),
-             host_.c_str());
-  session->set_show_hostname(buf);
   /// finish init
   {
     CautoSpinRWLock lck(session_lock_, true, session_poll_rwlock_spin_cnt);

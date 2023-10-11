@@ -60,7 +60,7 @@ public:
     counter.fetch_sub(static_cast<int>(free_sessions.size()),
                       std::memory_order_release);
     for (auto &s : free_sessions)
-      s->shutdown();
+      s->shutdown(true);
   }
 
   void execute(CtcpConnection &tcp, const uint64_t &sid, msg_t &&msg,
@@ -72,7 +72,7 @@ public:
 
   static err_t sql_stmt_execute_locally(CtcpConnection &tcp,
                                         reusable_session_t &session,
-                                        const Polarx::Sql::StmtExecute &msg);
+                                        const PolarXRPC::Sql::StmtExecute &msg);
 
   inline err_t new_session(CtcpConnection &tcp, const uint64_t &sid,
                            std::shared_ptr<Csession> &ptr);
@@ -85,7 +85,7 @@ public:
     return {};
   }
 
-  inline bool remove_and_shutdown(std::atomic<int> &counter, uint64_t sid) {
+  inline bool remove_and_shutdown(std::atomic<int> &counter, uint64_t sid, bool log) {
     DBG_LOG(("SessionMgr %p remove and shutdown session %lu", this, sid));
     std::shared_ptr<Csession> s;
     {
@@ -98,7 +98,7 @@ public:
     }
     if (s) {
       counter.fetch_sub(1, std::memory_order_release);
-      s->shutdown();
+      s->shutdown(log);
       return true;
     }
     return false;

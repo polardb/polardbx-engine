@@ -94,19 +94,19 @@ private:
         /// reset when success
         retry = 0;
 
-        /// resolve host name
-        std::string ip, host;
-        uint16_t port;
-        if (!resolve(accept_address, ip, host, port)) {
-          /// failed to resolve host, just reject
+        /// check api ready
+        if (!CsessionBase::is_api_ready()) {
+          /// api not ready, just reject
           Csocket::shutdown(new_fd);
           Csocket::close(new_fd);
           continue;
         }
 
-        /// check api ready
-        if (!CsessionBase::is_api_ready()) {
-          /// api not ready, just reject
+        /// resolve host name
+        std::string ip, host;
+        uint16_t port;
+        if (!resolve(accept_address, ip, host, port)) {
+          /// failed to resolve host, just reject
           Csocket::shutdown(new_fd);
           Csocket::close(new_fd);
           continue;

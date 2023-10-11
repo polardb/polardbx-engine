@@ -43,8 +43,8 @@ struct err_t final {
 
   explicit inline operator bool() const { return error != 0; }
 
-  inline Polarx::Error_Severity get_protocol_severity() const {
-    return FATAL == severity ? Polarx::Error::FATAL : Polarx::Error::ERROR;
+  inline PolarXRPC::Error_Severity get_protocol_severity() const {
+    return FATAL == severity ? PolarXRPC::Error::FATAL : PolarXRPC::Error::ERROR;
   }
 
   static inline err_t Success(const char *msg, ...) {

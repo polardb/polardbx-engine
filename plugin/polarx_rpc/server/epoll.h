@@ -29,7 +29,9 @@
 #include <sys/eventfd.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <sys/sysinfo.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "../common_define.h"
@@ -201,6 +203,8 @@ private:
   std::atomic<int64_t> last_cleanup_;
 
   /// affinity for dynamic threads
+  std::atomic<int> affinity_version_;
+  std::mutex affinity_lock_;
   bool with_affinity_;
   cpu_set_t cpus_{{}};
   std::string cores_str_;
@@ -276,65 +280,88 @@ private:
     return 0;
   }
 
-  void loop(uint32_t group_id, uint32_t thread_id, bool base_thread,
-            int affinity, bool epoll_wait, bool is_worker) {
-    plugin_info.threads.fetch_add(1, std::memory_order_release);
+  inline void set_affinity(uint32_t thread_id, bool base_thread,
+                           bool epoll_wait) {
+    std::lock_guard<std::mutex> lck(affinity_lock_);
 
-    if (affinity >= 0 && !multi_affinity_in_group) {
-      auto thread = pthread_self();
-      cpu_set_t cpu;
-      CPU_ZERO(&cpu);
-      auto iret = pthread_getaffinity_np(thread, sizeof(cpu), &cpu);
-      if ((0 == iret && CPU_ISSET(affinity, &cpu)) || force_all_cores) {
-        /// only set when this thread is allowed to run on it
-        CPU_ZERO(&cpu);
-        CPU_SET(affinity, &cpu);
-        iret = pthread_setaffinity_np(thread, sizeof(cpu), &cpu);
-        {
-          std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
-          if (plugin_info.plugin_info != nullptr) {
-            if (0 == iret)
-              my_plugin_log_message(
-                  &plugin_info.plugin_info, MY_WARNING_LEVEL,
-                  "MtEpoll start worker thread %u:%u(%u,%u) bind to core %d.",
-                  group_id, thread_id, base_thread, epoll_wait, affinity);
-            else
-              my_plugin_log_message(
-                  &plugin_info.plugin_info, MY_WARNING_LEVEL,
-                  "MtEpoll start worker thread %u:%u(%u,%u) bind "
-                  "to core %d failed. %s",
-                  group_id, thread_id, base_thread, epoll_wait, affinity,
-                  std::strerror(errno));
+    if (!with_affinity_ || 0 == CPU_COUNT(&cpus_))
+      return;
+
+    /// two cases:
+    ///   1. single CPU affinity(base thread and no multi_affinity_in_group)
+    ///   2. multi CPU affinity
+    const auto tid = syscall(SYS_gettid);
+
+    if (base_thread && !multi_affinity_in_group) {
+      /// check and find correct one in cpus
+      auto idx = thread_id % CPU_COUNT(&cpus_);
+      auto affinity = -1;
+      for (auto i = 0; i < CPU_SETSIZE; ++i) {
+        if (CPU_ISSET(i, &cpus_)) {
+          if (0 == idx--) {
+            affinity = i;
+            break;
           }
         }
       }
-    } else if ((!base_thread || multi_affinity_in_group) && with_affinity_) {
-      /// auto bind for dynamic thread or multi bind base thread
-      auto thread = pthread_self();
-      auto iret = pthread_setaffinity_np(thread, sizeof(cpus_), &cpus_);
-      {
+
+      /// bind if found
+      if (affinity >= 0) {
+        cpu_set_t cpu;
+        CPU_ZERO(&cpu);
+        CPU_SET(affinity, &cpu);
+        const auto iret =
+            pthread_setaffinity_np(pthread_self(), sizeof(cpu), &cpu);
+
         std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
         if (plugin_info.plugin_info != nullptr) {
           if (0 == iret)
             my_plugin_log_message(
                 &plugin_info.plugin_info, MY_WARNING_LEVEL,
-                "MtEpoll start%s worker thread %u:%u(%u,%u) bind to cores %s.",
-                base_thread ? "" : " dynamic", group_id, thread_id, base_thread,
-                epoll_wait, cores_str_.c_str());
+                "MtEpoll bind worker thread(tid:%u) %u:%u(%u,%u) to CPU %d.",
+                tid, group_id_, thread_id, base_thread, epoll_wait, affinity);
           else
-            my_plugin_log_message(
-                &plugin_info.plugin_info, MY_WARNING_LEVEL,
-                "MtEpoll start%s worker thread %u:%u(%u,%u) bind "
-                "to cores %s failed. %s",
-                base_thread ? "" : " dynamic", group_id, thread_id, base_thread,
-                epoll_wait, cores_str_.c_str(), std::strerror(errno));
+            my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                  "MtEpoll bind worker thread(tid:%u) "
+                                  "%u:%u(%u,%u) to CPU %d failed. %d",
+                                  tid, group_id_, thread_id, base_thread,
+                                  epoll_wait, affinity, iret);
         }
       }
+    } else {
+      /// bind for dynamic thread or multi bind base thread
+      const auto iret =
+          pthread_setaffinity_np(pthread_self(), sizeof(cpus_), &cpus_);
+
+      std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+      if (plugin_info.plugin_info != nullptr) {
+        if (0 == iret)
+          my_plugin_log_message(
+              &plugin_info.plugin_info, MY_WARNING_LEVEL,
+              "MtEpoll bind%s worker thread(tid:%u) %u:%u(%u,%u) to CPUs %s.",
+              base_thread ? "" : " dynamic", tid, group_id_, thread_id,
+              base_thread, epoll_wait, cores_str_.c_str());
+        else
+          my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                "MtEpoll bind%s worker thread(tid:%u) "
+                                "%u:%u(%u,%u) to CPUs %s failed. %d",
+                                base_thread ? "" : " dynamic", tid, group_id_,
+                                thread_id, base_thread, epoll_wait,
+                                cores_str_.c_str(), iret);
+      }
     }
+  }
+
+  void loop(uint32_t thread_id, bool base_thread, bool epoll_wait,
+            bool is_worker) {
+    plugin_info.threads.fetch_add(1, std::memory_order_release);
+
+    /// init local CPU affinity version
+    auto local_affinity_version = 0;
 
     std::vector<task_t> timer_tasks;
     CmcsSpinLock::mcs_spin_node_t timer_lock_node;
-    Csession::init_thread_for_session();
+    CsessionBase::init_thread_for_session();
     epoll_event events[MAX_EPOLL_EVENTS_PER_THREAD];
     while (true) {
       /// try pop and run task first
@@ -362,6 +389,17 @@ private:
       if (!base_thread) {
         if (UNLIKELY(shrink_thread_pool(is_worker)))
           break;
+      } else if (plugin_info.exit.load(std::memory_order_acquire)) {
+        /// shutdown exit
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                "MtEpoll%s worker thread(tid:%u) "
+                                "%u:%u(%u,%u) shutdown exit.",
+                                base_thread ? "" : " dynamic",
+                                syscall(SYS_gettid), group_id_, thread_id,
+                                base_thread, epoll_wait);
+        break;
       }
 
       /// limits the events
@@ -389,22 +427,22 @@ private:
                 std::min(timeout, static_cast<uint32>(next_trigger - now_time));
             DBG_LOG(
                 ("polarx_rpc thread %u:%u enter epoll with timer timeout %ums",
-                 group_id, thread_id, timeout));
+                 group_id_, thread_id, timeout));
           } else {
             timeout = 0;
             DBG_LOG(
                 ("polarx_rpc thread %u:%u enter epoll with expired timer task",
-                 group_id, thread_id));
+                 group_id_, thread_id));
           }
         } else {
           DBG_LOG(("polarx_rpc thread %u:%u enter epoll with no timer task",
-                   group_id, thread_id));
+                   group_id_, thread_id));
         }
         timer_lock_.unlock(timer_lock_node);
       } else {
         DBG_LOG(
             ("polarx_rpc thread %u:%u enter epoll with failed timer lock race",
-             group_id, thread_id));
+             group_id_, thread_id));
       }
 
       wait_cnt_.fetch_add(1, std::memory_order_release);
@@ -431,10 +469,10 @@ private:
 
       if (0 == n) {
         DBG_LOG(("polarx_rpc thread %u:%u leave epoll timeout, timeout %ums",
-                 group_id, thread_id, timeout));
+                 group_id_, thread_id, timeout));
       } else {
-        DBG_LOG(("polarx_rpc thread %u:%u leave epoll with %d events", group_id,
-                 thread_id, n));
+        DBG_LOG(("polarx_rpc thread %u:%u leave epoll with %d events",
+                 group_id_, thread_id, n));
       }
 
       auto total = 0;
@@ -445,7 +483,7 @@ private:
           uint64_t dummy;
           ::read(eventfd_, &dummy, sizeof(dummy));
           DBG_LOG(
-              ("polarx_rpc thread %u:%u notified work", group_id, thread_id));
+              ("polarx_rpc thread %u:%u notified work", group_id_, thread_id));
         } else {
           auto cb = reinterpret_cast<CepollCallback *>(events[i].data.ptr);
           assert(cb != nullptr);
@@ -454,9 +492,27 @@ private:
         }
       }
 
-      /// Note: move timer callback here before events dealing
+      /// Use `pre_events` to add reference count before actual invoke `events`
+      /// to prevent time waste in events, which may cause dealing ptr if tcp
+      /// connection context.
+      auto index = 0;
+      for (auto i = 0; i < n; ++i) {
+        if (events[i].data.fd == eventfd_)
+          continue; /// ignore it
+        auto cb = reinterpret_cast<CepollCallback *>(events[i].data.ptr);
+        assert(cb != nullptr);
+        auto bret = cb->events(events[i].events, index, total);
+        if (!bret)
+          delete cb;
+        ++index;
+      }
+
       /// timer task only one thread is ok
       if (timer_lock_.try_lock(timer_lock_node)) {
+        int64_t timer_start_time = 0;
+        if (enable_perf_hist)
+          timer_start_time = Ctime::steady_ns();
+
         timer_tasks.clear();
         auto now_time = Ctime::steady_ms();
         task_t task;
@@ -471,18 +527,12 @@ private:
           t.call();
           t.fin();
         }
-      }
 
-      auto index = 0;
-      for (auto i = 0; i < n; ++i) {
-        if (events[i].data.fd == eventfd_)
-          continue; /// ignore it
-        auto cb = reinterpret_cast<CepollCallback *>(events[i].data.ptr);
-        assert(cb != nullptr);
-        auto bret = cb->events(events[i].events, index, total);
-        if (!bret)
-          delete cb;
-        ++index;
+        if (timer_start_time != 0) {
+          auto timer_end_time = Ctime::steady_ns();
+          auto timer_time = timer_end_time - timer_start_time;
+          g_timer_hist.update(static_cast<double>(timer_time) / 1e9);
+        }
       }
 
       /// do clean up on extra context
@@ -492,6 +542,10 @@ private:
         /// every 10s
         if (last_cleanup_.compare_exchange_strong(last_time, now_time)) {
           /// only one thread do this
+          int64_t cleanup_start_time = 0;
+          if (enable_perf_hist)
+            cleanup_start_time = Ctime::steady_ns();
+
           uintptr_t first = 0;
           for (auto i = 0; i < extra_ctx_.BUFFERED_REUSABLE_SESSION_COUNT;
                ++i) {
@@ -511,20 +565,33 @@ private:
                 break; /// all checked
             }
           }
+
+          if (cleanup_start_time != 0) {
+            auto cleanup_end_time = Ctime::steady_ns();
+            auto cleanup_time = cleanup_end_time - cleanup_start_time;
+            g_cleanup_hist.update(static_cast<double>(cleanup_time) / 1e9);
+          }
         }
       }
+
+      /// and refresh bind cores
+      auto ver = affinity_version_.load(std::memory_order_acquire);
+      if (ver != local_affinity_version) {
+        set_affinity(thread_id, base_thread, epoll_wait);
+        local_affinity_version = ver;
+      }
     }
-    Csession::deinit_thread_for_session();
+    CsessionBase::deinit_thread_for_session();
 
     plugin_info.threads.fetch_sub(1, std::memory_order_release);
   }
 
   explicit CmtEpoll(uint32_t group_id, size_t work_queue_depth)
       : group_id_(group_id), work_queue_(work_queue_depth), wait_cnt_(0),
-        loop_cnt_(0), last_cleanup_(0), with_affinity_(true),
-        base_thread_count_(0), stall_count_(0), worker_count_(0),
-        tasker_count_(0), last_scale_time_(0), last_tasker_time_(0),
-        session_count_(0), last_head_(0), last_loop_(0) {
+        loop_cnt_(0), last_cleanup_(0), affinity_version_(0),
+        with_affinity_(false), base_thread_count_(0), stall_count_(0),
+        worker_count_(0), tasker_count_(0), last_scale_time_(0),
+        last_tasker_time_(0), session_count_(0), last_head_(0), last_loop_(0) {
     /// clear cpu set
     CPU_ZERO(&cpus_);
 
@@ -557,47 +624,19 @@ private:
     ::abort();
   }
 
-  inline void init_thread(uint32_t group_id, uint32_t threads,
-                          const std::vector<CcpuInfo::cpu_info_t> &affinities,
-                          int base_idx, int epoll_wait_threads,
+  inline void init_thread(uint32_t threads, int epoll_wait_threads,
                           int epoll_wait_gap) {
     /// record threads count first
     base_thread_count_ = worker_count_ = static_cast<int>(threads);
     global_thread_count() += static_cast<int>(threads);
 
-    /// build group affinities first
-    std::ostringstream oss;
-    oss << '[';
-    for (uint32_t thread_id = 0; thread_id < threads; ++thread_id) {
-      auto affinity = base_idx + thread_id < affinities.size()
-                          ? affinities[base_idx + thread_id].processor
-                          : -1;
-      /// record affinities
-      if (affinity < 0)
-        with_affinity_ = false;
-      else if (!CPU_ISSET(affinity, &cpus_)) {
-        CPU_SET(affinity, &cpus_); /// add to group set
-        if (thread_id != 0)
-          oss << ',';
-        oss << affinity;
-      }
-    }
-    if (with_affinity_) {
-      oss << ']';
-      cores_str_ = oss.str();
-    }
-
-    /// now cores_str_, with_affinity_ and cpus_ are valid
     /// create threads
     for (uint32_t thread_id = 0; thread_id < threads; ++thread_id) {
-      auto affinity = base_idx + thread_id < affinities.size()
-                          ? affinities[base_idx + thread_id].processor
-                          : -1;
       auto is_epoll_wait =
           0 == thread_id % epoll_wait_gap && --epoll_wait_threads >= 0;
       /// all thread is base thread when init
-      std::thread thread(&CmtEpoll::loop, this, group_id, thread_id, true,
-                         affinity, is_epoll_wait, true);
+      std::thread thread(&CmtEpoll::loop, this, thread_id, true, is_epoll_wait,
+                         true);
       thread.detach();
     }
   }
@@ -615,6 +654,16 @@ private:
 #else
     return ::get_nprocs();
 #endif
+  }
+
+  static inline std::mutex &available_cpus_lock() {
+    static std::mutex lock;
+    return lock;
+  }
+
+  static inline cpu_set_t &available_cpus() {
+    static cpu_set_t cpus = {0};
+    return cpus;
   }
 
 public:
@@ -637,77 +686,51 @@ public:
           threads = MAX_EPOLL_THREADS_PER_GROUP;
 
         auto groups = epoll_groups;
-        auto base_groups = groups;
         if (groups <= 0) {
           auto cores = get_core_number();
           if (auto_cpu_affinity) {
-            cpu_set_t cpu;
-            CPU_ZERO(&cpu);
-            auto iret =
-                pthread_getaffinity_np(pthread_self(), sizeof(cpu), &cpu);
-            if (0 == iret) {
-              auto cpus = 0;
-              for (auto i = 0; i < CPU_SETSIZE; ++i) {
-                if (CPU_ISSET(i, &cpu))
-                  ++cpus;
-              }
-              cores = cpus; /// at most cpus can run
+            if (force_all_cores) {
+              /// get all cores from /proc/cpuinfo
+              auto info_map = CcpuInfo::get_cpu_info();
+              if (info_map.size() > 0)
+                cores = info_map.size();
+            } else {
+              /// get all available cores from thread context
+              cpu_set_t cpu;
+              CPU_ZERO(&cpu);
+              auto iret = sched_getaffinity(getpid(), sizeof(cpu), &cpu);
+              if (LIKELY(0 == iret))
+                cores = CPU_COUNT(&cpu);
             }
           }
+
+          /// log it
+          {
+            std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+            if (plugin_info.plugin_info != nullptr)
+              my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                    "MtEpoll start with detected %u CPUs.",
+                                    cores);
+          }
+
+          /// calc group number
           groups = cores / threads + (0 == cores % threads ? 0 : 1);
-          if (groups < min_auto_epoll_groups)
-            groups = (min_auto_epoll_groups / groups +
-                      (0 == min_auto_epoll_groups % groups ? 0 : 1)) *
-                     groups;
-          base_groups = groups;
+          if (groups < min_auto_epoll_groups) {
+            /// recalculate groups with cores
+            auto probe = cores;
+            do {
+              probe += cores;
+              groups = probe / threads + (0 == probe % threads ? 0 : 1);
+            } while (groups < min_auto_epoll_groups);
+          }
           /// dealing extra group
           auto extra = epoll_extra_groups;
           if (extra > MAX_EPOLL_EXTRA_GROUPS)
             extra = MAX_EPOLL_EXTRA_GROUPS;
           groups += extra;
         }
-        if (UNLIKELY(base_groups > MAX_EPOLL_GROUPS))
-          base_groups = MAX_EPOLL_GROUPS;
         if (UNLIKELY(groups > MAX_EPOLL_GROUPS))
           groups = MAX_EPOLL_GROUPS;
-
-        std::vector<CcpuInfo::cpu_info_t> affinities;
-        if (auto_cpu_affinity) {
-          auto info_map = CcpuInfo::get_cpu_info();
-          cpu_set_t cpu;
-          CPU_ZERO(&cpu);
-          auto iret = pthread_getaffinity_np(pthread_self(), sizeof(cpu), &cpu);
-          if (0 == iret) {
-            for (auto i = 0; i < CPU_SETSIZE; ++i) {
-              auto it = info_map.find(i);
-              if (CPU_ISSET(i, &cpu) ||
-                  (force_all_cores && it != info_map.end())) {
-                if (it == info_map.end())
-                  /// no cpu info, just set to 0
-                  affinities.emplace_back(CcpuInfo::cpu_info_t{i, 0, 0});
-                else
-                  affinities.emplace_back(it->second);
-              }
-            }
-            /// sort before duplicate
-            /// result: 2314 -> 1234
-            std::sort(affinities.begin(), affinities.end());
-            /// if affinities not enough for base groups, just duplicate it
-            if (base_groups * threads > affinities.size()) {
-              auto duplicates = base_groups * threads / affinities.size();
-              if (duplicates > 1) {
-                /// result: 1234 -> 12341234
-                std::vector<CcpuInfo::cpu_info_t> final_affinities;
-                final_affinities.reserve(duplicates * affinities.size());
-                for (size_t i = 0; i < duplicates; ++i) {
-                  for (const auto &item : affinities)
-                    final_affinities.emplace_back(item);
-                }
-                affinities = final_affinities;
-              }
-            }
-          }
-        }
 
         auto total_epoll_wait_threads = max_epoll_wait_total_threads;
         if (0 == total_epoll_wait_threads)
@@ -729,7 +752,8 @@ public:
                (epoll_wait_threads_per_group + 1) * groups <=
                    total_epoll_wait_threads)
           ++epoll_wait_threads_per_group;
-        auto epoll_wait_threads_gap = threads / epoll_wait_threads_per_group;
+        auto epoll_wait_threads_gap =
+            static_cast<int>(threads) / epoll_wait_threads_per_group;
 
         auto work_queue_capacity = epoll_work_queue_capacity;
         if (UNLIKELY(work_queue_capacity < MIN_WORK_QUEUE_CAPACITY))
@@ -740,9 +764,8 @@ public:
         auto tmp = new CmtEpoll *[groups];
         for (uint32_t group_id = 0; group_id < groups; ++group_id) {
           tmp[group_id] = new CmtEpoll(group_id, work_queue_capacity);
-          tmp[group_id]->init_thread(
-              group_id, threads, affinities, group_id * threads,
-              epoll_wait_threads_per_group, epoll_wait_threads_gap);
+          tmp[group_id]->init_thread(threads, epoll_wait_threads_per_group,
+                                     epoll_wait_threads_gap);
         }
 
         {
@@ -750,9 +773,8 @@ public:
           if (plugin_info.plugin_info != nullptr)
             my_plugin_log_message(
                 &plugin_info.plugin_info, MY_WARNING_LEVEL,
-                "MtEpoll start with %u groups with each group %u "
-                "threads. With %u thread bind to fixed CPU core",
-                groups, threads, affinities.size());
+                "MtEpoll start with %u groups with each group %u threads.",
+                groups, threads);
         }
 
         inst_cnt = groups;
@@ -761,6 +783,155 @@ public:
     }
     instance_count = inst_cnt;
     return inst;
+  }
+
+  /// Caution: invoker should have all available cores
+  static inline void rebind_core() {
+    if (!auto_cpu_affinity)
+      return;
+
+    size_t inst_cnt;
+    const auto insts = get_instance(inst_cnt);
+
+    /// get now CPU
+    cpu_set_t new_cpus;
+    CPU_ZERO(&new_cpus);
+    auto iret = sched_getaffinity(getpid(), sizeof(new_cpus), &new_cpus);
+    if (UNLIKELY(iret != 0))
+      return;
+
+    /// compare within scoped lock
+    std::lock_guard<std::mutex> lck(available_cpus_lock());
+    auto &cpus = available_cpus();
+    if (LIKELY(CPU_EQUAL(&cpus, &new_cpus)))
+      return;
+
+    /// CPUs changed
+    std::ostringstream oss;
+    oss << "CPUs changed from [";
+    auto first = true;
+    for (auto i = 0; i < CPU_SETSIZE; ++i) {
+      if (CPU_ISSET(i, &cpus)) {
+        if (first) {
+          oss << i;
+          first = false;
+        } else
+          oss << ',' << i;
+      }
+    }
+    oss << "] to [";
+    first = true;
+    for (auto i = 0; i < CPU_SETSIZE; ++i) {
+      if (CPU_ISSET(i, &new_cpus)) {
+        if (first) {
+          oss << i;
+          first = false;
+        } else
+          oss << ',' << i;
+      }
+    }
+    oss << ']';
+
+    {
+      std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+      if (plugin_info.plugin_info != nullptr)
+        my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                              oss.str().c_str());
+    }
+
+    /// now re-calculate all cores assignment
+    auto threads = epoll_threads_per_group;
+    if (UNLIKELY(threads <= 0))
+      threads = 1;
+    else if (UNLIKELY(threads > MAX_EPOLL_THREADS_PER_GROUP))
+      threads = MAX_EPOLL_THREADS_PER_GROUP;
+
+    std::vector<CcpuInfo::cpu_info_t> affinities;
+    auto info_map = CcpuInfo::get_cpu_info();
+    for (auto i = 0; i < CPU_SETSIZE; ++i) {
+      auto it = info_map.find(i);
+      if (CPU_ISSET(i, &new_cpus) ||
+          (force_all_cores && it != info_map.end())) {
+        if (it == info_map.end())
+          /// no cpu info, just set to 0
+          affinities.emplace_back(CcpuInfo::cpu_info_t{i, 0, 0});
+        else
+          affinities.emplace_back(it->second);
+      }
+    }
+    /// sort before duplicate
+    /// result: 2314 -> 1234
+    std::sort(affinities.begin(), affinities.end());
+    /// if affinities not enough for base groups, just duplicate it
+    if (inst_cnt * threads > affinities.size()) {
+      auto duplicates = inst_cnt * threads / affinities.size();
+      if (duplicates > 1) {
+        /// result: 1234 -> 12341234
+        std::vector<CcpuInfo::cpu_info_t> final_affinities;
+        final_affinities.reserve(duplicates * affinities.size());
+        for (size_t i = 0; i < duplicates; ++i) {
+          for (const auto &item : affinities)
+            final_affinities.emplace_back(item);
+        }
+        affinities = final_affinities;
+      }
+    }
+
+    /// now assign
+    for (size_t inst_id = 0; inst_id < inst_cnt; ++inst_id) {
+      auto &inst = *insts[inst_id];
+
+      {
+        std::lock_guard<std::mutex> inst_lck(inst.affinity_lock_);
+        if ((inst_id + 1) * threads <= affinities.size()) {
+          /// bind to assigned
+          CPU_ZERO(&inst.cpus_);
+          oss.str("");
+          oss << '[';
+          for (uint32_t thread_id = 0; thread_id < threads; ++thread_id) {
+            auto affinity = affinities[inst_id * threads + thread_id].processor;
+            if (!CPU_ISSET(affinity, &inst.cpus_)) {
+              CPU_SET(affinity, &inst.cpus_); /// add to group set
+              if (thread_id != 0)
+                oss << ',';
+              oss << affinity;
+            }
+          }
+          oss << ']';
+          inst.cores_str_ = oss.str();
+          inst.with_affinity_ = true;
+        } else {
+          /// bind to all
+          CPU_ZERO(&inst.cpus_);
+          oss.str("");
+          oss << '[';
+          first = true;
+          for (auto i = 0; i < CPU_SETSIZE; ++i) {
+            if (CPU_ISSET(i, &new_cpus)) {
+              CPU_SET(i, &inst.cpus_); /// add to group set
+              if (first) {
+                oss << i;
+                first = false;
+              } else
+                oss << ',' << i;
+            }
+          }
+          oss << ']';
+          inst.cores_str_ = oss.str();
+          inst.with_affinity_ = true;
+        }
+      }
+
+      /// add version outside lock to prevent potential wait
+      inst.affinity_version_.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    /// update original
+    CPU_ZERO(&cpus);
+    for (auto i = 0; i < CPU_SETSIZE; ++i) {
+      if (CPU_ISSET(i, &new_cpus))
+        CPU_SET(i, &cpus);
+    }
   }
 
   inline const uint32_t &group_id() const { return group_id_; }
@@ -969,8 +1140,7 @@ public:
     /// force scale one thread
     ++worker_count_;
     ++global_thread_count();
-    std::thread thread(&CmtEpoll::loop, this, group_id_, 999, false, -1, true,
-                       true);
+    std::thread thread(&CmtEpoll::loop, this, 999, false, true, true);
     thread.detach();
 
     if (enable_thread_pool_log) {
@@ -1033,7 +1203,7 @@ public:
         tasker_count_ += extend;
         global_thread_count() += extend;
         for (size_t i = 0; i < extend; ++i) {
-          std::thread thread(&CmtEpoll::loop, this, group_id_, 999, false, -1,
+          std::thread thread(&CmtEpoll::loop, this, 999, false,
                              enable_epoll_in_tasker, false);
           thread.detach();
         }
@@ -1106,16 +1276,14 @@ public:
       /// need extra thread to handle new request
       ++worker_count_;
       ++global_thread_count();
-      std::thread thread(&CmtEpoll::loop, this, group_id_, 999, false, -1, true,
-                         true);
+      std::thread thread(&CmtEpoll::loop, this, 999, false, true, true);
       thread.detach();
       scaled = true;
     } else if (workers < prefer_thread_count) {
       do {
         ++worker_count_;
         ++global_thread_count();
-        std::thread thread(&CmtEpoll::loop, this, group_id_, 999, false, -1,
-                           true, true);
+        std::thread thread(&CmtEpoll::loop, this, 999, false, true, true);
         thread.detach();
       } while (worker_count_.load(std::memory_order_acquire) <
                prefer_thread_count);

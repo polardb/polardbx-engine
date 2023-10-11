@@ -40,6 +40,10 @@ namespace polarx_rpc {
 err_t Account_verification_handler::authenticate(
     Authentication_interface &account_verificator,
     Authentication_info *authenication_info, const std::string &sasl_message) {
+  /// return error if failed to init
+  if (m_err)
+    return m_err;
+
   std::size_t message_position = 0;
   std::string schema;
   std::string account;
@@ -172,6 +176,10 @@ err_t Account_verification_handler::verify_account(
 err_t Account_verification_handler::get_account_record(
     const std::string &user, const std::string &host,
     Account_record &record) try {
+  /// return error if failed to init
+  if (m_err)
+    return m_err;
+
   auto sql = get_sql(user, host);
   CbufferingCommandDelegate delegate;
   m_session.execute_sql(sql.c_str(), sql.length(), delegate);

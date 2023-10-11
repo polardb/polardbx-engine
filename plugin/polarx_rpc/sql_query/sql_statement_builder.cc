@@ -103,9 +103,10 @@ std::string trans_returning(const std::string &query,
 
 void Sql_statement_builder::build(const std::string &query,
                                   const Arg_list &args,
+                                  const CHARSET_INFO &charset,
                                   const std::string &hint) const {
   /// build original sql
-  build(query, args);
+  build(query, args, charset);
 
   std::string out_query;
   if (hint.find(HINT_RETURNING) != std::string::npos) {
@@ -132,12 +133,14 @@ void Sql_statement_builder::build(const std::string &query,
 }
 
 void Sql_statement_builder::build(const std::string &query,
-                                  const Arg_list &args) const {
+                                  const Arg_list &args,
+                                  const CHARSET_INFO &charset) const {
+  m_qb->set_charset(&charset);
   m_qb->put(query);
 
   Arg_inserter inserter(m_qb);
   for (int i = 0; i < args.size(); ++i) {
-    Getter_any::put_scalar_value_to_functor(args.Get(i), inserter);
+    Getter_any::put_scalar_value_to_functor(args.Get(i), inserter, charset);
   }
   m_qb->format_finalize();
 }

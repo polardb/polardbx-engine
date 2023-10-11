@@ -33,6 +33,7 @@
 
 #include "encoding_pool.h"
 
+namespace polarx_rpc {
 namespace protocol {
 
 class Encoding_buffer final {
@@ -107,3 +108,4 @@ private:
 };
 
 } // namespace protocol
+} // namespace polarx_rpc

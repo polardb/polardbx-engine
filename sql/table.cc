@@ -2583,6 +2583,8 @@ bool unpack_value_generator(THD *thd, TABLE *table,
 
   if (!(gcol_expr_str = (char *)table->mem_root.Alloc(
             val_gen_expr->length + PARSE_GCOL_KEYWORD.length + 3))) {
+    lex_end(thd->lex);
+    thd->lex = old_lex;
     return true;
   }
   memcpy(gcol_expr_str, PARSE_GCOL_KEYWORD.str, PARSE_GCOL_KEYWORD.length);
@@ -4262,6 +4264,15 @@ bool TABLE::refix_inner_value_generator_items(THD *thd, Value_generator *g_expr,
                                               Value_generator_source source,
                                               const char *source_name) {
   if (!g_expr->expr_item->fixed) {
+    // prevent empty lex context when dealing gcol
+    LEX *const old_lex = thd->lex;
+    LEX new_lex;
+    thd->lex = &new_lex;
+    if (lex_start(thd)) {
+      thd->lex = old_lex;
+      return true;  // OOM
+    }
+
     bool res = false;
     /*
       The call to fix_value_generators_fields() may create new item objects in
@@ -4313,6 +4324,10 @@ bool TABLE::refix_inner_value_generator_items(THD *thd, Value_generator *g_expr,
     // Restore any privileges check
     thd->want_privilege = sav_want_priv;
     get_fields_in_item_tree = false;
+
+    // restore
+    lex_end(thd->lex);
+    thd->lex = old_lex;
 
     /* error occurs */
     if (res) return res;

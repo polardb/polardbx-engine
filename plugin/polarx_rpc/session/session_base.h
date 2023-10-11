@@ -8,13 +8,12 @@
 #include <string>
 
 #include "mysql/service_command.h"
-#include "mysql/service_ssl_wrapper.h"
 
 #include "../coders/command_delegate.h"
 #include "../common_define.h"
+#include "../polarx_rpc.h"
 #include "../secure/authentication_interface.h"
 #include "../utility/error.h"
-#include "../polarx_rpc.h"
 
 #include "flow_control.h"
 
@@ -94,13 +93,21 @@ public:
 
   err_t execute_sql(const char *sql, size_t length, CcommandDelegate &delegate);
 
+  err_t attach();
+  void attach_psi();
   err_t detach();
 
   /// These will take and free LOCK_thd_data internal, so be careful.
-  void remote_kill();
+  void remote_kill(bool log);
   void remote_cancel();
 
   static bool is_api_ready();
+
+  bool is_detach_and_tls_cleared();
+
+  static void create_session_thread(void *(*func)(void *), void *arg);
+  static void init_thread_for_session();
+  static void deinit_thread_for_session();
 };
 
 } // namespace polarx_rpc

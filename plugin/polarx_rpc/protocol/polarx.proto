@@ -27,7 +27,7 @@ syntax = "proto2";
 
 // ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
-package Polarx;
+package PolarXRPC;
 option java_package = "com.mysql.cj.x.protobuf";
 
 // style-guide:
@@ -81,6 +81,12 @@ message ClientMessages {
 
     GET_TSO = 113;
 
+    AUTO_SP = 115;
+
+    FILE_OPERATION_GET_FILE_INFO = 116;
+    FILE_OPERATION_TRANSFER_FILE_DATA = 117;
+    FILE_OPERATION_FILE_MANAGE = 118;
+
     MSG_MAX = 127;
   }
 }
@@ -119,6 +125,10 @@ message ServerMessages {
     RESULTSET_TSO = 20;
 
     RESULTSET_CHUNK = 21;
+
+    RESULTSET_GET_FILE_INFO_OK = 22;
+    RESULTSET_TRANSFER_FILE_DATA_OK = 23;
+    RESULTSET_FILE_MANAGE_OK = 24;
   }
 }
 

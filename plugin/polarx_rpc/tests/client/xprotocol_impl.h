@@ -85,47 +85,47 @@ class Protocol_impl : public XProtocol,
               const std::size_t length) override;
 
   // Overrides for Client Session Messages
-  XError send(const Polarx::Session::AuthenticateStart &m) override {
-    return send(Polarx::ClientMessages::SESS_AUTHENTICATE_START, m);
+  XError send(const PolarXRPC::Session::AuthenticateStart &m) override {
+    return send(PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START, m);
   }
 
-  XError send(const Polarx::Session::AuthenticateContinue &m) override {
-    return send(Polarx::ClientMessages::SESS_AUTHENTICATE_CONTINUE, m);
+  XError send(const PolarXRPC::Session::AuthenticateContinue &m) override {
+    return send(PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE, m);
   }
 
-  XError send(const Polarx::Session::Reset &m) override {
-    return send(Polarx::ClientMessages::SESS_RESET, m);
+  XError send(const PolarXRPC::Session::Reset &m) override {
+    return send(PolarXRPC::ClientMessages::SESS_RESET, m);
   }
 
-  XError send(const Polarx::Session::Close &m) override {
-    return send(Polarx::ClientMessages::SESS_CLOSE, m);
+  XError send(const PolarXRPC::Session::Close &m) override {
+    return send(PolarXRPC::ClientMessages::SESS_CLOSE, m);
   }
 
   // Overrides for SQL Messages
-  XError send(const Polarx::Sql::StmtExecute &m) override {
+  XError send(const PolarXRPC::Sql::StmtExecute &m) override {
     // go with polarx rpc sql
-    return send(Polarx::ClientMessages::EXEC_SQL, m);
+    return send(PolarXRPC::ClientMessages::EXEC_SQL, m);
   }
 
   // Overrides for Connection
-  XError send(const Polarx::Connection::CapabilitiesGet &m) override {
-    return send(Polarx::ClientMessages::CON_CAPABILITIES_GET, m);
+  XError send(const PolarXRPC::Connection::CapabilitiesGet &m) override {
+    return send(PolarXRPC::ClientMessages::CON_CAPABILITIES_GET, m);
   }
 
-  XError send(const Polarx::Connection::CapabilitiesSet &m) override {
-    return send(Polarx::ClientMessages::CON_CAPABILITIES_SET, m);
+  XError send(const PolarXRPC::Connection::CapabilitiesSet &m) override {
+    return send(PolarXRPC::ClientMessages::CON_CAPABILITIES_SET, m);
   }
 
-  XError send(const Polarx::Connection::Close &m) override {
-    return send(Polarx::ClientMessages::CON_CLOSE, m);
+  XError send(const PolarXRPC::Connection::Close &m) override {
+    return send(PolarXRPC::ClientMessages::CON_CLOSE, m);
   }
 
-  XError send(const Polarx::Expect::Open &m) override {
-    return send(Polarx::ClientMessages::EXPECT_OPEN, m);
+  XError send(const PolarXRPC::Expect::Open &m) override {
+    return send(PolarXRPC::ClientMessages::EXPECT_OPEN, m);
   }
 
-  XError send(const Polarx::Expect::Close &m) override {
-    return send(Polarx::ClientMessages::EXPECT_CLOSE, m);
+  XError send(const PolarXRPC::Expect::Close &m) override {
+    return send(PolarXRPC::ClientMessages::EXPECT_CLOSE, m);
   }
 
   XError recv(Header_message_type_id *out_mid, uint8_t **buffer,
@@ -148,14 +148,14 @@ class Protocol_impl : public XProtocol,
       const Client_message_type_id mid, const Message &msg,
       XError *out_error) override;
 
-  std::unique_ptr<XQuery_result> execute_stmt(const Polarx::Sql::StmtExecute &m,
+  std::unique_ptr<XQuery_result> execute_stmt(const PolarXRPC::Sql::StmtExecute &m,
                                               XError *out_error) override;
 
   std::unique_ptr<Capabilities> execute_fetch_capabilities(
       XError *out_error) override;
 
   XError execute_set_capability(
-      const Polarx::Connection::CapabilitiesSet &capabilities_set) override;
+      const PolarXRPC::Connection::CapabilitiesSet &capabilities_set) override;
 
   XError execute_authenticate(const std::string &user, const std::string &pass,
                               const std::string &schema,
@@ -194,7 +194,7 @@ class Protocol_impl : public XProtocol,
   using Notice_handler_with_id = Handler_with_id<Notice_handler>;
   using Server_handler_with_id = Handler_with_id<Server_message_handler>;
   using Client_handler_with_id = Handler_with_id<Client_message_handler>;
-  using Sid = Polarx::ServerMessages;
+  using Sid = PolarXRPC::ServerMessages;
 
  private:
   template <typename Message_type>
@@ -243,7 +243,7 @@ class Protocol_impl : public XProtocol,
     handlers. Latest pushed handlers should be called first (called in
     reversed-pushed-order)
   */
-  Handler_result dispatch_received_notice(const Polarx::Notice::Frame &frame);
+  Handler_result dispatch_received_notice(const PolarXRPC::Notice::Frame &frame);
 
   /**
     Dispatch received messages to each registered handler. If the handler
@@ -295,23 +295,23 @@ XError Protocol_impl::authenticate_challenge_response(const std::string &user,
   XError error;
 
   {
-    Polarx::Session::AuthenticateStart auth;
+    PolarXRPC::Session::AuthenticateStart auth;
 
     auth.set_mech_name(auth_continue_handler.get_name());
 
-    error = send(Polarx::ClientMessages::SESS_AUTHENTICATE_START, auth);
+    error = send(PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START, auth);
 
     if (error) return error;
   }
 
   {
     std::unique_ptr<Message> message{
-        recv_id(::Polarx::ServerMessages::SESS_AUTHENTICATE_CONTINUE, &error)};
+        recv_id(::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE, &error)};
 
     if (error) return error;
 
     auto &auth_continue =
-        *static_cast<Polarx::Session::AuthenticateContinue *>(message.get());
+        *static_cast<PolarXRPC::Session::AuthenticateContinue *>(message.get());
 
     error = auth_continue_handler(user, pass, db, auth_continue);
 
@@ -320,7 +320,7 @@ XError Protocol_impl::authenticate_challenge_response(const std::string &user,
 
   {
     std::unique_ptr<Message> message{
-        recv_id(::Polarx::ServerMessages::SESS_AUTHENTICATE_OK, &error)};
+        recv_id(::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_OK, &error)};
 
     if (error) return error;
   }

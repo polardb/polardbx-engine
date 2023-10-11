@@ -113,8 +113,8 @@ class XProtocol {
   using Header_message_type_id = uint8_t;
 
   /** Aliases for types that represents different X Protocols message */
-  using Server_message_type_id = Polarx::ServerMessages::Type;
-  using Client_message_type_id = Polarx::ClientMessages::Type;
+  using Server_message_type_id = PolarXRPC::ServerMessages::Type;
+  using Client_message_type_id = PolarXRPC::ClientMessages::Type;
 
   /** Identification (representation) of notice handler placed in queue */
   using Handler_id = int;
@@ -129,7 +129,7 @@ class XProtocol {
 
   /** Function wrapper that can be used for X Protocol notice processing */
   using Notice_handler = std::function<Handler_result(
-      XProtocol *protocol, const bool, const Polarx::Notice::Frame::Type,
+      XProtocol *protocol, const bool, const PolarXRPC::Notice::Frame::Type,
       const char *, const uint32_t)>;
 
   /** Function wrapper that can be used for X Protocol message processing. */
@@ -138,7 +138,7 @@ class XProtocol {
   using Server_message_handler = std::function<Handler_result(
       XProtocol *protocol, const Server_message_type_id, const Message &)>;
 
-  using Capabilities = ::Polarx::Connection::Capabilities;
+  using Capabilities = ::PolarXRPC::Connection::Capabilities;
 
  public:
   virtual ~XProtocol() = default;
@@ -384,7 +384,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Session::AuthenticateStart &m) = 0;
+  virtual XError send(const PolarXRPC::Session::AuthenticateStart &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -395,7 +395,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Session::AuthenticateContinue &m) = 0;
+  virtual XError send(const PolarXRPC::Session::AuthenticateContinue &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -406,7 +406,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Session::Reset &m) = 0;
+  virtual XError send(const PolarXRPC::Session::Reset &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -417,7 +417,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Session::Close &m) = 0;
+  virtual XError send(const PolarXRPC::Session::Close &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -428,7 +428,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Sql::StmtExecute &m) = 0;
+  virtual XError send(const PolarXRPC::Sql::StmtExecute &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -439,7 +439,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Expect::Open &m) = 0;
+  virtual XError send(const PolarXRPC::Expect::Open &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -450,7 +450,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Expect::Close &m) = 0;
+  virtual XError send(const PolarXRPC::Expect::Close &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -461,7 +461,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Connection::CapabilitiesGet &m) = 0;
+  virtual XError send(const PolarXRPC::Connection::CapabilitiesGet &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -472,7 +472,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Connection::CapabilitiesSet &m) = 0;
+  virtual XError send(const PolarXRPC::Connection::CapabilitiesSet &m) = 0;
 
   /**
     Serialize and send protobuf message.
@@ -483,7 +483,7 @@ class XProtocol {
       @retval != true     OK
       @retval == true     I/O error occurred
   */
-  virtual XError send(const Polarx::Connection::Close &m) = 0;
+  virtual XError send(const PolarXRPC::Connection::Close &m) = 0;
 
   /*
     Methods that execute different message flows
@@ -537,9 +537,9 @@ class XProtocol {
   /**
     Execute session closing flow.
 
-    Send "Polarx::Session::Close" message and expect successful confirmation
-    from the X Plugin by reception of "Polarx::Ok". Synchronization errors and
-    "Polarx::Error" are returned through return values.
+    Send "PolarXRPC::Session::Close" message and expect successful confirmation
+    from the X Plugin by reception of "PolarXRPC::Ok". Synchronization errors and
+    "PolarXRPC::Error" are returned through return values.
 
     @return Error code with description
       @retval != true     Received OK message
@@ -577,7 +577,7 @@ class XProtocol {
                           or received "Mysqlx.Error" message
   */
   virtual std::unique_ptr<XQuery_result> execute_stmt(
-      const Polarx::Sql::StmtExecute &msg, XError *out_error) = 0;
+      const PolarXRPC::Sql::StmtExecute &msg, XError *out_error) = 0;
 
   /**
     Send "CapabilitiesGet" and expect Capabilities as response.
@@ -605,7 +605,7 @@ class XProtocol {
                           or received "Mysqlx.Error" message
   */
   virtual XError execute_set_capability(
-      const Polarx::Connection::CapabilitiesSet &capabilities) = 0;
+      const PolarXRPC::Connection::CapabilitiesSet &capabilities) = 0;
 
   /**
     Execute authentication flow

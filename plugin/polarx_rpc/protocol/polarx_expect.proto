@@ -21,7 +21,7 @@ syntax = "proto2";
 // ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
 
 // Expect operations
-package Polarx.Expect;
+package PolarXRPC.Expect;
 option java_package = "com.mysql.cj.polarx.protobuf";
 
 // Pipelining messages is a core feature of the Polarx Protocol. It
@@ -36,42 +36,42 @@ option java_package = "com.mysql.cj.polarx.protobuf";
 //
 // ::
 //
-//   Polarx.Crud::PrepareFind(stmt_id=1,...)
-//   Polarx.Expect::Open([no_error]) // if a execute fails
-//   Polarx.PreparedStmt::Execute(stmt_id=1,...)
-//   Polarx.PreparedStmt::Execute(stmt_id=1,...)
-//   Polarx.Expect::Close()
-//   Polarx.PreparedStmt::Close(stmt_id=1,...)
+//   PolarXRPC.Crud::PrepareFind(stmt_id=1,...)
+//   PolarXRPC.Expect::Open([no_error]) // if a execute fails
+//   PolarXRPC.PreparedStmt::Execute(stmt_id=1,...)
+//   PolarXRPC.PreparedStmt::Execute(stmt_id=1,...)
+//   PolarXRPC.Expect::Close()
+//   PolarXRPC.PreparedStmt::Close(stmt_id=1,...)
 //
 // This basic mechanism is extended to carry a arbitrary set of conditions that are
 // checked before executing message:
 //
 // ::
 //
-//   Polarx.Expect::Open([+no_error, +gtid_executed_contains = "...", +max_stmt_exec_time_ms = 10])
+//   PolarXRPC.Expect::Open([+no_error, +gtid_executed_contains = "...", +max_stmt_exec_time_ms = 10])
 //
-//   Polarx.Expect::Close()
+//   PolarXRPC.Expect::Close()
 //
 // Expect blocks can be nested to increase/change the restrictions for a subset of the
 // messages. At the end of the Expect block the previous restrictions are restored.
 //
 // ::
 //
-//   Polarx.Expect::Open([+no_error]) // if preparing the Find fails, don't try to close it
-//   Polarx.Crud::PrepareFind(stmt_id=1,...)
-//   Polarx.Expect::Open([+no_error]) // if a Execute fails, skip the rest of them and continue with Close
-//   Polarx.PreparedStmt::Execute(stmt_id=1,...)
-//   Polarx.PreparedStmt::Execute(stmt_id=1,...)
-//   Polarx.Expect::Close()
-//   Polarx.PreparedStmt::Close(stmt_id=1,...)
-//   Polarx.Expect::Close()
+//   PolarXRPC.Expect::Open([+no_error]) // if preparing the Find fails, don't try to close it
+//   PolarXRPC.Crud::PrepareFind(stmt_id=1,...)
+//   PolarXRPC.Expect::Open([+no_error]) // if a Execute fails, skip the rest of them and continue with Close
+//   PolarXRPC.PreparedStmt::Execute(stmt_id=1,...)
+//   PolarXRPC.PreparedStmt::Execute(stmt_id=1,...)
+//   PolarXRPC.Expect::Close()
+//   PolarXRPC.PreparedStmt::Close(stmt_id=1,...)
+//   PolarXRPC.Expect::Close()
 
 // open an Expect block and set/unset the conditions that have to be fulfilled
 //
 // if any of the conditions fail, all enclosed messages will fail with
-// a Polarx.Error message.
+// a PolarXRPC.Error message.
 //
-// :returns: :protobuf:msg:`Polarx::Ok` on success, :protobuf:msg:`Polarx::Error` on error
+// :returns: :protobuf:msg:`PolarXRPC::Ok` on success, :protobuf:msg:`PolarXRPC::Error` on error
 //
 message Open {
   message Condition {
@@ -103,7 +103,7 @@ message Open {
 // closing a Expect block restores the state of the previous Expect block
 // for the following messages
 //
-// :returns: :protobuf:msg:`Polarx::Ok` on success, :protobuf:msg:`Polarx::Error` on error
+// :returns: :protobuf:msg:`PolarXRPC::Ok` on success, :protobuf:msg:`PolarXRPC::Error` on error
 message Close {
 }
 

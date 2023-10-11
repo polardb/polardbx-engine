@@ -31,18 +31,9 @@
 
 namespace polarx_rpc {
 
-CHARSET_INFO *Query_string_builder::m_charset = NULL;
-std::once_flag Query_string_builder::m_charset_initialized;
-
-void Query_string_builder::init_charset() {
-  m_charset = get_charset_by_csname("utf8mb4", MY_CS_PRIMARY, MYF(MY_WME));
-}
-
 Query_string_builder::Query_string_builder(size_t reserve)
-    : m_in_quoted(false), m_in_identifier(false) {
-  std::call_once(m_charset_initialized, init_charset);
-  DBUG_ASSERT(m_charset != NULL);
-
+    : m_in_quoted(false), m_in_identifier(false),
+      m_charset(&my_charset_utf8mb4_general_ci) {
   m_str.reserve(reserve);
 }
 
@@ -125,7 +116,7 @@ Query_string_builder &Query_string_builder::put(const char *s, size_t length) {
 
 Query_formatter &Query_string_builder::format() {
   if (!m_formatter)
-    m_formatter.reset(new Query_formatter(m_str, *m_charset));
+    m_formatter.reset(new Query_formatter(m_str));
   return *m_formatter;
 }
 

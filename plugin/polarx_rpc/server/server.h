@@ -35,7 +35,7 @@ class Cserver final {
 
   /// thread of watch dog to prevent deadlock on thread pool schedule
   static void watch_dog() {
-    while (true) {
+    while (!plugin_info.exit.load(std::memory_order_acquire)) {
       /// check inited
       if (!plugin_info.inited.load(std::memory_order_acquire)) {
         if (CsessionBase::is_api_ready())
@@ -56,10 +56,18 @@ class Cserver final {
           inst.balance_tasker();
       }
 
+      /// check available cores
+      CmtEpoll::rebind_core();
+
       /// normal sleep and retry
       std::this_thread::sleep_for(std::chrono::milliseconds(
           epoll_group_thread_deadlock_check_interval));
     }
+
+    std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+    if (plugin_info.plugin_info != nullptr)
+      my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                            "polarx_rpc watch dog exit.");
   }
 
 public:
@@ -82,6 +90,22 @@ public:
       if (plugin_info.plugin_info != nullptr)
         my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
                               "PolarX RPC disabled.");
+    }
+  }
+
+  ~Cserver() {
+    /// wait all thread exit
+    int64 threads;
+    while ((threads = plugin_info.threads.load(std::memory_order_acquire)) >
+           0) {
+      {
+        std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+        if (plugin_info.plugin_info != nullptr)
+          my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+                                "polarx_rpc exiting still %d threads running.",
+                                threads);
+      }
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     }
   }
 };

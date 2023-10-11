@@ -1199,6 +1199,9 @@ ulonglong smart_handle_failed= 0;
 /* bloomfilter udf hash implementation */
 bool support_bloomfilter_xxhash = true;
 
+/* enable x-proto physical backfill*/
+bool physical_backfill_opt = true;
+
 /**
   Limit of the total number of prepared statements in the server.
   Is necessary to protect the server against out-of-memory attacks.

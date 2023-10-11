@@ -28,16 +28,16 @@ syntax = "proto2";
 //
 // A Resultset consists of:
 //
-// * one or more :protobuf:msg:`Polarx.Resultset::ColumnMetaData`
-// * zero or more :protobuf:msg:`Polarx.Resultset::Row`
+// * one or more :protobuf:msg:`PolarXRPC.Resultset::ColumnMetaData`
+// * zero or more :protobuf:msg:`PolarXRPC.Resultset::Row`
 //
 // It is followed by:
 //
-// * a :protobuf:msg:`Polarx.Resultset::FetchDoneMoreResultsets` if more
+// * a :protobuf:msg:`PolarXRPC.Resultset::FetchDoneMoreResultsets` if more
 //   resultsets are following
-// * a :protobuf:msg:`Polarx.Resultset::FetchDoneMoreOutParams` if more
+// * a :protobuf:msg:`PolarXRPC.Resultset::FetchDoneMoreOutParams` if more
 //   Resultset of ``OUT`` parameters is following
-// * a :protobuf:msg:`Polarx.Resultset::FetchDone` if the last resultset
+// * a :protobuf:msg:`PolarXRPC.Resultset::FetchDone` if the last resultset
 //   was sent
 //
 // .. uml::
@@ -117,7 +117,7 @@ syntax = "proto2";
 
 
 
-package Polarx.Resultset;
+package PolarXRPC.Resultset;
 option java_package = "com.mysql.cj.polarx.protobuf";
 
 // resultsets are finished, OUT paramset is next
@@ -158,7 +158,7 @@ message FetchDone {
 //
 //
 // :param type:
-//   .. table:: Expected Datatype of Polarx.Resultset.Row per SQL Type for non NULL values
+//   .. table:: Expected Datatype of PolarXRPC.Resultset.Row per SQL Type for non NULL values
 //
 //     ================= ============ ======= ========== ====== ========
 //     SQL Type          .type        .length .frac_dig  .flags .charset
@@ -189,7 +189,7 @@ message FetchDone {
 //     BIT               BIT          x
 //     ================= ============ ======= ========== ====== ========
 //
-//   .. note:: the SQL "NULL" value is sent as an empty field value in :protobuf:msg:`Polarx.Resultset::Row`
+//   .. note:: the SQL "NULL" value is sent as an empty field value in :protobuf:msg:`PolarXRPC.Resultset::Row`
 //   .. seealso:: protobuf encoding of primitive datatypes are decribed in https://developers.google.com/protocol-buffers/docs/encoding
 //
 //   SINT
@@ -540,7 +540,7 @@ message ColumnMetaData {
 //   Blob of size 0 represents the NULL value. Otherwise, if it contains at least
 //   one byte, it encodes a non-null value of the field using encoding appropriate for the
 //   type of the value given by ``ColumnMetadata``, as specified
-//   in the :protobuf:msg:`Polarx.Resultset::ColumnMetaData` description.
+//   in the :protobuf:msg:`PolarXRPC.Resultset::ColumnMetaData` description.
 //
 message Row {
   repeated bytes field = 1;

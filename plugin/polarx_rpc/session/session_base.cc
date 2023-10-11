@@ -6,7 +6,15 @@
 #ifndef MYSQL8
 #define MYSQL_SERVER
 #endif
+#include "mysql/psi/mysql_thread.h"
+#ifdef MYSQL8
+#include "my_psi_config.h"
+#else
+#include "mysql/psi/psi.h"
+#endif
 #include "mysql/service_command.h"
+#include "mysql/service_srv_session.h"
+#include "mysql/service_ssl_wrapper.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include "sql/srv_session.h"
@@ -21,6 +29,16 @@ namespace polarx_rpc {
 
 CsessionBase::~CsessionBase() {
   if (mysql_session_ != nullptr) {
+    /// de-init pfs
+    const auto thd = get_thd();
+    const auto psi = thd->get_psi();
+#ifdef HAVE_PSI_THREAD_INTERFACE
+    if (psi != nullptr) {
+      PSI_THREAD_CALL(delete_thread)(psi);
+      thd->set_psi(nullptr);
+    }
+#endif
+
     srv_session_close(mysql_session_);
     mysql_session_ = nullptr;
   }
@@ -48,7 +66,20 @@ err_t CsessionBase::init(uint16_t port) {
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Could not set session client port");
 
   mysql_session_->set_safe(true);
-  flow_control_.set_thd(get_thd());
+  const auto thd = get_thd();
+  flow_control_.set_thd(thd);
+
+  /// init pfs with fake one thread per session
+  assert(nullptr == thd->get_psi());
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  const auto psi = PSI_THREAD_CALL(new_thread)(key_thread_one_connection, thd,
+                                               thd->thread_id());
+  thd->set_psi(psi);
+  PSI_THREAD_CALL(set_thread_id)(psi, thd->thread_id());
+  PSI_THREAD_CALL(set_thread_THD)(psi, thd);
+  /// default attach to it
+  PSI_THREAD_CALL(set_thread)(psi);
+#endif
   return err_t::Success();
 }
 
@@ -305,11 +336,29 @@ err_t CsessionBase::execute_sql(const char *sql, size_t sql_len,
   return execute_server_command(COM_QUERY, data, delegate);
 }
 
+err_t CsessionBase::attach() {
+  if (nullptr == mysql_session_ ||
+      srv_session_attach(mysql_session_, nullptr) != 0)
+    return err_t(ER_POLARX_RPC_ERROR_MSG, "Internal error when attaching");
+  return err_t::Success();
+}
+
+void CsessionBase::attach_psi() {
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  PSI_THREAD_CALL(set_thread)(get_thd()->get_psi());
+#endif
+}
+
 err_t CsessionBase::detach() {
+  /// detach psi before reset psi in srv_session_detach
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  PSI_THREAD_CALL(set_thread)(nullptr);
+#endif
+
   if (nullptr == mysql_session_ || srv_session_detach(mysql_session_) != 0)
     return err_t(ER_POLARX_RPC_ERROR_MSG, "Internal error when detaching");
-    /// Note: we should force clear thd, or stale thd may cause bad memory
-    /// access
+
+  /// Note: we should force clear thd, or stale thd may cause bad memory access
 #ifdef MYSQL8
   current_thd = nullptr;
   THR_MALLOC = nullptr;
@@ -320,11 +369,11 @@ err_t CsessionBase::detach() {
   return err_t::Success();
 }
 
-void CsessionBase::remote_kill() {
-  if (enable_kill_log) {
+void CsessionBase::remote_kill(bool log) {
+  if (enable_kill_log && log) {
     std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
     if (plugin_info.plugin_info != nullptr)
-      my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+      my_plugin_log_message(&plugin_info.plugin_info, MY_INFORMATION_LEVEL,
                             "Session %p sid %lu killing.", this, sid_);
   }
 
@@ -348,7 +397,7 @@ void CsessionBase::remote_cancel() {
   if (enable_kill_log) {
     std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
     if (plugin_info.plugin_info != nullptr)
-      my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
+      my_plugin_log_message(&plugin_info.plugin_info, MY_INFORMATION_LEVEL,
                             "Session %p sid %lu canceling.", this, sid_);
   }
 
@@ -369,6 +418,75 @@ bool CsessionBase::is_api_ready() {
 #else
   return 0 != srv_session_server_is_available() && !::abort_loop;
 #endif
+}
+
+bool CsessionBase::is_detach_and_tls_cleared() {
+  if (mysql_session_ != nullptr && mysql_session_->is_attached())
+    return false;
+#ifdef MYSQL8
+  return nullptr == current_thd && nullptr == THR_MALLOC;
+#else
+  return nullptr == my_thread_get_THR_THD() &&
+         nullptr == my_thread_get_THR_MALLOC();
+#endif
+}
+
+static PSI_thread_key KEY_thread_polarx_rpc = PSI_NOT_INSTRUMENTED;
+
+static PSI_thread_info all_threads[] = {
+    {&KEY_thread_polarx_rpc, "polarx_rpc", 0},
+};
+
+static void init_performance_schema() {
+  const char *const category = "polarx_rpc";
+  mysql_thread_register(category, all_threads, array_elements(all_threads));
+}
+
+static std::once_flag pfs_once;
+
+static void init_session_once() {
+  std::call_once(pfs_once, init_performance_schema);
+}
+
+void CsessionBase::create_session_thread(void *(*func)(void *), void *arg) {
+  init_session_once();
+
+  my_thread_attr_t connection_attrib;
+  (void)my_thread_attr_init(&connection_attrib);
+
+  /*
+   check_stack_overrun() assumes that stack size is (at least)
+   my_thread_stack_size. If it is smaller, we may segfault.
+  */
+  my_thread_attr_setstacksize(&connection_attrib, my_thread_stack_size);
+
+  my_thread_handle thread;
+  if (mysql_thread_create(KEY_thread_polarx_rpc, &thread, &connection_attrib,
+                          func, arg))
+    throw std::runtime_error("Could not create a thread");
+}
+
+void CsessionBase::init_thread_for_session() {
+  {
+    std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
+    if (plugin_info.plugin_info != nullptr)
+      srv_session_init_thread(plugin_info.plugin_info);
+  }
+#if defined(__APPLE__)
+  pthread_setname_np("polarx_rpc");
+#elif defined(HAVE_PTHREAD_SETNAME_NP)
+  pthread_setname_np(pthread_self(), "polarx_rpc");
+#endif
+}
+
+void CsessionBase::deinit_thread_for_session() {
+  /// de-init pfs if exists
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  PSI_THREAD_CALL(delete_current_thread)();
+#endif
+
+  ssl_wrapper_thread_cleanup();
+  srv_session_deinit_thread();
 }
 
 } // namespace polarx_rpc

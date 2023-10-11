@@ -8,6 +8,7 @@
 
 // TODO use code to generate this
 
+namespace polarx_rpc {
 namespace protocol {
 
 namespace tags {
@@ -199,6 +200,17 @@ struct ColumnData {
   static constexpr uint32_t value = 1;
 };
 
+struct GetFileInfoOK {
+  static constexpr uint32_t server_id = 22;
+};
+struct TransferFileDataOK {
+  static constexpr uint32_t server_id = 23;
+};
+struct FileManageOK {
+  static constexpr uint32_t server_id = 24;
+};
+
 } // namespace tags
 
 } // namespace protocol
+} // namespace polarx_rpc

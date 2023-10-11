@@ -40,7 +40,7 @@ class Command {
   enum class Result { Continue, Stop_with_success, Stop_with_failure };
   enum class Metadata_policy { Default, Store, Use_stored };
 
-  using Any = ::Polarx::Datatypes::Any;
+  using Any = ::PolarXRPC::Datatypes::Any;
 
  public:
   Command();

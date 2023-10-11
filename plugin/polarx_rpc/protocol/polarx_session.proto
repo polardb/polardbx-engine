@@ -43,7 +43,7 @@ syntax = "proto2";
 //   Client -> Server: Close
 //   Server --> Client: Ok
 //
-package Polarx.Session;
+package PolarXRPC.Session;
 option java_package = "com.mysql.cj.polarx.protobuf";
 
 // the initial message send from the client to the server to start the
@@ -52,18 +52,18 @@ option java_package = "com.mysql.cj.polarx.protobuf";
 // :param mech_name: authentication mechanism name
 // :param auth_data: authentication data
 // :param initial_response: initial response
-// :Returns: :protobuf:msg:`Polarx.Session::AuthenticateContinue`
+// :Returns: :protobuf:msg:`PolarXRPC.Session::AuthenticateContinue`
 message AuthenticateStart {
   required string mech_name = 1;
   optional bytes auth_data = 2;
   optional bytes initial_response = 3;
 }
 
-// send by client or server after a :protobuf:msg:`Polarx.Session::AuthenticateStart` to
+// send by client or server after a :protobuf:msg:`PolarXRPC.Session::AuthenticateStart` to
 // exchange more auth data
 //
 // :param auth_data: authentication data
-// :Returns: :protobuf:msg:`Polarx.Session::AuthenticateContinue`
+// :Returns: :protobuf:msg:`PolarXRPC.Session::AuthenticateContinue`
 message AuthenticateContinue {
   required bytes auth_data = 1;
 }
@@ -89,13 +89,13 @@ message KillSession {
 
 // reset the current session
 //
-// :Returns: :protobuf:msg:`Polarx::Ok`
+// :Returns: :protobuf:msg:`PolarXRPC::Ok`
 message Reset {
 }
 
 // close the current session
 //
-// :Returns: :protobuf:msg:`Polarx::Ok`
+// :Returns: :protobuf:msg:`PolarXRPC::Ok`
 message Close {
 }
 

@@ -118,7 +118,7 @@ class Session_impl : public XSession {
   void setup_session_notices_handler();
   void setup_general_notices_handler();
   void setup_server_supported_features(
-      const Polarx::Connection::Capabilities *capabilities);
+      const PolarXRPC::Connection::Capabilities *capabilities);
 
   static std::vector<Auth> get_methods_sequence_from_auto(
       const Auth auto_authentication, const bool can_use_plain);
@@ -131,7 +131,7 @@ class Session_impl : public XSession {
   XError authenticate(const char *user, const char *pass, const char *schema,
                       Connection_type connection_type);
   static Handler_result handle_notices(std::shared_ptr<Context> context,
-                                       const Polarx::Notice::Frame::Type,
+                                       const PolarXRPC::Notice::Frame::Type,
                                        const char *, const uint32_t);
 
   std::pair<XError, std::vector<std::string>> validate_and_adjust_auth_methods(

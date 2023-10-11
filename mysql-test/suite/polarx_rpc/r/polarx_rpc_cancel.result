@@ -10,11 +10,11 @@ RUN use xtest
 RUN create table mytable (pk int primary key auto_increment, data varchar(100))
 
 0 rows affected
-send Polarx.Session.NewSession {
+send PolarXRPC.Session.NewSession {
 }
 
 RUN recvok
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'one\')"
   schema_name: "xtest"
 }
@@ -22,25 +22,25 @@ send Polarx.Sql.StmtExecute {
 
 1 rows affected
 last insert id: 1
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'two\')"
 }
 
 
 1 rows affected
 last insert id: 2
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "insert into mytable values (DEFAULT, \'three\')"
 }
 
 
 1 rows affected
 last insert id: 3
-send Polarx.Session.NewSession {
+send PolarXRPC.Session.NewSession {
 }
 
 RUN recvok
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "begin"
   schema_name: "xtest"
   token: 10000
@@ -48,7 +48,7 @@ send Polarx.Sql.StmtExecute {
 
 
 0 rows affected
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "select data from mytable where pk=1 for update"
   token: 10000
 }
@@ -56,42 +56,42 @@ send Polarx.Sql.StmtExecute {
 data
 one
 0 rows affected
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "select data from mytable where pk=1 for update"
   token: 10000
 }
 
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "select * from mytable"
   token: 10000
 }
 
-send Polarx.Session.KillSession {
+send PolarXRPC.Session.KillSession {
   type: QUERY
   x_session_id: 1
 }
 
-Polarx.Notice.Frame {
+PolarXRPC.Notice.Frame {
   type: 1
   scope: LOCAL
-  payload: "Polarx.Notice.Warning { level: ERROR\ncode: 1317\nmsg: \"Query execution was interrupted\"\n }"
+  payload: "PolarXRPC.Notice.Warning { level: ERROR\ncode: 1317\nmsg: \"Query execution was interrupted\"\n }"
 }
 
-Polarx.Notice.Frame {
+PolarXRPC.Notice.Frame {
   type: 1
   scope: LOCAL
-  payload: "Polarx.Notice.Warning { level: ERROR\ncode: 1030\nmsg: \"Got error 168 - \\\'Unknown (generic) error from engine\\\' from storage engine\"\n }"
+  payload: "PolarXRPC.Notice.Warning { level: ERROR\ncode: 1030\nmsg: \"Got error 168 - \\\'Unknown (generic) error from engine\\\' from storage engine\"\n }"
 }
 
 Got expected error:
-Polarx.Error {
+PolarXRPC.Error {
   severity: ERROR
   code: 1317
   msg: "Query execution was interrupted"
   sql_state: "70100"
 }
 
-Polarx.Resultset.ColumnMetaData {
+PolarXRPC.Resultset.ColumnMetaData {
   type: SINT
   original_type: MYSQL_TYPE_LONG
   name: "pk"
@@ -106,7 +106,7 @@ Polarx.Resultset.ColumnMetaData {
   original_flags: 16899
 }
 
-Polarx.Resultset.ColumnMetaData {
+PolarXRPC.Resultset.ColumnMetaData {
   type: BYTES
   original_type: MYSQL_TYPE_VARCHAR
   name: "data"
@@ -120,45 +120,45 @@ Polarx.Resultset.ColumnMetaData {
   original_flags: 0
 }
 
-Polarx.Resultset.Row {
+PolarXRPC.Resultset.Row {
   field: "\002"
   field: "one\000"
 }
 
-Polarx.Resultset.Row {
+PolarXRPC.Resultset.Row {
   field: "\004"
   field: "two\000"
 }
 
-Polarx.Resultset.Row {
+PolarXRPC.Resultset.Row {
   field: "\006"
   field: "three\000"
 }
 
-Polarx.Resultset.FetchDone {
+PolarXRPC.Resultset.FetchDone {
 }
 
-Polarx.Notice.Frame {
+PolarXRPC.Notice.Frame {
   type: 3
   scope: LOCAL
-  payload: "Polarx.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
+  payload: "PolarXRPC.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
 }
 
-Polarx.Sql.StmtExecuteOk {
+PolarXRPC.Sql.StmtExecuteOk {
 }
 
-send Polarx.Session.Close {
+send PolarXRPC.Session.Close {
 }
 
 RUN recvok
-send Polarx.Sql.StmtExecute {
+send PolarXRPC.Sql.StmtExecute {
   stmt: "rollback"
   token: 10000
 }
 
 
 0 rows affected
-send Polarx.Session.Close {
+send PolarXRPC.Session.Close {
 }
 
 RUN recvok

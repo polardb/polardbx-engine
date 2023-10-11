@@ -37,8 +37,14 @@
 namespace polarx_rpc {
 
 class Query_string_builder {
- public:
+public:
   Query_string_builder(size_t reserve = 256);
+
+  inline void set_charset(const CHARSET_INFO *charset) {
+    m_charset = charset;
+    assert(m_charset != nullptr);
+    format().set_charset(charset);
+  }
 
   Query_string_builder &bquote() {
     m_str.push_back('\'');
@@ -102,7 +108,7 @@ class Query_string_builder {
   inline void format_finalize() {
     if (m_formatter) {
       m_formatter->finalize();
-      m_formatter.reset();  // Free it.
+      m_formatter.reset(); // Free it.
     }
   }
 
@@ -114,7 +120,8 @@ class Query_string_builder {
 
   template <typename I>
   Query_string_builder &put_list(I begin, I end, const std::string &sep = ",") {
-    if (std::distance(begin, end) == 0) return *this;
+    if (std::distance(begin, end) == 0)
+      return *this;
     put(*begin);
     for (++begin; begin != end; ++begin) {
       put(sep);
@@ -126,7 +133,8 @@ class Query_string_builder {
   template <typename I, typename P>
   Query_string_builder &put_list(I begin, I end, P push,
                                  const std::string &sep = ",") {
-    if (std::distance(begin, end) == 0) return *this;
+    if (std::distance(begin, end) == 0)
+      return *this;
     push(*begin, this);
     for (++begin; begin != end; ++begin) {
       put(sep);
@@ -141,17 +149,14 @@ class Query_string_builder {
 
   const std::string &get() const { return m_str; }
 
- private:
+private:
   std::string m_str;
   bool m_in_quoted;
   bool m_in_identifier;
-
-  static void init_charset();
-  static std::once_flag m_charset_initialized;
-  static CHARSET_INFO *m_charset;
+  const CHARSET_INFO *m_charset;
 
   /** Try reuse the formatter. */
   std::unique_ptr<Query_formatter> m_formatter;
 };
 
-}  // namespace xpl
+} // namespace polarx_rpc

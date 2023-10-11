@@ -35,37 +35,38 @@
 #include "encoding_descriptors.h"
 #include "encoding_polarx_protocol.h"
 
+namespace polarx_rpc {
 namespace protocol {
 
 template <typename Base_type> class XMessage_encoder_base : public Base_type {
 private:
-  constexpr static Polarx::Notice::Frame_Type k_state_change =
-      Polarx::Notice::Frame_Type_SESSION_STATE_CHANGED;
+  constexpr static PolarXRPC::Notice::Frame_Type k_state_change =
+      PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED;
 
-  constexpr static Polarx::Notice::Frame_Scope k_local =
-      Polarx::Notice::Frame_Scope_LOCAL;
+  constexpr static PolarXRPC::Notice::Frame_Scope k_local =
+      PolarXRPC::Notice::Frame_Scope_LOCAL;
 
-  constexpr static Polarx::Notice::SessionStateChanged_Parameter k_message =
-      Polarx::Notice::SessionStateChanged::PRODUCED_MESSAGE;
+  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter k_message =
+      PolarXRPC::Notice::SessionStateChanged::PRODUCED_MESSAGE;
 
-  constexpr static Polarx::Notice::SessionStateChanged_Parameter k_expired =
-      Polarx::Notice::SessionStateChanged::ACCOUNT_EXPIRED;
+  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter k_expired =
+      PolarXRPC::Notice::SessionStateChanged::ACCOUNT_EXPIRED;
 
-  constexpr static Polarx::Notice::SessionStateChanged_Parameter
+  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter
       k_generated_insert_id =
-          Polarx::Notice::SessionStateChanged::GENERATED_INSERT_ID;
+          PolarXRPC::Notice::SessionStateChanged::GENERATED_INSERT_ID;
 
-  constexpr static Polarx::Datatypes::Scalar_Type k_string =
-      Polarx::Datatypes::Scalar_Type_V_STRING;
+  constexpr static PolarXRPC::Datatypes::Scalar_Type k_string =
+      PolarXRPC::Datatypes::Scalar_Type_V_STRING;
 
-  constexpr static Polarx::Datatypes::Scalar_Type k_v_uint =
-      Polarx::Datatypes::Scalar_Type_V_UINT;
+  constexpr static PolarXRPC::Datatypes::Scalar_Type k_v_uint =
+      PolarXRPC::Datatypes::Scalar_Type_V_UINT;
 
-  constexpr static Polarx::Notice::SessionStateChanged_Parameter
-      k_rows_affected = Polarx::Notice::SessionStateChanged::ROWS_AFFECTED;
+  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter
+      k_rows_affected = PolarXRPC::Notice::SessionStateChanged::ROWS_AFFECTED;
 
-  constexpr static Polarx::Notice::SessionStateChanged_Parameter k_client_id =
-      Polarx::Notice::SessionStateChanged::CLIENT_ID_ASSIGNED;
+  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter k_client_id =
+      PolarXRPC::Notice::SessionStateChanged::CLIENT_ID_ASSIGNED;
 
 public:
   // Constructor inheritance doesn't work in solaris
@@ -357,3 +358,4 @@ public:
 };
 
 } // namespace protocol
+} // namespace polarx_rpc

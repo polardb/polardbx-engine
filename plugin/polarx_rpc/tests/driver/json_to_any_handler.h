@@ -42,8 +42,8 @@ class Json_to_any_handler
     : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>,
                                           Json_to_any_handler> {
  public:
-  using Any = ::Polarx::Datatypes::Any;
-  using Scalar = ::Polarx::Datatypes::Scalar;
+  using Any = ::PolarXRPC::Datatypes::Any;
+  using Scalar = ::PolarXRPC::Datatypes::Scalar;
 
  public:
   explicit Json_to_any_handler(Any *any) { m_stack.push(any); }

@@ -22,15 +22,15 @@ syntax = "proto2";
 
 import "polarx_datatypes.proto";
 
-package Polarx.Connection;
+package PolarXRPC.Connection;
 option java_package = "com.mysql.cj.polarx.protobuf";
 
 // a Capability
 //
-// a tuple of a ``name`` and a :protobuf:msg:`Polarx.Datatypes::Any`
+// a tuple of a ``name`` and a :protobuf:msg:`PolarXRPC.Datatypes::Any`
 message Capability {
   required string name = 1;
-  required Polarx.Datatypes.Any value = 2;
+  required PolarXRPC.Datatypes.Any value = 2;
 }
 
 // Capabilities
@@ -40,7 +40,7 @@ message Capabilities {
 
 // get supported connection capabilities and their current state
 //
-//   :returns: :protobuf:msg:`Polarx.Connection::Capabilities` or :protobuf:msg:`Polarx::Error`
+//   :returns: :protobuf:msg:`PolarXRPC.Connection::Capabilities` or :protobuf:msg:`PolarXRPC::Error`
 //
 message CapabilitiesGet {
 };
@@ -51,7 +51,7 @@ message CapabilitiesGet {
 // If any of the changes fails, all changes are discarded.
 //
 // :precond: active sessions == 0
-// :returns: :protobuf:msg:`Polarx::Ok` or :protobuf:msg:`Polarx::Error`
+// :returns: :protobuf:msg:`PolarXRPC::Ok` or :protobuf:msg:`PolarXRPC::Error`
 message CapabilitiesSet {
   required Capabilities capabilities = 1;
 };
@@ -60,7 +60,7 @@ message CapabilitiesSet {
 //
 // it discards any session state of the server
 //
-// :Returns: :protobuf:msg:`Polarx::Ok`
+// :Returns: :protobuf:msg:`PolarXRPC::Ok`
 message Close {
 };
 

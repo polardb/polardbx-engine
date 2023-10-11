@@ -115,47 +115,47 @@ ExprParser &ExprParser::instance() {
   return parser;
 }
 
-int ExprParser::parse(const ::Polarx::Expr::Expr &arg,
+int ExprParser::parse(const ::PolarXRPC::Expr::Expr &arg,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   THD *thd = current_thd;
 
   switch (arg.type()) {
-    case ::Polarx::Expr::Expr::IDENT:
+    case ::PolarXRPC::Expr::Expr::IDENT:
       ret = parse(arg.identifier(), dataset, item);
       break;
 
-    case ::Polarx::Expr::Expr::LITERAL:
+    case ::PolarXRPC::Expr::Expr::LITERAL:
       ret = parse(arg.literal(), dataset, item);
       break;
 
-    case ::Polarx::Expr::Expr::VARIABLE:
+    case ::PolarXRPC::Expr::Expr::VARIABLE:
       ret = HA_ERR_UNSUPPORTED;
-      log_exec_error("::Polarx::Expr::Expr::VARIABLE is not supported yet");
+      log_exec_error("::PolarXRPC::Expr::Expr::VARIABLE is not supported yet");
       break;
 
-    case ::Polarx::Expr::Expr::FUNC_CALL:
+    case ::PolarXRPC::Expr::Expr::FUNC_CALL:
       ret = parse(arg.function_call(), dataset, item);
       break;
 
-    case ::Polarx::Expr::Expr::OPERATOR:
+    case ::PolarXRPC::Expr::Expr::OPERATOR:
       ret = parse(arg.operator_(), dataset, item);
       break;
 
-    case ::Polarx::Expr::Expr::PLACEHOLDER:
+    case ::PolarXRPC::Expr::Expr::PLACEHOLDER:
       ret = parse_placeholder(arg.position(), dataset, item);
       break;
 
-    case ::Polarx::Expr::Expr::OBJECT:
+    case ::PolarXRPC::Expr::Expr::OBJECT:
       ret = parse(arg.object(), dataset, item);
       break;
 
-    case ::Polarx::Expr::Expr::ARRAY:
+    case ::PolarXRPC::Expr::Expr::ARRAY:
       ret = parse(arg.array(), dataset, item);
       break;
 
-    case ::Polarx::Expr::Expr::REF:
+    case ::PolarXRPC::Expr::Expr::REF:
       ret = parse_fieldref(arg.ref_id(), dataset, item);
       break;
 
@@ -172,7 +172,7 @@ int ExprParser::parse(const ::Polarx::Expr::Expr &arg,
   return ret;
 }
 
-int ExprParser::parse(const ::Polarx::Expr::Operator &op,
+int ExprParser::parse(const ::PolarXRPC::Expr::Operator &op,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
@@ -287,11 +287,11 @@ int ExprParser::parse(const ::Polarx::Expr::Operator &op,
   return ret;
 }
 
-int ExprParser::parse(const ::Polarx::Datatypes::Scalar &literal,
+int ExprParser::parse(const ::PolarXRPC::Datatypes::Scalar &literal,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
-  ::Polarx::Datatypes::Scalar_Type type = literal.type();
+  ::PolarXRPC::Datatypes::Scalar_Type type = literal.type();
   my_decimal decimal_value;
   switch (type) {
     case MysqlxScalar::V_SINT:
@@ -343,7 +343,7 @@ int ExprParser::parse(const ::Polarx::Datatypes::Scalar &literal,
   return ret;
 }
 
-int ExprParser::parse(const ::Polarx::Expr::Identifier &arg,
+int ExprParser::parse(const ::PolarXRPC::Expr::Identifier &arg,
                       InternalDataSet &dataset,
                       ExprItem *&item,
                       const bool is_function) const {
@@ -351,14 +351,14 @@ int ExprParser::parse(const ::Polarx::Expr::Identifier &arg,
   abort();
   return ret;
 }
-int ExprParser::parse(const ::Polarx::Expr::ColumnIdentifier &arg,
+int ExprParser::parse(const ::PolarXRPC::Expr::ColumnIdentifier &arg,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
-int ExprParser::parse(const ::Polarx::Expr::FunctionCall &func,
+int ExprParser::parse(const ::PolarXRPC::Expr::FunctionCall &func,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
@@ -398,14 +398,14 @@ int ExprParser::parse(const ::Polarx::Expr::FunctionCall &func,
 
   return ret;
 }
-int ExprParser::parse(const ::Polarx::Datatypes::Any &arg,
+int ExprParser::parse(const ::PolarXRPC::Datatypes::Any &arg,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
-int ExprParser::parse(const ::Polarx::Datatypes::Scalar::Octets &octets,
+int ExprParser::parse(const ::PolarXRPC::Datatypes::Scalar::Octets &octets,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
@@ -420,21 +420,21 @@ int ExprParser::parse_placeholder(const Placeholder &arg_pos,
                                   ExprItem *&item) const {
   return parse(tls_params->Get(arg_pos), dataset, item);
 }
-int ExprParser::parse(const ::Polarx::Expr::Object &arg,
+int ExprParser::parse(const ::PolarXRPC::Expr::Object &arg,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
-int ExprParser::parse(const ::Polarx::Expr::Object::ObjectField &arg,
+int ExprParser::parse(const ::PolarXRPC::Expr::Object::ObjectField &arg,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
-int ExprParser::parse(const ::Polarx::Expr::Array &arg,
+int ExprParser::parse(const ::PolarXRPC::Expr::Array &arg,
                       InternalDataSet &dataset,
                       ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
@@ -475,14 +475,14 @@ int ExprParser::parse_fieldref(const FieldIndex &index,
   return ret;
 }
 
-int ExprParser::parse_field(const ::Polarx::Datatypes::Scalar &field_mark,
+int ExprParser::parse_field(const ::PolarXRPC::Datatypes::Scalar &field_mark,
                             InternalDataSet &dataset,
                             ExprItem *&item,
                             const char *&field_name) const {
   int ret = HA_EXEC_SUCCESS;
-  const ::Polarx::Datatypes::Scalar &real_field = real(field_mark);
+  const ::PolarXRPC::Datatypes::Scalar &real_field = real(field_mark);
   Field *field = nullptr;
-  if (real_field.type() == ::Polarx::Datatypes::Scalar::V_UINT) {
+  if (real_field.type() == ::PolarXRPC::Datatypes::Scalar::V_UINT) {
     uint64_t field_index = real_field.v_unsigned_int();
     if ((ret = dataset.get_field(field_index, field))) {
       log_exec_error("ExprParse can not parse field, "

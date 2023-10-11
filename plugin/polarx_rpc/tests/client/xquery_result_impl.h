@@ -42,7 +42,7 @@ namespace xcl {
 
 class Query_result : public XQuery_result {
  public:
-  using Row_ptr = std::unique_ptr<Polarx::Resultset::Row>;
+  using Row_ptr = std::unique_ptr<PolarXRPC::Resultset::Row>;
 
  public:
   explicit Query_result(std::shared_ptr<XProtocol> protocol,
@@ -71,7 +71,7 @@ class Query_result : public XQuery_result {
  private:
   void clear();
 
-  Handler_result handle_notice(const Polarx::Notice::Frame::Type type,
+  Handler_result handle_notice(const PolarXRPC::Notice::Frame::Type type,
                                const char *payload,
                                const uint32_t payload_size);
 

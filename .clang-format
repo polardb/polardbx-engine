@@ -169,7 +169,6 @@ SpacesInSquareBrackets: false
 StatementMacros: 
   - Q_UNUSED
   - QT_REQUIRE_VERSION
-Standard:        Auto
 TabWidth:        8
 UseTab:          Never
 

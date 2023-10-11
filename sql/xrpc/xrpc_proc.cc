@@ -15,7 +15,7 @@ namespace im {
 LEX_CSTRING XRPC_PROC_SCHEMA = {C_STRING_WITH_LEN("xrpc")};
 
 Proc *Proc_perf_hist::instance() {
-  auto proc = new Proc_perf_hist(key_memory_package);
+  static auto *proc = new Proc_perf_hist(key_memory_package);
   return proc;
 }
 
@@ -71,6 +71,14 @@ void Cmd_perf_hist::send_result(THD *thd, bool error) {
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row())
       return;
+  } else if (0 == ::strcasecmp(name_.c_str(), "decode")) {
+    protocol->start_row();
+    protocol->store("decode", system_charset_info);
+    std::string hist("hist:\n");
+    hist += polarx_rpc::g_decode_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
   } else if (0 == ::strcasecmp(name_.c_str(), "schedule")) {
     protocol->start_row();
     protocol->store("schedule", system_charset_info);
@@ -84,6 +92,38 @@ void Cmd_perf_hist::send_result(THD *thd, bool error) {
     protocol->store("run", system_charset_info);
     std::string hist("hist:\n");
     hist += polarx_rpc::g_run_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+  } else if (0 == ::strcasecmp(name_.c_str(), "timer")) {
+    protocol->start_row();
+    protocol->store("timer", system_charset_info);
+    std::string hist("hist:\n");
+    hist += polarx_rpc::g_timer_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+  } else if (0 == ::strcasecmp(name_.c_str(), "cleanup")) {
+    protocol->start_row();
+    protocol->store("cleanup", system_charset_info);
+    std::string hist("hist:\n");
+    hist += polarx_rpc::g_cleanup_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+  } else if (0 == ::strcasecmp(name_.c_str(), "fin")) {
+    protocol->start_row();
+    protocol->store("fin", system_charset_info);
+    std::string hist("hist:\n");
+    hist += polarx_rpc::g_fin_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+  } else if (0 == ::strcasecmp(name_.c_str(), "auth")) {
+    protocol->start_row();
+    protocol->store("auth", system_charset_info);
+    std::string hist("hist:\n");
+    hist += polarx_rpc::g_auth_hist.histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row())
       return;
@@ -114,6 +154,14 @@ void Cmd_perf_hist::send_result(THD *thd, bool error) {
       return;
 
     protocol->start_row();
+    protocol->store("decode", system_charset_info);
+    hist = "hist:\n";
+    hist += polarx_rpc::g_decode_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+
+    protocol->start_row();
     protocol->store("schedule", system_charset_info);
     hist = "hist:\n";
     hist += polarx_rpc::g_schedule_hist.histogram();
@@ -128,13 +176,50 @@ void Cmd_perf_hist::send_result(THD *thd, bool error) {
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row())
       return;
+
+    protocol->start_row();
+    protocol->store("timer", system_charset_info);
+    hist = "hist:\n";
+    hist += polarx_rpc::g_timer_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+
+    protocol->start_row();
+    protocol->store("cleanup", system_charset_info);
+    hist = "hist:\n";
+    hist += polarx_rpc::g_cleanup_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+
+    protocol->start_row();
+    protocol->store("fin", system_charset_info);
+    hist = "hist:\n";
+    hist += polarx_rpc::g_fin_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
+
+    protocol->start_row();
+    protocol->store("auth", system_charset_info);
+    hist = "hist:\n";
+    hist += polarx_rpc::g_auth_hist.histogram();
+    protocol->store(hist.c_str(), system_charset_info);
+    if (protocol->end_row())
+      return;
   } else if (0 == ::strcasecmp(name_.c_str(), "reset")) {
     /// reset all
     polarx_rpc::g_work_queue_hist.reset();
     polarx_rpc::g_recv_first_hist.reset();
     polarx_rpc::g_recv_all_hist.reset();
+    polarx_rpc::g_decode_hist.reset();
     polarx_rpc::g_schedule_hist.reset();
     polarx_rpc::g_run_hist.reset();
+    polarx_rpc::g_timer_hist.reset();
+    polarx_rpc::g_cleanup_hist.reset();
+    polarx_rpc::g_fin_hist.reset();
+    polarx_rpc::g_auth_hist.reset();
 
     protocol->start_row();
     protocol->store("reset", system_charset_info);
@@ -144,9 +229,10 @@ void Cmd_perf_hist::send_result(THD *thd, bool error) {
   } else {
     protocol->start_row();
     protocol->store("error", system_charset_info);
-    protocol->store("Param should be \"work queue\", \"recv\", \"schedule\", "
-                    "\"run\" \"all\" or \"reset\".",
-                    system_charset_info);
+    protocol->store("Param should be \"work queue\", \"recv first\", \"recv "
+        "all\", \"decode\", \"schedule\", \"run\", \"timer\", "
+        "\"cleanup\", \"fin\", \"auth\", \"all\" or \"reset\".",
+        system_charset_info);
     if (protocol->end_row())
       return;
   }

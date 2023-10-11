@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <google/protobuf/wire_format_lite.h>
 
+namespace polarx_rpc {
 namespace protocol {
 
 namespace primitives {
@@ -387,3 +388,4 @@ public:
 } // namespace primitives
 
 } // namespace protocol
+} // namespace polarx_rpc

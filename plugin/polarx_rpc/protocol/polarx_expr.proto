@@ -38,7 +38,7 @@ syntax = "proto2";
 // * build an Item-tree in the MySQL Server
 // * generate SQL from it
 // * use as filter condition in CRUD's Find(), Update() and Delete() calls.
-package Polarx.Expr;
+package PolarXRPC.Expr;
 option java_package = "com.mysql.cj.x.protobuf";
 
 import "polarx_datatypes.proto";
@@ -77,7 +77,7 @@ message Expr {
 
   optional ColumnIdentifier identifier = 2;
   optional string       variable = 3;
-  optional Polarx.Datatypes.Scalar literal = 4;
+  optional PolarXRPC.Datatypes.Scalar literal = 4;
   optional FunctionCall function_call = 5;
   optional Operator     operator = 6;
   optional uint32       position = 7;
@@ -135,7 +135,7 @@ message DocumentPathItem {
 //    doubleAsterisk = "**"
 //
 message ColumnIdentifier {
-  repeated Polarx.Expr.DocumentPathItem document_path = 1;
+  repeated PolarXRPC.Expr.DocumentPathItem document_path = 1;
   optional string name = 2;
   optional string table_name = 3;
   optional string schema_name = 4;

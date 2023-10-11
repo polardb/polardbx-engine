@@ -268,29 +268,29 @@ std::string message_to_text(const Message &message) {
   printer.SetInitialIndentLevel(1);
 
   // special handling for nested messages (at least for Notices)
-  if (message.GetDescriptor()->full_name() == "Polarx.Notice.Frame") {
-    Polarx::Notice::Frame frame =
-        *static_cast<const Polarx::Notice::Frame *>(&message);
+  if (message.GetDescriptor()->full_name() == "PolarXRPC.Notice.Frame") {
+    PolarXRPC::Notice::Frame frame =
+        *static_cast<const PolarXRPC::Notice::Frame *>(&message);
 
     switch (frame.type()) {
-      case ::Polarx::Notice::Frame_Type_WARNING: {
+      case ::PolarXRPC::Notice::Frame_Type_WARNING: {
         const auto payload_as_text =
-            message_to_text<Polarx::Notice::Warning>(frame.payload());
+            message_to_text<PolarXRPC::Notice::Warning>(frame.payload());
 
         frame.set_payload(payload_as_text);
         break;
       }
-      case ::Polarx::Notice::Frame_Type_SESSION_VARIABLE_CHANGED: {
+      case ::PolarXRPC::Notice::Frame_Type_SESSION_VARIABLE_CHANGED: {
         const auto payload_as_text =
-            message_to_text<Polarx::Notice::SessionVariableChanged>(
+            message_to_text<PolarXRPC::Notice::SessionVariableChanged>(
                 frame.payload());
 
         frame.set_payload(payload_as_text);
         break;
       }
-      case ::Polarx::Notice::Frame_Type_SESSION_STATE_CHANGED: {
+      case ::PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED: {
         const auto payload_as_text =
-            message_to_text<Polarx::Notice::SessionStateChanged>(
+            message_to_text<PolarXRPC::Notice::SessionStateChanged>(
                 frame.payload());
 
         frame.set_payload(payload_as_text);

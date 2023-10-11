@@ -36,8 +36,7 @@ Message_server_by_id server_msgs_by_id;
 Message_client_by_id client_msgs_by_id;
 
 static struct init_message_factory {
-  template <class C>
-  static xcl::XProtocol::Message *create() {
+  template <class C> static xcl::XProtocol::Message *create() {
     return new C();
   }
 
@@ -47,7 +46,8 @@ static struct init_message_factory {
     server_msgs_by_name[name] = std::make_pair(&create<T>, id);
     server_msgs_by_id[id] = std::make_pair(&create<T>, name);
 
-    if (!full_name.empty()) server_msgs_by_full_name[full_name] = name;
+    if (!full_name.empty())
+      server_msgs_by_full_name[full_name] = name;
   }
 
   template <typename T, typename Message_type_id>
@@ -56,92 +56,123 @@ static struct init_message_factory {
     client_msgs_by_name[name] = std::make_pair(&create<T>, id);
     client_msgs_by_id[id] = std::make_pair(&create<T>, name);
 
-    if (!full_name.empty()) client_msgs_by_full_name[full_name] = name;
+    if (!full_name.empty())
+      client_msgs_by_full_name[full_name] = name;
   }
 
   init_message_factory() {
-    server_message<Polarx::Connection::Capabilities>(
-        Polarx::ServerMessages::CONN_CAPABILITIES, "CONN_CAPABILITIES",
-        "Polarx.Connection.Capabilities");
-    server_message<Polarx::Session::AuthenticateContinue>(
-        Polarx::ServerMessages::SESS_AUTHENTICATE_CONTINUE,
-        "SESS_AUTHENTICATE_CONTINUE", "Polarx.Session.AuthenticateContinue");
-    server_message<Polarx::Error>(Polarx::ServerMessages::ERROR, "ERROR",
-                                  "Polarx.Error");
-    server_message<Polarx::Notice::Frame>(Polarx::ServerMessages::NOTICE,
-                                          "NOTICE", "Polarx.Notice.Frame");
-    server_message<Polarx::Ok>(Polarx::ServerMessages::OK, "OK", "Polarx.Ok");
-    server_message<Polarx::Resultset::ColumnMetaData>(
-        Polarx::ServerMessages::RESULTSET_COLUMN_META_DATA,
-        "RESULTSET_COLUMN_META_DATA", "Polarx.Resultset.ColumnMetaData");
-    server_message<Polarx::Resultset::FetchDone>(
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE, "RESULTSET_FETCH_DONE",
-        "Polarx.Resultset.FetchDone");
-    server_message<Polarx::Resultset::FetchDoneMoreOutParams>(
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
+    server_message<PolarXRPC::Connection::Capabilities>(
+        PolarXRPC::ServerMessages::CONN_CAPABILITIES, "CONN_CAPABILITIES",
+        "PolarXRPC.Connection.Capabilities");
+    server_message<PolarXRPC::Session::AuthenticateContinue>(
+        PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE,
+        "SESS_AUTHENTICATE_CONTINUE", "PolarXRPC.Session.AuthenticateContinue");
+    server_message<PolarXRPC::Error>(PolarXRPC::ServerMessages::ERROR, "ERROR",
+                                     "PolarXRPC.Error");
+    server_message<PolarXRPC::Notice::Frame>(
+        PolarXRPC::ServerMessages::NOTICE, "NOTICE", "PolarXRPC.Notice.Frame");
+    server_message<PolarXRPC::Ok>(PolarXRPC::ServerMessages::OK, "OK",
+                                  "PolarXRPC.Ok");
+    server_message<PolarXRPC::Resultset::ColumnMetaData>(
+        PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA,
+        "RESULTSET_COLUMN_META_DATA", "PolarXRPC.Resultset.ColumnMetaData");
+    server_message<PolarXRPC::Resultset::FetchDone>(
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE, "RESULTSET_FETCH_DONE",
+        "PolarXRPC.Resultset.FetchDone");
+    server_message<PolarXRPC::Resultset::FetchDoneMoreOutParams>(
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS,
         "RESULTSET_FETCH_DONE_MORE_OUT_PARAMS",
-        "Polarx.Resultset.FetchDoneMoreOutParams");
-    server_message<Polarx::Resultset::FetchDoneMoreResultsets>(
-        Polarx::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
+        "PolarXRPC.Resultset.FetchDoneMoreOutParams");
+    server_message<PolarXRPC::Resultset::FetchDoneMoreResultsets>(
+        PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_RESULTSETS,
         "RESULTSET_FETCH_DONE_MORE_RESULTSETS",
-        "Polarx.Resultset.FetchDoneMoreResultsets");
-    server_message<Polarx::Resultset::Row>(
-        Polarx::ServerMessages::RESULTSET_ROW, "RESULTSET_ROW",
-        "Polarx.Resultset.Row");
-    server_message<Polarx::Session::AuthenticateOk>(
-        Polarx::ServerMessages::SESS_AUTHENTICATE_OK, "SESS_AUTHENTICATE_OK",
-        "Polarx.Session.AuthenticateOk");
-    server_message<Polarx::Sql::StmtExecuteOk>(
-        Polarx::ServerMessages::SQL_STMT_EXECUTE_OK, "SQL_STMT_EXECUTE_OK",
-        "Polarx.Sql.StmtExecuteOk");
+        "PolarXRPC.Resultset.FetchDoneMoreResultsets");
+    server_message<PolarXRPC::Resultset::Row>(
+        PolarXRPC::ServerMessages::RESULTSET_ROW, "RESULTSET_ROW",
+        "PolarXRPC.Resultset.Row");
+    server_message<PolarXRPC::Session::AuthenticateOk>(
+        PolarXRPC::ServerMessages::SESS_AUTHENTICATE_OK, "SESS_AUTHENTICATE_OK",
+        "PolarXRPC.Session.AuthenticateOk");
+    server_message<PolarXRPC::Sql::StmtExecuteOk>(
+        PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK, "SQL_STMT_EXECUTE_OK",
+        "PolarXRPC.Sql.StmtExecuteOk");
 
-    client_message<Polarx::Connection::CapabilitiesGet>(
-        Polarx::ClientMessages::CON_CAPABILITIES_GET, "CON_CAPABILITIES_GET",
-        "Polarx.Connection.CapabilitiesGet");
-    client_message<Polarx::Connection::CapabilitiesSet>(
-        Polarx::ClientMessages::CON_CAPABILITIES_SET, "CON_CAPABILITIES_SET",
-        "Polarx.Connection.CapabilitiesSet");
-    client_message<Polarx::Connection::Close>(Polarx::ClientMessages::CON_CLOSE,
-                                              "CON_CLOSE",
-                                              "Polarx.Connection.Close");
-    client_message<Polarx::Expect::Close>(Polarx::ClientMessages::EXPECT_CLOSE,
-                                          "EXPECT_CLOSE",
-                                          "Polarx.Expect.Close");
-    client_message<Polarx::Expect::Open>(Polarx::ClientMessages::EXPECT_OPEN,
-                                         "EXPECT_OPEN", "Polarx.Expect.Open");
-    client_message<Polarx::Session::AuthenticateContinue>(
-        Polarx::ClientMessages::SESS_AUTHENTICATE_CONTINUE,
-        "SESS_AUTHENTICATE_CONTINUE", "Polarx.Session.AuthenticateContinue");
-    client_message<Polarx::Session::AuthenticateStart>(
-        Polarx::ClientMessages::SESS_AUTHENTICATE_START,
-        "SESS_AUTHENTICATE_START", "Polarx.Session.AuthenticateStart");
-    client_message<Polarx::Session::Close>(Polarx::ClientMessages::SESS_CLOSE,
-                                           "SESS_CLOSE",
-                                           "Polarx.Session.Close");
-    client_message<Polarx::Session::Reset>(Polarx::ClientMessages::SESS_RESET,
-                                           "SESS_RESET",
-                                           "Polarx.Session.Reset");
-    client_message<Polarx::Sql::StmtExecute>(
-        Polarx::ClientMessages::EXEC_SQL, "EXEC_SQL",
-        "Polarx.Sql.StmtExecute");
-    client_message<Polarx::ExecPlan::ExecPlan>(
-        Polarx::ClientMessages::EXEC_PLAN_READ, "EXEC_PLAN",
-        "Polarx.ExecPlan.ExecPlan");
-    client_message<Polarx::ExecPlan::GetTSO>(Polarx::ClientMessages::GET_TSO, "GET_TSO",
-                                   "Polarx.ExecPlan.GetTSO");
-    server_message<Polarx::ExecPlan::ResultTSO>(Polarx::ServerMessages::RESULTSET_TSO,
-                                      "RESULT_TSO", "Polarx.ExecPlan.ResultTSO");
-    client_message<Polarx::Session::NewSession>(
-        Polarx::ClientMessages::SESS_NEW, "SESS_NEW",
-        "Polarx.Session.NewSession");
-    client_message<Polarx::Session::KillSession>(
-        Polarx::ClientMessages::SESS_KILL, "SESS_KILL",
-        "Polarx.Session.KillSession");
-    client_message<Polarx::Sql::TokenOffer>(Polarx::ClientMessages::TOKEN_OFFER,
-                                            "TOKEN_OFFER",
-                                            "Polarx.Sql.TokenOffer");
-    server_message<Polarx::Resultset::TokenDone>(
-        Polarx::ServerMessages::RESULTSET_TOKEN_DONE, "RESULTSET_TOKEN_DONE",
-        "Polarx.Resultset.TokenDone");
+    client_message<PolarXRPC::Connection::CapabilitiesGet>(
+        PolarXRPC::ClientMessages::CON_CAPABILITIES_GET, "CON_CAPABILITIES_GET",
+        "PolarXRPC.Connection.CapabilitiesGet");
+    client_message<PolarXRPC::Connection::CapabilitiesSet>(
+        PolarXRPC::ClientMessages::CON_CAPABILITIES_SET, "CON_CAPABILITIES_SET",
+        "PolarXRPC.Connection.CapabilitiesSet");
+    client_message<PolarXRPC::Connection::Close>(
+        PolarXRPC::ClientMessages::CON_CLOSE, "CON_CLOSE",
+        "PolarXRPC.Connection.Close");
+    client_message<PolarXRPC::Expect::Close>(
+        PolarXRPC::ClientMessages::EXPECT_CLOSE, "EXPECT_CLOSE",
+        "PolarXRPC.Expect.Close");
+    client_message<PolarXRPC::Expect::Open>(
+        PolarXRPC::ClientMessages::EXPECT_OPEN, "EXPECT_OPEN",
+        "PolarXRPC.Expect.Open");
+    client_message<PolarXRPC::Session::AuthenticateContinue>(
+        PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE,
+        "SESS_AUTHENTICATE_CONTINUE", "PolarXRPC.Session.AuthenticateContinue");
+    client_message<PolarXRPC::Session::AuthenticateStart>(
+        PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START,
+        "SESS_AUTHENTICATE_START", "PolarXRPC.Session.AuthenticateStart");
+    client_message<PolarXRPC::Session::Close>(
+        PolarXRPC::ClientMessages::SESS_CLOSE, "SESS_CLOSE",
+        "PolarXRPC.Session.Close");
+    client_message<PolarXRPC::Session::Reset>(
+        PolarXRPC::ClientMessages::SESS_RESET, "SESS_RESET",
+        "PolarXRPC.Session.Reset");
+    client_message<PolarXRPC::Sql::StmtExecute>(
+        PolarXRPC::ClientMessages::EXEC_SQL, "EXEC_SQL",
+        "PolarXRPC.Sql.StmtExecute");
+    client_message<PolarXRPC::ExecPlan::ExecPlan>(
+        PolarXRPC::ClientMessages::EXEC_PLAN_READ, "EXEC_PLAN",
+        "PolarXRPC.ExecPlan.ExecPlan");
+    client_message<PolarXRPC::ExecPlan::GetTSO>(
+        PolarXRPC::ClientMessages::GET_TSO, "GET_TSO",
+        "PolarXRPC.ExecPlan.GetTSO");
+    server_message<PolarXRPC::ExecPlan::ResultTSO>(
+        PolarXRPC::ServerMessages::RESULTSET_TSO, "RESULT_TSO",
+        "PolarXRPC.ExecPlan.ResultTSO");
+    client_message<PolarXRPC::Session::NewSession>(
+        PolarXRPC::ClientMessages::SESS_NEW, "SESS_NEW",
+        "PolarXRPC.Session.NewSession");
+    client_message<PolarXRPC::Session::KillSession>(
+        PolarXRPC::ClientMessages::SESS_KILL, "SESS_KILL",
+        "PolarXRPC.Session.KillSession");
+    client_message<PolarXRPC::Sql::TokenOffer>(
+        PolarXRPC::ClientMessages::TOKEN_OFFER, "TOKEN_OFFER",
+        "PolarXRPC.Sql.TokenOffer");
+    server_message<PolarXRPC::Resultset::TokenDone>(
+        PolarXRPC::ServerMessages::RESULTSET_TOKEN_DONE, "RESULTSET_TOKEN_DONE",
+        "PolarXRPC.Resultset.TokenDone");
+    client_message<PolarXRPC::ExecPlan::AutoSp>(
+        PolarXRPC::ClientMessages::AUTO_SP, "AUTO_SP",
+        "PolarXRPC.Sql.AutoSp");
+
+
+    server_message<PolarXRPC::PhysicalBackfill::GetFileInfoOperator>(
+        PolarXRPC::ServerMessages::RESULTSET_GET_FILE_INFO_OK, "RESULTSET_GET_FILE_INFO_OK",
+        "PolarXRPC.PhysicalBackfill.GetFileInfoOperator");
+
+    server_message<PolarXRPC::PhysicalBackfill::TransferFileDataOperator>(
+        PolarXRPC::ServerMessages::RESULTSET_TRANSFER_FILE_DATA_OK, "RESULTSET_TRANSFER_FILE_DATA_OK",
+        "PolarXRPC.PhysicalBackfill.TransferFileDataOperator");
+
+    server_message<PolarXRPC::PhysicalBackfill::FileManageOperatorResponse>(
+       PolarXRPC::ServerMessages::RESULTSET_FILE_MANAGE_OK, "RESULTSET_FILE_MANAGE_OK",
+       "PolarXRPC.PhysicalBackfill.FileManageOperatorResponse");
+
+     client_message<PolarXRPC::PhysicalBackfill::GetFileInfoOperator>(
+             PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO, "FILE_OPERATION_GET_FILE_INFO",
+             "PolarXRPC.PhysicalBackfill.GetFileInfoOperator");
+      client_message<PolarXRPC::PhysicalBackfill::FileManageOperator>(
+              PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE, "FILE_OPERATION_FILE_MANAGE",
+              "PolarXRPC.PhysicalBackfill.FileManageOperator");
+      client_message<PolarXRPC::PhysicalBackfill::TransferFileDataOperator>(
+              PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA, "FILE_OPERATION_TRANSFER_FILE_DATA",
+              "PolarXRPC.PhysicalBackfill.TransferFileDataOperator");
   }
 } init_message_factory;
