@@ -6840,5 +6840,12 @@ static Sys_var_bool Sys_enable_changeset(
        NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(handle_enable_changeset)
 );
 
+static Sys_var_bool Sys_auto_savepoint_opt(
+        "auto_savepoint_opt",
+        "Whether support x-proto optimization for auto savepoint",
+        READ_ONLY GLOBAL_VAR(auto_savepoint_opt), NO_CMD_LINE, DEFAULT(TRUE),
+        NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0)
+);
+
 #include "sys_vars_ext.cc"
 #include "sys_vars_consensus.cc"

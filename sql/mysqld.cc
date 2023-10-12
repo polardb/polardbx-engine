@@ -1209,6 +1209,10 @@ bool physical_backfill_opt = true;
 ulong max_prepared_stmt_count;
 
 bool enable_changeset;
+
+/* enable x-proto optimization for auto savepoint*/
+bool auto_savepoint_opt = TRUE;
+
 /**
   Current total number of prepared statements in the server. This number
   is exact, and therefore may not be equal to the difference between

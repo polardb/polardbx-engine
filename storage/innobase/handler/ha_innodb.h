@@ -1285,4 +1285,6 @@ void innobase_build_v_templ_callback(const TABLE *table, void *ib_table);
 the table virtual columns' template */
 typedef void (*my_gcolumn_templatecallback_t)(const TABLE *, void *);
 
+void innobase_force_register_ht(THD *thd);
+
 #endif /* ha_innodb_h */

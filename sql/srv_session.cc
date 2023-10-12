@@ -77,6 +77,8 @@
 #include "plugin/x/src/galaxy_atomicex.h"
 
 #include "ppi/ppi_statement.h"
+#include "transaction.h"
+#include "sql_lex.h"
 
 struct decimal_t;
 
@@ -1218,4 +1220,106 @@ unsigned int Srv_session::thread_count(const void *plugin) {
 */
 bool Srv_session::is_srv_session_thread() {
   return nullptr != THR_srv_session_thread;
+}
+
+/**
+ * pre-process
+ * -> set/release/rollback savepoint
+ * -> post-process
+ */
+int Srv_session::savepoint_wrapper(bool (*func)(THD *, LEX_STRING), const LEX_CSTRING &sp_name) {
+  // RAII:the destructor restores the state
+  Srv_session::Session_backup_and_attach backup(this, false);
+  thd.reset_for_next_command();
+  thd.set_command(COM_QUERY);
+  thd.set_time();
+  thd.set_query_id(next_query_id());
+  Global_THD_manager::get_instance()->inc_thread_running();
+  thd.status_var.questions++;
+  thd.server_status&= ~SERVER_STATUS_CLEAR_SET;
+
+  LEX_STRING saved_ident = thd.lex->ident;
+  thd.lex->ident = { const_cast<char *>(sp_name.str), sp_name.length };
+  bool err = false;
+  if (func(&thd, thd.lex->ident)) {
+    trans_rollback_stmt(&thd);
+    err = true;
+  } else if (trans_commit_stmt(&thd)) {
+    err = true;
+  }
+  thd.lex->ident = saved_ident;
+
+  // Cleanup.
+  close_thread_tables(&thd);
+  thd.mdl_context.release_statement_locks();
+  thd.cleanup_after_query();
+  thd.set_command(COM_SLEEP);
+  thd.proc_info = nullptr;
+  Global_THD_manager::get_instance()->dec_thread_running();
+  free_root(thd.mem_root,MYF(MY_KEEP_PREALLOC));
+  return err;
+}
+
+/**
+ * Set a savepoint, and force registering an innobase handlerton if needed.
+ */
+bool my_trans_savepoint(THD *thd, LEX_STRING name) {
+  if (!thd->in_multi_stmt_transaction_mode()) {
+    // Not in a trx.
+    return false;
+  }
+  if (!innodb_hton) {
+    // It should have an innobase handlerton.
+    return true;
+  }
+  // Force register an innobase handlerton.
+  if (!thd->get_transaction()->is_active(Transaction_ctx::SESSION)) {
+    innodb_hton->force_register_ht(thd);
+  }
+  return trans_savepoint(thd, name);
+}
+
+/**
+  Set a savepoint.
+*/
+int Srv_session::set_savepoint(const LEX_CSTRING &sp_name) {
+  if (opt_general_log_raw) {
+    char buf[sizeof("SAVEPOINT ") + 64 + 1];
+    memcpy(buf, "SAVEPOINT ", sizeof("SAVEPOINT "));
+    query_logger.general_log_write(&thd, COM_QUERY,
+                                   strncat(buf, sp_name.str, 64),
+                                   sizeof("SAVEPOINT ") - 1 + sp_name.length);
+  }
+  ++thd.status_var.com_stat[SQLCOM_SAVEPOINT];
+  return savepoint_wrapper(my_trans_savepoint, sp_name);
+}
+
+/**
+  Release a savepoint.
+*/
+int Srv_session::release_savepoint(const LEX_CSTRING &sp_name) {
+  if (opt_general_log_raw) {
+    char buf[sizeof("RELEASE SAVEPOINT ") + 64 + 1];
+    memcpy(buf, "RELEASE SAVEPOINT ", sizeof("RELEASE SAVEPOINT "));
+    query_logger.general_log_write(&thd, COM_QUERY,
+                                   strncat(buf, sp_name.str, 64),
+                                   sizeof("RELEASE SAVEPOINT ") - 1 + sp_name.length);
+  }
+  ++thd.status_var.com_stat[SQLCOM_RELEASE_SAVEPOINT];
+  return savepoint_wrapper(trans_release_savepoint, sp_name);
+}
+
+/**
+  Rollback a savepoint.
+*/
+int Srv_session::rollback_savepoint(const LEX_CSTRING &sp_name) {
+  if (opt_general_log_raw) {
+    char buf[sizeof("ROLLBACK SAVEPOINT ") + 64 + 1];
+    memcpy(buf, "ROLLBACK SAVEPOINT ", sizeof("ROLLBACK SAVEPOINT "));
+    query_logger.general_log_write(&thd, COM_QUERY,
+                                   strncat(buf, sp_name.str, 64),
+                                   sizeof("ROLLBACK SAVEPOINT ") - 1 + sp_name.length);
+  }
+  ++thd.status_var.com_stat[SQLCOM_ROLLBACK_TO_SAVEPOINT];
+  return savepoint_wrapper(trans_rollback_to_savepoint, sp_name);
 }

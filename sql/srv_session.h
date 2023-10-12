@@ -217,27 +217,20 @@ class Srv_session {
                       enum cs_text_or_binary text_or_binary,
                       void *callbacks_context);
 
+  int savepoint_wrapper(bool (*func)(THD *, LEX_STRING), const LEX_CSTRING &sp_name);
+
   /**
     Set a savepoint.
   */
-  int set_savepoint(const LEX_CSTRING &sp_name) {
-    // TODO impl this
-    return 1;
-  }
+  int set_savepoint(const LEX_CSTRING &sp_name);
   /**
     Release a savepoint.
   */
-  int release_savepoint(const LEX_CSTRING &sp_name) {
-    // TODO impl this
-    return 1;
-  }
+  int release_savepoint(const LEX_CSTRING &sp_name);
   /**
     Rollback a savepoint.
   */
-  int rollback_savepoint(const LEX_CSTRING &sp_name) {
-    // TODO impl this
-    return 1;
-  }
+  int rollback_savepoint(const LEX_CSTRING &sp_name);
 
   /**
     Returns the internal THD object

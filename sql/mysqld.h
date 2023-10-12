@@ -145,6 +145,9 @@ extern bool physical_backfill_opt;
 /* enable polarx changeset udf */
 extern bool enable_changeset;
 
+/* enable x-proto optimization for auto savepoint*/
+extern bool auto_savepoint_opt;
+
 enum enum_server_operational_state {
   SERVER_BOOTING,      /* Server is not operational. It is starting */
   SERVER_OPERATING,    /* Server is fully initialized and operating */

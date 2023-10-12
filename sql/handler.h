@@ -1266,6 +1266,8 @@ typedef int (*prepare_t)(handlerton *hton, THD *thd, bool all);
 typedef int (*recover_t)(handlerton *hton, XA_recover_txn *xid_list, uint len,
                          MEM_ROOT *mem_root);
 
+typedef void (*force_register_ht_t)(THD *thd);
+
 /** X/Open XA distributed transaction status codes */
 enum xa_status_code {
   /**
@@ -2376,6 +2378,7 @@ struct handlerton {
   dict_get_server_version_t dict_get_server_version;
   dict_set_server_version_t dict_set_server_version;
   is_reserved_db_name_t is_reserved_db_name;
+  force_register_ht_t force_register_ht;
 
   /** Global handler flags. */
   uint32 flags;

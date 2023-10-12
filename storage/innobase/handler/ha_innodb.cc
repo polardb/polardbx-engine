@@ -4857,6 +4857,8 @@ static int innodb_init(void *p) {
 
   innobase_hton->register_xa_attributes = innobase_register_xa_attributes;
 
+  innobase_hton->force_register_ht = innobase_force_register_ht;
+
   ut_a(DATA_MYSQL_TRUE_VARCHAR == (ulint)MYSQL_TYPE_VARCHAR);
 
   os_file_set_umask(my_umask);
@@ -24034,6 +24036,12 @@ void ha_innobase::get_create_info(const char *table, const dd::Table *table_def,
 
 bool thd_get_transaction_group(THD *thd) {
   return THDVAR(thd, transaction_group);
+}
+
+void innobase_force_register_ht(THD *thd) {
+  trx_t* trx = check_trx_exists(thd);
+  TrxInInnoDB	trx_in_innodb(trx);
+  innobase_register_trx(innodb_hton_ptr, thd, trx);
 }
 
 #include "ha_innodb_ext.cc"
