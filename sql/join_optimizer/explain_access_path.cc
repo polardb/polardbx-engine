@@ -963,6 +963,25 @@ static std::unique_ptr<Json_object> SetObjectMembers(
       error |= AddChildrenFromPushedCondition(table, children);
       break;
     }
+    case AccessPath::TABLE_SAMPLE: {
+      TABLE *table = path->table_sample().table;
+      description += string("Table sample on ") + table->alias;
+      if (table->s->is_secondary_engine()) {
+        error |= AddMemberToObject<Json_string>(obj, "secondary_engine",
+                                                table->file->table_type());
+        description +=
+            string(" in secondary engine ") + table->file->table_type();
+      }
+      description += table->file->explain_extra();
+
+      error |= AddMemberToObject<Json_string>(obj, "table_name", table->alias);
+      error |= AddMemberToObject<Json_string>(obj, "access_type", "table");
+      if (!table->file->explain_extra().empty())
+        error |= AddMemberToObject<Json_string>(obj, "message",
+                                                table->file->explain_extra());
+      error |= AddChildrenFromPushedCondition(table, children);
+      break;
+    }
     case AccessPath::INDEX_SCAN: {
       TABLE *table = path->index_scan().table;
       assert(table->file->pushed_idx_cond == nullptr);

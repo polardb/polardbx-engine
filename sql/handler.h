@@ -4506,6 +4506,8 @@ class handler {
 
   std::mt19937 m_random_number_engine;
   double m_sampling_percentage;
+  enum_sampling_method m_sampling_method;
+  void *m_scan_ctx;
 
  private:
   /** Internal state of the batch instrumentation. */
@@ -4718,6 +4720,7 @@ class handler {
   int ha_reset();
   /* this is necessary in many places, e.g. in HANDLER command */
   int ha_index_or_rnd_end() {
+    if (inited == SAMPLING) return ha_sample_end(m_scan_ctx);
     return inited == INDEX ? ha_index_end() : inited == RND ? ha_rnd_end() : 0;
   }
   /**

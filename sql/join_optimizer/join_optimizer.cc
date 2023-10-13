@@ -4245,6 +4245,9 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
     case AccessPath::TABLE_SCAN:
       str += "TABLE_SCAN";
       break;
+    case AccessPath::TABLE_SAMPLE:
+      str += "TABLE_SAMPLE";
+      break;
     case AccessPath::INDEX_SCAN:
       str += "INDEX_SCAN";
       break;

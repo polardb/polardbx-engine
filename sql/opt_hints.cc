@@ -21,6 +21,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/opt_hints.h"
+#include "sql/opt_hints_ext.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -40,6 +41,7 @@
 #include "sql/mysqld.h"  // table_alias_charset
 #include "sql/nested_join.h"
 #include "sql/parse_tree_hints.h"
+#include "sql/parse_tree_hints_ext.h"
 #include "sql/set_var.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_const.h"
@@ -81,6 +83,7 @@ struct st_opt_hint_info opt_hint_info[] = {
     {"INDEX_MERGE", false, false, false},
     {"RESOURCE_GROUP", false, false, false},
     {"SKIP_SCAN", false, false, false},
+    {"SAMPLE_PERCENTAGE", false, false, false},
     {"HASH_JOIN", true, true, false},
     {"INDEX", false, false, false},
     {"JOIN_INDEX", false, false, false},
@@ -202,6 +205,8 @@ void Opt_hints_global::print_irregular_hints(const THD *thd, String *str) {
   if (sys_var_hint) sys_var_hint->print(thd, str);
 
   if (ccl_queue_hint) ccl_queue_hint->print(thd, str);
+
+  if (sample_hint) sample_hint->print(thd, str);
 }
 
 Opt_hints_qb::Opt_hints_qb(Opt_hints *opt_hints_arg, MEM_ROOT *mem_root_arg,
@@ -967,3 +972,5 @@ bool idx_merge_hint_state(THD *thd, const TABLE *table,
 
   return force_index_merge;
 }
+
+#include "opt_hints_ext.cc"

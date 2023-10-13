@@ -48,6 +48,7 @@ class Ccl_queue_hint;
 }
 
 enum class Subquery_strategy : int;
+class Sample_percentage_hint;
 class Item;
 class JOIN;
 class Opt_hints_table;
@@ -82,6 +83,7 @@ enum opt_hints_enum {
   INDEX_MERGE_HINT_ENUM,
   RESOURCE_GROUP_HINT_ENUM,
   SKIP_SCAN_HINT_ENUM,
+  SAMPLE_PERCENTAGE_HINT_ENUM,
   HASH_JOIN_HINT_ENUM,
   INDEX_HINT_ENUM,
   JOIN_INDEX_HINT_ENUM,
@@ -356,12 +358,14 @@ class Opt_hints_global : public Opt_hints {
   PT_hint_max_execution_time *max_exec_time;
   Sys_var_hint *sys_var_hint;
   im::Ccl_queue_hint *ccl_queue_hint;
+  Sample_percentage_hint *sample_hint;
 
   Opt_hints_global(MEM_ROOT *mem_root_arg)
       : Opt_hints(nullptr, nullptr, mem_root_arg) {
     max_exec_time = nullptr;
     sys_var_hint = nullptr;
     ccl_queue_hint = nullptr;
+    sample_hint = nullptr;
   }
 
   void append_name(const THD *, String *) override {}

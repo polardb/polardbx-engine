@@ -37,6 +37,7 @@
 #include "my_inttypes.h"
 #include "sql/iterators/row_iterator.h"
 #include "sql/mem_root_array.h"
+#include "sql/table.h"
 
 class Filesort_info;
 class Item;
@@ -93,6 +94,35 @@ class TableScanIterator final : public TableRowIterator {
   /// Used for EXCEPT and INTERSECT only: rows scanned so far, see also
   /// m_limit_rows.
   ha_rows m_stored_rows{0};
+};
+
+/**
+  Sample scan a table from beginning to end.
+
+  This is the most basic access method of a table using ha_sample_init,
+  ha_sample_next and ha_sample_end. No indexes are used.
+ */
+class TableSampleIterator final : public TableRowIterator {
+ public:
+  // Accepts nullptr for qep_tab; qep_tab is used only for setting up record
+  // buffers.
+  //
+  // The pushed condition can be nullptr.
+  //
+  // "examined_rows", if not nullptr, is incremented for each successful Read().
+  TableSampleIterator(THD *thd, TABLE *table, double expected_rows,
+                      ha_rows *examined_rows, double sample_pct);
+  ~TableSampleIterator() override;
+
+  bool Init() override;
+  int Read() override;
+
+ private:
+  uchar *const m_record;
+  const double m_expected_rows;
+  ha_rows *const m_examined_rows;
+  double m_sample_pct;
+  void *m_scan_ctx;
 };
 
 /** Perform a full index scan along an index. */

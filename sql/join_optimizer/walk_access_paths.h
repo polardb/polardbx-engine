@@ -80,6 +80,7 @@ void WalkAccessPaths(AccessPathPtr path, JoinPtr join,
   }
   switch (path->type) {
     case AccessPath::TABLE_SCAN:
+    case AccessPath::TABLE_SAMPLE:
     case AccessPath::INDEX_SCAN:
     case AccessPath::REF:
     case AccessPath::REF_OR_NULL:
@@ -265,6 +266,8 @@ void WalkTablesUnderAccessPath(AccessPath *root_path, Func &&func,
         switch (path->type) {
           case AccessPath::TABLE_SCAN:
             return func(path->table_scan().table);
+          case AccessPath::TABLE_SAMPLE:
+            return func(path->table_sample().table);
           case AccessPath::INDEX_SCAN:
             return func(path->index_scan().table);
           case AccessPath::REF:

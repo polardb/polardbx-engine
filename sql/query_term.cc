@@ -270,6 +270,12 @@ static void dumpAccessPath(int level, AccessPath *p, std::ostringstream &buf) {
                                                 : "<no alias>");
         p = nullptr;
         break;
+      case AccessPath::TABLE_SAMPLE:
+        str.append("AccessPath::TABLE_SAMPLE alias: ");
+        str.append(p->table_sample().table->alias
+                       ? p->table_sample().table->alias
+                       : "<no alias>");
+        break;
       case AccessPath::SORT:
         str.append("AccessPath::SORT");
         p = p->sort().child;

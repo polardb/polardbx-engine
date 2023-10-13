@@ -3033,28 +3033,36 @@ int handler::ha_sample_init(void *&scan_ctx, double sampling_percentage,
   assert(sampling_percentage >= 0.0);
   assert(sampling_percentage <= 100.0);
   assert(inited == NONE);
+  DBUG_EXECUTE_IF("fixed_sample_seed", sampling_seed = 1;);
 
   // Initialise the random number generator.
   m_random_number_engine.seed(sampling_seed);
   m_sampling_percentage = sampling_percentage;
+  m_sampling_method = sampling_method;
 
   int result = sample_init(scan_ctx, sampling_percentage, sampling_seed,
                            sampling_method, tablesample);
   inited = (result != 0) ? NONE : SAMPLING;
+  m_scan_ctx = (result != 0) ? nullptr : scan_ctx;
   return result;
 }
 
 int handler::ha_sample_end(void *scan_ctx) {
   DBUG_TRACE;
-  assert(inited == SAMPLING);
-  inited = NONE;
-  int result = sample_end(scan_ctx);
+  int result = 0;
+  if (inited != NONE) {
+    assert(inited == SAMPLING);
+    assert(scan_ctx == m_scan_ctx);
+    inited = NONE;
+    result = sample_end(scan_ctx);
+  }
   return result;
 }
 
 int handler::ha_sample_next(void *scan_ctx, uchar *buf) {
   DBUG_TRACE;
   assert(inited == SAMPLING);
+  assert(scan_ctx == m_scan_ctx);
 
   if (m_sampling_percentage == 0.0) return HA_ERR_END_OF_FILE;
 

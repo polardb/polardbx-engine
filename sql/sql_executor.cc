@@ -1540,6 +1540,7 @@ AccessPath *MoveCompositeIteratorsFromTablePath(
                              explain](AccessPath *sub_path, const JOIN *) {
     switch (sub_path->type) {
       case AccessPath::TABLE_SCAN:
+      case AccessPath::TABLE_SAMPLE:
       case AccessPath::REF:
       case AccessPath::REF_OR_NULL:
       case AccessPath::EQ_REF:
@@ -4717,6 +4718,9 @@ AccessPath *create_table_access_path(THD *thd, TABLE *table,
     path = range_scan;
   } else if (table_ref != nullptr && table_ref->is_recursive_reference()) {
     path = NewFollowTailAccessPath(thd, table, count_examined_rows);
+  } else if (thd->lex && thd->lex->opt_hints_global &&
+             thd->lex->opt_hints_global->sample_hint) {
+    path = NewTableSampleAccessPath(thd, table, count_examined_rows);
   } else {
     path = NewTableScanAccessPath(thd, table, count_examined_rows);
   }

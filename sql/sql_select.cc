@@ -65,6 +65,7 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
+#include "sql/derror.h"
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Ignore_error_handler
 #include "sql/field.h"
@@ -91,6 +92,7 @@
 #include "sql/opt_explain.h"
 #include "sql/opt_explain_format.h"
 #include "sql/opt_hints.h"  // hint_key_state()
+#include "sql/opt_hints_ext.h"
 #include "sql/opt_trace.h"
 #include "sql/opt_trace_context.h"
 #include "sql/parse_tree_node_base.h"
@@ -457,6 +459,15 @@ bool Sql_cmd_select::prepare_inner(THD *thd) {
   Query_block *parameters = unit->global_parameters();
   if (!parameters->has_limit()) {
     parameters->m_use_select_limit = true;
+  }
+
+  // Recheck the semantics of sampling scan
+  if (lex->opt_hints_global && lex->opt_hints_global->sample_hint &&
+      check_sample_semantic(lex)) {
+    lex->opt_hints_global->sample_hint = nullptr;
+    push_warning(thd, Sql_condition::SL_WARNING,
+                 ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR,
+                 ER_THD(thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR));
   }
 
   if (unit->is_simple()) {

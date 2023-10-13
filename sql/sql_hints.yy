@@ -43,6 +43,7 @@
 #include "sql/opt_hints.h"
 #include "sql/parse_tree_helpers.h"  // check_resource_group_name_len
 #include "sql/parse_tree_hints.h"
+#include "sql/parse_tree_hints_ext.h"
 #include "sql/parser_yystype.h"
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
@@ -137,11 +138,14 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
 %token CCL_QUEUE_FIELD_HINT 1050
 %token CCL_QUEUE_VALUE_HINT 1051
 
+%token SAMPLE_PERCENTAGE_HINT 1052
+
 /*
   YYUNDEF in internal to Bison. Please don't change its number, or change
   it in sync with YYUNDEF in sql_yacc.yy.
 */
 %token YYUNDEF 1150
+
 
 /*
   Please add new tokens right above this line.
@@ -166,6 +170,7 @@ static bool parse_int(longlong *to, const char *from, size_t from_length)
   set_var_hint
   resource_group_hint
   ccl_queue_hint
+  sample_percentage_hint
 
 %type <hint_list> hint_list
 
@@ -242,6 +247,7 @@ hint:
         | set_var_hint
         | resource_group_hint
         | ccl_queue_hint
+        | sample_percentage_hint
         ;
 
 ccl_queue_hint:
@@ -256,6 +262,21 @@ ccl_queue_hint:
             $$= NEW_PTN im::PT_hint_ccl_queue(
                   im::Ccl_hint_type::CCL_HINT_QUEUE_VALUE, $3);
             if ($$ == NULL) YYABORT;
+          }
+        ;
+
+sample_percentage_hint:
+          SAMPLE_PERCENTAGE_HINT '(' HINT_ARG_FLOATING_POINT_NUMBER ')'
+          {
+            $$= NEW_PTN PT_hint_sample_percentage($3);
+            if ($$ == NULL)
+              YYABORT; // OOM
+          }
+        | SAMPLE_PERCENTAGE_HINT '(' HINT_ARG_NUMBER ')'
+          {
+            $$= NEW_PTN PT_hint_sample_percentage($3);
+            if ($$ == NULL)
+              YYABORT; // OOM
           }
         ;
 

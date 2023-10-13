@@ -438,3 +438,63 @@ bool FollowTailIterator::RepositionCursorAfterSpillToDisk() {
   }
   return reposition_innodb_cursor(table(), m_read_rows);
 }
+
+TableSampleIterator::TableSampleIterator(THD *thd, TABLE *table,
+                                         double expected_rows,
+                                         ha_rows *examined_rows,
+                                         double sample_pct)
+    : TableRowIterator(thd, table),
+      m_record(table->record[0]),
+      m_expected_rows(expected_rows),
+      m_examined_rows(examined_rows),
+      m_sample_pct(sample_pct) {}
+
+TableSampleIterator::~TableSampleIterator() {
+  if (table()->file != nullptr) {
+    table()->file->ha_sample_end(m_scan_ctx);
+  }
+}
+
+bool TableSampleIterator::Init() {
+  /*
+    Only attempt to allocate a record buffer the first time the handler is
+    initialized.
+  */
+  const bool first_init = !table()->file->inited;
+
+  std::random_device rd;
+  std::uniform_int_distribution<int> dist;
+  int sampling_seed = dist(rd);
+
+  DBUG_EXECUTE_IF("force_sampling", {
+    sampling_seed = 1;
+    m_sample_pct = 50.0;
+  });
+
+  bool tablesample = false;
+  int error =
+      table()->file->ha_sample_init(m_scan_ctx, m_sample_pct, sampling_seed,
+                                    enum_sampling_method::SYSTEM, tablesample);
+  if (error) {
+    PrintError(error);
+    return true;
+  }
+
+  if (first_init && set_record_buffer(table(), m_expected_rows))
+    return true; /* purecov: inspected */
+
+  return false;
+}
+
+int TableSampleIterator::Read() {
+  int tmp;
+  while ((tmp = table()->file->ha_sample_next(m_scan_ctx, m_record))) {
+    return HandleError(tmp);
+  }
+
+  if (m_examined_rows != nullptr) {
+    ++*m_examined_rows;
+  }
+
+  return 0;
+}

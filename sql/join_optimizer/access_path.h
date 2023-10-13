@@ -206,6 +206,7 @@ struct AccessPath {
     // NOTE: When adding more paths to this section, also update GetBasicTable()
     // to handle them.
     TABLE_SCAN,
+    TABLE_SAMPLE,
     INDEX_SCAN,
     REF,
     REF_OR_NULL,
@@ -493,6 +494,14 @@ struct AccessPath {
   const auto &table_scan() const {
     assert(type == TABLE_SCAN);
     return u.table_scan;
+  }
+  auto &table_sample() {
+    assert(type == TABLE_SAMPLE);
+    return u.table_sample;
+  }
+  const auto &table_sample() const {
+    assert(type == TABLE_SAMPLE);
+    return u.table_sample;
   }
   auto &index_scan() {
     assert(type == INDEX_SCAN);
@@ -857,6 +866,9 @@ struct AccessPath {
     struct {
       TABLE *table;
     } table_scan;
+    struct {
+      TABLE *table;
+    } table_sample;
     struct {
       TABLE *table;
       int idx;
@@ -1237,6 +1249,15 @@ inline AccessPath *NewTableScanAccessPath(THD *thd, TABLE *table,
   path->type = AccessPath::TABLE_SCAN;
   path->count_examined_rows = count_examined_rows;
   path->table_scan().table = table;
+  return path;
+}
+
+inline AccessPath *NewTableSampleAccessPath(THD *thd, TABLE *table,
+                                            bool count_examined_rows) {
+  AccessPath *path = new (thd->mem_root) AccessPath;
+  path->type = AccessPath::TABLE_SAMPLE;
+  path->count_examined_rows = count_examined_rows;
+  path->table_sample().table = table;
   return path;
 }
 

@@ -214,6 +214,7 @@ void Hint_scanner::add_hint_token_digest() {
           case RESOURCE_GROUP_HINT:
           case SKIP_SCAN_HINT:
           case NO_SKIP_SCAN_HINT:
+          case SAMPLE_PERCENTAGE_HINT:
           case HASH_JOIN_HINT:
           case NO_HASH_JOIN_HINT:
           case INDEX_HINT:

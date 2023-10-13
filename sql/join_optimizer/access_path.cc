@@ -43,6 +43,7 @@
 #include "sql/join_optimizer/relational_expression.h"
 #include "sql/join_optimizer/walk_access_paths.h"
 #include "sql/mem_root_array.h"
+#include "sql/opt_hints_ext.h"
 #include "sql/range_optimizer/geometry_index_range_scan.h"
 #include "sql/range_optimizer/group_index_skip_scan.h"
 #include "sql/range_optimizer/group_index_skip_scan_plan.h"
@@ -163,6 +164,8 @@ TABLE *GetBasicTable(const AccessPath *path) {
     // Basic access paths (those with no children, at least nominally).
     case AccessPath::TABLE_SCAN:
       return path->table_scan().table;
+    case AccessPath::TABLE_SAMPLE:
+      return path->table_sample().table;
     case AccessPath::INDEX_SCAN:
       return path->index_scan().table;
     case AccessPath::REF:
@@ -256,6 +259,7 @@ Mem_root_array<TABLE *> CollectTables(THD *thd, AccessPath *root_path) {
 bool ShouldEnableBatchMode(AccessPath *path) {
   switch (path->type) {
     case AccessPath::TABLE_SCAN:
+    case AccessPath::TABLE_SAMPLE:
     case AccessPath::INDEX_SCAN:
     case AccessPath::REF:
     case AccessPath::REF_OR_NULL:
@@ -399,6 +403,14 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         const auto &param = path->table_scan();
         iterator = NewIterator<TableScanIterator>(
             thd, mem_root, param.table, path->num_output_rows(), examined_rows);
+        break;
+      }
+      case AccessPath::TABLE_SAMPLE: {
+        DBUG_PRINT("info", ("using TableSampleIterator"));
+        const auto &param = path->table_sample();
+        iterator = NewIterator<TableSampleIterator>(
+            thd, mem_root, param.table, path->num_output_rows(), examined_rows,
+            thd->lex->opt_hints_global->sample_hint->sample_pct());
         break;
       }
       case AccessPath::INDEX_SCAN: {
