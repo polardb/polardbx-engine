@@ -1,0 +1,482 @@
+
+## Test PolarXRPC rpc basic behavior
+
+--let $TEMP_FILE = polarx_rpc_physical_backfill
+
+--source include/polarx_rpc_preamble.inc
+--source include/polarx_rpc_create_user.inc
+## Test starts here
+--write_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+
+## do sth with sql in auto commit session
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+create schema xtest;
+use xtest;
+create table mytable (pk int primary key auto_increment, data varchar(100));
+create table mypart (pk int primary key auto_increment, data varchar(100)) partition by key(pk) partitions 2;
+
+insert into mytable values (NULL, 'one');
+insert into mytable values (NULL, 'two');
+insert into mytable values (NULL, 'three');
+insert into mytable values (NULL, '4444444');
+insert into mytable values (NULL, '5555555');
+insert into mytable(data) select data from mytable;
+insert into mytable(data) select data from mytable;
+insert into mytable(data) select data from mytable;
+insert into mytable(data) select data from mytable;
+insert into mypart(data) select data from mytable;
+-->endsql
+
+## do sth with PolarXRPC_rpc msg
+
+## switch Session ID to 1
+-->switchsid 1
+
+## first start new session
+PolarXRPC.Session.NewSession {
+}
+## expect PolarXRPC.Ok
+-->recvok
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "flush tables mytable for export"
+  schema_name: "xtest"
+}
+
+## expect PolarXRPC.Sql.StmtExecuteOk
+-->recvresult
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable1"
+        partitioned: 0
+    }
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+    }
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.PhysicalBackfill.GetFileInfoOperator
+-->recvtype PolarXRPC.PhysicalBackfill.GetFileInfoOperator
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+                directory: "./xtest/mytable.ibd11"
+                file_name: "./xtest/mytable.ibd11"
+                partition_name: ""
+                }
+    }
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+                directory: "./xtest/mytable.ibd"
+                file_name: "./xtest/mytable.ibd"
+                partition_name: ""
+                }
+    }
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.PhysicalBackfill.GetFileInfoOperator
+-->recvtype PolarXRPC.PhysicalBackfill.GetFileInfoOperator
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mypart"
+        partitioned: 1
+    }
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mypart"
+        partitioned: 1
+        physical_partition_name: "p1"
+        physical_partition_name: "p20"
+    }
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mypart"
+        partitioned: 1
+        physical_partition_name: "p0"
+        physical_partition_name: "p1"
+    }
+    operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+## expect PolarXRPC.PhysicalBackfill.GetFileInfoOperator
+-->recvtype PolarXRPC.PhysicalBackfill.GetFileInfoOperator
+
+PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+    file_info: {
+        directory: "./xtest/mytable.ibd1"
+        file_name: "./xtest/mytable.ibd1"
+        partition_name: ""
+        }
+    buffer_len:1024
+    offset:100
+    operator_type: GET_DATA_FROM_SRC_IBD
+}
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+
+PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+    file_info: {
+        directory: "./xtest/mytable.ibd"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        }
+    buffer_len:1024
+    offset:100
+    operator_type: GET_DATA_FROM_SRC_IBD
+}
+## expect PolarXRPC.PhysicalBackfill.TransferFileDataOperator
+-->recvtype PolarXRPC.PhysicalBackfill.TransferFileDataOperator
+
+PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+    file_info: {
+        directory: "./xtest1/mytable.ibd1"
+        file_name: "./xtest1/mytable.ibd1"
+        partition_name: ""
+        }
+    buffer_len:10
+    buffer:"1234567890"
+    offset:100
+    operator_type: PUT_DATA_TO_TAR_IBD
+}
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+    file_info: {
+        directory: "./xtest/mytable.ibd_1"
+        file_name: "./xtest/mytable.ibd_1"
+        partition_name: ""
+        }
+    buffer_len:10
+    buffer:"1234567890"
+    offset:100
+    operator_type: PUT_DATA_TO_TAR_IBD
+}
+## expect PolarXRPC.PhysicalBackfill.TransferFileDataOperator
+-->recvtype PolarXRPC.PhysicalBackfill.TransferFileDataOperator
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.ibd"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        data_size: 12345678
+        }
+    }
+    operator_type: FALLOCATE_IBD
+}
+## expect PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+-->recvtype PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.ibd_2"
+        file_name: "./xtest/mytable.ibd_2"
+        partition_name: ""
+        data_size: 12345678
+        },
+        file_info: {
+        directory: "./xtest/mytable.ibd_2"
+        file_name: "./xtest/mytable.ibd_2"
+        partition_name: ""
+        data_size: 12345678
+        }
+    }
+    operator_type: FALLOCATE_IBD
+}
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest1/mytable.ibd_2"
+        file_name: "./xtest1/mytable.ibd_2"
+        partition_name: ""
+        data_size: 12345678
+        }
+    }
+    operator_type: FALLOCATE_IBD
+}
+
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.ibd_2"
+        file_name: "./xtest/mytable.ibd_2"
+        partition_name: ""
+        data_size: 12345678
+        }
+    }
+    operator_type: FALLOCATE_IBD
+}
+
+## expect PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+-->recvtype PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: ""
+        table_name: ""
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.ibd_2"
+        file_name: ""
+        partition_name: ""
+        temp_file:1
+        }
+    }
+    operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+-->recvtype PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: ""
+        table_name: ""
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.ibd_1"
+        file_name: ""
+        partition_name: ""
+        temp_file:1
+        }
+    }
+    operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+-->recvtype PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.cfg"
+        file_name: "./xtest/mytable.cfg"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.cfg.TEMPFILE"
+        file_name: "./xtest/mytable.cfg"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.ibd"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.ibd.TEMPFILE"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        }
+    }
+    operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+-->recvtype PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: ""
+        table_name: ""
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.cfg.TEMPFILE"
+        file_name: ""
+        partition_name: ""
+        temp_file:1
+        }
+    }
+    operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+-->recvtype PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: ""
+        table_name: ""
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.ibd.TEMPFILE"
+        file_name: ""
+        partition_name: ""
+        temp_file:1
+        }
+    }
+    operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+-->recvtype PolarXRPC.PhysicalBackfill.FileManageOperatorResponse
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.cfg1"
+        file_name: "./xtest/mytable.cfg"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.cfg.TEMPFILE"
+        file_name: "./xtest/mytable.cfg"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.ibd1"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.ibd.TEMPFILE"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        }
+    }
+    operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.cfg"
+        file_name: "./xtest/mytable.cfg"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.cfg.TEMPFILE"
+        file_name: "./xtest/mytable.cfg"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest/mytable.ibd"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        }
+    }
+    operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+PolarXRPC.PhysicalBackfill.FileManageOperator {
+    table_info: {
+        table_schema: "xtest"
+        table_name: "mytable"
+        partitioned: 0
+        file_info: {
+        directory: "./xtest/mytable.ibd"
+        file_name: "./xtest/mytable.ibd"
+        partition_name: ""
+        },
+        file_info: {
+        directory: "./xtest_2/mytable.ibd"
+        file_name: "./xtest_2/mytable.ibd"
+        partition_name: ""
+        }
+    }
+    operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+}
+## expect PolarXRPC.Error
+-->recvtype PolarXRPC.Error
+
+## close session.
+PolarXRPC.Session.Close {
+}
+## expect PolarXRPC.Ok
+-->recvok
+
+## switch back to auto commit session and cleanup
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+-->endsql
+
+EOF
+
+--exec $POLARX_RPC_TEST -upolarx_root --password='' --file=$MYSQL_TMP_DIR/$TEMP_FILE.tmp 2>&1
+
+## Cleanup
+--remove_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+--source include/polarx_rpc_drop_user.inc

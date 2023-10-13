@@ -74,8 +74,12 @@ polarx_rpc::err_t Physical_backfill::check_file_existence(
                    table_info.physical_partition_name(i).c_str(),
                    table_info.physical_partition_name(i).size());
           }
+#ifdef MYSQL8
+          full_file_name = Fil_path::make("", norm_name, IBD, false);
+#else
           fil_make_filepath(NULL, norm_name, false, full_name_ptr);
           full_file_name = full_name_ptr.get();
+#endif
           if (full_file_name == NULL) {
             log_exec_error(
                 "ER_X_CAN_NOT_ALLOCATE_MEMORY can not allocate memory");
@@ -300,8 +304,11 @@ polarx_rpc::err_t Physical_backfill::pre_allocate(
 #if !defined(NO_FALLOCATE) && defined(UNIV_LINUX)
         uint64 size = file_info.data_size();
         /* This is required by FusionIO HW/Firmware */
-        int ret = MyFSHelper::fallocate(to_file, 0, 0, size);
-
+#ifdef MYSQL8
+          int ret = fallocate(file_desc_info.file, 0, 0, size);
+#else
+          int ret = MyFSHelper::fallocate(file_desc_info.file, 0, 0, size);
+#endif
         if (ret != 0) {
 
           log_exec_error(
@@ -461,6 +468,7 @@ void Physical_backfill::normalize_table_name_low(char *norm_name,
   }
 }
 
+#ifndef MYSQL8
 void Physical_backfill::fil_make_filepath(const char *path, const char *name,
                                           bool trim_name,
                                           std::unique_ptr<char[]> &output) {
@@ -474,11 +482,7 @@ void Physical_backfill::fil_make_filepath(const char *path, const char *name,
   LIKELY(!trim_name || (path != NULL && name != NULL));
 
   if (path == NULL) {
-#ifdef MYSQL8
-    // TODO fixme
-#else
     path = fil_path_to_mysql_datadir;
-#endif
   }
 
   unsigned long int len = 0; /* current length */
@@ -554,6 +558,7 @@ void Physical_backfill::fil_make_filepath(const char *path, const char *name,
   }
   output = std::move(full_name_ptr);
 }
+#endif
 
 // the code is copy from my_copy.c
 int Physical_backfill::my_copy_interrutable(const char *from, const char *to,

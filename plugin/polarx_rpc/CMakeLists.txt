@@ -25,6 +25,8 @@ INCLUDE(${MYSQL_CMAKE_SCRIPT_DIR}/compile_flags.cmake)
 INCLUDE_DIRECTORIES(${PROTOBUF_INCLUDE_DIRS})
 INCLUDE(polarx_rpc_protobuf.cmake)
 
+INCLUDE(${CMAKE_SOURCE_DIR}/storage/innobase/innodb.cmake)
+
 IF (NOT PROTOBUF_FOUND)
   MESSAGE(WARNING "Disabling polarx_rpc plugin.")
 ELSE ()

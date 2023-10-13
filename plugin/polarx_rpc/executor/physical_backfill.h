@@ -20,15 +20,13 @@
 #include "../utility/error.h"
 #include "coders/command_delegate.h"
 #ifdef MYSQL8
-// TODO fixme
+#include "storage/innobase/include/fil0fil.h"
 #else
 #include "myfs_helper.h"
 #endif
 #include "../global_defines.h"
 
-#ifdef MYSQL8
-// TODO fixme
-#else
+#ifndef MYSQL8
 extern const char *fil_path_to_mysql_datadir;
 #endif
 namespace rpc_executor {
@@ -77,10 +75,10 @@ public:
   delete_file(const PolarXRPC::PhysicalBackfill::FileManageOperator &msg);
 
   void normalize_table_name_low(char *norm_name, const char *name);
-
+#ifndef MYSQL8
   void fil_make_filepath(const char *path, const char *name, bool trim_name,
                          std::unique_ptr<char[]> &output);
-
+#endif
   int my_copy_interrutable(const char *from, const char *to, myf MyFlags,
                            MYSQL_THD thd);
 };
@@ -97,8 +95,7 @@ inline void file_status(const char *path, bool *exists) {
   struct stat stat_info;
 
 #ifdef MYSQL8
-  // TODO fixme
-  int ret = 1;
+  int ret = stat(path, &stat_info);
 #else
   int ret = MyFSHelper::stat(path, &stat_info);
 #endif
