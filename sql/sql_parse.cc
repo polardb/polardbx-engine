@@ -1160,7 +1160,9 @@ void init_sql_command_flags(void) {
   sql_command_flags[SQLCOM_SET_PASSWORD] |= CF_REQUIRE_ACL_CACHE;
 
   /* Native package proc flags */
-  sql_command_flags[SQLCOM_ADMIN_PROC] = CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_ADMIN_PROC] =
+      CF_AUTO_COMMIT_TRANS | CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_TRANS_PROC] |= CF_ALLOW_PROTOCOL_PLUGIN;
 }
 
 
