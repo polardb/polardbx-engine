@@ -1,0 +1,99 @@
+call mtr.add_suppression("Unsafe statement written to the binary log");
+drop table if exists t1,t2;
+create table t1(id int, col1 varchar(100))engine =innodb;
+create table t2(id int, col1 varchar(100))engine =innodb;
+insert into t1 values(1, 'galaxysql1');
+insert into t2 values(1, 'galaxysql1');
+begin;
+call dbms_trans.returning("", "update t1 set col1='galaxysql2' where id = 1");
+select * from t1;
+id	col1
+1	galaxysql2
+commit;
+begin;
+call dbms_trans.returning("*", "update t1 set col1='galaxysql3' where id = 1");
+id	col1
+1	galaxysql3
+call dbms_trans.returning("*", "delete from t1 where id = 1");
+id	col1
+1	galaxysql3
+rollback;
+select * from t1;
+id	col1
+1	galaxysql2
+begin;
+call dbms_trans.returning("*", "update t1 , t2 set t1.col1=t2.col1 where t1.id = t2.id");
+ERROR HY000: Statement didn't support RETURNING clause
+commit;
+call dbms_trans.returning("*", "select * from t1");
+ERROR HY000: Statement didn't support RETURNING clause
+call dbms_trans.returning("*", "uppppdate t1 seet");
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'uppppdate t1 seet' at line 1
+call dbms_trans.returning("*", "update t1 set col5='xx'");
+ERROR 42S22: Unknown column 'col5' in 'field list'
+call dbms_trans.returning("xxxx,xxx", "update t1 set col1 = 'xx'");
+ERROR 42S22: Unknown column 'xxxx' in 'field list'
+call dbms_trans.returning("xxxx,xxx", "delete from t1");
+ERROR 42S22: Unknown column 'xxxx' in 'field list'
+call dbms_trans.returning("xxxx,xxx", "insert into t1 values(10, 'galaxysql10')");
+ERROR 42S22: Unknown column 'xxxx' in 'field list'
+create table t3(id int primary key auto_increment,  col1 int default 1, col2
+timestamp default '2019-01-01 00:00:01');
+call dbms_trans.returning("*", "insert into t3(id)  values(NULL)");
+id	col1	col2
+1	1	2019-01-01 00:00:01
+call dbms_trans.returning("*", "insert into t3(id)  values(NULL), (NULL)");
+id	col1	col2
+2	1	2019-01-01 00:00:01
+3	1	2019-01-01 00:00:01
+call dbms_trans.returning("", "insert into t3(id)  values(NULL)");
+commit;
+select * from t3;
+id	col1	col2
+1	1	2019-01-01 00:00:01
+2	1	2019-01-01 00:00:01
+3	1	2019-01-01 00:00:01
+4	1	2019-01-01 00:00:01
+call dbms_trans.returning("*", "insert into t3 select * from t3");
+ERROR HY000: Statement didn't support RETURNING clause
+call dbms_trans.returning("*", "explain select * from t1");
+ERROR HY000: Statement didn't support RETURNING clause
+call dbms_trans.returning("*", "explain insert into t3(id)  values(NULL)");
+ERROR HY000: Statement didn't support RETURNING clause
+call dbms_trans.returning("*", "explain update t1 set col1='galaxysql3' where id = 1");
+ERROR HY000: Statement didn't support RETURNING clause
+create table m_1(id1 int, col1 int);
+create table m_2(id2 int, col2 int);
+insert into m_1 values(1, 1);
+insert into m_2 values(1, 2);
+create view v_1 as select * from m_1, m_2 where id1 = id2;
+call dbms_trans.returning("*", "update v_1 set col1 = 10");
+ERROR HY000: Statement didn't support RETURNING clause
+call dbms_trans.returning("*", "delete m_1, m_2 from m_1 inner join m_2");
+ERROR HY000: Statement didn't support RETURNING clause
+CREATE TABLE table_a (id int, value int);
+CREATE TABLE table_b (id int, ta_id int, value int);
+INSERT INTO table_a VALUES (1, 10);
+INSERT INTO table_a VALUES (2, 20);
+INSERT INTO table_a VALUES (3, 30);
+INSERT INTO table_b VALUES (1, 1, 100);
+INSERT INTO table_b VALUES (2, 1, 200);
+INSERT INTO table_b VALUES (3, 2, 300);
+INSERT INTO table_b VALUES (4, 2, 400);
+CREATE VIEW v AS
+SELECT      a.id a_id, b.id b_id, b.ta_id, a.value v1, b.value v2
+FROM    table_a a
+INNER JOIN  table_b b ON (b.ta_id = a.id);
+call dbms_trans.returning("*", "INSERT INTO v (a_id, v1) VALUES (3, 30)");
+ERROR HY000: Statement didn't support RETURNING clause
+call dbms_trans.returning("*", "INSERT INTO v (b_id, ta_id, v2) VALUES (5, 3, 500)");
+ERROR HY000: Statement didn't support RETURNING clause
+drop table m_1;
+drop table m_2;
+drop view v_1;
+drop table table_a;
+drop table table_b;
+drop view v;
+drop table t1;
+drop table t2;
+drop table t3;

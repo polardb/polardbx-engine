@@ -54,11 +54,11 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_grant, check_access
 #include "sql/auth/sql_guard.h"
-#include "sql/binlog.h"            // mysql_bin_log
-#include "sql/debug_sync.h"        // DEBUG_SYNC
-#include "sql/derror.h"            // ER_THD
-#include "sql/field.h"             // Field
-#include "sql/filesort.h"          // Filesort
+#include "sql/binlog.h"      // mysql_bin_log
+#include "sql/debug_sync.h"  // DEBUG_SYNC
+#include "sql/derror.h"      // ER_THD
+#include "sql/field.h"       // Field
+#include "sql/filesort.h"    // Filesort
 #include "sql/handler.h"
 #include "sql/item.h"            // Item
 #include "sql/item_json_func.h"  // Item_json_func
@@ -112,6 +112,7 @@
 #include "sql/table_trigger_dispatcher.h"  // Table_trigger_dispatcher
 #include "sql/temp_table_param.h"
 #include "sql/thd_raii.h"
+#include "sql/trans_proc/returning_parse.h"
 #include "sql/transaction_info.h"
 #include "sql/trigger_chain.h"
 #include "sql/trigger_def.h"
@@ -614,6 +615,12 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
 
   if (table->setup_partial_update()) return true; /* purecov: inspected */
 
+  /* Initialize returning statement */
+  im::Update_returning_statement returning_stmt(thd);
+  /* Setup returning fields and prepare the result set*/
+  returning_stmt.setup(thd, const_cast<Query_block *>(query_block));
+  if (thd->is_error()) return true;
+
   ha_rows updated_rows = 0;
   ha_rows found_rows = 0;
 
@@ -1010,6 +1017,12 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
         }
       }
 
+      /* Send data if it is returning clause */
+      if (!error && returning_stmt.send_data(thd)) {
+        error = 1;
+        break;
+      }
+
       if (!error && has_after_triggers &&
           table->triggers->process_triggers(thd, TRG_EVENT_UPDATE,
                                             TRG_ACTION_AFTER, true)) {
@@ -1164,11 +1177,15 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
     snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
-    my_ok(thd,
-          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-              ? found_rows
-              : updated_rows,
-          id, buff);
+    /* Send eof if it is returning clause */
+    if (returning_stmt.is_returning())
+      returning_stmt.send_eof(thd);
+    else
+      my_ok(thd,
+            thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                ? found_rows
+                : updated_rows,
+            id, buff);
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
@@ -1571,6 +1588,11 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
     // Identify the single table to be updated
     single_table_updated = table_list->updatable_base_table();
   } else {
+    /* Return error if updating multitable tables */
+    if (thd->get_lex_returning()->is_returning_call()) {
+      my_error(ER_NOT_SUPPORT_RETURNING_CLAUSE, MYF(0));
+      return true;
+    }
     // At this point the update is known to be a multi-table operation.
     // Join buffering and hash join cannot be used as the update operations
     // assume nested loop join (see logic in safe_update_on_fly()).

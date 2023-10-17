@@ -10058,6 +10058,9 @@ ER_RESERVED_USER_OR_PRIVS
 ER_LOCK_INSTANCE_REQUIRE_READ_ONLY
   eng "Lock instance %-.64s require read only or super read only"
 
+ER_NOT_SUPPORT_RETURNING_CLAUSE
+  eng "Statement didn't support RETURNING clause"
+
 #
 #  End of RDS error message.
 #

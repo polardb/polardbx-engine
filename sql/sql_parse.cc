@@ -180,6 +180,7 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "violite.h"
+#include "sql/trans_proc/returning_parse.h"
 
 #ifdef WITH_LOCK_ORDER
 #include "sql/debug_lock_order.h"
@@ -3221,6 +3222,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
       return -1;
     }
   } /* endif unlikely slave */
+
+  /* Deny returning clause if it is not supported */
+  if (im::deny_returning_clause_by_command(thd, lex)) return -1;
 
   thd->status_var.com_stat[lex->sql_command]++;
 

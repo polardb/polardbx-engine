@@ -30,6 +30,7 @@
 #include "sql/package/proc.h"
 #include "sql/sp_head.h"
 #include "sql/tso/tso_proc.h"
+#include "sql/trans_proc/returning.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -135,6 +136,8 @@ void package_context_init() {
 
   /* dbms_xa.Xa_proc_advance_gcn_no_flush() */
   register_package<Proc, Xa_proc_advance_gcn_no_flush>(XA_PROC_SCHEMA);
+  /* dbms_trans.returning() */
+  register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
 }
 
 } /* namespace im */

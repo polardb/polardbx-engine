@@ -88,6 +88,7 @@
 #include "sql/transaction_info.h"
 #include "sql/trigger_def.h"
 #include "sql/uniques.h"  // Unique
+#include "sql/trans_proc/returning_parse.h"
 
 class COND_EQUAL;
 class Item_exists_subselect;
@@ -303,6 +304,13 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
   */
   if (lex->is_ignore()) table->file->ha_extra(HA_EXTRA_IGNORE_DUP_KEY);
 
+  /* Initialize returning statement */
+  im::Update_returning_statement returning_stmt(thd);
+  /* Setup returning fields and prepare the result set*/
+  returning_stmt.setup(thd, const_cast<Query_block *>(query_block));
+  bool delete_all_rows = false;
+  if(thd->is_error()) return true;
+
   /*
     Test if the user wants to delete all rows and deletion doesn't have
     any side-effects (because of triggers), so we can use optimized
@@ -324,6 +332,8 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
         thd->is_current_stmt_binlog_disabled()) &&    // no binlog for this
                                                       // command
        !has_delete_triggers)) {
+    /* Mark we are deleting all rows */
+    delete_all_rows = true;
     /* Update the table->file->stats.records number */
     table->file->info(HA_STATUS_VARIABLE | HA_STATUS_NO_LOCK);
     ha_rows const maybe_deleted = table->file->stats.records;
@@ -613,7 +623,11 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
         error = 1;
         break;
       }
-
+      /* Send data if it is returning clause */
+      if (returning_stmt.send_data(thd)) {
+        error = 1;
+        break;
+      }
       if (!--limit && using_limit) {
         error = -1;
         break;
@@ -678,7 +692,13 @@ cleanup:
   assert(transactional_table || deleted_rows == 0 ||
          thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT));
   if (error < 0) {
-    my_ok(thd, deleted_rows);
+    /* Send eof if it is returning clause and set row count of deleting */
+    if (!delete_all_rows && returning_stmt.is_returning()) {
+      returning_stmt.send_eof(thd);
+      thd->set_row_count_func(deleted_rows);
+    }
+    else
+      my_ok(thd, deleted_rows);
     DBUG_PRINT("info", ("%ld records deleted", (long)deleted_rows));
   }
   return error > 0;
@@ -705,6 +725,13 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
   Opt_trace_array trace_steps(trace, "steps");
 
   apply_semijoin = multitable;
+
+  /* Return error if deleting from multitable tables */
+  if (multitable && thd->get_lex_returning()->is_returning_call()) {
+    my_error(ER_NOT_SUPPORT_RETURNING_CLAUSE, MYF(0));
+    //DBUG_RETURN(true);
+    return true;
+  }
 
   if (select->setup_tables(thd, table_list, false))
     return true; /* purecov: inspected */

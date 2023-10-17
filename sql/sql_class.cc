@@ -55,6 +55,8 @@
 #include "mysql/service_mysql_alloc.h"
 #include "mysys_err.h"  // EE_OUTOFMEMORY
 #include "pfs_statement_provider.h"
+#include "ppi/ppi_statement.h"
+#include "ppi/ppi_transaction.h"
 #include "rpl_source.h"  // unregister_slave
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/binlog.h"
@@ -85,6 +87,7 @@
 #include "sql/rpl_replica.h"  // rpl_master_erroneous_autoinc
 #include "sql/rpl_rli.h"      // Relay_log_info
 #include "sql/rpl_transaction_write_set_ctx.h"
+#include "sql/sequence_common.h"  // Sequence_last_value_hash
 #include "sql/sp_cache.h"         // sp_cache_clear
 #include "sql/sp_head.h"          // sp_head
 #include "sql/sql_audit.h"        // mysql_audit_free_thd
@@ -103,6 +106,7 @@
 #include "sql/table_cache.h"  // table_cache_manager
 #include "sql/tc_log.h"
 #include "sql/thr_malloc.h"
+#include "sql/trans_proc/common.h"
 #include "sql/transaction.h"  // trans_rollback
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
@@ -112,9 +116,6 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
-#include "ppi/ppi_statement.h"
-#include "ppi/ppi_transaction.h"
-#include "sql/sequence_common.h"  // Sequence_last_value_hash
 
 class Parse_tree_root;
 
@@ -732,7 +733,8 @@ THD::THD(bool enable_plugins)
       bind_parameter_values(nullptr),
       bind_parameter_values_count(0),
       owned_commit_gcn(),
-      owned_vision_gcn() {
+      owned_vision_gcn(),
+      lex_returning(new im::Lex_returning(false, mem_root)) {
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);
