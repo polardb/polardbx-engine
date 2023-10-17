@@ -113,6 +113,7 @@ VIEW_ROUTINE_USAGE
 VIEW_TABLE_USAGE
 columns_priv
 component
+concurrency_control
 db
 default_roles
 engine_cost
@@ -899,7 +900,7 @@ AND table_name not like 'ndb%' AND table_name COLLATE utf8_general_ci not like '
 GROUP BY TABLE_SCHEMA;
 TABLE_SCHEMA	count(*)
 information_schema	51
-mysql	35
+mysql	36
 create table t1 (i int, j int);
 create trigger trg1 before insert on t1 for each row
 begin

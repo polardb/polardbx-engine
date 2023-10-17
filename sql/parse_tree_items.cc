@@ -53,6 +53,8 @@
 #include "sql_string.h"
 #include "template_utils.h"
 
+#include "sql/ccl/ccl_hint_parse.h"
+
 /**
   Apply a truth test to given expression. Either the expression can implement
   it itself, or we create an Item node to implement it by wrapping the
@@ -168,6 +170,7 @@ bool PTI_comp_op::itemize(Parse_context *pc, Item **res) {
     return true;
 
   *res = (*boolfunc2creator)(false)->create(left, right);
+  if (*res != nullptr) im::fill_ccl_queue_field_cond(pc, *res, left, right);
   return *res == nullptr;
 }
 

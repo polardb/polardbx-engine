@@ -27,6 +27,11 @@
 #include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_internal_account.h"
 #include "sql/sql_common_ext.h"
+#include "sql/sys_vars.h"
+#include "my_config.h"
+#include "sql/ccl/ccl.h"
+#include "sql/ccl/ccl_bucket.h"
+#include "sql/ccl/ccl_interface.h"
 
 #include "my_config.h"
 #include "mysqld.h"
@@ -331,3 +336,36 @@ static Sys_var_bool Sys_gcn_write_event(
     READ_ONLY NON_PERSIST GLOBAL_VAR(opt_gcn_write_event),
     CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_ulong Sys_ccl_wait_timeout(
+    "ccl_wait_timeout", "Timeout in seconds to wait when concurrency control.",
+    GLOBAL_VAR(im::ccl_wait_timeout), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, LONG_TIMEOUT), DEFAULT(CCL_LONG_WAIT), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_ccl_max_waiting(
+    "ccl_max_waiting_count", "max waiting count in one ccl rule or bucket",
+    GLOBAL_VAR(im::ccl_max_waiting_count), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, INT_MAX64),
+    DEFAULT(CCL_DEFAULT_WAITING_COUNT), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static bool update_ccl_queue(sys_var *, THD *, enum_var_type) {
+  im::System_ccl::instance()->get_queue_buckets()->init_queue_buckets(
+      im::ccl_queue_bucket_count, im::ccl_queue_bucket_size,
+      im::Ccl_error_level::CCL_WARNING);
+  return false;
+}
+
+static Sys_var_ulong Sys_ccl_queue_size(
+    "ccl_queue_bucket_size", "The max concurrency allowed when use ccl queue",
+    GLOBAL_VAR(im::ccl_queue_bucket_size), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, CCL_QUEUE_BUCKET_SIZE_MAX),
+    DEFAULT(CCL_QUEUE_BUCKET_SIZE_DEFAULT), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(update_ccl_queue));
+
+static Sys_var_ulong Sys_ccl_queue_bucket(
+    "ccl_queue_bucket_count", "How many groups when use ccl queue",
+    GLOBAL_VAR(im::ccl_queue_bucket_count), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, CCL_QUEUE_BUCKET_COUNT_MAX),
+    DEFAULT(CCL_QUEUE_BUCKET_COUNT_DEFAULT), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(update_ccl_queue));

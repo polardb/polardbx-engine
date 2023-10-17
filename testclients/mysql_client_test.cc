@@ -52,6 +52,7 @@
 #include "mysql_client_fw.cc"
 #include "template_utils.h"
 
+#include <atomic>
 #include <list>
 #include <sstream>
 #include <string>
@@ -23490,6 +23491,190 @@ static void test_client_endpoint_ip()
   DBUG_VOID_RETURN;
 }
 
+#define T_NUM 5
+
+std::atomic_int max_waiting_error(0);
+
+struct ccl_st {
+  char m_exec_sql[100];
+  char m_init_sql[100];
+  uint m_error_no;
+};
+typedef struct ccl_st ccl_st;
+
+static void *ccl_thread(void *param) {
+  MYSQL *ccl_con;
+  ccl_st *s = (ccl_st *)param;
+  time_t begintime, endtime;
+  mysql_thread_init();
+  ccl_con = mysql_client_init(NULL);
+  DIE_UNLESS(ccl_con);
+  if (!mysql_real_connect(ccl_con, opt_host, opt_user, opt_password, NULL,
+                          opt_port, opt_unix_socket, 0)) {
+    myquery2(ccl_con, 1);
+  }
+  if (strlen(s->m_init_sql) != 0) {
+    if (mysql_query(ccl_con, s->m_init_sql)) myquery2(ccl_con, 1);
+  }
+  begintime = time(NULL);
+  if (mysql_query(ccl_con, s->m_exec_sql)) {
+    if (s->m_error_no != 0 && mysql_errno(ccl_con) == s->m_error_no) {
+      max_waiting_error++;
+      goto end;
+    }
+    myquery2(ccl_con, 1);
+  }
+
+  endtime = time(NULL);
+  DIE_UNLESS(endtime - begintime > 5);
+end:
+  mysql_close(ccl_con);
+  my_thread_end();
+  pthread_exit(0);
+}
+
+static void test_ccl() {
+  int rc = 0, i = 0;
+  char sql[1024];
+  pthread_t thd_id[T_NUM];
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  ccl_st exec_sql;
+  int rnum = 0, cnum = 0;
+  rc = mysql_query(mysql, "USE ccl_db");
+  if (rc) return;
+
+  sprintf(sql, "show status like 'threads_running'");
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+  result = mysql_store_result(mysql);
+  row = mysql_fetch_row(result);
+  rnum = atoi(row[1]);
+  mysql_free_result(result);
+
+  sprintf(sql, "select count(*) from information_schema.PROCESSLIST");
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+  result = mysql_store_result(mysql);
+  row = mysql_fetch_row(result);
+  cnum = atoi(row[0]);
+  mysql_free_result(result);
+
+  sprintf(exec_sql.m_exec_sql, "select id from ccl_db.t1 where id = 1");
+  sprintf(exec_sql.m_init_sql, "set debug='d,cond_wait_sleep_10'");
+  exec_sql.m_error_no = 0;
+  pthread_create(&thd_id[0], NULL, ccl_thread, (void *)&exec_sql);
+  sprintf(sql, "call dbms_ccl.show_ccl_rule()");
+  do {
+    rc = mysql_query(mysql, sql);
+    myquery2(mysql, rc);
+    result = mysql_store_result(mysql);
+    row = mysql_fetch_row(result);
+    DIE_UNLESS(row);
+    /* RUNNING column in show_ccl_rule()*/
+    if (atoi(row[8]) == 1) {
+      mysql_free_result(result);
+      break;
+    }
+    mysql_free_result(result);
+    sleep(1);
+  } while (1);
+  exec_sql.m_init_sql[0] = 0;
+  for (i = 1; i < T_NUM; i++) {
+    pthread_create(&thd_id[i], NULL, ccl_thread, &exec_sql);
+  }
+  sleep(2);
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+  result = mysql_store_result(mysql);
+  row = mysql_fetch_row(result);
+  DIE_UNLESS(row);
+  /* RUNNING column in show_ccl_rule()*/
+  DIE_UNLESS(atoi(row[8]) == 1);
+  /* WAITTING column in show_ccl_rule()*/
+  DIE_UNLESS(atoi(row[9]) == T_NUM - 1);
+  mysql_free_result(result);
+
+  sprintf(sql, "show status like 'threads_running'");
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+  result = mysql_store_result(mysql);
+  row = mysql_fetch_row(result);
+  DIE_UNLESS(atoi(row[1]) == rnum + 1);
+  mysql_free_result(result);
+
+  sprintf(sql, "select count(*) from information_schema.PROCESSLIST");
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+  result = mysql_store_result(mysql);
+  row = mysql_fetch_row(result);
+  DIE_UNLESS(atoi(row[0]) == cnum + T_NUM);
+  mysql_free_result(result);
+
+  for (i = 0; i < T_NUM; i++) {
+    pthread_join(thd_id[i], NULL);
+  }
+}
+
+static void test_ccl_max_waiting() {
+  int rc = 0, i = 0;
+  char sql[1024];
+  pthread_t thd_id[T_NUM];
+  MYSQL_RES *result;
+  MYSQL_ROW row;
+  ccl_st exec_sql;
+  rc = mysql_query(mysql, "USE ccl_db");
+  if (rc) return;
+
+  sprintf(sql, "set global ccl_max_waiting_count = 1");
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+
+  sprintf(exec_sql.m_exec_sql, "select id from ccl_db.t1 where id = 1");
+  sprintf(exec_sql.m_init_sql, "set debug='d,cond_wait_sleep_10'");
+  exec_sql.m_error_no = ER_CCL_MAX_WAITING_COUNT;
+  pthread_create(&thd_id[0], NULL, ccl_thread, (void *)&exec_sql);
+  sprintf(sql, "call dbms_ccl.show_ccl_rule()");
+  do {
+    rc = mysql_query(mysql, sql);
+    myquery2(mysql, rc);
+    result = mysql_store_result(mysql);
+    row = mysql_fetch_row(result);
+    DIE_UNLESS(row);
+    /* RUNNING column in show_ccl_rule()*/
+    if (atoi(row[8]) == 1) {
+      mysql_free_result(result);
+      break;
+    }
+    mysql_free_result(result);
+    sleep(1);
+  } while (1);
+  exec_sql.m_init_sql[0] = 0;
+  for (i = 1; i < T_NUM; i++) {
+    pthread_create(&thd_id[i], NULL, ccl_thread, &exec_sql);
+  }
+  sleep(2);
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+  result = mysql_store_result(mysql);
+  row = mysql_fetch_row(result);
+  DIE_UNLESS(row);
+  /* RUNNING column in show_ccl_rule()*/
+  DIE_UNLESS(atoi(row[8]) == 1);
+  /* WAITTING column in show_ccl_rule()*/
+  DIE_UNLESS(atoi(row[9]) == 1);
+  mysql_free_result(result);
+
+  for (i = 0; i < T_NUM; i++) {
+    pthread_join(thd_id[i], NULL);
+  }
+  DIE_UNLESS(T_NUM - 2 == max_waiting_error);
+
+  sprintf(sql, "set global ccl_max_waiting_count = 0");
+  rc = mysql_query(mysql, sql);
+  myquery2(mysql, rc);
+}
+
 static struct my_tests_st my_tests[] = {
     {"test_bug5194", test_bug5194},
     {"disable_query_logs", disable_query_logs},
@@ -23807,6 +23992,8 @@ static struct my_tests_st my_tests[] = {
     {"test_bug25584097", test_bug25584097},
     {"test_34556764", test_34556764},
     {"test_client_endpoint_ip", test_client_endpoint_ip},
+    {"test_ccl", test_ccl},
+    {"test_ccl_max_waiting", test_ccl_max_waiting},
     {nullptr, nullptr}};
 
 static struct my_tests_st *get_my_tests() { return my_tests; }

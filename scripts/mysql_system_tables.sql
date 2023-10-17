@@ -591,6 +591,22 @@ DROP PREPARE stmt;
 -- Remember for later if proxies_priv table already existed
 set @had_proxies_priv_table= @@warning_count != 0;
 
+-- Concurrency control system table
+SET @cmd = "CREATE TABLE IF NOT EXISTS concurrency_control (
+  Id bigint AUTO_INCREMENT NOT NULL,
+  Type enum('SELECT','UPDATE','INSERT','DELETE') COLLATE utf8mb3_general_ci DEFAULT 'SELECT' NOT NULL,
+  Schema_name varchar(64),
+  Table_name varchar(64),
+  Concurrency_count bigint NOT NULL,
+  Keywords text,
+  State enum('N','Y') COLLATE utf8mb3_general_ci DEFAULT 'Y' NOT NULL,
+  Ordered enum('N','Y') COLLATE utf8mb3_general_ci DEFAULT 'N' NOT NULL,
+  PRIMARY KEY Rule_id(id)
+) Engine=InnoDB STATS_PERSISTENT=0 CHARACTER SET=utf8mb3 COLLATE=utf8mb3_bin comment='Concurrency control' TABLESPACE=mysql";
+SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
 
 --
 -- Only create the ndb_binlog_index table if the server is built with ndb.

@@ -889,6 +889,7 @@ MySQL clients support the protocol:
 #include "plugin/performance_point/pps_server.h"
 #include "sql/sequence_common.h"
 #include "sys_vars_ext.h"
+#include "sql/ccl/ccl_interface.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -2696,6 +2697,8 @@ static void clean_up(bool print_message) {
   persisted_variables_cache.cleanup();
 
   udf_deinit_globals();
+
+  im::ccl_destroy();
   im::internal_account_ctx_destroy();
   im::internal_guard_strategy_shutdown();
 
@@ -7519,6 +7522,8 @@ int mysqld_main(int argc, char **argv)
 
   /* Initialize Package context. */
   im::package_context_init();
+  /* Init conconcurrency control system */
+  im::ccl_init();
 
   object_statistics_context_init();
 
@@ -8130,6 +8135,10 @@ int mysqld_main(int argc, char **argv)
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
 
   initialize_information_schema_acl();
+
+  im::ccl_rules_init(opt_initialize);
+  im::ccl_queue_buckets_init(im::ccl_queue_bucket_count,
+                             im::ccl_queue_bucket_size);
 
   im::internal_account_ctx_init();
 

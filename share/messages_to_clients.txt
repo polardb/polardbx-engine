@@ -10061,6 +10061,32 @@ ER_LOCK_INSTANCE_REQUIRE_READ_ONLY
 ER_NOT_SUPPORT_RETURNING_CLAUSE
   eng "Statement didn't support RETURNING clause"
 
+ER_CCL
+  eng "Concurrency control : %s"
+
+ER_CCL_TABLE_OP_FAILED
+  eng "The CCL table operation failed due to the following error from SE: errcode %d - %.256s"
+
+ER_CCL_INVALID_RULE
+  eng "Concurrency control rule %d is not valid when %s"
+
+ER_CCL_DUPLICATE_RULE
+  eng "Concurrency control rule %d is duplicate when %s"
+
+ER_CCL_RULE_NOT_FOUND
+  eng "Concurrency control rule %d is not found in %s"
+
+ER_CCL_UNAVAILABLE_SLOT
+  eng "Concurrency control rule %d cann't acquire available slot""
+
+ER_CCL_MAX_WAITING_COUNT
+  eng "Concurrency control waiting count exceed max waiting count"
+
+ER_CCL_REFUSE_QUERY
+  eng "Concurrency control refuse to execute query"
+
+ER_CCL_QUEUE_FIELD_NOT_FOUND
+  eng "Didn't found suitable field condition when apply ccl queue"
 #
 #  End of RDS error message.
 #

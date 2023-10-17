@@ -74,8 +74,14 @@ static const String_type
   PLS increase it if update system table structure.
 
   Historical mysqld_version_upgrade  version number published:
+
+  1. Published by Concurrency control system
+  ------------------------------------------
+  mysql.concurrency_control
 */
-static const uint EXTRA_MYSQLD_VERSION_UPGRADED = 0;
+static const uint EXTRA_MYSQLD_VERSION_UPGRADED = 1;
+
+
 
 static const unsigned int UNKNOWN_EXTRA_VERSION = -1;
 

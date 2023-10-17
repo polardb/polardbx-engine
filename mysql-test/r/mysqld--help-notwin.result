@@ -252,6 +252,14 @@ The following options may be given as the first argument:
  --caching-sha2-password-public-key-path=name 
  A fully qualified path to the public RSA key used for
  authentication.
+ --ccl-max-waiting-count=# 
+ max waiting count in one ccl rule or bucket
+ --ccl-queue-bucket-count=# 
+ How many groups when use ccl queue
+ --ccl-queue-bucket-size=# 
+ The max concurrency allowed when use ccl queue
+ --ccl-wait-timeout=# 
+ Timeout in seconds to wait when concurrency control.
  --character-set-client-handshake 
  Don't ignore client side character set value sent during
  handshake.
@@ -1781,6 +1789,10 @@ bulk-insert-buffer-size 8388608
 caching-sha2-password-digest-rounds 5000
 caching-sha2-password-private-key-path private_key.pem
 caching-sha2-password-public-key-path public_key.pem
+ccl-max-waiting-count 0
+ccl-queue-bucket-count 4
+ccl-queue-bucket-size 64
+ccl-wait-timeout 86400
 character-set-client-handshake TRUE
 character-set-filesystem binary
 character-set-server utf8mb4

@@ -583,7 +583,13 @@ enum enum_table_category {
     For table in this category we will skip row locks when SQL statement
     reads them.
   */
-  TABLE_CATEGORY_ACL_TABLE = 10
+  TABLE_CATEGORY_ACL_TABLE = 10,
+
+  /**
+    Concurrency_control.
+    Table didn't generate binlog.
+  */
+  TABLE_CATEGORY_CCL = 16
 };
 typedef enum enum_table_category TABLE_CATEGORY;
 

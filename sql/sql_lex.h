@@ -2388,6 +2388,9 @@ class Query_block : public Query_term {
 
   static const char
       *type_str[static_cast<int>(enum_explain_type::EXPLAIN_total)];
+
+ public:
+  List<Item> ccl_queue_field_cond_list;
 };
 
 inline bool Query_expression::is_union() const {

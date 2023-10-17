@@ -59,7 +59,7 @@ extern struct st_opt_hint_info opt_hint_info[];
            NULL if failed to create the object
 */
 
-static Opt_hints_global *get_global_hints(Parse_context *pc) {
+Opt_hints_global *get_global_hints(Parse_context *pc) {
   LEX *lex = pc->thd->lex;
 
   if (!lex->opt_hints_global)

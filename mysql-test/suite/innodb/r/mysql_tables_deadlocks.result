@@ -38,6 +38,10 @@ Preparing deadlock scenario for mysql.component
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
 ROLLBACK;
+Preparing deadlock scenario for mysql.concurrency_control
+ROLLBACK;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+ROLLBACK;
 Preparing deadlock scenario for mysql.engine_cost
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction

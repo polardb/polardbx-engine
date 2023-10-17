@@ -2155,7 +2155,8 @@ Query_block::Query_block(MEM_ROOT *mem_root, Item *where, Item *having)
       m_table_nest(mem_root),
       m_current_table_nest(&m_table_nest),
       m_where_cond(where),
-      m_having_cond(having) {}
+      m_having_cond(having),
+      ccl_queue_field_cond_list() {}
 
 /**
   Set the name resolution context for the specified query block.

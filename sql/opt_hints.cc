@@ -48,6 +48,8 @@
 #include "sql/sql_select.h"
 #include "sql/table.h"
 
+#include "sql/ccl/ccl_hint.h"
+
 struct MEM_ROOT;
 
 /**
@@ -85,6 +87,7 @@ struct st_opt_hint_info opt_hint_info[] = {
     {"GROUP_INDEX", false, false, false},
     {"ORDER_INDEX", false, false, false},
     {"DERIVED_CONDITION_PUSHDOWN", true, true, false},
+        {"CCL_QUEUE", false, false, true},
     {nullptr, false, false, false}};
 
 /**
@@ -197,6 +200,8 @@ PT_hint *Opt_hints_global::get_complex_hints(opt_hints_enum type) {
 
 void Opt_hints_global::print_irregular_hints(const THD *thd, String *str) {
   if (sys_var_hint) sys_var_hint->print(thd, str);
+
+  if (ccl_queue_hint) ccl_queue_hint->print(thd, str);
 }
 
 Opt_hints_qb::Opt_hints_qb(Opt_hints *opt_hints_arg, MEM_ROOT *mem_root_arg,

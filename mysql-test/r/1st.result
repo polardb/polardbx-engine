@@ -10,6 +10,7 @@ show tables in mysql where Tables_in_mysql != 'ndb_binlog_index';
 Tables_in_mysql
 columns_priv
 component
+concurrency_control
 db
 default_roles
 engine_cost

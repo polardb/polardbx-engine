@@ -31,6 +31,7 @@
 #include "sql/sp_head.h"
 #include "sql/tso/tso_proc.h"
 #include "sql/trans_proc/returning.h"
+#include "sql/ccl/ccl_proc.h"
 
 #ifndef DBUG_OFF
 #include "sql/package/proc_dummy.h"
@@ -77,8 +78,8 @@ static const T *find_package_element(const std::string &schema_name,
   return Package::instance()->lookup_element<T>(schema_name, element_name);
 }
 /* Template instantiation */
-template static const Proc *find_package_element(
-    const std::string &schema_name, const std::string &element_name);
+template const Proc *find_package_element(const std::string &schema_name,
+                                          const std::string &element_name);
 
 /**
   whether exist native proc by schema_name and proc_name
@@ -137,11 +138,27 @@ void package_context_init() {
 
   /* dbms_xa.Xa_proc_advance_gcn_no_flush() */
   register_package<Proc, Xa_proc_advance_gcn_no_flush>(XA_PROC_SCHEMA);
+
   /* dbms_trans.returning() */
   register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
 
  /* dbms_undo.get_undo_purge_status() */
   register_package<Proc, Proc_get_undo_purge_status>(PROC_UNDO_SCHEMA);
+
+  /* dbms_ccl.add_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_add>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.flush_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_flush>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.del_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_del>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.show_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_show>(CCL_PROC_SCHEMA);
+
+  /* dbms_ccl.flush_ccl_queue(...) */
+  register_package<Proc, Ccl_proc_flush_queue>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.show_ccl_queue(...) */
+  register_package<Proc, Ccl_proc_show_queue>(CCL_PROC_SCHEMA);
+
 }
 
 } /* namespace im */

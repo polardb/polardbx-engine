@@ -226,6 +226,8 @@ void Hint_scanner::add_hint_token_digest() {
           case NO_ORDER_INDEX_HINT:
           case DERIVED_CONDITION_PUSHDOWN_HINT:
           case NO_DERIVED_CONDITION_PUSHDOWN_HINT:
+          case CCL_QUEUE_FIELD_HINT:
+          case CCL_QUEUE_VALUE_HINT:
             break;
           default:
             assert(false);

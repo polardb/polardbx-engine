@@ -1,0 +1,187 @@
+SET @old_ccl_queue_bucket_count=@@global.ccl_queue_bucket_count;
+SET @old_ccl_queue_bucket_size=@@global.ccl_queue_bucket_size;
+create database db_queue;
+use db_queue;
+create table t(id int, col1 int, col2 varchar(100));
+show global variables like 'ccl_queue_bucket%';
+Variable_name	Value
+ccl_queue_bucket_count	4
+ccl_queue_bucket_size	64
+set global ccl_queue_bucket_count=1;
+set global ccl_queue_bucket_size=1;
+show global variables like 'ccl_queue_bucket%';
+Variable_name	Value
+ccl_queue_bucket_count	1
+ccl_queue_bucket_size	1
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	1	0	0	0
+call dbms_ccl.flush_ccl_queue();
+set global ccl_queue_bucket_count=default;
+set global ccl_queue_bucket_size=default;
+call dbms_ccl.flush_ccl_queue();
+insert /*+ ccl_queue_value(1) */  into t values(1, 1, 'xpchild');
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	1	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+select /*+ ccl_queue_value(1) */* from t;
+id	col1	col2
+1	1	xpchild
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	2	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_value(1) */ t set col1 = col1+1 where id = 1;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	3	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+delete /*+ ccl_queue_value(1) */ from t where id = 0;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	4	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_value("xpchild") */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	4	0	0
+3	QUEUE	64	1	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_value(1) ccl_queue_value("xpchild") */
+t set col1 = col1+1 where id =1;
+Warnings:
+Warning	3126	Hint CCL_QUEUE() is ignored as conflicting/duplicated
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	5	0	0
+3	QUEUE	64	1	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_value(NULL) */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	5	0	0
+3	QUEUE	64	1	0	0
+4	QUEUE	64	1	0	0
+explain update /*+ ccl_queue_value(1) ccl_queue_value("xpchild") */
+t set col1 = col1+1 where id =1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where
+Warnings:
+Warning	3126	Hint CCL_QUEUE() is ignored as conflicting/duplicated
+Note	1003	update /*+ CCL_QUEUE_VALUE(1) */ `db_queue`.`t` set `db_queue`.`t`.`col1` = (`db_queue`.`t`.`col1` + 1) where (`db_queue`.`t`.`id` = 1)
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	0	0	0
+2	QUEUE	64	6	0	0
+3	QUEUE	64	1	0	0
+4	QUEUE	64	1	0	0
+call dbms_ccl.flush_ccl_queue();
+insert /*+ ccl_queue_field(1) */  into t values(1, 1, 'xpchild');
+Warnings:
+Warning	1064	Optimizer hint syntax error near '1) */  into t values(1, 1, 'xpchild')' at line 1
+insert /*+ ccl_queue_field(NULL) */  into t values(1, 1, 'xpchild');
+Warnings:
+Warning	7540	Didn't found suitable field condition when apply ccl queue
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	1	0	0
+2	QUEUE	64	0	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	1	0	0
+2	QUEUE	64	1	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_field("ID") */ t  set col1 = col1+1 where id =1;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	1	0	0
+2	QUEUE	64	2	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_field("col1") */ t  set col1 = col1+1 where id =1;
+Warnings:
+Warning	7540	Didn't found suitable field condition when apply ccl queue
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	2	0	0
+2	QUEUE	64	2	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id+1 = 1;
+Warnings:
+Warning	7540	Didn't found suitable field condition when apply ccl queue
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	3	0	0
+2	QUEUE	64	2	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id = 1+1;
+Warnings:
+Warning	7540	Didn't found suitable field condition when apply ccl queue
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	4	0	0
+2	QUEUE	64	2	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_field("id") */ t  set col1 = col1+1 where id is NULL;
+Warnings:
+Warning	7540	Didn't found suitable field condition when apply ccl queue
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	5	0	0
+2	QUEUE	64	2	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+update /*+ ccl_queue_field("col1") */ t  set col1 = col1+1 where id =1 and col1 =1;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	5	0	0
+2	QUEUE	64	3	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+select /*+ ccl_queue_field("id") */ * from (select * from t where id = 1) b;
+id	col1	col2
+1	8	xpchild
+1	4	xpchild
+1	4	xpchild
+Warnings:
+Warning	7540	Didn't found suitable field condition when apply ccl queue
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	6	0	0
+2	QUEUE	64	3	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+explain update /*+ ccl_queue_field("col1") */ t  set col1 = col1+1 where id =1 and col1 =1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	t	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using where
+Warnings:
+Note	1003	update /*+ CCL_QUEUE_FIELD('col1') */ `db_queue`.`t` set `db_queue`.`t`.`col1` = (`db_queue`.`t`.`col1` + 1) where ((`db_queue`.`t`.`col1` = 1) and (`db_queue`.`t`.`id` = 1))
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	64	6	0	0
+2	QUEUE	64	4	0	0
+3	QUEUE	64	0	0	0
+4	QUEUE	64	0	0	0
+drop table t;
+drop database db_queue;
+SET @@global.ccl_queue_bucket_count = @old_ccl_queue_bucket_count;
+SET @@global.ccl_queue_bucket_size=@old_ccl_queue_bucket_size;

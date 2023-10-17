@@ -43,6 +43,10 @@
 #include "sql/sql_show.h"        // append_identifier
 #include "sql_string.h"          // String
 
+namespace im {
+class Ccl_queue_hint;
+}
+
 enum class Subquery_strategy : int;
 class Item;
 class JOIN;
@@ -84,6 +88,7 @@ enum opt_hints_enum {
   GROUP_INDEX_HINT_ENUM,
   ORDER_INDEX_HINT_ENUM,
   DERIVED_CONDITION_PUSHDOWN_HINT_ENUM,
+  CCL_QUEUE_HINT_ENUM,
   MAX_HINT_ENUM
 };
 
@@ -350,11 +355,13 @@ class Opt_hints_global : public Opt_hints {
  public:
   PT_hint_max_execution_time *max_exec_time;
   Sys_var_hint *sys_var_hint;
+  im::Ccl_queue_hint *ccl_queue_hint;
 
   Opt_hints_global(MEM_ROOT *mem_root_arg)
       : Opt_hints(nullptr, nullptr, mem_root_arg) {
     max_exec_time = nullptr;
     sys_var_hint = nullptr;
+    ccl_queue_hint = nullptr;
   }
 
   void append_name(const THD *, String *) override {}

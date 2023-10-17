@@ -181,13 +181,14 @@
 #include "thr_lock.h"
 #include "violite.h"
 #include "sql/trans_proc/returning_parse.h"
+#include "sql/ccl/ccl_interface.h"
 
 #ifdef WITH_LOCK_ORDER
 #include "sql/debug_lock_order.h"
 #endif /* WITH_LOCK_ORDER */
-
 #include "ppi/ppi_statement.h"
 #include "sql/xa/lizard_xa_trx.h"
+#include "sql/ccl/ccl.h"
 
 namespace resourcegroups {
 class Resource_group;
@@ -196,10 +197,6 @@ struct mysql_rwlock_t;
 
 namespace dd {
 class Schema;
-}  // namespace dd
-
-namespace dd {
-class Abstract_table;
 }  // namespace dd
 
 using std::max;
@@ -3319,6 +3316,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
   Disable_autocommit_guard autocommit_guard(
       sqlcom_needs_autocommit_off(lex) && !thd->is_plugin_fake_ddl() ? thd
                                                                      : nullptr);
+  im::Ccl_comply_wrapper ccl_comply(thd);
+  im::do_ccl_comply_queue_or_rule(thd, lex, all_tables);
+  if (thd->is_error()) goto error;
 
   /*
     Check if we are in a read-only transaction and we're trying to

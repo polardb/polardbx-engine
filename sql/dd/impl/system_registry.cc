@@ -254,6 +254,7 @@ void System_tables::add_remaining_dd_tables() {
   register_table("temp_user", system);
   register_table("tmp_user", system);
   register_table("user_backup", system);
+  register_table("concurrency_control", system);
 }
 
 void System_views::init() {
