@@ -111,12 +111,10 @@ struct slot_addr_t {
   /** Special fake address if didn't allocate txn undo */
   bool is_no_redo() const;
 
-  bool is_equal(space_id_t space_id_arg, page_no_t page_no_arg,
-                ulint offset_arg) {
-    if (space_id == space_id_arg && page_no == page_no_arg &&
-        offset == offset_arg)
-      return true;
-    return false;
+  bool equal_with(space_id_t space_id_arg, page_no_t page_no_arg,
+                  ulint offset_arg) {
+    return space_id == space_id_arg && page_no == page_no_arg &&
+           offset == offset_arg;
   }
 };
 
@@ -127,11 +125,8 @@ typedef ib_id_t slot_ptr_t;
 
 /** Compare function */
 inline bool operator==(const slot_addr_t &lhs, const slot_addr_t &rhs) {
-  if (lhs.offset == rhs.offset && lhs.page_no == rhs.page_no &&
-      lhs.space_id == rhs.space_id)
-    return true;
-
-  return false;
+  return (lhs.offset == rhs.offset && lhs.page_no == rhs.page_no &&
+          lhs.space_id == rhs.space_id);
 }
 
 /**
@@ -220,6 +215,8 @@ typedef struct undo_addr_t undo_addr_t;
 
 #define UBA_POS_STATE (UBA_POS_CSR + UBA_WIDTH_CSR)
 #define UBA_WIDTH_STATE 1
+
+#define UBA_MASK_STATE ((~(~0ULL << UBA_WIDTH_STATE)) << UBA_POS_STATE)
 
 /** Address, include [offset, page_no, space_id] */
 #define UBA_POS_ADDR 0
@@ -425,20 +422,18 @@ struct txn_lookup_t {
 namespace lizard {
 
 inline bool undo_ptr_is_active(undo_ptr_t undo_ptr) {
-  return !(bool)(undo_ptr >> UBA_POS_STATE);
-}
-
-inline void undo_ptr_set_commit(undo_ptr_t *undo_ptr) {
-  *undo_ptr |= (undo_ptr_t)1 << UBA_POS_STATE;
+  return !static_cast<bool>((undo_ptr & UBA_MASK_STATE) >> UBA_POS_STATE);
 }
 
 inline csr_t undo_ptr_get_csr(undo_ptr_t undo_ptr) {
   return static_cast<csr_t>((undo_ptr & UBA_MASK_CSR) >> UBA_POS_CSR);
 }
 
-inline void undo_ptr_set_csr(undo_ptr_t *undo_ptr, csr_t csr) {
+inline void undo_ptr_set_commit(undo_ptr_t *undo_ptr, csr_t csr) {
+  *undo_ptr |= ((undo_ptr_t)1 << UBA_POS_STATE);
+
   undo_ptr_t value = static_cast<undo_ptr_t>(csr);
-  *undo_ptr |= value << UBA_POS_CSR;
+  *undo_ptr |= (value << UBA_POS_CSR);
 }
 
 inline undo_ptr_t undo_ptr_get_addr(const undo_ptr_t undo_ptr) {

@@ -1418,8 +1418,8 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx){
       /** Only allocate log header, */
       undo->empty = true;
 
-      ut_ad(undo->slot_addr.is_equal(undo->space, undo->hdr_page_no,
-                                     undo->hdr_offset));
+      ut_ad(undo->slot_addr.equal_with(undo->space, undo->hdr_page_no,
+                                       undo->hdr_offset));
 
       trx->txn_desc.assemble_undo_ptr(undo->slot_addr);
 
@@ -2407,8 +2407,7 @@ already_commit:
   assert_commit_mark_allocated(txn_undo_hdr.image);
   txn_rec->scn = txn_undo_hdr.image.scn;
   txn_rec->gcn = txn_undo_hdr.image.gcn;
-  undo_ptr_set_commit(&txn_rec->undo_ptr);
-  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
+  undo_ptr_set_commit(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_COMMITTED);
   if (!have_mtr) mtr_commit(mtr);
@@ -2418,8 +2417,7 @@ undo_purged:
   assert_commit_mark_allocated(txn_undo_hdr.image);
   txn_rec->scn = txn_undo_hdr.image.scn;
   txn_rec->gcn = txn_undo_hdr.image.gcn;
-  undo_ptr_set_commit(&txn_rec->undo_ptr);
-  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
+  undo_ptr_set_commit(&txn_rec->undo_ptr, txn_undo_hdr.image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_PURGED);
   if (!have_mtr) mtr_commit(mtr);
@@ -2429,8 +2427,7 @@ undo_reuse:
   assert_commit_mark_allocated(txn_undo_hdr.prev_image);
   txn_rec->scn = txn_undo_hdr.prev_image.scn;
   txn_rec->gcn = txn_undo_hdr.prev_image.gcn;
-  undo_ptr_set_commit(&txn_rec->undo_ptr);
-  undo_ptr_set_csr(&txn_rec->undo_ptr, txn_undo_hdr.prev_image.csr);
+  undo_ptr_set_commit(&txn_rec->undo_ptr, txn_undo_hdr.prev_image.csr);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.prev_image,
                    txn_state_t::TXN_STATE_REUSE);
   if (!have_mtr) mtr_commit(mtr);
@@ -2442,8 +2439,7 @@ undo_corrupted:
   ut_a(opt_cleanout_safe_mode);
   txn_rec->scn = SCN_UNDO_CORRUPTED;
   txn_rec->gcn = GCN_UNDO_CORRUPTED;
-  undo_ptr_set_commit(&txn_rec->undo_ptr);
-  undo_ptr_set_csr(&txn_rec->undo_ptr, CSR_AUTOMATIC);
+  undo_ptr_set_commit(&txn_rec->undo_ptr, CSR_AUTOMATIC);
   txn_lookup_t_set(txn_lookup, txn_undo_hdr,
                    {SCN_UNDO_CORRUPTED, US_UNDO_CORRUPTED, GCN_UNDO_CORRUPTED,
                     CSR_AUTOMATIC},
@@ -2499,8 +2495,7 @@ bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
       };
       txn_rec->scn = SCN_UNDO_CORRUPTED;
       txn_rec->gcn = GCN_UNDO_CORRUPTED;
-      undo_ptr_set_commit(&txn_rec->undo_ptr);
-      undo_ptr_set_csr(&txn_rec->undo_ptr, CSR_AUTOMATIC);
+      undo_ptr_set_commit(&txn_rec->undo_ptr, CSR_AUTOMATIC);
       lizard_stats.txn_undo_lost_page_miss_when_safe.inc();
       txn_lookup_t_set(txn_lookup, txn_undo_hdr,
                        {SCN_UNDO_CORRUPTED, US_UNDO_CORRUPTED,

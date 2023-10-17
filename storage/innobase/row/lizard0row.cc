@@ -992,7 +992,6 @@ struct CommitCleanout {
 
       if (m_txn_rec.trx_id == trx_id) {
         if (undo_ptr_is_active(undo_ptr)) {
-          undo_ptr_set_commit(&undo_ptr);
           ut_a(undo_ptr_get_csr(undo_ptr) == CSR_AUTOMATIC);
           ut_a(undo_ptr_get_addr(m_txn_rec.undo_ptr) ==
                undo_ptr_get_addr(undo_ptr));

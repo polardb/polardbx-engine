@@ -189,8 +189,7 @@ commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   }
 #endif
 
-  undo_ptr_set_commit(&trx->txn_desc.undo_ptr);
-  undo_ptr_set_csr(&trx->txn_desc.undo_ptr, trx->txn_desc.cmmt.csr);
+  undo_ptr_set_commit(&trx->txn_desc.undo_ptr, trx->txn_desc.cmmt.csr);
 
   return cmmt;
 }

@@ -77,8 +77,7 @@ bool trx_search_tcn(txn_rec_t *txn_rec, btr_pcur_t *pcur,
     tcn = cont->search(txn_rec->trx_id);
 
     if (tcn.trx_id == txn_rec->trx_id) {
-      undo_ptr_set_commit(&txn_rec->undo_ptr);
-      undo_ptr_set_csr(&txn_rec->undo_ptr, tcn.csr);
+      undo_ptr_set_commit(&txn_rec->undo_ptr, tcn.csr);
       txn_rec->scn = tcn.scn;
       txn_rec->gcn = tcn.gcn;
 

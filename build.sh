@@ -269,14 +269,8 @@ else
   exit 1
 fi
 
-if [ x"$mach_type" = x"aarch64" ]; then # ARM64
-    CC=gcc
-    CXX=g++
-else # X86
-    CC=/opt/rh/devtoolset-11/root/usr/bin/gcc
-    CXX=/opt/rh/devtoolset-11/root/usr/bin/g++
-    source /opt/rh/devtoolset-11/enable
-fi
+CC=gcc
+CXX=g++
 
 # Update choosed version
 gcc_version=`$CC --version | awk 'NR==1 {print $3}'`
