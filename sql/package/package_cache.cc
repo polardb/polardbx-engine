@@ -148,8 +148,8 @@ void package_context_init() {
   /* dbms_trans.returning() */
   register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
 
- /* dbms_undo.get_undo_purge_status() */
-  register_package<Proc, Proc_get_undo_purge_status>(PROC_UNDO_SCHEMA);
+ /* dbms_undo.purge_status() */
+  register_package<Proc, Proc_purge_status>(PROC_UNDO_SCHEMA);
 
   /* dbms_ccl.add_ccl_rule(...) */
   register_package<Proc, Ccl_proc_add>(CCL_PROC_SCHEMA);

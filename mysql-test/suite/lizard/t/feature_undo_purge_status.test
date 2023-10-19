@@ -24,7 +24,7 @@ commit;
 
 sleep 1;
 --replace_column 1 # 2 # 3 # 8 #
-call dbms_undo.get_undo_purge_status();
+call dbms_undo.purge_status();
 
 --echo ###########################################
 --echo undo purge retained by time
@@ -38,7 +38,7 @@ update foo set id = 3 where id = 2;
 sleep 1;
 --replace_column 1 # 2 # 3 # 8 #
 --replace_regex /The undo has been retained for \d+/The undo has been retained for #/
-call dbms_undo.get_undo_purge_status();
+call dbms_undo.purge_status();
 
 --echo ###########################################
 --echo undo purge retained by space
@@ -52,14 +52,14 @@ update foo set id = 4 where id = 3;
 sleep 1;
 --replace_column 1 # 2 # 3 # 8 #
 --replace_regex /The current size of undo is \d+/The current size of undo is #/
-call dbms_undo.get_undo_purge_status();
+call dbms_undo.purge_status();
 
 set global INNODB_UNDO_SPACE_RESERVED_SIZE=1;
 set global INNODB_UNDO_SPACE_SUPREMUM_SIZE=10;
 
 sleep 1;
 --replace_column 1 # 2 # 3 # 8 #
-call dbms_undo.get_undo_purge_status();
+call dbms_undo.purge_status();
 
 --echo ###########################################
 --echo undo purge blocked by active vision
@@ -77,17 +77,13 @@ update foo set sec = 7 where id = 7;
 update foo set sec = 8 where id = 8;
 sleep 1;
 --replace_column 1 # 2 # 3 # 8 #
-call dbms_undo.get_undo_purge_status();
+call dbms_undo.purge_status();
 
 
 connection con1;
 commit;
 
 connection default;
-sleep 1;
---replace_column 1 # 2 # 3 # 8 #
-call dbms_undo.get_undo_purge_status();
-
 drop table foo;
 set global innodb_undo_retention = @saved_innodb_undo_retention;
 set global innodb_undo_space_reserved_size = @saved_innodb_undo_space_reserved_size;

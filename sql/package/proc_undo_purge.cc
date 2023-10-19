@@ -34,29 +34,23 @@ namespace im {
 
 const LEX_CSTRING PROC_UNDO_SCHEMA = {C_STRING_WITH_LEN("dbms_undo")};
 
-Proc *Proc_get_undo_purge_status::instance() {
-  static Proc_get_undo_purge_status *proc =
-      new Proc_get_undo_purge_status(key_memory_package);
+Proc *Proc_purge_status::instance() {
+  static Proc_purge_status *proc = new Proc_purge_status(key_memory_package);
 
   return proc;
 }
 
-Sql_cmd *Proc_get_undo_purge_status::evoke_cmd(
-    THD *thd, mem_root_deque<Item *> *list) const {
-  return new (thd->mem_root) Cmd_get_undo_purge_status(thd, list, this);
+Sql_cmd *Proc_purge_status::evoke_cmd(THD *thd,
+                                      mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_purge_status(thd, list, this);
 }
 
-bool Cmd_get_undo_purge_status::pc_execute(THD *) {
+bool Sql_cmd_purge_status::pc_execute(THD *) {
   bool error = false;
-  innodb_hton->ext.get_undo_purge_status(&m_used_size, &m_file_size,
-                                         &m_retained_time, &m_blocked_cause,
-                                         &m_blocked_utc);
-  innodb_hton->ext.get_undo_retention_config(
-      &m_retention_time, &m_reserved_size, &m_retention_size_limit);
   return error;
 }
 
-void Cmd_get_undo_purge_status::send_result(THD *thd, bool error) {
+void Sql_cmd_purge_status::send_result(THD *thd, bool error) {
   Protocol *protocol = thd->get_protocol();
 
   if (error) {
@@ -64,19 +58,22 @@ void Cmd_get_undo_purge_status::send_result(THD *thd, bool error) {
     return;
   }
 
+  Undo_purge_show_result result;
+  innodb_hton->ext.get_undo_purge_status(&result);
+
   if (m_proc->send_result_metadata(thd)) return;
 
   protocol->start_row();
-  protocol->store_longlong(m_used_size, true);
-  protocol->store_longlong(m_file_size, true);
-  protocol->store_longlong(m_retained_time, true);
-  protocol->store_longlong(m_retention_time, true);
-  protocol->store_longlong(m_reserved_size, true);
-  protocol->store_longlong(m_retention_size_limit, true);
-  protocol->store(&m_blocked_cause);
-  if (m_blocked_utc != 0) {
+  protocol->store_longlong(result.used_size, true);
+  protocol->store_longlong(result.file_size, true);
+  protocol->store_longlong(result.retained_time, true);
+  protocol->store_longlong(result.retention_time, true);
+  protocol->store_longlong(result.reserved_size, true);
+  protocol->store_longlong(result.retention_size_limit, true);
+  protocol->store(&result.blocked_cause);
+  if (result.blocked_utc != 0) {
     String utc_str;
-    utc_to_str(m_blocked_utc, &utc_str);
+    utc_to_str(result.blocked_utc, &utc_str);
     protocol->store(&utc_str);
   } else {
     protocol->store_null();
@@ -91,7 +88,7 @@ void Cmd_get_undo_purge_status::send_result(THD *thd, bool error) {
   A helper function to convert a timestamp (microseconds since epoch) to a
   string of the form YYYY-MM-DD HH:MM:SS.UUUUUU.
 */
-size_t Cmd_get_undo_purge_status::utc_to_str(ulonglong timestamp, String *s) {
+size_t Sql_cmd_purge_status::utc_to_str(ulonglong timestamp, String *s) {
   char buf[256];
   time_t seconds = (time_t)(timestamp / 1000000);
   int useconds = (int)(timestamp % 1000000);

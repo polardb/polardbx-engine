@@ -2713,7 +2713,7 @@ bool Undo_retention::purge_advise() {
   if (space_reserve > 0 && used_size < mb_to_pages(space_reserve)) {
     purge_sys->blocked_stat.retained_by_space(
         purge_blocked_cause_t::RETENTION_BY_SPACE, ut_time_system_us(),
-        used_size, space_reserve);
+        pages_to_mb(used_size), space_reserve);
     return true;
   }
 

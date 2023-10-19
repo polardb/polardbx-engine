@@ -32,11 +32,37 @@ namespace im {
 
 extern const LEX_CSTRING PROC_UNDO_SCHEMA;
 
-/* dbms_undo.get_undo_purge_status() */
-class Cmd_get_undo_purge_status : public Sql_cmd_admin_proc {
+/* Result structure for purge_status */
+typedef struct Undo_purge_show_result {
+  /* current info of undo */
+  ulong used_size;
+  ulong file_size;
+  ulong retained_time;
+  /* current undo retention config */
+  ulong reserved_size;
+  ulong retention_size_limit;
+  ulong retention_time;
+  /* last blocked reason of purge sys */
+  String blocked_cause;
+  ulong blocked_utc;
+
  public:
-  explicit Cmd_get_undo_purge_status(THD *thd, mem_root_deque<Item *> *list,
-                                     const Proc *proc)
+  Undo_purge_show_result() {
+    used_size = 0;
+    file_size = 0;
+    retained_time = 0;
+    reserved_size = 0;
+    retention_size_limit = 0;
+    retention_time = 0;
+    blocked_utc = 0;
+  }
+} Undo_purge_show_result;
+
+/* dbms_undo.purge_status() */
+class Sql_cmd_purge_status : public Sql_cmd_admin_proc {
+ public:
+  explicit Sql_cmd_purge_status(THD *thd, mem_root_deque<Item *> *list,
+                                const Proc *proc)
       : Sql_cmd_admin_proc(thd, list, proc) {}
 
   virtual bool pc_execute(THD *thd) override;
@@ -45,24 +71,11 @@ class Cmd_get_undo_purge_status : public Sql_cmd_admin_proc {
 
  private:
   size_t utc_to_str(ulonglong timestamp, String *s);
-
- private:
-  /* current info of undo */
-  uint64_t m_used_size;
-  uint64_t m_file_size;
-  uint64_t m_retained_time;
-  /* current undo retention config */
-  uint64_t m_reserved_size;
-  uint64_t m_retention_size_limit;
-  uint64_t m_retention_time;
-  /* last blocked reason of purge sys */
-  String m_blocked_cause;
-  uint64_t m_blocked_utc;
 };
 
-class Proc_get_undo_purge_status : public Proc {
+class Proc_purge_status : public Proc {
  public:
-  typedef Proc_get_undo_purge_status Sql_cmd_type;
+  typedef Proc_purge_status Sql_cmd_type;
 
   enum enum_column {
     COLUMN_USED_SIZE = 0,
@@ -77,7 +90,7 @@ class Proc_get_undo_purge_status : public Proc {
   };
 
  public:
-  explicit Proc_get_undo_purge_status(PSI_memory_key key) : Proc(key) {
+  explicit Proc_purge_status(PSI_memory_key key) : Proc(key) {
     m_result_type = Result_type::RESULT_SET;
 
     Column_element elements[COLUMN_LAST] = {
@@ -98,7 +111,7 @@ class Proc_get_undo_purge_status : public Proc {
     }
   }
 
-  virtual ~Proc_get_undo_purge_status() {}
+  virtual ~Proc_purge_status() {}
 
   static Proc *instance();
 
@@ -106,7 +119,7 @@ class Proc_get_undo_purge_status : public Proc {
                              mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
-    return std::string("get_undo_purge_status");
+    return std::string("purge_status");
   }
 
   virtual const std::string qname() const override {
