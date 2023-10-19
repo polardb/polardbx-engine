@@ -21,8 +21,8 @@ show create table __recycle_bin__.__innodb_165;
 Table	Create Table
 __innodb_165	CREATE TABLE `__innodb_165` (
   `c4` json DEFAULT NULL,
-  `c5` int(11) GENERATED ALWAYS AS (json_extract(`c4`,_utf8mb4'$.key_a')) STORED,
-  `c6` int(11) GENERATED ALWAYS AS (json_extract(`c4`,_utf8mb4'$.key_b')) VIRTUAL,
+  `c5` int GENERATED ALWAYS AS (json_extract(`c4`,_utf8mb4'$.key_a')) STORED,
+  `c6` int GENERATED ALWAYS AS (json_extract(`c4`,_utf8mb4'$.key_b')) VIRTUAL,
   `c7` point NOT NULL /*!80003 SRID 0 */,
   SPATIAL KEY `idx2` (`c7`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci

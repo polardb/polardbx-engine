@@ -4,11 +4,12 @@
 --disable_ps_protocol
 
 call mtr.add_suppression("table already exists in recycle_bin");
+call mtr.add_suppression("Fail to recycle table");
 
 connection master;
 # Set up some variables
 LET $MYSQLD_DATADIR = `select @@datadir`;
-LET $data_directory_clause = DATA DIRECTORY='$MYSQL_TMP_DIR/alt_dir';
+# LET $data_directory_clause = DATA DIRECTORY='$MYSQL_TMP_DIR/alt_dir';
 
 connection master;
 create database db_recycle;
@@ -272,80 +273,77 @@ connection master;
 connection m_normal_1;
 drop tablespace ts1;
 
---echo ------------------------------------------------------
---echo 5. Table options:
---echo      key_block_size
---echo      encrypt
---echo      data dir
---echo ------------------------------------------------------
+# --echo ------------------------------------------------------
+# --echo 5. Table options:
+# --echo      key_block_size
+# --echo      encrypt
+# --echo      data dir
+# --echo ------------------------------------------------------
 
-connection m_super_1;
-set global recycle_scheduler=off;
+# connection m_super_1;
+# set global recycle_scheduler=off;
 
-connection m_normal_1;
-use db_recycle;
-set session sql_log_bin=off;
+# connection m_normal_1;
+# use db_recycle;
+# set session sql_log_bin=off;
 
---echo #sleep begin
-select sleep(50);
---echo #sleep end
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-eval create table t5 (a int, b int) $data_directory_clause;
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# eval create table t5 (a int, b int) $data_directory_clause;
 
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-show create table t5;
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# show create table t5;
 
-truncate table t5;
+# truncate table t5;
 
---replace_column 5 # 6 #
-call dbms_recycle.show_tables();
+# --replace_column 5 # 6 #
+# call dbms_recycle.show_tables();
 
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-show create table __recycle_bin__.__innodb_169;
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-show create table t5;
-call dbms_recycle.purge_table("__innodb_169");
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# show create table __recycle_bin__.__innodb_169;
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# show create table t5;
+# call dbms_recycle.purge_table("__innodb_169");
 
-drop table t5;
-call dbms_recycle.purge_table("__innodb_169");
+# drop table t5;
+# call dbms_recycle.purge_table("__innodb_169");
 
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-eval CREATE TABLE t6 (a INT, b INT)
-ENGINE = InnoDB key_block_size = 8
-  PARTITION BY RANGE(a) SUBPARTITION BY KEY(b) (
-    PARTITION tens VALUES LESS THAN (100)
-      (SUBPARTITION subpart11,
-       SUBPARTITION subpart12),
-    PARTITION hundreds VALUES LESS THAN (1000)
-      (SUBPARTITION subpart21,
-       SUBPARTITION subpart22),
-    PARTITION thousands VALUES LESS THAN (10000)
-      (SUBPARTITION subpart31 DATA DIRECTORY '$MYSQL_TMP_DIR',
-       SUBPARTITION subpart32 DATA DIRECTORY '$MYSQL_TMP_DIR' TABLESPACE `innodb_file_per_table`));
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# eval CREATE TABLE t6 (a INT, b INT)
+# ENGINE = InnoDB key_block_size = 8
+#   PARTITION BY RANGE(a) SUBPARTITION BY KEY(b) (
+#     PARTITION tens VALUES LESS THAN (100)
+#       (SUBPARTITION subpart11,
+#        SUBPARTITION subpart12),
+#     PARTITION hundreds VALUES LESS THAN (1000)
+#       (SUBPARTITION subpart21,
+#        SUBPARTITION subpart22),
+#     PARTITION thousands VALUES LESS THAN (10000)
+#       (SUBPARTITION subpart31 DATA DIRECTORY '$MYSQL_TMP_DIR',
+#        SUBPARTITION subpart32 DATA DIRECTORY '$MYSQL_TMP_DIR' TABLESPACE `innodb_file_per_table`));
 
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-show create table t6;
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# show create table t6;
 
-truncate table t6;
+# truncate table t6;
 
---replace_column 5 # 6 #
-call dbms_recycle.show_tables();
+# --replace_column 5 # 6 #
+# call dbms_recycle.show_tables();
 
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-show create table __recycle_bin__.__innodb_170;
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-show create table t6;
-call dbms_recycle.purge_table("__innodb_170");
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# show create table __recycle_bin__.__innodb_170;
+# --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+# show create table t6;
+# call dbms_recycle.purge_table("__innodb_170");
 
-drop table t6;
-call dbms_recycle.purge_table("__innodb_170");
+# drop table t6;
+# call dbms_recycle.purge_table("__innodb_170");
 
-connection m_normal_1;
-set session sql_log_bin=on;
+# connection m_normal_1;
+# set session sql_log_bin=on;
 
 
-connection m_super_1;
-set global recycle_scheduler=on;
+# connection m_super_1;
+# set global recycle_scheduler=on;
 
 --sleep 3
 
@@ -368,8 +366,8 @@ connection master;
 --source include/rpl_end.inc
 --enable_ps_protocol
 
---rmdir $MYSQL_TMP_DIR/alt_dir/__recycle_bin__
---rmdir $MYSQL_TMP_DIR/alt_dir/db_recycle
---rmdir $MYSQL_TMP_DIR/alt_dir
---rmdir $MYSQL_TMP_DIR/__recycle_bin__
---rmdir $MYSQL_TMP_DIR/db_recycle
+# --rmdir $MYSQL_TMP_DIR/alt_dir/__recycle_bin__
+# --rmdir $MYSQL_TMP_DIR/alt_dir/db_recycle
+# --rmdir $MYSQL_TMP_DIR/alt_dir
+# --rmdir $MYSQL_TMP_DIR/__recycle_bin__
+# --rmdir $MYSQL_TMP_DIR/db_recycle

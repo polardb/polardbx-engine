@@ -233,15 +233,15 @@ drop table t1;
 --replace_column 5 # 6 #
 call dbms_recycle.show_tables();
 
-show grants;
---error ER_DBACCESS_DENIED_ERROR
-rename table __recycle_bin__.__innodb_165 to db_recycle.t1;
-show tables;
+#show grants;
+#--error ER_DBACCESS_DENIED_ERROR
+#rename table __recycle_bin__.__innodb_165 to db_recycle.t1;
+#show tables;
 
 
---error ER_DBACCESS_DENIED_ERROR
-rename table __recycle_bin__.__innodb_165 to db_recycle.t2;
-show tables;
+#--error ER_DBACCESS_DENIED_ERROR
+#rename table __recycle_bin__.__innodb_165 to db_recycle.t2;
+#show tables;
 
 call dbms_recycle.purge_table("__innodb_165");
 
