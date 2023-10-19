@@ -53,6 +53,9 @@ void mts_init_consensus_apply_index(Relay_log_info *rli,
   assert(rli->is_parallel_exec());
   assert(rli->info_thd->raft_replication_channel);
 
+  raft::error(ER_RAFT_APPLIER) << "mts_init_consensus_apply_index " << consensus_index
+    << ", rli " << rli;
+
   rli->m_consensus_index_buf->init_tail(consensus_index);
 }
 
@@ -145,7 +148,10 @@ inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
   assert(index <= m_tail.load() + m_capacity);
   assert(index > m_tail.load());
 
-  raft::info(ER_RAFT_APPLIER) << "add index " << index;
+  raft::info(ER_RAFT_APPLIER) << "add index " << index
+    << ", curr tail " << m_tail.load()
+    << ", count " << index - m_tail.load()
+    << ", " << get_backtrace_str();
 
   auto slot_index = get_slot_index(index);
   auto &slot = m_indexes[slot_index];

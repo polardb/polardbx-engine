@@ -2207,7 +2207,10 @@ static int easy_connection_checkself(easy_connection_t *c)
     // self connect self
     if (c->addr.family == AF_INET && getsockname(c->fd, (struct sockaddr *)&addr, &len) == 0) {
         if (addr.sin_port == c->addr.port && addr.sin_addr.s_addr == c->addr.u.addr) {
-            easy_error_log("connect to %s failure, self connect self\n", easy_connection_str(c));
+            easy_error_log("connect to %s failure, self connect self, %d-%d\n", 
+                            easy_connection_str(c),
+                            ntohs(addr.sin_port),
+                            ntohs(c->addr.port));
             return EASY_ERROR;
         }
     }

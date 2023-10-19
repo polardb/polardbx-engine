@@ -710,7 +710,8 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
     start_apply_index = consensus_log_manager.get_consensus_info()->get_start_apply_index();
     raft::info(ER_RAFT_APPLIER) << "Apply thread start, recover status = " << recover_status
                                 << ", start apply index = " << start_apply_index
-                                << ", rli consensus index " << rli->get_consensus_apply_index();
+                                << ", rli consensus index " << rli->get_consensus_apply_index()
+                                << ", consensus_ptr CommitIndex " << consensus_ptr->getCommitIndex();
 
     // follower recover, do nothing, leader recover should set apply start point
     if (recover_status == BINLOG_WORKING)
@@ -747,9 +748,6 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
       {
         // role already degraded to follower ,but log status is still binlog working
         uint64 start_index = max(start_apply_index, rli->get_consensus_apply_index());
-
-        start_index = std::max(start_index, consensus_ptr->getCommitIndex());
-
         uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
         if (consensus_log_manager.get_log_position(next_index, FALSE, log_name, &log_pos))
         {

@@ -826,7 +826,9 @@ uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index)
     raft::error(ER_RAFT_0) << "ConsensusLogManager: fail to find next trx index.";
     abort();
   }
-  raft::info(ER_RAFT_0) << "ConsensusLogManager: next transaction index is " << retIndex + 1;
+  raft::info(ER_RAFT_0) << "ConsensusLogManager: "
+    << "input index: " << consensus_index
+    << ", next transaction index is " << retIndex + 1
   return retIndex + 1;
 }
 
