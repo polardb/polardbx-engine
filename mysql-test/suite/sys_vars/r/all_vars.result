@@ -157,10 +157,16 @@ opt_enable_rds_priv_strategy
 opt_enable_rds_priv_strategy
 opt_indexstat
 opt_indexstat
+opt_outline_enabled
+opt_outline_enabled
 opt_tablestat
 opt_tablestat
 optimizer_max_subgraph_pairs
 optimizer_max_subgraph_pairs
+outline_allowed_sql_digest_truncate
+outline_allowed_sql_digest_truncate
+outline_partitions
+outline_partitions
 partial_revokes
 partial_revokes
 password_require_current

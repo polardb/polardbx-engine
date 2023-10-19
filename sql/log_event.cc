@@ -175,6 +175,8 @@ Error_log_throttle slave_ignored_err_throttle(
 #include "sql/rpl_utility.h"
 #include "sql/xa_aux.h"
 
+#include "sql/common/reload.h"
+
 #include "ppi/ppi_statement.h"
 
 #include "sql/xa/lizard_xa_trx.h"
@@ -6131,6 +6133,9 @@ bool Xid_log_event::do_commit(THD *thd_arg) {
     Increment the global status commit count variable
   */
   if (!error) thd_arg->status_var.com_stat[SQLCOM_COMMIT]++;
+
+  if (!error)
+    im::execute_reload_on_slave(thd_arg, thd_arg->get_transaction());
 
   return error;
 }

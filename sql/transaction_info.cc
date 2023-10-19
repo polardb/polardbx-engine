@@ -50,6 +50,7 @@ Transaction_ctx::Transaction_ctx()
       m_transaction_write_set_ctx(),
       trans_begin_hook_invoked(false) {
   memset(&m_scope_info, 0, sizeof(m_scope_info));
+  memset(reload_entries, 0, sizeof(reload_entries));
 }
 
 void Transaction_ctx::push_unsafe_rollback_warnings(THD *thd) {

@@ -1,0 +1,127 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("reload outline failed");
+call mtr.add_suppression("Column count of mysql.outline is wrong");
+create database outline_db;
+create table outline_db.t1(id int auto_increment primary key,
+col1 int,
+col2 varchar(100),
+key ind_1(col1),
+key ind_2(col2)) engine = innodb;
+create table outline_db.t2(id int auto_increment primary key,
+col1 int,
+col2 varchar(100),
+key ind_1(col1),
+key ind_2(col2)) engine = innodb;
+insert into outline_db.t1 values(1, 2, 'xpchild');
+insert into outline_db.t2 values(1, 2, 'xpchild');
+commit;
+create user super_1@'%' identified by 'pass';
+create user normal_1@'%' identified by 'pass';
+grant all on *.* to super_1@'%';
+grant all on outline_db.* to normal_1@'%' ;
+grant all on mysql.* to normal_1@'%' ;
+SET @start_read_only = @@global.read_only;
+SET global read_only = true;
+--------------------------------------------------------------
+Fail on slave add outline
+--------------------------------------------------------------
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+"select * from t1 where col1 = 2 and col2 = 'xpchild'");
+ERROR HY000: The MySQL server is running with the --read-only option so it cannot execute this statement
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	0
+--------------------------------------------------------------
+add/delete outline
+--------------------------------------------------------------
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+"select * from t1 where col1 = 2 and col2 = 'xpchild'");
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+1	outline_db	c3fa7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76	USE INDEX		1	ind_1	0	0	SELECT * FROM `t1` WHERE `col1` = ? AND `col2` = ?
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	0
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+1	outline_db	c3fa7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76	USE INDEX		1	ind_1	0	0	SELECT * FROM `t1` WHERE `col1` = ? AND `col2` = ?
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	1
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	0
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	2
+--------------------------------------------------------------
+modify outline table structure.
+--------------------------------------------------------------
+set session sql_log_bin=off;
+alter table mysql.outline add xx int;
+set session sql_log_bin=on;
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+"select * from t1 where col1 = 2 and col2 = 'xpchild'");
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+2	outline_db	c3fa7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76	USE INDEX		1	ind_1	0	0	SELECT * FROM `t1` WHERE `col1` = ? AND `col2` = ?
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	0
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	3
+set session sql_log_bin=off;
+alter table mysql.outline drop column xx;
+set session sql_log_bin=on;
+--------------------------------------------------------------
+DDL on outline
+--------------------------------------------------------------
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+"select * from t1 where col1 = 2 and col2 = 'xpchild'");
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+3	outline_db	c3fa7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76	USE INDEX		1	ind_1	0	0	SELECT * FROM `t1` WHERE `col1` = ? AND `col2` = ?
+2	outline_db	c3fa7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76	USE INDEX		1	ind_1	0	0	SELECT * FROM `t1` WHERE `col1` = ? AND `col2` = ?
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	0
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+3	outline_db	c3fa7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76	USE INDEX		1	ind_1	0	0	SELECT * FROM `t1` WHERE `col1` = ? AND `col2` = ?
+2	outline_db	c3fa7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76	USE INDEX		1	ind_1	0	0	SELECT * FROM `t1` WHERE `col1` = ? AND `col2` = ?
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	4
+truncate table mysql.outline;
+call dbms_outln.flush_outline();
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	0
+call dbms_outln.show_outline();
+ID	SCHEMA	DIGEST	TYPE	SCOPE	POS	HINT	HIT	OVERFLOW	DIGEST_TEXT
+show global status like 'reload_slave_outline';
+Variable_name	Value
+Reload_slave_outline	5
+set global read_only = @start_read_only;
+drop user super_1@'%';
+drop user normal_1@'%';
+drop database outline_db;
+include/rpl_end.inc

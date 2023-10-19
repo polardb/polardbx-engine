@@ -501,6 +501,7 @@ void LEX::reset() {
   is_update_stmt = false;
   table_snap_expr_count_to_evaluate = 0;
   sequence_info = nullptr;
+  reset_query_blocks_list();
 }
 
 /**
@@ -658,6 +659,8 @@ Query_block *LEX::new_query(Query_block *curr_query_block) {
   if (new_query_expression == nullptr) return nullptr;
   Query_block *const new_query_block =
       new_query_expression->first_query_block();
+
+  add_to_query_blocks(new_query_block);
 
   if (new_query_block->set_context(nullptr)) return nullptr;
   /*
@@ -863,7 +866,7 @@ Yacc_state::~Yacc_state() {
   }
 }
 
-static bool consume_optimizer_hints(Lex_input_stream *lip) {
+bool consume_optimizer_hints(Lex_input_stream *lip) {
   const my_lex_states *state_map = lip->query_charset->state_maps->main_map;
   int whitespace = 0;
   uchar c = lip->yyPeek();
@@ -2156,7 +2159,8 @@ Query_block::Query_block(MEM_ROOT *mem_root, Item *where, Item *having)
       m_current_table_nest(&m_table_nest),
       m_where_cond(where),
       m_having_cond(having),
-      ccl_queue_field_cond_list() {}
+      ccl_queue_field_cond_list(),
+      outline_optimizer_list(nullptr) {}
 
 /**
   Set the name resolution context for the specified query block.

@@ -608,6 +608,24 @@ PREPARE stmt FROM @str;
 EXECUTE stmt;
 DROP PREPARE stmt;
 
+-- Outline system table
+SET @cmd = "CREATE TABLE IF NOT EXISTS outline(
+ Id bigint AUTO_INCREMENT NOT NULL,
+ Schema_name varchar(64) DEFAULT NULL,
+ Digest varchar(64) NOT NULL,
+ Digest_text longtext DEFAULT NULL,
+ Type enum('IGNORE INDEX','USE INDEX','FORCE INDEX','OPTIMIZER') COLLATE utf8mb3_general_ci NOT NULL,
+ Scope enum('','FOR JOIN','FOR ORDER BY','FOR GROUP BY') COLLATE utf8mb3_general_ci DEFAULT '',
+ State enum('N','Y') COLLATE utf8mb3_general_ci DEFAULT 'Y' NOT NULL,
+ Position bigint NOT NULL,
+ Hint text NOT NULL,
+ PRIMARY KEY Outline_id(id)
+)engine=InnoDB STATS_PERSISTENT=0 CHARACTER SET utf8mb3 COLLATE utf8mb3_bin comment='Statement outline' TABLESPACE=mysql";
+SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
 --
 -- Only create the ndb_binlog_index table if the server is built with ndb.
 -- Create this table last among the tables in the mysql schema to make it

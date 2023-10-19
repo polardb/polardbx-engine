@@ -35,6 +35,8 @@
 #include "sql/rpl_transaction_write_set_ctx.h"  // Transaction_write_set_ctx
 #include "sql/xa.h"                             // XID_STATE
 
+#include "sql/common/reload.h"
+
 class Ha_trx_info;
 class Ha_trx_info_list;
 class THD;
@@ -379,6 +381,9 @@ class Transaction_ctx {
   Rpl_transaction_ctx m_rpl_transaction_ctx;
   Rpl_transaction_write_set_ctx m_transaction_write_set_ctx;
   bool trans_begin_hook_invoked;
+
+ public:
+   im::Reload *reload_entries[im::MAX_RELOAD_ENTRY_COUNT];
 };
 
 /**

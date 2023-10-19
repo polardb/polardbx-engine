@@ -12175,6 +12175,9 @@ ER_RECYCLE_BIN_SCHEMA_INIT_FAILED
 ER_RECYCLE_BIN
   eng "Recycle_bin : %s"
 
+ER_OUTLINE
+  eng "Statement outline : %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

@@ -10091,6 +10091,30 @@ ER_CCL_QUEUE_FIELD_NOT_FOUND
 ER_PREPARE_RECYCLE_TABLE_ERROR
   eng "Recycle table failed : %s"
 
+ER_OUTLINE_TABLE_OP_FAILED
+  eng "The table operation failed due to the following error from SE: errcode %d - %.256s"
+
+ER_OUTLINE_INVALID
+  eng "Statement outline %d is not valid when %s since %s"
+
+ER_STATEMENT_DIGEST_PARSE
+  eng "Statement outline query parse error: %s"
+
+ER_OUTLINE_DIGEST_COMPUTE
+  eng "Statement outline digest compute error from %s"
+
+ER_OUTLINE_DIGEST_MISMATCH
+  eng "Statement outline digest didn't match between %s and %s"
+
+ER_OUTLINE_NOT_FOUND
+  eng "Statement outline %d is not found in %s"
+
+ER_OUTLINE_OPTIMIZER_HINT_PARSE
+  eng "Statement outline optimizer hint parse error: %s"
+
+ER_OUTLINE_SQL_DIGEST_TRUNCATED
+  eng "Statement outline sql text has been truncated when compute digest: %s"
+
 #
 #  End of RDS error message.
 #

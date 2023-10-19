@@ -24,6 +24,8 @@
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/components/services/bits/psi_bits.h"
 
+#include "sql/ccl/ccl_proc.h"
+#include "sql/outline/outline_proc.h"
 #include "sql/package/package.h"
 #include "sql/package/package_common.h"
 #include "sql/package/package_parse.h"
@@ -171,8 +173,22 @@ void package_context_init() {
   /* dbms_recycle.restore_table(...) */
   register_package<Proc, im::recycle_bin::Recycle_proc_restore>(
       im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
+
   /* dbms_admin.show_native_procedure() */
   register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
+  
+  /* dbms_outln.add_optimizer_outline(...) */
+  register_package<Proc, Outline_optimizer_proc_add>(OUTLINE_PROC_SCHEMA);
+  /* dbms_outln.add_index_outline(...) */
+  register_package<Proc, Outline_index_proc_add>(OUTLINE_PROC_SCHEMA);
+  /* dbms_outln.del_outline(...) */
+  register_package<Proc, Outline_proc_del>(OUTLINE_PROC_SCHEMA);
+  /* dbms_outln.flush_outline() */
+  register_package<Proc, Outline_proc_flush>(OUTLINE_PROC_SCHEMA);
+  /* dbms_outln.show_outline() */
+  register_package<Proc, Outline_proc_show>(OUTLINE_PROC_SCHEMA);
+  /* dbms_outln.preview_outline() */
+  register_package<Proc, Outline_proc_preview>(OUTLINE_PROC_SCHEMA);
 }
 
 } /* namespace im */

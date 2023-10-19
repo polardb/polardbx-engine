@@ -818,6 +818,10 @@ The following options may be given as the first argument:
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
+ --opt-outline-enabled 
+ When this option is enabled,it will invoke statement
+ outline when execute sql
+ (Defaults to on; use --skip-opt-outline-enabled to disable.)
  --opt-tablestat     When this option is enabled,it will accumulate the table
  statistics
  (Defaults to on; use --skip-opt-tablestat to disable.)
@@ -875,6 +879,12 @@ The following options may be given as the first argument:
  Maximum allowed cumulated size of stored optimizer traces
  --optimizer-trace-offset=# 
  Offset of first optimizer trace to show; see manual
+ --outline-allowed-sql-digest-truncate 
+ Whether allowed the incomplete of sql digest when add
+ outline
+ (Defaults to on; use --skip-outline-allowed-sql-digest-truncate to disable.)
+ --outline-partitions=# 
+ How many parititon of system outline structure.
  --parser-max-mem-size=# 
  Maximum amount of memory available to the parser
  --partial-revokes   Access of database objects can be restricted, even if
@@ -1968,6 +1978,7 @@ old-style-user-limits FALSE
 only-report-warning-when-skip-sequence TRUE
 opt-enable-rds-priv-strategy FALSE
 opt-indexstat TRUE
+opt-outline-enabled TRUE
 opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000
 optimizer-prune-level 1
@@ -1978,6 +1989,8 @@ optimizer-trace-features greedy_search=on,range_optimizer=on,dynamic_range=on,re
 optimizer-trace-limit 1
 optimizer-trace-max-mem-size 1048576
 optimizer-trace-offset -1
+outline-allowed-sql-digest-truncate TRUE
+outline-partitions 16
 parser-max-mem-size 18446744073709551615
 partial-revokes ####
 password-history 0

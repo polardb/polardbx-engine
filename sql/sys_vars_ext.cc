@@ -30,6 +30,7 @@
 #include "sql/ccl/ccl_interface.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
+#include "sql/outline/outline_interface.h"
 #include "sql/sql_common_ext.h"
 #include "sql/sys_vars.h"
 #include "sql_statistics_common.h"
@@ -426,3 +427,21 @@ static Sys_var_bool Sys_recycle_scheduler_purge_table_print(
     GLOBAL_VAR(im::recycle_bin::recycle_scheduler_purge_table_print),
     CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(0), ON_UPDATE(0));
+static Sys_var_ulong Sys_outline_partitions(
+    "outline_partitions", "How many parititon of system outline structure.",
+    READ_ONLY GLOBAL_VAR(im::outline_partitions), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 256), DEFAULT(16), BLOCK_SIZE(1));
+
+static Sys_var_bool Sys_opt_outline_enabled(
+    "opt_outline_enabled",
+    "When this option is enabled,"
+    "it will invoke statement outline when execute sql",
+    GLOBAL_VAR(im::opt_outline_enabled), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_outline_allowed_sql_digest_truncate(
+    "outline_allowed_sql_digest_truncate",
+    "Whether allowed the incomplete of sql digest when add outline",
+    SESSION_VAR(outline_allowed_sql_digest_truncate),
+    CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));

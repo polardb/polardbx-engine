@@ -97,6 +97,8 @@
 
 #include "sql/sequence_common.h"  // Sequence_scan
 
+#include "sql/outline/outline_interface.h"
+
 class Alter_info;
 
 namespace im {
@@ -2391,6 +2393,9 @@ class Query_block : public Query_term {
 
  public:
   List<Item> ccl_queue_field_cond_list;
+  List<im::Lex_optimizer_hint> *outline_optimizer_list;
+  Query_block *next_qb{nullptr};
+  Query_block **prev_qb{nullptr};
 };
 
 inline bool Query_expression::is_union() const {
@@ -3713,7 +3718,7 @@ class LEX_GRANT_AS {
           LEX::reset() redundant.
 */
 
-struct LEX : public Query_tables_list {
+struct LEX : public Query_tables_list, public im::Query_blocks_list {
   friend bool lex_start(THD *thd);
 
   Query_expression *unit;  ///< Outer-most query expression
@@ -4790,6 +4795,8 @@ bool accept_for_order(SQL_I_List<ORDER> orders, Select_lex_visitor *visitor);
 bool accept_table(Table_ref *t, Select_lex_visitor *visitor);
 bool accept_for_join(mem_root_deque<Table_ref *> *tables,
                      Select_lex_visitor *visitor);
+
+bool consume_optimizer_hints(Lex_input_stream *lip);
 Table_ref *nest_join(THD *thd, Query_block *select, Table_ref *embedding,
                      mem_root_deque<Table_ref *> *jlist, size_t table_cnt,
                      const char *legend);

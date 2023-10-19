@@ -162,10 +162,11 @@ typedef struct sql_digest_storage sql_digest_storage;
   Compute a digest hash.
   @param digest_storage The digest
   @param [out] hash The computed digest hash. This parameter is a buffer of size
+  @param[in]    strip length      number of bytes stripped for explain token
   @c DIGEST_HASH_SIZE.
 */
 void compute_digest_hash(const sql_digest_storage *digest_storage,
-                         unsigned char *hash);
+                         unsigned char *hash, const uint strip_length = 0);
 
 /**
   Compute a digest text.

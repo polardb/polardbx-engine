@@ -681,6 +681,16 @@ SET(SQL_SHARED_SOURCES
   recycle_bin/recycle_cache.cc
   recycle_bin/recycle_auth.cc
   recycle_bin/recycle_scheduler.cc
+  outline/outline.cc
+  outline/outline_common.cc
+  outline/outline_cache.cc
+  outline/outline_proc.cc
+  outline/outline_table.cc
+  outline/outline_table_common.cc
+  common/table.cc
+  outline/outline_digest.cc
+  common/reload.cc
+  outline/outline_reload.cc
   timestamp_service.cc
   tso/tso_proc.cc
   lizard/lizard_snapshot.cc

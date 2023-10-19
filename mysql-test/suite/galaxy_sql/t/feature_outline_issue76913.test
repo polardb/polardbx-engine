@@ -1,0 +1,469 @@
+--disable_ps_protocol
+
+call mtr.add_suppression("mysql.outline");
+call mtr.add_suppression("Statement outline");
+
+connection default;
+create database outline_db;
+create table outline_db.t1(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+create table outline_db.t2(id int auto_increment primary key,
+                           col1 int,
+                           col2 varchar(100),
+                           key ind_1(col1),
+                           key ind_2(col2)) engine = innodb;
+
+insert into outline_db.t1 values(1, 2, 'xpchild');
+insert into outline_db.t2 values(1, 2, 'xpchild');
+commit;
+
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%';
+
+create user 'u1'@'%';
+grant all privileges on outline_db.* to 'u1'@'%';
+grant all privileges on mysql.* to 'u1'@'%';
+
+connect(con_u0, localhost, u0,,);
+connect(con_u1, localhost, u1,,);
+connect(con_root,localhost, root,,);
+
+
+#-----------------------------------------------------------
+# 1. check the outline table structure
+#-----------------------------------------------------------
+connection con_root;
+show create table mysql.outline;
+
+#-----------------------------------------------------------
+# 2. check outline proc
+#-----------------------------------------------------------
+
+--echo 2.1 check privileges
+connection con_u1;
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--replace_column 1 #
+call dbms_outln.show_outline();
+
+call dbms_outln.flush_outline();
+
+call dbms_outln.preview_outline('outline_db',
+                                "select * from t1 where col1 = 2 and col2 = 'xxx'");
+call dbms_outln.del_outline(1);
+
+--replace_column 1 #
+call dbms_outln.show_outline();
+
+#-----------------------------------------------------------
+# 3. check outline add index proc
+#-----------------------------------------------------------
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_outln.add_index_outline('outline_db', 1, 'USE INDEX', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_outln.add_index_outline('outline_db', 2, 0, 'USE INDEX', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_OUTLINE_INVALID
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE xxx', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_OUTLINE_INVALID
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE xxx', 'ind_1', '',
+                                  "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_OUTLINE_INVALID
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', 'FOR
+                                  ORDER', "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_OUTLINE_DIGEST_MISMATCH
+call dbms_outln.add_index_outline('outline_db', 'a7558f4dd3dd0713428fbd60beda118f35ed9c447ce58b2bb9239539fab76',
+                                  0, 'USE INDEX', 'ind_1, ind_2', 'FOR ORDER BY', "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_STATEMENT_DIGEST_PARSE
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', 'FOR
+                                  ORDER', "select * t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1, ind_2',
+                                  'FOR ORDER BY', "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--replace_column 1 #
+call dbms_outln.show_outline();
+
+--replace_column 1 #
+select * from mysql.outline;
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+#-----------------------------------------------------------
+# 4. check outline add optimizer proc
+#-----------------------------------------------------------
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_outln.add_optimizer_outline('outline_db', 1, 'OPTIMIZER', 'ind_1', '',
+                                      "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_SP_WRONG_NO_OF_ARGS
+call dbms_outln.add_optimizer_outline('outline_db', 2, 0, 'OPTIMIZER', 'ind_1', '',
+                                      "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_OUTLINE_OPTIMIZER_HINT_PARSE
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ EXECUTION_TIME(1000) */',
+                                      "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ MAX_EXECUTION_TIME(1000) */',
+                                      "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--replace_column 1 #
+call dbms_outln.show_outline();
+
+--replace_column 1 #
+select * from mysql.outline;
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+#-----------------------------------------------------------
+# 5. test table structure error
+#-----------------------------------------------------------
+connection con_u1;
+alter table mysql.outline add col1 int;
+
+--error ER_CANNOT_LOAD_FROM_TABLE_V2
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1, ind_2',
+                                  'FOR ORDER BY', "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_CANNOT_LOAD_FROM_TABLE_V2
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ MAX_EXECUTION_TIME(1000) */',
+                                      "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--error ER_CANNOT_LOAD_FROM_TABLE_V2
+call dbms_outln.flush_outline();
+
+--error ER_CANNOT_LOAD_FROM_TABLE_V2
+call dbms_outln.del_outline(11111);
+
+alter table mysql.outline drop column col1;
+
+
+#-----------------------------------------------------------
+# 6. del warning
+#-----------------------------------------------------------
+connection con_u1;
+call dbms_outln.del_outline(123456);
+
+
+#-----------------------------------------------------------
+# 7. test flush warning
+#-----------------------------------------------------------
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1, ind_2',
+                                  'FOR ORDER BY', "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ MAX_EXECUTION_TIME(1000) */',
+                                      "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+--replace_column 1 #
+call dbms_outln.show_outline();
+
+update mysql.outline set  hint ='xxxx' where type ='OPTIMIZER';
+commit;
+
+call dbms_outln.flush_outline();
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+#-----------------------------------------------------------
+# 8. test index hint
+#-----------------------------------------------------------
+
+--echo 8.1 single table index hint
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1',
+                                  'FOR ORDER BY', "select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1");
+
+use outline_db;
+explain select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1;
+
+call dbms_outln.preview_outline('outline_db', "select * from t1 where col1 = 2 and col2 ='xpchild' order by col1");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2',
+                                  '', "select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1");
+
+use outline_db;
+explain select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1;
+
+call dbms_outln.preview_outline('outline_db', "select * from t1 where col1 = 2 and col2 ='xpchild' order by col1");
+
+
+# second use index hint
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1',
+                                  'FOR ORDER BY', "select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1");
+
+use outline_db;
+explain select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1;
+
+call dbms_outln.preview_outline('outline_db', "select * from t1 where col1 = 2 and col2 ='xpchild' order by col1");
+
+
+# multi index hint
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1 ,ind_2',
+                                  'FOR ORDER BY', "select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1");
+
+use outline_db;
+explain select * from t1 where col1 = 2 and col2 = 'xpchild' order by col1;
+
+call dbms_outln.preview_outline('outline_db', "select * from t1 where col1 = 2 and col2 ='xpchild' order by col1");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+
+--echo 8.2 multi table index hint
+
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1',
+                                  '', "select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild'");
+
+call dbms_outln.add_index_outline('outline_db', '', 2, 'USE INDEX', 'ind_1',
+                                  '', "select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild'");
+
+use outline_db;
+explain select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild';
+
+call dbms_outln.preview_outline('outline_db', "select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild'");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2',
+                                  '', "select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild'");
+
+call dbms_outln.add_index_outline('outline_db', '', 2, 'USE INDEX', 'ind_2',
+                                  '', "select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild'");
+
+use outline_db;
+explain select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild';
+
+call dbms_outln.preview_outline('outline_db', "select t1.id, t2.id from t1, t2 where t1.col1 = t2.col1 and t1.col2 = t2.col2 and t1.col1 = 1 and t1.col2 = 'xpchild'");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+
+--echo 8.3 nest subquery index hint
+
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1',
+                                  '', "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild'");
+call dbms_outln.add_index_outline('outline_db', '', 2, 'USE INDEX', 'ind_1',
+                                  '', "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild'");
+use outline_db;
+explain select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild';
+call dbms_outln.preview_outline("outline_db", "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 ='xpchild') and col2 = 'xpchild'");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2',
+                                  '', "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild'");
+call dbms_outln.add_index_outline('outline_db', '', 2, 'USE INDEX', 'ind_2',
+                                  '', "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild'");
+use outline_db;
+explain select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild';
+call dbms_outln.preview_outline("outline_db", "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 ='xpchild') and col2 = 'xpchild'");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+
+--echo 8.4 index hint report error and overflow
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_3',
+                                  '', "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild'");
+
+--error ER_KEY_DOES_NOT_EXITS
+select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild';
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+call dbms_outln.add_index_outline('outline_db', '', 3, 'USE INDEX', 'ind_1',
+                                  '', "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild'");
+
+select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild') and col2 = 'xpchild';
+
+--replace_column 1 #
+call dbms_outln.show_outline();
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+#-----------------------------------------------------------
+# 9. test optimizer hint
+#-----------------------------------------------------------
+
+--echo 9.1 global optimizer hint
+
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ MAX_EXECUTION_TIME(1000) */',
+                                      "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+use outline_db;
+explain select * from t1 where col1 = 2 and col2 = 'xpchild';
+call dbms_outln.preview_outline("outline_db", "select * from t1 where col1 = 2 and col2 = 'xpchild'");
+
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ MAX_EXECUTION_TIME(1000) */',
+                                      "update t1 set col1 = 1");
+use outline_db;
+explain update t1 set col1 = 1;
+call dbms_outln.preview_outline("outline_db", "update t1 set col1 = 1");
+
+
+#
+# MAX_EXECUTION_TIME hint is supported by top-level standalone SELECT statements only
+#
+call dbms_outln.add_optimizer_outline('outline_db', '', 2, '/*+ MAX_EXECUTION_TIME(1000) */',
+                                      "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild')");
+
+use outline_db;
+explain select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild');
+call dbms_outln.preview_outline("outline_db", "select id from t1 where col1 in (select col1 from t2 where col1 = 1 and col2 = 'xpchild')");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+
+--echo 9.2 multi-table join
+# Revision:
+# Starting with MySQL 8.0.20, the block nested loop is no longer used by MySQL, 
+# and a hash join is employed for in all cases where the block nested loop was used previously. 
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ BNL(t1,t2) */',
+                                      "select t1.id, t2.id from t1,t2");
+
+use outline_db;
+explain select t1.id, t2.id from t1,t2;
+call dbms_outln.preview_outline("outline_db", "select t1.id, t2.id from t1,t2");
+
+
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ MAX_EXECUTION_TIME(1000) */',
+                                      "select t1.id, t2.id from t1,t2");
+
+use outline_db;
+explain select t1.id, t2.id from t1,t2;
+call dbms_outln.preview_outline("outline_db", "select t1.id, t2.id from t1,t2");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+
+--echo 9.3 nest-subquery select
+
+call dbms_outln.add_optimizer_outline('outline_db', '', 2, '/*+ INDEX_MERGE(t2 ind_1, ind_2) */',
+                                      "select t1.id from t1 where t1.col1 in (select t2.col1 from t2 where t2.col1 = 1 and t2.col2 = 'xpchild')");
+
+use outline_db;
+explain select t1.id from t1 where t1.col1 in (select t2.col1 from t2 where t2.col1 = 1 and t2.col2 = 'xpchild');
+call dbms_outln.preview_outline("outline_db", "select t1.id from t1 where t1.col1 in (select t2.col1 from t2 where t2.col1 = 1 and t2.col2 = 'xpchild')");
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+--echo 9.4 subquery query block name
+call dbms_outln.add_optimizer_outline('outline_db', '', 2, ' /*+ QB_NAME(subq1) */', "SELECT * FROM t1 WHERE t1.col1 IN (SELECT  col1 FROM t2)");
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ SEMIJOIN(@subq1 MATERIALIZATION, DUPSWEEDOUT) */ ', "SELECT * FROM t1 WHERE t1.col1 IN (SELECT  col1 FROM t2)");
+use outline_db;
+explain SELECT * FROM t1 WHERE t1.col1 IN (SELECT  col1 FROM t2);
+call dbms_outln.preview_outline("outline_db", "SELECT * FROM t1 WHERE t1.col1 IN (SELECT  col1 FROM t2)");
+explain SELECT /*+ SEMIJOIN(@subq1 MATERIALIZATION, DUPSWEEDOUT) */ * FROM t1 WHERE t1.col1 IN (SELECT /*+ QB_NAME(subq1) */ col1 FROM t2);
+
+
+--echo 9.5 set var
+
+call dbms_outln.add_optimizer_outline('outline_db', '', 1, '/*+ SET_VAR(foreign_key_checks=OFF) */',
+                                      "insert into t1 values(123, 123, 'xpchild')");
+
+use outline_db;
+explain insert into t1 values(123, 123, 'xpchild');
+call dbms_outln.preview_outline("outline_db", "insert into t1 values(123, 123,'xpchild')");
+
+
+
+--echo 9.6 query trim
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2',
+                                  '', "select * from t1 where col1 = 1 and col2='xpchild'");
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2',
+                                  '', "select * from t2 where col1 = 1 and col2='xpchild';");
+explain select * from t1 where col1 = 1 and col2='xpchild';
+explain select * from t2 where col1 = 1 and col2='xpchild';
+
+
+DELIMITER $;
+explain select * from t1 where col1 = 1 and col2='xpchild';$
+explain select * from t2 where col1 = 1 and col2='xpchild';$
+DELIMITER ;$
+
+--replace_column 1 #
+call dbms_outln.show_outline();
+
+call dbms_outln.preview_outline("outline_db", "select * from t2 where col1 = 1 and col2='xpchild'");
+call dbms_outln.preview_outline("outline_db", "select * from t2 where col1 = 1 and col2='xpchild';");
+call dbms_outln.preview_outline("outline_db", "select * from t2 where col1 = 1 and col2='xpchild';;;");
+
+
+#-----------------------------------------------------------
+# 10. test explain format
+#-----------------------------------------------------------
+
+--echo 10.1 explain format = xxx
+
+CALL dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+				 "select * from t1 where t1.col1 =1 and t1.col2 ='xpchild'");
+
+
+CALL dbms_outln.preview_outline('outline_db', "select * from t1 where t1.col1 =1 and t1.col2 ='xpchild'");
+
+use outline_db;
+EXPLAIN SELECT * FROM t1 WHERE t1.col1 =2 AND t1.col2 ='xpchild';
+EXPLAIN FORMAT = JSON SELECT * FROM t1 WHERE t1.col1 =2 AND t1.col2 ='xpchild';
+EXPLAIN FORMAT = TRADITIONAL SELECT * FROM t1 WHERE t1.col1 =2 AND t1.col2 ='xpchild';
+EXPLAIN FORMAT = 'JsOn' SELECT * FROM t1 WHERE t1.col1 =2 AND t1.col2 ='xpchild';
+EXPLAIN FORMAT = 'TrAdItIoNaL' SELECT * FROM t1 WHERE t1.col1 =2 AND t1.col2 ='xpchild';
+
+
+delete from mysql.outline;
+commit;
+call dbms_outln.flush_outline();
+
+connection default;
+drop database outline_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+
+disconnect con_u0;
+disconnect con_u1;
+disconnect con_root;
+
+--enable_ps_protocol

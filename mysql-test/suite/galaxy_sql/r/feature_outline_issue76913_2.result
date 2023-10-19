@@ -1,0 +1,55 @@
+call mtr.add_suppression("mysql.outline");
+call mtr.add_suppression("Statement outline");
+show global variables like "max_digest_length";
+Variable_name	Value
+max_digest_length	50
+create database outline_db;
+create table outline_db.t1(id int auto_increment primary key,
+col1 int,
+col2 varchar(100),
+key ind_1(col1),
+key ind_2(col2)) engine = innodb;
+create table outline_db.t2(id int auto_increment primary key,
+col1 int,
+col2 varchar(100),
+key ind_1(col1),
+key ind_2(col2)) engine = innodb;
+insert into outline_db.t1 values(1, 2, 'xpchild');
+insert into outline_db.t2 values(1, 2, 'xpchild');
+commit;
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%';
+create user 'u1'@'%';
+grant all privileges on outline_db.* to 'u1'@'%';
+grant all privileges on mysql.* to 'u1'@'%';
+SET @@SESSION.debug = "+d,simulate_storage_engine_out_of_memory";
+call dbms_outln.add_index_outline(
+'outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+"select * from t1 where col1 = 2 and col2 = 'xpchild'");
+ERROR HY000: The table operation failed due to the following error from SE: errcode 194 - Out of memory in storage engine
+SET @@SESSION.debug = "-d,simulate_storage_engine_out_of_memory";
+SET @@SESSION.debug = "+d,outline_simulate_oom";
+call dbms_outln.add_index_outline(
+'outline_db', '', 1, 'USE INDEX', 'ind_1', '',
+"select * from t1 where col1 = 2 and col2 = 'xpchild'");
+ERROR HY000: Statement outline digest compute error from select * from t1 where col1 = 2 and col2 = 'xpchild'
+SET @@SESSION.debug = "-d,outline_simulate_oom";
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2', '',
+"select * from t1 where col1 = 2 and col2 =
+                                  'xpchild' and (col2 = 'dajda' or col2 = 'ydaa'
+                                                 and col2 = 'fdaj')");
+Warnings:
+Warning	7549	Statement outline sql text has been truncated when compute digest: select * from t1 where col1 = 2 and col2 =
+                                  'xpchild' and (col2 = 'dajda' or col2 = 'ydaa'
+                                                 and col2 = 'fdaj')
+set session outline_allowed_sql_digest_truncate = off;
+call dbms_outln.add_index_outline('outline_db', '', 1, 'USE INDEX', 'ind_2', '',
+"select * from t1 where col1 = 2 and col2 =
+                                  'xpchild' and (col2 = 'dajda' or col2 = 'ydaa'
+                                                 and col2 = 'fdaj')");
+ERROR HY000: Statement outline sql text has been truncated when compute digest: select * from t1 where col1 = 2 and col2 =
+                                  'xpchild' and (col2 = 'dajda' or col2 = 'ydaa'
+                                                 and col2 = 'fdaj')
+drop database outline_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';

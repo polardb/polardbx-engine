@@ -44,6 +44,7 @@ innodb_ddl_log	mysql
 innodb_dynamic_metadata	mysql
 innodb_index_stats	mysql
 innodb_table_stats	mysql
+outline	mysql
 parameter_type_elements	mysql
 parameters	mysql
 password_history	mysql
@@ -116,6 +117,7 @@ innodb_ddl_log
 innodb_dynamic_metadata
 innodb_index_stats
 innodb_table_stats
+outline
 parameter_type_elements
 parameters
 password_history

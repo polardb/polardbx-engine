@@ -112,6 +112,10 @@ MYSQL.INNODB_TABLE_STATS
 ERROR
 The used command is not allowed with this MySQL version
 @table_name
+MYSQL.OUTLINE
+ERROR
+Storage engine 'MyISAM' does not support system tables. [mysql.outline]
+@table_name
 MYSQL.PASSWORD_HISTORY
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.password_history]
@@ -281,6 +285,8 @@ SEVERITY	ERRNO	MESSAGE
 ERROR	3554	Access to system table 'mysql.innodb_index_stats' is rejected.
 SEVERITY	ERRNO	MESSAGE
 ERROR	3554	Access to system table 'mysql.innodb_table_stats' is rejected.
+SEVERITY	ERRNO	MESSAGE
+Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.outline]
 SEVERITY	ERRNO	MESSAGE
 Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.password_history]
 SEVERITY	ERRNO	MESSAGE

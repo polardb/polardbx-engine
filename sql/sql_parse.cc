@@ -191,6 +191,8 @@
 #include "sql/ccl/ccl.h"
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_parse.h"
+#include "sql/outline/outline_digest.h"
+#include "sql/outline/outline_interface.h"
 
 namespace resourcegroups {
 class Resource_group;
@@ -5006,6 +5008,8 @@ finish:
     trans_commit_implicit(thd);
     thd->get_stmt_da()->set_overwrite_status(false);
     thd->mdl_context.release_transactional_locks();
+
+    im::execute_reload_on_slave(thd, thd->get_transaction());
   } else if (!thd->in_sub_stmt && !thd->in_multi_stmt_transaction_mode()) {
     /*
       - If inside a multi-statement transaction,
@@ -5283,6 +5287,8 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
   // by setting maximum digest length to zero
   if (get_max_digest_length() != 0)
     parser_state->m_input.m_compute_digest = true;
+
+  im::enable_digest_by_outline(parser_state);
 
   LEX *lex = thd->lex;
   const char *found_semicolon = nullptr;
@@ -7253,6 +7259,13 @@ bool parse_sql(THD *thd, Parser_state *parser_state,
   /* That's it. */
 
   ret_value = mysql_parse_status || thd->is_fatal_error();
+
+  if (ret_value == 0 && thd->m_digest) {
+    /* invoke index outline */
+    im::invoke_outlines(
+        thd, thd->db().str, &thd->m_digest->m_digest_storage,
+        im::calculate_strip_length_for_explain(&thd->m_digest->m_digest_storage));
+  }
 
   if ((ret_value == 0) && (parser_state->m_digest_psi != nullptr)) {
     /*
