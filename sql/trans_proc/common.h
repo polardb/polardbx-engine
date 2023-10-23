@@ -38,7 +38,7 @@ class Trans_proc_base : public Proc {
  public:
   explicit Trans_proc_base(PSI_memory_key key) : Proc(key) {}
 
-  virtual const std::string qname() const {
+  virtual const std::string qname() const override {
     std::stringstream ss;
     ss << TRANS_PROC_SCHEMA.str << "." << str();
     return ss.str();

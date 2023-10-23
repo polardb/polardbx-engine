@@ -487,7 +487,8 @@ bool stmt_makes_implicit_savepoint(THD *thd)
     Set savepoint name, like "SAVEPOINT name" statement, the name is needed
     in low level function call.
   */
-  thd->lex->ident = { C_STRING_WITH_LEN(MYSQL_IMPLICIT_SAVEPOINT) };
+  thd->lex->ident = {const_cast<char *>(mysql_implicit_savepoint),
+                     (sizeof(mysql_implicit_savepoint) - 1)};
 
   if (trans_savepoint(thd, thd->lex->ident)) {
     thd->lex->ident = saved_ident;

@@ -154,7 +154,7 @@ class ha_tablespace_statistics;
 class Unique_on_insert;
 
 /* Name of implicit savepoint */
-#define MYSQL_IMPLICIT_SAVEPOINT "__MySQL_Implicit_Savepoint__"
+constexpr const char *mysql_implicit_savepoint{"__MySQL_Implicit_Savepoint__"};
 
 extern ulong savepoint_alloc_size;
 

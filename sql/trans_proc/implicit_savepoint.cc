@@ -56,10 +56,8 @@ bool Sql_cmd_trans_proc_implicit_savepoint::pc_execute(THD *thd) {
   Sub_statement_context stmt_ctx(thd);
 
   /* Make statement 'ROLLBACK TO savepoint_name' */
-  if (cmd.append(STRING_WITH_LEN("ROLLBACK TO ")) ||
-      cmd.append("`") ||
-      cmd.append(STRING_WITH_LEN(MYSQL_IMPLICIT_SAVEPOINT)) ||
-      cmd.append("`"))
+  if (cmd.append(STRING_WITH_LEN("ROLLBACK TO ")) || cmd.append("`") ||
+      cmd.append(STRING_WITH_LEN(mysql_implicit_savepoint)) || cmd.append("`"))
     DBUG_RETURN(TRUE);
 
   thd->set_query(cmd.lex_cstring());
