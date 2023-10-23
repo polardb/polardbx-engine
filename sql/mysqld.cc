@@ -8462,7 +8462,7 @@ int mysqld_main(int argc, char **argv)
     Save set of GTIDs of the last binlog into gtid_executed table
     on server shutdown.
   */
-  if (opt_bin_log && !raft::Recovery_manager::instance().is_raft_instance_recovering())
+  if (opt_bin_log)
     if (gtid_state->save_gtids_of_last_binlog_into_table())
       LogErr(WARNING_LEVEL, ER_CANT_SAVE_GTIDS);
 

@@ -53,7 +53,7 @@ void mts_init_consensus_apply_index(Relay_log_info *rli,
   assert(rli->is_parallel_exec());
   assert(rli->info_thd->raft_replication_channel);
 
-  raft::error(ER_RAFT_APPLIER) << "mts_init_consensus_apply_index " << consensus_index
+  raft::info(ER_RAFT_APPLIER) << "mts_init_consensus_apply_index " << consensus_index
     << ", rli " << rli;
 
   rli->m_consensus_index_buf->init_tail(consensus_index);

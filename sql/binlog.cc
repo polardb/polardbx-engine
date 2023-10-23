@@ -1824,7 +1824,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
   if (thd->owned_gtid.sidno > 0) {
     assert(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
-    if (!opt_bin_log || (thd->slave_thread && !opt_log_replica_updates)) {
+    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || thd->raft_replication_channel))) {
       /*
         If the binary log is disabled for this thread (either by
         log_bin=0 or sql_log_bin=0 or by log_replica_updates=0 for a
@@ -9155,8 +9155,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   if ((!opt_initialize && consensus_log_manager.get_status() !=
                               Consensus_Log_System_Status::BINLOG_WORKING) ||
       opt_cluster_log_type_instance) {
-    auto *cache_mgr = thd_get_cache_mngr(thd);
-    cache_mgr->reset();
+    thd_get_cache_mngr(thd)->reset();
     thd->mark_transaction_to_rollback(true);
     thd->commit_error = THD::CE_COMMIT_ERROR;
     consensus_log_manager.unlock_consensus();

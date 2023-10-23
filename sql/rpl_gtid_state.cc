@@ -49,6 +49,7 @@
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
 #include "sql/raft/raft0err.h"
+#include "sql/raft/raft0recovery.h"
 
 class Table_ref;
 
@@ -706,6 +707,9 @@ int Gtid_state::save(const Gtid_set *gtid_set) {
 int Gtid_state::save_gtids_of_last_binlog_into_table() {
   DBUG_TRACE;
   int ret = 0;
+
+  if (raft::Recovery_manager::instance().is_raft_instance_recovering())
+    return ret;
 
   if (DBUG_EVALUATE_IF("gtid_executed_readonly", true, false)) {
     my_error(ER_DA_RPL_GTID_TABLE_CANNOT_OPEN, MYF(0), "mysql",

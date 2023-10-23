@@ -380,7 +380,7 @@ void Clone_persist_gtid::get_gtid_info(trx_t *trx, Gtid_desc &gtid_desc) {
 
 int Clone_persist_gtid::write_other_gtids() {
   int err = 0;
-  if (opt_bin_log && !raft::Recovery_manager::instance().is_raft_instance_recovering()) {
+  if (opt_bin_log) {
     err = gtid_state->save_gtids_of_last_binlog_into_table();
   }
   return (err);

@@ -568,12 +568,6 @@ int  ConsensusLogManager::set_start_apply_index_if_need(uint64 consensus_index)
   if (!already_set_start_index && status == BINLOG_WORKING)
   {
     consensus_info->set_start_apply_index(consensus_index);
-    // store executed gtid to table before xpaxos receiving relay log
-    if (gtid_state->save_gtids_of_last_binlog_into_table()) {
-      mysql_rwlock_unlock(&LOCK_consensuslog_status);
-      raft::error(ER_RAFT_0) << "Failed save gtids to table in saving last term index.";
-      return 1;
-    }
     if (consensus_info->flush_info(true, true))
     {
       mysql_rwlock_unlock(&LOCK_consensuslog_status);
@@ -828,7 +822,7 @@ uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index)
   }
   raft::info(ER_RAFT_0) << "ConsensusLogManager: "
     << "input index: " << consensus_index
-    << ", next transaction index is " << retIndex + 1
+    << ", next transaction index is " << retIndex + 1;
   return retIndex + 1;
 }
 
