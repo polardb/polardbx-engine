@@ -1,13 +1,13 @@
 --source include/have_galaxy.inc
 
---echo Install galaxy plugin
+--echo Install polarx_udf plugin
 
-eval INSTALL PLUGIN galaxy SONAME "$GALAXY_PLUGIN";
+eval INSTALL PLUGIN polarx_udf SONAME "$GALAXY_PLUGIN";
 
 --echo galax plugin status
 
 --replace_column 2 #
-show global status like '%galaxy%';
+show global status like '%polarx_udf%';
 
 --echo performance_schema metrics
 select * from performance_schema.user_defined_functions where UDF_NAME in ('hyperloglog', 'hllndv', 'bloomfilter');
@@ -32,6 +32,6 @@ drop function hyperloglog;
 --error ER_UDF_DROP_DYNAMICALLY_REGISTERED
 drop function hllndv;
 
-UNINSTALL PLUGIN galaxy;
+UNINSTALL PLUGIN polarx_udf;
 
 select * from performance_schema.user_defined_functions where UDF_NAME in ('hyperloglog', 'hllndv', 'bloomfilter');

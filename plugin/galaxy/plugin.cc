@@ -76,15 +76,15 @@ static SYS_VAR *galaxy_system_vars[] = {
 
 /** All counter for show global status */
 static SHOW_VAR galaxy_status_vars[] = {
-    {"galaxy_bloomfilter_call_count",
+    {"polarx_udf_number_bloomfilter_calls",
      (char *)&udf::udf_counter.bloomfilter_counter, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
-    {"galaxy_hyperloglog_call_count",
+    {"polarx_udf_number_hyperloglog_calls",
      (char *)&udf::udf_counter.hyperloglog_counter, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
-    {"galaxy_hllndv_call_count", (char *)&udf::udf_counter.hllndv_counter,
+    {"polarx_udf_number_hllndv_calls", (char *)&udf::udf_counter.hllndv_counter,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
-    {"galaxy_hashcheck_call_count", (char*)&udf::udf_counter.hashcheck_counter, SHOW_LONG,
+    {"polarx_udf_number_hashcheck_calls", (char*)&udf::udf_counter.hashcheck_counter, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
     {NULL, NULL, SHOW_LONG, SHOW_SCOPE_GLOBAL},
 };

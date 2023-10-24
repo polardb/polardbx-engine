@@ -33,7 +33,7 @@ qa_auth_interface                       plugin_output_directory PLUGIN_AUTH_INTE
 qa_auth_server                          plugin_output_directory PLUGIN_AUTH_SERVER    qa_auth_server
 qa_auth_client                          plugin_output_directory PLUGIN_AUTH_CLIENT    qa_auth_client
 udf_example                             plugin_output_directory UDF_EXAMPLE_LIB
-galaxy                                  plugin_output_directory GALAXY_PLUGIN
+polarx_udf                              plugin_output_directory GALAXY_PLUGIN
 ha_example                              plugin_output_directory EXAMPLE_PLUGIN         EXAMPLE
 semisync_master                         plugin_output_directory SEMISYNC_MASTER_PLUGIN
 semisync_slave                          plugin_output_directory SEMISYNC_SLAVE_PLUGIN

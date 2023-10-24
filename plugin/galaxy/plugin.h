@@ -21,6 +21,6 @@
 #ifndef PLUGIN_GALAXY_PLUGIN_H
 #define PLUGIN_GALAXY_PLUGIN_H
 
-#define GALAXY_PLUGIN_NAME "galaxy"
+#define GALAXY_PLUGIN_NAME "polarx_udf"
 
 #endif

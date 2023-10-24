@@ -21,11 +21,11 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="galaxy")
+ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="polarx_udf")
 
 INCLUDE_DIRECTORIES(${BOOST_INCLUDE_DIR})
 
-SET(GALAXY_SOURCES
+SET(POLARX_UDF_SOURCES
     plugin.h
     plugin.cc
     udf/udf.cc
@@ -38,6 +38,6 @@ SET(GALAXY_SOURCES
     service/service_udf.cc)
 
 
-MYSQL_ADD_PLUGIN(galaxy ${GALAXY_SOURCES} MODULE_ONLY MODULE_OUTPUT_NAME
-                 "galaxy")
+MYSQL_ADD_PLUGIN(polarx_udf ${POLARX_UDF_SOURCES} MODULE_ONLY MODULE_OUTPUT_NAME
+                 "polarx_udf")
 
