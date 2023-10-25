@@ -70,7 +70,22 @@ static int galaxy_deinit(void *) {
   return 0;
 }
 
+static char udf_list[PATH_MAX] = "hashcheck,bloomfilter,hyperloglog,hllndv";
+static char *p_udf_list = udf_list;
+static MYSQL_SYSVAR_STR(function_list, p_udf_list,
+  PLUGIN_VAR_READONLY | PLUGIN_VAR_NOCMDOPT | PLUGIN_VAR_NOCMDARG,
+  "list of user defined functions for PolarX",
+  nullptr, nullptr, nullptr);
+
+#define MYSQL_PLUGIN_VAR_HEADER \
+  int flags;                    \
+  const char *name;             \
+  const char *comment;          \
+  mysql_var_check_func check;   \
+  mysql_var_update_func update
+
 static SYS_VAR *galaxy_system_vars[] = {
+    MYSQL_SYSVAR(function_list),
     NULL,
 };
 
@@ -106,7 +121,7 @@ mysql_declare_plugin(galaxy){
     gs::galaxy_init,        /*   init function (when loaded)     */
     NULL,                   /*   check uninstall function        */
     gs::galaxy_deinit,      /*   deinit function (when unloaded) */
-    0x0100,                 /*   version                         */
+    0x0101,                 /*   version                         */
     gs::galaxy_status_vars, /*   status variables                */
     gs::galaxy_system_vars, /*   system variables                */
     NULL,
