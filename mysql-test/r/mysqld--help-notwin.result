@@ -1380,7 +1380,8 @@ The following options may be given as the first argument:
  --read-rnd-buffer-size=# 
  When reading rows in sorted order after a sort, the rows
  are read through this buffer to avoid a disk seeks
-<<<<<<< HEAD
+ --recover-snapshot  recover from the backup of cloud storage and output the
+ committed index
  --recycle-bin       Whether recycle the table which is going to be dropped
  --recycle-bin-retention=# 
  Seconds before really purging the recycled table.
@@ -1389,10 +1390,6 @@ The following options may be given as the first argument:
  Interval in seconds for recycle scheduler.
  --recycle-scheduler-purge-table-print 
  Print the recycle scheduler process.
-=======
- --recover-snapshot  recover from the backup of cloud storage and output the
- committed index
->>>>>>> [Raft] fix mysql test case bugs
  --regexp-stack-limit=# 
  Stack size limit for regular expressions matches
  --regexp-time-limit=# 
@@ -2225,18 +2222,9 @@ old-alter-table FALSE
 old-style-user-limits FALSE
 only-report-warning-when-skip-sequence TRUE
 opt-enable-rds-priv-strategy FALSE
-<<<<<<< HEAD
-<<<<<<< HEAD
-opt-indexstat TRUE
-opt-outline-enabled TRUE
-opt-tablestat TRUE
-=======
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
-=======
-=======
->>>>>>> [Raft] fix case after rebase feature_mix_binlog_relaylog on master-8.0.32 49ddaafb
 opt-force-index-pct-cached FALSE
 opt-indexstat TRUE
+opt-outline-enabled TRUE
 opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000
 optimizer-prune-level 1
@@ -2354,15 +2342,12 @@ read-buffer-size 131072
 read-lsn 0
 read-only FALSE
 read-rnd-buffer-size 262144
-<<<<<<< HEAD
+recover-snapshot FALSE
 recycle-bin FALSE
 recycle-bin-retention 604800
 recycle-scheduler FALSE
 recycle-scheduler-interval 30
 recycle-scheduler-purge-table-print FALSE
-=======
-recover-snapshot FALSE
->>>>>>> [Raft] fix mysql test case bugs
 regexp-stack-limit 8000000
 regexp-time-limit 32
 relay-log relaylog

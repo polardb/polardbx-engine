@@ -118,6 +118,7 @@ bool xa::Transaction_cache::detach(Transaction_ctx *transaction, bool force_logg
   instance.m_transaction_cache.erase(to_string(xid));
   res = xa::Transaction_cache::create_and_insert_new_transaction(
       &xid, was_logged, transaction);
+
   return res;
 }
 
@@ -139,7 +140,6 @@ bool xa::Transaction_cache::insert(XID *xid, Transaction_ctx *transaction) {
     std::shared_ptr<Transaction_ctx> ptr{transaction, transaction_free_hash{}};
     res = !instance.m_transaction_cache.emplace(to_string(*xid), std::move(ptr))
                .second;
-
   }
   if (res) {
     my_error(ER_XAER_DUPID, MYF(0));

@@ -20440,7 +20440,7 @@ static xa_status_code innobase_rollback_by_xid(
   trx_t *trx = trx_get_trx_by_xid(xid);
 
   if (trx != nullptr) {
-    int ret = 0;
+    int ret;
     {
       TrxInInnoDB trx_in_innodb(trx);
 

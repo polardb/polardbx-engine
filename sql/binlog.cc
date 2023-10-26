@@ -8687,7 +8687,7 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     mysql_mutex_unlock(consensus_log_manager.get_term_lock());
     mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
     *out_queue_var = first_seen;
-    return ER_ERROR_ON_WRITE;
+    return 0;
   }
 
   /*

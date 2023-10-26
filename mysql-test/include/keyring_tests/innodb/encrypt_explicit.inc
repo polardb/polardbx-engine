@@ -19,10 +19,12 @@ write_file $BOOTSTRAP_SQL;
 CREATE DATABASE test;
 EOF
 
+--source include/make_consensus_args.inc
+
 --echo # Stop the MTR default DB server
 --source include/shutdown_mysqld.inc
 --source include/keyring_tests/helper/binary_backup_manifest.inc
-let NEW_CMD = $MYSQLD --no-defaults --initialize-insecure --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap1.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --initialize-insecure $consensus_args --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap1.log 2>&1;
 
 --echo # Run the bootstrap command of datadir1
 --exec $NEW_CMD
@@ -94,7 +96,7 @@ LET $MYSQL_DATA_DIR = `select @@datadir`;
 --echo # Stop the non-encrypted server
 --source include/shutdown_mysqld.inc
 
-let NEW_CMD = $MYSQLD --no-defaults --initialize-insecure --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap2.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --initialize-insecure $consensus_args --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap2.log 2>&1;
 
 --echo # Run the bootstrap command of datadir1
 --exec $NEW_CMD

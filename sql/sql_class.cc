@@ -737,7 +737,7 @@ THD::THD(bool enable_plugins)
       bind_parameter_values_count(0),
       owned_commit_gcn(),
       owned_vision_gcn(),
-      lex_returning(new im::Lex_returning(false, mem_root))
+      lex_returning(new im::Lex_returning(false, mem_root)),
       raft_replication_channel(false) {
   main_lex->reset();
   set_psi(nullptr);

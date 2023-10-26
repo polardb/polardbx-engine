@@ -14,11 +14,14 @@ CREATE DATABASE test DEFAULT CHARACTER SET latin1;
 EOF
 --mkdir $ENCRYPT_DATADIR
 
+
+--source include/make_consensus_args.inc
+
 --echo # Create and start mysqld with keyring plugin.
 --source include/shutdown_mysqld.inc
 
 --replace_result $MYSQLD MYSQLD $BOOTSTRAP_SQL BOOTSTRAP_SQL $ENCRYPT_DATADIR ENCRYPT_DATADIR $START_PAGE_SIZE PAGE_SIZE $ENCRYPT_ERROR_FILE ENCRYPT_ERROR_FILE
---let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure --init-file=$BOOTSTRAP_SQL --innodb_redo_log_capacity=10M --innodb_page_size=$START_PAGE_SIZE --datadir=$ENCRYPT_DATADIR > $ENCRYPT_ERROR_FILE  2>&1
+--let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --init-file=$BOOTSTRAP_SQL --innodb_redo_log_capacity=10M --innodb_page_size=$START_PAGE_SIZE --datadir=$ENCRYPT_DATADIR > $ENCRYPT_ERROR_FILE  2>&1
 
 --exec $NEW_CMD
 

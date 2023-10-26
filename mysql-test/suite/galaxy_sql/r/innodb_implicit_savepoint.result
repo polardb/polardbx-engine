@@ -6,7 +6,7 @@ start transaction;
 insert into t1 values(1);
 insert into t1 values(2);
 call dbms_trans.rollback_to_implicit_savepoint();
-ERROR 42000: SAVEPOINT __MySQL_Implicit_Savepoint__ does not exist
+ERROR 42000: SAVEPOINT __MySQL does not exist
 commit;
 SET auto_savepoint = ON;
 start transaction;

@@ -29,6 +29,8 @@ write_file $BOOTSTRAP_SQL;
 CREATE DATABASE test;
 EOF
 
+--source include/make_consensus_args.inc
+
 --echo # Stop the MTR default DB server
 --source include/shutdown_mysqld.inc
 
@@ -36,7 +38,7 @@ EOF
 --echo # INITIALIZE NEW SERVER
 --echo #########################################################################
 --source include/keyring_tests/helper/binary_backup_manifest.inc
-let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_data_home_dir=$MYSQLD_HOME_DATA_DIR --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT;
+let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_data_home_dir=$MYSQLD_HOME_DATA_DIR --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT;
 
 --echo # Server should be initialized successfully.
 --exec $NEW_CMD

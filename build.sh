@@ -217,7 +217,7 @@ fi
 
 build_type="release"
 dest_dir=$HOME/tmp_run
-server_suffix="galaxy-dev"
+server_suffix="dev"
 san_type=""
 asan=0
 tsan=0

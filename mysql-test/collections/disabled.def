@@ -339,6 +339,10 @@ main.wl14965									 :  WL#001 upgrade from 8027
 
 encryption.upgrade                               : WL#21509040 not support start from no 3 nodes dir
 
+component_keyring_file.clone_remote_encrypt      : WL#21509040 not support clone
+component_keyring_file.clone_local_encrypt       : WL#21509040 not support clone
+
+
 binlog.binlog_encryption_random_access           					: WL#21509040 encrypt binlog
 binlog.binlog_rotate_binlog_master_key_errors    					: WL#21509040 encrypt binlog
 binlog.binlog_rotate_binlog_master_key_crash_recovery_at_startup 	: WL#21509040 encrypt binlog

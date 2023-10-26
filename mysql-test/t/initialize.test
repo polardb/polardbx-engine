@@ -280,7 +280,7 @@ CREATE DATABASE test;
 EOF
 
 --echo # Run the server with --initialize-insecure and 4K pages.
---exec $MYSQLD --no-defaults $consensus_args --initialize-insecure --innodb_page_size=4K --datadir=$DDIR --init-file=$BOOTSTRAP_SQL >$MYSQLD_LOG 2>&1
+--exec $MYSQLD --no-defaults --initialize-insecure $consensus_args --innodb_page_size=4K --datadir=$DDIR --init-file=$BOOTSTRAP_SQL >$MYSQLD_LOG 2>&1
 
 --echo # Look for error messages from my_message_stderr (there should be none)
 --perl

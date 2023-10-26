@@ -30,11 +30,13 @@ SHOW VARIABLES LIKE "%innodb_undo_log_encrypt%";
 CREATE DATABASE test;
 EOF
 
+--source include/make_consensus_args.inc
+
 --source include/shutdown_mysqld.inc
 --source include/wait_until_disconnected.inc
 
 --source include/keyring_tests/helper/binary_backup_manifest.inc
---let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$PAGE_SIZE --datadir=$MYSQL_ENC_DATADIR --init-file=$BOOTSTRAP_SQL --secure-file-priv="" >>$BOOTSTRAP_LOG 2>&1
+--let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$PAGE_SIZE --datadir=$MYSQL_ENC_DATADIR --init-file=$BOOTSTRAP_SQL --secure-file-priv="" >>$BOOTSTRAP_LOG 2>&1
 
 --exec $NEW_CMD
 

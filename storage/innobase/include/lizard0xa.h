@@ -52,7 +52,7 @@ struct SYS_VAR;
 */
 typedef struct xa_desc_t {
  public:
-  xa_desc_t() : xid(), group() {}
+  explicit xa_desc_t() : xid(), group() {}
   virtual ~xa_desc_t() { reset(); }
 
   void reset() { xid.null(); }

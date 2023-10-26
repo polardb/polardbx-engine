@@ -85,24 +85,16 @@ void print_commit_id() {
 void customize_server_version() {
   char tmp_version[SERVER_VERSION_LENGTH];
   uint version_patch;
-  size_t size;
-  char *end;
 
   memset(tmp_version, '\0', SERVER_VERSION_LENGTH);
   version_patch =
       rds_version > MYSQL_VERSION_PATCH ? rds_version : MYSQL_VERSION_PATCH;
 
-  size = snprintf(tmp_version, SERVER_VERSION_LENGTH, "%d.%d.%d%s",
-                  MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, version_patch,
-                  MYSQL_VERSION_EXTRA);
+  snprintf(tmp_version, SERVER_VERSION_LENGTH, "%d.%d.%d%s",
+          MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, version_patch,
+          MYSQL_VERSION_EXTRA);
 
   strxmov(innodb_version, tmp_version, NullS);
-
-  end = strstr(server_version, "-");
-  if (end && (size < SERVER_VERSION_LENGTH)) {
-    snprintf(tmp_version + size, (SERVER_VERSION_LENGTH - size), "%s", end);
-  }
-  strxmov(server_version, tmp_version, NullS);
 }
 
 static bool fix_server_version(sys_var *, THD *, enum_var_type) {

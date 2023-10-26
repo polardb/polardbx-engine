@@ -29,6 +29,8 @@ write_file $BOOTSTRAP_SQL;
 CREATE DATABASE test;
 EOF
 
+--source include/make_consensus_args.inc
+
 --echo # Stop the MTR default DB server
 --source include/shutdown_mysqld.inc
 
@@ -36,7 +38,7 @@ EOF
 
 --source include/keyring_tests/helper/binary_backup_manifest.inc
 # Set the bootstrap parameters with undo log encryption enabled
-let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure --secure-file-priv="" --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_data_home_dir=$MYSQLD_HOME_DATA_DIR --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL --innodb_undo_log_encrypt=ON </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --secure-file-priv="" --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_data_home_dir=$MYSQLD_HOME_DATA_DIR --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL --innodb_undo_log_encrypt=ON </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap.log 2>&1;
 
 --echo # Run the bootstrap command with no keyring
 --error 1,42
@@ -55,7 +57,7 @@ let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OF
 # Test2: bootstrap with undo encryption and with keyring, it should
 # success, then restart with no undo encryption.
 --source include/keyring_tests/helper/binary_restore_manifest.inc
-let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_data_home_dir=$MYSQLD_HOME_DATA_DIR --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL --innodb_undo_log_encrypt=ON --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap2.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_data_home_dir=$MYSQLD_HOME_DATA_DIR --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR --init-file=$BOOTSTRAP_SQL --innodb_undo_log_encrypt=ON --secure-file-priv="" </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap2.log 2>&1;
 
 --echo # Run the bootstrap command with keyring
 --exec $NEW_CMD

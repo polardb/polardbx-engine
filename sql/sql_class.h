@@ -4851,6 +4851,10 @@ public:
 
   MyVisionGCN owned_vision_gcn;
 
+  struct im::ST_CONN_ATTR conn_attr;
+  /** Returning clause lex */
+  std::unique_ptr<im::Lex_returning> lex_returning;
+
   bool raft_replication_channel;
 
   void reset_gcn_variables() {
@@ -4863,13 +4867,6 @@ public:
   }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
-
- public:
-  struct im::ST_CONN_ATTR conn_attr;
-  /** Returning clause lex */
-  std::unique_ptr<im::Lex_returning> lex_returning;
-
-  bool xpaxos_replication_channel;
 
   /** Get returning lex */
   im::Lex_returning *get_lex_returning() { return lex_returning.get(); }

@@ -123,11 +123,8 @@ VIEW_ROUTINE_USAGE
 VIEW_TABLE_USAGE
 columns_priv
 component
-<<<<<<< HEAD
 concurrency_control
-=======
 consensus_info
->>>>>>> [Raft] fix mysql test case bugs
 db
 default_roles
 engine_cost
@@ -915,22 +912,8 @@ table_schema IN ('mysql', 'information_schema', 'test', 'mysqltest')
 AND table_name not like 'ndb%' AND table_name COLLATE utf8_general_ci not like 'innodb_%'
 GROUP BY TABLE_SCHEMA;
 TABLE_SCHEMA	count(*)
-<<<<<<< HEAD
-<<<<<<< HEAD
-information_schema	51
-<<<<<<< HEAD
-mysql	37
-=======
-mysql	35
-=======
-information_schema	56
-mysql	36
->>>>>>> 4785e8de0cf... fix cases 1
->>>>>>> [Raft] fix mysql test case bugs
-=======
 information_schema	59
-mysql	36
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
+mysql	38
 create table t1 (i int, j int);
 create trigger trg1 before insert on t1 for each row
 begin

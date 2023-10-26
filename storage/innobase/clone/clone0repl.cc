@@ -522,7 +522,6 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
     trx_sys_gtids_mem_mutex_exit();
     err = write_to_table(flush_list_number, table_gtid_set, sid_map);
     m_flush_in_progress.store(false);
-
     /* Compress always after recovery, if GTIDs are added. */
     if (!m_thread_active.load()) {
       compress_recovery = true;

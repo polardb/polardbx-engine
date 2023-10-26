@@ -2,11 +2,8 @@ show tables where Tables_in_db != 'ndb_binlog_index';
 Tables_in_db
 columns_priv
 component
-<<<<<<< HEAD
 concurrency_control
-=======
 consensus_info
->>>>>>> [Raft] fix mysql test case bugs
 db
 default_roles
 engine_cost

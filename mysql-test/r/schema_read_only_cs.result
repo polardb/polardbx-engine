@@ -708,7 +708,7 @@ ALTER SCHEMA S READ ONLY=1;;
 # Verify lock state and let the INSERT continue.
 connection default;
 SELECT object_schema, object_name, lock_type, lock_status
-FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S') order by 1, 2;
+FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S') order by 1, 2, 3;
 object_schema	object_name	lock_type	lock_status
 S	NULL	EXCLUSIVE	GRANTED
 S	t	EXCLUSIVE	PENDING
@@ -736,7 +736,7 @@ INSERT INTO S.t VALUES (1);;
 # Verify lock state and let the ALTER continue.
 connection default;
 SELECT object_schema, object_name, lock_type, lock_status
-FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S') order by 1, 2;
+FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S') order by 1, 2, 3;
 object_schema	object_name	lock_type	lock_status
 S	NULL	EXCLUSIVE	GRANTED
 S	t	EXCLUSIVE	GRANTED

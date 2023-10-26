@@ -150,39 +150,6 @@ disable_wait_commitindex
 disable_wait_commitindex
 disabled_storage_engines
 disabled_storage_engines
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
-example_create_count_thdvar
-example_create_count_thdvar
-example_double_thdvar
-example_double_thdvar
-example_double_var
-example_double_var
-example_enum_var
-example_enum_var
-example_last_create_thdvar
-example_last_create_thdvar
-example_ulong_var
-example_ulong_var
-<<<<<<< HEAD
-=======
->>>>>>> [Raft] support mtr and consensus_proc pl
-explain_format
-explain_format
-gcn_write_event
-gcn_write_event
-=======
-=======
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
->>>>>>> [Raft] fix compile error and case after rebase feature_mix_binlog_relaylog on master-8.0.32 6de5f3dd
-=======
->>>>>>> [Raft] fix compile error after rebase feature_mix_binlog_relaylog on master-8.0.32 181647e53
 enable_appliedindex_checker
 enable_appliedindex_checker
 explain_format

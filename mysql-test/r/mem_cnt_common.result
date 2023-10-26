@@ -1,12 +1,8 @@
 
 # Check variables for min/default values.
 SET SESSION connection_memory_limit = 1024 * 1024;
-Warnings:
-Warning	1292	Truncated incorrect connection_memory_limit value: '1048576'
 SET SESSION connection_memory_limit = 1024 * 1024 * 2;
 SET GLOBAL global_connection_memory_limit = 1024 * 1024;
-Warnings:
-Warning	1292	Truncated incorrect global_connection_memory_limit value: '1048576'
 SET GLOBAL global_connection_memory_limit = 1024 * 1024 * 16;
 SET SESSION connection_memory_chunk_size = 1024 * 1024;
 SET SESSION connection_memory_chunk_size = 1024 * 1024 * 16;

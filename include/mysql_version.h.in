@@ -26,7 +26,7 @@
 
 #define RDS_RELEASE_DATE           "@RDS_RELEASE_DATE@"
 #define RDS_COMMIT_ID              "@RDS_COMMIT_ID@"
-#define GALAXYENGINE_VERSION        "3.0.0"
+#define POLARDB_X_ENGINE_VERSION        "2.0.0"
 
 #ifndef LICENSE
 #define LICENSE                     GPL

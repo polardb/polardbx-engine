@@ -46,6 +46,7 @@ let $wait_condition= select role='leader' and server_ready_for_rw='Yes' from inf
 --source include/wait_condition.inc
 show global variables like "event_scheduler";
 
+sleep 2;
 --connection default
 --enable_reconnect
 show global variables like "event_scheduler";
