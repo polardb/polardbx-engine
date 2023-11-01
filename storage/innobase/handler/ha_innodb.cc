@@ -1358,15 +1358,23 @@ static SHOW_VAR innodb_status_variables[] = {
 #ifdef UNIV_DEBUG
     // {"purge_trx_id_age", (char *)&export_vars.innodb_purge_trx_id_age,
     //  SHOW_LONG, SHOW_SCOPE_GLOBAL},
-    // {"purge_view_trx_id_age", (char *)&export_vars.innodb_purge_view_trx_id_age,
+    // {"purge_view_trx_id_age", (char
+    // *)&export_vars.innodb_purge_view_trx_id_age,
     //  SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {"purge_trx_scn_age", (char *)&export_vars.innodb_purge_trx_scn_age,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
-    {"purge_view_trx_scn_age", (char *)&export_vars.innodb_purge_view_trx_scn_age,
-     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"purge_view_trx_scn_age",
+     (char *)&export_vars.innodb_purge_view_trx_scn_age, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
     {"ahi_drop_lookups", (char *)&export_vars.innodb_ahi_drop_lookups,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 #endif /* UNIV_DEBUG */
+    {"polarx_block_mode_sample_records",
+     (char *)&export_vars.innodb_polarx_block_mode_sample_records, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"polarx_rec_mode_sample_records",
+     (char *)&export_vars.innodb_polarx_rec_mode_sample_records, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 /** Handling the shared INNOBASE_SHARE structure that is needed to provide table
@@ -3097,7 +3105,8 @@ ha_innobase::ha_innobase(handlerton *hton, TABLE_SHARE *table_arg)
           HA_SUPPORTS_DEFAULT_EXPRESSION),
       m_start_of_scan(),
       m_stored_select_lock_type(LOCK_NONE_UNSET),
-      m_mysql_has_locked() {}
+      m_mysql_has_locked(),
+      m_sampler(nullptr) {}
 
 /** Updates the user_thd field in a handle and also allocates a new InnoDB
  transaction handle if needed, and updates the transaction fields in the
@@ -10242,6 +10251,8 @@ int ha_innobase::index_init(uint keynr, /*!< in: key (index) number */
 {
   DBUG_TRACE;
 
+  ut_ad(!m_sampler);
+
   return change_active_index(keynr);
 }
 
@@ -10883,7 +10894,10 @@ int ha_innobase::sample_init(void *&scan_ctx, double sampling_percentage,
 
   ut_ad(sampling_percentage >= 0.0);
   ut_ad(sampling_percentage <= 100.0);
-  ut_ad(sampling_method == enum_sampling_method::SYSTEM);
+
+  if (m_sampling_method == enum_sampling_method::USER) {
+    return lizard_sample_init(sampling_percentage, sampling_seed);
+  }
 
   if (sampling_percentage <= 0.0 || sampling_percentage > 100.0 ||
       sampling_method != enum_sampling_method::SYSTEM) {
@@ -10952,6 +10966,9 @@ int ha_innobase::sample_init(void *&scan_ctx, double sampling_percentage,
 }
 
 int ha_innobase::sample_next(void *scan_ctx, uchar *buf) {
+  if (m_sampling_method == enum_sampling_method::USER) {
+    return lizard_sample_next(buf);
+  }
   dberr_t err = DB_SUCCESS;
 
   Histogram_sampler *sampler = static_cast<Histogram_sampler *>(scan_ctx);
@@ -10969,6 +10986,9 @@ int ha_innobase::sample_next(void *scan_ctx, uchar *buf) {
 }
 
 int ha_innobase::sample_end(void *scan_ctx) {
+  if (m_sampling_method == enum_sampling_method::USER) {
+    return lizard_sample_end();
+  }
   Histogram_sampler *sampler = static_cast<Histogram_sampler *>(scan_ctx);
 
   ut::delete_(sampler);
@@ -23651,6 +23671,10 @@ static MYSQL_SYSVAR_BOOL(vision_use_commit_snapshot_debug,
                          "find a suitable up_limit_tid for general Vision on",
                          NULL, NULL, false);
 
+static MYSQL_SYSVAR_BOOL(innodb_btree_sampling, srv_innodb_btree_sampling,
+                         PLUGIN_VAR_OPCMDARG, "Support btree sampling.", NULL,
+                         NULL, TRUE);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -23902,6 +23926,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(txn_cached_list_keep_size),
     MYSQL_SYSVAR(commit_snapshot_search_enabled),
     MYSQL_SYSVAR(vision_use_commit_snapshot_debug),
+    MYSQL_SYSVAR(innodb_btree_sampling),
     nullptr};
 
 mysql_declare_plugin(innobase){

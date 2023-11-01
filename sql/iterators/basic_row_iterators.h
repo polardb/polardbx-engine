@@ -111,7 +111,8 @@ class TableSampleIterator final : public TableRowIterator {
   //
   // "examined_rows", if not nullptr, is incremented for each successful Read().
   TableSampleIterator(THD *thd, TABLE *table, double expected_rows,
-                      ha_rows *examined_rows, double sample_pct);
+                      ha_rows *examined_rows, double sample_pct,
+                      JOIN *join = nullptr);
   ~TableSampleIterator() override;
 
   bool Init() override;
@@ -123,6 +124,10 @@ class TableSampleIterator final : public TableRowIterator {
   ha_rows *const m_examined_rows;
   double m_sample_pct;
   void *m_scan_ctx;
+
+  /* count(*) related */
+  JOIN *const m_join;
+  uint m_count;
 };
 
 /** Perform a full index scan along an index. */

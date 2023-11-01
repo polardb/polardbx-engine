@@ -410,7 +410,8 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         const auto &param = path->table_sample();
         iterator = NewIterator<TableSampleIterator>(
             thd, mem_root, param.table, path->num_output_rows(), examined_rows,
-            thd->lex->opt_hints_global->sample_hint->sample_pct());
+            thd->lex->sample_percentage,
+            (join && join->select_count) ? join : nullptr);
         break;
       }
       case AccessPath::INDEX_SCAN: {

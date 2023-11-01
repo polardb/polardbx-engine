@@ -41,11 +41,13 @@
 #include "mysqld_error.h"
 #include "sql/debug_sync.h"
 #include "sql/handler.h"
+#include "sql/item_sum.h"
 #include "sql/iterators/row_iterator.h"
 #include "sql/mem_root_array.h"
 #include "sql/sql_bitmap.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_executor.h"
+#include "sql/sql_optimizer.h"
 #include "sql/sql_tmp_table.h"
 #include "sql/system_variables.h"
 #include "sql/table.h"
@@ -442,14 +444,26 @@ bool FollowTailIterator::RepositionCursorAfterSpillToDisk() {
 TableSampleIterator::TableSampleIterator(THD *thd, TABLE *table,
                                          double expected_rows,
                                          ha_rows *examined_rows,
-                                         double sample_pct)
+                                         double sample_pct, JOIN *join)
     : TableRowIterator(thd, table),
       m_record(table->record[0]),
       m_expected_rows(expected_rows),
       m_examined_rows(examined_rows),
-      m_sample_pct(sample_pct) {}
+      m_sample_pct(sample_pct),
+      m_join(join),
+      m_count(0) {}
 
 TableSampleIterator::~TableSampleIterator() {
+  if (m_join != nullptr) {
+    for (Item *item : *m_join->fields) {
+      if (item->type() == Item::SUM_FUNC_ITEM &&
+          down_cast<Item_sum *>(item)->sum_func() == Item_sum::COUNT_FUNC) {
+        down_cast<Item_sum_count *>(item)->make_const(
+            static_cast<longlong>(m_count));
+      }
+    }
+  }
+
   if (table()->file != nullptr) {
     table()->file->ha_sample_end(m_scan_ctx);
   }
@@ -470,11 +484,12 @@ bool TableSampleIterator::Init() {
     sampling_seed = 1;
     m_sample_pct = 50.0;
   });
+  DBUG_EXECUTE_IF("sampling_use_fixed_seed", { sampling_seed = 1; });
 
   bool tablesample = false;
   int error =
       table()->file->ha_sample_init(m_scan_ctx, m_sample_pct, sampling_seed,
-                                    enum_sampling_method::SYSTEM, tablesample);
+                                    enum_sampling_method::USER, tablesample);
   if (error) {
     PrintError(error);
     return true;
@@ -489,11 +504,21 @@ bool TableSampleIterator::Init() {
 int TableSampleIterator::Read() {
   int tmp;
   while ((tmp = table()->file->ha_sample_next(m_scan_ctx, m_record))) {
+    /*
+     ha_rnd_next can return RECORD_DELETED for MyISAM when one thread is
+     reading and another deleting without locks.
+     For MEMORY and PERFORMANCE_SCHEMA, return RECORD_DELETED is possible too.
+     */
+    if (tmp == HA_ERR_RECORD_DELETED && !thd()->killed) continue;
     return HandleError(tmp);
   }
 
   if (m_examined_rows != nullptr) {
     ++*m_examined_rows;
+  }
+
+  if (m_join != nullptr) {
+    ++m_count;
   }
 
   return 0;

@@ -4440,6 +4440,9 @@ void handler::print_error(int error, myf errflag) {
     case HA_ERR_GP_WAIT_TIMEOUT:
       textno = ER_GP_WAIT_TIMEOUT;
       break;
+    case HA_ERR_SAMPLE_WRONG_SEMANTIC:
+      textno = ER_SAMPLE_WRONG_SEMANTIC;
+      break;
     default: {
       /* The error was "unknown" to this function.
          Ask handler if it has got a message for this error */

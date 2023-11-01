@@ -1359,7 +1359,7 @@ err:
   Set table->read_set taking partitioning expressions into account.
 */
 
-inline void Partition_helper::set_partition_read_set() {
+void Partition_helper::set_partition_read_set() {
   /*
     For operations that may need to change data, we may need to extend
     read_set.

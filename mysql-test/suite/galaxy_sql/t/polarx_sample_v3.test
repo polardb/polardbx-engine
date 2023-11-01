@@ -1,0 +1,40 @@
+
+create table tt (id int primary key, pad char(255)) CHARACTER SET = utf8, engine = innodb;
+--source polarx_sample_v3.inc
+drop table tt;
+
+create table tt (id int, pad char(255)) CHARACTER SET = utf8, engine = innodb;
+--source polarx_sample_v3.inc
+drop table tt;
+
+--echo ######################
+--echo # special tables
+--echo ######################
+CREATE TABLE triangle (
+  sidea DOUBLE,
+  sideb DOUBLE,
+  sidec DOUBLE GENERATED ALWAYS AS (SQRT(sidea * sidea + sideb * sideb)) VIRTUAL
+);
+INSERT INTO triangle (sidea, sideb) VALUES(1,1),(3,4),(6,8);
+
+select /*+ sample_percentage(100.0) */ * from triangle;
+drop table triangle;
+
+CREATE TABLE triangle (
+  sidea DOUBLE,
+  sideb DOUBLE,
+  sidec DOUBLE GENERATED ALWAYS AS (SQRT(sidea * sidea + sideb * sideb)) STORED
+);
+INSERT INTO triangle (sidea, sideb) VALUES(1,1),(3,4),(6,8);
+select /*+ sample_percentage(100.0) */ * from triangle;
+drop table triangle;
+
+# create temporary table t_tmp (i int);
+# --error ER_SAMPLE_WRONG_SEMANTIC
+# select /*+ sample_percentage(100.0) */ * from t_tmp;
+# drop table t_tmp;
+
+create table tt (id int);
+--error ER_SAMPLE_WRONG_SEMANTIC
+select /*+ sample_percentage(100.0) */ * from tt where id < 10;
+drop table tt;

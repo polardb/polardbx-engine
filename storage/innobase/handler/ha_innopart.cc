@@ -2003,7 +2003,12 @@ int ha_innopart::sample_init(void *&scan_ctx, double sampling_percentage,
                              const bool tablesample) {
   assert(table_share->is_missing_primary_key() ==
          (bool)m_prebuilt->clust_index_was_generated);
-
+  m_sampling_method = sampling_method;
+  if (m_sampling_method == enum_sampling_method::USER) {
+    m_sampling_percentage = sampling_percentage;
+    m_sampling_seed = sampling_seed;
+    return (Partition_helper::ph_sample_init(true));
+  }
   ut_ad(sampling_percentage >= 0.0);
   ut_ad(sampling_percentage <= 100.0);
   ut_ad(sampling_method == enum_sampling_method::SYSTEM);
@@ -2078,6 +2083,9 @@ int ha_innopart::sample_init(void *&scan_ctx, double sampling_percentage,
 }
 
 int ha_innopart::sample_next(void *scan_ctx, uchar *buf) {
+  if (m_sampling_method == enum_sampling_method::USER) {
+    return (Partition_helper::ph_sample_next(buf));
+  }
   dberr_t err = DB_SUCCESS;
 
   auto sampler = static_cast<Histogram_sampler *>(scan_ctx);
@@ -2095,6 +2103,9 @@ int ha_innopart::sample_next(void *scan_ctx, uchar *buf) {
 }
 
 int ha_innopart::sample_end(void *scan_ctx) {
+  if (m_sampling_method == enum_sampling_method::USER) {
+    return (Partition_helper::ph_sample_end());
+  }
   auto sampler = static_cast<Histogram_sampler *>(scan_ctx);
   ut::delete_(sampler);
 

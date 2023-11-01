@@ -1,0 +1,41 @@
+
+CREATE TABLE tt (
+    id int primary key,
+    pad char (255)
+)
+PARTITION BY HASH(id)
+PARTITIONS 4;
+
+--source polarx_sample_v3.inc
+
+drop table tt;
+
+CREATE TABLE tt (
+    id int,
+    pad char (255)
+)
+PARTITION BY HASH(id)
+PARTITIONS 4;
+
+--source polarx_sample_v3.inc
+
+drop table tt;
+
+CREATE TABLE t1 (
+    id INT,
+    year_col INT
+)
+PARTITION BY RANGE (year_col) (
+    PARTITION p0 VALUES LESS THAN (1991),
+    PARTITION p1 VALUES LESS THAN (1995),
+    PARTITION p2 VALUES LESS THAN (1999)
+);
+
+insert into t1 values (1, 1800), (2, 1993), (3, 1996);
+
+ALTER TABLE t1 DISCARD PARTITION p1 TABLESPACE;
+
+--error ER_TABLESPACE_MISSING
+select /*+ sample_percentage(100.0) */ * from t1;
+
+drop table t1;

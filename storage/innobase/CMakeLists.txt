@@ -225,6 +225,7 @@ SET(INNOBASE_SOURCES
   row/row0upd.cc
   row/row0quiesce.cc
   row/row0vers.cc
+  sampler/lizard0sample.cc
   srv/srv0conc.cc
   srv/srv0mon.cc
   srv/srv0srv.cc

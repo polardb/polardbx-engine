@@ -902,6 +902,12 @@ class ha_innopart : public ha_innobase,
   @return 0 for success, else one of the HA_xxx values in case of error. */
   int sample_end(void *scan_ctx) override;
 
+  virtual int sample_init_in_part(uint part_id, bool scan) override;
+
+  virtual int sample_next_in_part(uint part_id, uchar *buf) override;
+
+  virtual int sample_end_in_part(uint part_id, bool scan) override;
+
   /** Initialize random read/scan of a specific partition.
   @param[in]    part_id         Partition to initialize.
   @param[in]    scan            True for scan else random access.

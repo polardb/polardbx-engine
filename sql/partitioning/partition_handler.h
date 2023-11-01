@@ -606,6 +606,23 @@ class Partition_helper {
 
   /** @} */
 
+  /**
+    MODULE sample
+
+    Like 'MODULE full table scan'. Supports partitioned tables for sampling.
+  */
+  int ph_sample_init(bool scan);
+
+  int ph_sample_end();
+
+  int ph_sample_next(uchar *buf);
+
+  virtual int sample_init_in_part(uint part_id, bool table_scan);
+
+  virtual int sample_next_in_part(uint part_id, uchar *buf);
+
+  virtual int sample_end_in_part(uint part_id, bool scan);
+
  protected:
   /* Common helper functions to be used by inheriting engines. */
 

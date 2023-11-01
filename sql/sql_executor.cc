@@ -87,6 +87,7 @@
 #include "sql/nested_join.h"
 #include "sql/opt_costmodel.h"
 #include "sql/opt_explain_format.h"
+#include "sql/opt_hints_ext.h"
 #include "sql/opt_trace.h"  // Opt_trace_object
 #include "sql/query_options.h"
 #include "sql/record_buffer.h"  // Record_buffer
@@ -3003,7 +3004,8 @@ static void DisableEqRefCache(AccessPath *path) {
 }
 
 AccessPath *JOIN::create_root_access_path_for_join() {
-  if (select_count) {
+  if (select_count && (!thd->lex || !thd->lex->opt_hints_global ||
+                       !thd->lex->opt_hints_global->sample_hint)) {
     return NewUnqualifiedCountAccessPath(thd);
   }
 
@@ -4718,8 +4720,8 @@ AccessPath *create_table_access_path(THD *thd, TABLE *table,
     path = range_scan;
   } else if (table_ref != nullptr && table_ref->is_recursive_reference()) {
     path = NewFollowTailAccessPath(thd, table, count_examined_rows);
-  } else if (thd->lex && thd->lex->opt_hints_global &&
-             thd->lex->opt_hints_global->sample_hint) {
+  } else if (is_polarx_sample_query(thd->lex, table) &&
+             !check_sample_semantic(thd->lex, table)) {
     path = NewTableSampleAccessPath(thd, table, count_examined_rows);
   } else {
     path = NewTableScanAccessPath(thd, table, count_examined_rows);

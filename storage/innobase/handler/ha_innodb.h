@@ -82,6 +82,10 @@ class Dictionary_client;
 }
 }  // namespace dd
 
+namespace lizard {
+class Sampler;
+}
+
 /** The class defining a handle to an InnoDB table */
 class ha_innobase : public handler {
  public:
@@ -222,16 +226,24 @@ class ha_innobase : public handler {
                   int sampling_seed, enum_sampling_method sampling_method,
                   const bool tablesample) override;
 
+  int lizard_sample_init(double sampling_percentage, int sampling_seed);
+
+  int lizard_sample_init_low(double sampling_percentage, int sampling_seed);
+
   /** Get the next record for sampling.
   @param[in]  scan_ctx  Scan context of the sampling
   @param[in]  buf       buffer to place the read record
   @return 0 for success, else one of the HA_xxx values in case of error. */
   int sample_next(void *scan_ctx, uchar *buf) override;
 
+  int lizard_sample_next(uchar *buf);
+
   /** End sampling.
   @param[in] scan_ctx  Scan context of the sampling
   @return 0 for success, else one of the HA_xxx values in case of error. */
   int sample_end(void *scan_ctx) override;
+
+  int lizard_sample_end();
 
   /** MySQL calls this function at the start of each SQL statement
   inside LOCK TABLES. Inside LOCK TABLES the "::external_lock" method
@@ -679,9 +691,12 @@ class ha_innobase : public handler {
   /** If mysql has locked with external_lock() */
   bool m_mysql_has_locked;
 
-public:
- virtual void get_create_info(const char *table, const dd::Table *table_def,
-                              HA_CREATE_INFO *create_info) override;
+  /** polarx sampler v3. */
+  lizard::Sampler *m_sampler;
+
+ public:
+  virtual void get_create_info(const char *table, const dd::Table *table_def,
+                               HA_CREATE_INFO *create_info) override;
 };
 
 struct trx_t;

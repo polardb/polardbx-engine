@@ -30,7 +30,7 @@ void Sample_percentage_hint::print(const THD *, String *str) {
   str->append(ss.str().c_str(), ss.str().length());
 }
 
-bool check_sample_semantic(LEX *lex) {
+bool check_sample_semantic(LEX *lex, const TABLE *table) {
   assert(lex);
 
   auto select = lex->current_query_block();
@@ -40,16 +40,54 @@ bool check_sample_semantic(LEX *lex) {
 
   if (!lex->is_single_level_stmt() || select->where_cond() != nullptr ||
       select->having_cond() != nullptr || select->is_ordered() ||
-      select->is_grouped() || select->has_limit()) {
+      /* Don't know why 'select count(*)' was turn to 'is_grouped()' */
+      /* select->is_grouped() || */
+      select->has_limit() || select->is_distinct() ||
+      (select->active_options() & OPTION_BUFFER_RESULT) ||
+      /* CREATE TABLE AS SELECT*/
+      (lex->m_sql_cmd && lex->m_sql_cmd->sql_command_code() != SQLCOM_SELECT)) {
+    return true;
+  }
+  if (select->m_table_list.elements != 1 ||
+      select->get_table_list()->index_hints != nullptr ||
+      select->get_table_list()->is_view_or_derived() ||
+      select->get_table_list()->is_table_function()) {
     return true;
   }
 
-  if (select->m_table_list.elements != 1 ||
-      select->m_table_list.first->index_hints != nullptr ||
-      select->m_table_list.first->is_view_or_derived() ||
-      select->m_table_list.first->is_table_function()) {
+  if (table != nullptr &&
+      /* skip select ... lock in share mode / for update */
+      !(table->reginfo.lock_type == TL_READ)
+      /** Not sure for generated column for now. */
+      /* || table->has_gcol() || table->has_virtual_gcol() */
+      /** Only innodb */
+      /* || table->s->db_type() == nullptr || */
+      /* || table->s->db_type()->db_type != DB_TYPE_INNODB */
+  ) {
     return true;
   }
 
   return false;
+}
+
+#ifdef POLARX_SAMPLE_TEST
+static bool srv_turn_regular_query_to_sample = true;
+
+/** Try treating all regular queries as sample queries with a sampling rate of
+100%. */
+inline void turn_regular_query_to_sample(LEX *lex, const TABLE *table) {
+  if (srv_turn_regular_query_to_sample && !lex->hint_polarx_sample &&
+      !check_sample_semantic(lex, table)) {
+    /* Not set sample percentage 100% for avoiding false triggering */
+    lex->sample_percentage = 95.0;
+    lex->hint_polarx_sample = true;
+  }
+}
+#endif
+bool is_polarx_sample_query(LEX *lex, const TABLE *table [[maybe_unused]]) {
+#ifdef POLARX_SAMPLE_TEST
+  turn_regular_query_to_sample(lex, table);
+#endif
+
+  return lex->hint_polarx_sample;
 }

@@ -444,6 +444,8 @@ void LEX::reset() {
   part_info = nullptr;
   duplicates = DUP_ERROR;
   ignore = false;
+  sample_percentage = 100.0;
+  hint_polarx_sample = false;
   spname = nullptr;
   sphead = nullptr;
   set_sp_current_parsing_ctx(nullptr);

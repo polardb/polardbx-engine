@@ -791,6 +791,8 @@ extern struct export_var_t export_vars;
 /** Global counters */
 extern srv_stats_t srv_stats;
 
+extern bool srv_innodb_btree_sampling;
+
 /* Keys to register InnoDB threads with performance schema */
 
 #ifdef UNIV_PFS_THREAD
@@ -1231,6 +1233,8 @@ struct export_var_t {
 #endif                                /* UNIV_DEBUG */
 
   ulint commit_gcn;
+  ulint innodb_polarx_block_mode_sample_records;
+  ulint innodb_polarx_rec_mode_sample_records;
 };
 
 #ifndef UNIV_HOTBACKUP

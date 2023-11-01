@@ -3825,6 +3825,9 @@ struct LEX : public Query_tables_list, public im::Query_blocks_list {
   */
   List<Item_param> param_list;
 
+  double sample_percentage{100.0};
+  bool hint_polarx_sample{false};
+
   bool locate_var_assignment(const Name_string &name);
 
   void insert_values_map(Item_field *f1, Field *f2) {

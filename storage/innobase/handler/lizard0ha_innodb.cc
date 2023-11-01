@@ -207,3 +207,182 @@ void innobase_init_ext(handlerton *hton) {
       innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>;
   hton->ext.get_undo_purge_status = innobase_get_undo_purge_status;
 }
+
+enum_tx_isolation thd_get_trx_isolation(const THD *thd);
+
+#include "ha_innodb.h"
+#include "i_s.h"
+#include "sync0sync.h"
+
+/* for ha_innopart, Native InnoDB Partitioning. */
+#include "ha_innopart.h"
+
+#include "lizard0sample.h"
+static dberr_t prebuilt_table_validity(row_prebuilt_t *prebuilt) {
+  if (dict_table_is_discarded(prebuilt->table)) {
+    return DB_TABLESPACE_DELETED;
+
+  } else if (prebuilt->table->ibd_file_missing) {
+    return DB_TABLESPACE_NOT_FOUND;
+
+  } else if (!prebuilt->index_usable) {
+    return DB_MISSING_HISTORY;
+
+  } else if (prebuilt->index->is_corrupted()) {
+    return DB_CORRUPTION;
+  }
+
+  return DB_SUCCESS;
+}
+
+int ha_innobase::lizard_sample_init(double sampling_percentage,
+                                    int sampling_seed) {
+  int err;
+
+  ut_ad((table_share->primary_key == MAX_KEY) ==
+        m_prebuilt->clust_index_was_generated);
+
+  if (m_prebuilt->clust_index_was_generated) {
+    err = change_active_index(MAX_KEY);
+  } else {
+    err = change_active_index(table_share->primary_key);
+  }
+
+  if (err != 0) {
+    return (err);
+  }
+
+  return lizard_sample_init_low(sampling_percentage, sampling_seed);
+}
+
+int ha_innobase::lizard_sample_init_low(double sampling_percentage,
+                                        int sampling_seed) {
+  ut_a(sampling_percentage > 0.0);
+  ut_a(sampling_percentage <= 100.0);
+
+#ifndef POLARX_SAMPLE_TEST
+  /* If in POLARX_SAMPLE_TEST, allow it. */
+  if (dict_index_is_spatial(m_prebuilt->index) ||
+      m_prebuilt->index->table->is_temporary()) {
+    return HA_ERR_SAMPLE_WRONG_SEMANTIC;
+  }
+#endif
+
+  dberr_t db_err;
+  if ((db_err = prebuilt_table_validity(m_prebuilt)) != DB_SUCCESS) {
+    return (convert_error_code_to_mysql(db_err, 0, ha_thd()));
+  }
+
+  /* Assign a trx_t. */
+  update_thd();
+
+  ut_a(m_prebuilt->trx);
+  ut_a(m_prebuilt->index->is_clustered());
+  ut_a(m_prebuilt->table->first_index() == m_prebuilt->index);
+  ut_a(nullptr == m_sampler);
+
+  m_sampler = lizard::create_sampler(sampling_seed, sampling_percentage,
+                                     m_prebuilt->index);
+
+  db_err = m_sampler->init(m_prebuilt->trx, m_prebuilt->index, m_prebuilt);
+
+  if (db_err != DB_SUCCESS) {
+    lizard_sample_end();
+    return (convert_error_code_to_mysql(db_err, 0, ha_thd()));
+  }
+
+#ifdef POLARX_SAMPLE_TEST
+  m_start_of_scan = true;
+#endif
+  return (0);
+}
+
+int ha_innobase::lizard_sample_next(uchar *buf) {
+  dberr_t err = DB_SUCCESS;
+
+  if (!srv_innodb_btree_sampling) {
+    return HA_ERR_END_OF_FILE;
+  }
+
+#ifdef POLARX_SAMPLE_TEST
+  if (m_start_of_scan && m_prebuilt->sql_stat_start &&
+      !can_reuse_mysql_template()) {
+    build_template(false);
+  }
+  m_start_of_scan = false;
+#endif
+
+  if ((err = prebuilt_table_validity(m_prebuilt)) == DB_SUCCESS) {
+    ut_a(nullptr != m_sampler);
+
+    /** Buffer rows one by one */
+    err = m_sampler->next(buf);
+
+    if (DB_END_OF_INDEX == err) {
+      return HA_ERR_END_OF_FILE;
+    }
+
+    ut_ad(err == DB_SUCCESS);
+  }
+
+  return (convert_error_code_to_mysql(err, 0, ha_thd()));
+}
+
+int ha_innobase::lizard_sample_end() {
+  if (m_sampler) {
+    m_sampler->end();
+    ut::delete_(m_sampler);
+    m_sampler = nullptr;
+  }
+
+  return 0;
+}
+
+int ha_innopart::sample_init_in_part(uint part_id, bool scan) {
+  int err;
+
+  if (m_prebuilt->clust_index_was_generated) {
+    err = change_active_index(part_id, MAX_KEY);
+  } else {
+    err = change_active_index(part_id, table_share->primary_key);
+  }
+
+  if (err) {
+    return err;
+  }
+
+  ut_a(scan);
+  // /* Don't use semi-consistent read in random row reads (by position).
+  // This means we must disable semi_consistent_read if scan is false. */
+
+  // if (!scan) {
+  //   try_semi_consistent_read(false);
+  // }
+
+  return (ha_innobase::lizard_sample_init_low(m_sampling_percentage,
+                                              m_sampling_seed));
+}
+
+int ha_innopart::sample_next_in_part(uint part_id, uchar *buf) {
+  int error;
+
+  DBUG_ENTER("ha_innopart::rnd_next_in_part");
+
+  set_partition(part_id);
+
+  error = ha_innobase::sample_next(nullptr, buf);
+
+  update_partition(part_id);
+  DBUG_RETURN(error);
+}
+
+int ha_innopart::sample_end_in_part(uint part_id, bool scan) {
+  int error;
+
+  ut_a(scan);
+  if ((error = ha_innopart::rnd_end_in_part(part_id, scan))) {
+    return error;
+  }
+
+  return ha_innobase::sample_end(nullptr);
+}

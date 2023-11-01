@@ -40,40 +40,40 @@ delimiter ;||
 ### incorrect usage ###
 
 # cte
+--error ER_SAMPLE_WRONG_SEMANTIC
 with kk as (select *from p) select /*+ sample_percentage(10.0) */ * from kk;
-show warnings;
 
 # subquery
+--error ER_SAMPLE_WRONG_SEMANTIC
 select * from (select /*+ sample_percentage(10.0) */ * from p) a;
-show warnings;
 
 # subquery
+--error ER_SAMPLE_WRONG_SEMANTIC
 select /*+ sample_percentage(10.0) */ * from (select * from p) a;
-show warnings;
 
 # union
+--error ER_SAMPLE_WRONG_SEMANTIC
 select /*+ sample_percentage(10.0) */ * from t union select * from p;
-show warnings;
 
 # union
+--error ER_SAMPLE_WRONG_SEMANTIC
 select * from p union select /*+ sample_percentage(10.0) */ * from p;
-show warnings;
 
 # order by
+--error ER_SAMPLE_WRONG_SEMANTIC
 select /*+ sample_percentage(100.0) */ b from p order by b;
-show warnings;
 
 # limit
+--error ER_SAMPLE_WRONG_SEMANTIC
 select /*+ sample_percentage(100.0) */ b from p limit 10;
-show warnings;
 
 # more than one table
+--error ER_SAMPLE_WRONG_SEMANTIC
 select /*+ sample_percentage(100.0) */ p.b from p,t;
-show warnings;
 
 # view
+--error ER_SAMPLE_WRONG_SEMANTIC
 select /*+ sample_percentage(100.0) */ * from v;
-show warnings;
 
 SET SESSION debug = "+d,fixed_sample_seed";
 

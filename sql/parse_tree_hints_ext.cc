@@ -34,7 +34,10 @@ bool PT_hint_sample_percentage::contextualize(Parse_context *pc) {
 
     if (lex->sql_command != SQLCOM_SELECT) break;
 
-    if (check_sample_semantic(lex)) break;
+    if (check_sample_semantic(lex)) {
+      my_error(ER_SAMPLE_WRONG_SEMANTIC, MYF(0), "");
+      return true;
+    }
 
     int error;
     auto end = sample_pct.str + sample_pct.length;
@@ -49,6 +52,9 @@ bool PT_hint_sample_percentage::contextualize(Parse_context *pc) {
       print_warn(pc->thd, ER_WARN_CONFLICTING_HINT, NULL, NULL, NULL, this);
       return false;
     }
+    pc->thd->lex->sample_percentage = pct;
+    assert(pc->thd->lex->hint_polarx_sample == false);
+    pc->thd->lex->hint_polarx_sample = true;
 
     global_hint->sample_hint =
         new (pc->thd->mem_root) Sample_percentage_hint(pct);
@@ -56,9 +62,7 @@ bool PT_hint_sample_percentage::contextualize(Parse_context *pc) {
     return false;
   } while (0);
 
-  push_warning(pc->thd, Sql_condition::SL_WARNING,
-               ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR,
-               ER_THD(pc->thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR));
-  return false;
+  my_error(ER_SAMPLE_WRONG_SEMANTIC, MYF(0), "");
+  return true;
 }
 

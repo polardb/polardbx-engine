@@ -110,6 +110,7 @@
 #include "sql/mysqld.h"              // replica_open_temp_tables
 #include "sql/mysqld_thd_manager.h"  // Global_THD_manage
 #include "sql/nested_join.h"
+#include "sql/opt_hints_ext.h"
 #include "sql/partition_info.h"  // partition_info
 #include "sql/psi_memory_key.h"  // key_memory_TABLE
 #include "sql/query_options.h"
@@ -137,6 +138,7 @@
 #include "sql/sql_select.h"   // reset_statement_timer
 #include "sql/sql_show.h"     // append_identifier
 #include "sql/sql_sort.h"
+#include "sql/sql_statistics.h"
 #include "sql/sql_table.h"   // build_table_filename
 #include "sql/sql_update.h"  // records_are_comparable
 #include "sql/sql_view.h"    // mysql_make_view
@@ -153,7 +155,6 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
-#include "sql/sql_statistics.h"
 
 using std::equal_to;
 using std::hash;
@@ -3260,10 +3261,10 @@ retry_share : {
     /* Sample scan not allowed for view */
     if (thd->lex && thd->lex->opt_hints_global &&
         thd->lex->opt_hints_global->sample_hint) {
-      thd->lex->opt_hints_global->sample_hint = nullptr;
-      push_warning(thd, Sql_condition::SL_WARNING,
-                   ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR,
-                   ER_THD(thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR));
+      my_error(ER_SAMPLE_WRONG_SEMANTIC, MYF(0), "");
+      release_table_share(share);
+      mysql_mutex_unlock(&LOCK_open);
+      return true;
     }
 
     bool view_open_result = true;

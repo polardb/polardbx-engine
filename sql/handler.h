@@ -154,7 +154,8 @@ class ha_tablespace_statistics;
 class Unique_on_insert;
 
 /* Name of implicit savepoint */
-constexpr const char *mysql_implicit_savepoint{"__MySQL_Implicit_Savepoint__"};
+constexpr const char mysql_implicit_savepoint[] =
+    "__MySQL_Implicit_Savepoint__";
 
 extern ulong savepoint_alloc_size;
 
@@ -713,7 +714,7 @@ enum enum_binlog_command {
   LOGCOM_DROP_DB,
 };
 
-enum class enum_sampling_method { SYSTEM, NONE };
+enum class enum_sampling_method { SYSTEM, USER, NONE };
 
 /* Bits in used_fields */
 #define HA_CREATE_USED_AUTO (1L << 0)
@@ -4506,6 +4507,7 @@ class handler {
 
   std::mt19937 m_random_number_engine;
   double m_sampling_percentage;
+  int m_sampling_seed;
   enum_sampling_method m_sampling_method;
   void *m_scan_ctx;
 

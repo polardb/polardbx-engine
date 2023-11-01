@@ -1023,10 +1023,12 @@ Information in the data-dictionary needs to be updated. */
 /* Prepare wait timeout */
 #define HA_ERR_GP_WAIT_TIMEOUT 221
 
+/* Sample hint syntax error */
+#define HA_ERR_SAMPLE_WRONG_SEMANTIC 222
 /* lizard errors end */
 
 /** Copy of last error number */
-#define HA_ERR_LAST 221
+#define HA_ERR_LAST 222
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

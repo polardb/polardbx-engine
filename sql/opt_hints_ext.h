@@ -40,6 +40,13 @@ class Sample_percentage_hint {
   void print(const THD *thd, String *str);
 };
 
-extern bool check_sample_semantic(LEX *lex);
+extern bool check_sample_semantic(LEX *lex, const TABLE *table = nullptr);
+
+#ifdef POLARX_SAMPLE_TEST
+extern void turn_regular_query_to_sample(LEX *lex, const TABLE *table);
+#endif
+
+extern bool is_polarx_sample_query(LEX *lex,
+                                   const TABLE *table [[maybe_unused]]);
 
 #endif

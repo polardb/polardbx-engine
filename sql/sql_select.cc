@@ -465,9 +465,8 @@ bool Sql_cmd_select::prepare_inner(THD *thd) {
   if (lex->opt_hints_global && lex->opt_hints_global->sample_hint &&
       check_sample_semantic(lex)) {
     lex->opt_hints_global->sample_hint = nullptr;
-    push_warning(thd, Sql_condition::SL_WARNING,
-                 ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR,
-                 ER_THD(thd, ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR));
+    my_error(ER_SAMPLE_WRONG_SEMANTIC, MYF(0), "");
+    return true;
   }
 
   if (unit->is_simple()) {
