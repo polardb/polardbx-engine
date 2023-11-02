@@ -201,14 +201,19 @@ static void gp_wait_signal_thread(trx_t *trx) {
   Reset the wait state and blocking relationship from
   query trx point, signal it if allocated slot.
 
-  @param[in]      trx     global query
+  @param[in]      trx                 global query
+  @param[in]      release_reason      reason why the global query wait state was
+  reset. DB_SUCCESS if the blocking transaction has committed, or
+  DB_GP_WAIT_TIMEOUT if the global query wait has timed out.
 */
-static void gp_reset_wait_and_release_thread(trx_t *trx) {
+static void gp_reset_wait_and_release_thread(trx_t *trx,
+                                             dberr_t release_reason) {
   trx_t *blocking_trx = nullptr;
   gp_state_t *state = nullptr;
   gp_wait_t *wait = nullptr;
   ut_ad(gp_mutex_own());
   ut_ad(trx_mutex_own(trx));
+  ut_ad(release_reason == DB_SUCCESS || release_reason == DB_GP_WAIT_TIMEOUT);
 
   state = trx_gp_state(trx);
   blocking_trx = state->blocking_trx;
@@ -218,6 +223,7 @@ static void gp_reset_wait_and_release_thread(trx_t *trx) {
   wait = trx_gp_wait(blocking_trx);
   wait->release(trx);
 
+  trx->error_state = release_reason;
   /** Signal by the slot */
   gp_wait_signal_thread(trx);
 }
@@ -243,7 +249,7 @@ void gp_wait_cancel_all_when_commit(trx_t *trx) {
   for (trx_t *blocked_trx : dups) {
     trx_mutex_enter(blocked_trx);
     /** Reset wait state and release blocked thread */
-    gp_reset_wait_and_release_thread(blocked_trx);
+    gp_reset_wait_and_release_thread(blocked_trx, DB_SUCCESS);
     trx_mutex_exit(blocked_trx);
   }
 
@@ -280,7 +286,7 @@ void gp_wait_check_and_cancel(gp_slot_t *slot) {
       ut_ad(blocking_trx != nullptr);
 
       trx_mutex_enter(blocking_trx);
-      gp_reset_wait_and_release_thread(trx);
+      gp_reset_wait_and_release_thread(trx, DB_GP_WAIT_TIMEOUT);
       trx_mutex_exit(blocking_trx);
     }
 
@@ -403,12 +409,10 @@ void gp_wait_suspend_thread(trx_t *trx) {
   if (gp_state->waiting == false) {
     ut_a(gp_state->blocking_trx == nullptr);
     ut_a(gp_state->slot == nullptr);
+    ut_a(trx->error_state == DB_SUCCESS);
 
-    /** TODO: SET trx->error_state */
     gp_wait_mutex_exit();
     trx_mutex_exit(trx);
-
-    trx->error_state = DB_SUCCESS;
     return;
   }
   /** GP state has been allocated */
@@ -435,19 +439,12 @@ void gp_wait_suspend_thread(trx_t *trx) {
     srv_conc_force_enter_innodb(trx);
   }
 
-  const auto wait_time = std::chrono::duration_cast<std::chrono::seconds>(
-      std::chrono::steady_clock::now() - slot->suspend_time);
-
   /** Wakeup by timeout or XA commit */
   assert_gp_state_initial(trx);
 
   gp_release_slot(slot);
 
-  if (wait_time > wait_timeout) {
-    trx->error_state = DB_GP_WAIT_TIMEOUT;
-  } else {
-    trx->error_state = DB_SUCCESS;
-  }
+  ut_ad(trx->error_state != DB_GP_WAIT);
 }
 
 /**
