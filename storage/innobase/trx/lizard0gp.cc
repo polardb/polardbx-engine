@@ -435,7 +435,8 @@ void gp_wait_suspend_thread(trx_t *trx) {
     srv_conc_force_enter_innodb(trx);
   }
 
-  const auto wait_time = std::chrono::steady_clock::now() - slot->suspend_time;
+  const auto wait_time = std::chrono::duration_cast<std::chrono::seconds>(
+      std::chrono::steady_clock::now() - slot->suspend_time);
 
   /** Wakeup by timeout or XA commit */
   assert_gp_state_initial(trx);
