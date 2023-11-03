@@ -6,8 +6,8 @@
  */
 
 #ifdef __cplusplus
-# define EASY_CPP_START extern "C" {
-# define EASY_CPP_END }
+#define EASY_CPP_START extern "C" {
+#define EASY_CPP_END }
 #else
 # define EASY_CPP_START
 # define EASY_CPP_END

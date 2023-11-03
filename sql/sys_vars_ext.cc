@@ -71,7 +71,7 @@ static char *rds_release_date_ptr = NULL;
   @returns void.
 */
 void print_commit_id() {
-  printf("commit id: %s\n", RDS_COMMIT_ID);
+  printf("RDS_XCLUSTER_80 commit id: %s\n", RDS_COMMIT_ID);
 }
 
 /**

@@ -192,9 +192,9 @@ struct                  ev_loop;
 #define EV_VERSION_MINOR 1
 
 /* eventmask, revents, events... */
-        enum {
+enum {
     EV_UNDEF    = 0xFFFFFFFF, /* guaranteed to be invalid */
-    EV_NONE     =       0x00, /* no events */
+    EV_NO_EVENT =       0x00, /* no events */
     EV_READ     =       0x01, /* ev_io detected read will not block */
     EV_WRITE    =       0x02, /* ev_io detected write will not block */
     EV__IOFDSET =       0x80, /* internal use only */
