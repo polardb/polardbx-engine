@@ -6977,6 +6977,9 @@ static int init_server_components() {
     }
   }
 
+  /* Initialize the optimizer cost module */
+  init_optimizer_cost_module(true);
+
   ReplicaInitializer replica_initializer(opt_initialize, /*opt_skip_replica_start*/ true,
                                          rpl_channel_filters,
                                          &opt_replica_skip_errors);
@@ -7088,8 +7091,6 @@ static int init_server_components() {
   rpl_source_io_monitor = new Source_IO_monitor();
   udf_load_service.init();
 
-  /* Initialize the optimizer cost module */
-  init_optimizer_cost_module(true);
   ft_init_stopwords();
 
   init_max_user_conn();
