@@ -3083,7 +3083,7 @@ WHERE LOCK_TYPE='RECORD' AND
 (LOCATE('u2',LOCK_DATA)>0 OR LOCATE('u2x',LOCK_DATA)>0);
 tab	INDEX_NAME	LOCK_MODE	Has_lock
 mysql.user	PRIMARY	X	Acquired row lock on u2/u2x
-mysql.user	PRIMARY	X	Acquired row lock on u2/u2x
+mysql.user	PRIMARY	X,GAP	Acquired row lock on u2/u2x
 # Make sure that we do not allow updating ACL table.
 INSERT INTO mysql.user SELECT * FROM user_bk;
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
@@ -3662,7 +3662,7 @@ WHERE LOCK_TYPE='RECORD' AND
 (LOCATE('u2',LOCK_DATA)>0 OR LOCATE('u2x',LOCK_DATA)>0);
 tab	INDEX_NAME	LOCK_MODE	Has_lock
 mysql.user	PRIMARY	X	Acquired row lock on u2/u2x
-mysql.user	PRIMARY	X	Acquired row lock on u2/u2x
+mysql.user	PRIMARY	X,GAP	Acquired row lock on u2/u2x
 # Make sure that we do not allow updating ACL table.
 INSERT INTO mysql.user SELECT * FROM user_bk;
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction

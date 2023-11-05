@@ -66,7 +66,7 @@ OK: Handler_read_key
 
 OK: Result set: Non-empty  Expected: Non-empty
 
-*** ERROR ***: Extra rows: 1698  Missing rows: 0
+*** ERROR ***: Extra rows: 1699  Missing rows: 0
 ========
 SELECT THREAD_ID, ERROR_NUMBER FROM performance_schema.events_errors_summary_by_thread_by_error WHERE thread_id = @target_thread_id
 

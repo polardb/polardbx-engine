@@ -2,7 +2,7 @@
 call dbms_consensus.add_learner(learner_cluster_info);
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
 count(*)
-2
+1
 create database aaa;
 use aaa;
 create table t (id int);

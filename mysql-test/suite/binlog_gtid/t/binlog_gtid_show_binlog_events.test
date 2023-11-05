@@ -33,7 +33,7 @@ CREATE TABLE t1 (c1 INT);
 --let $assert_cond="[SHOW BINLOG EVENTS FROM 4 LIMIT 1, Pos, 1]" = 4
 --source include/assert.inc
 
-# Lizard: (Server ver: 8.0.32-debug) --> (Server ver: 8.0.32-galaxy-dev-debug)
+# Lizard: (Server ver: 8.0.32-debug) --> (Server ver: 8.0.32-dev-debug)
 --let $assert_text=Verify that the starting offset (190) of an event after the invalid position 14 is displayed.
 --let $assert_cond="[SHOW BINLOG EVENTS FROM 14 LIMIT 1, Pos, 1]" = 190
 --source include/assert.inc
