@@ -27,5 +27,5 @@ type SnapshotTooOldError struct {
 }
 
 func (e *SnapshotTooOldError) Error() string {
-	return fmt.Sprintf("snapshot too old: %v", e.Ts)
+	return fmt.Sprintf("Snapshot too old: %v", e.Ts)
 }

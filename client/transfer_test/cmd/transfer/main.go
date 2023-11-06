@@ -20,8 +20,9 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	_ "github.com/lib/pq"
 	_ "net/http/pprof"
+
+	_ "github.com/lib/pq"
 )
 
 type SubCmd int
@@ -134,7 +135,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	accs, err := transfer.GetAccounts(ctx, conn, transfer.RouteScan(conf)(), "", "")
+	accs, err := transfer.GetAccounts(ctx, conn, transfer.RouteScan(conf)(), "", "", false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -318,6 +319,18 @@ func main() {
 	}
 	if conf.EnableSsot {
 		app.Register(builder.BuildSsotGcPlugin(time.Second * 60))
+	}
+
+	if conf.ReadCurrentSnapshot.Enabled {
+		for i := 0; i < conf.ReadCurrentSnapshot.Threads; i++ {
+			app.Register(builder.BuildReadCurrentSnapshot())
+		}
+	}
+
+	if conf.CheckSecIdx.Enabled {
+		for i := 0; i < conf.CheckSecIdx.Threads; i++ {
+			app.Register(builder.BuildCheckSecIdx())
+		}
 	}
 
 	g, ctx := errgroup.WithContext(ctx)

@@ -1,3 +1,5 @@
+# local transaction
+db_type = "mysql"
 row_count = 100
 initial_balance = 1000
 verbose = true
@@ -12,7 +14,7 @@ enabled = true
 threads = 10
 
 [read_too_old_snapshot]
-enabled = false
+enabled = true
 threads = 1
 
 [read_long]
@@ -21,14 +23,10 @@ threads = 10
 interval = "5s"
 total = "20m"
 
-[transfer_basic]
+[check_secondary_index]
 enabled = true
 threads = 10
 
-[transfer_one_phase]
+[transfer_simple]
 enabled = true
-threads = 10
-
-[transfer_two_xa]
-enabled = false
 threads = 10

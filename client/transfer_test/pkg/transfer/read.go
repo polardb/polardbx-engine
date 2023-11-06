@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func check(ctx context.Context, p basePlugin, ts int64, useCts bool, id string) (err error) {
+func check(ctx context.Context, p basePlugin, ts int64, useCts bool, id string, useSecIdx bool, useCurrSnapshot bool) (err error) {
 	db := p.connector.Raw()
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -49,10 +49,18 @@ func check(ctx context.Context, p basePlugin, ts int64, useCts bool, id string) 
 	if useCts {
 		_, err = conn.ExecContext(ctx, fmt.Sprintf("SET innodb_snapshot_seq = %v", ts))
 		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Error("SET innodb_snapshot_seq failed.")
 			return fmt.Errorf("failed to query: %w", err)
 		}
 	}
-	if err := checkInternal(ctx, conn, p, ts, id); err != nil {
+	if useCurrSnapshot {
+		_, err = conn.ExecContext(ctx, fmt.Sprintf("SET innodb_current_snapshot_seq = on"))
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Error("SET innodb_current_snapshot_seq failed.")
+			return fmt.Errorf("failed to query: %w", err)
+		}
+	}
+	if err := checkInternal(ctx, conn, p, ts, id, useSecIdx); err != nil {
 		return err
 	}
 
@@ -130,7 +138,7 @@ func checkFlashbackSessionHint(ctx context.Context, p basePlugin, ts int64, id s
 	return nil
 }
 
-func checkPeriodically(ctx context.Context, p basePlugin, ts int64, interval, total time.Duration, useCts bool, id string) (err error) {
+func checkPeriodically(ctx context.Context, p basePlugin, ts int64, interval, total time.Duration, useCts bool, id string, useSecIdx bool) (err error) {
 	db := p.connector.Raw()
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -152,7 +160,8 @@ func checkPeriodically(ctx context.Context, p basePlugin, ts int64, interval, to
 	}
 	totalTm := time.After(total)
 	for {
-		if err := checkInternal(ctx, conn, p, ts, id); err != nil {
+		if err := checkInternal(ctx, conn, p, ts, id, useSecIdx); err != nil {
+			logutils.FromContext(ctx).Error("check internal failed.", zap.Error(err))
 			if err := trx.Rollback(); err != nil {
 				logutils.FromContext(ctx).Error("Rollback failed.", zap.Error(err))
 			}
@@ -182,7 +191,7 @@ type Account struct {
 	Version int
 }
 
-func GetAccounts(ctx context.Context, conn *sql.Conn, tables []string, hint string, sessionVar string) ([]Account, error) {
+func GetAccounts(ctx context.Context, conn *sql.Conn, tables []string, hint string, sessionVar string, useSecIdx bool) ([]Account, error) {
 	if sessionVar != "" {
 		_, err := conn.ExecContext(ctx, sessionVar)
 		if err != nil {
@@ -193,7 +202,11 @@ func GetAccounts(ctx context.Context, conn *sql.Conn, tables []string, hint stri
 	var records []Account
 	for _, tableName := range tables {
 		if partials, err := func(tableName string) (partialRecods []Account, err error) {
-			rows, err := conn.QueryContext(ctx, hint+"SELECT id, balance, version FROM "+tableName+" ORDER BY balance")
+			var query = "SELECT id, balance, version FROM " + tableName + " ORDER BY balance"
+			if useSecIdx {
+				query = "SELECT id, balance, version FROM " + tableName + " force index(index_balance) ORDER BY balance"
+			}
+			rows, err := conn.QueryContext(ctx, hint+query)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query on %s: %w", tableName, err)
 			}
@@ -384,17 +397,21 @@ func GetAccount(ctx context.Context, conn *sql.Conn, tableName string, id int, h
 	}
 }
 
-func checkInternal(ctx context.Context, conn *sql.Conn, p basePlugin, ts int64, id string) (err error) {
+func checkInternal(ctx context.Context, conn *sql.Conn, p basePlugin, ts int64, id string, useSecIdx bool) (err error) {
 	defer func() {
-		if isMySQLError(err, 5013) {
+		if isMySQLError(err, 7510) {
 			err = &SnapshotTooOldError{Ts: ts}
+		} else if isMySQLError(err, 7527) {
+			// global query timeout error
+			err = nil
 		}
 	}()
 
-	accounts, err := GetAccounts(ctx, conn, RouteScan(p.conf)(), fmt.Sprintf("/*%s*/", id), "")
+	accounts, err := GetAccounts(ctx, conn, RouteScan(p.conf)(), fmt.Sprintf("/*%s*/", id), "", useSecIdx)
+
 	if err != nil {
-		logutils.FromContext(ctx).With(zap.Error(err)).Error("GetAccounts failed.")
-		return nil
+		logutils.FromContext(ctx).With(zap.Error(err)).Info("GetAccounts failed.")
+		return err
 	}
 
 	err = checkAccounts(accounts, p, ts, false)
@@ -407,7 +424,7 @@ func checkInternal(ctx context.Context, conn *sql.Conn, p basePlugin, ts int64, 
 
 func checkSessionHintInternal(ctx context.Context, conn *sql.Conn, p basePlugin, ts int64, id string) (err error) {
 	defer func() {
-		if isMySQLError(err, 5013) {
+		if isMySQLError(err, 7510) {
 			err = &SnapshotTooOldError{Ts: ts}
 		}
 	}()
@@ -429,7 +446,7 @@ func checkSessionHintInternal(ctx context.Context, conn *sql.Conn, p basePlugin,
 
 func checkFlashbackInternal(ctx context.Context, conn *sql.Conn, p basePlugin, ts int64, id string) (err error) {
 	defer func() {
-		if isMySQLError(err, 5013) {
+		if isMySQLError(err, 7510) {
 			err = &SnapshotTooOldError{Ts: ts}
 		}
 	}()
@@ -467,7 +484,7 @@ func checkFlashbackInternal(ctx context.Context, conn *sql.Conn, p basePlugin, t
 
 func checkFlashbackSessionHintInternal(ctx context.Context, conn *sql.Conn, p basePlugin, ts int64, id string) (err error) {
 	defer func() {
-		if isMySQLError(err, 5013) {
+		if isMySQLError(err, 7510) {
 			err = &SnapshotTooOldError{Ts: ts}
 		}
 	}()
@@ -540,7 +557,7 @@ func (*CheckBalancePlugin) Name() string {
 func (p *CheckBalancePlugin) Round(ctx context.Context, id string) error {
 	current := p.tso.Next()
 
-	return check(ctx, p.basePlugin, current, p.conf.EnableCts, id)
+	return check(ctx, p.basePlugin, current, p.conf.EnableCts, id, false, false)
 }
 
 func (b PluginBuilder) BuildCheckBalance() Plugin {
@@ -643,13 +660,14 @@ func (p *ReadSnapshotPlugin) Round(ctx context.Context, id string) error {
 		base = p.tso.Start()
 	}
 	ts := rand.Int63n(current-base) + base
-	err := check(ctx, p.basePlugin, ts, p.conf.EnableCts, id)
+	err := check(ctx, p.basePlugin, ts, p.conf.EnableCts, id, false, false)
 	var serr *SnapshotTooOldError
 	if errors.As(err, &serr) {
 		ts := serr.Ts
 		p.globals.TryUpdateSnapshotLowerbound(ctx, ts)
+		return nil
 	}
-	return nil
+	return err
 }
 
 func (b PluginBuilder) BuildReadSnapshot() Plugin {
@@ -674,7 +692,7 @@ func (p *ReadTooOldSnapshotPlugin) Round(ctx context.Context, id string) error {
 	}
 	start := p.tso.Start()
 	ts := rand.Int63n(base-start) + start
-	err := check(ctx, p.basePlugin, ts, p.conf.EnableCts, id)
+	err := check(ctx, p.basePlugin, ts, p.conf.EnableCts, id, false, false)
 	var serr *SnapshotTooOldError
 	if err == nil || !errors.As(err, &serr) {
 		return errors.New("snapshot should be too old")
@@ -709,7 +727,7 @@ func (p *ReadLongSnapshotPlugin) Round(ctx context.Context, id string) (err erro
 			logger.Error("Read long failed.", zap.Error(err))
 		}
 	}()
-	return checkPeriodically(ctx, p.basePlugin, ts, p.interval, p.total, p.conf.EnableCts, id)
+	return checkPeriodically(ctx, p.basePlugin, ts, p.interval, p.total, p.conf.EnableCts, id, false)
 }
 
 func (b PluginBuilder) BuildReadLong(interval, total time.Duration) Plugin {
@@ -717,5 +735,46 @@ func (b PluginBuilder) BuildReadLong(interval, total time.Duration) Plugin {
 		basePlugin: b.basePlugin,
 		interval:   interval,
 		total:      total,
+	}
+}
+
+type CheckSecIdxPlugin struct {
+	basePlugin
+}
+
+func (*CheckSecIdxPlugin) Name() string {
+	return "check_secondary_index"
+}
+
+func (p *CheckSecIdxPlugin) Round(ctx context.Context, id string) error {
+	current := p.tso.Next()
+
+	return check(ctx, p.basePlugin, current, p.conf.EnableCts, id, true, false)
+}
+
+func (b PluginBuilder) BuildCheckSecIdx() Plugin {
+	return &CheckSecIdxPlugin{
+		basePlugin: b.basePlugin,
+	}
+}
+
+type ReadCurrentSnapshotPlugin struct {
+	basePlugin
+}
+
+func (*ReadCurrentSnapshotPlugin) Name() string {
+	return "read_current_snapshot"
+}
+
+func (p *ReadCurrentSnapshotPlugin) Round(ctx context.Context, id string) error {
+
+	current := p.tso.Next()
+
+	return check(ctx, p.basePlugin, current, false, id, false, true)
+}
+
+func (b PluginBuilder) BuildReadCurrentSnapshot() Plugin {
+	return &ReadCurrentSnapshotPlugin{
+		basePlugin: b.basePlugin,
 	}
 }

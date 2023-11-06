@@ -72,10 +72,12 @@ type Config struct {
 	CreateTableSuffix        string `toml:"create_table_suffix" default:""`
 	DbType                   string `toml:"db_type" default:"mysql"`
 
-	CheckBalance       basePluginConfig `toml:"check_balance"`
-	ReadSnapshot       basePluginConfig `toml:"read_snapshot"`
-	ReadTooOldSnapshot basePluginConfig `toml:"read_too_old_snapshot"`
-	ReadLong           readLongConfig   `toml:"read_long"`
+	CheckBalance        basePluginConfig `toml:"check_balance"`
+	ReadSnapshot        basePluginConfig `toml:"read_snapshot"`
+	ReadTooOldSnapshot  basePluginConfig `toml:"read_too_old_snapshot"`
+	ReadLong            readLongConfig   `toml:"read_long"`
+	CheckSecIdx         basePluginConfig `toml:"check_secondary_index"`
+	ReadCurrentSnapshot basePluginConfig `toml:"read_current_snapshot"`
 
 	TransferBasic    basePluginConfig          `toml:"transfer_basic"`
 	TransferOnePhase basePluginConfig          `toml:"transfer_one_phase"`

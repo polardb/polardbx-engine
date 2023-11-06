@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"transfer/pkg/logutils"
+
+	"go.uber.org/zap"
 )
 
 // We support 2 kinds of transactions:
@@ -55,6 +58,11 @@ func (trx *baseTrx) setPrepareTs(ts int64) error {
 
 func (trx *baseTrx) setCommitTs(ts int64) error {
 	_, err := trx.conn.ExecContext(trx.ctx, fmt.Sprintf("SET innodb_commit_seq = %v", ts))
+	return err
+}
+
+func (trx *baseTrx) setCurrentSnapshotTs(ts int64) error {
+	_, err := trx.conn.ExecContext(trx.ctx, fmt.Sprintf("SET innodb_current_snapshot_seq = on", ts))
 	return err
 }
 
@@ -117,11 +125,15 @@ func (trx *XATrx) Rollback() (err error) {
 		}
 	}()
 	_, err = trx.conn.ExecContext(trx.ctx, fmt.Sprintf("XA END %v", trx.xid()))
-	if err != nil && !strings.Contains(err.Error(), "1614") {
+
+	if err != nil {
+		logutils.FromContext(trx.ctx).Error("XA END in rollback failed.", zap.Error(err), zap.Stringer("trx", trx))
 		return fmt.Errorf("XA END in rollback failed: %w", err)
 	}
 	_, err = trx.conn.ExecContext(trx.ctx, fmt.Sprintf("XA ROLLBACK %v", trx.xid()))
+
 	if err != nil {
+		logutils.FromContext(trx.ctx).Error("XA ROLLBACK failed.", zap.Error(err), zap.Stringer("trx", trx))
 		return fmt.Errorf("XA ROLLBACK failed: %w", err)
 	}
 	return nil

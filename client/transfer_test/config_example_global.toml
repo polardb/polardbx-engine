@@ -1,0 +1,43 @@
+# global transaction
+db_type = "mysql"
+row_count = 10000
+initial_balance = 1000
+verbose = true
+enable_cts = true # set innodb_snapshot_seq
+enable_ssot = false
+enable_async_commit = false
+
+[check_balance]
+enabled = true
+threads = 5
+
+[check_secondary_index]
+enabled = true
+threads = 5
+
+[read_long]
+enabled = true
+threads = 5
+interval = "5s"
+total = "20m"
+
+# local read
+[read_current_snapshot]
+enabled = true
+threads = 5
+
+# global xa with 1 branch
+[transfer_basic]
+enabled = true
+threads = 5
+
+# xa commit one phase
+[transfer_one_phase]
+enabled = true
+threads = 5
+
+# global xa with 2 branches
+[transfer_two_xa]
+enabled = true
+threads = 5
+

@@ -195,15 +195,19 @@ func transferInternal(ctx context.Context,
 			err = nil
 		}
 		if err != nil || !ok {
+			logutils.FromContext(ctx).Info("Will rollback trx.", zap.Error(err), zap.Int("src", src), zap.Int("dst", dst))
 			for trx := range map[Trx]struct{}{
 				trx1: {},
 				trx2: {},
 			} {
-				logger := logutils.FromContext(ctx)
-				logger.Info("Will rollback trx.", zap.Error(err), zap.Stringer("trx", trx))
-				if err := trx.Rollback(); err != nil && !errors.Is(err, context.Canceled) {
-					logutils.FromContext(ctx).Error("Rollback trx failed.", zap.Error(err))
+				if rollbackErr := trx.Rollback(); rollbackErr != nil {
+					logutils.FromContext(ctx).Error("Rollback trx failed.", zap.Error(rollbackErr), zap.Stringer("trx", trx))
+					err = rollbackErr
 				}
+			}
+			if isMySQLError(err, 1213) || isMySQLError(err, 1205) {
+				// Deadlock error or Lockwait timeout error
+				err = nil
 			}
 		}
 	}()

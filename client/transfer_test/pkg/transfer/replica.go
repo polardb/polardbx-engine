@@ -64,7 +64,7 @@ func checkReplica(ctx context.Context, tso TSO, master *sql.DB, slave *sql.DB, c
 		ts = tso.Next()
 
 		defer func() {
-			if isMySQLError(err, 5013) {
+			if isMySQLError(err, 7510) {
 				err = &SnapshotTooOldError{Ts: ts}
 			}
 		}()
@@ -127,14 +127,14 @@ func checkReplica(ctx context.Context, tso TSO, master *sql.DB, slave *sql.DB, c
 
 	tables := RouteScan(conf)()
 
-	masterAccounts, err := GetAccounts(ctx, masterConn, tables, fmt.Sprintf("/*%s*/", id), "")
+	masterAccounts, err := GetAccounts(ctx, masterConn, tables, fmt.Sprintf("/*%s*/", id), "", false)
 	if err != nil {
 		logutils.FromContext(ctx).With(zap.Error(err)).Error("read leader failed.")
 		return nil
 	}
 
 	slaveAccounts, err := GetAccounts(ctx, slaveConn, tables,
-		fmt.Sprintf("/*%s*/", id)+conf.ReplicaRead.ReplicaReadHint, conf.ReplicaRead.SessionVar)
+		fmt.Sprintf("/*%s*/", id)+conf.ReplicaRead.ReplicaReadHint, conf.ReplicaRead.SessionVar, false)
 	if err != nil {
 		logutils.FromContext(ctx).With(zap.Error(err)).Error("read follower failed.")
 		return nil
@@ -564,7 +564,7 @@ func (p *CheckCdcPlugin) Round(ctx context.Context, id string) error {
 
 	tables := RouteScan(p.conf)()
 
-	slaveAccounts, err := GetAccounts(ctx, slaveConn, tables, "", "")
+	slaveAccounts, err := GetAccounts(ctx, slaveConn, tables, "", "", false)
 	if err != nil {
 		logutils.FromContext(ctx).With(zap.Error(err)).Error("read downstream DB failed.")
 		return nil
