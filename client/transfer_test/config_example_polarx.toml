@@ -1,0 +1,85 @@
+# datasource name, format: '${user_name}:${password}@tcp(${ip}:${port})/${db_name}'
+dsn = 'polardbx_root:123456@tcp(127.0.0.1:37306)/db1'
+
+# db type, supported: mysql, postgres
+db_type = 'mysql'
+
+# number of accounts
+row_count = 100
+
+# initial balance of each account
+initial_balance = 1000
+
+# the following suffix will be appended to CREATE TABLE SQL
+create_table_suffix = 'DBPARTITION BY HASH(id) TBPARTITION BY HASH(id) TBPARTITIONS 4'
+
+# check strong consistency of replica
+replica_strong_consistency = true
+
+# for debug
+ignore_read_error = false
+
+# transfer running in background
+[transfer_simple]
+enabled = true
+threads = 10
+
+# check sum of balance
+[check_balance]
+enabled = false
+threads = 5
+
+# check consistency of replica
+[replica_read]
+enabled = true
+threads = 20
+# special hint to force routing query to replica, for PolarDB-X only
+replica_read_hint = '/*+TDDL:SLAVE()*/'
+# replica datasource
+replica_dsn = 'polardbx_root:123456@tcp(127.0.0.1:37306)/db1'
+# set session variables before query, e.g. 'set session tidb_replica_read = "follower"' for TiDB
+session_var = ''
+
+# check sum of balance using session hint, for PolarDB-X only
+[session_hint]
+enabled = false
+threads = 5
+
+# check consistency of replica using session hint, for PolarDB-X only
+[replica_session_hint]
+enabled = false
+threads = 5
+# special hint to force routing query to replica, for PolarDB-X only
+replica_read_hint = '/*+TDDL:SLAVE()*/'
+# replica datasource
+replica_dsn = 'polardbx_root:123456@tcp(127.0.0.1:37306)/db1'
+# set session variables
+session_var = ''
+
+# check sum of balance using flashback query
+[flashback_query]
+enabled = false
+threads = 5
+# flashback to a snapshot before x seconds, here min < x < max
+min_seconds = 10
+max_seconds = 20
+
+# check consistency of replica using flashback query
+[replica_flashback_query]
+enabled = false
+threads = 5
+# flashback to a snapshot before x seconds, here min < x < max
+min_seconds = 10
+max_seconds = 20
+# special hint to force routing query to replica, for PolarDB-X only
+replica_read_hint = '/*+TDDL:SLAVE()*/'
+# replica datasource
+replica_dsn = 'polardbx_root:123456@tcp(127.0.0.1:37306)/db1'
+# set session variables
+session_var = ''
+
+# check consistency of downstream database synchronized by cdc
+[check_cdc]
+enabled = false
+threads = 2
+downstream_dsn = 'root:root@tcp(127.0.0.1:37306)/db1'

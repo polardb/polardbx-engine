@@ -1,0 +1,52 @@
+row_count = 100
+initial_balance = 1000
+verbose = true
+enable_cts = true
+enable_ssot = true
+enable_async_commit = false
+
+[check_balance]
+enabled = true
+threads = 10
+
+[read_snapshot]
+enabled = true
+threads = 10
+
+[read_too_old_snapshot]
+enabled = true
+threads = 1
+
+[read_long]
+enabled = true
+threads = 10
+interval = "5s"
+total = "20m"
+
+[transfer_basic]
+enabled = true
+threads = 10
+
+[transfer_one_phase]
+enabled = true
+threads = 10
+
+[transfer_two_xa]
+enabled = true
+threads = 10
+
+[run_evict]
+enabled = true
+interval = "10s"
+
+[run_purge]
+enabled = true
+interval = "10s"
+
+[heartbeat]
+enabled = true
+interval = "1s"
+
+[show_status]
+enabled = true
+interval = "10s"
