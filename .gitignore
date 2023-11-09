@@ -266,3 +266,4 @@ install_manifest.txt
 
 mysql-test/run_query.log
 mysql-test/run_query.error
+mysql-test/var*

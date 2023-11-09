@@ -126,17 +126,22 @@ std::pair<trx_t *, trx_state_t> trx_rw_is_prepared(trx_id_t trx_id) {
       trx_id,
       [&trx, &state](trx_t *in_trx) {
         if (in_trx != nullptr) {
-          if (in_trx->state == TRX_STATE_PREPARED) {
-            trx_reference(in_trx);
-            // out
-            trx = in_trx;
-            state = TRX_STATE_PREPARED;
-          } else {
-            ut_ad(in_trx->state == TRX_STATE_ACTIVE ||
-                  in_trx->state == TRX_STATE_FORCED_ROLLBACK);
-            // out
-            trx = nullptr;
-            state = TRX_STATE_ACTIVE;
+          switch (in_trx->state.load(std::memory_order_relaxed)) {
+            case TRX_STATE_FORCED_ROLLBACK:
+            case TRX_STATE_ACTIVE:
+              // out
+              trx = nullptr;
+              state = TRX_STATE_ACTIVE;
+              break;
+            case TRX_STATE_PREPARED:
+              trx_reference(in_trx);
+              // out
+              trx = in_trx;
+              state = TRX_STATE_PREPARED;
+              break;
+            default:
+              ut_ad(0);
+              break;
           }
         } else {
           /** Not found */
