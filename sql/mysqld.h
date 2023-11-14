@@ -156,6 +156,8 @@ extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *national_charset_info;
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *table_alias_charset;
 extern CHARSET_INFO *character_set_filesystem;
 
+extern bool opt_physical_backfill;
+
 enum enum_server_operational_state {
   SERVER_BOOTING,      /* Server is not operational. It is starting */
   SERVER_OPERATING,    /* Server is fully initialized and operating */
@@ -764,6 +766,8 @@ extern std::atomic<query_id_t> atomic_global_query_id;
 
 int *get_remaining_argc();
 char ***get_remaining_argv();
+
+void unireg_abort(int exit_code);
 
 /* increment query_id and return it.  */
 [[nodiscard]] inline query_id_t next_query_id() {

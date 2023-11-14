@@ -656,6 +656,10 @@ void *thd_memdup(MYSQL_THD thd, const void *str, size_t size) {
 void thd_wait_begin(MYSQL_THD thd, int wait_type) {
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
                  (thd, wait_type));
+  /// invoke THD PolarDB-X RPC cb after global
+  if (likely(thd != nullptr))
+    MYSQL_CALLBACK(thd->polarx_rpc_monitor, thd_wait_begin,
+                   (thd, wait_type));
 }
 
 /**
@@ -672,6 +676,9 @@ void thd_wait_begin(MYSQL_THD thd, int wait_type) {
   @param thd Calling thread context. If nullptr is passed, current_thd is used.
 */
 void thd_wait_end(MYSQL_THD thd) {
+  /// invoke THD PolarDB-X RPC cb before global
+  if (likely(thd != nullptr))
+    MYSQL_CALLBACK(thd->polarx_rpc_monitor, thd_wait_end, (thd));
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
                  (thd));
 }

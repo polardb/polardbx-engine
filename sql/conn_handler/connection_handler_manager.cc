@@ -44,6 +44,7 @@
 #include "sql/current_thd.h"
 #include "sql/mysqld.h"        // max_connections
 #include "sql/sql_callback.h"  // MYSQL_CALLBACK
+#include "sql/sql_class.h"
 #include "thr_lock.h"
 #include "thr_mutex.h"
 
@@ -71,9 +72,17 @@ uint Connection_handler_manager::max_threads = 0;
 static void scheduler_wait_lock_begin() {
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
                  (current_thd, THD_WAIT_TABLE_LOCK));
+  /// invoke THD PolarDB-X RPC cb after global
+  if (likely(current_thd != nullptr))
+    MYSQL_CALLBACK(current_thd->polarx_rpc_monitor, thd_wait_begin,
+                   (current_thd, THD_WAIT_TABLE_LOCK));
 }
 
 static void scheduler_wait_lock_end() {
+  /// invoke THD PolarDB-X RPC cb before global
+  if (likely(current_thd != nullptr))
+    MYSQL_CALLBACK(current_thd->polarx_rpc_monitor, thd_wait_end,
+                   (current_thd));
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
                  (current_thd));
 }
@@ -81,9 +90,17 @@ static void scheduler_wait_lock_end() {
 static void scheduler_wait_sync_begin() {
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_begin,
                  (current_thd, THD_WAIT_SYNC));
+  /// Invoke THD PolarDB-X RPC cb after global
+  if (likely(current_thd != nullptr))
+    MYSQL_CALLBACK(current_thd->polarx_rpc_monitor, thd_wait_begin,
+                   (current_thd, THD_WAIT_SYNC));
 }
 
 static void scheduler_wait_sync_end() {
+  /// invoke THD PolarDB-X RPC cb before global
+  if (likely(current_thd != nullptr))
+    MYSQL_CALLBACK(current_thd->polarx_rpc_monitor, thd_wait_end,
+                   (current_thd));
   MYSQL_CALLBACK(Connection_handler_manager::event_functions, thd_wait_end,
                  (current_thd));
 }

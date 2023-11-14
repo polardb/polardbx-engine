@@ -338,6 +338,25 @@ INSERT INTO global_suppressions VALUES
  ("Plugin mysqlx reported: 'Failed at SSL configuration: \"SSL context is not usable without certificate and private key\"'"),
 
  /*
+   Warnings/errors related to PolarX-RPC
+ */
+ ("Plugin polarx_rpc reported: 'MtEpoll bind.* worker thread.* .* to CPU.*.'"),
+ ("Plugin polarx_rpc reported: 'MtEpoll worker thread.* .* shutdown exit.'"),
+ ("Plugin polarx_rpc reported: 'MtEpoll start with detected .* CPUs.'"),
+ ("Plugin polarx_rpc reported: 'MtEpoll start with .* groups with each group .* threads.'"),
+ ("Plugin polarx_rpc reported: 'CPUs changed from .* to .*.'"),
+ ("Plugin polarx_rpc reported: 'MtEpoll .* thread pool tasker scale to .*, worker .*. Total threads .*.'"),
+ ("Plugin polarx_rpc reported: 'MtEpoll .* thread pool scale to worker .* tasker .*. Total threads .*. .*'"),
+ ("Plugin polarx_rpc reported: 'MtEpoll .* thread pool shrink to worker .* tasker .*. Total thread .*.'"),
+ ("Plugin polarx_rpc reported: 'Listen on port .*.'"),
+ ("Plugin polarx_rpc reported: 'Plugin polarx_rpc disabled by database initialization.'"),
+ ("Plugin polarx_rpc reported: 'Plugin polarx_rpc start up.'"),
+ ("Plugin polarx_rpc reported: 'Plugin polarx_rpc exit.'"),
+ ("Plugin polarx_rpc reported: 'Plugin polarx_rpc get shutdown notify.'"),
+ ("Plugin polarx_rpc reported: 'Plugin polarx_rpc watch dog exit.'"),
+ ("Plugin polarx_rpc reported: 'Plugin polarx_rpc exiting still .* threads running.'"),
+
+ /*
    Missing Private/Public key files
  */
  ("RSA private key file not found"),

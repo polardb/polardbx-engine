@@ -1,0 +1,89 @@
+
+## Test polarx rpc auto commit and run locally behavior
+
+--let $TEMP_FILE = polarx_rpc_template
+
+--source include/polarx_rpc_preamble.inc
+--source include/polarx_rpc_create_user.inc
+## Test starts here
+--write_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+
+## do sth with sql in auto commit session
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+create schema xtest;
+use xtest;
+create table mytable (pk int primary key auto_increment, data varchar(100));
+-->endsql
+
+
+## do sth with polarx_rpc msg
+
+## switch Session ID to -2(highest bit is 1 means auto commit session)
+-->switchsid -2
+
+## begin has no effect on others auto commit request.
+PolarXRPC.Sql.StmtExecute {
+  stmt: "begin"
+  schema_name: "xtest"
+}
+## expect PolarXRPC.Sql.StmtExecuteOk
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'one\')"
+}
+## expect PolarXRPC.Sql.StmtExecuteOk
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'two\')"
+}
+## expect PolarXRPC.Sql.StmtExecuteOk
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'three\')"
+}
+## expect PolarXRPC.Sql.StmtExecuteOk
+-->recvresult
+
+## rollback should have no affect
+PolarXRPC.Sql.StmtExecute {
+  stmt: "rollback"
+}
+## expect PolarXRPC.Sql.StmtExecuteOk
+-->recvresult
+
+## switch to another auto commit session
+-->switchsid -3
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "select * from mytable"
+  token: 10000
+}
+
+-->recvtype PolarXRPC.Resultset.ColumnMetaData
+-->recvtype PolarXRPC.Resultset.ColumnMetaData
+-->recvtype PolarXRPC.Resultset.Row
+-->recvtype PolarXRPC.Resultset.Row
+-->recvtype PolarXRPC.Resultset.Row
+-->recvtype PolarXRPC.Resultset.FetchDone
+-->recvtype PolarXRPC.Notice.Frame
+-->recvtype PolarXRPC.Sql.StmtExecuteOk
+
+
+## switch back to auto commit session and cleanup
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+-->endsql
+
+EOF
+
+--exec $POLARX_RPC_TEST -upolarx_root --password='' --file=$MYSQL_TMP_DIR/$TEMP_FILE.tmp 2>&1
+
+## Cleanup
+--remove_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+--source include/polarx_rpc_drop_user.inc

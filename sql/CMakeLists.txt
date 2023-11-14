@@ -714,6 +714,8 @@ SET(SQL_SHARED_SOURCES
   consensus/consensus_proc.cc
   consensus_log_index.cc
   consensus_recovery_manager.cc
+
+  xrpc/xrpc_proc.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

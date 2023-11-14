@@ -243,9 +243,38 @@ class Srv_session {
                       void *callbacks_context);
 
   /**
+    Set a savepoint.
+  */
+  int set_savepoint(const LEX_CSTRING &) {
+    // TODO impl this
+    return 1;
+  }
+
+  /**
+    Release a savepoint.
+  */
+  int release_savepoint(const LEX_CSTRING &) {
+    // TODO impl this
+    return 1;
+  }
+
+  /**
+    Rollback a savepoint.
+  */
+  int rollback_savepoint(const LEX_CSTRING &) {
+    // TODO impl this
+    return 1;
+  }
+
+  /**
     Returns the internal THD object
   */
   inline THD *get_thd() { return m_thd; }
+
+  /**
+   * Mark or unmark session for PolarDB-X RPC.
+   */
+  void set_safe(bool safe);
 
   /**
     Returns the ID of a session.
@@ -376,6 +405,7 @@ class Srv_session {
   enum_vio_type m_vio_type;
   THD *m_thd;
   const bool m_free_resources;
+  bool safe_session{false};
 
   class Session_backup_and_attach {
    public:

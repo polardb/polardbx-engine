@@ -151,6 +151,7 @@ class Table_ref;
 struct timeval;
 struct User_level_lock;
 struct YYLTYPE;
+struct THD_event_functions;
 
 namespace dd {
 namespace cache {
@@ -4619,6 +4620,7 @@ public:
 
   bool is_a_srv_session() const { return is_a_srv_session_thd; }
   void mark_as_srv_session() { is_a_srv_session_thd = true; }
+  void remove_srv_session_mark() { is_a_srv_session_thd = false; }
 
   /**
     Returns the plugin, the thd belongs to.
@@ -4879,6 +4881,26 @@ public:
         kill_idle_transaction_timeout < variables.net_wait_timeout)
       return kill_idle_transaction_timeout;
     return variables.net_wait_timeout;
+  }
+
+  /** for PolarDB-X RPC thread pool */
+  THD_event_functions *polarx_rpc_monitor = nullptr;
+  void *polarx_rpc_context = nullptr;
+  bool polarx_rpc_record = false;
+  std::atomic<intptr_t> polarx_rpc_enter{0};
+
+  inline void register_polarx_rpc_monitor(THD_event_functions *cb, void *ctx) {
+    polarx_rpc_monitor = cb;
+    polarx_rpc_context = ctx;
+    polarx_rpc_record = false;
+    polarx_rpc_enter = 0;
+  }
+
+  inline void clear_polarx_rpc_monitor() {
+    polarx_rpc_monitor = nullptr;
+    polarx_rpc_context = nullptr;
+    polarx_rpc_record = false;
+    polarx_rpc_enter = 0;
   }
 };
 

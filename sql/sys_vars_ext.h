@@ -33,6 +33,7 @@
 #include "my_config.h"
 #include "my_sharedlib.h"
 #include "mysql_com.h"
+#include "my_inttypes.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -40,6 +41,13 @@
 #include <sys/types.h>
 
 extern "C" MYSQL_PLUGIN_IMPORT char innodb_version[SERVER_VERSION_LENGTH];
+
+static constexpr uint DEFAULT_RPC_PORT = 33660;
+extern int32 opt_rpc_port;
+extern bool opt_enable_polarx_rpc;
+
+static constexpr ulonglong DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL = 0;
+extern ulonglong opt_import_tablespace_iterator_interval_ms;
 
 extern void customize_server_version();
 

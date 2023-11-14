@@ -1,0 +1,625 @@
+RUN drop schema if exists xtest
+
+0 rows affected
+RUN create schema xtest
+
+1 rows affected
+RUN use xtest
+
+0 rows affected
+RUN create table mytable (pk int primary key auto_increment, data varchar(100))
+
+0 rows affected
+RUN create table mypart (pk int primary key auto_increment, data varchar(100)) partition by key(pk) partitions 2
+
+0 rows affected
+RUN insert into mytable values (NULL, 'one')
+
+1 rows affected
+last insert id: 1
+RUN insert into mytable values (NULL, 'two')
+
+1 rows affected
+last insert id: 2
+RUN insert into mytable values (NULL, 'three')
+
+1 rows affected
+last insert id: 3
+RUN insert into mytable values (NULL, '4444444')
+
+1 rows affected
+last insert id: 4
+RUN insert into mytable values (NULL, '5555555')
+
+1 rows affected
+last insert id: 5
+RUN insert into mytable(data) select data from mytable
+
+5 rows affected
+last insert id: 6
+Records: 5  Duplicates: 0  Warnings: 0
+RUN insert into mytable(data) select data from mytable
+
+10 rows affected
+last insert id: 13
+Records: 10  Duplicates: 0  Warnings: 0
+RUN insert into mytable(data) select data from mytable
+
+20 rows affected
+last insert id: 28
+Records: 20  Duplicates: 0  Warnings: 0
+RUN insert into mytable(data) select data from mytable
+
+40 rows affected
+last insert id: 59
+Records: 40  Duplicates: 0  Warnings: 0
+RUN insert into mypart(data) select data from mytable
+
+80 rows affected
+last insert id: 1
+Records: 80  Duplicates: 0  Warnings: 0
+send PolarXRPC.Session.NewSession {
+}
+
+RUN recvok
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "flush tables mytable for export"
+  schema_name: "xtest"
+}
+
+
+0 rows affected
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable1"
+    partitioned: false
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8107
+  msg: "file:./xtest/mytable1.ibd is not exists"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8106
+  msg: "missing table info"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+  }
+}
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd"
+      file_name: "xtest/mytable"
+      partition_name: ""
+      data_size: 114688
+      existence: true
+    }
+  }
+}
+
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd11"
+      file_name: "./xtest/mytable.ibd11"
+      partition_name: ""
+    }
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8107
+  msg: "file:./xtest/mytable.ibd11 is not exists"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+      data_size: 114688
+      existence: true
+    }
+  }
+}
+
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mypart"
+    partitioned: true
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8108
+  msg: " missing partition info"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mypart"
+    partitioned: true
+    physical_partition_name: "p1"
+    physical_partition_name: "p20"
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8107
+  msg: "file:./xtest/mypart#p#p20.ibd is not exists"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mypart"
+    partitioned: true
+    physical_partition_name: "p0"
+    physical_partition_name: "p1"
+  }
+}
+
+PolarXRPC.PhysicalBackfill.GetFileInfoOperator {
+  operator_type: CHECK_SRC_FILE_EXISTENCE
+  table_info {
+    table_schema: "xtest"
+    table_name: "mypart"
+    partitioned: true
+    physical_partition_name: "p0"
+    physical_partition_name: "p1"
+    file_info {
+      directory: "./xtest/mypart#p#p0.ibd"
+      file_name: "xtest/mypart#p#p0"
+      partition_name: "p0"
+      data_size: 114688
+      existence: true
+    }
+    file_info {
+      directory: "./xtest/mypart#p#p1.ibd"
+      file_name: "xtest/mypart#p#p1"
+      partition_name: "p1"
+      data_size: 114688
+      existence: true
+    }
+  }
+}
+
+send PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+  operator_type: GET_DATA_FROM_SRC_IBD
+  file_info {
+    directory: "./xtest/mytable.ibd1"
+    file_name: "./xtest/mytable.ibd1"
+    partition_name: ""
+  }
+  buffer_len: 1024
+  offset: 100
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8107
+  msg: "file:./xtest/mytable.ibd1 is not exists"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+  operator_type: GET_DATA_FROM_SRC_IBD
+  file_info {
+    directory: "./xtest/mytable.ibd"
+    file_name: "./xtest/mytable.ibd"
+    partition_name: ""
+  }
+  buffer_len: 1024
+  offset: 100
+}
+
+PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+  operator_type: GET_DATA_FROM_SRC_IBD
+  file_info {
+    directory: "./xtest/mytable.ibd"
+    file_name: "./xtest/mytable.ibd"
+    partition_name: ""
+  }
+  buffer_len: 1024
+  buffer: "\377\377\000\000\377\377\377\377\000\000\000\000\000\000\000\000\000\005\000\000\000\000\377\377\377\377\000\000\377\377\377\377\000\000\000\000\000\001\000\000\000\002\000&\000\000\000\002\000&\000\000\000\000\000\000\000\000\377\377\377\377\000\000\377\377\377\377\000\000\000\000\000\002\252\376\377\377\377\377\377\377\377\377\377\377\377\377\377\377\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+  offset: 100
+}
+
+send PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+  operator_type: PUT_DATA_TO_TAR_IBD
+  file_info {
+    directory: "./xtest1/mytable.ibd1"
+    file_name: "./xtest1/mytable.ibd1"
+    partition_name: ""
+  }
+  buffer_len: 10
+  buffer: "1234567890"
+  offset: 100
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8100
+  msg: "can not open file:./xtest1/mytable.ibd1"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+  operator_type: PUT_DATA_TO_TAR_IBD
+  file_info {
+    directory: "./xtest/mytable.ibd_1"
+    file_name: "./xtest/mytable.ibd_1"
+    partition_name: ""
+  }
+  buffer_len: 10
+  buffer: "1234567890"
+  offset: 100
+}
+
+PolarXRPC.PhysicalBackfill.TransferFileDataOperator {
+  operator_type: PUT_DATA_TO_TAR_IBD
+  file_info {
+    directory: "./xtest/mytable.ibd_1"
+    file_name: "./xtest/mytable.ibd_1"
+    partition_name: ""
+  }
+  buffer_len: 10
+  offset: 100
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: FALLOCATE_IBD
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+      data_size: 12345678
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.FileManageOperatorResponse {
+  result: true
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: FALLOCATE_IBD
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd_2"
+      file_name: "./xtest/mytable.ibd_2"
+      partition_name: ""
+      data_size: 12345678
+    }
+    file_info {
+      directory: "./xtest/mytable.ibd_2"
+      file_name: "./xtest/mytable.ibd_2"
+      partition_name: ""
+      data_size: 12345678
+    }
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8103
+  msg: "only support to pre_allocate one file per time"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: FALLOCATE_IBD
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest1/mytable.ibd_2"
+      file_name: "./xtest1/mytable.ibd_2"
+      partition_name: ""
+      data_size: 12345678
+    }
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8100
+  msg: "can not open file:./xtest1/mytable.ibd_2"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: FALLOCATE_IBD
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd_2"
+      file_name: "./xtest/mytable.ibd_2"
+      partition_name: ""
+      data_size: 12345678
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.FileManageOperatorResponse {
+  result: true
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: ""
+    table_name: ""
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd_2"
+      file_name: ""
+      partition_name: ""
+      temp_file: true
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.FileManageOperatorResponse {
+  result: true
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: ""
+    table_name: ""
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd_1"
+      file_name: ""
+      partition_name: ""
+      temp_file: true
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.FileManageOperatorResponse {
+  result: true
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.cfg"
+      file_name: "./xtest/mytable.cfg"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.cfg.TEMPFILE"
+      file_name: "./xtest/mytable.cfg"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.ibd"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.ibd.TEMPFILE"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.FileManageOperatorResponse {
+  result: true
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: ""
+    table_name: ""
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.cfg.TEMPFILE"
+      file_name: ""
+      partition_name: ""
+      temp_file: true
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.FileManageOperatorResponse {
+  result: true
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: DELETE_IBD_FROM_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: ""
+    table_name: ""
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd.TEMPFILE"
+      file_name: ""
+      partition_name: ""
+      temp_file: true
+    }
+  }
+}
+
+PolarXRPC.PhysicalBackfill.FileManageOperatorResponse {
+  result: true
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.cfg1"
+      file_name: "./xtest/mytable.cfg"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.cfg.TEMPFILE"
+      file_name: "./xtest/mytable.cfg"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.ibd1"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.ibd.TEMPFILE"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+    }
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8104
+  msg: "can not copy the file from ./xtest/mytable.cfg1 to ./xtest/mytable.cfg.TEMPFILE"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.cfg"
+      file_name: "./xtest/mytable.cfg"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.cfg.TEMPFILE"
+      file_name: "./xtest/mytable.cfg"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest/mytable.ibd"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+    }
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8103
+  msg: "expect to specified even files input, but get\003"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.PhysicalBackfill.FileManageOperator {
+  operator_type: COPY_IBD_TO_TEMP_DIR_IN_SRC
+  table_info {
+    table_schema: "xtest"
+    table_name: "mytable"
+    partitioned: false
+    file_info {
+      directory: "./xtest/mytable.ibd"
+      file_name: "./xtest/mytable.ibd"
+      partition_name: ""
+    }
+    file_info {
+      directory: "./xtest_2/mytable.ibd"
+      file_name: "./xtest_2/mytable.ibd"
+      partition_name: ""
+    }
+  }
+}
+
+PolarXRPC.Error {
+  severity: ERROR
+  code: 8104
+  msg: "can not copy the file from ./xtest/mytable.ibd to ./xtest_2/mytable.ibd"
+  sql_state: "HY000"
+}
+
+send PolarXRPC.Session.Close {
+}
+
+RUN recvok
+RUN drop schema if exists xtest
+
+2 rows affected
+ok

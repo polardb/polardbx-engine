@@ -127,8 +127,9 @@ static void test_session(void *p) {
 
   unsigned int thread_count = srv_session_info_thread_count((const void *)p);
   WRITE_VAL("Number of threads of this plugin: %d\n", thread_count);
-  thread_count = srv_session_info_thread_count(nullptr);
-  WRITE_VAL("Number of threads of all (NULL) plugins: %d\n", thread_count);
+  /// ignore all threads count(PolarX-PRC will init some threads in pool)
+  // thread_count = srv_session_info_thread_count(nullptr);
+  // WRITE_VAL("Number of threads of all (NULL) plugins: %d\n", thread_count);
 
   /*  close sessions: Must pass */
   for (int i = 0; i < nb_sessions; i++) {

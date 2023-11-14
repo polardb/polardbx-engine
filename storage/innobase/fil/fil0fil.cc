@@ -102,6 +102,8 @@ using Space_id_set = std::set<space_id_t>;
 dberr_t dict_stats_rename_table(const char *old_name, const char *new_name,
                                 char *errstr, size_t errstr_sz);
 
+extern unsigned long long int opt_import_tablespace_iterator_interval_ms;
+
 /** Used for collecting the data in boot_tablespaces() */
 namespace dd_fil {
 
@@ -8499,6 +8501,10 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
 
         return err;
       }
+    }
+    if (opt_import_tablespace_iterator_interval_ms > 0) {
+      std::this_thread::sleep_for(
+          std::chrono::microseconds(opt_import_tablespace_iterator_interval_ms));
     }
   }
 

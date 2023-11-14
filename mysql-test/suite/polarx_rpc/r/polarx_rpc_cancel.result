@@ -1,0 +1,168 @@
+RUN drop schema if exists xtest
+
+0 rows affected
+RUN create schema xtest
+
+1 rows affected
+RUN use xtest
+
+0 rows affected
+RUN create table mytable (pk int primary key auto_increment, data varchar(100))
+
+0 rows affected
+send PolarXRPC.Session.NewSession {
+}
+
+RUN recvok
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'one\')"
+  schema_name: "xtest"
+}
+
+
+1 rows affected
+last insert id: 1
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'two\')"
+}
+
+
+1 rows affected
+last insert id: 2
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "insert into mytable values (DEFAULT, \'three\')"
+}
+
+
+1 rows affected
+last insert id: 3
+send PolarXRPC.Session.NewSession {
+}
+
+RUN recvok
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "begin"
+  schema_name: "xtest"
+  token: 10000
+}
+
+
+0 rows affected
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "select data from mytable where pk=1 for update"
+  token: 10000
+}
+
+data
+one
+0 rows affected
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "select data from mytable where pk=1 for update"
+  token: 10000
+}
+
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "select * from mytable"
+  token: 10000
+}
+
+send PolarXRPC.Session.KillSession {
+  type: QUERY
+  x_session_id: 1
+}
+
+PolarXRPC.Notice.Frame {
+  type: 1
+  scope: LOCAL
+  payload: "PolarXRPC.Notice.Warning { level: ERROR\ncode: 1317\nmsg: \"Query execution was interrupted\"\n }"
+}
+
+PolarXRPC.Notice.Frame {
+  type: 1
+  scope: LOCAL
+  payload: "PolarXRPC.Notice.Warning { level: ERROR\ncode: 1030\nmsg: \"Got error 168 - \\\'Unknown (generic) error from engine\\\' from storage engine\"\n }"
+}
+
+Got expected error:
+PolarXRPC.Error {
+  severity: ERROR
+  code: 1317
+  msg: "Query execution was interrupted"
+  sql_state: "70100"
+}
+
+PolarXRPC.Resultset.ColumnMetaData {
+  type: SINT
+  original_type: MYSQL_TYPE_LONG
+  name: "pk"
+  original_name: "pk"
+  table: "mytable"
+  original_table: "mytable"
+  schema: "xtest"
+  catalog: "def"
+  collation: 63
+  length: 11
+  flags: 304
+  original_flags: 16899
+}
+
+PolarXRPC.Resultset.ColumnMetaData {
+  type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
+  name: "data"
+  original_name: "data"
+  table: "mytable"
+  original_table: "mytable"
+  schema: "xtest"
+  catalog: "def"
+  collation: 33
+  length: 300
+  original_flags: 0
+}
+
+PolarXRPC.Resultset.Row {
+  field: "\002"
+  field: "one\000"
+}
+
+PolarXRPC.Resultset.Row {
+  field: "\004"
+  field: "two\000"
+}
+
+PolarXRPC.Resultset.Row {
+  field: "\006"
+  field: "three\000"
+}
+
+PolarXRPC.Resultset.FetchDone {
+}
+
+PolarXRPC.Notice.Frame {
+  type: 3
+  scope: LOCAL
+  payload: "PolarXRPC.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
+}
+
+PolarXRPC.Sql.StmtExecuteOk {
+}
+
+send PolarXRPC.Session.Close {
+}
+
+RUN recvok
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "rollback"
+  token: 10000
+}
+
+
+0 rows affected
+send PolarXRPC.Session.Close {
+}
+
+RUN recvok
+RUN drop schema if exists xtest
+
+1 rows affected
+ok

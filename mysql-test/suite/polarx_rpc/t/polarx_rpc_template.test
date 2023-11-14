@@ -1,0 +1,36 @@
+
+## Test polarx rpc template
+
+--let $TEMP_FILE = polarx_rpc_template
+
+--source include/polarx_rpc_preamble.inc
+--source include/polarx_rpc_create_user.inc
+## Test starts here
+--write_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+
+## do sth with sql in auto commit session
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+create schema xtest;
+use xtest;
+create table mytable (pk int primary key auto_increment, data varchar(100));
+-->endsql
+
+
+## do sth with polarx_rpc msg
+
+
+## switch back to auto commit session and cleanup
+-->switchsid -1
+-->sql
+drop schema if exists xtest;
+-->endsql
+
+EOF
+
+--exec $POLARX_RPC_TEST -upolarx_root --password='' --file=$MYSQL_TMP_DIR/$TEMP_FILE.tmp 2>&1
+
+## Cleanup
+--remove_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+--source include/polarx_rpc_drop_user.inc

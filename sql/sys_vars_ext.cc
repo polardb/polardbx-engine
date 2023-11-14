@@ -65,6 +65,11 @@ char innodb_version[SERVER_VERSION_LENGTH];
 static uint rds_version = 0;
 static char *rds_release_date_ptr = NULL;
 
+int32 opt_rpc_port = DEFAULT_RPC_PORT;
+bool opt_enable_polarx_rpc = true;
+
+ulonglong opt_import_tablespace_iterator_interval_ms =
+    DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL;
 
 /**
   Output the latest build info for the MYSQLD binary.
@@ -527,3 +532,40 @@ static Sys_var_charptr Sys_rotate_log_table_last_name(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
 
 /* RDS DEFINED */
+
+/* PolarDB-X RPC */
+
+static Sys_var_int32 Sys_rpc_port("rpc_port", "RPC port for PolarDB-X",
+                                  READ_ONLY GLOBAL_VAR(opt_rpc_port),
+                                  CMD_LINE(OPT_ARG), VALID_RANGE(0, 65535),
+                                  DEFAULT(DEFAULT_RPC_PORT), BLOCK_SIZE(1),
+                                  NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+                                  ON_UPDATE(0));
+
+static Sys_var_bool Sys_enable_polarx_rpc(
+    "enable_polarx_rpc", "Use new open PolarDB-X RPC",
+    READ_ONLY GLOBAL_VAR(opt_enable_polarx_rpc), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_deprecated_alias Sys_new_rpc("new_rpc", Sys_enable_polarx_rpc);
+
+static Sys_var_ulonglong Sys_import_tablespace_iterator_interval_ms(
+    "import_tablespace_iterator_interval_ms",
+    "The interval sleep between each import tablespace iterator in "
+    "microseconds",
+    GLOBAL_VAR(opt_import_tablespace_iterator_interval_ms), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, 1000000), DEFAULT(10), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_deprecated_alias Sys_import_tablespace_iterator_interval(
+    "import_tablespace_iterator_interval",
+    Sys_import_tablespace_iterator_interval_ms);
+
+static Sys_var_bool Sys_enable_physical_backfill(
+    "enable_physical_backfill",
+    "Whether support x-proto physical backfill, readonly option",
+    READ_ONLY GLOBAL_VAR(opt_physical_backfill), NO_CMD_LINE, DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_deprecated_alias Sys_physical_backfill_opt(
+    "physical_backfill_opt", Sys_enable_physical_backfill);

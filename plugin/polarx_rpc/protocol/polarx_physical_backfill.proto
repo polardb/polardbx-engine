@@ -1,0 +1,96 @@
+/*
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; version 2 of the
+ * License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301  USA
+ */
+syntax = "proto2";
+
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
+
+package PolarXRPC.PhysicalBackfill;
+option java_package = "com.mysql.cj.polarx.protobuf";
+
+message TableInfo {
+  required string table_schema = 1;
+  required string table_name = 2;
+  required bool partitioned = 3;
+  repeated string physical_partition_name = 4;
+  repeated FileInfo file_info = 5;
+}
+
+message FileInfo {
+  required string directory = 1;
+  required string file_name = 2;
+  required string partition_name = 3 [default = ""];
+  optional uint64 data_size = 4;
+  optional bool existence = 5;
+  optional bool temp_file = 6;
+}
+
+message DiskInfo {
+  required string directory = 1;
+  optional uint64 total_size = 2;
+  optional uint64 free_size = 3;
+  optional uint64 used_size = 4;
+}
+
+message GetFileInfoOperator {
+  enum Type {
+    CHECK_SRC_FILE_EXISTENCE = 1;
+    CHECK_TAR_FILE_EXISTENCE = 2;
+    GET_TAR_IBD_DIR = 3;
+    GET_SRC_FILE_LEN = 4;
+    GET_SRC_DIR_FREE_SPACE = 5;
+    GET_TAR_DIR_FREE_SPACE = 6;
+    GET_SRC_IBD_TEMP_DIR = 7;
+    GET_TAR_FILE_LEN = 8;
+  };
+  required Type operator_type = 1;
+  optional TableInfo table_info = 2;
+  optional DiskInfo disk_info = 3;
+}
+
+message TransferFileDataOperator {
+  enum Type {
+    GET_DATA_FROM_SRC_IBD = 1;
+    PUT_DATA_TO_TAR_IBD = 2;
+  };
+  required Type operator_type = 1;
+  required FileInfo file_info = 2;
+  optional DiskInfo disk_info = 3;
+  required uint64 buffer_len = 4;
+  optional bytes buffer = 5;
+  required uint64 offset = 6;
+}
+
+message FileManageOperator {
+  enum Type {
+    CREATE_TEMP_DIR_IN_SRC = 1;
+    COPY_IBD_TO_TEMP_DIR_IN_SRC = 2;
+    DELETE_IBD_FROM_TEMP_DIR_IN_SRC = 3;
+    FLUSH_TABLE_IN_SRC = 4;
+    UNLOCK_TABLE_IN_SRC = 5;
+    DELETE_TEMP_DIR_IN_SRC = 6;
+    FALLOCATE_IBD = 7;
+  };
+  required Type operator_type = 1;
+  optional TableInfo table_info = 2;
+}
+
+message FileManageOperatorResponse {
+  required bool result = 1;
+  optional string detail = 2;
+}

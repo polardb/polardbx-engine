@@ -1,0 +1,16 @@
+RUN drop schema if exists xtest
+
+0 rows affected
+RUN create schema xtest
+
+1 rows affected
+RUN use xtest
+
+0 rows affected
+RUN create table mytable (pk int primary key auto_increment, data varchar(100))
+
+0 rows affected
+RUN drop schema if exists xtest
+
+1 rows affected
+ok

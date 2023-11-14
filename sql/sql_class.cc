@@ -1590,9 +1590,12 @@ void THD::awake(THD::killed_state state_to_set) {
     }
 
     /* Send an event to the scheduler that a thread should be killed. */
-    if (!slave_thread)
+    if (!slave_thread) {
       MYSQL_CALLBACK(Connection_handler_manager::event_functions,
                      post_kill_notification, (this));
+      /// and THD PolarDB-X RPC cb
+      MYSQL_CALLBACK(polarx_rpc_monitor, post_kill_notification, (this));
+    }
   }
 
   /* Interrupt target waiting inside a storage engine. */

@@ -1262,6 +1262,8 @@ void init_sql_command_flags() {
 
   /* Native package proc flags */
   sql_command_flags[SQLCOM_ADMIN_PROC] = CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_ADMIN_PROC] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_TRANS_PROC] |= CF_ALLOW_PROTOCOL_PLUGIN;
 }
 
 bool sqlcom_can_generate_row_events(enum enum_sql_command command) {

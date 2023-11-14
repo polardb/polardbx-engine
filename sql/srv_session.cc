@@ -78,6 +78,7 @@
 #include "sql/sql_thd_internal_api.h"  // thd_set_thread_stack
 #include "sql/system_variables.h"
 #include "thr_mutex.h"
+#include "plugin/polarx_rpc/utility/atomicex.h"
 
 #include "ppi/ppi_statement.h"
 
@@ -294,16 +295,10 @@ class Mutexed_map_thd_srv_session {
   */
   typedef std::pair<const void *, Srv_session *> map_value_t;
 
+  polarx_rpc::CspinRWLock collection_lock;
   std::map<const THD *, map_value_t> collection;
 
   bool initted;
-  bool psi_initted;
-
-  mysql_rwlock_t LOCK_collection;
-
-#ifdef HAVE_PSI_INTERFACE
-  PSI_rwlock_key key_LOCK_collection;
-#endif
 
  public:
   /**
@@ -314,20 +309,7 @@ class Mutexed_map_thd_srv_session {
       true   failure
   */
   bool init() {
-    const char *category = "session";
-    PSI_rwlock_info all_rwlocks[] = {{&key_LOCK_collection,
-                                      "LOCK_srv_session_collection",
-                                      PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}};
-
     initted = true;
-#ifdef HAVE_PSI_INTERFACE
-    psi_initted = true;
-
-    mysql_rwlock_register(category, all_rwlocks,
-                          static_cast<int>(array_elements(all_rwlocks)));
-#endif
-    mysql_rwlock_init(key_LOCK_collection, &LOCK_collection);
-
     return false;
   }
 
@@ -340,8 +322,6 @@ class Mutexed_map_thd_srv_session {
   */
   bool deinit() {
     initted = false;
-    mysql_rwlock_destroy(&LOCK_collection);
-
     return false;
   }
 
@@ -354,7 +334,7 @@ class Mutexed_map_thd_srv_session {
     @retval NULL  if not found
   */
   Srv_session *find(const THD *key) {
-    rwlock_scoped_lock lock(&LOCK_collection, false, __FILE__, __LINE__);
+    polarx_rpc::CautoSpinRWLock lck(collection_lock, false, 200);
 
     std::map<const THD *, map_value_t>::iterator it = collection.find(key);
     return (it != collection.end()) ? it->second.second : NULL;
@@ -371,7 +351,7 @@ class Mutexed_map_thd_srv_session {
     @retval true   failure
   */
   bool add(const THD *key, const void *plugin, Srv_session *session) {
-    rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+    polarx_rpc::CautoSpinRWLock lck(collection_lock, true, 200);
     try {
       collection[key] = std::make_pair(plugin, session);
     } catch (const std::bad_alloc &) {
@@ -390,7 +370,7 @@ class Mutexed_map_thd_srv_session {
       true   failure
   */
   bool remove(const THD *key) {
-    rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+    polarx_rpc::CautoSpinRWLock lck(collection_lock, true, 200);
     /*
       If we use erase with the key directly an exception could be thrown. The
       find method never throws. erase() with iterator as parameter also never
@@ -412,7 +392,7 @@ class Mutexed_map_thd_srv_session {
     removed = 0;
 
     {
-      rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+      polarx_rpc::CautoSpinRWLock lck(collection_lock, true, 200);
 
       for (std::map<const THD *, map_value_t>::iterator it = collection.begin();
            it != collection.end(); ++it) {
@@ -441,7 +421,7 @@ class Mutexed_map_thd_srv_session {
       true   failure
   */
   bool clear() {
-    rwlock_scoped_lock lock(&LOCK_collection, true, __FILE__, __LINE__);
+    polarx_rpc::CautoSpinRWLock lck(collection_lock, true, 200);
     collection.clear();
     return false;
   }
@@ -450,7 +430,7 @@ class Mutexed_map_thd_srv_session {
     Returns the number of elements in the maps
   */
   unsigned int size() {
-    rwlock_scoped_lock lock(&LOCK_collection, false, __FILE__, __LINE__);
+    polarx_rpc::CautoSpinRWLock lck(collection_lock, false, 200);
     return collection.size();
   }
 };
@@ -773,6 +753,7 @@ bool Srv_session::module_deinit() {
 */
 bool Srv_session::is_valid(const Srv_session *session) {
   assert(session != nullptr);
+  if (session->safe_session) return true; /// fast bypass for PolarDB-X RPC
   const bool is_valid_session = ((session->m_state > SRV_SESSION_CREATED) &&
                                  (session->m_state < SRV_SESSION_CLOSED));
 
@@ -849,7 +830,9 @@ bool Srv_session::open() {
   DBUG_PRINT("info", ("Session=%p  THD=%p  DA=%p", this, m_thd, &m_da));
   assert(m_state == SRV_SESSION_CREATED || m_state == SRV_SESSION_CLOSED);
 
+  mysql_mutex_lock(&m_thd->LOCK_thd_protocol);
   m_thd->push_protocol(&m_protocol_error);
+  mysql_mutex_unlock(&m_thd->LOCK_thd_protocol);
   m_thd->push_diagnostics_area(&m_da);
   /*
     m_thd.stack_start will be set once we start attempt to attach.
@@ -895,6 +878,9 @@ bool Srv_session::open() {
 
   m_state = SRV_SESSION_OPENED;
 
+  /// reset with empty thread
+  m_thd->real_id = 0;
+
   return false;
 }
 
@@ -913,11 +899,18 @@ bool Srv_session::attach() {
 
   if (is_attached()) {
     if (!my_thread_equal(m_thd->real_id, my_thread_self())) {
+      sql_print_error("FATAL: attach different thread! %lu %lu", m_thd->real_id,
+                      my_thread_self());
       DBUG_PRINT("error", ("Attached to different thread. Detach in it"));
       return true;
     }
     /* As it is attached, no need to do anything */
     return false;
+  }
+
+  if (m_thd->real_id != 0 || current_thd != nullptr) {
+    sql_print_error("FATAL: attach before detach! %lu %p", m_thd->real_id,
+                    current_thd);
   }
 
   // Since we now set current_thd during open(), we need to do complete
@@ -943,10 +936,12 @@ bool Srv_session::attach() {
   // This will install our new THD object as current_thd
   m_thd->store_globals();
 
-  Srv_session *old_session = server_session_list.find(old_thd);
+  if (old_thd) {
+    Srv_session *old_session = server_session_list.find(old_thd);
 
-  /* Really detach only if we are sure everything went fine */
-  if (old_session) old_session->set_detached();
+    /* Really detach only if we are sure everything went fine */
+    if (old_session) old_session->set_detached();
+  }
 
   thd_clear_errors(m_thd);
 
@@ -985,9 +980,14 @@ bool Srv_session::detach() {
   if (!is_attached()) return false;
 
   if (!my_thread_equal(m_thd->real_id, my_thread_self())) {
+    sql_print_error("FATAL: detach different thread! %lu %lu", m_thd->real_id,
+                    my_thread_self());
     DBUG_PRINT("error", ("Attached to a different thread. Detach in it"));
     return true;
   }
+
+  /// clear thread id
+  m_thd->real_id = 0;
 
   DBUG_PRINT("info",
              ("Session=%p THD=%p current_thd=%p", this, m_thd, current_thd));
@@ -1149,7 +1149,9 @@ int Srv_session::execute_command(enum enum_server_command command,
   /* Switch to different callbacks */
   Protocol_callback client_proto(callbacks, text_or_binary, callbacks_context);
 
+  mysql_mutex_lock(&m_thd->LOCK_thd_protocol);
   m_thd->push_protocol(&client_proto);
+  mysql_mutex_unlock(&m_thd->LOCK_thd_protocol);
 
   mysql_audit_release(m_thd);
 
@@ -1180,7 +1182,9 @@ int Srv_session::execute_command(enum enum_server_command command,
   }
   int ret = dispatch_command(m_thd, data, command);
 
+  mysql_mutex_lock(&m_thd->LOCK_thd_protocol);
   m_thd->pop_protocol();
+  mysql_mutex_unlock(&m_thd->LOCK_thd_protocol);
   assert(m_thd->get_protocol() == &m_protocol_error);
   return ret;
 }
@@ -1282,4 +1286,12 @@ unsigned int Srv_session::thread_count(const void *plugin) {
 */
 bool Srv_session::is_srv_session_thread() {
   return nullptr != THR_srv_session_thread;
+}
+
+void Srv_session::set_safe(bool safe) {
+  safe_session = safe;
+  if (safe)
+    m_thd->remove_srv_session_mark();
+  else
+    m_thd->mark_as_srv_session();
 }

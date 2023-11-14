@@ -1406,6 +1406,9 @@ ulonglong global_conn_mem_counter = 0;
 */
 Deployed_components *g_deployed_components = nullptr;
 
+/* enable x-proto physical backfill*/
+bool opt_physical_backfill = true;
+
 /**
   Limit of the total number of prepared statements in the server.
   Is necessary to protect the server against out-of-memory attacks.
@@ -2262,6 +2265,10 @@ class Set_kill_conn : public Do_THD_Impl {
 
       MYSQL_CALLBACK(Connection_handler_manager::event_functions,
                      post_kill_notification, (killing_thd));
+      /// and THD PolarDB-X RPC cb
+      if (likely(killing_thd != nullptr))
+        MYSQL_CALLBACK(killing_thd->polarx_rpc_monitor,
+                       post_kill_notification, (killing_thd));
     }
 
     if (killing_thd->is_killable && killing_thd->kill_immunizer == nullptr) {
@@ -2453,7 +2460,7 @@ void kill_mysql(void) {
   DBUG_PRINT("quit", ("After pthread_kill"));
 }
 
-static void unireg_abort(int exit_code) {
+void unireg_abort(int exit_code) {
   DBUG_TRACE;
 
   if (errno) {

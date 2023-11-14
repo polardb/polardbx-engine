@@ -47,6 +47,7 @@
 
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/package/proc_undo_purge.h"
+#include "sql/xrpc/xrpc_proc.h"
 
 namespace im {
 
@@ -219,6 +220,9 @@ void package_context_init() {
   register_package<Proc, Consensus_proc_local_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_force_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_drop_prefetch_channel>(CONSENSUS_PROC_SCHEMA);
+
+  /** xrpc.perf_hist() */
+  register_package<Proc, Proc_perf_hist>(XRPC_PROC_SCHEMA);
 }
 
 } /* namespace im */

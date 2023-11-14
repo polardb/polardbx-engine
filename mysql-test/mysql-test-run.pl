@@ -714,7 +714,7 @@ sub main {
   if ($opt_parallel > 1) {
     if ($opt_start_exit || $opt_stress || $is_option_mysqlx_port_set || $is_option_polarx_rpc_port_set) {
       mtr_warning("Parallel cannot be used neither with --start-and-exit nor",
-                  "--stress nor --mysqlx_port.\nSetting parallel value to 1.");
+                  "--stress nor --mysqlx_port nor --polarx_rpc_port.\nSetting parallel value to 1.");
       $opt_parallel = 1;
     }
   }

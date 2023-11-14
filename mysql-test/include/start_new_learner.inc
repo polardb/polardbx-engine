@@ -46,7 +46,7 @@ CREATE TABLE mtr.test_suppressions (pattern VARCHAR(255)) ENGINE=MyISAM;
 EOF
 
 
---let extra_args=--defaults-file='$MYSQLTEST_VARDIR/my.cnf' --console --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR --socket=$learner_socket_path --mysqlx-port=$learner_x_port --port=$learner_port --pid-file=$learner_pid_file --mysqlx=0 --server-id=$learner_consensus_port
+--let extra_args=--defaults-file='$MYSQLTEST_VARDIR/my.cnf' --console --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR --socket=$learner_socket_path --mysqlx-port=$learner_x_port --port=$learner_port --rpc-port=$learner_rpc_port --pid-file=$learner_pid_file --mysqlx=0 --server-id=$learner_consensus_port
 
 --let init_args=--server_id=$learner_server_id --cluster-id=$learner_cluster_id --cluster-learner-node=ON --cluster-info=$learner_cluster_info --init-file=$mysql_bootsql_file
 
