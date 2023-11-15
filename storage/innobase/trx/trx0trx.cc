@@ -260,6 +260,7 @@ static void trx_init(trx_t *trx) {
 
   trx->gp_state = GP_STATE_NULL;
   trx->gp_wait.reset();
+  trx->gp_error_state = DB_SUCCESS;
 
   trx->vision.reset();
 

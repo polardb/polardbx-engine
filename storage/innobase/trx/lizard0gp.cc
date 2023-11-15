@@ -175,6 +175,8 @@ static void gp_build_wait_state(trx_t *query_trx, trx_t *blocking_trx) {
 
   trx_gp_state(query_trx)->build(blocking_trx);
 
+  query_trx->gp_error_state = DB_GP_WAIT;
+
   /** Wait state must be built in advance of allocating slot. */
   ut_ad(trx_gp_state(query_trx)->slot == nullptr);
 
@@ -228,7 +230,7 @@ static void gp_reset_wait_and_release_thread(trx_t *trx,
   wait = trx_gp_wait(blocking_trx);
   wait->release(trx);
 
-  trx->error_state = release_reason;
+  trx->gp_error_state = release_reason;
   /** Signal by the slot */
   gp_wait_signal_thread(trx);
 }
@@ -414,7 +416,7 @@ void gp_wait_suspend_thread(trx_t *trx) {
   if (gp_state->waiting == false) {
     ut_a(gp_state->blocking_trx == nullptr);
     ut_a(gp_state->slot == nullptr);
-    ut_a(trx->error_state == DB_SUCCESS);
+    ut_a(trx->gp_error_state == DB_SUCCESS);
 
     gp_wait_mutex_exit();
     trx_mutex_exit(trx);
@@ -449,7 +451,7 @@ void gp_wait_suspend_thread(trx_t *trx) {
 
   gp_release_slot(slot);
 
-  ut_ad(trx->error_state != DB_GP_WAIT);
+  ut_a(trx->gp_error_state != DB_GP_WAIT);
 }
 
 /**

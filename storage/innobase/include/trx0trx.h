@@ -1179,6 +1179,17 @@ struct trx_t {
   gp_state_t gp_state;
   /** Prepared XA transaction blocking info */
   gp_wait_t gp_wait;
+  /**
+   * Error state used in global query. Must be accessed with the protection of
+   trx mutex.
+
+   * It has only three possible values:
+   * DB_WAIT: Set in gp_build_wait_state by the global query itself.
+   * DB_WAIT_TIMEOUT: Set in gp_wait_check_and_cancel by gp_wait_timeout_thread.
+   * DB_SUCCESS: The initial normal state when the global query hasn't been
+   blocked, or set in gp_wait_cancel_all_when_commit by the blocking trx.
+   */
+  dberr_t gp_error_state;
 
   /** Descripe XA attributes from server */
   XAD xad;

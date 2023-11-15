@@ -725,15 +725,20 @@ handle_new_error:
 
     case DB_GP_WAIT:
       lizard::gp_wait_suspend_thread(trx);
+      trx_mutex_enter(trx);
+      trx->error_state = trx->gp_error_state;
+      trx_mutex_exit(trx);
+      ut_a(trx->error_state == DB_GP_WAIT_TIMEOUT ||
+           trx->error_state == DB_SUCCESS);
       if (trx->error_state != DB_SUCCESS) {
-        ut_ad(trx->error_state == DB_GP_WAIT_TIMEOUT);
+        ut_a(trx->error_state == DB_GP_WAIT_TIMEOUT);
         que_thr_stop_for_mysql(thr);
 
         goto handle_new_error;
       }
 
       *new_err = err;
-      ut_ad(trx->error_state == DB_SUCCESS);
+      ut_a(trx->error_state == DB_SUCCESS);
       return true;
 
     case DB_DEADLOCK:
