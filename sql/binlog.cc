@@ -9386,6 +9386,8 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   });
   DEBUG_SYNC(thd, "sync_before_commit_stage_in_order_commit");
 
+  DBUG_EXECUTE_IF("simulate_old_8018_allow_null_gcn", { DBUG_SUICIDE(); });
+
 commit_stage:
   /* Clone needs binlog commit order. */
   if ((opt_binlog_order_commits || Clone_handler::need_commit_order()) &&
@@ -12046,6 +12048,9 @@ bool Gcn_manager::assign_gcn_to_flush_group(THD *first_seen) {
       head->owned_commit_gcn.set(innodb_hton->ext.load_gcn(),
                                  MYSQL_CSR_AUTOMATIC);
     }
+
+    DBUG_EXECUTE_IF("simulate_old_8018_allow_null_gcn",
+                    { head->owned_commit_gcn.reset(); });
   }
   return err;
 }

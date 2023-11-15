@@ -1,0 +1,11 @@
+create table t1 (id int);
+set session debug = "+d, simulate_old_8018_allow_null_gcn";
+begin;
+insert into t1 values (1);
+commit;
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+select * from t1;
+id
+1
+drop table t1;

@@ -1,0 +1,16 @@
+
+create table t1 (id int);
+
+set session debug = "+d, simulate_old_8018_allow_null_gcn";
+begin;
+insert into t1 values (1);
+
+--source include/expect_crash.inc
+--error 2013
+commit;
+
+--source include/start_mysqld.inc
+
+select * from t1;
+
+drop table t1;

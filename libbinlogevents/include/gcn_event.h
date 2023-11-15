@@ -122,10 +122,10 @@ class Gcn_event : public Binary_log_event {
   MyGCN get_commit_gcn() const {
     MyGCN my_gcn;
 
-    assert(have_commit_gcn());
-
-    my_gcn.set(commit_gcn,
-               is_assigned_gcn() ? MYSQL_CSR_ASSIGNED : MYSQL_CSR_AUTOMATIC);
+    if (have_commit_gcn()) {
+      my_gcn.set(commit_gcn,
+                 is_assigned_gcn() ? MYSQL_CSR_ASSIGNED : MYSQL_CSR_AUTOMATIC);
+    }
 
     return my_gcn;
   }
