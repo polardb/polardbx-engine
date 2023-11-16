@@ -1728,7 +1728,16 @@ static bool trx_write_serialisation_history(
   }
 
   if (own_txn_rseg_mutex) {
-    trx->rsegs.m_txn.rseg->unlatch();
+    /**
+     * The function trx_undo_prev_version_build may attempt to acquire the
+     * update undo page latches while holding the txn undo page latch. This
+     * could lead to a deadlock if we try to re-acquire the txn undo page latch
+     * while holding the update undo page latch. To avoid this potential
+     * deadlock, we disable txn size validation in debug mode during unlatching.
+     * The validation is then performed later, after the latches have been
+     * released.
+     */
+    trx->rsegs.m_txn.rseg->unlatch(false);
     own_txn_rseg_mutex = false;
   }
 
@@ -2033,6 +2042,12 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
     // trx_erase_from_serialisation_list_low(trx);
 
     trx_sys_gtids_mem_mutex_exit();
+
+#ifdef UNIV_DEBUG
+    /** Validate the txn size after the undo page latches have been released. */
+    trx->rsegs.m_txn.rseg->latch();
+    trx->rsegs.m_txn.rseg->unlatch();
+#endif /* UNIV_DEBUG */
 
     lizard::gcs_erase_lists(trx);
   }

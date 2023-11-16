@@ -190,8 +190,12 @@ struct trx_rseg_t {
   }
 
   /** Exit the rseg->mutex. */
-  void unlatch() {
-    ut_ad(validate_curr_size(false));
+  void unlatch(bool enable_validation = true) {
+#ifdef UNIV_DEBUG
+    if (enable_validation) {
+      validate_curr_size(false);
+    }
+#endif /* UNIV_DEBUG */
     mutex_exit(&mutex);
   }
 
