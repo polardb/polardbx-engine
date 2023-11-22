@@ -17,6 +17,7 @@
 #include "sql/rpl_rli.h"
 #include "sql/rpl_rli_ext.h"
 #include "bl_consensus_log.h"
+#include "storage/innobase/include/ut0dbg.h"
 
 bool opt_consensus_index_buf_enabled = false;
 
@@ -100,7 +101,7 @@ Index_link_buf::Index_link_buf(uint64 capacity)
 
   m_indexes = (std::atomic<uint64> *)my_malloc(
       PSI_INSTRUMENT_ME, sizeof(std::atomic<uint64>) * capacity, MYF(0));
-  if (m_indexes == nullptr) return;
+  ut_a(m_indexes != nullptr);
 
   for (size_t i = 0; i < capacity; ++i) {
     m_indexes[i].store(0);
@@ -145,18 +146,22 @@ inline uint64 Index_link_buf::get_slot_index(uint64 index) const {
 }
 
 inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
-  assert(index <= m_tail.load() + m_capacity);
-  assert(index > m_tail.load());
-
-  raft::info(ER_RAFT_APPLIER) << "add index " << index
-    << ", curr tail " << m_tail.load()
-    << ", count " << index - m_tail.load()
-    << ", " << get_backtrace_str();
+  ut_a(index <= m_tail.load() + m_capacity);
+  ut_a(index > m_tail.load());
+  uint64 old_tail = m_tail.load();
+  uint64 ret = 0;
 
   auto slot_index = get_slot_index(index);
   auto &slot = m_indexes[slot_index];
   slot.store(index, std::memory_order_release);
-  return advance_tail();
+  ret = advance_tail();
+
+  raft::info(ER_RAFT_APPLIER) << "add_index_advance_tail " << index
+    << ", old tail " << old_tail
+    << ", old count " << index - old_tail
+    << ", curr tail " << m_tail.load()
+    << ", curr count " << index - m_tail.load();
+  return ret;
 }
 
 inline uint64 Index_link_buf::advance_tail() {
@@ -173,7 +178,6 @@ inline uint64 Index_link_buf::advance_tail() {
   }
 
   unlock();
-  raft::info(ER_RAFT_APPLIER) << "advance to tail " << m_tail.load();
   return m_tail;
 }
 

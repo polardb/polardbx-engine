@@ -1,4 +1,5 @@
 --source include/paxos.inc
+--source include/have_debug.inc
 
 create table t (id int);
 
@@ -26,6 +27,7 @@ call dbms_consensus.change_leader(2);
 connection con2;
 let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
 --source include/wait_condition.inc
+--source include/wait_leader_apply_catchup.inc
 xa commit 'xa1';
 xa recover;
 select * from t;
@@ -37,6 +39,7 @@ connection con1;
 --disable_reconnect
 let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
 --source include/wait_condition.inc
+--source include/wait_leader_apply_catchup.inc
 drop table t;
 
 --disconnect con1

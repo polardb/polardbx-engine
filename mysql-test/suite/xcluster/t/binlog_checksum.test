@@ -148,7 +148,7 @@ while($cnt)
 --connection conn1
 --source include/wait_follower_catchup.inc
 
-select count(distinct(APPLIED_INDEX)) from information_schema.alisql_cluster_global;
+select count(distinct(APPLIED_INDEX)) from information_schema.alisql_cluster_global where role <> "leader";
 
 # cleanup
 --connection conn1

@@ -2,7 +2,7 @@ use test;
 create table t1 (data varchar(1024));
 insert into t1 values ("test");
 insert into t1 values (REPEAT('test',100));
-# Kill and restart: --consensus_max_log_size=512 --consensus_large_trx=OFF
+# Kill and restart: --consensus_large_trx_split_size=256 --consensus_large_event_split_size=256 --consensus_max_log_size=512 --consensus_large_event_size_limit=2048 --consensus_large_trx=OFF
 insert into t1 values ("test");
 insert into t1 values (REPEAT('test',100));
 ERROR HY000: The consensus log is too large for cluster, please split the transcation to small ones.

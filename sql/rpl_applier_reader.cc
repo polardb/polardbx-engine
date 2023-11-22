@@ -148,6 +148,11 @@ void Rpl_applier_reader::close() {
   m_errmsg = nullptr;
 }
 
+my_off_t Rpl_applier_reader::relaylog_reader_position()
+{
+  return m_relaylog_file_reader.position();
+}
+
 Log_event *Rpl_applier_reader::read_next_event() {
   DBUG_TRACE;
   Log_event *ev = nullptr;

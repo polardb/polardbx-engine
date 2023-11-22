@@ -373,13 +373,18 @@ The following options may be given as the first argument:
  Number of consensus io thread
  --consensus-large-batch-ratio[=#] 
  Large batch ratio of consensus server send at once
+ --consensus-large-event-count-limit=# 
+ Consensus large event count limit in one trx
  --consensus-large-event-limit=# 
- Consensus large event limit
+ This option is deprecated. Use
+ consensus_large_event_size_limit instead.
+ --consensus-large-event-size-limit=# 
+ Consensus large event size limit
  --consensus-large-event-split-size[=#] 
  split size for large event, dangerous to change this
  variable
  --consensus-large-trx 
- consensus large trx or not
+ support consensus large trx or not
  (Defaults to on; use --skip-consensus-large-trx to disable.)
  --consensus-large-trx-split-size=# 
  Max size to split large trx into multi consensus logs.
@@ -445,7 +450,8 @@ The following options may be given as the first argument:
  --consensus-worker-thread-cnt[=#] 
  Number of consensus worker thread
  --consensuslog-revise 
- revise consensuslog before flush to disk
+ revise consensuslog end_pos before flush to disk
+ (Defaults to on; use --skip-consensuslog-revise to disable.)
  --console           Write error output on screen; don't remove the console
  window on windows.
  --core-file         Write core on errors.
@@ -2036,7 +2042,9 @@ consensus-heartbeat-thread-cnt 0
 consensus-index-buf-enabled TRUE
 consensus-io-thread-cnt 3
 consensus-large-batch-ratio 50
+consensus-large-event-count-limit 1
 consensus-large-event-limit 1073741824
+consensus-large-event-size-limit 1073741824
 consensus-large-event-split-size 2097152
 consensus-large-trx TRUE
 consensus-large-trx-split-size 2097152
@@ -2065,7 +2073,7 @@ consensus-safe-for-reset-master FALSE
 consensus-send-timeout 0
 consensus-sync-follower-meta-interva 1
 consensus-worker-thread-cnt 3
-consensuslog-revise FALSE
+consensuslog-revise TRUE
 console FALSE
 create-admin-listener-thread FALSE
 cte-max-recursion-depth 1000

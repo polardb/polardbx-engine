@@ -101,8 +101,8 @@ uint64_t LocalServer::writeLogDoneInternal(uint64_t logIndex, bool forceSend) {
 
   if (forceSend) /* for large trx, send directly after sync partial */
   {
-    easy_warn_log("Server %d : writeLogDoneInternal logIndex:%ld\n", serverId,
-                  logIndex);
+    easy_warn_log("Server %d : writeLogDoneInternal logIndex:%ld, lastSyncedIndex:%llu\n",
+                  serverId, logIndex, lastSyncedIndex.load());
     paxos->appendLog(false);
   }
   return 0;
@@ -134,9 +134,9 @@ uint64_t AliSQLServer::writeLogDone(uint64_t logIndex) {
   int tmp = 0;
 
   tmp = paxos->tryUpdateCommitIndex();
-  easy_warn_log(
-      "Server %d : writeLogDone logIndex:%ld, tryUpdateCommitIndex return:%d\n",
-      serverId, logIndex, tmp);
+  easy_info_log(
+      "Server %d : writeLogDone logIndex:%ld, tryUpdateCommitIndex return:%d, lastSyncedIndex:%llu\n",
+      serverId, logIndex, tmp, lastSyncedIndex.load());
 
   if (paxos->getReplicateWithCacheLog() == false) paxos->appendLog(false);
 
@@ -510,10 +510,11 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
       lli = paxos->getLastLogIndex();
   }
   easy_warn_log(
-      "Server %d : Send msg msgId(%llu) to server %ld, term:%ld, "
+      "Server %d : Send msg msgId(%llu) to server %ld, term:%ld, commitIndex:%llu, "
       "startLogIndex:%ld, entries_size:%d, log_size:%llu lli:%ld\n",
       paxos ? paxos->getLocalServer()->serverId : 0, msg->msgid(), serverId,
       msg->term(),
+      msg->commitindex(),
       msg->entries_size() >= 1 ? msg->entries().begin()->index() : -1,
       msg->entries_size(), logSize, lli);
 

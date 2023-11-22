@@ -28,6 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "consensus_log_manager.h"
 #include "sys_vars_consensus.h"
 #include "mysqld.h"
+#include "storage/innobase/include/ut0dbg.h"
 
 #ifdef HAVE_PSI_INTERFACE
 PSI_memory_key key_memory_ConsensusLogManager;
@@ -100,13 +101,13 @@ int ConsensusFifoCacheManager::get_log_from_cache(uint64 index, uint64 *term,
     return OUT_OF_RANGE;
   }
   ConsensusLogEntry log_entry =
-      log_cache_list[(rleft + index - log_cache_list[rleft].index) %
-                     reserve_list_size];
+      log_cache_list[(rleft + index - log_cache_list[rleft].index) % reserve_list_size];
   *term = log_entry.term;
   *outer = log_entry.outer;
   *flag = log_entry.flag;
   log_content.assign((char *)(log_entry.buffer), log_entry.buf_size);
   *checksum = log_entry.checksum;
+  ut_a(log_entry.index == index);
   mysql_rwlock_unlock(&LOCK_consensuslog_cache);
   return 0;
 }
@@ -116,22 +117,50 @@ int ConsensusFifoCacheManager::add_log_to_cache(uint64 term, uint64 index,
                                                 bool outer, uint flag,
                                                 uint64 checksum,
                                                 bool reuse_buffer) {
-  if (opt_consensus_disable_fifo_cache) return 1;
+  if (opt_consensus_disable_fifo_cache) return 0;
 
   uchar *new_buffer = nullptr;
   /* spin loop to make sure enough space left */
   while (current_log_count >= reserve_list_size - 1)
     mysql_cond_signal(&cleaner_cond);
+
+  if (rright != rleft) {
+      const size_t lasti = (rright + reserve_list_size - 1) % reserve_list_size;
+      if (index != log_cache_list[lasti].index  + 1) {
+        raft::error(ER_RAFT_FIFO)  << "fifo cache add invalid index, need strictly increasing"
+                          << ", input_index " << index
+                          << ", start_index " << log_cache_list[rleft].index
+                          << ", end_index " << log_cache_list[lasti].index
+                          << ", cache count " << (rright + reserve_list_size - rleft) % reserve_list_size
+                          << ", fifo_cache_size " << fifo_cache_size
+                          << ", current_log_count " << current_log_count
+                          << " " << get_backtrace_str();
+        return 1;
+      }
+  }
+
   if (reuse_buffer)
     new_buffer = buffer;
   else
     new_buffer = (uchar *)my_memdup(key_memory_cache_mem_root, (char *)buffer,
                                     buf_size, MYF(MY_WME));
+  assert(new_buffer != NULL);
   log_cache_list[rright] = (ConsensusLogEntry){
       term, index, buf_size, new_buffer, outer, flag, checksum};
   rright = (rright + 1) % reserve_list_size;
   fifo_cache_size += buf_size;
   current_log_count++;
+
+  // raft::info(ER_RAFT_FIFO) << "add_log_to_fifo_cache"
+  //   << ", term " << term
+  //   << ", index " << index
+  //   << ", flag " << flag
+  //   << ", checksum " << checksum
+  //   << ", start_index " << log_cache_list[rleft].index
+  //   << ", current_log_count " << current_log_count
+  //   << ", fifo_cache_size " << fifo_cache_size
+  //   << ", " << get_backtrace_str();
+
   mysql_cond_signal(&cleaner_cond);
   consensus_log_manager.set_cache_index(index);
   return 0;
@@ -140,11 +169,11 @@ int ConsensusFifoCacheManager::add_log_to_cache(uint64 term, uint64 index,
 int ConsensusFifoCacheManager::trunc_log_from_cache(uint64 index) {
   consensus_log_manager.set_cache_index(index - 1);
   mysql_rwlock_wrlock(&LOCK_consensuslog_cache);
-  raft::info(ER_RAFT_FIFO) << "Truncate fifo before, first index = ["
-                           << log_cache_list[rleft].index << "], cache size = ["
-                           << (rright + reserve_list_size - rleft) %
-                                  reserve_list_size
-                           << "]";
+  raft::info(ER_RAFT_FIFO)  << "Truncate fifo before"
+                            << ", first index = [" << log_cache_list[rleft].index
+                            << "], end index = [" << log_cache_list[(rright + reserve_list_size - 1) % reserve_list_size].index
+                            << "], cache count = [" << (rright + reserve_list_size - rleft) % reserve_list_size
+                            << "]";
   if (max_log_cache_size == 0 || current_log_count == 0) {
     mysql_rwlock_unlock(&LOCK_consensuslog_cache);
     return 0;
@@ -166,11 +195,11 @@ int ConsensusFifoCacheManager::trunc_log_from_cache(uint64 index) {
     cur_pos = (cur_pos + 1) % reserve_list_size;
   }
   rright = start_point;
-  raft::info(ER_RAFT_FIFO) << "Truncate fifo after, first index = ["
-                           << log_cache_list[rleft].index << "], cache size = ["
-                           << (rright + reserve_list_size - rleft) %
-                                  reserve_list_size
-                           << "]";
+  raft::info(ER_RAFT_FIFO)  << "Truncate fifo after"
+                            << ", first index = [" << log_cache_list[rleft].index
+                            << "], end index = [" << log_cache_list[(rright + reserve_list_size - 1) % reserve_list_size].index
+                            << "], cache count = [" << (rright + reserve_list_size - rleft) % reserve_list_size
+                            << "]";
   mysql_rwlock_unlock(&LOCK_consensuslog_cache);
   return 0;
 }

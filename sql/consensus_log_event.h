@@ -72,6 +72,7 @@ class Consensus_log_event final : public binary_log::Consensus_event,
 #endif
 
   size_t get_data_size() override { return POST_HEADER_LENGTH; }
+  static size_t get_event_total_size() { return POST_HEADER_LENGTH + LOG_EVENT_HEADER_LEN + BINLOG_CHECKSUM_LEN; }
 
 #if defined(MYSQL_SERVER)
   enum_skip_reason do_shall_skip(Relay_log_info *) override {
@@ -79,23 +80,6 @@ class Consensus_log_event final : public binary_log::Consensus_event,
   }
   int do_apply_event(Relay_log_info const *rli) override;
   int do_update_pos(Relay_log_info *rli) override;
-#endif
-
-#ifdef MYSQL_SERVER
-  /**
-  Writes this event to a memory buffer.
-
-  @param buf The event will be written to this buffer.
-
-  @return the number of bytes written, i.e., always
-  LOG_EVENT_HEADER_LEN + Gtid_log_event::POST_HEADEr_LENGTH.
-  */
-  uint32 write_to_memory(uchar *buf) {
-    common_header->data_written = LOG_EVENT_HEADER_LEN + get_data_size();
-    uint32 len = write_header_to_memory(buf);
-    len += write_data_header_to_memory(buf + len);
-    return len;
-  }
 #endif
 
   uint64 get_flag() const { return flag; }
@@ -226,22 +210,6 @@ class Consensus_cluster_info_log_event final
   int do_update_pos(Relay_log_info *rli) override;
 #endif
 
-#ifdef MYSQL_SERVER
-  /**
-  Writes this event to a memory buffer.
-
-  @param buf The event will be written to this buffer.
-
-  @return the number of bytes written, i.e., always
-  LOG_EVENT_HEADER_LEN + Gtid_log_event::POST_HEADEr_LENGTH.
-  */
-  uint32 write_to_memory(uchar *buf) {
-    common_header->data_written = LOG_EVENT_HEADER_LEN + get_data_size();
-    uint32 len = write_header_to_memory(buf);
-    len += write_data_header_to_memory(buf + len);
-    return len;
-  }
-#endif
   uint32 get_info_length() { return info_length; }
   const char *get_info() { return info; }
 
@@ -277,6 +245,7 @@ class Consensus_empty_log_event final
 #endif
 
   size_t get_data_size() override { return 0; }
+  static size_t get_event_total_size() { return 0 + LOG_EVENT_HEADER_LEN + BINLOG_CHECKSUM_LEN; }
 
 #if defined(MYSQL_SERVER)
   enum_skip_reason do_shall_skip(Relay_log_info *) override {

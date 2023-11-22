@@ -40,12 +40,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/log_event.h"
 #include "sql/mysqld.h"
 #include "sql/xa/xid_extract.h"
+#include "storage/innobase/include/ut0dbg.h"
 
 namespace raft {
-
-static uchar *remove_const(std::string &str) {
-  return (uchar *)const_cast<char *>(str.c_str());
-}
 
 static int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader,
                                   uint64 start_pos, uint64 end_pos,
@@ -88,10 +85,11 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
   binlog::tools::Iterator it{&m_reader};
   it.set_copy_event_buffer();
   m_valid_pos = m_reader.position();
+  int error = 0;
 
   this->process_format_event(*this->m_reader.format_description_event());
 
-  for (Log_event *ev = it.begin(); ev != it.end(); ev = it.next()) {
+  for (Log_event *ev = it.begin(); ev != it.end() && !error; ev = it.next()) {
     if (ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT) {
       process_consensus_event(dynamic_cast<Consensus_log_event &>(*ev));
     } else if (ev->get_type_code() ==
@@ -119,27 +117,26 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
       if (m_begin_consensus && m_end_pos > m_start_pos &&
           m_end_pos - m_start_pos == m_current_length) {
         if (m_current_flag & Consensus_log_event_flag::FLAG_BLOB) {
-          m_blob_index_list.emplace_back(m_current_index);
-          m_blob_term_list.emplace_back(m_current_term);
-          m_blob_flag_list.emplace_back(m_current_flag);
-          m_blob_crc32_list.emplace_back(m_current_crc32);
+          m_blob_index_list.push_back(m_current_index);
+          m_blob_term_list.push_back(m_current_term);
+          m_blob_flag_list.push_back(m_current_flag);
         } else if (m_current_flag & Consensus_log_event_flag::FLAG_BLOB_END) {
           m_blob_index_list.push_back(m_current_index);
           m_blob_term_list.push_back(m_current_term);
           m_blob_flag_list.push_back(m_current_flag);
-          m_blob_crc32_list.push_back(m_current_crc32);
           uint64 split_len = opt_consensus_large_event_split_size;
-          uint64 blob_start_pos = m_start_pos,
-                 blob_end_pos = m_start_pos + split_len;
+          uint64 blob_start_pos = m_start_pos;
+          uint64 blob_end_pos = (m_blob_index_list.size() == 1 ? m_end_pos : (m_start_pos + split_len));
           uint64 save_position = m_reader.position();
-
-          for (size_t i = 0; i < m_blob_index_list.size(); ++i) {
-            fetch_binlog_by_offset(m_reader, blob_start_pos, blob_end_pos,
-                                   m_rci_ev, m_log_content);
-            consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
+          for (size_t i = 0; i < m_blob_index_list.size() && !error; ++i) {
+            fetch_binlog_by_offset(m_reader, blob_start_pos, blob_end_pos, m_rci_ev, m_log_content);
+            const uint64 current_crc32 = opt_consensus_checksum
+              ? checksum_crc32(0, get_uchar_str(m_log_content), m_log_content.size())
+              : 0;
+            error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
                 m_blob_term_list[i], m_blob_index_list[i], m_log_content.size(),
-                remove_const(m_log_content), (m_rci_ev != nullptr),
-                m_blob_flag_list[i], m_blob_crc32_list[i]);
+                get_uchar_str(m_log_content), (m_rci_ev != nullptr),
+                m_blob_flag_list[i], current_crc32);
             blob_start_pos = blob_end_pos;
             blob_end_pos = blob_end_pos + split_len > m_end_pos
                                ? m_end_pos
@@ -148,26 +145,28 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
           m_blob_index_list.clear();
           m_blob_term_list.clear();
           m_blob_flag_list.clear();
-          m_blob_crc32_list.clear();
           m_begin_consensus = false;
-          m_valid_index = m_current_index;
-          /*
-            fetch_binlog_by_offset will modify the position
-            of binlog_file_reader.
-          */
+          //fetch_binlog_by_offset will modify the position of binlog_file_reader.
           m_reader.seek(save_position);
+          if (!(m_current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX)) {
+            m_valid_index = m_current_index;
+          }
         } else {
           uint64 save_position = m_reader.position();
-
-          // copy log to buffer
           fetch_binlog_by_offset(m_reader, m_start_pos, m_end_pos, m_rci_ev,
                                  m_log_content);
-          consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
+          const uint64 current_crc32 = opt_consensus_checksum
+            ? checksum_crc32(0, get_uchar_str(m_log_content), m_log_content.size())
+            : 0;
+          // copy log to buffer
+          error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
               m_current_term, m_current_index, m_log_content.size(),
-              remove_const(m_log_content), (m_rci_ev != nullptr),
-              m_current_flag, m_current_crc32);
+              get_uchar_str(m_log_content), (m_rci_ev != nullptr),
+              m_current_flag, current_crc32);
           m_begin_consensus = false;
-          m_valid_index = m_current_index;
+          if (!(m_current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX)) {
+            m_valid_index = m_current_index;
+          }
 
           /*
             fetch_binlog_by_offset will modify the position
@@ -179,14 +178,36 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
       }
     }
 
-    if (!m_reader.has_fatal_error() && !m_begin_consensus &&
-        !is_gtid_event(ev) && !is_gcn_event(ev)) {
+    // Whenever the current position is at a transaction boundary, save it
+    // to m_valid_pos
+    if (!this->m_is_malformed && !this->m_in_transaction &&
+        !m_reader.has_fatal_error() && !m_begin_consensus &&
+        !(m_current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX) &&
+        !lizard::is_b_events_before_gtid(ev) && !is_gtid_event(ev) &&
+        !is_session_control_event(ev)) {
       m_valid_pos = my_b_tell(m_reader.get_io_cache());
     }
 
     delete ev;
     ev = nullptr;
+
+    this->m_is_malformed =
+        it.has_error() || m_reader.has_fatal_error() || this->m_is_malformed;
+    if (this->m_is_malformed) break;
   }
+
+  raft::info(ER_RAFT_RECOVERY)
+      << "Consensus_binlog_recovery::recover end "
+      << ", file_size " << m_reader.ifile()->length() << ", curr_position "
+      << m_reader.position() << ", m_current_index " << m_current_index
+      << ", m_start_pos " << m_start_pos << ", m_end_pos " << m_end_pos
+      << ", m_valid_pos " << m_valid_pos << ", m_valid_index " << m_valid_index
+      << ", m_is_malformed " << m_is_malformed << ", m_in_transaction "
+      << m_in_transaction << ", get_error_type  " << m_reader.get_error_type()
+      << ", get_error " << it.get_error_number() << ", get_error_message "
+      << it.get_error_message();
+
+  ut_a(!it.has_error());
 
   if (m_start_pos < m_valid_pos && m_end_pos > m_valid_pos) {
     m_end_pos = m_valid_pos;
@@ -195,15 +216,19 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
   // recover current/sync index
   //
   // if the last log is not integrated
-  if (m_begin_consensus) {
-    raft::warn(ER_RAFT_RECOVERY) << "last consensus log is not integrated, "
-                                 << "sync index should set to " << m_valid_index
-                                 << " instead of " << m_current_index;
+  if (m_valid_index != m_current_index) {
+    raft::warn(ER_RAFT_RECOVERY)
+        << "last consensus log is not integrated, "
+        << "sync index should set to " << m_valid_index << " instead of "
+        << m_current_index << ", with valid_pos " << m_valid_pos;
+    // truncate cache
+    consensus_log_manager.get_fifo_cache_manager()->trunc_log_from_cache(
+        m_valid_index + 1);
   }
-  consensus_log_manager.set_cache_index(m_valid_index);
+
   consensus_log_manager.set_sync_index(m_valid_index);
-  consensus_log_manager.set_current_index(
-      consensus_log_manager.get_sync_index() + 1);
+  consensus_log_manager.set_cache_index(m_valid_index);
+  consensus_log_manager.set_current_index(m_valid_index + 1);
   consensus_log_manager.set_enable_rotate(!(m_current_flag & FLAG_LARGE_TRX));
 
   if (!this->m_is_malformed && total_ha_2pc > 1) {
@@ -239,7 +264,6 @@ void Consensus_binlog_recovery::process_consensus_event(
   m_current_term = ev.get_term();
   m_current_length = ev.get_length();
   m_current_flag = ev.get_flag();
-  m_current_crc32 = ev.get_reserve();
   m_end_pos = m_start_pos = my_b_tell(m_reader.get_io_cache());
   m_begin_consensus = true;
 

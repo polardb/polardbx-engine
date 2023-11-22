@@ -13,7 +13,7 @@ create table t1 (data varchar(1024));
 insert into t1 values ("test");
 insert into t1 values (REPEAT('test',100));
 
-let $restart_parameters = restart: --consensus_max_log_size=512 --consensus_large_trx=OFF;
+let $restart_parameters = restart: --consensus_large_trx_split_size=256 --consensus_large_event_split_size=256 --consensus_max_log_size=512 --consensus_large_event_size_limit=2048 --consensus_large_trx=OFF;
 --source include/kill_and_restart_mysqld.inc
 
 insert into t1 values ("test");

@@ -2,3 +2,4 @@
 
 [mysqld]
 performance_schema=1
+innodb_lock_wait_timeout=2

@@ -1,6 +1,15 @@
 use test;
 create table t1 (data longblob);
-select count(distinct(match_index)), count(distinct(applied_index)) from information_schema.alisql_cluster_global;
-count(distinct(match_index))	count(distinct(applied_index))
-1	1
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 select * from t1;
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 1024));
+insert into t1 values (repeat('a', 1024));
+insert into t1 values (repeat('a', 1024));
+insert into t1 values (repeat('a', 1024));
+insert into t1 values (repeat('a', 1024));
 drop table t1;

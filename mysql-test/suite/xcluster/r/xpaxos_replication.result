@@ -12,12 +12,19 @@ ERROR HY000: The server is not allowed to do current operation.
 stop slave;
 reset slave all for channel 'aaa';
 stop xpaxos_replication;
+No
+No
+"before reset"
 reset slave;
+"after reset"
+No
+No
 start xpaxos_replication;
 STOP REPLICA for channel '';
 ERROR HY000: Slave channel '' does not exist.
 stop slave for channel '';
 ERROR HY000: Slave channel '' does not exist.
+"after start"
 Yes
 Yes
 set global relay_log_info_repository='file';
@@ -31,6 +38,8 @@ count(1)
 set global relay_log_info_repository='file';
 ERROR HY000: This operation cannot be performed with running replication threads; run STOP SLAVE FOR CHANNEL '' first
 stop xpaxos_replication;
+No
+No
 set global relay_log_info_repository='file';
 Warnings:
 Warning	1287	'@@relay_log_info_repository' is deprecated and will be removed in a future release.

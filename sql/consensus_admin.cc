@@ -581,12 +581,26 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
                                            bool is_xpaxos_replication) {
   DBUG_ENTER("check_exec_consensus_log_end_condition");
   if (is_xpaxos_replication  && !opt_disable_wait_commitindex) {
-    while (consensus_ptr->checkCommitIndex(consensus_log_manager.get_real_apply_index() - 1, consensus_log_manager.get_current_term()) <
-            consensus_log_manager.get_real_apply_index())
+    uint64 tmpCommitIndex = 0;
+    //when the followe case, continue read, return 0
+    //  commitIndex > applyIndex
+    //  commitIndex == applyIndex && apply_current_pos < apply_end_pos
+    //any the followe case, wait and retry
+    //  commitIndex < applyIndex
+    //  commitIndex == applyIndex && apply_current_pos >= apply_end_pos
+    while (((tmpCommitIndex = consensus_ptr->checkCommitIndex(consensus_log_manager.get_real_apply_index() - 1, consensus_log_manager.get_current_term()))
+              < consensus_log_manager.get_real_apply_index())
+           || (tmpCommitIndex == consensus_log_manager.get_real_apply_index()
+               && consensus_log_manager.get_apply_index_current_pos() >= consensus_log_manager.get_apply_index_end_pos()))
     {
       if (consensus_ptr->isShutdown())
       {
         raft::info(ER_RAFT_APPLIER) << "Apply thread is terminated because of shutdown";
+        DBUG_RETURN(1);
+      }
+
+      if (sql_slave_killed(rli->info_thd , rli)) {
+        raft::info(ER_RAFT_APPLIER) << "Apply thread is terminated because of slave_killed";
         DBUG_RETURN(1);
       }
 
@@ -614,11 +628,14 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         mysql_mutex_unlock(consensus_log_manager.get_apply_thread_lock());
         raft::info(ER_RAFT_APPLIER) << "Apply thread catchup commit index, consensus index: " << rli->get_consensus_apply_index()
                                     << ", current term: " << consensus_log_manager.get_current_term()
+                                    << ", apply term: " << consensus_log_manager.get_apply_term()
                                     << ", stop term: " << consensus_log_manager.get_stop_term();
         DBUG_RETURN(1);
       }
-      else if (consensus_ptr->getCommitIndex() > consensus_log_manager.get_real_apply_index() ||
-              (consensus_ptr->getCommitIndex() == 1 && consensus_log_manager.get_real_apply_index()==1))
+      else if (consensus_ptr->getCommitIndex() > consensus_log_manager.get_real_apply_index()
+               || (consensus_ptr->getCommitIndex() == consensus_log_manager.get_real_apply_index()
+                   && consensus_log_manager.get_apply_index_current_pos() < consensus_log_manager.get_apply_index_end_pos())
+               || (consensus_ptr->getCommitIndex() == 1 && consensus_log_manager.get_real_apply_index()==1))
       {
         // not reach commit index, continue to read log
         break;
@@ -649,15 +666,15 @@ void update_consensus_apply_pos(Relay_log_info *rli,
           r_ev->future_event_relay_log_pos + r_ev->get_length();
 
       if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX) {
-        if (!consensus_log_manager.get_in_large_trx()) {
+        if (!consensus_log_manager.get_in_large_trx_applying()) {
           consensus_log_manager.set_apply_index(consensus_index);
           consensus_log_manager.set_apply_term(consensus_term);
           consensus_log_manager.set_apply_ev_sequence(0);
-          consensus_log_manager.set_in_large_trx(true);
+          consensus_log_manager.set_in_large_trx_applying(true);
         }
       } else if (r_ev->get_flag() &
                  Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
-        consensus_log_manager.set_in_large_trx(false);
+        consensus_log_manager.set_in_large_trx_applying(false);
       } else {
         /* normal case */
         consensus_log_manager.set_apply_index(consensus_index);
@@ -667,28 +684,19 @@ void update_consensus_apply_pos(Relay_log_info *rli,
       consensus_log_manager.set_real_apply_index(consensus_index);
       consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
 
-      raft::info(ER_RAFT_APPLIER) << "set_real_apply_index: " << consensus_index
+      raft::info(ER_RAFT_APPLIER) << "update_consensus_apply_pos: " << consensus_index
                             << ", consensus_term: " << consensus_term
                             << ", consensus_index: " << consensus_index
-                            << ", consensus_index_end_pos: " << consensus_index_end_pos;
+                            << ", consensus_index_end_pos: " << consensus_index_end_pos
+                            << ", consensus_index_current_pos: " << ev->future_event_relay_log_pos;
     }
 
+    consensus_log_manager.set_apply_index_current_pos(ev->future_event_relay_log_pos);
     ev->consensus_index = consensus_log_manager.get_apply_index();
 	  ev->consensus_real_index = consensus_log_manager.get_real_apply_index();
     ev->consensus_index_end_pos = consensus_log_manager.get_apply_index_end_pos();
     ev->consensus_sequence = consensus_log_manager.get_apply_ev_sequence();
     consensus_log_manager.incr_apply_ev_sequence();
-
-	  /**
-     * The Group of CONSENSUS_LOG which is applied may be truncated.
-     * It will add a CONSENSUS_EMPTY event instead of the truncated binlog.
-     * 
-     * The CONSENSUS_EMPTY event can be considered as end_group().
-     */
-    if (ev->get_type_code() == binary_log::CONSENSUS_EMPTY_EVENT) {
-      ev->consensus_index_end_pos = ev->future_event_relay_log_pos;
-    }
-
   }
 }
 

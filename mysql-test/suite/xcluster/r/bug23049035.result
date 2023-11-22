@@ -1,7 +1,5 @@
 create table t(id int primary key);
 insert into t values(1);
-SET @old_innodb_lock_wait_timeout= @@innodb_lock_wait_timeout;
-set global innodb_lock_wait_timeout=2;
 begin;
 select * from t where id=1 for update;
 id
@@ -12,6 +10,5 @@ commit;
 rollback;
 select * from t;
 id
-2
-set global innodb_lock_wait_timeout= @old_innodb_lock_wait_timeout;
+1
 drop table t;

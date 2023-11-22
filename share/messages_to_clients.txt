@@ -10126,7 +10126,7 @@ ER_SAMPLE_WRONG_SEMANTIC
 #
 
 ER_CONSENSUS_CONFIG_BAD
-  eng "Bad Consensus configuration, name:%s, value:%llu"
+  eng "Bad Consensus configuration, name:%s, value:%llu, reason:%s"
 
 ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
   eng "The consensus follower is not allowed to to do current operation."

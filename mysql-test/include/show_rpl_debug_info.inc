@@ -241,6 +241,14 @@ while ($_rpl_server <= $rpl_server_count) {
   --echo **** mysql.gtid_executed on $CURRENT_CONNECTION ****
   SELECT * FROM mysql.gtid_executed;
 
+  --echo
+  --echo **** information_schema.alisql_cluster_local on $CURRENT_CONNECTION ****
+  SELECT * FROM information_schema.alisql_cluster_local;
+
+  --echo
+  --echo **** information_schema.alisql_cluster_global on $CURRENT_CONNECTION ****
+  SELECT * FROM information_schema.alisql_cluster_global;
+
   if ($extra_debug_table) {
     --echo
     --echo **** extra_debug_table on $CURRENT_CONNECTION ****

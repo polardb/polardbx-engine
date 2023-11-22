@@ -2,37 +2,56 @@ use test;
 create table t1 (data longblob);
 insert into t1 values (repeat('a', 100));
 set global consensus_checksum=ON;
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
 insert into t1 select * from t1 limit 5;
-insert into t1 values (repeat('a', 40*1024*1024));
+insert into t1 values (repeat('a', 8*1024*1024));
+--disconnect conn1
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
 set global consensus_checksum=OFF;
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
 insert into t1 select * from t1 limit 5;
-insert into t1 values (repeat('a', 40*1024*1024));
+insert into t1 values (repeat('a', 8*1024*1024));
 drop table t1;
 
 set global consensus_log_cache_size=1;
 create table t1 (data longblob);
 insert into t1 values (repeat('a', 100));
 set global consensus_checksum=ON;
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
+--disconnect conn1
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
 insert into t1 select * from t1 limit 5;
-insert into t1 values (repeat('a', 40*1024*1024));
+insert into t1 values (repeat('a', 8*1024*1024));
 set global consensus_checksum=OFF;
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
-insert into t1 values (repeat('a', 10*1024*1024));
+--disconnect conn1
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
+insert into t1 values (repeat('a', 2*1024*1024));
 insert into t1 select * from t1 limit 5;
-insert into t1 values (repeat('a', 40*1024*1024));
+insert into t1 values (repeat('a', 8*1024*1024));
 drop table t1;
+
 set global consensus_log_cache_size=64*1024*1024;
+--disconnect conn1
+

@@ -6,17 +6,17 @@ YES
 create table t (id int);
 insert into t values (1);
 insert into t values (2);
-select connected, log_delay_num, apply_delay_num from information_schema.alisql_cluster_health order by 1,2,3;
-connected	log_delay_num	apply_delay_num
-NO	1	1
-YES	0	0
-YES	0	0
+select role, connected, log_delay_num, apply_delay_num from information_schema.alisql_cluster_health order by 1,2,3,4;
+role	connected	log_delay_num	apply_delay_num
+Follower	NO	1	1
+Follower	YES	0	0
+Leader	YES	0	0
 insert into t values (3);
-select connected, log_delay_num, apply_delay_num from information_schema.alisql_cluster_health order by 1,2,3;
-connected	log_delay_num	apply_delay_num
-YES	0	0
-YES	0	0
-YES	0	0
-select connected, log_delay_num, apply_delay_num from information_schema.alisql_cluster_health order by 1,2,3;
-connected	log_delay_num	apply_delay_num
+select role, connected, log_delay_num, apply_delay_num from information_schema.alisql_cluster_health order by 1,2,3,4;
+role	connected	log_delay_num	apply_delay_num
+Follower	YES	0	0
+Follower	YES	0	0
+Leader	YES	0	0
+select role, connected, log_delay_num, apply_delay_num from information_schema.alisql_cluster_health order by 1,2,3,4;
+role	connected	log_delay_num	apply_delay_num
 drop table t;

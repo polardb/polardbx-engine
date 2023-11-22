@@ -1,3 +1,4 @@
+--source include/have_debug.inc
 
 CREATE TABLE tt (
     id int primary key,

@@ -19,7 +19,21 @@ stop slave;
 reset slave all for channel 'aaa';
 --connection conn2
 stop xpaxos_replication;
+sleep 5;
+
+--let $sql_running= query_get_value("show slave status", Slave_SQL_Running, 1)
+--echo $sql_running
+--let $sql_running= query_get_value("show slave status for channel ''", Slave_SQL_Running, 1)
+--echo $sql_running
+--echo "before reset"
 reset slave;
+
+--echo "after reset"
+--let $sql_running= query_get_value("show slave status", Slave_SQL_Running, 1)
+--echo $sql_running
+--let $sql_running= query_get_value("show slave status for channel ''", Slave_SQL_Running, 1)
+--echo $sql_running
+
 #
 # mysql> show consensus logs;
 # +-------------------+-----------+-----------------+
@@ -38,6 +52,7 @@ STOP REPLICA for channel '';
 --error ER_SLAVE_CHANNEL_DOES_NOT_EXIST
 stop slave for channel '';
 
+--echo "after start"
 --let $sql_running= query_get_value("show slave status", Slave_SQL_Running, 1)
 --echo $sql_running
 --let $sql_running= query_get_value("show slave status for channel ''", Slave_SQL_Running, 1)
@@ -56,7 +71,13 @@ select count(1) from mysql.slave_relay_log_info where number_of_workers = (selec
 --error ER_SLAVE_CHANNEL_MUST_STOP
 set global relay_log_info_repository='file';
 stop xpaxos_replication;
+
 --sleep 5
+--let $sql_running= query_get_value("show slave status", Slave_SQL_Running, 1)
+--echo $sql_running
+--let $sql_running= query_get_value("show slave status for channel ''", Slave_SQL_Running, 1)
+--echo $sql_running
+
 set global relay_log_info_repository='file';
 set global relay_log_info_repository='table';
 start xpaxos_replication;

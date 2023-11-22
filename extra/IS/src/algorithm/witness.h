@@ -89,7 +89,7 @@ class Witness : public Consensus {
 
   /* timeout unit is ms */
   uint64_t currentTerm_;
-  uint64_t commitIndex_;
+  std::atomic<uint64_t> commitIndex_;
   std::atomic<uint64_t> appliedIndex_;
   uint64_t leaderId_;
   uint64_t serverId;

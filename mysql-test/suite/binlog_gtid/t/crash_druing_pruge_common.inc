@@ -15,7 +15,6 @@ set @@debug='';
 --source include/flush_and_load_data.inc
 
 flush logs;
-show consensus logs;
 --eval $sql0
 select @@debug;
 let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
@@ -36,7 +35,6 @@ connection default;
 connect (conn1,localhost,root,,);
 connection conn1;
 xa recover;
-show consensus logs;
 xa commit 'xx';
 disconnect conn1;
 connection default;

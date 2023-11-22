@@ -41,7 +41,6 @@ while ($iter <= 2)
 	flush logs;
 
 	xa recover;
-	show consensus logs;
 	xa commit 'xx';
 
 
@@ -62,7 +61,6 @@ while ($iter <= 2)
 
 	connection default;
 	xa recover;
-	show consensus logs;
 	xa commit 'xx';
 
 
@@ -83,7 +81,6 @@ while ($iter <= 2)
 
 	connection default;
 	xa recover;
-	show consensus logs;
 	xa commit 'xx';
 
 
@@ -104,7 +101,6 @@ while ($iter <= 2)
 
 	connection default;
 	xa recover;
-	show consensus logs;
 	xa commit 'xx';
 
 
@@ -125,7 +121,6 @@ while ($iter <= 2)
 
 	connection default;
 	xa recover;
-	show consensus logs;
 	xa commit 'xx';
 
 	--inc $iter

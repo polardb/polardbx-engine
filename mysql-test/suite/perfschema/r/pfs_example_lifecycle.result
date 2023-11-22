@@ -18,6 +18,7 @@ wait/synch/mutex/pfs_example/T	YES	YES		3	And more.
 wait/synch/mutex/pfs_example/X	YES	YES	singleton	1	Example doc, permanent mutex, singleton.
 wait/synch/mutex/pfs_example/Y	YES	YES		7	Example doc, very volatile mutexes.
 wait/synch/mutex/pfs_example/Z	YES	YES	singleton	2	Another example.
+wait/synch/rwlock/pfs_example/T	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/X	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/Y	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/Z	YES	YES		0	NULL

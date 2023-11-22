@@ -27,6 +27,7 @@ Test: dump of mysql database should not contain unexpected tables
 Matching lines are:
 CREATE TABLE `mysql`.`component` (
 CREATE TABLE `mysql`.`concurrency_control` (
+CREATE TABLE `mysql`.`consensus_info` (
 CREATE TABLE `mysql`.`engine_cost` (
 CREATE TABLE `mysql`.`func` (
 CREATE TABLE `mysql`.`help_category` (
@@ -48,7 +49,7 @@ CREATE TABLE `mysql`.`time_zone_leap_second` (
 CREATE TABLE `mysql`.`time_zone_name` (
 CREATE TABLE `mysql`.`time_zone_transition` (
 CREATE TABLE `mysql`.`time_zone_transition_type` (
-Occurrences of 'CREATE TABLE' in the input file: 23
+Occurrences of 'CREATE TABLE' in the input file: 24
 #
 # Bug #83144: mysqlpump reads mysql_dump group, not mysqlpump in config-group
 #

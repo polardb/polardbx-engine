@@ -103,10 +103,13 @@ public:
   uint64 get_apply_index() { return apply_index; }
   uint64 get_real_apply_index() { return real_apply_index; }
   uint64 get_apply_index_end_pos() { return apply_index_end_pos; }
+  uint64 get_apply_index_current_pos() { return apply_index_current_pos; }
   uint64 get_apply_term() { return apply_term; }
   uint64 get_apply_ev_sequence() { return apply_ev_seq; }
   uint64 get_stop_term() { return stop_term; }
-  bool get_in_large_trx() { return in_large_trx; }
+  bool get_in_large_trx_applying() { return in_large_trx_applying; }
+  bool get_in_large_trx_appending() { return in_large_trx_appending; }
+  bool get_in_large_event_appending() { return in_large_event_appending; }
   bool get_enable_rotate() { return enable_rotate; }
 
   Consensus_info* get_consensus_info() { return consensus_info; }
@@ -132,10 +135,13 @@ public:
   void set_apply_index(uint64 apply_index_arg) { apply_index = apply_index_arg; }
   void set_real_apply_index(uint64 real_apply_index_arg) { real_apply_index = real_apply_index_arg; }
   void set_apply_index_end_pos(uint64 apply_index_end_pos_arg) { apply_index_end_pos = apply_index_end_pos_arg; }  
+  void set_apply_index_current_pos(uint64 apply_index_current_pos_arg) { apply_index_current_pos = apply_index_current_pos_arg; }  
   void set_apply_term(uint64 apply_term_arg) { apply_term = apply_term_arg; }
   void set_apply_ev_sequence(uint64 apply_ev_seq_arg) { apply_ev_seq = apply_ev_seq_arg; }
   void set_apply_catchup(uint apply_catchup_arg) { apply_catchup = apply_catchup_arg; }
-  void set_in_large_trx(bool in_large_trx_arg) {in_large_trx = in_large_trx_arg;}
+  void set_in_large_trx_applying(bool in_large_trx_arg) {in_large_trx_applying = in_large_trx_arg;}
+  void set_in_large_trx_appending(bool in_large_trx_arg) {in_large_trx_appending = in_large_trx_arg;}
+  void set_in_large_event_appending(bool in_large_event_arg) {in_large_event_appending = in_large_event_arg;}
 
   void set_current_term(uint64 current_term_arg) { current_term = current_term_arg; }
   void incr_current_index() { current_index++; }
@@ -236,12 +242,15 @@ private:
   std::atomic<uint64>                       apply_index;            // used to record sql thread coordinator apply index
   std::atomic<uint64>                       real_apply_index;       // for large trx
   std::atomic<uint64>                       apply_index_end_pos;    // used to record sql thread coordinator apply index end pos   
+  std::atomic<uint64>                       apply_index_current_pos;    // used to record sql thread coordinator apply index current pos   
   std::atomic<uint64>                       apply_term;             // used to record sql thread coordinator apply term
   std::atomic<uint64>                       stop_term;              // used to mark sql thread coordinator stop condition
   std::atomic<uint64>                       apply_ev_seq;           // used to record sql thread coordinator apply event sequence in one index
   std::atomic<uint64>                       current_term;    // record the current system term, changed by stageChange callback
-  std::atomic<bool>                         in_large_trx;
+  std::atomic<bool>                         in_large_trx_applying;
   std::atomic<bool>                         enable_rotate;  // do not rotate if last log is in middle of large trx
+  std::atomic<bool>                         in_large_trx_appending;
+  std::atomic<bool>                         in_large_event_appending;
 
   Consensus_recovery_manager *recovery_manager;       // recovery module
   ConsensusPreFetchManager                  *prefetch_manager;       // prefetch module
@@ -281,7 +290,6 @@ private:
 
   MYSQL_BIN_LOG                             *binlog;           // point to the MySQL binlog object 
   Relay_log_info                            *rli_info;         // point to the MySQL relay log info object, include relay_log
-
 };
 
 extern ConsensusLogManager consensus_log_manager;

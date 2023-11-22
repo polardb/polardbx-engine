@@ -1,3 +1,4 @@
+--source include/have_debug.inc
 
 create table t1 (id int);
 

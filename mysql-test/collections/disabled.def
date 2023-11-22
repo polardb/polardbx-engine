@@ -400,6 +400,7 @@ binlog.binlog_xa_recovery_errors					 	: WL#21509040 disable temp
 binlog.binlog_expire_logs_seconds		     			: WL#21509040 not support expire_logs_seconds
 
 binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table  : WL#21509040 not support encrypt table
+binlog_gtid.binlog_flush_logs_error                     : WL#21509040 not support now
 binlog_gtid.binlog_gtid_purge_binlog_at_startup	     	: WL#21509040 not support expire_logs_seconds
 binlog_gtid.binlog_gtids_table_gcov                 	: WL#21509040 must write gtid to SE
 binlog_gtid.binlog_gtid_log_status_errors      			: WL#001 'change replicate to' does not work for x-cluster
@@ -407,3 +408,5 @@ binlog_nogtid.binlog_gtid_simple_recovery        	 	: WL#21509040 binlog remove
 
 service_sys_var_registration.sys_var_service_cl       : WL#21509040 not support restart --log-in
 sys_vars.innodb_version_basic                         : WL#21509040 modify the version
+main.log_components_filter                            : WL#21509040 log timestamp unstable
+x.compression_level_lz4_server                        : WL#21509040 error from raft support, todo@yanhua

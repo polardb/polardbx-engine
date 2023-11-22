@@ -190,7 +190,7 @@ int Witness::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     easy_warn_log(
         "Server %d : commitIndex change from %ld to %ld, now lastLogIndex is "
         "%ld\n",
-        serverId, commitIndex_, msg->commitindex(), log_->getLastLogIndex());
+        serverId, commitIndex_.load(), msg->commitindex(), log_->getLastLogIndex());
     commitIndex_ = msg->commitindex();
   }
   easy_warn_log("Server %d : msgId(%llu) onAppendLog end, is_success %d\n",

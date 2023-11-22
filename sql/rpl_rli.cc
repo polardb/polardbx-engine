@@ -1299,8 +1299,11 @@ void Relay_log_info::cleanup_context(THD *thd, bool error) {
     "context cleanup" function.
   */
   if (error) {
+    //trans_rollback_stmt maybe response error, we need overwrite_status here
+    thd->get_stmt_da()->set_overwrite_status(true);
     trans_rollback_stmt(thd);  // if a "statement transaction"
     trans_rollback(thd);       // if a "real transaction"
+    thd->get_stmt_da()->set_overwrite_status(false);
     thd->variables.original_commit_timestamp = UNDEFINED_COMMIT_TIMESTAMP;
   }
   if (rows_query_ev) {

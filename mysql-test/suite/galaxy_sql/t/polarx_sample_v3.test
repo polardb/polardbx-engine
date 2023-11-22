@@ -1,3 +1,4 @@
+--source include/have_debug.inc
 
 create table tt (id int primary key, pad char(255)) CHARACTER SET = utf8, engine = innodb;
 --source polarx_sample_v3.inc

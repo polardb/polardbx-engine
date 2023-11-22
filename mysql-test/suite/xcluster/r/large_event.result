@@ -7,6 +7,11 @@ create table t1 (id int primary key, data longblob);
 insert into t1 values (1, repeat("a", 2048576));
 insert into t1 values (0, 'a');
 consistent!!!!!!!
+# --------- normal case 2 ---------
+set global debug="+d,get_log_from_fifo_fail_when_blob_end";
+insert into t1 values (100, repeat("a", 2048576));
+set global debug="";
+consistent!!!!!!!
 # --------- case 1 ---------
 insert into t1 values (2, repeat("a", 2048576));
 set global debug="+d,crash_during_large_event_binlog_flush";
@@ -14,9 +19,7 @@ insert into t1 values (3, repeat("a", 2048576));
 ERROR HY000: Lost connection to MySQL server during query
 # restart
 insert into t1 values (13, 'a');
-Timeout in wait_condition.inc for select count(distinct applied_index)=1 from information_schema.alisql_cluster_global
-Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
-Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
+consistent!!!!!!!
 # --------- case 2 ---------
 insert into t1 values (4, repeat("a", 2048576));
 set global debug="+d,crash_during_large_event_binlog_flush_slow";
@@ -24,24 +27,20 @@ insert into t1 values (5, repeat("a", 2048576));
 ERROR HY000: Lost connection to MySQL server during query
 # restart
 insert into t1 values (15, 'a');
-Timeout in wait_condition.inc for select count(distinct applied_index)=1 from information_schema.alisql_cluster_global
-Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
-Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
+consistent!!!!!!!
 # --------- case 3 ---------
 insert into t1 values (6, repeat("a", 2048576));
 set global debug="+d,crash_during_large_event_receive";
 insert into t1 values (7, repeat("a", 2048576));
 insert into t1 values (8, repeat("a", 2048576));
 insert into t1 values (18, 'a');
-Timeout in wait_condition.inc for select count(distinct applied_index)=1 from information_schema.alisql_cluster_global
-Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
+consistent!!!!!!!
 # --------- case 4 ---------
 insert into t1 values (9, repeat("a", 2048576));
 set global debug="+d,crash_during_large_event_receive_slow";
 insert into t1 values (10, repeat("a", 2048576));
 insert into t1 values (11, repeat("a", 2048576));
 insert into t1 values (111, 'a');
-Timeout in wait_condition.inc for select count(distinct applied_index)=1 from information_schema.alisql_cluster_global
-Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
+consistent!!!!!!!
 drop table t1;
 set global debug="";

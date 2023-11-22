@@ -63,7 +63,8 @@ ulonglong opt_consensus_large_trx_split_size;
 ulonglong opt_consensus_new_follower_threshold = 10000;
 bool opt_consensus_large_trx;
 bool opt_consensus_check_large_event;
-ulonglong opt_consensus_large_event_limit;
+ulonglong opt_consensus_large_event_size_limit;
+ulonglong opt_consensus_large_event_count_limit;
 ulonglong opt_consensus_large_event_split_size;
 uint opt_consensus_send_timeout;
 uint opt_consensus_learner_timeout;
@@ -247,8 +248,8 @@ static Sys_var_bool Sys_consensus_disable_fifo_cache(
 
 static Sys_var_bool Sys_consensuslog_revise(
       "consensuslog_revise",
-      "revise consensuslog before flush to disk",
-      GLOBAL_VAR(opt_consensuslog_revise), CMD_LINE(OPT_ARG), DEFAULT(FALSE));
+      "revise consensuslog end_pos before flush to disk",
+      GLOBAL_VAR(opt_consensuslog_revise), CMD_LINE(OPT_ARG), DEFAULT(TRUE));
 
 static Sys_var_bool Sys_consensus_prefetch_fast_fetch(
        "consensus_prefetch_fast_fetch", "prefetch speed optimize",
@@ -270,7 +271,7 @@ check_consensus_prefetch_cache_size(sys_var *, THD *,  set_var *var)
   ulonglong val= var->save_result.ulonglong_value;
   if (val < opt_consensus_max_log_size * 3)
   {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_prefetch_cache_size", val);
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_prefetch_cache_size", val, "need >= consensus_max_log_size * 3");
     return true;
   }
   return false;
@@ -308,13 +309,29 @@ static Sys_var_ulonglong Sys_consensus_prefetch_wakeup_ratio(
        VALID_RANGE(1, ULLONG_MAX), DEFAULT(2), BLOCK_SIZE(1),
        NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_prefetch_wakeup_ratio));
 
+/*
+ * opt_consensus_prefetch_cache_size >= 3 * opt_consensus_max_log_size
+ * make sure at least 3 log entries can be stored in cache
+ */
 static bool
 check_consensus_max_log_size(sys_var *, THD *,  set_var *var)
 {
   ulonglong val= var->save_result.ulonglong_value;
-  if (opt_consensus_prefetch_cache_size < val * 3 || opt_consensus_large_trx_split_size > val)
+  if ((val * 3) > opt_consensus_prefetch_cache_size)
   {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val);
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val, "need <= consensus_prefetch_cache_size / 3");
+    return true;
+  }
+
+  if (val < opt_consensus_large_trx_split_size)
+  {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val, "need >= consensus_large_trx_split_size");
+    return true;
+  }
+
+  if (val < opt_consensus_large_event_split_size)
+  {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val, "need >= consensus_large_event_split_size");
     return true;
   }
   return false;
@@ -326,10 +343,15 @@ static Sys_var_ulonglong Sys_consensus_max_log_size(
        VALID_RANGE(1, 1024*1024*1024), DEFAULT(20 * 1024 * 1024), BLOCK_SIZE(1),
        NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_consensus_max_log_size), ON_UPDATE(NULL));
 
-static bool fix_consensus_large_trx_split_size(sys_var *, THD *, enum_var_type)
+static bool
+check_consensus_large_trx_split_size(sys_var *, THD *,  set_var *var)
 {
-  if (opt_consensus_large_trx_split_size > opt_consensus_max_log_size)
-    opt_consensus_large_trx_split_size = opt_consensus_max_log_size;
+  ulonglong val= var->save_result.ulonglong_value;
+  if (val > opt_consensus_max_log_size)
+  {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_large_trx_split_size", val, "need <= consensus_max_log_size");
+    return true;
+  }
   return false;
 }
 
@@ -337,13 +359,14 @@ static Sys_var_ulonglong Sys_consensus_large_trx_split_size(
        "consensus_large_trx_split_size", "Max size to split large trx into multi consensus logs. (default 2M)",
        GLOBAL_VAR(opt_consensus_large_trx_split_size), CMD_LINE(REQUIRED_ARG),
        VALID_RANGE(1, 62*1024*1024), DEFAULT(2 * 1024 * 1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(fix_consensus_large_trx_split_size));
+       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_consensus_large_trx_split_size), ON_UPDATE(NULL));
 
 static bool fix_consensus_new_follower_threshold(sys_var *, THD *, enum_var_type)
 {
   consensus_ptr->setMaxDelayIndex4NewMember(opt_consensus_new_follower_threshold);
   return false;
 }
+
 
 static Sys_var_ulonglong Sys_consensus_new_follower_threshold(
        "consensus_new_follower_threshold", "Max delay index to allow a learner becomes a follower",
@@ -352,7 +375,7 @@ static Sys_var_ulonglong Sys_consensus_new_follower_threshold(
        NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_new_follower_threshold));
 
 static Sys_var_bool Sys_consensus_large_trx(
-       "consensus_large_trx", "consensus large trx or not",
+       "consensus_large_trx", "support consensus large trx or not",
        GLOBAL_VAR(opt_consensus_large_trx), CMD_LINE(OPT_ARG),
        DEFAULT(TRUE), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
@@ -361,18 +384,40 @@ static Sys_var_bool Sys_consensus_check_large_event(
        GLOBAL_VAR(opt_consensus_check_large_event), CMD_LINE(OPT_ARG),
        DEFAULT(TRUE), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
-static Sys_var_ulonglong Sys_consensus_large_event_limit(
-       "consensus_large_event_limit", "Consensus large event limit",
-       GLOBAL_VAR(opt_consensus_large_event_limit), CMD_LINE(REQUIRED_ARG),
+static Sys_var_ulonglong Sys_consensus_large_event_size_limit(
+       "consensus_large_event_size_limit", "Consensus large event size limit",
+       GLOBAL_VAR(opt_consensus_large_event_size_limit), CMD_LINE(REQUIRED_ARG),
        VALID_RANGE(1*1024*1024, ULLONG_MAX), DEFAULT(1024*1024*1024), BLOCK_SIZE(1),
        NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_ulonglong Sys_consensus_large_event_count_limit(
+       "consensus_large_event_count_limit", "Consensus large event count limit in one trx",
+       GLOBAL_VAR(opt_consensus_large_event_count_limit), CMD_LINE(REQUIRED_ARG),
+       VALID_RANGE(1, ULLONG_MAX), DEFAULT(1), BLOCK_SIZE(1),
+       NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_deprecated_alias Sys_consensus_large_event_limit(
+    "consensus_large_event_limit", Sys_consensus_large_event_size_limit);
+
+static bool
+check_consensus_large_event_split_size(sys_var *, THD *,  set_var *var)
+{
+  ulonglong val= var->save_result.ulonglong_value;
+  if (val > opt_consensus_max_log_size)
+  {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_large_event_split_size", val, "need <= consensus_max_log_size");
+    return true;
+  }
+  return false;
+}
 
 static Sys_var_ulonglong Sys_consensus_large_event_split_size(
        "consensus_large_event_split_size",
        "split size for large event, dangerous to change this variable",
        READ_ONLY GLOBAL_VAR(opt_consensus_large_event_split_size), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1024, 20*1024*1024), DEFAULT(2*1024*1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG);
+       VALID_RANGE(1, 20*1024*1024), DEFAULT(2*1024*1024), BLOCK_SIZE(1),
+       NO_MUTEX_GUARD, NOT_IN_BINLOG,
+       ON_CHECK(check_consensus_large_event_split_size), ON_UPDATE(NULL));
 
 static bool fix_consensus_send_timeout(sys_var *, THD *, enum_var_type)
 {

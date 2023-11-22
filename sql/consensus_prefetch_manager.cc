@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/thread_pool_priv.h"
 #include "raft/raft0err.h"
 #include "sql/sql_thd_internal_api.h"
+#include "storage/innobase/include/ut0dbg.h"
 
 #ifdef HAVE_PSI_INTERFACE
 PSI_thread_key key_thread_prefetch;
@@ -152,7 +153,7 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
           channel_id, first_index_in_cache.load(), first_index_in_cache +
       prefetch_cache.size() -1, index, current_prefetch_request.load());
       */
-      ConsensusLogEntry old_log = prefetch_cache.front();
+      ConsensusLogEntry &old_log = prefetch_cache.front();
       if (old_log.buf_size > 0) my_free(old_log.buffer);
       prefetch_cache_size -= old_log.buf_size;
       prefetch_cache.pop_front();
@@ -162,6 +163,21 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
 
   if (prefetch_cache.size() == 0) {
     first_index_in_cache = index;
+  } else {
+    ConsensusLogEntry &old_log = prefetch_cache.back();
+    if (old_log.index + 1 != index) {
+      mysql_mutex_unlock(&LOCK_prefetch_channel);
+      raft::error(ER_RAFT_PREFETCH)  << "prefetch cache add invalid index, need strictly increasing"
+                      << ", channel_id " << channel_id
+                      << ", input_index " << index
+                      << ", start_index " << first_index_in_cache
+                      << ", end_index " << old_log.index
+                      << ", cache count " << prefetch_cache.size()
+                      << ", prefetch_cache_size " << prefetch_cache_size
+                      << " " << get_backtrace_str();
+      ut_a(old_log.index + 1 == index);
+      return INTERRUPT;
+    }
   }
 
   uchar *new_buffer = (uchar *)my_memdup(key_memory_prefetch_mem_root,
@@ -172,6 +188,17 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
   prefetch_cache_size += buf_size;
 
   mysql_mutex_unlock(&LOCK_prefetch_channel);
+
+  // raft::info(ER_RAFT_FIFO) << "add_log_to_prefetch_cache"
+  //   << ", term " << term
+  //   << ", index " << index
+  //   << ", flag " << flag
+  //   << ", checksum " << checksum
+  //   << ", first_index_in_cache " << first_index_in_cache
+  //   << ", current_log_count " << prefetch_cache.size()
+  //   << ", prefetch_cache_size " << prefetch_cache_size
+  //   << ", " << get_backtrace_str();
+
   return SUCCESS;
 }
 
@@ -206,6 +233,7 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
       *term = it->second.term;
       *outer = it->second.outer;
       *flag = it->second.flag;
+      ut_a(index == it->second.index);
       log_content.assign("");
       raft::info(ER_RAFT_PREFETCH)
           << "Consensus prefetch cache: get large trx consensus log(" << index
@@ -239,7 +267,7 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
         << first_index_in_cache + prefetch_cache.size() - 1
         << ", the required index is " << index;
     while (prefetch_cache.size() > window_size) {
-      ConsensusLogEntry old_log = prefetch_cache.front();
+      ConsensusLogEntry &old_log = prefetch_cache.front();
       if (old_log.buf_size > 0) my_free(old_log.buffer);
       prefetch_cache_size -= old_log.buf_size;
       prefetch_cache.pop_front();
@@ -247,12 +275,13 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
     }
     error = OUT_OF_RANGE;
   } else {
-    ConsensusLogEntry log_entry =
+    ConsensusLogEntry &log_entry =
         prefetch_cache.at(index - first_index_in_cache);
     *term = log_entry.term;
     *outer = log_entry.outer;
     *flag = log_entry.flag;
     *checksum = log_entry.checksum;
+    ut_a(log_entry.index == index);
     log_content.assign((char *)(log_entry.buffer), log_entry.buf_size);
 
     // truncate before , retain window_size or 1/2 max_cacache_size
@@ -261,7 +290,7 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
     while (first_index_in_cache + window_size < index ||
            (first_index_in_cache + 1 < index &&
             prefetch_cache_size * 2 > max_prefetch_cache_size)) {
-      ConsensusLogEntry old_log = prefetch_cache.front();
+      ConsensusLogEntry &old_log = prefetch_cache.front();
       if (old_log.buf_size > 0) my_free(old_log.buffer);
       prefetch_cache_size -= old_log.buf_size;
       prefetch_cache.pop_front();
@@ -367,9 +396,12 @@ int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
     large_trx_table.erase(it, large_trx_table.end());
   }
   raft::info(ER_RAFT_PREFETCH)
-      << "Consensus Prefetch Channel " << channel_id
-      << " before truncate , first index of cache is "
-      << first_index_in_cache.load() << ", cache size is " << prefetch_cache.size();
+      << "Truncate prefetch before"
+      << ", channel " << channel_id
+      << ", first index = [" << first_index_in_cache.load() 
+      << "], end index = [" << (prefetch_cache.empty() ? -1 : prefetch_cache.back().index)
+      << "], cache count = [" << prefetch_cache.size()
+      << "]";
   if (max_prefetch_cache_size == 0 || prefetch_cache.size() == 0) {
     mysql_mutex_unlock(&LOCK_prefetch_channel);
     return 0;
@@ -386,17 +418,22 @@ int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
   } else if ((index > first_index_in_cache) &&
              (index < first_index_in_cache + prefetch_cache.size())) {
     while (index < first_index_in_cache + prefetch_cache.size()) {
-      ConsensusLogEntry old_log = prefetch_cache.back();
+      ConsensusLogEntry &old_log = prefetch_cache.back();
       if (old_log.buf_size > 0) my_free(old_log.buffer);
       prefetch_cache_size -= old_log.buf_size;
       prefetch_cache.pop_back();
     }
   }
 
-  raft::info(ER_RAFT_PREFETCH) << "Consensus Prefetch Channel " << channel_id
-                                << " after truncate , first index of cache is "
-                                << first_index_in_cache.load()
-                                << ", cache size is " << prefetch_cache.size();
+
+  raft::info(ER_RAFT_PREFETCH)
+      << "Truncate prefetch after"
+      << ", channel " << channel_id
+      << ", first index = [" << first_index_in_cache.load() 
+      << "], end index = [" << (prefetch_cache.empty() ? -1 : prefetch_cache.back().index)
+      << "], cache count = [" << prefetch_cache.size()
+      << "]";
+
   mysql_mutex_unlock(&LOCK_prefetch_channel);
   return 0;
 }

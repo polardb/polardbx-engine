@@ -730,15 +730,15 @@ class Log_event {
   */
   ulonglong future_event_relay_log_pos;
 
-  ulonglong consensus_index;
-  ulonglong consensus_real_index;
-  ulonglong consensus_index_end_pos;
-  ulonglong consensus_sequence;
+  ulonglong consensus_index{0};
+  ulonglong consensus_real_index{0};
+  ulonglong consensus_index_end_pos{0};
+  ulonglong consensus_sequence{0};
 
   /**
     A timestamp given by consensus module.
   */
-  uint32 consensus_extra_time;
+  uint32 consensus_extra_time{0};
 
 #ifdef MYSQL_SERVER
   THD *thd;

@@ -14,6 +14,7 @@ wait/synch/mutex/pfs_example/T	YES	YES		3	And more.
 wait/synch/mutex/pfs_example/X	YES	YES	singleton	1	Example doc, permanent mutex, singleton.
 wait/synch/mutex/pfs_example/Y	YES	YES		7	Example doc, very volatile mutexes.
 wait/synch/mutex/pfs_example/Z	YES	YES	singleton	2	Another example.
+wait/synch/rwlock/pfs_example/T	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/X	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/Y	YES	YES		0	NULL
 wait/synch/rwlock/pfs_example/Z	YES	YES		0	NULL
@@ -29,6 +30,7 @@ select NAME, WRITE_LOCKED_BY_THREAD_ID is not NULL, READ_LOCKED_BY_COUNT
 from performance_schema.rwlock_instances
 where NAME like "wait/synch/%/pfs_example/%";
 NAME	WRITE_LOCKED_BY_THREAD_ID is not NULL	READ_LOCKED_BY_COUNT
+wait/synch/rwlock/pfs_example/T	0	0
 wait/synch/rwlock/pfs_example/X	0	0
 wait/synch/rwlock/pfs_example/Y	0	0
 wait/synch/rwlock/pfs_example/Z	0	0
@@ -68,7 +70,7 @@ Performance_schema_cond_classes_lost	0
 Performance_schema_file_classes_lost	0
 Performance_schema_memory_classes_lost	0
 Performance_schema_mutex_classes_lost	0
-Performance_schema_rwlock_classes_lost	3
+Performance_schema_rwlock_classes_lost	2
 Performance_schema_socket_classes_lost	0
 Performance_schema_stage_classes_lost	0
 Performance_schema_statement_classes_lost	0

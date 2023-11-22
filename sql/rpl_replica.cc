@@ -177,6 +177,7 @@
 #include "sql/replica_read_manager.h"
 # include "sql/rpl_rli_ext.h"
 #include "sql/gcn_log_event.h"
+#include "storage/innobase/include/ut0dbg.h"
 
 struct mysql_cond_t;
 struct mysql_mutex_t;
@@ -4481,8 +4482,8 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
 
   DBUG_TRACE;
 
-  DBUG_PRINT("exec_event",
-             ("%s(type_code: %d; server_id: %d)", ev->get_type_str(),
+  DBUG_PRINT("mts",
+             ("exec_event %s(type_code: %d; server_id: %d)", ev->get_type_str(),
               ev->get_type_code(), ev->server_id));
   DBUG_PRINT("info",
              ("thd->options: %s%s; rli->last_event_start_time: %lu",
@@ -4569,8 +4570,9 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
         // all events except BEGIN-query must be marked with a non-NULL Worker
         assert(((Slave_worker *)ev->worker) == rli->last_assigned_worker);
 
-        DBUG_PRINT("Log_event::apply_event:",
-                   ("-> job item data %p to W_%lu", job_item->data, w->id));
+        DBUG_PRINT("mts",
+                   ("Log_event::apply_event: -> job item data %p-%llu to W_%lu",
+                   job_item->data, job_item->data->consensus_real_index, w->id));
 
         // Reset mts in-group state
         if (rli->mts_group_status == Relay_log_info::MTS_END_GROUP) {
@@ -4595,8 +4597,9 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
           */
           for (uint i = 0; i < rli->curr_group_da.size(); i++) {
             Slave_job_item da_item = rli->curr_group_da[i];
-            DBUG_PRINT("mts", ("Assigning job %llu to worker %lu",
-                               (da_item.data)->common_header->log_pos, w->id));
+            DBUG_PRINT("mts", ("Assigning job %llu-%llu to worker %lu",
+                               (da_item.data)->common_header->log_pos,
+                               (da_item.data)->consensus_real_index, w->id));
             da_item.data->mts_group_idx =
                 rli->gaq->assigned_group_index;  // similarly to above
             if (!append_item_to_jobs_error)
@@ -4608,8 +4611,9 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
         if (append_item_to_jobs_error)
           return SLAVE_APPLY_EVENT_AND_UPDATE_POS_APPEND_JOB_ERROR;
 
-        DBUG_PRINT("mts", ("Assigning job %llu to worker %lu\n",
-                           job_item->data->common_header->log_pos, w->id));
+        DBUG_PRINT("mts", ("Assigning job %llu-%llu to worker %lu\n",
+                           job_item->data->common_header->log_pos,
+                           job_item->data->consensus_real_index, w->id));
 
         /* Notice `ev' instance can be destroyed after `append()' */
         if (append_item_to_jobs(job_item, w, rli))
@@ -6688,7 +6692,13 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
   if (!rli->gaq->inited) return 1;
 
   if(opt_consensus_index_buf_enabled && rli->info_thd->raft_replication_channel) {
-    rli->m_consensus_index_buf = new Index_link_buf(rli->checkpoint_group * 2);
+    //TODO::this buff is too large on defult(512*1*1024/2 * 8 =2MB), need optimizer @yanhua
+    const uint64 cache_size = rli->checkpoint_group
+                              * opt_consensus_large_event_count_limit 
+                              * opt_consensus_large_event_size_limit 
+                              / opt_consensus_large_event_split_size;
+    ut_a(cache_size > 0);
+    rli->m_consensus_index_buf = new Index_link_buf(cache_size);
     if(!rli->m_consensus_index_buf)
       return 1;
   }
@@ -7303,6 +7313,12 @@ extern "C" void *handle_slave_sql(void *arg) {
                rli->get_group_master_log_name_info(),
                (ulong)rli->get_group_master_log_pos_info());
         saved_skip = 0;
+      }
+
+      //wait commitIndex update when wakeup by event_read_signal
+      if (1 == check_exec_consensus_log_end_condition(rli, Multisource_info::is_raft_channel(rli))) {
+        main_loop_error = true;
+        continue;
       }
 
       // read next event

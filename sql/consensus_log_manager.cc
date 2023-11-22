@@ -152,6 +152,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
   apply_index = 1;
   real_apply_index = 1;
   apply_index_end_pos = 0;
+  apply_index_current_pos = 0;
   apply_term = 1;
   apply_catchup = 0;
   current_term = 1;
@@ -159,8 +160,10 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
   already_set_start_index = FALSE;
   already_set_start_term = FALSE;
   apply_ev_seq = 1;
-  in_large_trx = false;
+  in_large_trx_applying = false;
   enable_rotate = false;
+  in_large_trx_appending = FALSE;
+  in_large_event_appending = FALSE;
   atomic_logging_flag = FLAG_GU1;
   ev_tt_ = 0;
 
@@ -709,11 +712,15 @@ int ConsensusLogManager::get_log_directly(uint64 consensus_index, uint64* consen
   MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING ?
     binlog : &(rli_info->relay_log);
 
-  if (log->consensus_get_log_entry(consensus_index, consensus_term, log_content, outer, flag, checksum, need_content))
+  if (log->consensus_get_log_entry(consensus_index, consensus_term, log_content, outer, flag, need_content))
     error = 1;
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
     raft::error(ER_RAFT_0) << "ConsensusLogManager::get_log_directly error,  consensus index: " << consensus_index;
+  else
+    *checksum = opt_consensus_checksum
+      ? checksum_crc32(0, get_uchar_str(log_content), log_content.size())
+      : 0;
   return error;
 }
 
@@ -746,6 +753,7 @@ int ConsensusLogManager::get_log_entry(uint64 channel_id, uint64 consensus_index
   }
 
   error = fifo_cache_manager->get_log_from_cache(consensus_index, consensus_term, log_content, outer, flag, checksum);
+  DBUG_EXECUTE_IF("get_log_from_fifo_fail_when_blob_end", error = ALREADY_SWAP_OUT;);
   if (error == ALREADY_SWAP_OUT)
   {
     uint64_t last_sync_index = sync_index;
@@ -843,21 +851,49 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
 {
   int error = 0;
 
-  raft::info(ER_RAFT_0) << "Consensus Truncate log , index is " << consensus_index;
+  raft::warn(ER_RAFT_0) << "ConsensusLogManager::truncate_log before"
+          << ", error: " << error
+          << ", consensus index: " << consensus_index
+          << ", status: " << status
+          << ", relaylog_reader_position: " << (rli_info && rli_info->applier_reader ? rli_info->applier_reader->relaylog_reader_position() : 0)
+          << ", relay_log->position " << (rli_info ? rli_info->relay_log.get_binlog_file()->position() : 0)
+          << ", binlog->position: " << binlog->get_binlog_file()->position();
 
   prefetch_manager->stop_prefetch_threads();
   mysql_rwlock_rdlock(&LOCK_consensuslog_status);
   MYSQL_BIN_LOG *log = (status == BINLOG_WORKING ? binlog : &(rli_info->relay_log));
   mysql_mutex_lock(log->get_log_lock());
+  log->lock_index();
 
   // truncate log file
-  Relay_log_info *rli = status == RELAY_LOG_WORKING ? rli_info : NULL;
-  if (log->consensus_truncate_log(consensus_index, rli))
+  if (log->consensus_truncate_log(consensus_index))
   {
     error = 1;
+    raft::error(ER_RAFT_0) << "Consensus Truncate log failed " << consensus_index;
+    abort();
   }
-  if (status == RELAY_LOG_WORKING && recovery_manager->get_last_leader_term_index() >= consensus_index)
-    recovery_manager->set_last_leader_term_index(consensus_index - 1);
+
+  log->unlock_index();
+  consensus_log_manager.set_sync_index(consensus_index - 1);
+  consensus_log_manager.set_current_index(consensus_index);
+  consensus_log_manager.set_in_large_trx_appending(false);
+  consensus_log_manager.set_in_large_event_appending(false);
+  reinit_io_cache(cache_log->get_io_cache(), WRITE_CACHE, 0, 0, 1);
+
+  if (status == RELAY_LOG_WORKING) {
+    if (rli_info->applier_reader
+        && log->get_binlog_file()->position() < rli_info->applier_reader->relaylog_reader_position()) {
+      raft::error(ER_RAFT_COMMIT) << "relay log new position " << log->get_binlog_file()->position()
+        << " is small then current relaylog_reader_position " << rli_info->applier_reader->relaylog_reader_position()
+        << ", need abort and restat";
+      abort();
+    }
+
+    if (recovery_manager->get_last_leader_term_index() >= consensus_index)
+      recovery_manager->set_last_leader_term_index(consensus_index - 1);
+    rli_info->notify_relay_log_truncated();
+  }
+
   // truncate commit map
   recovery_manager->truncate_pending_recovering_trxs(consensus_index);
 
@@ -867,10 +903,16 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
   mysql_mutex_unlock(log->get_log_lock());
 
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
-  if (error)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::truncate_log error, consensus index: " << consensus_index;
-
   prefetch_manager->start_prefetch_threads();
+
+  raft::warn(ER_RAFT_0) << "ConsensusLogManager::truncate_log finish"
+          << ", error: " << error
+          << ", consensus index: " << consensus_index
+          << ", status: " << status
+          << ", relaylog_reader_position: " << (rli_info && rli_info->applier_reader ? rli_info->applier_reader->relaylog_reader_position() : 0)
+          << ", relay_log->position " << (rli_info ? rli_info->relay_log.get_binlog_file()->position() : 0)
+          << ", binlog->position: " << binlog->get_binlog_file()->position();
+
   return error;
 }
 
@@ -926,7 +968,7 @@ int ConsensusLogManager::purge_log(uint64 consensus_index)
     * Need to update the log pos because purge logs has been called
     * after fetching initially the log pos at the begining of the method.
     */
-    if (!opt_cluster_log_type_instance)
+    if (!opt_cluster_log_type_instance && rli_info->applier_reader)
     {
       LOG_INFO *log_info = rli_info->applier_reader->get_log_info();
       assert(log_info != NULL);
@@ -1121,6 +1163,7 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index)
     wait_apply_threads_start();
   }
 end:
+  raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_leader_degraded finish, error " << error;
   // recover prefetch
   prefetch_manager->enable_all_prefetch_channels();
   return error;
@@ -1152,8 +1195,6 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   {
     my_sleep(1000);
   }
-  // clear cache
-  reinit_io_cache(cache_log->get_io_cache(), WRITE_CACHE, 0, 0, 1);
   // prefetch stop, and release LOCK_consensuslog_status
   prefetch_manager->disable_all_prefetch_channels();
 
@@ -1208,6 +1249,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   real_apply_index = 1;
   already_set_start_index = FALSE;
   already_set_start_term = FALSE;
+
   current_term = term;
 
   // log type instance do not to recover start index
@@ -1252,6 +1294,8 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
     }
   }
 end:
+  raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_follower_upgraded finish, error " << error;
+
   // recover prefetch
   prefetch_manager->enable_all_prefetch_channels();
   return error;

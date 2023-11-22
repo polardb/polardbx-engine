@@ -86,9 +86,9 @@ eval set global consensus_flow_control="127.0.0.1:$MYPORT_CONSENSUS_3 -2";
 
 # server 3 restart
 --connection conn3
---enable_reconnect
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.3.expect
-shutdown;
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
 
 --connection conn1
 insert into t1 values(1);

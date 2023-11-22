@@ -22,7 +22,6 @@ call dbms_consensus.add_learner("127.0.0.1:MYPORT_CONSENSUS_3");
 call dbms_consensus.upgrade_learner("127.0.0.1:MYPORT_CONSENSUS_3");
 insert into t1 values(1);
 set global consensus_flow_control="127.0.0.1:MYPORT_CONSENSUS_3 -2";
-shutdown;
 insert into t1 values(1);
 set global consensus_flow_control="";
 insert into t1 values(1);

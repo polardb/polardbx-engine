@@ -69,6 +69,7 @@ class Rpl_applier_reader {
   */
   bool open(const char **errmsg);
   void close();
+  my_off_t relaylog_reader_position();
 
   /**
      Read next event from relay log.

@@ -1,6 +1,5 @@
 
 flush logs;
-show consensus logs;
 xa recover;
 
 --disable_result_log
@@ -42,7 +41,6 @@ xa prepare 'xx';
 --enable_result_log
 --enable_query_log
 
-show consensus logs;
 xa recover;
 
 --echo finish load

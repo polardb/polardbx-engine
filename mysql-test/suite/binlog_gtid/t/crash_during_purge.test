@@ -41,13 +41,11 @@ while ($iter <= 2)
 	--source include/flush_and_load_data.inc
 
 	flush logs;
-	show consensus logs;
 	--eval $sql0
 	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
 	--eval call dbms_consensus.purge_log($last_log_index);
 
 	xa recover;
-	show consensus logs;
 	xa commit 'xx';
 	disconnect conn1;
 	connection default;

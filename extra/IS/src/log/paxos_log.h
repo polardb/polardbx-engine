@@ -30,12 +30,12 @@ namespace alisql {
 
 enum LogOperation {
   kNormal = 0,
-  kConfigureChange = 7,
-  kMock = 8,
   kPut = 3,
   kDel = 4,
   kCas = 5,
   kTairSet = 6,
+  kConfigureChange = 7,
+  kMock = 8,
   kCommitDep = 11,
   kCommitDepEnd = 12,
   kNop = 10
@@ -163,6 +163,7 @@ class PaxosLog {
       *term = le.term();
       *optype = le.optype();
       *info = le.info();
+      assert(index == le.index());
     } else {
       ++stats_.countMetaGetInCache;
     }

@@ -6,8 +6,6 @@ insert into t values(1);
 --source include/wait_follower_catchup.inc
 
 connection follower;
-SET @old_innodb_lock_wait_timeout= @@innodb_lock_wait_timeout;
-set global innodb_lock_wait_timeout=2;
 begin;
 select * from t where id=1 for update;
 
@@ -29,7 +27,6 @@ connection default;
 
 connection follower;
 select * from t;
-set global innodb_lock_wait_timeout= @old_innodb_lock_wait_timeout;
 
 connection default;
 drop table t;

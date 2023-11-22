@@ -3346,7 +3346,8 @@ int Log_event::apply_event(Relay_log_info *rli) {
 #ifndef NDEBUG
   if (rli->last_assigned_worker)
     DBUG_PRINT("mts",
-               ("Assigning job to worker %lu", rli->last_assigned_worker->id));
+               ("Assigning job %llu to worker %lu",
+               this->consensus_real_index, rli->last_assigned_worker->id));
 #endif
 
 err:
@@ -6324,7 +6325,7 @@ int Xid_apply_log_event::do_apply_event(Relay_log_info const *rli) {
   rli_ptr->inc_event_relay_log_pos();
   rli_ptr->set_group_relay_log_pos(rli_ptr->get_event_relay_log_pos());
   rli_ptr->set_group_relay_log_name(rli_ptr->get_event_relay_log_name());
-  rli_ptr->set_consensus_apply_index(consensus_index);
+  rli_ptr->set_consensus_apply_index(this->consensus_index);
 
   if (common_header->log_pos)  // 3.23 binlogs don't have log_posx
     rli_ptr->set_group_master_log_pos(common_header->log_pos);

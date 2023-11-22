@@ -2334,7 +2334,7 @@ static void close_connections(void) {
   Set_kill_conn set_kill_conn;
   thd_manager->do_for_all_thd(&set_kill_conn);
 
-  raft::info(ER_RAFT_0) << "Shutting down consensus module";
+  raft::info(ER_RAFT_0) << "Shutting down consensus module in close_connections";
   consensus_log_manager.stop_consensus_commit_pos_watcher();
   // set close flag to stop workers and apply thread
   if (consensus_ptr && !opt_consensus_force_recovery) {
@@ -2494,7 +2494,7 @@ static void unireg_abort(int exit_code) {
     mysqld::runtime::signal_parent(pipe_write_fd, 0);
   }
 #endif
-  raft::info(ER_RAFT_0) << "Shutting down consensus module";
+  raft::info(ER_RAFT_0) << "Shutting down consensus module in unireg_abort";
   consensus_log_manager.stop_consensus_commit_pos_watcher();
   if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
     consensus_ptr->shutdown();
@@ -2602,7 +2602,7 @@ static void clean_up(bool print_message) {
   dd::shutdown();
 
   Events::deinit();
-  raft::info(ER_RAFT_0) << "delete consensus module";
+  raft::info(ER_RAFT_0) << "Shutting down consensus module in clean_up";
   consensus_log_manager.stop_consensus_commit_pos_watcher();
   my_sleep(5000);
   if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {

@@ -75,6 +75,15 @@ insert into t1 values (27);
 set global debug="+d,force_large_trx,force_large_trx_single_ev";
 insert into t1 values (28);
 consistent!!!!!!!
+# --------- case 8 ---------
+insert into t1 values (60);
+set global debug="+d,generate_bad_log_entry";
+insert into t1 values (61);
+Timeout in wait_condition.inc for select count(*)=1 from information_schema.alisql_cluster_local where role='leader'
+Timeout in wait_condition.inc for select SERVER_READY_FOR_RW='Yes' from information_schema.alisql_cluster_local
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+insert into t1 values (62);
+consistent!!!!!!!
 # --------- case 1.1 ---------
 insert into t1 values (29);
 set global debug="+d,crash_during_large_trx_binlog_flush_slow";

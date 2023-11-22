@@ -369,4 +369,9 @@ static inline void lex_cstring_set(LEX_CSTRING *lex_str, const char *c_str) {
   lex_str->length = strlen(c_str);
 }
 
+static inline uchar *get_uchar_str(std::string &str) {
+  return (uchar *)const_cast<char *>(str.c_str());
+}
+
+
 #endif  // M_STRING_INCLUDED

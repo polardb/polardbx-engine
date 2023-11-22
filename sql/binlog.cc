@@ -1590,10 +1590,10 @@ int binlog_cache_data::write_event(Log_event *ev) {
   }
 
   /* X-Cluster do not allow a log event larger than
-   * opt_consensus_large_event_limit */
+   * opt_consensus_large_event_size_limit */
   my_off_t newpos = get_byte_position();
   if (opt_consensus_check_large_event) {
-    if (newpos - oldpos > opt_consensus_large_event_limit ||
+    if (newpos - oldpos > opt_consensus_large_event_size_limit ||
         DBUG_EVALUATE_IF("force_large_event", 1, 0)) {
       raft::warn(ER_RAFT_COMMIT)
           << "Log event too large, event type " << ev->get_type_str()

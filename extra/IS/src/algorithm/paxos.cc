@@ -536,7 +536,7 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
       easy_error_log(
           "Server %d : skip send cmd LeaderTransfer because the pos is not "
           "catch up. commitIndex(%llu), lli(%llu), li(%llu), target matchIndex(%llu)",
-          localServer_->serverId, commitIndex_, log_->getLastLogIndex(), logIndex,
+          localServer_->serverId, commitIndex_.load(), log_->getLastLogIndex(), logIndex,
           server->matchIndex.load());
     }
     // TODO we also need to call leaderCommand in tryUpdateCommitIndex_
@@ -1125,8 +1125,9 @@ void Paxos::becameLeader_() {
       cdrMgr_.lastLogIndex = tmpIndex;
       cdrMgr_.lastNonCommitDepIndex = 0;
       easy_error_log(
-          "Server %d : Last log optype is kCommitDep, will reset the log.\n",
-          localServer_->serverId);
+          "Server %d : Last log optype is kCommitDep, will reset the log, "
+          "lastLogIndex(%llu). tmpEntry(term:%llu,index:%llu)\n",
+          localServer_->serverId, tmpIndex, tmpEntry.term(), tmpEntry.index());
     }
 
     nextEpochCheckStatemachine_ =
@@ -1210,8 +1211,8 @@ void Paxos::commitDepResetLog(commitDepArgType *arg) {
     }
     if (tmpEntry.optype() != kCommitDep) break;
   }
-  easy_error_log("Server %d : commitDepResetLog reset from index %ld to %ld.\n",
-                 localServer->serverId, tmpIndex + 1, arg->lastLogIndex);
+  easy_error_log("Server %d : commitDepResetLog reset from index %ld to %ld. tmpEntry(term:%llu,index:%llu)\n",
+                 localServer->serverId, arg->lastLogIndex, tmpIndex + 1, tmpEntry.term(), tmpEntry.index());
   arg->paxos->truncateBackward_(tmpIndex + 1);
   if (arg->paxos->debugResetLogSlow) sleep(1);
   tmpEntry.Clear();
@@ -1300,9 +1301,10 @@ uint64_t Paxos::replicateLog_(LogEntry &entry, const bool needLock) {
     cdrMgr_.setLastNonCommitDepIndex(logIndex);
 
   easy_info_log(
-      "Server %d : replicateLog write done logTerm(%ld), logIndex(%ld)\n",
-      localServer_->serverId, term, logIndex);
-
+      "Server %d : replicateLog write done logTerm(%llu), logIndex(%llu), "
+      "optype(%ld), lastNonCommitDepIndex(%llu)\n",
+      localServer_->serverId, term, logIndex, entry.optype(),
+      cdrMgr_.lastNonCommitDepIndex.load());
   /* TODO
    * if we use sendAsyncEvent to append log here,too much workers will be used
    * to appendLog and be blocked by mutex. So we use sendAsyncEvent only after
@@ -1907,8 +1909,9 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
 
   easy_warn_log(
       "Server %d : msgId(%llu) onAppendLog start, receive logs from "
-      "leader(%d), msg.term(%d) lli(%llu)\n",
+      "leader(%d), msg.term(%d), msg.commitindex(%llu), msg.prevlogindex(%llu), entries_size(%llu), lli(%llu)\n",
       localServer_->serverId, msg->msgid(), msg->leaderid(), msg->term(),
+      msg->commitindex(), msg->prevlogindex(), msg->entries_size(),
       lastLogIndex);
 
   /*
@@ -2089,8 +2092,8 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     if (checksum_mode_) {
       for (auto &entry : msg->entries()) {
         if (log_checksum_test(entry)) {
-          easy_error_log("Server %d: msgId(%llu) log index %llu checksum fail.",
-                         localServer_->serverId, msg->msgid(), entry.index());
+          easy_error_log("Server %d: msgId(%llu) log index %llu checksum fail(expect %llu).",
+                         localServer_->serverId, msg->msgid(), entry.index(), entry.checksum());
           return -1;
         }
       }
@@ -2166,8 +2169,9 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
 
           easy_warn_log(
               "Server %d : parse entries index:%ld, entry.term:%ld, "
-              "entry.index:%ld\n",
-              localServer_->serverId, index, entry.term(), entry.index());
+              "entry.index:%ld, lli:%ld\n",
+              localServer_->serverId, index, entry.term(), entry.index(),
+              log_->getLastLogIndex());
           assert(entry.index() == index);
 
           if (log_->getLastLogIndex() >= index) {
@@ -2179,10 +2183,13 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
               dupcnt++;
               easy_warn_log(
                   "Server %d : duplicate log entry, ignore, entry.term:%ld, "
-                  "entry.index:%ld\n",
-                  localServer_->serverId, entry.term(), entry.index());
+                  "entry.index:%ld, optype(%ld)\n",
+                  localServer_->serverId, entry.term(), entry.index(), en.optype());
               continue;
             }
+            easy_warn_log("Server %d : need trunc log entry, entry(term:%ld, index:%ld, optype:%ld)\n",
+                localServer_->serverId, en.term(), en.index(), en.optype());
+
             // commit index might be bigger than last log index if we set
             // learner auto reset match index on
             if (enableLearnerAutoResetMatchIndex_ && commitIndex_ >= index &&
@@ -2268,7 +2275,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
         if (ccMgr_.needNotify != 1) ccMgr_.clear();
       }
       easy_warn_log("Server %d : Follower commitIndex change from %ld to %ld\n",
-                    localServer_->serverId, commitIndex_, msg->commitindex());
+                    localServer_->serverId, commitIndex_.load(), msg->commitindex());
       commitIndex_ = msg->commitindex();
       assert(commitIndex_ <= log_->getLastLogIndex());
 
@@ -2288,9 +2295,8 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     easy_warn_log("Server %d : msgId(%llu) tryFillFollowerMeta\n",
                   localServer_->serverId);
 
-  easy_warn_log("Server %d : msgId(%llu) onAppendLog end, is_success %d\n",
-                localServer_->serverId, msg->msgid(), rsp->issuccess());
-
+  easy_warn_log("Server %d : msgId(%llu) onAppendLog end, is_success %d, current commitIndex_ %llu\n",
+                localServer_->serverId, msg->msgid(), rsp->issuccess(), commitIndex_.load());
   return 0;
 }
 
@@ -2298,6 +2304,11 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
   assert(msg->msgtype() == AppendLogResponce);
   /* XXX Now we support learner source to another learner */
   if (state_ != LEADER && state_ != FOLLOWER && state_ != LEARNER) return -1;
+
+  easy_info_log(
+      "Server %d : onAppendLogResponce msgId(%llu)"
+      "server %d, lastlogindex(%ld)\n",
+      localServer_->serverId, msg->msgid(), msg->serverid(), msg->lastlogindex());
 
   /* update extra storage for Followers */
   if (msg->has_extra()) option.extraStore->setRemote(msg->extra());
@@ -2373,11 +2384,9 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
       server->appliedIndex = msg->appliedindex();
     /*
      * XXX  About msg->lastlogindex
-     * when appendLog is success: msg->lastlogindex means the last log index in
-     * the msg (prevLogIndex + numEntries) when appendLog is unsuccess:
-     * msg->lastlogindex means the last log index in the follower's local log_
-     * when appendLog is success but in cached mode: msg->lastlogindex means the
-     * last log index in the follower's local log_(not include cache)
+     * when appendLog is success: msg->lastlogindex means the last log index in the msg (prevLogIndex + numEntries)
+     * when appendLog is unsuccess: msg->lastlogindex means the last log index in the follower's local log_
+     * when appendLog is success but in cached mode: msg->lastlogindex means the last log index in the follower's local log_(not include cache)
      */
     if (msg->issuccess()) {
       if (server->nextIndex != msg->lastlogindex() + 1 ||
@@ -2646,7 +2655,7 @@ int Paxos::onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) {
       easy_warn_log(
           "Server %d : Follower commitIndex change from %ld to %ld during "
           "onLeaderCommand\n",
-          localServer_->serverId, commitIndex_, msg->commitindex());
+          localServer_->serverId, commitIndex_.load(), msg->commitindex());
       commitIndex_ = msg->commitindex();
       assert(commitIndex_ <= log_->getLastLogIndex());
       /* notify waitCommitIndexUpdate */
@@ -2807,7 +2816,7 @@ uint64_t Paxos::waitCommitIndexUpdate(uint64_t baseIndex, uint64_t term) {
 
   return (state_ == LEADER && consensusAsync_.load())
              ? localServer_->lastSyncedIndex.load()
-             : commitIndex_;
+             : commitIndex_.load();
 }
 
 uint64_t Paxos::checkCommitIndex(uint64_t baseIndex, uint64_t term) {
@@ -2889,6 +2898,13 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
                               ? log_->getLastCachedLogIndex()
                               : log_->getLastLogIndex();
   uint64_t size = 0;
+
+  easy_info_log(
+      "Server %d : server %d 's appendLogFillForEach nextIndex %llu, prevLogIndex %llu, "
+      "lastLogIndex %llu, msg->msgid(%llu), msg->entries_size(%llu), msg->commitindex(%llu) \n",
+      localServer_->serverId, server->serverId, nextIndex, prevLogIndex,
+      lastLogIndex, msg->msgid(), msg->entries_size(), msg->commitindex());
+
   if (cdrMgr_.inRecovery) {
     easy_warn_log(
         "Server %d : fill nothing to msg during commit dependency recovery.\n",
@@ -3040,6 +3056,11 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
   msg->set_commitindex(
       std::min(msg->commitindex(), prevLogIndex + msg->entries_size()));
 
+  easy_info_log("Server %d : server %d 's appendLogFillForEach end nextIndex %llu, "
+      "prevLogIndex %llu, lastLogIndex %llu, msg->msgid(%llu), "
+      "msg->entries_size(%llu), msg->commitindex(%llu)\n",
+      localServer_->serverId, server->serverId, nextIndex, prevLogIndex,
+      lastLogIndex, msg->msgid(), msg->entries_size(), msg->commitindex());
   return size;
 }
 
@@ -3062,6 +3083,13 @@ int Paxos::tryUpdateCommitIndex_() {
   uint64_t forceCommitIndex = config_->forceMin(&Server::getMatchIndex);
   if (forceCommitIndex < newCommitIndex && leaderForceSyncStatus_.load())
     newCommitIndex = forceCommitIndex;
+
+  easy_info_log("Server %d : tryUpdateCommitIndex_ newCommitIndex %llu, "
+                "forceCommitIndex %llu, commitIndex %llu, LastLogIndex %llu, "
+                "lastNonCommitDepIndex %llu.\n",
+      localServer_->serverId, newCommitIndex, forceCommitIndex,
+      commitIndex_.load(), log_->getLastLogIndex(),
+      cdrMgr_.lastNonCommitDepIndex.load());
 
   if (commitIndex_ >= newCommitIndex) return -1;
 
@@ -3103,7 +3131,7 @@ int Paxos::tryUpdateCommitIndex_() {
   }
 
   easy_warn_log("Server %d : Leader commitIndex change from %ld to %ld\n",
-                localServer_->serverId, commitIndex_, newCommitIndex);
+                localServer_->serverId, commitIndex_.load(), newCommitIndex);
   commitIndex_ = newCommitIndex;
 
   /* already hold the lock_ by the caller. */

@@ -8,16 +8,8 @@ xa recover;
 formatID	gtrid_length	bqual_length	data
 # 01. succ
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	292	7
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3486	7
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -26,28 +18,11 @@ flush logs;
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	292	15
 xa commit 'xx';
 # 11. crash_before_rotate_binlog
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	292	16
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3486	16
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -58,31 +33,11 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3650	16
 xa commit 'xx';
 # 21. crash_before_rotate_event_appended
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	292	27
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3486	27
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -93,34 +48,11 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3650	27
 xa commit 'xx';
 # 31. crash_after_rotate_event_appended
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	292	38
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	3486	38
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -131,37 +63,11 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	3698	38
 xa commit 'xx';
 # 41. crash_binlog_rotate_between_close_and_open
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	292	49
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	3486	49
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -172,43 +78,14 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	3698	49
 xa commit 'xx';
 # run cmd: update db_crash_8.t set id = id+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 # 02. succ
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	292	60
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5076	60
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -217,46 +94,11 @@ flush logs;
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	292	68
 xa commit 'xx';
 # 12. crash_before_rotate_binlog
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	292	69
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5076	69
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -267,49 +109,11 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5240	69
 xa commit 'xx';
 # 22. crash_before_rotate_event_appended
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	292	80
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5076	80
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -320,52 +124,11 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5240	80
 xa commit 'xx';
 # 32. crash_after_rotate_event_appended
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5549	80
-master-bin.000012	292	91
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5549	80
-master-bin.000012	5076	91
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -376,55 +139,11 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5549	80
-master-bin.000012	5288	91
 xa commit 'xx';
 # 42. crash_binlog_rotate_between_close_and_open
 flush logs;
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5549	80
-master-bin.000012	5597	91
-master-bin.000013	292	102
 xa recover;
 formatID	gtrid_length	bqual_length	data
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5549	80
-master-bin.000012	5597	91
-master-bin.000013	5076	102
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
@@ -435,21 +154,6 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	xx
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	2133	1
-master-bin.000002	3534	7
-master-bin.000003	601	15
-master-bin.000004	3959	16
-master-bin.000005	3959	27
-master-bin.000006	4007	38
-master-bin.000007	4007	49
-master-bin.000008	5124	60
-master-bin.000009	601	68
-master-bin.000010	5549	69
-master-bin.000011	5549	80
-master-bin.000012	5597	91
-master-bin.000013	5288	102
 xa commit 'xx';
 drop table db_crash_8.t;
 drop database db_crash_8;

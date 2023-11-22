@@ -65,7 +65,6 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
         m_current_term(0),
         m_current_length(0),
         m_current_flag(0),
-        m_current_crc32(0),
         m_rci_ev(nullptr),
         m_start_pos(BIN_LOG_HEADER_SIZE),
         m_end_pos(m_start_pos),
@@ -75,7 +74,6 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
         m_blob_index_list(),
         m_blob_term_list(),
         m_blob_flag_list(),
-        m_blob_crc32_list(),
         m_gtid(),
         m_ev_start_pos(0),
         m_query_ev(nullptr) {}
@@ -111,7 +109,6 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
   uint64 m_current_term;
   uint64 m_current_length;
   uint m_current_flag;
-  uint64 m_current_crc32;
   Consensus_cluster_info_log_event *m_rci_ev;
   uint64 m_start_pos;
   uint64 m_end_pos;
@@ -122,7 +119,6 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
   std::vector<uint64> m_blob_index_list;
   std::vector<uint64> m_blob_term_list;
   std::vector<uint64> m_blob_flag_list;
-  std::vector<uint64> m_blob_crc32_list;
 
   // collect gtid and start pos for recovery apply binlog
   Gtid m_gtid;

@@ -439,7 +439,7 @@ class Paxos : public Consensus {
   uint64_t getCommitIndex() {
     return (state_.load() == LEADER && consensusAsync_.load())
                ? localServer_->lastSyncedIndex.load()
-               : commitIndex_;
+               : commitIndex_.load();
   }
   const StatsType &getStats() { return stats_; }
   std::vector<MembershipChangeType> getMembershipChangeHistory() {
@@ -641,7 +641,7 @@ class Paxos : public Consensus {
   const uint64_t purgeLogTimeout_;
   std::atomic<uint64_t> currentTerm_;
   std::atomic<bool> leaderStepDowning_;
-  uint64_t commitIndex_;
+  std::atomic<uint64_t> commitIndex_;
   std::atomic<uint64_t> leaderId_;
   std::string leaderAddr_;
   uint64_t votedFor_;
