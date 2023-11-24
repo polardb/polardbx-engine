@@ -2045,8 +2045,11 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
 
 #ifdef UNIV_DEBUG
     /** Validate the txn size after the undo page latches have been released. */
-    trx->rsegs.m_txn.rseg->latch();
-    trx->rsegs.m_txn.rseg->unlatch();
+    if (trx->rsegs.m_txn.rseg != nullptr &&
+        lizard::trx_is_txn_rseg_updated(trx)) {
+      trx->rsegs.m_txn.rseg->latch();
+      trx->rsegs.m_txn.rseg->unlatch();
+    }
 #endif /* UNIV_DEBUG */
 
     lizard::gcs_erase_lists(trx);
