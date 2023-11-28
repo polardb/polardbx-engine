@@ -10215,6 +10215,10 @@ ER_X_NOT_ALLOW_NEGATIVE_OFFSET
 ER_X_CAN_NOT_ALLOCATE_MEMORY
   eng "%s"
 
+##### ChangeSet error messages
+ER_CHANGESET_COMMAND_ERROR
+  eng "ChangeSet command error : %s"
+
 #
 # End of PolarDB-X special error messages intended to be return to CN.
 #

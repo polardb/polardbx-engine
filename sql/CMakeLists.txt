@@ -643,6 +643,10 @@ SET(SQL_SHARED_SOURCES
   xa/lizard_xa_trx.cc
   xa/lizard_xa_proc.cc
   common/component.cc
+  polarx_proc/changeset.cc
+  polarx_proc/changeset_manager.cc
+  polarx_proc/changeset_proc.cc
+  polarx_proc/thread_pool.cc
   package/package.cc
   package/package_cache.cc
   package/package_common.cc

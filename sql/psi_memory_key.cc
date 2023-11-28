@@ -148,6 +148,11 @@ PSI_memory_key key_memory_sp_cache;
 PSI_memory_key key_memory_write_set_extraction;
 PSI_memory_key key_memory_IA_mem;
 
+PSI_memory_key key_memory_CS_PRIMARY_KEY_CACHE;
+PSI_memory_key key_memory_CS_PRIMARY_KEY;
+PSI_memory_key key_memory_CS_RESULT_BUFFER;
+PSI_memory_key key_memory_CS_FILE_NAME;
+
 #ifdef HAVE_PSI_INTERFACE
 
 static PSI_memory_info all_server_memory[] = {
@@ -391,8 +396,15 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_persisted_variables_unordered_set,
      "Persisted_variables::unordered_set", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
      "Memory allocated for in-memory sets for persisted variables"},
-
-    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0, PSI_DOCUMENT_ME}
+    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_CS_PRIMARY_KEY_CACHE, "changeset_primary_key_cache", 0, 0,
+     "Memory allocated for primary keys of changeset cache"},
+    {&key_memory_CS_PRIMARY_KEY, "changeset_primary_key", 0, 0,
+     "Memory allocated for primary keys of changeset"},
+    {&key_memory_CS_RESULT_BUFFER, "changeset_result_buffer", 0, 0,
+     "Memory allocated for fetching result of changeset"},
+    {&key_memory_CS_FILE_NAME, "changeset_file_name", 0, 0,
+     "Memory allocated for filename of changeset"}
 };
 
 void register_server_memory_keys() {

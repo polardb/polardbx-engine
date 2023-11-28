@@ -1047,6 +1047,7 @@ inline void setup_fpu() {
 
 extern "C" void handle_fatal_signal(int sig);
 void my_server_abort();
+void UninitChangesetThreadPool();
 
 /* Constants */
 
@@ -1408,6 +1409,8 @@ Deployed_components *g_deployed_components = nullptr;
 
 /* enable x-proto physical backfill*/
 bool opt_physical_backfill = true;
+
+bool opt_enable_changeset;
 
 /**
   Limit of the total number of prepared statements in the server.
@@ -2765,6 +2768,9 @@ static void clean_up(bool print_message) {
     engine
   */
   user_seq_sp_exit();
+
+  // exit changeset thread pool
+  UninitChangesetThreadPool();
 
   /*
     The following lines may never be executed as the main thread may have

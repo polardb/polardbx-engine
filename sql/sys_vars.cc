@@ -157,6 +157,7 @@
 #include "sql/appliedindex_checker.h"         // AppliedIndexChecker
 #include "sql/rpl_replica.h"              // rotate_relay_log
 #include "sql/consensus_log_manager.h"
+#include "sql/polarx_proc/changeset_manager.h"
 
 
 static constexpr const unsigned long DEFAULT_ERROR_COUNT{1024};
@@ -7739,6 +7740,20 @@ static Sys_var_bool Sys_sequence_read_skip_cache(
     "Skip sequence cache, read the based table directly.",
     SESSION_ONLY(sequence_read_skip_cache), NO_CMD_LINE, DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
+
+static bool handle_enable_changeset(sys_var *, THD *, enum_var_type) {
+  if (!opt_enable_changeset) {
+    im::gChangesetManager.erase_all_changeset();
+  }
+	return false;
+}
+
+static Sys_var_bool Sys_enable_changeset(
+       "enable_changeset",
+       "Whether open the polarx changeset proc",
+       GLOBAL_VAR(opt_enable_changeset), CMD_LINE(OPT_ARG), DEFAULT(true),
+       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(handle_enable_changeset)
+);
 
 #include "sys_vars_ext.cc"
 #include "sys_vars_consensus.cc"

@@ -146,6 +146,8 @@
 #include "replica_read_manager.h"
 #include "sql/raft/raft0recovery.h"
 
+#include "polarx_proc/changeset_manager.h"
+
 class Item;
 
 using binary_log::checksum_crc32;
@@ -2774,6 +2776,8 @@ int MYSQL_BIN_LOG::rollback(THD *thd, bool all) {
     error |= cache_mngr->trx_cache.truncate(thd, all);
   }
 
+  im::gChangesetManager.rollback_change(thd);
+
 end:
   // The caches may be empty if an `XA ROLLBACK` was issued just after `XA
   // END`. In that case, the BCG will not be invoked and we need to
@@ -2869,6 +2873,8 @@ static int binlog_savepoint_set(handlerton *, THD *thd, void *sv) {
   if (!(error = mysql_bin_log.write_event(&qinfo)))
     binlog_trans_log_savepos(thd, (my_off_t *)sv);
 
+  im::gChangesetManager.set_save_point(thd, *(my_off_t*) sv);
+
   return error;
 }
 
@@ -2919,6 +2925,9 @@ static int binlog_savepoint_rollback(handlerton *, THD *thd, void *sv) {
   }
   // Otherwise, we truncate the cache
   cache_mngr->trx_cache.restore_savepoint(pos);
+
+  // changeset truncate the cache
+  im::gChangesetManager.rollback_to_save_point(thd, pos);
   /*
     When a SAVEPOINT is executed inside a stored function/trigger we force the
     pending event to be flushed with a STMT_END_F flag and clear the table maps
@@ -8505,6 +8514,8 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
         is, did log a transaction to the binary log.
       */
       (void)RUN_HOOK(transaction, after_commit, (thd, all));
+    } else {
+      im::gChangesetManager.commit_change(thd);
     }
   } else if (!skip_commit) {
     if (trx_coordinator::commit_in_engines(thd, all))
@@ -11476,6 +11487,9 @@ int THD::binlog_write_row(TABLE *table, bool is_trans, uchar const *record,
       binlog_prepare_pending_rows_event<Write_rows_log_event>(
           table, server_id, len, is_trans, extra_row_info);
 
+  /* Record in changeset */
+  im::gChangesetManager.write_row_to_cache(this, table, record);
+
   if (unlikely(ev == nullptr)) return HA_ERR_OUT_OF_MEM;
 
   return ev->add_row_data(row_data, len);
@@ -11520,6 +11534,9 @@ int THD::binlog_update_row(TABLE *table, bool is_trans,
   DBUG_DUMP("after_record", after_record, table->s->reclength);
   DBUG_DUMP("before_row", before_row, before_size);
   DBUG_DUMP("after_row", after_row, after_size);
+
+  /* Record in changeset */
+  im::gChangesetManager.update_row_to_cache(this, table, before_record, after_record);
 
   partition_info *part_info = table->part_info;
   uint32 source_part_id = binary_log::Rows_event::Extra_row_info::UNDEFINED;
@@ -11584,6 +11601,9 @@ int THD::binlog_delete_row(TABLE *table, bool is_trans, uchar const *record,
             (table->s->fields + 7) / 8);
   size_t const len = pack_row(table, table->read_set, row_data, record,
                               enum_row_image_type::DELETE_BI);
+
+  /* Record in changeset */
+  im::gChangesetManager.delete_row_to_cache(this, table, record);
 
   Rows_log_event *const ev =
       binlog_prepare_pending_rows_event<Delete_rows_log_event>(

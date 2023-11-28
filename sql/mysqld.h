@@ -158,6 +158,9 @@ extern CHARSET_INFO *character_set_filesystem;
 
 extern bool opt_physical_backfill;
 
+/* enable polarx changeset udf */
+extern bool opt_enable_changeset;
+
 enum enum_server_operational_state {
   SERVER_BOOTING,      /* Server is not operational. It is starting */
   SERVER_OPERATING,    /* Server is fully initialized and operating */

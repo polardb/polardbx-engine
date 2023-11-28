@@ -172,7 +172,7 @@ class Proc : public PSI_memory_base {
     @retval       true          Failure
     @retval       false         Success
   */
-  bool send_result_metadata(THD *thd) const;
+  virtual bool send_result_metadata(THD *thd) const;
 
   /**
     Interface of proc name.
