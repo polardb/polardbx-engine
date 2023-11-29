@@ -58,13 +58,13 @@ bool Sql_cmd_trans_proc_implicit_savepoint::pc_execute(THD *thd) {
   /* Make statement 'ROLLBACK TO savepoint_name' */
   if (cmd.append(STRING_WITH_LEN("ROLLBACK TO ")) || cmd.append("`") ||
       cmd.append(STRING_WITH_LEN(mysql_implicit_savepoint)) || cmd.append("`"))
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
 
   thd->set_query(cmd.lex_cstring());
   thd->set_query_id(next_query_id());
 
   if (parser_state.init(thd, thd->query().str, thd->query().length))
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
 
   stmt_ctx.start_statement();
 

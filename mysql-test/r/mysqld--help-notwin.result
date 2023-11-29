@@ -129,7 +129,7 @@ The following options may be given as the first argument:
  aborts.
  --binlog-expire-logs-auto-purge 
  Controls whether the server shall automatically purge
- binary log files or not. If this variable is set to FALSE
+ binary log files or not. If this variable is set to false
  then the server will not purge binary log files
  automatically.
  (Defaults to on; use --skip-binlog-expire-logs-auto-purge to disable.)
@@ -272,9 +272,9 @@ The following options may be given as the first argument:
  Set the default character set.
  --character-sets-dir=name 
  Directory where character sets are
- --check-proxy-users If set to FALSE (the default), then proxy user identity
+ --check-proxy-users If set to false (the default), then proxy user identity
  will not be mapped for authentication plugins which
- support mapping from grant tables.  When set to TRUE,
+ support mapping from grant tables.  When set to true,
  users associated with authentication plugins which signal
  proxy user mapping should be done according to GRANT
  PROXY privilege definition.
@@ -739,14 +739,14 @@ The following options may be given as the first argument:
  --log-bin-index=name 
  File that holds the names for binary log files.
  --log-bin-trust-function-creators 
- If set to FALSE (the default), then when --log-bin is
+ If set to false (the default), then when --log-bin is
  used, creation of a stored function (or trigger) is
  allowed only to users having the SUPER privilege and only
  if this stored function (trigger) may not break binary
  logging. Note that if ALL connections to this server
  ALWAYS use row-based binary logging, the security issues
  do not exist and the binary logging cannot break, so you
- can safely set this to TRUE
+ can safely set this to true
  --log-bin-use-v1-row-events 
  If equal to 1 then version 1 row events are written to a
  row based binary log.  If equal to 0, then the latest
@@ -940,10 +940,10 @@ The following options may be given as the first argument:
  NULLS_EQUAL (emulate 4.0 behavior), and NULLS_IGNORED
  --myisam-use-mmap   Use memory mapping for reading and writing MyISAM tables
  --mysql-native-password-proxy-users 
- If set to FALSE (the default), then the
+ If set to false (the default), then the
  mysql_native_password plugin will not signal for
  authenticated users to be checked for mapping to proxy
- users.  When set to TRUE, the plugin will flag associated
+ users.  When set to true, the plugin will flag associated
  authenticated accounts to be mapped to proxy users when
  the server option check_proxy_users is enabled.
  --net-buffer-length=# 
@@ -1267,7 +1267,7 @@ The following options may be given as the first argument:
  The client peer certificate name required to enable
  setting all system variables via SET PERSIST[_ONLY]
  --persist-sensitive-variables-in-plaintext 
- If set to FALSE, server will refuse to persist SENSITIVE
+ If set to false, server will refuse to persist SENSITIVE
  variables in plaintext and refuse to start if encrypted
  part of persited file cannot be processed.
  (Defaults to on; use --skip-persist-sensitive-variables-in-plaintext to disable.)
@@ -1662,10 +1662,10 @@ The following options may be given as the first argument:
  snapshot - but not any work done / data modified within
  the transaction).
  --sha256-password-proxy-users 
- If set to FALSE (the default), then the sha256_password
+ If set to false (the default), then the sha256_password
  authentication plugin will not signal for authenticated
  users to be checked for mapping to proxy users.  When set
- to TRUE, the plugin will flag associated authenticated
+ to true, the plugin will flag associated authenticated
  accounts to be mapped to proxy users when the server
  option check_proxy_users is enabled.
  --show-create-table-verbosity 
@@ -2096,7 +2096,7 @@ disconnect-slave-event-count 0
 div-precision-increment 4
 enable-appliedindex-checker TRUE
 end-markers-in-json FALSE
-enforce-gtid-consistency FALSE
+enforce-gtid-consistency false
 eq-range-index-dive-limit 200
 event-scheduler ON
 expire-logs-days 0

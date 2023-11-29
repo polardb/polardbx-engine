@@ -1624,7 +1624,7 @@ static bool repository_check(sys_var *self, THD *thd, set_var *var,
     msg= "relay_log_info is not inited";
     my_error(ER_CHANGE_RPL_INFO_REPOSITORY_FAILURE, MYF(0), msg);
     channel_map.unlock();
-    return TRUE;
+    return true;
   }
   mysql_mutex_unlock(&mi->rli->data_lock);
 
@@ -2238,7 +2238,7 @@ static Sys_var_ulong Sys_binlog_expire_logs_seconds(
 static Sys_var_bool Sys_binlog_expire_logs_auto_purge(
     "binlog_expire_logs_auto_purge",
     "Controls whether the server shall automatically purge binary log "
-    "files or not. If this variable is set to FALSE then the server will "
+    "files or not. If this variable is set to false then the server will "
     "not purge binary log files automatically.",
     GLOBAL_VAR(opt_binlog_expire_logs_auto_purge), CMD_LINE(OPT_ARG),
     DEFAULT(true));
@@ -2508,30 +2508,30 @@ static Sys_var_enum Sys_binlog_error_action(
 
 static Sys_var_bool Sys_trust_function_creators(
     "log_bin_trust_function_creators",
-    "If set to FALSE (the default), then when --log-bin is used, creation "
+    "If set to false (the default), then when --log-bin is used, creation "
     "of a stored function (or trigger) is allowed only to users having the "
     "SUPER privilege and only if this stored function (trigger) may not "
     "break binary logging. Note that if ALL connections to this server "
     "ALWAYS use row-based binary logging, the security issues do not "
     "exist and the binary logging cannot break, so you can safely set "
-    "this to TRUE",
+    "this to true",
     GLOBAL_VAR(trust_function_creators), CMD_LINE(OPT_ARG), DEFAULT(false));
 
 static Sys_var_bool Sys_check_proxy_users(
     "check_proxy_users",
-    "If set to FALSE (the default), then proxy user identity will not be "
+    "If set to false (the default), then proxy user identity will not be "
     "mapped for authentication plugins which support mapping from grant "
-    "tables.  When set to TRUE, users associated with authentication "
+    "tables.  When set to true, users associated with authentication "
     "plugins which signal proxy user mapping should be done according to "
     "GRANT PROXY privilege definition.",
     GLOBAL_VAR(check_proxy_users), CMD_LINE(OPT_ARG), DEFAULT(false));
 
 static Sys_var_bool Sys_mysql_native_password_proxy_users(
     "mysql_native_password_proxy_users",
-    "If set to FALSE (the default), then the mysql_native_password "
+    "If set to false (the default), then the mysql_native_password "
     "plugin will not signal for authenticated users to be checked for "
     "mapping "
-    "to proxy users.  When set to TRUE, the plugin will flag associated "
+    "to proxy users.  When set to true, the plugin will flag associated "
     "authenticated accounts to be mapped to proxy users when the server "
     "option "
     "check_proxy_users is enabled.",
@@ -2540,10 +2540,10 @@ static Sys_var_bool Sys_mysql_native_password_proxy_users(
 
 static Sys_var_bool Sys_sha256_password_proxy_users(
     "sha256_password_proxy_users",
-    "If set to FALSE (the default), then the sha256_password authentication "
+    "If set to false (the default), then the sha256_password authentication "
     "plugin will not signal for authenticated users to be checked for "
     "mapping "
-    "to proxy users.  When set to TRUE, the plugin will flag associated "
+    "to proxy users.  When set to true, the plugin will flag associated "
     "authenticated accounts to be mapped to proxy users when the server "
     "option "
     "check_proxy_users is enabled.",
@@ -6550,7 +6550,7 @@ static Sys_var_uint Sys_host_cache_size(
 
 const Sys_var_multi_enum::ALIAS enforce_gtid_consistency_aliases[] = {
     {"OFF", 0},   {"ON", 1},   {"WARN", 2},
-    {"FALSE", 0}, {"TRUE", 1}, {nullptr, 0}};
+    {"false", 0}, {"true", 1}, {nullptr, 0}};
 static Sys_var_enforce_gtid_consistency Sys_enforce_gtid_consistency(
     "enforce_gtid_consistency",
     "Prevents execution of statements that would be impossible to log "
@@ -6560,7 +6560,7 @@ static Sys_var_enforce_gtid_consistency Sys_enforce_gtid_consistency(
     PERSIST_AS_READONLY GLOBAL_VAR(_gtid_consistency_mode),
     CMD_LINE(OPT_ARG, OPT_ENFORCE_GTID_CONSISTENCY),
     enforce_gtid_consistency_aliases, 3,
-    DEFAULT(3 /*position of "FALSE" in enforce_gtid_consistency_aliases*/),
+    DEFAULT(3 /*position of "false" in enforce_gtid_consistency_aliases*/),
     DEFAULT(GTID_CONSISTENCY_MODE_ON), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_session_admin_outside_trx_outside_sf_outside_sp));
 const char *fixup_enforce_gtid_consistency_command_line(char *value_arg) {
@@ -7714,7 +7714,7 @@ static Sys_var_charptr Sys_debug_sensitive_session_string(
 
 static Sys_var_bool Sys_persist_sensitive_variables_in_plaintext(
     "persist_sensitive_variables_in_plaintext",
-    "If set to FALSE, server will refuse to persist SENSITIVE variables in "
+    "If set to false, server will refuse to persist SENSITIVE variables in "
     "plaintext and refuse to start if encrypted part of persited file cannot "
     "be processed.",
     READ_ONLY NON_PERSIST
@@ -7737,7 +7737,7 @@ static Sys_var_enum Sys_explain_format(
 static Sys_var_bool Sys_sequence_read_skip_cache(
     "sequence_read_skip_cache",
     "Skip sequence cache, read the based table directly.",
-    SESSION_ONLY(sequence_read_skip_cache), NO_CMD_LINE, DEFAULT(FALSE),
+    SESSION_ONLY(sequence_read_skip_cache), NO_CMD_LINE, DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
 
 #include "sys_vars_ext.cc"

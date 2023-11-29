@@ -120,7 +120,7 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size, Log_event *
       error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term, log_content.length());
     }
     if (!error)
-      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(thd->consensus_term, thd->consensus_index, blen, buffer, FALSE, flag, crc32);
+      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(thd->consensus_term, thd->consensus_index, blen, buffer, false, flag, crc32);
 
     if (!error) {
       if (end_pos == ev->buf_len)
@@ -200,7 +200,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size)
       crc32 = opt_consensus_checksum? checksum_crc32(0, buffer, batch_size ): 0;
       error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term, batch_size); /* inc current index inside */
       if (!error)
-        error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(thd->consensus_term, thd->consensus_index, batch_size, buffer, FALSE, flag, crc32);
+        error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(thd->consensus_term, thd->consensus_index, batch_size, buffer, false, flag, crc32);
 
       if (!error) {
         DBUG_EXECUTE_IF("crash_during_large_trx_binlog_flush2", {
@@ -260,7 +260,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size)
     crc32 = opt_consensus_checksum? checksum_crc32(0, buffer, batch_size ): 0;
     error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term, batch_size); /* inc current index inside */
     if (!error)
-      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(thd->consensus_term, thd->consensus_index, batch_size, buffer, FALSE, flag, crc32);
+      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(thd->consensus_term, thd->consensus_index, batch_size, buffer, false, flag, crc32);
 
     if (!error)
       error = mysql_bin_log.write_buf_to_log_file(buffer, batch_size);
@@ -390,7 +390,7 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
     binlog_file_reader.set_format_description_event(*fd_ev_p);
     Log_event *ev = NULL;
     Previous_consensus_index_log_event *prev_consensus_index_ev = NULL;
-    bool find_prev_consensus_log = FALSE;
+    bool find_prev_consensus_log = false;
 
     // while (!find_prev_consensus_log && ((ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) != NULL))
     while (!find_prev_consensus_log && (ev = binlog_file_reader.read_event_object()) != NULL) {
@@ -404,7 +404,7 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
       case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
         prev_consensus_index_ev = (Previous_consensus_index_log_event*)ev;
         consensus_log_manager.get_log_file_index()->add_to_index_list(prev_consensus_index_ev->get_index(), prev_consensus_index_ev->common_header->when.tv_sec, *iter);
-        find_prev_consensus_log = TRUE;
+        find_prev_consensus_log = true;
         break;
       default:
         break;
@@ -432,7 +432,7 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
 int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term)
 {
   LOG_INFO log_info;
-  bool found = FALSE;
+  bool found = false;
   std::vector<std::string>  consensuslog_file_name_vector;
   get_consensus_log_file_list(consensuslog_file_name_vector);
 
@@ -459,7 +459,7 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term)
     binlog_file_reader.set_format_description_event(*fd_ev_p);
     Log_event *ev = NULL;
     Consensus_log_event *consensus_log_ev = NULL;
-    bool skip = FALSE;
+    bool skip = false;
    
     // while (!skip && ((ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) != NULL))
     while (!skip && (ev = binlog_file_reader.read_event_object()) != NULL)
@@ -480,12 +480,12 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term)
         // if find larger term, skip current file to previous one
         if (current_term > term)
         {
-          skip = TRUE;
+          skip = true;
         }
         if (current_term  <= term && !(current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX))
         {
           consensus_log_manager.get_recovery_manager()->set_last_leader_term_index(current_index);
-          found = TRUE;
+          found = true;
         }
         break;
       default:
@@ -555,7 +555,7 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
   binlog_file_reader.set_format_description_event(*fd_ev_p);
   Log_event *ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
-  bool stop_scan = FALSE;
+  bool stop_scan = false;
   uint64 currentIndex = 0;
   uint64 currentFlag = 0;
   // while (!stop_scan && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) != NULL)
@@ -643,9 +643,9 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
   Log_event *ev = NULL;
   Consensus_cluster_info_log_event *rci_ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
-  bool found = FALSE;
-  bool stop_scan = FALSE;
-  bool in_transaction = FALSE;
+  bool found = false;
+  bool stop_scan = false;
+  bool in_transaction = false;
   uint64 start_pos = my_b_tell(binlog_file_reader.get_io_cache());
   uint64 end_pos = start_pos;
   uint64 consensus_log_length = 0;
@@ -665,7 +665,7 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
       end_pos = start_pos = my_b_tell(binlog_file_reader.get_io_cache());
       if (consensus_index == cindex)
       {
-        found = TRUE;
+        found = true;
         *consensus_term = cterm;
         *flag = cflag;
       }
@@ -712,7 +712,7 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
                   log_content.assign(ev->temp_buf + blob_start_pos - start_pos, blob_end_pos - blob_start_pos);
                   *outer = false;
                   end_pos = start_pos = my_b_tell(binlog_file_reader.get_io_cache());
-                  stop_scan = TRUE;
+                  stop_scan = true;
                   break;
                 }
                 blob_start_pos = blob_end_pos;
@@ -729,7 +729,7 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
                 fetch_binlog_by_offset(binlog_file_reader, start_pos, end_pos, rci_ev, log_content);
               *outer = (rci_ev != NULL);
               end_pos = start_pos = my_b_tell(binlog_file_reader.get_io_cache());
-              stop_scan = TRUE;
+              stop_scan = true;
               rci_ev = NULL;
             }
           }
@@ -807,14 +807,14 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
   uint32 consensus_log_length = 0;
   uint current_flag = 0;
   uint64 current_crc32 = 0;
-  bool stop_prefetch = FALSE;
+  bool stop_prefetch = false;
   std::string log_content;
   std::vector<uint64> blob_index_list;
   std::vector<uint64> blob_term_list;
   std::vector<uint64> blob_flag_list;
   ConsensusPreFetchManager *prefetch_mgr = consensus_log_manager.get_prefetch_manager();
   ConsensusPreFetchChannel *prefetch_channel = prefetch_mgr->get_prefetch_channel(channel_id);
-  prefetch_channel->set_prefetching(TRUE);
+  prefetch_channel->set_prefetching(true);
   if (prefetch_channel->get_channel_id() == 0)
     prefetch_channel->clear_large_trx_table();
   // while (!stop_prefetch && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) != NULL)
@@ -875,7 +875,7 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
             // wait condition already executed in add log to prefetch cache
           }
           if (result == INTERRUPT || current_index == consensus_log_manager.get_sync_index())
-            stop_prefetch = TRUE;
+            stop_prefetch = true;
           my_free(buffer);
           end_pos = my_b_tell(binlog_file_reader.get_io_cache());
           assert(end_pos - start_pos == consensus_log_length);
@@ -934,7 +934,7 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
                 }
                 if (result == INTERRUPT)
                 {
-                  stop_prefetch = TRUE;
+                  stop_prefetch = true;
                   break; // break iterate blob_index_list
                 }
               }
@@ -963,7 +963,7 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
               }
               if (result == INTERRUPT || current_index == consensus_log_manager.get_sync_index())
               {
-                stop_prefetch = TRUE; // because truncate log happened, stop prefetch and retry
+                stop_prefetch = true; // because truncate log happened, stop prefetch and retry
               }
               binlog_file_reader.seek(save_position);
             }
@@ -982,7 +982,7 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
     delete fd_ev_p;
     fd_ev_p = &fd_ev;
   }
-  prefetch_channel->set_prefetching(FALSE);
+  prefetch_channel->set_prefetching(false);
   prefetch_channel->dec_ref_count();
   prefetch_channel->clear_prefetch_request();
   // mysql_file_close(file, MYF(MY_WME));
@@ -1034,8 +1034,8 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char* file_name, uint64 con
   Log_event *ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
   Previous_consensus_index_log_event *consensus_prev_ev = NULL;
-  bool found = FALSE;
-  bool first_log_in_file = FALSE;
+  bool found = false;
+  bool first_log_in_file = false;
 
   // while (!found && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) != NULL)
   while (!found && (ev = binlog_file_reader.read_event_object()) != NULL)
@@ -1045,23 +1045,23 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char* file_name, uint64 con
     case binary_log::CONSENSUS_LOG_EVENT:
       consensus_log_ev = (Consensus_log_event*)ev;
       if (consensus_index == consensus_log_ev->get_index())
-        found = TRUE;
+        found = true;
       if (consensus_index == consensus_log_ev->get_index() + 1)
       {
-        found = TRUE;
+        found = true;
         *pos = my_b_tell(binlog_file_reader.get_io_cache()) + consensus_log_ev->get_length();
       }
       break;
     case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
       consensus_prev_ev = (Previous_consensus_index_log_event*)ev;
       if (consensus_index == consensus_prev_ev->get_index())
-        first_log_in_file = TRUE;
+        first_log_in_file = true;
       break;
     case binary_log::PREVIOUS_GTIDS_LOG_EVENT:
       if (first_log_in_file)
       {
         *pos = my_b_tell(binlog_file_reader.get_io_cache());
-        found = TRUE;
+        found = true;
       }
       break;
     case binary_log::FORMAT_DESCRIPTION_EVENT:
@@ -1164,7 +1164,7 @@ int MYSQL_BIN_LOG::truncate_files_after(std::string & file_name)
       delete_vector.push_back(*iter);
 
     if (*iter == file_name)
-        found = TRUE;
+        found = true;
   }
 
   raft::info(ER_RAFT_COMMIT) << "truncate_files_after file:" << file_name.c_str();
@@ -1569,7 +1569,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
   }
 
   if (!error)
-    error = flush_and_sync(FALSE);
+    error = flush_and_sync(false);
 
   if (error)
     goto err;
@@ -1727,7 +1727,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
   }
 
   if (!error)
-    error = flush_and_sync(FALSE);
+    error = flush_and_sync(false);
 
   if (error)
     goto err;
@@ -1763,7 +1763,7 @@ int MYSQL_BIN_LOG::rotate_consensus_log()
   mysql_mutex_lock(&LOCK_rotate);
   need_real_rotate = !rotating;
   if (!rotating)
-    rotating = TRUE;
+    rotating = true;
   mysql_mutex_unlock(&LOCK_rotate);
   if (need_real_rotate)
   {
@@ -1773,7 +1773,7 @@ int MYSQL_BIN_LOG::rotate_consensus_log()
     mysql_mutex_unlock(&LOCK_log);
 
     mysql_mutex_lock(&LOCK_rotate);
-    rotating = FALSE;
+    rotating = false;
     mysql_mutex_unlock(&LOCK_rotate);
   }
   return error;
@@ -2118,7 +2118,7 @@ int flush_consensus_log(THD *thd, binlog_cache_data *,
   // error = mysql_bin_log.write_cache(thd, binlog_cache, writer);
   buf_size = my_b_tell(consensus_log_manager.get_cache());
   // determine whether log is too large
-  if (buf_size > opt_consensus_max_log_size) is_large_trx = TRUE;
+  if (buf_size > opt_consensus_max_log_size) is_large_trx = true;
   // group update do not support large trx
   DBUG_EXECUTE_IF("simulate_trx_cache_error", {
     if (thd->consensus_index != 0) mark_as_rollback = true;
@@ -2159,7 +2159,7 @@ int flush_consensus_log(THD *thd, binlog_cache_data *,
       uint64 crc32 = opt_consensus_checksum ? checksum_crc32(0, buffer, buf_size) : 0;
       error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
               thd->consensus_term, thd->consensus_index, buf_size, buffer,
-              FALSE, flag, crc32, true);
+              false, flag, crc32, true);
       if (!error)
         error = mysql_bin_log.write_buf_to_log_file(buffer, buf_size);
 

@@ -137,7 +137,7 @@ int Partition_helper::ph_sample_next(uchar *buf) {
 
   assert(m_scan_value == 1);
 
-  while (TRUE) {
+  while (true) {
     result = sample_next_in_part(part_id, buf);
     if (!result) {
       m_last_part = part_id;

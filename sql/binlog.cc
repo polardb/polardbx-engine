@@ -3588,7 +3588,7 @@ bool mysql_show_binlog_events(THD *thd) {
   */
   ha_binlog_wait(thd);
 
-  consensus_log_manager.lock_consensus(TRUE);
+  consensus_log_manager.lock_consensus(true);
   MYSQL_BIN_LOG *log = consensus_log_manager.get_status() == BINLOG_WORKING ?
                        &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
   bool res= show_binlog_events(thd, log);
@@ -9473,7 +9473,7 @@ commit_stage:
   if (DBUG_EVALUATE_IF("force_rotate", 1, 0) ||
       (do_rotate && thd->commit_error == THD::CE_NONE &&
        !is_rotating_caused_by_incident)) {
-    consensus_log_manager.lock_consensus(TRUE);
+    consensus_log_manager.lock_consensus(true);
     if (consensus_log_manager.get_status() == BINLOG_WORKING)
     {
       /*
@@ -9488,8 +9488,7 @@ commit_stage:
       bool need_real_rotate = false;
       mysql_mutex_lock(&LOCK_rotate);
       need_real_rotate = !rotating;
-      if (!rotating)
-        rotating = TRUE;
+      if (!rotating) rotating = true;
       mysql_mutex_unlock(&LOCK_rotate);
 
       if (need_real_rotate)
@@ -9510,7 +9509,7 @@ commit_stage:
         else if (check_purge)
           auto_purge();
         mysql_mutex_lock(&LOCK_rotate);
-        rotating = FALSE;
+        rotating = false;
         mysql_mutex_unlock(&LOCK_rotate);
 
         DBUG_EXECUTE_IF("simulate_crash_after_rotate", { DBUG_SUICIDE(); });

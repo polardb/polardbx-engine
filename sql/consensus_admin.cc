@@ -60,7 +60,7 @@ bool show_consensuslog_events(THD *thd, MYSQL_BIN_LOG *binary_log, unsigned long
   Protocol *protocol = thd->get_protocol();
   List<Item> field_list;
   const char *errmsg = 0;
-  bool ret = TRUE;
+  bool ret = true;
   // IO_CACHE log;
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   // File file = -1;
@@ -203,7 +203,7 @@ bool show_consensuslog_events(THD *thd, MYSQL_BIN_LOG *binary_log, unsigned long
   // Check that linfo is still on the function scope.
   DEBUG_SYNC(thd, "after_show_consensuslog_events");
 
-  ret = FALSE;
+  ret = false;
 
 err:
   delete description_event;
@@ -248,7 +248,7 @@ bool mysql_show_consensuslog_events(THD* thd, unsigned long long consensus_index
   Log_event::init_show_field_list(&field_list);
   if (thd->send_result_metadata(field_list,
     Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
 
   /*
   Wait for handlers to insert any pending information
@@ -256,7 +256,7 @@ bool mysql_show_consensuslog_events(THD* thd, unsigned long long consensus_index
   this is needed so that the uses sees all its own commands in the binlog
   */
   ha_binlog_wait(thd);
-  consensus_log_manager.lock_consensus(TRUE);
+  consensus_log_manager.lock_consensus(true);
   MYSQL_BIN_LOG *log = consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
   bool res = show_consensuslog_events(thd, log, consensus_index);
   consensus_log_manager.unlock_consensus();
@@ -284,13 +284,13 @@ bool show_consensus_logs(THD* thd)
   Protocol *protocol= thd->get_protocol();
   DBUG_ENTER("show_consensus_logs");
 
-  consensus_log_manager.lock_consensus(TRUE);
+  consensus_log_manager.lock_consensus(false);
   MYSQL_BIN_LOG *log = consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
   if (!log->is_open())
   {
     consensus_log_manager.unlock_consensus();
     my_error(ER_NO_BINARY_LOGGING, MYF(0));
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
   }
 
   field_list.push_back(new Item_empty_string("Log_name", 255));
@@ -301,7 +301,7 @@ bool show_consensus_logs(THD* thd)
 
   if (thd->send_result_metadata(field_list, Protocol::SEND_NUM_ROWS |
                                     Protocol::SEND_EOF))
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
 
   mysql_mutex_lock(log->get_log_lock());
   DEBUG_SYNC(thd, "show_binlogs_after_lock_log_before_lock_index");
@@ -355,12 +355,12 @@ bool show_consensus_logs(THD* thd)
   log->unlock_index();
   consensus_log_manager.unlock_consensus();
   my_eof(thd);
-  DBUG_RETURN(FALSE);
+  DBUG_RETURN(false);
 
 err:
   log->unlock_index();
   consensus_log_manager.unlock_consensus();
-  DBUG_RETURN(TRUE);
+  DBUG_RETURN(true);
 }
 
 
@@ -405,23 +405,23 @@ static bool invalid_on_consensus_force_recovery_limited(enum_sql_command cmd) {
 
 int consensus_command_limit(THD *thd) {
   /* rw check: leader read-write, others read-only */
-  bool reject_query = FALSE;
-  bool is_leader = FALSE;
+  bool reject_query = false;
+  bool is_leader = false;
   DBUG_ENTER("consensus_command_limit");
   // dd_upgrade execute inner sql before consensus module startup
   if (!opt_initialize && consensus_ptr != NULL)
   {
     if (consensus_ptr->getState() == alisql::Paxos::LEADER)
     {
-      is_leader = TRUE;
+      is_leader = true;
       if (consensus_ptr->getTerm() != consensus_log_manager.get_current_term())
-        reject_query = TRUE;
+        reject_query = true;
     }
     else
     {
-      is_leader = FALSE;
+      is_leader = false;
       if (invalid_on_consensus_limited(thd->lex->sql_command, thd->lex->no_write_to_binlog))
-        reject_query = TRUE;
+        reject_query = true;
     }
   }
   if (reject_query && !thd->slave_thread)
@@ -434,9 +434,9 @@ int consensus_command_limit(THD *thd) {
       else
         my_error(ER_CONSENSUS_FOLLOWER_NOT_ALLOWED, MYF(0));
       DBUG_RETURN(1);
-    }
-    else if (thd->variables.opt_force_revise == FALSE &&
-             (thd->variables.option_bits & OPTION_BIN_LOG)) // arg is only used for super account
+    } else if (thd->variables.opt_force_revise == false &&
+               (thd->variables.option_bits &
+                OPTION_BIN_LOG))  // arg is only used for super account
     {
       // super account
       if (!opt_cluster_log_type_instance)
@@ -459,7 +459,7 @@ int consensus_command_limit(THD *thd) {
   /* logger node check: logger is not allowed to do configure change unless force_revise is set to TRUE */
   if (opt_cluster_log_type_instance &&
       invalid_on_logger_limited(thd->lex->sql_command) &&
-      thd->variables.opt_force_revise == FALSE) {
+      thd->variables.opt_force_revise == false) {
     my_error(ER_CONSENSUS_LOG_TYPE_NODE, MYF(0));
     DBUG_RETURN(1);
   }
@@ -619,11 +619,11 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         raft::info(ER_RAFT_APPLIER) << "Apply thread stop, opt_consensus_leader_stop_apply: " << (opt_consensus_leader_stop_apply ? "true" : "false")
                                     << ", seconds_behind_master: " << time_diff
                                     << ", opt_consensus_leader_stop_apply_time: " << opt_consensus_leader_stop_apply_time;
-        opt_consensus_leader_stop_apply = FALSE;
+        opt_consensus_leader_stop_apply = false;
         mysql_mutex_lock(consensus_log_manager.get_apply_thread_lock());
         mysql_cond_broadcast(consensus_log_manager.get_catchup_cond());
-        consensus_log_manager.set_apply_catchup(TRUE);
-        rli->sql_thread_kill_accepted = TRUE;
+        consensus_log_manager.set_apply_catchup(true);
+        rli->sql_thread_kill_accepted = true;
         rli->force_apply_queue_before_stop = true;
         mysql_mutex_unlock(consensus_log_manager.get_apply_thread_lock());
         raft::info(ER_RAFT_APPLIER) << "Apply thread catchup commit index, consensus index: " << rli->get_consensus_apply_index()
@@ -705,7 +705,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
   ulonglong start_apply_index = 0;
   uint64 recover_term = 0;
   std::string recover_log_content;
-  bool recover_outer = FALSE;
+  bool recover_outer = false;
   uint recover_flag = 0;
   uint64 recover_checksum = 0;
   uint64 rli_appliedindex = 0;
@@ -750,15 +750,15 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         }
         rli->set_consensus_apply_index(recover_index);
         consensus_log_manager.set_apply_term(recover_term);
-        rli->flush_info(TRUE);
+        rli->flush_info(true);
       }
       else
       {
         // role already degraded to follower ,but log status is still binlog working
         uint64 start_index = max(start_apply_index, rli->get_consensus_apply_index());
         uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
-        if (consensus_log_manager.get_log_position(next_index, FALSE, log_name, &log_pos))
-        {
+        if (consensus_log_manager.get_log_position(next_index, false, log_name,
+                                                   &log_pos)) {
           raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
@@ -776,7 +776,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         }
         rli->set_consensus_apply_index(start_index);
         consensus_log_manager.set_apply_term(recover_term);
-        rli->flush_info(TRUE);
+        rli->flush_info(true);
       }
     }
     else
@@ -789,8 +789,8 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           // start replay from first position
           uint64 start_index = 0, start_term = 1;
           uint64 next_index = 1;
-          if (consensus_log_manager.get_log_position(next_index, FALSE, log_name, &log_pos))
-          {
+          if (consensus_log_manager.get_log_position(next_index, false,
+                                                     log_name, &log_pos)) {
             raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
             abort();
           }
@@ -802,15 +802,15 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           rli->set_group_relay_log_pos(log_pos);
           rli->set_consensus_apply_index(start_index);
           consensus_log_manager.set_apply_term(start_term);
-          rli->flush_info(TRUE);
+          rli->flush_info(true);
         }
         else
         {
           // because backup restore will reorganize the log , so should use index to set the replay pos
           uint64 start_index = rli->get_consensus_apply_index();
           uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
-          if (consensus_log_manager.get_log_position(next_index, FALSE, log_name, &log_pos))
-          {
+          if (consensus_log_manager.get_log_position(next_index, false,
+                                                     log_name, &log_pos)) {
             raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
             abort();
           }
@@ -821,7 +821,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
 
           rli->set_group_relay_log_name(log_name);
           rli->set_group_relay_log_pos(log_pos);
-          rli->flush_info(TRUE);
+          rli->flush_info(true);
         }
       }
       else
@@ -831,8 +831,8 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         // start_apply_index != 0 && recover_status == RELAYLOG_WORKING is impossible
         uint64 start_index = max(start_apply_index, rli->get_consensus_apply_index());
         uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
-        if (consensus_log_manager.get_log_position(next_index, FALSE, log_name, &log_pos))
-        {
+        if (consensus_log_manager.get_log_position(next_index, false, log_name,
+                                                   &log_pos)) {
           raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }

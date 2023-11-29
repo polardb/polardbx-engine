@@ -116,10 +116,11 @@ static bool fix_consensus_checksum(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_consensus_checksum(
-       "consensus_checksum", "Checksum when consensus receive log. Disabled by default.",
-       GLOBAL_VAR(opt_consensus_checksum), CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
-       ON_UPDATE(fix_consensus_checksum));
+    "consensus_checksum",
+    "Checksum when consensus receive log. Disabled by default.",
+    GLOBAL_VAR(opt_consensus_checksum), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_checksum));
 
 static bool fix_consensus_disable_election(sys_var *, THD *, enum_var_type)
 {
@@ -131,10 +132,11 @@ static bool fix_consensus_disable_election(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_consensus_disable_election(
-       "consensus_disable_election", "Disable consensus election and stepdown. Disabled by default.",
-       GLOBAL_VAR(opt_consensus_disable_election), CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
-       ON_UPDATE(fix_consensus_disable_election));
+    "consensus_disable_election",
+    "Disable consensus election and stepdown. Disabled by default.",
+    GLOBAL_VAR(opt_consensus_disable_election), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_disable_election));
 
 static bool fix_consensus_dynamic_easyindex(sys_var *, THD *, enum_var_type)
 {
@@ -143,10 +145,11 @@ static bool fix_consensus_dynamic_easyindex(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_consensus_dynamic_easyindex(
-       "consensus_dynamic_easyindex", "Enable dynamic easy addr cidx. Enabled by default.",
-       GLOBAL_VAR(opt_consensus_dynamic_easyindex), CMD_LINE(OPT_ARG), DEFAULT(TRUE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
-       ON_UPDATE(fix_consensus_dynamic_easyindex));
+    "consensus_dynamic_easyindex",
+    "Enable dynamic easy addr cidx. Enabled by default.",
+    GLOBAL_VAR(opt_consensus_dynamic_easyindex), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_dynamic_easyindex));
 
 static bool handle_weak_consensus_mode(sys_var *, THD *, enum_var_type)
 {
@@ -156,11 +159,10 @@ static bool handle_weak_consensus_mode(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_weak_consensus_mode(
-       "weak_consensus_mode",
-       "set server to weak consensus mode",
-       GLOBAL_VAR(opt_weak_consensus_mode), CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(0), ON_UPDATE(handle_weak_consensus_mode));
+    "weak_consensus_mode", "set server to weak consensus mode",
+    GLOBAL_VAR(opt_weak_consensus_mode), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(handle_weak_consensus_mode));
 
 static bool handle_consensus_replicate_with_cache_log(sys_var *, THD *, enum_var_type)
 {
@@ -169,11 +171,11 @@ static bool handle_consensus_replicate_with_cache_log(sys_var *, THD *, enum_var
 }
 
 static Sys_var_bool Sys_consensus_replicate_with_cache_log(
-       "consensus_replicate_with_cache_log",
-       "set server to replicate with cache log",
-       GLOBAL_VAR(opt_consensus_replicate_with_cache_log), CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(0), ON_UPDATE(handle_consensus_replicate_with_cache_log));
+    "consensus_replicate_with_cache_log",
+    "set server to replicate with cache log",
+    GLOBAL_VAR(opt_consensus_replicate_with_cache_log), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(handle_consensus_replicate_with_cache_log));
 
 static bool handle_consensus_old_compact_mode(sys_var *, THD *, enum_var_type)
 {
@@ -182,19 +184,17 @@ static bool handle_consensus_old_compact_mode(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_consensus_old_compact_mode(
-       "consensus_old_compact_mode",
-       "set server to old compact mode to use to be compactible with version before 1.2.0.2",
-       GLOBAL_VAR(opt_consensus_old_compact_mode), CMD_LINE(OPT_ARG), DEFAULT(TRUE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(0), ON_UPDATE(handle_consensus_old_compact_mode));
+    "consensus_old_compact_mode",
+    "set server to old compact mode to use to be compactible with version "
+    "before 1.2.0.2",
+    GLOBAL_VAR(opt_consensus_old_compact_mode), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(handle_consensus_old_compact_mode));
 
 static Sys_var_bool Sys_consensus_leader_stop_apply(
-       "consensus_leader_stop_apply",
-       "leader stop apply",
-       GLOBAL_VAR(opt_consensus_leader_stop_apply), CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(0), ON_UPDATE(0));
-
+    "consensus_leader_stop_apply", "leader stop apply",
+    GLOBAL_VAR(opt_consensus_leader_stop_apply), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_ulong Sys_consensus_leader_stop_apply_time(
        "consensus_leader_stop_apply_time", "leader stop apply time",
@@ -215,15 +215,13 @@ static Sys_var_ulonglong Sys_consensus_force_sync_epoch_diff(
        NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_force_sync_epoch_diff));
 
 static Sys_var_bool Sys_consensus_force_recovery(
-       "consensus_force_recovery",
-       "for innodb_force_recovery",
-       READ_ONLY GLOBAL_VAR(opt_consensus_force_recovery), CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(0), ON_UPDATE(0));
-static Sys_var_bool Sys_force_revise(
-       "force_revise", "force revise or not",
-       SESSION_VAR(opt_force_revise), CMD_LINE(OPT_ARG),
-       DEFAULT(FALSE), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "consensus_force_recovery", "for innodb_force_recovery",
+    READ_ONLY GLOBAL_VAR(opt_consensus_force_recovery), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+static Sys_var_bool Sys_force_revise("force_revise", "force revise or not",
+                                     SESSION_VAR(opt_force_revise),
+                                     CMD_LINE(OPT_ARG), DEFAULT(false),
+                                     NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_cluster_id(
        "cluster_id", "cluster id",
@@ -243,17 +241,20 @@ static Sys_var_ulonglong Sys_consensus_log_cache_size(
        NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_log_cache_size));
 
 static Sys_var_bool Sys_consensus_disable_fifo_cache(
-       "consensus_disable_fifo_cache", "disable consensus fifo cache (run with weak consensus mode)",
-       READ_ONLY GLOBAL_VAR(opt_consensus_disable_fifo_cache), CMD_LINE(OPT_ARG), DEFAULT(FALSE));
+    "consensus_disable_fifo_cache",
+    "disable consensus fifo cache (run with weak consensus mode)",
+    READ_ONLY GLOBAL_VAR(opt_consensus_disable_fifo_cache), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
 
 static Sys_var_bool Sys_consensuslog_revise(
       "consensuslog_revise",
       "revise consensuslog end_pos before flush to disk",
-      GLOBAL_VAR(opt_consensuslog_revise), CMD_LINE(OPT_ARG), DEFAULT(TRUE));
+      GLOBAL_VAR(opt_consensuslog_revise), CMD_LINE(OPT_ARG), DEFAULT(true));
 
 static Sys_var_bool Sys_consensus_prefetch_fast_fetch(
-       "consensus_prefetch_fast_fetch", "prefetch speed optimize",
-       GLOBAL_VAR(opt_consensus_prefetch_fast_fetch), CMD_LINE(OPT_ARG), DEFAULT(FALSE));
+    "consensus_prefetch_fast_fetch", "prefetch speed optimize",
+    GLOBAL_VAR(opt_consensus_prefetch_fast_fetch), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
 
 static bool fix_consensus_prefetch_cache_size(sys_var *, THD *, enum_var_type)
 {
@@ -377,12 +378,12 @@ static Sys_var_ulonglong Sys_consensus_new_follower_threshold(
 static Sys_var_bool Sys_consensus_large_trx(
        "consensus_large_trx", "support consensus large trx or not",
        GLOBAL_VAR(opt_consensus_large_trx), CMD_LINE(OPT_ARG),
-       DEFAULT(TRUE), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+       DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_bool Sys_consensus_check_large_event(
-       "consensus_check_large_event", "check consensus large event or not",
-       GLOBAL_VAR(opt_consensus_check_large_event), CMD_LINE(OPT_ARG),
-       DEFAULT(TRUE), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "consensus_check_large_event", "check consensus large event or not",
+    GLOBAL_VAR(opt_consensus_check_large_event), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_consensus_large_event_size_limit(
        "consensus_large_event_size_limit", "Consensus large event size limit",
@@ -450,9 +451,10 @@ static bool fix_consensus_learner_pipelining(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_consensus_learner_pipelining(
-       "consensus_learner_pipelining", "enable pipelining send msg to learner",
-       GLOBAL_VAR(opt_consensus_learner_pipelining), CMD_LINE(OPT_ARG),
-       DEFAULT(FALSE), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_learner_pipelining));
+    "consensus_learner_pipelining", "enable pipelining send msg to learner",
+    GLOBAL_VAR(opt_consensus_learner_pipelining), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_learner_pipelining));
 
 static bool fix_consensus_configure_change_timeout(sys_var *, THD *, enum_var_type)
 {
@@ -636,10 +638,11 @@ static bool fix_consensus_optimistic_heartbeat(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_consensus_optimistic_heartbeat(
-       "consensus_optimistic_heartbeat", "whether to use optimistic heartbeat in consensus layer",
-       GLOBAL_VAR(opt_consensus_optimistic_heartbeat), CMD_LINE(OPT_ARG),
-       DEFAULT(FALSE),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_optimistic_heartbeat));
+    "consensus_optimistic_heartbeat",
+    "whether to use optimistic heartbeat in consensus layer",
+    GLOBAL_VAR(opt_consensus_optimistic_heartbeat), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_optimistic_heartbeat));
 
 static bool fix_consensus_sync_follower_meta_interval(sys_var *, THD *, enum_var_type)
 {
@@ -661,9 +664,11 @@ static bool fix_enable_appliedindex_checker(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_enable_appliedindex_checker(
-       "enable_appliedindex_checker", "enable applied index checker during ordered_commit",
-       GLOBAL_VAR(opt_enable_appliedindex_checker), CMD_LINE(OPT_ARG),
-       DEFAULT(TRUE), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_enable_appliedindex_checker));
+    "enable_appliedindex_checker",
+    "enable applied index checker during ordered_commit",
+    GLOBAL_VAR(opt_enable_appliedindex_checker), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_enable_appliedindex_checker));
 
 static Sys_var_ulonglong Sys_appliedindex_force_delay(
        "appliedindex_force_delay", "force set a smaller appliedindex",
@@ -739,18 +744,17 @@ static bool handler_reset_consensus_prefetch_cache(sys_var *, THD *, enum_var_ty
   DBUG_RETURN(false);
 }
 
-
 Sys_var_bool Sys_reset_consensus_prefetch_cache(
-  "reset_consensus_prefetch_cache",
-  "reset consensus prefetch_cache",
-  GLOBAL_VAR(opt_reset_consensus_prefetch_cache), CMD_LINE(OPT_ARG),
-  DEFAULT(FALSE),
-  NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL, ON_UPDATE(handler_reset_consensus_prefetch_cache));
+    "reset_consensus_prefetch_cache", "reset consensus prefetch_cache",
+    GLOBAL_VAR(opt_reset_consensus_prefetch_cache), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
+    ON_UPDATE(handler_reset_consensus_prefetch_cache));
 
 static Sys_var_bool Sys_commit_pos_watcher(
-       "commit_pos_watcher",
-       "background thread checking and updating binlog commit position",
-       READ_ONLY GLOBAL_VAR(opt_commit_pos_watcher), CMD_LINE(OPT_ARG), DEFAULT(TRUE));
+    "commit_pos_watcher",
+    "background thread checking and updating binlog commit position",
+    READ_ONLY GLOBAL_VAR(opt_commit_pos_watcher), CMD_LINE(OPT_ARG),
+    DEFAULT(true));
 
 static Sys_var_ulonglong Sys_commit_pos_watcher_interval(
        "commit_pos_watcher_interval",
@@ -772,12 +776,9 @@ static bool update_session_track_index(sys_var *, THD *thd,
 }
 
 static Sys_var_bool Sys_session_track_index(
-    "session_track_index",
-    "Track current index for non-select request.",
-    SESSION_VAR(session_track_index),
-    CMD_LINE(OPT_ARG), DEFAULT(FALSE),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(0),
+    "session_track_index", "Track current index for non-select request.",
+    SESSION_VAR(session_track_index), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(update_session_track_index));
 
 static bool handle_consensus_force_promote(sys_var *, THD *, enum_var_type) {
@@ -789,11 +790,10 @@ static bool handle_consensus_force_promote(sys_var *, THD *, enum_var_type) {
 }
 
 static Sys_var_bool Sys_consensus_force_promote(
-    "consensus_force_promote",
-    "Try to force promote a follower to leader",
-    GLOBAL_VAR(opt_consensus_force_promote), CMD_LINE(OPT_ARG),
-    DEFAULT(FALSE),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL, ON_UPDATE(handle_consensus_force_promote));
+    "consensus_force_promote", "Try to force promote a follower to leader",
+    GLOBAL_VAR(opt_consensus_force_promote), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
+    ON_UPDATE(handle_consensus_force_promote));
 
 static bool fix_consensus_auto_reset_match_index(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setEnableAutoResetMatchIndex(opt_consensus_auto_reset_match_index);
@@ -801,9 +801,11 @@ static bool fix_consensus_auto_reset_match_index(sys_var *, THD *, enum_var_type
 }
 
 static Sys_var_bool Sys_consensus_auto_reset_match_index(
-    "consensus_auto_reset_match_index", "enable auto reset match index when consensus follower has fewer logs",
+    "consensus_auto_reset_match_index",
+    "enable auto reset match index when consensus follower has fewer logs",
     GLOBAL_VAR(opt_consensus_auto_reset_match_index), CMD_LINE(OPT_ARG),
-    DEFAULT(TRUE), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_auto_reset_match_index));
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_auto_reset_match_index));
 
 static bool fix_consensus_learner_heartbeat(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setEnableLearnerHeartbeat(opt_consensus_learner_heartbeat);
@@ -813,7 +815,8 @@ static bool fix_consensus_learner_heartbeat(sys_var *, THD *, enum_var_type) {
 static Sys_var_bool Sys_consensus_learner_heartbeat(
     "consensus_learner_heartbeat", "enable send heartbeat to learner",
     GLOBAL_VAR(opt_consensus_learner_heartbeat), CMD_LINE(OPT_ARG),
-    DEFAULT(TRUE), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_learner_heartbeat));
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_learner_heartbeat));
 
 static bool fix_consensus_auto_leader_transfer(sys_var *, THD *, enum_var_type)
 {
@@ -822,10 +825,11 @@ static bool fix_consensus_auto_leader_transfer(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_bool Sys_consensus_auto_leader_transfer(
-    "consensus_auto_leader_transfer", "whether to enable auto leader transfer in consensus layer",
+    "consensus_auto_leader_transfer",
+    "whether to enable auto leader transfer in consensus layer",
     GLOBAL_VAR(opt_consensus_auto_leader_transfer), CMD_LINE(OPT_ARG),
-    DEFAULT(TRUE),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_auto_leader_transfer));
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_auto_leader_transfer));
 
 static bool fix_consensus_auto_leader_transfer_check_seconds(sys_var *, THD *, enum_var_type)
 {
@@ -839,9 +843,8 @@ static Sys_var_ulonglong Sys_consensus_auto_leader_transfer_check_seconds(
     VALID_RANGE(10, 300), DEFAULT(60),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_auto_leader_transfer_check_seconds));
 
-
 static Sys_var_bool Sys_consensus_safe_for_reset_master(
-      "consensus_safe_for_reset_master",
-      "insert Consensus_empty event into binblog after reset master",
-      SESSION_VAR(opt_consensus_safe_for_reset_master),
-      CMD_LINE(OPT_ARG), DEFAULT(FALSE), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "consensus_safe_for_reset_master",
+    "insert Consensus_empty event into binblog after reset master",
+    SESSION_VAR(opt_consensus_safe_for_reset_master), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);

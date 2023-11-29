@@ -73,6 +73,7 @@ extra/libedit/libedit-20210910-3.1/src/vi.h
 extra/libevent/libevent-2.1.11-stable/include/evconfig-private.h
 extra/libevent/libevent-2.1.11-stable/include/event2/event-config.h
 extra/libevent/libevent-2.1.11-stable/lib/
+extra/openssl
 extra/zlib/zlib-1.2.13/zconf.h
 find_libevent_version.c
 icudt69l.lnk

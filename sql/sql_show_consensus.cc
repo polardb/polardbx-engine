@@ -200,16 +200,16 @@ int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *)
       use_applied = "No";
     }
     int field_num = 0;
-    table->field[field_num++]->store((longlong)id, TRUE);
+    table->field[field_num++]->store((longlong)id, true);
     table->field[field_num++]->store(ip_port.c_str(), ip_port.length(), system_charset_info);
-    table->field[field_num++]->store((longlong)match_index, TRUE);
-    table->field[field_num++]->store((longlong)next_index, TRUE);
+    table->field[field_num++]->store((longlong)match_index, true);
+    table->field[field_num++]->store((longlong)next_index, true);
     table->field[field_num++]->store(role.c_str(), role.length(), system_charset_info);
     table->field[field_num++]->store(has_voted.c_str(), has_voted.length(), system_charset_info);
     table->field[field_num++]->store(force_sync.c_str(), force_sync.length(), system_charset_info);
-    table->field[field_num++]->store((longlong)election_weight, TRUE);
-    table->field[field_num++]->store((longlong)learner_source, TRUE);
-    table->field[field_num++]->store((longlong)applied_index, TRUE);
+    table->field[field_num++]->store((longlong)election_weight, true);
+    table->field[field_num++]->store((longlong)learner_source, true);
+    table->field[field_num++]->store((longlong)applied_index, true);
     table->field[field_num++]->store(pipelining.c_str(), pipelining.length(), system_charset_info);
     table->field[field_num++]->store(use_applied.c_str(), use_applied.length(), system_charset_info);
     if (schema_table_store_record(thd, table))
@@ -303,15 +303,15 @@ if (opt_cluster_log_type_instance)
 
 
   int field_num = 0;
-  table->field[field_num++]->store((longlong)id,TRUE);
-  table->field[field_num++]->store((longlong)current_term, TRUE);
+  table->field[field_num++]->store((longlong)id,true);
+  table->field[field_num++]->store((longlong)current_term, true);
   table->field[field_num++]->store(current_leader_ip_port.c_str(), current_leader_ip_port.length(), system_charset_info);
-  table->field[field_num++]->store((longlong)commit_index, TRUE);
-  table->field[field_num++]->store((longlong)last_log_term, TRUE);
-  table->field[field_num++]->store((longlong)last_log_index, TRUE);
+  table->field[field_num++]->store((longlong)commit_index, true);
+  table->field[field_num++]->store((longlong)last_log_term, true);
+  table->field[field_num++]->store((longlong)last_log_index, true);
   table->field[field_num++]->store(role.c_str(), role.length(), system_charset_info);
-  table->field[field_num++]->store((longlong)voted_for, TRUE);
-  table->field[field_num++]->store((longlong)last_apply_index, TRUE);
+  table->field[field_num++]->store((longlong)voted_for, true);
+  table->field[field_num++]->store((longlong)last_apply_index, true);
   table->field[field_num++]->store(rw_status_str.c_str(), rw_status_str.length(), system_charset_info);
   table->field[field_num++]->store(instance_type.c_str(), instance_type.length(), system_charset_info);
 
@@ -336,7 +336,7 @@ int fill_alisql_cluster_health(THD *thd, Table_ref *tables, Item *)
     int field_num = 0;
     std::string role;
     std::string connected;
-    table->field[field_num++]->store((longlong)e.serverId,TRUE);
+    table->field[field_num++]->store((longlong)e.serverId,true);
     table->field[field_num++]->store(e.addr.c_str(), e.addr.length(), system_charset_info);
     switch(e.role)
     {
@@ -363,8 +363,8 @@ int fill_alisql_cluster_health(THD *thd, Table_ref *tables, Item *)
       connected = "NO";
     }
     table->field[field_num++]->store(connected.c_str(), connected.length(), system_charset_info);
-    table->field[field_num++]->store((longlong)e.logDelayNum,TRUE);
-    table->field[field_num++]->store((longlong)e.applyDelayNum,TRUE);
+    table->field[field_num++]->store((longlong)e.logDelayNum,true);
+    table->field[field_num++]->store((longlong)e.applyDelayNum,true);
 
     if (schema_table_store_record(thd, table))
       DBUG_RETURN(1);
@@ -425,15 +425,15 @@ int fill_alisql_cluster_learner_source(THD *thd, Table_ref *tables, Item *)
     learner_applied_index = cis[i].appliedIndex;
 
     int field_num = 0;
-    table->field[field_num++]->store((longlong)learner_id, TRUE);
+    table->field[field_num++]->store((longlong)learner_id, true);
     table->field[field_num++]->store(learner_ip_port.c_str(), learner_ip_port.length(), system_charset_info);
-    table->field[field_num++]->store((longlong)source_id, TRUE);
+    table->field[field_num++]->store((longlong)source_id, true);
     table->field[field_num++]->store(source_ip_port.c_str(), source_ip_port.length(), system_charset_info);
-    table->field[field_num++]->store((longlong)source_last_index, TRUE);
-    table->field[field_num++]->store((longlong)source_commit_index, TRUE);
-    table->field[field_num++]->store((longlong)learner_match_index, TRUE);
-    table->field[field_num++]->store((longlong)learner_next_index, TRUE);
-    table->field[field_num++]->store((longlong)learner_applied_index, TRUE);
+    table->field[field_num++]->store((longlong)source_last_index, true);
+    table->field[field_num++]->store((longlong)source_commit_index, true);
+    table->field[field_num++]->store((longlong)learner_match_index, true);
+    table->field[field_num++]->store((longlong)learner_next_index, true);
+    table->field[field_num++]->store((longlong)learner_applied_index, true);
     if (schema_table_store_record(thd, table))
       DBUG_RETURN(1);
   }
@@ -454,17 +454,17 @@ int fill_alisql_cluster_prefetch_channel(THD *thd, Table_ref *tables, Item *)
 
   // get from consensus alg layer
   ConsensusPreFetchManager *prefetch_mgr = consensus_log_manager.get_prefetch_manager();
-  prefetch_mgr->lock_prefetch_channels_hash(TRUE);
+  prefetch_mgr->lock_prefetch_channels_hash(true);
   for (auto iter = prefetch_mgr->get_channels_hash()->begin();
         iter != prefetch_mgr->get_channels_hash()->end(); ++iter)
   {
     std::string stop_flag_str = iter->second->get_stop_preftch_request() ? "YES" : "NO";
     int field_num = 0;
-    table->field[field_num++]->store((longlong)iter->second->get_channel_id(), TRUE);
-    table->field[field_num++]->store((longlong)iter->second->get_first_index_in_cache(), TRUE);
-    table->field[field_num++]->store((longlong)iter->second->get_last_index_in_cache(), TRUE);
-    table->field[field_num++]->store((longlong)iter->second->get_prefetch_cache_size(), TRUE);
-    table->field[field_num++]->store((longlong)iter->second->get_current_request(), TRUE);
+    table->field[field_num++]->store((longlong)iter->second->get_channel_id(), true);
+    table->field[field_num++]->store((longlong)iter->second->get_first_index_in_cache(), true);
+    table->field[field_num++]->store((longlong)iter->second->get_last_index_in_cache(), true);
+    table->field[field_num++]->store((longlong)iter->second->get_prefetch_cache_size(), true);
+    table->field[field_num++]->store((longlong)iter->second->get_current_request(), true);
     table->field[field_num++]->store(stop_flag_str.c_str(), stop_flag_str.length(), system_charset_info);
 
     if (schema_table_store_record(thd, table))
@@ -505,16 +505,16 @@ int fill_alisql_cluster_consensus_status(THD *thd, Table_ref *tables, Item *)
   count_log_meta_get_total = log_stats.countMetaGetTotal;
 
   int field_num = 0;
-  table->field[field_num++]->store((longlong)id, TRUE);
-  table->field[field_num++]->store((longlong)count_msg_append_log, TRUE);
-  table->field[field_num++]->store((longlong)count_msg_request_vote, TRUE);
-  table->field[field_num++]->store((longlong)count_heartbeat, TRUE);
-  table->field[field_num++]->store((longlong)count_on_msg_append_log, TRUE);
-  table->field[field_num++]->store((longlong)count_on_msg_request_vote, TRUE);
-  table->field[field_num++]->store((longlong)count_on_heartbeat, TRUE);
-  table->field[field_num++]->store((longlong)count_replicate_log, TRUE);
-  table->field[field_num++]->store((longlong)count_log_meta_get_in_cache, TRUE);
-  table->field[field_num++]->store((longlong)count_log_meta_get_total, TRUE);
+  table->field[field_num++]->store((longlong)id, true);
+  table->field[field_num++]->store((longlong)count_msg_append_log, true);
+  table->field[field_num++]->store((longlong)count_msg_request_vote, true);
+  table->field[field_num++]->store((longlong)count_heartbeat, true);
+  table->field[field_num++]->store((longlong)count_on_msg_append_log, true);
+  table->field[field_num++]->store((longlong)count_on_msg_request_vote, true);
+  table->field[field_num++]->store((longlong)count_on_heartbeat, true);
+  table->field[field_num++]->store((longlong)count_replicate_log, true);
+  table->field[field_num++]->store((longlong)count_log_meta_get_in_cache, true);
+  table->field[field_num++]->store((longlong)count_log_meta_get_total, true);
   if (schema_table_store_record(thd, table))
     DBUG_RETURN(1);
 

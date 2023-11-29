@@ -3588,7 +3588,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
                  "SUPER or REPLICATION_SLAVE_ADMIN");
         goto error;
       }
-      consensus_log_manager.lock_consensus(TRUE);
+      consensus_log_manager.lock_consensus(true);
       res = change_master_cmd(thd);
       consensus_log_manager.unlock_consensus();
       break;
@@ -3753,7 +3753,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
     }
 
     case SQLCOM_START_XPAXOS_REPLICATION: {
-      consensus_log_manager.lock_consensus(TRUE);
+      consensus_log_manager.lock_consensus(true);
       if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
         res = start_slave_cmd(thd);
       else
@@ -3782,7 +3782,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
         goto error;
       }
 
-      consensus_log_manager.lock_consensus(TRUE);
+      consensus_log_manager.lock_consensus(true);
       if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
       {
         res= stop_slave_cmd(thd);
@@ -5761,7 +5761,7 @@ bool Alter_info::add_field(
       no need fix_fields()
 
       We allow only CURRENT_TIMESTAMP as function default for the TIMESTAMP or
-      DATETIME types. In addition, TRUE and FALSE are allowed for bool types.
+      DATETIME types. In addition, true and false are allowed for bool types.
     */
     if (default_value->type() == Item::FUNC_ITEM) {
       Item_func *func = down_cast<Item_func *>(default_value);

@@ -83,17 +83,15 @@
 #include "scope_guard.h"
 #include "sql/consensus_log_manager.h"  // ConsensusLogManager
 
-#define READ_CONSENSUS_LOG()  \
-  consensus_log_manager.lock_consensus(TRUE);\
-  MYSQL_BIN_LOG *consensus_log = \
-    (consensus_log_manager.get_status() == BINLOG_WORKING \
-    ? &mysql_bin_log \
-    : &consensus_log_manager.get_relay_log_info()->relay_log);\
-  \
-  auto consensus_guard = create_scope_guard([&] {\
-    consensus_log_manager.unlock_consensus();\
-  });
-
+#define READ_CONSENSUS_LOG()                                          \
+  consensus_log_manager.lock_consensus(true);                         \
+  MYSQL_BIN_LOG *consensus_log =                                      \
+      (consensus_log_manager.get_status() == BINLOG_WORKING           \
+           ? &mysql_bin_log                                           \
+           : &consensus_log_manager.get_relay_log_info()->relay_log); \
+                                                                      \
+  auto consensus_guard =                                              \
+      create_scope_guard([&] { consensus_log_manager.unlock_consensus(); });
 
 int max_binlog_dump_events = 0;  // unlimited
 bool opt_sporadic_binlog_dump_fail = false;

@@ -110,11 +110,12 @@ void wait_commit_index_in_recovery() {
   }
 }
 
-ConsensusLogManager::ConsensusLogManager() :
-  inited(FALSE), current_index(0),
-  cache_log(new MYSQL_BIN_LOG::Binlog_ofile()), binlog(NULL), rli_info(NULL)
-{
-}
+ConsensusLogManager::ConsensusLogManager()
+    : inited(false),
+      current_index(0),
+      cache_log(new MYSQL_BIN_LOG::Binlog_ofile()),
+      binlog(NULL),
+      rli_info(NULL) {}
 
 ConsensusLogManager::~ConsensusLogManager() 
 {
@@ -157,13 +158,13 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
   apply_catchup = 0;
   current_term = 1;
   stop_term = UINT64_MAX;
-  already_set_start_index = FALSE;
-  already_set_start_term = FALSE;
+  already_set_start_index = false;
+  already_set_start_term = false;
   apply_ev_seq = 1;
   in_large_trx_applying = false;
   enable_rotate = false;
-  in_large_trx_appending = FALSE;
-  in_large_event_appending = FALSE;
+  in_large_trx_appending = false;
+  in_large_event_appending = false;
   atomic_logging_flag = FLAG_GU1;
   ev_tt_ = 0;
 
@@ -203,7 +204,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
   if (!consensus_info)
     return 1;
 
-  consensus_state_change_is_running = TRUE;
+  consensus_state_change_is_running = true;
   if (mysql_thread_create(key_thread_consensus_stage_change,
       &consensus_state_change_thread_handle, NULL,
       run_consensus_stage_change, (void *) &consensus_state_change_is_running))
@@ -211,7 +212,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
     raft::error(ER_RAFT_0) << "Fail to create thread run_consensus_stage_change.";
     abort();
   }
-  inited = TRUE;
+  inited = true;
   return 0;
 }
 
@@ -375,8 +376,7 @@ int ConsensusLogManager::init_service() {
       std::string apply_index_str = oss_apply_index.str();
       uint64 log_pos = 0;
       char log_name[FN_REFLEN];
-      if (get_log_position(apply_index, FALSE, log_name, &log_pos))
-      {
+      if (get_log_position(apply_index, false, log_name, &log_pos)) {
         raft::error(ER_RAFT_0) << "Cann't find start index " << apply_index << " in binlog file.";
         return -1;
       }
@@ -501,10 +501,10 @@ int ConsensusLogManager::cleanup()
 {
   if (inited)
   {
-    /* set apply_catchup to TRUE to skip wait_replay_log_finished */
-    apply_catchup = TRUE;
+    /* set apply_catchup to true to skip wait_replay_log_finished */
+    apply_catchup = true;
     mysql_mutex_lock(&LOCK_consensus_state_change);
-    consensus_state_change_is_running = FALSE;
+    consensus_state_change_is_running = false;
     mysql_mutex_unlock(&LOCK_consensus_state_change);
     mysql_cond_broadcast(&COND_consensus_state_change);
     mysql_cond_broadcast(&COND_server_started);
@@ -576,7 +576,7 @@ int  ConsensusLogManager::set_start_apply_index_if_need(uint64 consensus_index)
       mysql_rwlock_unlock(&LOCK_consensuslog_status);
       return 1;
     }
-    already_set_start_index = TRUE;
+    already_set_start_index = true;
   }
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   return 0;
@@ -595,7 +595,7 @@ int  ConsensusLogManager::set_start_apply_term_if_need(uint64 consensus_term)
       mysql_rwlock_unlock(&LOCK_consensuslog_status);
       return 1;
     }
-    already_set_start_term = TRUE;
+    already_set_start_term = true;
   }
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   return 0;
@@ -610,7 +610,7 @@ int ConsensusLogManager::write_log_entry(ConsensusLogEntry &log, uint64* consens
   enable_rotate = !(log.flag & Consensus_log_event_flag::FLAG_LARGE_TRX);
   if (status == Consensus_Log_System_Status::BINLOG_WORKING)
   {
-    bool do_rotate = FALSE;
+    bool do_rotate = false;
     if ((error = binlog->append_consensus_log(log, consensus_index, &do_rotate, rli_info, with_check)))
     {
       goto end;
@@ -704,7 +704,7 @@ int ConsensusLogManager::get_log_directly(uint64 consensus_index, uint64* consen
   if (consensus_index == 0)
   {
     *consensus_term = 1;
-    *outer = FALSE;
+    *outer = false;
     *flag  = 0;
     return error;
   }
@@ -953,8 +953,9 @@ int ConsensusLogManager::purge_log(uint64 consensus_index)
   }
   log->lock_index();
   if (log->find_log_by_consensus_index(purge_index, file_name) ||
-    log->purge_logs(file_name.c_str(), FALSE/**include*/, FALSE /*need index lock*/, TRUE /*update threads*/, NULL, TRUE))
-  {
+      log->purge_logs(file_name.c_str(), false /**include*/,
+                      false /*need index lock*/, true /*update threads*/, NULL,
+                      true)) {
     error = 1;
   }
 
@@ -1060,12 +1061,9 @@ void ConsensusLogManager::get_commit_pos(char * const fname_ptr, uint64_t* pos_p
 void ConsensusLogManager::wait_replay_log_finished()
 {
   mysql_mutex_lock(&LOCK_consensuslog_apply_thread);
-  if (apply_catchup == TRUE)
-  {
+  if (apply_catchup == true) {
     mysql_mutex_unlock(&LOCK_consensuslog_apply_thread);
-  }
-  else
-  {
+  } else {
     struct timespec abstime;
     set_timespec(&abstime, 2);
     while (!apply_catchup)
@@ -1075,7 +1073,7 @@ void ConsensusLogManager::wait_replay_log_finished()
     mysql_mutex_unlock(&LOCK_consensuslog_apply_thread);
   }
 
-  set_apply_catchup(FALSE);
+  set_apply_catchup(false);
 }
 
 void ConsensusLogManager::wait_apply_threads_start()
@@ -1117,7 +1115,7 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index)
 
   assert(this->status == Consensus_Log_System_Status::BINLOG_WORKING);
   // set offline mode
-  opt_enable_consensus_leader = FALSE;
+  opt_enable_consensus_leader = false;
   // kill all the thd
   killall_threads();
   // wait all commit trx finished
@@ -1216,14 +1214,13 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
 
   // open binlog index and file
   log_lock = binlog->get_log_lock();
-  if (binlog->open_index_file(opt_binlog_index_name, opt_bin_logname, TRUE))
-  {
+  if (binlog->open_index_file(opt_binlog_index_name, opt_bin_logname, true)) {
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
     raft::error(ER_RAFT_0) << "Failed in open_index_file() called from ConsensusLog::wait_follower_upgraded.";
     error = 1;
     goto end;
   }
-  
+
   mysql_mutex_lock(log_lock);
   if (binlog->open_exist_binlog(opt_bin_logname, 0,
     max_binlog_size, true,
@@ -1239,7 +1236,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   }
   mysql_mutex_unlock(log_lock);
   // set offline mode
-  opt_enable_consensus_leader = TRUE;
+  opt_enable_consensus_leader = true;
   appliedindex_checker.reset();
   set_event_timestamp(0);
   set_consensus_system_status(BINLOG_WORKING);
@@ -1247,8 +1244,8 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   //reset apply start point displayed in information_schema
   apply_index = 1;
   real_apply_index = 1;
-  already_set_start_index = FALSE;
-  already_set_start_term = FALSE;
+  already_set_start_index = false;
+  already_set_start_term = false;
 
   current_term = term;
 

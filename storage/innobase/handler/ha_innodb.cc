@@ -537,7 +537,7 @@ static TYPELIB innodb_default_row_format_typelib = {
 /** Possible values for system variable "innodb_doublewrite".
 @note: If you change order or add new values, please update dblwr::mode_t. */
 static const char *innodb_doublewrite_names[] = {
-    "OFF", "ON", "DETECT_ONLY", "DETECT_AND_RECOVER", "FALSE", "TRUE", NullS};
+    "OFF", "ON", "DETECT_ONLY", "DETECT_AND_RECOVER", "false", "true", NullS};
 
 /** Used to define an enumerate type of the system variable
 innodb_default_row_format. */
@@ -1176,7 +1176,7 @@ static MYSQL_THDVAR_ULONG(ddl_threads, PLUGIN_VAR_RQCMDARG,
 static MYSQL_THDVAR_BOOL(transaction_group, PLUGIN_VAR_OPCMDARG,
                          "Enable transaction group mode, data changes are "
                          "visible to all transactions in the same group",
-                         nullptr, nullptr, FALSE);
+                         nullptr, nullptr, false);
 
 static SHOW_VAR innodb_status_variables[] = {
     {"buffer_pool_dump_status",
@@ -3176,7 +3176,7 @@ void innobase_register_trx_only_trans(handlerton *hton, THD *thd, trx_t *trx) {
 
   if (!trx_is_registered_for_2pc(trx) &&
       thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
-    trans_register_ha(thd, TRUE, innodb_hton, &trx_id);
+    trans_register_ha(thd, true, innodb_hton, &trx_id);
   }
 
   trx_register_for_2pc(trx);
@@ -23479,19 +23479,19 @@ char **thd_innodb_interpreter(THD *thd) {
 static MYSQL_SYSVAR_BOOL(data_file_purge, srv_data_file_purge,
                          PLUGIN_VAR_OPCMDARG,
                          "Data file purge little by little (off by default)",
-                         NULL, NULL, FALSE);
+                         NULL, NULL, false);
 
 static MYSQL_SYSVAR_BOOL(data_file_purge_immediate,
                          srv_data_file_purge_immediate, PLUGIN_VAR_OPCMDARG,
                          "Data file unlink by purge thread directly "
                          "even though async purge",
-                         NULL, NULL, FALSE);
+                         NULL, NULL, false);
 
 static MYSQL_SYSVAR_BOOL(
     data_file_purge_all_at_shutdown, srv_data_file_purge_all_at_shutdown,
     PLUGIN_VAR_OPCMDARG,
     "Data file unlink directly even though async purge when shutdown", NULL,
-    NULL, FALSE);
+    NULL, false);
 
 static MYSQL_SYSVAR_ULONG(
     data_file_purge_interval, srv_data_file_purge_interval, PLUGIN_VAR_OPCMDARG,
@@ -23513,7 +23513,7 @@ static MYSQL_SYSVAR_BOOL(
     print_data_file_purge_process, srv_print_data_file_purge_process,
     PLUGIN_VAR_OPCMDARG,
     "Print all data file purge process to MySQL error log (off by default)",
-    NULL, NULL, FALSE);
+    NULL, NULL, false);
 /* End of data file purge system variables  */
 
 static MYSQL_SYSVAR_BOOL(
@@ -23579,7 +23579,7 @@ static MYSQL_SYSVAR_BOOL(rds_flashback_enabled,
                          lizard::srv_force_normal_query_if_fbq,
                          PLUGIN_VAR_OPCMDARG,
                          "Whether to enable use as of query (true by default)",
-                         NULL, NULL, TRUE);
+                         NULL, NULL, true);
 
 static MYSQL_SYSVAR_ULONG(
     scn_history_keep_days, lizard::srv_scn_history_keep_days,
@@ -23649,11 +23649,10 @@ static MYSQL_SYSVAR_BOOL(lizard_stat_enabled, lizard::stat_enabled,
                          "whether to enable lizard statistics", NULL, NULL,
                          false);
 
-static MYSQL_SYSVAR_BOOL(cleanout_write_redo,
-                         lizard::opt_cleanout_write_redo,
+static MYSQL_SYSVAR_BOOL(cleanout_write_redo, lizard::opt_cleanout_write_redo,
                          PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
-                         "whether to write redo log when cleanout",
-                         NULL, NULL, FALSE);
+                         "whether to write redo log when cleanout", NULL, NULL,
+                         false);
 
 static MYSQL_SYSVAR_ULONG(txn_cached_list_keep_size,
                           lizard::srv_txn_cached_list_keep_size,
@@ -23678,7 +23677,7 @@ static MYSQL_SYSVAR_BOOL(vision_use_commit_snapshot_debug,
 
 static MYSQL_SYSVAR_BOOL(innodb_btree_sampling, srv_innodb_btree_sampling,
                          PLUGIN_VAR_OPCMDARG, "Support btree sampling.", NULL,
-                         NULL, TRUE);
+                         NULL, true);
 
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),

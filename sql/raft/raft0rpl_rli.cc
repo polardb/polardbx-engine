@@ -95,7 +95,8 @@ int Raft_relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_positio
   uint64 log_pos = 0;
   char log_name[FN_REFLEN];
   uint64 next_index = consensus_log_manager.get_next_trx_index(get_consensus_apply_index());
-  if (consensus_log_manager.get_log_position(next_index , FALSE, log_name, &log_pos)) {
+  if (consensus_log_manager.get_log_position(next_index, false, log_name,
+                                             &log_pos)) {
     sql_print_error("Mts recover cannot find start index %llu.", next_index);
     return 1;
   }

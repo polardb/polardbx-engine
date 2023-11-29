@@ -789,10 +789,10 @@ bool ha_sequence::setup_base_engine() {
   }
   if (!m_engine) goto err;
 
-  DBUG_RETURN(FALSE);
+  DBUG_RETURN(false);
 err:
   clear_base_handler_file();
-  DBUG_RETURN(TRUE);
+  DBUG_RETURN(true);
 }
 /**
   Clear the locked sequence base table engine and destroy file handler
@@ -828,9 +828,9 @@ bool ha_sequence::setup_base_handler(MEM_ROOT *mem_root) {
   if (!(m_file = get_new_handler(table_share, false, mem_root, hton))) {
     my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
              static_cast<int>(sizeof(handler)));
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
   }
-  DBUG_RETURN(FALSE);
+  DBUG_RETURN(false);
 }
 /**
   Setup the sequence base table engine and base file handler.
@@ -844,14 +844,14 @@ bool ha_sequence::setup_base_handler(MEM_ROOT *mem_root) {
 bool ha_sequence::get_from_handler_file(const char *, MEM_ROOT *mem_root) {
   DBUG_ENTER("ha_sequence::get_from_handler_file");
 
-  if (m_file) DBUG_RETURN(FALSE);
+  if (m_file) DBUG_RETURN(false);
 
   if (setup_base_engine() || setup_base_handler(mem_root)) goto err;
 
-  DBUG_RETURN(FALSE);
+  DBUG_RETURN(false);
 err:
   clear_base_handler_file();
-  DBUG_RETURN(TRUE);
+  DBUG_RETURN(true);
 }
 
 /**
@@ -870,9 +870,9 @@ bool ha_sequence::new_handler_from_sequence_info(MEM_ROOT *mem_root) {
                                  m_sequence_info->base_db_type))) {
     my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR),
              static_cast<int>(sizeof(handler)));
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
   }
-  DBUG_RETURN(FALSE);
+  DBUG_RETURN(false);
 }
 
 /**
@@ -888,18 +888,18 @@ bool ha_sequence::initialize_sequence(MEM_ROOT *mem_root) {
 
   if (m_sequence_info) {
     if (new_handler_from_sequence_info(mem_root)) {
-      DBUG_RETURN(TRUE);
+      DBUG_RETURN(true);
     }
   } else if (get_from_handler_file(nullptr, mem_root)) {
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
   }
 
   DBUG_EXECUTE_IF("sequence_handler_error", {
     my_error(ER_SEQUENCE_ACCESS_FAILURE, MYF(0), nullptr, nullptr);
-    DBUG_RETURN(TRUE);
+    DBUG_RETURN(true);
   });
 
-  DBUG_RETURN(FALSE);
+  DBUG_RETURN(false);
 }
 
 /**
@@ -1333,7 +1333,7 @@ int ha_sequence::create(const char *name, TABLE *form,
   int error;
   DBUG_ENTER("ha_sequence::create");
 
-  if (get_from_handler_file(name, ha_thd()->mem_root)) DBUG_RETURN(TRUE);
+  if (get_from_handler_file(name, ha_thd()->mem_root)) DBUG_RETURN(true);
 
   assert(m_engine && m_file);
   if ((error = m_file->ha_create(name, form, create_info, table_def))) goto err;
@@ -1372,7 +1372,7 @@ const char **ha_sequence::bas_ext() const {
 int ha_sequence::delete_table(const char *name, const dd::Table *table_def) {
   DBUG_ENTER("ha_sequence::delete_table");
 
-  if (get_from_handler_file(name, ha_thd()->mem_root)) DBUG_RETURN(TRUE);
+  if (get_from_handler_file(name, ha_thd()->mem_root)) DBUG_RETURN(true);
 
   destroy_share(name);
   DBUG_RETURN(m_file->ha_delete_table(name, table_def));
@@ -1487,7 +1487,7 @@ int ha_sequence::rename_table(const char *from, const char *to,
                               const dd::Table *from_table_def,
                               dd::Table *to_table_def) {
   DBUG_ENTER("ha_sequence::rename_table");
-  if (get_from_handler_file(from, ha_thd()->mem_root)) DBUG_RETURN(TRUE);
+  if (get_from_handler_file(from, ha_thd()->mem_root)) DBUG_RETURN(true);
 
   destroy_share(from);
   DBUG_RETURN(m_file->ha_rename_table(from, to, from_table_def, to_table_def));

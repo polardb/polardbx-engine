@@ -148,7 +148,7 @@ public:
   void incr_apply_ev_sequence() { apply_ev_seq++; }
   uint64 get_cache_index();
   void set_cache_index(uint64 cache_index_arg);
-  uint64 get_sync_index(bool serious = FALSE);
+  uint64 get_sync_index(bool serious = false);
   uint64 get_final_sync_index();
   void set_sync_index(uint64 sync_index_arg);
   void set_sync_index_if_greater(uint64 sync_index_arg);

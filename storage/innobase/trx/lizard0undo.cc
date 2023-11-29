@@ -2006,7 +2006,7 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
       trx_undo_mem_create(rseg, slot_no, TRX_UNDO_TXN, 0, &xid, hdr_addr.page,
                           0, txn_sys_t::SLOT_ADDR_NULL);
   undo->state = TRX_UNDO_CACHED;
-  undo->empty = TRUE;
+  undo->empty = true;
 
   UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
 

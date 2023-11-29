@@ -442,7 +442,7 @@ static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
                                        "Whether to make implicit savepoint for "
                                        "each INSERT/DELETE/UPDATE statement",
                                        SESSION_VAR(auto_savepoint), NO_CMD_LINE,
-                                       DEFAULT(FALSE), NO_MUTEX_GUARD,
+                                       DEFAULT(false), NO_MUTEX_GUARD,
                                        NOT_IN_BINLOG, ON_CHECK(0),
                                        ON_UPDATE(0));
 

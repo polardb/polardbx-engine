@@ -154,7 +154,7 @@ void collect_show_logs_results(MEM_ROOT *mem_root, std::vector<Consensus_show_lo
   size_t length;
   size_t cur_dir_len;
 
-  consensus_log_manager.lock_consensus(TRUE);
+  consensus_log_manager.lock_consensus(true);
   MYSQL_BIN_LOG *log = consensus_log_manager.get_status() == BINLOG_WORKING ? &mysql_bin_log : &consensus_log_manager.get_relay_log_info()->relay_log;
   if (!log->is_open()) {
     consensus_log_manager.unlock_consensus();
