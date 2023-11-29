@@ -80,8 +80,10 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size, Log_event *
   uint64 start_pos = 0 , end_pos = opt_consensus_large_event_split_size > ev->buf_len? ev->buf_len: opt_consensus_large_event_split_size;
   std::string log_content = consensus_log_manager.get_empty_log();
   //correct before split
-  uint64 offset = (Consensus_log_event::get_event_total_size() + Consensus_empty_log_event::get_event_total_size())
-                   * (ev->buf_len / opt_consensus_large_event_split_size);
+  uint64 offset = log_content.length() + Consensus_log_event::MAX_EVENT_LENGTH;
+  if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
+    offset += BINLOG_CHECKSUM_LEN;
+  offset *= (ev->buf_len / opt_consensus_large_event_split_size);
   correct_binlog_event_log_pos(ev->temp_buf, ev->buf_len, offset);
 
   while(start_pos < ev->buf_len)
@@ -595,8 +597,7 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
   return stop_scan? currentIndex: 0;
 }
 
-// int MYSQL_BIN_LOG::fetch_binlog_by_offset(IO_CACHE *log, uint64 start_pos, uint64 end_pos, Consensus_cluster_info_log_event *rci_ev, std::string& log_content)
-int MYSQL_BIN_LOG::fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader, uint64 start_pos, uint64 end_pos, Consensus_cluster_info_log_event *rci_ev, std::string& log_content)
+int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader, uint64 start_pos, uint64 end_pos, Consensus_cluster_info_log_event *rci_ev, std::string& log_content)
 {
   if (start_pos == end_pos)
   {
@@ -607,13 +608,12 @@ int MYSQL_BIN_LOG::fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader
   {
     unsigned int buf_size = end_pos - start_pos;
     uchar* buffer = (uchar*)my_malloc(key_memory_thd_main_mem_root, buf_size, MYF(MY_WME));
-    // my_b_seek(log, start_pos);
+    uint64 save_position = binlog_file_reader.position();
     binlog_file_reader.seek(start_pos);
-    // my_b_read(log, buffer, buf_size);
-    // binlog_file_reader.read_event_data(&buffer, &(buf_size));
     my_b_read(binlog_file_reader.get_io_cache(), buffer, buf_size);
     log_content.assign((char *)buffer, buf_size);
     my_free(buffer);
+    binlog_file_reader.seek(save_position);
   }
   else
   {
@@ -624,13 +624,6 @@ int MYSQL_BIN_LOG::fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader
 
 int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, bool need_content)
 {
-  // const char *errmsg = NULL;
-  // IO_CACHE log;
-
-  // File file = open_binlog_file(&log, file_name, &errmsg);
-  // if (file < 0) {
-    //return 1;
-  //}
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name))
     return 1;
@@ -645,7 +638,6 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
   Consensus_log_event *consensus_log_ev = NULL;
   bool found = false;
   bool stop_scan = false;
-  bool in_transaction = false;
   uint64 start_pos = my_b_tell(binlog_file_reader.get_io_cache());
   uint64 end_pos = start_pos;
   uint64 consensus_log_length = 0;
@@ -685,11 +677,8 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
       if (!ev->is_control_event())
       {
         end_pos = my_b_tell(binlog_file_reader.get_io_cache());
-        if (ev->get_type_code() ==  binary_log::CONSENSUS_CLUSTER_INFO_EVENT && found)
-        {
-          rci_ev = (Consensus_cluster_info_log_event*)ev;
-        }
-        if (end_pos > start_pos && end_pos - start_pos == consensus_log_length)
+        assert(end_pos > start_pos);
+        if (end_pos - start_pos == consensus_log_length)
         {
           if (need_content && (cflag & Consensus_log_event_flag::FLAG_BLOB))
           {
@@ -721,17 +710,16 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
             }
             blob_index_list.clear();
           }
-          else
+          else if (found)
           {
-            if (found)
-            {
-              if (need_content || rci_ev != NULL) 
-                fetch_binlog_by_offset(binlog_file_reader, start_pos, end_pos, rci_ev, log_content);
-              *outer = (rci_ev != NULL);
-              end_pos = start_pos = my_b_tell(binlog_file_reader.get_io_cache());
-              stop_scan = true;
-              rci_ev = NULL;
-            }
+            if (ev->get_type_code() ==  binary_log::CONSENSUS_CLUSTER_INFO_EVENT && found)
+              rci_ev = (Consensus_cluster_info_log_event*)ev;
+
+            if (need_content || rci_ev != NULL) 
+              fetch_binlog_by_offset(binlog_file_reader, start_pos, end_pos, rci_ev, log_content);
+            *outer = (rci_ev != NULL);
+            end_pos = start_pos = my_b_tell(binlog_file_reader.get_io_cache());
+            stop_scan = true;
           }
         }
       }
@@ -739,15 +727,6 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
     }
     if (ev != NULL && ev != fd_ev_p)
       delete ev;
-  }
-
-  // if scan to end of file
-  if (end_pos > start_pos && !in_transaction)
-  {
-    if (need_content || rci_ev != NULL)
-      fetch_binlog_by_offset(binlog_file_reader, start_pos, end_pos, rci_ev, log_content);
-    raft::info(ER_RAFT_COMMIT) << "directly read last log size " << end_pos - start_pos;
-    end_pos = start_pos = my_b_tell(binlog_file_reader.get_io_cache());
   }
 
   if (fd_ev_p != &fd_ev)
@@ -817,7 +796,6 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
   prefetch_channel->set_prefetching(true);
   if (prefetch_channel->get_channel_id() == 0)
     prefetch_channel->clear_large_trx_table();
-  // while (!stop_prefetch && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) != NULL)
   while (!stop_prefetch && (ev = binlog_file_reader.read_event_object()) != NULL)
   {
     switch (ev->get_type_code())
@@ -860,25 +838,21 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
                           | Consensus_log_event_flag::FLAG_CONFIG_CHANGE)))
             && (current_index + prefetch_channel->get_window_size() >= start_index))
         {
-          uchar* buffer = (uchar*)my_malloc(key_memory_thd_main_mem_root, consensus_log_length, MYF(MY_WME));
-          // my_b_read(&log, buffer, consensus_log_length);
-          // binlog_file_reader.read_event_data(&buffer, &consensus_log_length);
-          my_b_read(binlog_file_reader.get_io_cache(), buffer, consensus_log_length);
+          fetch_binlog_by_offset(binlog_file_reader, start_pos, start_pos + consensus_log_length, NULL, log_content);
           current_crc32 = opt_consensus_checksum
-            ? checksum_crc32(0, buffer, consensus_log_length)
+            ? checksum_crc32(0, get_uchar_str(log_content), log_content.size())
             : 0;
           int result = 0;
           while ((result = prefetch_channel->add_log_to_prefetch_cache(current_term,
-            current_index, consensus_log_length,
-            buffer, false, current_flag, current_crc32)) == FULL)
+            current_index, log_content.size(),
+            get_uchar_str(log_content), false, current_flag, current_crc32)) == FULL)
           {
             // wait condition already executed in add log to prefetch cache
           }
           if (result == INTERRUPT || current_index == consensus_log_manager.get_sync_index())
             stop_prefetch = true;
-          my_free(buffer);
-          end_pos = my_b_tell(binlog_file_reader.get_io_cache());
-          assert(end_pos - start_pos == consensus_log_length);
+          end_pos = start_pos + consensus_log_length;
+          binlog_file_reader.seek(end_pos);
         }
       }
       break;
@@ -949,7 +923,6 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
           {
             if (current_index + prefetch_channel->get_window_size() >= start_index)
             {
-              uint64 save_position = binlog_file_reader.position();
               fetch_binlog_by_offset(binlog_file_reader, start_pos, end_pos, rci_ev, log_content); 
               current_crc32 = opt_consensus_checksum
                 ? checksum_crc32(0, get_uchar_str(log_content), log_content.size())
@@ -965,7 +938,6 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
               {
                 stop_prefetch = true; // because truncate log happened, stop prefetch and retry
               }
-              binlog_file_reader.seek(save_position);
             }
           }
           rci_ev = NULL;
@@ -1947,6 +1919,7 @@ bool MYSQL_BIN_LOG::write_consensus_log(uint flag, uint64 term, uint64 length) {
   DBUG_ENTER("MYSQL_BIN_LOG::write_consensus_log");
 
   Consensus_log_event rev(flag, term, consensus_log_manager.get_current_index(), length);
+  rev.common_footer->checksum_alg = static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
   if (!(rev.get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX))
     alisql_server->setLastNonCommitDepIndex(rev.get_index());
   if (opt_consensuslog_revise && is_raft_log && is_relay_log)

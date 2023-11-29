@@ -874,10 +874,10 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
   }
 
   log->unlock_index();
-  consensus_log_manager.set_sync_index(consensus_index - 1);
-  consensus_log_manager.set_current_index(consensus_index);
-  consensus_log_manager.set_in_large_trx_appending(false);
-  consensus_log_manager.set_in_large_event_appending(false);
+  set_sync_index(consensus_index - 1);
+  set_current_index(consensus_index);
+  set_in_large_trx_appending(false);
+  set_in_large_event_appending(false);
   reinit_io_cache(cache_log->get_io_cache(), WRITE_CACHE, 0, 0, 1);
 
   if (status == RELAY_LOG_WORKING) {

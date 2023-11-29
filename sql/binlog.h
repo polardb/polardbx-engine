@@ -920,7 +920,6 @@ class MYSQL_BIN_LOG : public TC_LOG {
   uint64 get_trx_end_index(uint64 firstIndex);
 
   uint64 wait_xid_disappear();
-  int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader, uint64 start_pos, uint64 end_pos, Consensus_cluster_info_log_event *rci_ev, std::string& log_content);
   int read_log_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *consensus_term, std::string& log_content, bool *outer, uint *flag, bool need_content = true);
   int prefetch_logs_of_file(THD *thd, uint64 channel_id, const char* file_name, uint64 start_index);
   int find_pos_by_consensus_index(const char* file_name, uint64 consensus_index, uint64 *pos);
@@ -1143,5 +1142,10 @@ bool normalize_binlog_name(char *to, const char *from, bool is_relay_log);
 int flush_consensus_log(THD *thd, binlog_cache_data *binlog_cache,
                         Binlog_event_writer *writer, bool &mark_as_rollback,
                         my_off_t &bytes_in_cache);
+
+int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader,
+                           uint64 start_pos, uint64 end_pos,
+                           Consensus_cluster_info_log_event *rci_ev,
+                           std::string& log_content);
 
 #endif /* BINLOG_H_INCLUDED */

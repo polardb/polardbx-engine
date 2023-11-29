@@ -72,7 +72,6 @@ class Consensus_log_event final : public binary_log::Consensus_event,
 #endif
 
   size_t get_data_size() override { return POST_HEADER_LENGTH; }
-  static size_t get_event_total_size() { return POST_HEADER_LENGTH + LOG_EVENT_HEADER_LEN + BINLOG_CHECKSUM_LEN; }
 
 #if defined(MYSQL_SERVER)
   enum_skip_reason do_shall_skip(Relay_log_info *) override {
@@ -245,7 +244,6 @@ class Consensus_empty_log_event final
 #endif
 
   size_t get_data_size() override { return 0; }
-  static size_t get_event_total_size() { return 0 + LOG_EVENT_HEADER_LEN + BINLOG_CHECKSUM_LEN; }
 
 #if defined(MYSQL_SERVER)
   enum_skip_reason do_shall_skip(Relay_log_info *) override {

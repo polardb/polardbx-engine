@@ -41,30 +41,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/mysqld.h"
 #include "sql/xa/xid_extract.h"
 #include "storage/innobase/include/ut0dbg.h"
+#include "sql/binlog.h"
 
 namespace raft {
-
-static int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader,
-                                  uint64 start_pos, uint64 end_pos,
-                                  Consensus_cluster_info_log_event *rci_ev,
-                                  std::string &log_content) {
-  if (start_pos == end_pos) {
-    log_content.assign("");
-    return 0;
-  }
-  if (rci_ev == nullptr) {
-    unsigned int buf_size = end_pos - start_pos;
-    auto *buffer =
-        (uchar *)my_malloc(key_memory_thd_main_mem_root, buf_size, MYF(MY_WME));
-    binlog_file_reader.seek(start_pos);
-    my_b_read(binlog_file_reader.get_io_cache(), buffer, buf_size);
-    log_content.assign((char *)buffer, buf_size);
-    my_free(buffer);
-  } else {
-    log_content.assign(rci_ev->get_info(), (size_t)rci_ev->get_info_length());
-  }
-  return 0;
-}
 
 bool Recovery_manager::is_raft_instance_recovering() const {
   return !opt_initialize && is_raft_instance();
@@ -127,15 +106,15 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
           uint64 split_len = opt_consensus_large_event_split_size;
           uint64 blob_start_pos = m_start_pos;
           uint64 blob_end_pos = (m_blob_index_list.size() == 1 ? m_end_pos : (m_start_pos + split_len));
-          uint64 save_position = m_reader.position();
+          assert(m_rci_ev == nullptr);
           for (size_t i = 0; i < m_blob_index_list.size() && !error; ++i) {
-            fetch_binlog_by_offset(m_reader, blob_start_pos, blob_end_pos, m_rci_ev, m_log_content);
+            m_log_content.assign(ev->temp_buf + blob_start_pos - m_start_pos, blob_end_pos - blob_start_pos);
             const uint64 current_crc32 = opt_consensus_checksum
               ? checksum_crc32(0, get_uchar_str(m_log_content), m_log_content.size())
               : 0;
             error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
                 m_blob_term_list[i], m_blob_index_list[i], m_log_content.size(),
-                get_uchar_str(m_log_content), (m_rci_ev != nullptr),
+                get_uchar_str(m_log_content), false,
                 m_blob_flag_list[i], current_crc32);
             blob_start_pos = blob_end_pos;
             blob_end_pos = blob_end_pos + split_len > m_end_pos
@@ -146,13 +125,10 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
           m_blob_term_list.clear();
           m_blob_flag_list.clear();
           m_begin_consensus = false;
-          //fetch_binlog_by_offset will modify the position of binlog_file_reader.
-          m_reader.seek(save_position);
           if (!(m_current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX)) {
             m_valid_index = m_current_index;
           }
         } else {
-          uint64 save_position = m_reader.position();
           fetch_binlog_by_offset(m_reader, m_start_pos, m_end_pos, m_rci_ev,
                                  m_log_content);
           const uint64 current_crc32 = opt_consensus_checksum
@@ -167,12 +143,6 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
           if (!(m_current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX)) {
             m_valid_index = m_current_index;
           }
-
-          /*
-            fetch_binlog_by_offset will modify the position
-            of binlog_file_reader.
-          */
-          m_reader.seek(save_position);
         }
         m_rci_ev = nullptr;
       }

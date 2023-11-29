@@ -146,10 +146,10 @@ inline uint64 Index_link_buf::get_slot_index(uint64 index) const {
 }
 
 inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
-  ut_a(index <= m_tail.load() + m_capacity);
-  ut_a(index > m_tail.load());
   uint64 old_tail = m_tail.load();
   uint64 ret = 0;
+  ut_a(index <= old_tail + m_capacity);
+  ut_a(index > old_tail);
 
   auto slot_index = get_slot_index(index);
   auto &slot = m_indexes[slot_index];
@@ -159,26 +159,27 @@ inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
   raft::info(ER_RAFT_APPLIER) << "add_index_advance_tail " << index
     << ", old tail " << old_tail
     << ", old count " << index - old_tail
-    << ", curr tail " << m_tail.load()
-    << ", curr count " << index - m_tail.load();
+    << ", curr tail " << ret
+    << ", curr count " << index - ret;
   return ret;
 }
 
 inline uint64 Index_link_buf::advance_tail() {
   if (!lock()) return 0;
+  auto current_index = m_tail.load();
 
   while (true) {
-    auto advance_index = m_tail.load() + 1;
+    auto advance_index = current_index + 1;
     auto slot_index = get_slot_index(advance_index);
     auto &slot = m_indexes[slot_index];
 
     if (slot.load(std::memory_order_acquire) != advance_index) break;
 
-    m_tail++;
+    current_index = ++m_tail;
   }
 
   unlock();
-  return m_tail;
+  return current_index;
 }
 
 inline void Index_link_buf::force_advance_tail(uint64 index) {
