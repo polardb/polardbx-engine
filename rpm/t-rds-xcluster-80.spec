@@ -82,7 +82,7 @@ $CMAKE_BIN .                            \
   -DINSTALL_LAYOUT=STANDALONE        \
   -DMYSQL_MAINTAINER_MODE=0          \
   -DWITH_EMBEDDED_SERVER=0           \
-  -DWITH_SSL=system                 \
+  -DWITH_SSL=openssl                 \
   -DWITH_ZLIB=bundled                \
   -DWITH_MYISAM_STORAGE_ENGINE=1     \
   -DWITH_INNOBASE_STORAGE_ENGINE=1   \
