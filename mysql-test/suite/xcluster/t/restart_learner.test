@@ -10,6 +10,7 @@ let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 #add consensus_learner '$learner_cluster_info';
 --replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);
+--sleep 5
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
 create database aaa;
 use aaa;

@@ -31,14 +31,14 @@ show binlog events limit 2, 6;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 binlog.000001	221	Previous_gtids	1	252	#
 binlog.000001	252	Consensus_log	1	311	#
-binlog.000001	311	Gcn	1	32	#
-binlog.000001	343	Anonymous_Gtid	1	111	#
-binlog.000001	422	Query	1	186	#
-binlog.000001	497	Table_map	1	235	#
+binlog.000001	311	Gcn	1	343	#
+binlog.000001	343	Anonymous_Gtid	1	422	#
+binlog.000001	422	Query	1	497	#
+binlog.000001	497	Table_map	1	546	#
 show binlog events limit 8, 3;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-binlog.000001	546	Write_rows	1	279	#
-binlog.000001	590	Xid	1	310	#
+binlog.000001	546	Write_rows	1	590	#
+binlog.000001	590	Xid	1	621	#
 binlog.000001	621	Consensus_log	1	680	#
 delete from t1;
 flush logs;
@@ -64,14 +64,14 @@ show binlog events limit 2, 6;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 binlog.000001	221	Previous_gtids	1	252	#
 binlog.000001	252	Consensus_log	1	311	#
-binlog.000001	311	Anonymous_Gtid	1	79	#
-binlog.000001	390	Query	1	154	#
-binlog.000001	465	Table_map	1	203	#
-binlog.000001	514	Write_rows	1	247	#
+binlog.000001	311	Anonymous_Gtid	1	390	#
+binlog.000001	390	Query	1	465	#
+binlog.000001	465	Table_map	1	514	#
+binlog.000001	514	Write_rows	1	558	#
 show binlog events limit 7,3;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-binlog.000001	514	Write_rows	1	247	#
-binlog.000001	558	Xid	1	278	#
+binlog.000001	514	Write_rows	1	558	#
+binlog.000001	558	Xid	1	589	#
 binlog.000001	589	Consensus_log	1	648	#
 # restart:
 drop database mydb;

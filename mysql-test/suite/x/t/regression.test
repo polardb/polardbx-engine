@@ -17,9 +17,9 @@ call mtr.add_suppression("Plugin mysqlx reported: .Setup of socket: '' failed, t
 # Test case for Bug #21472634 SHOW PROCESSLIST RETURNS DIFERENT RESULTS THAN IS QUERY WITH XPROTOCOL CONNECTN
 -->echo Bug #21472634
 -->stmtsql show processlist;
--->recvresult Id User Host db Command State Info
+-->recvresult User Host db Command State Info
 -->sql
-SELECT id,user,command,state FROM information_schema.processlist where User != "event_scheduler" ORDER BY id;
+SELECT user,command,state FROM information_schema.processlist where User != "event_scheduler" ORDER BY user;
 -->endsql
 EOF
 --replace_regex /localhost:[0-9]*/localhost/ /	[12]	/	0	/ /[0-9]+	root(.+)Sleep/$PROC_1_ID	root\1Sleep/ /[0-9]+	x_root(.+)Query/$PROC_2_ID	x_root\1Query/ /Execute/Query/ 

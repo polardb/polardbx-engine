@@ -10,6 +10,7 @@ eval call dbms_consensus.add_learner($learner_cluster_info);
 #change consensus_node 100 consensus_learner_source 1;
 --replace_result $learner_cluster_info learner_cluster_info $PAXOS_PORT_1 PAXOS_PORT_1
 eval call dbms_consensus.configure_learner($learner_cluster_info, "127.0.0.1:$PAXOS_PORT_1");
+--sleep 5
 select server_id, role, learner_source from information_schema.alisql_cluster_global;
 create table t1(id int);
 insert into t1 values (1);

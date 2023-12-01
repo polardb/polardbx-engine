@@ -362,6 +362,8 @@ while (!$json_sysvar_done) {
 
 # Restart server.
 --source include/restart_mysqld.inc
+--source include/wait_follower_catchup.inc
+
 --let $error_pattern = NONE
 --source include/assert_error_log.inc
 # Load file contents.

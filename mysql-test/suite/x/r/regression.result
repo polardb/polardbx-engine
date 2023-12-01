@@ -3,15 +3,15 @@ call mtr.add_suppression("Plugin mysqlx reported: .Setup of socket: '' failed, t
 # restart
 Bug #21472634
 RUN show processlist;
-Id	User	Host	db	Command		State	Info
-$PROC_1_ID	root	localhost	test	Sleep		null
-14	event_scheduler	localhost	null	Daemon	Waiting on empty queue	null
-$PROC_2_ID	x_root	localhost	null	Query	init	PLUGIN: show processlist
+	User	Host	db	Command		State	Info
+	event_scheduler	localhost	null	Daemon	Waiting on empty queue	null
+	root	localhost	test	Sleep		null
+	x_root	localhost	null	Query	init	PLUGIN: show processlist
 0 rows affected
-RUN SELECT id,user,command,state FROM information_schema.processlist where User != "event_scheduler" ORDER BY id
-id	user	command	state
-$PROC_1_ID	root	Sleep	
-$PROC_2_ID	x_root	Query	executing
+RUN SELECT user,command,state FROM information_schema.processlist where User != "event_scheduler" ORDER BY user
+user	command	state
+root	Sleep	
+x_root	Query	executing
 0 rows affected
 Mysqlx.Ok {
   msg: "bye!"

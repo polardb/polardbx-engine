@@ -1509,12 +1509,12 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
         << ", checksum " << log.checksum;
   }
 
-  raft::info(ER_RAFT_COMMIT) << "append_consensus_log " 
-    << ", term " << log.term
-    << ", index " << *index
-    << ", buf_size " << log.buf_size
-    << ", flag " << log.flag
-    << ", checksum " << log.checksum;
+  // raft::info(ER_RAFT_COMMIT) << "append_consensus_log " 
+  //   << ", term " << log.term
+  //   << ", index " << *index
+  //   << ", buf_size " << log.buf_size
+  //   << ", flag " << log.flag
+  //   << ", checksum " << log.checksum;
 
   if (!error)
     error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(log.term,
@@ -1661,13 +1661,13 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
           << ", checksum " << iter->checksum;
     }
 
-    raft::info(ER_RAFT_COMMIT) << "append_multi_consensus_logs " 
-      << ", max_index " << *max_index
-      << ", term " << iter->term
-      << ", index " << iter->index
-      << ", buf_size " << iter->buf_size
-      << ", flag " << iter->flag
-      << ", checksum " << iter->checksum;
+    // raft::info(ER_RAFT_COMMIT) << "append_multi_consensus_logs " 
+    //   << ", max_index " << *max_index
+    //   << ", term " << iter->term
+    //   << ", index " << iter->index
+    //   << ", buf_size " << iter->buf_size
+    //   << ", flag " << iter->flag
+    //   << ", checksum " << iter->checksum;
 
     if (!error)
       error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(iter->term,
@@ -1816,7 +1816,7 @@ void binlog_commit_pos_watcher(bool *is_running)
       goto err;
     }
     skip = false;
-    raft::warn(ER_RAFT_COMMIT) << "binlog_commit_pos_watcher init " << log_name.c_str()
+    raft::info(ER_RAFT_COMMIT) << "binlog_commit_pos_watcher init " << log_name.c_str()
                   << ", position: " << binlog_file_reader.position();
     while (*is_running && !skip && (ev = binlog_file_reader.read_event_object()) != NULL)
     {
