@@ -1,0 +1,3 @@
+t-rds-xcluster-80:
+  pkgpara:
+    DOCKER: 1
