@@ -3958,6 +3958,42 @@ class Item_func_internal_is_enabled_role : public Item_int_func {
   }
 };
 
+class Item_func_alter_type : public Item_func {
+ public:
+  Item_func_alter_type(const POS &pos, Item *a) : Item_func(pos, a) {}
+  double val_real() override {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return 0;
+  }
+  longlong val_int() override {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return 0;
+  }
+  String *val_str(String *) override {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    null_value = 1;
+    return nullptr;
+  }
+  bool get_date(MYSQL_TIME *, my_time_flags_t) override {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return true;
+  }
+  bool get_time(MYSQL_TIME *) override {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return true;
+  }
+  const char *func_name() const override { return "alter_type"; }
+  bool resolve_type(THD *) override { return false; }
+  bool resolve_type_inner(THD *) override {
+    set_data_type_string((uint32)32);
+    return false;
+  }
+
+ protected:
+  type_conversion_status save_in_field_inner(Field *to,
+                                             bool no_conversions) override;
+};
+
 /**
   Create new Item_func_get_system_var object
 

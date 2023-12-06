@@ -9960,3 +9960,18 @@ longlong Item_func_internal_is_enabled_role::val_int() {
 
   return 0;
 }
+
+type_conversion_status Item_func_alter_type::save_in_field_inner(Field *to,
+                                                                 bool) {
+  Item_field *from_item = dynamic_cast<Item_field *>(args[0]);
+  if (nullptr == from_item) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return TYPE_OK;
+  }
+  Field *from = from_item->field;
+  Copy_field *copy = new Copy_field;
+  copy->set(to, from);
+  copy->invoke_do_copy();
+  delete copy;
+  return TYPE_OK;
+}
