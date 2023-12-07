@@ -43,7 +43,10 @@ while ($iter <= 2)
 	flush logs;
 	--eval $sql0
 	let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
+
+	--disable_query_log
 	--eval call dbms_consensus.purge_log($last_log_index);
+	--enable_query_log
 
 	xa recover;
 	xa commit 'xx';

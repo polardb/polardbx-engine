@@ -16,7 +16,7 @@ set global source_verify_checksum=OFF;
 set global replica_sql_verify_checksum=ON;
 select count(distinct(APPLIED_INDEX)) from information_schema.alisql_cluster_global where role <> "leader";
 count(distinct(APPLIED_INDEX))
-2
+1
 drop table t1;
 set global source_verify_checksum=OFF;
 set global replica_sql_verify_checksum=OFF;

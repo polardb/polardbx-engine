@@ -534,7 +534,7 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
   // use another io_cache , so do not need lock LOCK_log
   if (find_log_by_consensus_index(firstIndex, file_name))
   {
-    raft::error(ER_RAFT_COMMIT) << "get_trx_end_index cannot find consensus index log " << firstIndex;
+    raft::error(ER_RAFT_RECOVERY) << "get_trx_end_index cannot find consensus index log " << firstIndex;
     return 0;
   }
 
@@ -546,8 +546,10 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
     //return 0;
   //}
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
-  if (binlog_file_reader.open(file_name.c_str()))
+  if (binlog_file_reader.open(file_name.c_str())) {
+    raft::error(ER_RAFT_RECOVERY) << "fail to open file " << file_name;
     return 0; // ??????
+  }
 
   Format_description_log_event fd_ev;
   Format_description_log_event *fd_ev_p = &fd_ev;
@@ -593,6 +595,11 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
 
   // mysql_file_close(file, MYF(MY_WME));
   // end_io_cache(&log);
+  raft::info(ER_RAFT_RECOVERY) << "get_trx_end_index finish  "
+    << ", stop_scan " << stop_scan
+    << ", firstIndex " << firstIndex
+    << ", currentIndex " << currentIndex
+    << ", currentFlag " << currentFlag;
 
   return stop_scan? currentIndex: 0;
 }
@@ -641,7 +648,7 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
   uint64 start_pos = my_b_tell(binlog_file_reader.get_io_cache());
   uint64 end_pos = start_pos;
   uint64 consensus_log_length = 0;
-  uint64 cindex, cterm, cflag;
+  uint64 cindex, cterm, cflag = 0;
   std::vector<uint64> blob_index_list;
   // while (!stop_scan && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) != NULL) 
   while (!stop_scan && (ev = binlog_file_reader.read_event_object()) != NULL)
@@ -1816,8 +1823,6 @@ void binlog_commit_pos_watcher(bool *is_running)
       goto err;
     }
     skip = false;
-    raft::info(ER_RAFT_COMMIT) << "binlog_commit_pos_watcher init " << log_name.c_str()
-                  << ", position: " << binlog_file_reader.position();
     while (*is_running && !skip && (ev = binlog_file_reader.read_event_object()) != NULL)
     {
       switch (ev->get_type_code())

@@ -70,13 +70,16 @@ void Raft_relay_log_info::overwrite_log_name(const char **ln,
   return;
 }
 
-
-LOG_POS_COORD Relay_log_info::get_log_pos_coord() {
-  return {get_group_master_log_name(), get_group_master_log_pos(), 0};
+LOG_POS_COORD Relay_log_info::get_log_pos_coord(Relay_log_info *rli) {
+  return { const_cast<char*>(rli->get_group_master_log_name()),
+          rli->get_group_master_log_pos(),
+          0 };
 }
 
-LOG_POS_COORD Raft_relay_log_info::get_log_pos_coord() {
-  return { get_group_relay_log_name(), get_group_relay_log_pos(), get_consensus_apply_index() };
+LOG_POS_COORD Raft_relay_log_info::get_log_pos_coord(Relay_log_info *rli) {
+  return { const_cast<char*>(rli->get_group_relay_log_name()),
+          rli->get_group_relay_log_pos(),
+          rli->get_consensus_apply_index() };
 }
 
 int Relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)

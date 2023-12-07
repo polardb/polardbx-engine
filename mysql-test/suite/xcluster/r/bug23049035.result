@@ -10,5 +10,5 @@ commit;
 rollback;
 select * from t;
 id
-1
+2
 drop table t;

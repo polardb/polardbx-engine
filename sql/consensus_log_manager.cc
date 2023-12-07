@@ -817,16 +817,18 @@ int ConsensusLogManager::get_log_position(uint64 consensus_index, bool need_lock
 uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index)
 {
   uint64 retIndex = consensus_index;
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
-  MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING ?
-    binlog : &(rli_info->relay_log);
+  if (consensus_index != 0) {
+    mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+    MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING ?
+      binlog : &(rli_info->relay_log);
 
-  retIndex = log->get_trx_end_index(consensus_index);
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
-  if (retIndex == 0)
-  {
-    raft::error(ER_RAFT_0) << "ConsensusLogManager: fail to find next trx index.";
-    abort();
+    retIndex = log->get_trx_end_index(consensus_index);
+    mysql_rwlock_unlock(&LOCK_consensuslog_status);
+    if (retIndex == 0)
+    {
+      raft::error(ER_RAFT_0) << "ConsensusLogManager: fail to find next trx index.";
+      abort();
+    }
   }
   raft::info(ER_RAFT_0) << "ConsensusLogManager: "
     << "input index: " << consensus_index
@@ -885,7 +887,7 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
         && log->get_binlog_file()->position() < rli_info->applier_reader->relaylog_reader_position()) {
       raft::error(ER_RAFT_COMMIT) << "relay log new position " << log->get_binlog_file()->position()
         << " is small then current relaylog_reader_position " << rli_info->applier_reader->relaylog_reader_position()
-        << ", need abort and restat";
+        << ", need abort and restart";
       abort();
     }
 

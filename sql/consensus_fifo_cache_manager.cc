@@ -100,7 +100,7 @@ int ConsensusFifoCacheManager::get_log_from_cache(uint64 index, uint64 *term,
     mysql_rwlock_unlock(&LOCK_consensuslog_cache);
     return OUT_OF_RANGE;
   }
-  ConsensusLogEntry log_entry =
+  ConsensusLogEntry &log_entry =
       log_cache_list[(rleft + index - log_cache_list[rleft].index) % reserve_list_size];
   *term = log_entry.term;
   *outer = log_entry.outer;

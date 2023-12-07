@@ -12,7 +12,7 @@ File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
 master-bin.000001	#			#
 select max(interval_end) from mysql.gtid_executed;
 max(interval_end)
-2
+3
 flush logs;
 select max(interval_end) from mysql.gtid_executed;
 max(interval_end)

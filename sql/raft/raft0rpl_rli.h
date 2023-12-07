@@ -99,7 +99,7 @@ class Raft_relay_log_info final : public Relay_log_info {
   */
   virtual void relay_log_number_to_name(uint number, char name[FN_REFLEN + 1]) override;
 
-  virtual LOG_POS_COORD get_log_pos_coord() override;
+  virtual LOG_POS_COORD get_log_pos_coord(Relay_log_info *rli) override;
   virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position) override;
   virtual void set_raft_relay_log_info() override;
   virtual void set_raft_apply_ev_sequence() override;

@@ -2162,7 +2162,7 @@ class Relay_log_info : public Rpl_info {
    */
   virtual void overwrite_log_name(const char **ln, const char **log_index_name);
 
-  virtual LOG_POS_COORD get_log_pos_coord();
+  virtual LOG_POS_COORD get_log_pos_coord(Relay_log_info *rli);
   virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position);
   virtual void set_raft_relay_log_info() {}
   virtual void set_raft_apply_ev_sequence() {}

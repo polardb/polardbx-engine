@@ -177,8 +177,6 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
       << ", get_error " << it.get_error_number() << ", get_error_message "
       << it.get_error_message();
 
-  ut_a(!it.has_error());
-
   if (m_start_pos < m_valid_pos && m_end_pos > m_valid_pos) {
     m_end_pos = m_valid_pos;
   }

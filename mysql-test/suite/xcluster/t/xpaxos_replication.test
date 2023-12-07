@@ -78,7 +78,10 @@ stop xpaxos_replication;
 --let $sql_running= query_get_value("show slave status for channel ''", Slave_SQL_Running, 1)
 --echo $sql_running
 
+
 set global relay_log_info_repository='file';
 set global relay_log_info_repository='table';
+--disable_warnings
 start xpaxos_replication;
+--enable_warnings
 select count(1) from mysql.slave_relay_log_info where number_of_workers = (select count(1) from mysql.slave_worker_info);

@@ -4932,8 +4932,6 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
   DBUG_TRACE;
 
   assert(thd->raft_replication_channel == Multisource_info::is_raft_channel(rli));
-  if (1 == check_exec_consensus_log_end_condition(rli, Multisource_info::is_raft_channel(rli)))
-    return 1;
 
   /*
      We acquire this mutex since we need it for all operations except
@@ -6217,7 +6215,7 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   /*
     Save relay log position to compare with worker's position.
   */
-  LOG_POS_COORD cp = rli->get_log_pos_coord();
+  LOG_POS_COORD cp = rli->get_log_pos_coord(rli);
 
   /*
     Gathers information on valuable workers and stores it in
@@ -6243,7 +6241,7 @@ bool mts_recovery_groups(Relay_log_info *rli) {
       goto err;
     }
 
-    LOG_POS_COORD w_last = worker->get_log_pos_coord();
+    LOG_POS_COORD w_last = rli->get_log_pos_coord(worker);
 
     if (!is_raft_channel && mts_event_coord_cmp(&w_last, &cp) > 0) {
       /*
@@ -6305,7 +6303,7 @@ bool mts_recovery_groups(Relay_log_info *rli) {
   for (Slave_job_group *jg = above_lwm_jobs.begin(); jg != above_lwm_jobs.end();
        ++jg) {
     Slave_worker *w = jg->worker;
-    LOG_POS_COORD w_last = w->get_log_pos_coord();
+    LOG_POS_COORD w_last = rli->get_log_pos_coord(w);
 
     LogErr(INFORMATION_LEVEL,
            ER_RPL_MTS_GROUP_RECOVERY_RELAY_LOG_INFO_FOR_WORKER, w->id,

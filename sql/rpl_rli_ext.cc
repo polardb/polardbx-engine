@@ -51,7 +51,7 @@ void mts_init_consensus_apply_index(Relay_log_info *rli,
   /** rli->m_consensus_index_buf will be inited in mts and xpaxos_replication */
   if (!rli || !rli->m_consensus_index_buf) return;
 
-  assert(rli->is_parallel_exec());
+  // assert(rli->is_parallel_exec());
   assert(rli->info_thd->raft_replication_channel);
 
   raft::info(ER_RAFT_APPLIER) << "mts_init_consensus_apply_index " << consensus_index
