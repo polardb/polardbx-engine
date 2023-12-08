@@ -29,7 +29,7 @@ namespace alisql {
 
 class Consensus;
 
-bool MyParseFromArray(google::protobuf::Message &msg, const void *data,
+bool MyParseFromArray(google::protobuf::MessageLite &msg, const void *data,
                       int size);
 
 /**
@@ -87,13 +87,8 @@ class Service {
   template <typename Callable, typename... Args>
   int sendAsyncEvent(Callable &&f, Args &&...args) {
     CallbackType callBackPtr;
-#if (__GNUC__ >= 7)
     callBackPtr = makeCallback(
         std::bind(std::forward<Callable>(f), std::forward<Args>(args)...));
-#else
-    callBackPtr = makeCallback(std::__bind_simple(std::forward<Callable>(f),
-                                                  std::forward<Args>(args)...));
-#endif
     pushAsyncEvent(callBackPtr);
     return 0;
   }

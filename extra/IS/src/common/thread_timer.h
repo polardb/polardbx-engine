@@ -125,13 +125,8 @@ class ThreadTimer {
     time_ = t;
     type_ = type;
     randWeight_ = 0;
-#if (__GNUC__ >= 7)
     callBackPtr = makeCallback(
         std::bind(std::forward<Callable>(f), std::forward<Args>(args)...));
-#else
-    callBackPtr = makeCallback(std::__bind_simple(std::forward<Callable>(f),
-                                                  std::forward<Args>(args)...));
-#endif
     if (type_ == Oneshot) {
       ev_timer_init(&timer_, timerCallbackInternal, t, 0.0);
       timer_.data = this;

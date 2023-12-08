@@ -8,10 +8,7 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/extension_set.h>
 #include <google/protobuf/wire_format_lite.h>
-#include <google/protobuf/descriptor.h>
-#include <google/protobuf/generated_message_reflection.h>
-#include <google/protobuf/reflection_ops.h>
-#include <google/protobuf/wire_format.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 // @@protoc_insertion_point(includes)
 #include <google/protobuf/port_def.inc>
 
@@ -189,292 +186,7 @@ struct TestMsg2DefaultTypeInternal {
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT TestMsg2DefaultTypeInternal _TestMsg2_default_instance_;
 }  // namespace alisql
-static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_paxos_2eproto[9];
-static const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* file_level_enum_descriptors_paxos_2eproto[1];
-static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_paxos_2eproto = nullptr;
-
-const uint32_t TableStruct_paxos_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, term_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, index_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, optype_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, ikey_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, value_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, info_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, checksum_),
-  PROTOBUF_FIELD_OFFSET(::alisql::LogEntry, opaque_),
-  3,
-  4,
-  5,
-  0,
-  1,
-  6,
-  7,
-  2,
-  PROTOBUF_FIELD_OFFSET(::alisql::RDSFields, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::RDSFields, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::RDSFields, rdsserverid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::RDSFields, source_),
-  0,
-  1,
-  PROTOBUF_FIELD_OFFSET(::alisql::PolarFields, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PolarFields, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::PolarFields, version_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PolarFields, start_lsn_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PolarFields, extra_value_),
-  2,
-  1,
-  0,
-  PROTOBUF_FIELD_OFFSET(::alisql::CompressedLogEntries, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::CompressedLogEntries, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::CompressedLogEntries, type_),
-  PROTOBUF_FIELD_OFFSET(::alisql::CompressedLogEntries, rawsize_),
-  PROTOBUF_FIELD_OFFSET(::alisql::CompressedLogEntries, data_),
-  PROTOBUF_FIELD_OFFSET(::alisql::CompressedLogEntries, checksum_),
-  1,
-  2,
-  0,
-  3,
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, cctype_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, optype_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, addrs_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, allservers_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, alllearners_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, serverid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, forcesync_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, electionweight_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, learnersource_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ConfigureChangeValue, applymode_),
-  0,
-  1,
-  ~0u,
-  ~0u,
-  ~0u,
-  2,
-  3,
-  4,
-  5,
-  6,
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, serverid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, matchindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, nextindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, role_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, hasvoted_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, forcesync_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, electionweight_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, learnersource_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, appliedindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::ClusterInfoEntry, pipelining_),
-  0,
-  1,
-  2,
-  4,
-  3,
-  5,
-  7,
-  6,
-  9,
-  8,
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, configid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, clusterid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, serverid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, msgtype_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, term_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, msgid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, leaderid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, prevlogindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, prevlogterm_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, entries_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, commitindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, nocache_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, issuccess_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, candidateid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, lastlogindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, lastlogterm_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, force_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, addr_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, votegranted_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, ignorecheck_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, lctype_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, minmatchindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, appliedindex_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, newclusterid_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, cientries_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, role_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, compressedentries_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, extra_),
-  PROTOBUF_FIELD_OFFSET(::alisql::PaxosMsg, msgerror_),
-  3,
-  4,
-  5,
-  12,
-  6,
-  7,
-  8,
-  9,
-  10,
-  ~0u,
-  11,
-  13,
-  14,
-  17,
-  18,
-  19,
-  20,
-  0,
-  15,
-  16,
-  21,
-  22,
-  23,
-  24,
-  ~0u,
-  25,
-  2,
-  1,
-  26,
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg1, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg1, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg1, id_),
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg1, c1_),
-  0,
-  1,
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg2, _has_bits_),
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg2, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg2, id_),
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg2, c1_),
-  PROTOBUF_FIELD_OFFSET(::alisql::TestMsg2, c2_),
-  0,
-  1,
-  ~0u,
-};
-static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
-  { 0, 14, -1, sizeof(::alisql::LogEntry)},
-  { 22, 30, -1, sizeof(::alisql::RDSFields)},
-  { 32, 41, -1, sizeof(::alisql::PolarFields)},
-  { 44, 54, -1, sizeof(::alisql::CompressedLogEntries)},
-  { 58, 74, -1, sizeof(::alisql::ConfigureChangeValue)},
-  { 84, 100, -1, sizeof(::alisql::ClusterInfoEntry)},
-  { 110, 145, -1, sizeof(::alisql::PaxosMsg)},
-  { 174, 182, -1, sizeof(::alisql::TestMsg1)},
-  { 184, 193, -1, sizeof(::alisql::TestMsg2)},
-};
-
-static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_LogEntry_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_RDSFields_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_PolarFields_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_CompressedLogEntries_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_ConfigureChangeValue_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_ClusterInfoEntry_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_PaxosMsg_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_TestMsg1_default_instance_),
-  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::alisql::_TestMsg2_default_instance_),
-};
-
-const char descriptor_table_protodef_paxos_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\013paxos.proto\022\006alisql\"\204\001\n\010LogEntry\022\014\n\004te"
-  "rm\030\001 \002(\004\022\r\n\005index\030\002 \002(\004\022\016\n\006opType\030\003 \002(\004\022"
-  "\014\n\004ikey\030\004 \001(\014\022\r\n\005value\030\005 \001(\014\022\014\n\004info\030\006 \001"
-  "(\004\022\020\n\010checksum\030\007 \001(\004\022\016\n\006opaque\030\t \001(\014\"0\n\t"
-  "RDSFields\022\023\n\013rdsServerId\030\001 \001(\r\022\016\n\006source"
-  "\030\002 \001(\r\"F\n\013PolarFields\022\017\n\007version\030\001 \002(\r\022\021"
-  "\n\tstart_lsn\030\002 \002(\004\022\023\n\013extra_value\030\003 \001(\014\"U"
-  "\n\024CompressedLogEntries\022\014\n\004type\030\001 \002(\r\022\017\n\007"
-  "rawSize\030\002 \002(\r\022\014\n\004data\030\003 \002(\014\022\020\n\010checksum\030"
-  "\004 \001(\r\"\325\001\n\024ConfigureChangeValue\022\016\n\006ccType"
-  "\030\001 \001(\005\022\016\n\006opType\030\002 \001(\005\022\r\n\005addrs\030\003 \003(\014\022\022\n"
-  "\nallServers\030\004 \003(\014\022\023\n\013allLearners\030\005 \003(\014\022\020"
-  "\n\010serverId\030\006 \001(\004\022\021\n\tforceSync\030\007 \001(\r\022\026\n\016e"
-  "lectionWeight\030\010 \001(\r\022\025\n\rlearnerSource\030\t \001"
-  "(\004\022\021\n\tapplyMode\030\n \001(\010\"\327\001\n\020ClusterInfoEnt"
-  "ry\022\020\n\010serverId\030\001 \002(\004\022\022\n\nmatchIndex\030\002 \001(\004"
-  "\022\021\n\tnextIndex\030\003 \001(\004\022\014\n\004role\030\004 \001(\r\022\020\n\010has"
-  "Voted\030\005 \001(\004\022\021\n\tforceSync\030\006 \001(\r\022\026\n\016electi"
-  "onWeight\030\007 \001(\r\022\025\n\rlearnerSource\030\010 \001(\004\022\024\n"
-  "\014appliedIndex\030\t \001(\004\022\022\n\npipelining\030\n \001(\r\""
-  "\274\005\n\010PaxosMsg\022\020\n\010configId\030\001 \001(\004\022\021\n\tcluste"
-  "rId\030\002 \002(\004\022\020\n\010serverId\030\003 \002(\004\022\017\n\007msgType\030\004"
-  " \002(\005\022\014\n\004term\030\005 \002(\004\022\r\n\005msgId\030\006 \002(\004\022\020\n\010lea"
-  "derId\030\007 \001(\004\022\024\n\014prevLogIndex\030\010 \001(\004\022\023\n\013pre"
-  "vLogTerm\030\t \001(\004\022!\n\007entries\030\n \003(\0132\020.alisql"
-  ".LogEntry\022\023\n\013commitIndex\030\013 \001(\004\022\017\n\007nocach"
-  "e\030\014 \001(\010\022\021\n\tisSuccess\030\r \001(\010\022\023\n\013candidateI"
-  "d\030\016 \001(\004\022\024\n\014lastLogIndex\030\017 \001(\004\022\023\n\013lastLog"
-  "Term\030\020 \001(\004\022\r\n\005force\030\021 \001(\004\022\014\n\004addr\030\022 \001(\014\022"
-  "\023\n\013voteGranted\030\023 \001(\010\022\023\n\013ignoreCheck\030\024 \001("
-  "\010\022\016\n\006lcType\030\025 \001(\004\022\025\n\rminMatchIndex\030\026 \001(\004"
-  "\022\024\n\014appliedIndex\030\027 \001(\004\022\024\n\014newClusterId\030\030"
-  " \001(\004\022+\n\tciEntries\030\031 \003(\0132\030.alisql.Cluster"
-  "InfoEntry\022\014\n\004role\030\032 \001(\r\0227\n\021compressedEnt"
-  "ries\030\033 \001(\0132\034.alisql.CompressedLogEntries"
-  "\022\r\n\005extra\030\034 \001(\014\022/\n\010msgError\030\036 \001(\0162\035.alis"
-  "ql.PaxosMsg.MsgErrorType\"$\n\014MsgErrorType"
-  "\022\010\n\004NONE\020\000\022\n\n\006APPEND\020\001\"\"\n\010TestMsg1\022\n\n\002id"
-  "\030\001 \002(\004\022\n\n\002c1\030\002 \001(\004\".\n\010TestMsg2\022\n\n\002id\030\001 \002"
-  "(\004\022\n\n\002c1\030\002 \001(\004\022\n\n\002c2\030\003 \003(\004"
-  ;
-static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_paxos_2eproto_once;
-const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_paxos_2eproto = {
-  false, false, 1586, descriptor_table_protodef_paxos_2eproto, "paxos.proto", 
-  &descriptor_table_paxos_2eproto_once, nullptr, 0, 9,
-  schemas, file_default_instances, TableStruct_paxos_2eproto::offsets,
-  file_level_metadata_paxos_2eproto, file_level_enum_descriptors_paxos_2eproto, file_level_service_descriptors_paxos_2eproto,
-};
-PROTOBUF_ATTRIBUTE_WEAK const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable* descriptor_table_paxos_2eproto_getter() {
-  return &descriptor_table_paxos_2eproto;
-}
-
-// Force running AddDescriptors() at dynamic initialization time.
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY static ::PROTOBUF_NAMESPACE_ID::internal::AddDescriptorsRunner dynamic_init_dummy_paxos_2eproto(&descriptor_table_paxos_2eproto);
 namespace alisql {
-const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* PaxosMsg_MsgErrorType_descriptor() {
-  ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_paxos_2eproto);
-  return file_level_enum_descriptors_paxos_2eproto[0];
-}
 bool PaxosMsg_MsgErrorType_IsValid(int value) {
   switch (value) {
     case 0:
@@ -485,6 +197,47 @@ bool PaxosMsg_MsgErrorType_IsValid(int value) {
   }
 }
 
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> PaxosMsg_MsgErrorType_strings[2] = {};
+
+static const char PaxosMsg_MsgErrorType_names[] =
+  "APPEND"
+  "NONE";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry PaxosMsg_MsgErrorType_entries[] = {
+  { {PaxosMsg_MsgErrorType_names + 0, 6}, 1 },
+  { {PaxosMsg_MsgErrorType_names + 6, 4}, 0 },
+};
+
+static const int PaxosMsg_MsgErrorType_entries_by_number[] = {
+  1, // 0 -> NONE
+  0, // 1 -> APPEND
+};
+
+const std::string& PaxosMsg_MsgErrorType_Name(
+    PaxosMsg_MsgErrorType value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          PaxosMsg_MsgErrorType_entries,
+          PaxosMsg_MsgErrorType_entries_by_number,
+          2, PaxosMsg_MsgErrorType_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      PaxosMsg_MsgErrorType_entries,
+      PaxosMsg_MsgErrorType_entries_by_number,
+      2, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     PaxosMsg_MsgErrorType_strings[idx].get();
+}
+bool PaxosMsg_MsgErrorType_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, PaxosMsg_MsgErrorType* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      PaxosMsg_MsgErrorType_entries, 2, name, &int_value);
+  if (success) {
+    *value = static_cast<PaxosMsg_MsgErrorType>(int_value);
+  }
+  return success;
+}
 #if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
 constexpr PaxosMsg_MsgErrorType PaxosMsg::NONE;
 constexpr PaxosMsg_MsgErrorType PaxosMsg::APPEND;
@@ -529,7 +282,7 @@ class LogEntry::_Internal {
 
 LogEntry::LogEntry(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -537,9 +290,9 @@ LogEntry::LogEntry(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:alisql.LogEntry)
 }
 LogEntry::LogEntry(const LogEntry& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ikey_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
     ikey_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
@@ -593,7 +346,7 @@ LogEntry::~LogEntry() {
   // @@protoc_insertion_point(destructor:alisql.LogEntry)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void LogEntry::SharedDtor() {
@@ -637,7 +390,7 @@ void LogEntry::Clear() {
         reinterpret_cast<char*>(&term_)) + sizeof(checksum_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* LogEntry::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -730,7 +483,7 @@ const char* LogEntry::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -799,8 +552,8 @@ uint8_t* LogEntry::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.LogEntry)
   return target;
@@ -884,21 +637,19 @@ size_t LogEntry::ByteSizeLong() const {
     }
 
   }
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData LogEntry::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    LogEntry::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*LogEntry::GetClassData() const { return &_class_data_; }
-
-void LogEntry::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<LogEntry *>(to)->MergeFrom(
-      static_cast<const LogEntry &>(from));
+void LogEntry::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const LogEntry*>(
+      &from));
 }
-
 
 void LogEntry::MergeFrom(const LogEntry& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.LogEntry)
@@ -934,7 +685,7 @@ void LogEntry::MergeFrom(const LogEntry& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void LogEntry::CopyFrom(const LogEntry& from) {
@@ -978,11 +729,10 @@ void LogEntry::InternalSwap(LogEntry* other) {
           reinterpret_cast<char*>(&other->term_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata LogEntry::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[0]);
+std::string LogEntry::GetTypeName() const {
+  return "alisql.LogEntry";
 }
+
 
 // ===================================================================
 
@@ -999,7 +749,7 @@ class RDSFields::_Internal {
 
 RDSFields::RDSFields(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -1007,9 +757,9 @@ RDSFields::RDSFields(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:alisql.RDSFields)
 }
 RDSFields::RDSFields(const RDSFields& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&rdsserverid_, &from.rdsserverid_,
     static_cast<size_t>(reinterpret_cast<char*>(&source_) -
     reinterpret_cast<char*>(&rdsserverid_)) + sizeof(source_));
@@ -1027,7 +777,7 @@ RDSFields::~RDSFields() {
   // @@protoc_insertion_point(destructor:alisql.RDSFields)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void RDSFields::SharedDtor() {
@@ -1057,7 +807,7 @@ void RDSFields::Clear() {
         reinterpret_cast<char*>(&rdsserverid_)) + sizeof(source_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* RDSFields::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -1096,7 +846,7 @@ const char* RDSFields::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -1129,8 +879,8 @@ uint8_t* RDSFields::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.RDSFields)
   return target;
@@ -1157,21 +907,19 @@ size_t RDSFields::ByteSizeLong() const {
     }
 
   }
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData RDSFields::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    RDSFields::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*RDSFields::GetClassData() const { return &_class_data_; }
-
-void RDSFields::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<RDSFields *>(to)->MergeFrom(
-      static_cast<const RDSFields &>(from));
+void RDSFields::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const RDSFields*>(
+      &from));
 }
-
 
 void RDSFields::MergeFrom(const RDSFields& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.RDSFields)
@@ -1189,7 +937,7 @@ void RDSFields::MergeFrom(const RDSFields& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void RDSFields::CopyFrom(const RDSFields& from) {
@@ -1215,11 +963,10 @@ void RDSFields::InternalSwap(RDSFields* other) {
           reinterpret_cast<char*>(&other->rdsserverid_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata RDSFields::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[1]);
+std::string RDSFields::GetTypeName() const {
+  return "alisql.RDSFields";
 }
+
 
 // ===================================================================
 
@@ -1242,7 +989,7 @@ class PolarFields::_Internal {
 
 PolarFields::PolarFields(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -1250,9 +997,9 @@ PolarFields::PolarFields(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:alisql.PolarFields)
 }
 PolarFields::PolarFields(const PolarFields& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   extra_value_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
     extra_value_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
@@ -1282,7 +1029,7 @@ PolarFields::~PolarFields() {
   // @@protoc_insertion_point(destructor:alisql.PolarFields)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void PolarFields::SharedDtor() {
@@ -1316,7 +1063,7 @@ void PolarFields::Clear() {
         reinterpret_cast<char*>(&start_lsn_)) + sizeof(version_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* PolarFields::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -1364,7 +1111,7 @@ const char* PolarFields::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -1403,8 +1150,8 @@ uint8_t* PolarFields::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.PolarFields)
   return target;
@@ -1452,21 +1199,19 @@ size_t PolarFields::ByteSizeLong() const {
         this->_internal_extra_value());
   }
 
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData PolarFields::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    PolarFields::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*PolarFields::GetClassData() const { return &_class_data_; }
-
-void PolarFields::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<PolarFields *>(to)->MergeFrom(
-      static_cast<const PolarFields &>(from));
+void PolarFields::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const PolarFields*>(
+      &from));
 }
-
 
 void PolarFields::MergeFrom(const PolarFields& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.PolarFields)
@@ -1487,7 +1232,7 @@ void PolarFields::MergeFrom(const PolarFields& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void PolarFields::CopyFrom(const PolarFields& from) {
@@ -1521,11 +1266,10 @@ void PolarFields::InternalSwap(PolarFields* other) {
           reinterpret_cast<char*>(&other->start_lsn_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata PolarFields::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[2]);
+std::string PolarFields::GetTypeName() const {
+  return "alisql.PolarFields";
 }
+
 
 // ===================================================================
 
@@ -1551,7 +1295,7 @@ class CompressedLogEntries::_Internal {
 
 CompressedLogEntries::CompressedLogEntries(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -1559,9 +1303,9 @@ CompressedLogEntries::CompressedLogEntries(::PROTOBUF_NAMESPACE_ID::Arena* arena
   // @@protoc_insertion_point(arena_constructor:alisql.CompressedLogEntries)
 }
 CompressedLogEntries::CompressedLogEntries(const CompressedLogEntries& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   data_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
     data_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
@@ -1591,7 +1335,7 @@ CompressedLogEntries::~CompressedLogEntries() {
   // @@protoc_insertion_point(destructor:alisql.CompressedLogEntries)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void CompressedLogEntries::SharedDtor() {
@@ -1625,7 +1369,7 @@ void CompressedLogEntries::Clear() {
         reinterpret_cast<char*>(&type_)) + sizeof(checksum_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* CompressedLogEntries::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -1682,7 +1426,7 @@ const char* CompressedLogEntries::_InternalParse(const char* ptr, ::PROTOBUF_NAM
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -1727,8 +1471,8 @@ uint8_t* CompressedLogEntries::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.CompressedLogEntries)
   return target;
@@ -1786,21 +1530,19 @@ size_t CompressedLogEntries::ByteSizeLong() const {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_checksum());
   }
 
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData CompressedLogEntries::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    CompressedLogEntries::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*CompressedLogEntries::GetClassData() const { return &_class_data_; }
-
-void CompressedLogEntries::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<CompressedLogEntries *>(to)->MergeFrom(
-      static_cast<const CompressedLogEntries &>(from));
+void CompressedLogEntries::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const CompressedLogEntries*>(
+      &from));
 }
-
 
 void CompressedLogEntries::MergeFrom(const CompressedLogEntries& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.CompressedLogEntries)
@@ -1824,7 +1566,7 @@ void CompressedLogEntries::MergeFrom(const CompressedLogEntries& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void CompressedLogEntries::CopyFrom(const CompressedLogEntries& from) {
@@ -1858,11 +1600,10 @@ void CompressedLogEntries::InternalSwap(CompressedLogEntries* other) {
           reinterpret_cast<char*>(&other->type_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata CompressedLogEntries::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[3]);
+std::string CompressedLogEntries::GetTypeName() const {
+  return "alisql.CompressedLogEntries";
 }
+
 
 // ===================================================================
 
@@ -1894,7 +1635,7 @@ class ConfigureChangeValue::_Internal {
 
 ConfigureChangeValue::ConfigureChangeValue(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned),
   addrs_(arena),
   allservers_(arena),
   alllearners_(arena) {
@@ -1905,12 +1646,12 @@ ConfigureChangeValue::ConfigureChangeValue(::PROTOBUF_NAMESPACE_ID::Arena* arena
   // @@protoc_insertion_point(arena_constructor:alisql.ConfigureChangeValue)
 }
 ConfigureChangeValue::ConfigureChangeValue(const ConfigureChangeValue& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_),
       addrs_(from.addrs_),
       allservers_(from.allservers_),
       alllearners_(from.alllearners_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&cctype_, &from.cctype_,
     static_cast<size_t>(reinterpret_cast<char*>(&applymode_) -
     reinterpret_cast<char*>(&cctype_)) + sizeof(applymode_));
@@ -1928,7 +1669,7 @@ ConfigureChangeValue::~ConfigureChangeValue() {
   // @@protoc_insertion_point(destructor:alisql.ConfigureChangeValue)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void ConfigureChangeValue::SharedDtor() {
@@ -1961,7 +1702,7 @@ void ConfigureChangeValue::Clear() {
         reinterpret_cast<char*>(&cctype_)) + sizeof(applymode_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* ConfigureChangeValue::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -2087,7 +1828,7 @@ const char* ConfigureChangeValue::_InternalParse(const char* ptr, ::PROTOBUF_NAM
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -2168,8 +1909,8 @@ uint8_t* ConfigureChangeValue::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.ConfigureChangeValue)
   return target;
@@ -2245,21 +1986,19 @@ size_t ConfigureChangeValue::ByteSizeLong() const {
     }
 
   }
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ConfigureChangeValue::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    ConfigureChangeValue::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ConfigureChangeValue::GetClassData() const { return &_class_data_; }
-
-void ConfigureChangeValue::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<ConfigureChangeValue *>(to)->MergeFrom(
-      static_cast<const ConfigureChangeValue &>(from));
+void ConfigureChangeValue::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const ConfigureChangeValue*>(
+      &from));
 }
-
 
 void ConfigureChangeValue::MergeFrom(const ConfigureChangeValue& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.ConfigureChangeValue)
@@ -2295,7 +2034,7 @@ void ConfigureChangeValue::MergeFrom(const ConfigureChangeValue& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void ConfigureChangeValue::CopyFrom(const ConfigureChangeValue& from) {
@@ -2324,11 +2063,10 @@ void ConfigureChangeValue::InternalSwap(ConfigureChangeValue* other) {
           reinterpret_cast<char*>(&other->cctype_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata ConfigureChangeValue::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[4]);
+std::string ConfigureChangeValue::GetTypeName() const {
+  return "alisql.ConfigureChangeValue";
 }
+
 
 // ===================================================================
 
@@ -2372,7 +2110,7 @@ class ClusterInfoEntry::_Internal {
 
 ClusterInfoEntry::ClusterInfoEntry(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -2380,9 +2118,9 @@ ClusterInfoEntry::ClusterInfoEntry(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:alisql.ClusterInfoEntry)
 }
 ClusterInfoEntry::ClusterInfoEntry(const ClusterInfoEntry& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&serverid_, &from.serverid_,
     static_cast<size_t>(reinterpret_cast<char*>(&appliedindex_) -
     reinterpret_cast<char*>(&serverid_)) + sizeof(appliedindex_));
@@ -2400,7 +2138,7 @@ ClusterInfoEntry::~ClusterInfoEntry() {
   // @@protoc_insertion_point(destructor:alisql.ClusterInfoEntry)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void ClusterInfoEntry::SharedDtor() {
@@ -2435,7 +2173,7 @@ void ClusterInfoEntry::Clear() {
         reinterpret_cast<char*>(&pipelining_)) + sizeof(appliedindex_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* ClusterInfoEntry::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -2546,7 +2284,7 @@ const char* ClusterInfoEntry::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPA
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -2627,8 +2365,8 @@ uint8_t* ClusterInfoEntry::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.ClusterInfoEntry)
   return target;
@@ -2696,21 +2434,19 @@ size_t ClusterInfoEntry::ByteSizeLong() const {
     }
 
   }
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ClusterInfoEntry::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    ClusterInfoEntry::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ClusterInfoEntry::GetClassData() const { return &_class_data_; }
-
-void ClusterInfoEntry::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<ClusterInfoEntry *>(to)->MergeFrom(
-      static_cast<const ClusterInfoEntry &>(from));
+void ClusterInfoEntry::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const ClusterInfoEntry*>(
+      &from));
 }
-
 
 void ClusterInfoEntry::MergeFrom(const ClusterInfoEntry& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.ClusterInfoEntry)
@@ -2755,7 +2491,7 @@ void ClusterInfoEntry::MergeFrom(const ClusterInfoEntry& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void ClusterInfoEntry::CopyFrom(const ClusterInfoEntry& from) {
@@ -2782,11 +2518,10 @@ void ClusterInfoEntry::InternalSwap(ClusterInfoEntry* other) {
           reinterpret_cast<char*>(&other->serverid_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata ClusterInfoEntry::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[5]);
+std::string ClusterInfoEntry::GetTypeName() const {
+  return "alisql.ClusterInfoEntry";
 }
+
 
 // ===================================================================
 
@@ -2886,7 +2621,7 @@ PaxosMsg::_Internal::compressedentries(const PaxosMsg* msg) {
 }
 PaxosMsg::PaxosMsg(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned),
   entries_(arena),
   cientries_(arena) {
   SharedCtor();
@@ -2896,11 +2631,11 @@ PaxosMsg::PaxosMsg(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:alisql.PaxosMsg)
 }
 PaxosMsg::PaxosMsg(const PaxosMsg& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_),
       entries_(from.entries_),
       cientries_(from.cientries_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   addr_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
     addr_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
@@ -2947,7 +2682,7 @@ PaxosMsg::~PaxosMsg() {
   // @@protoc_insertion_point(destructor:alisql.PaxosMsg)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void PaxosMsg::SharedDtor() {
@@ -3009,7 +2744,7 @@ void PaxosMsg::Clear() {
         reinterpret_cast<char*>(&newclusterid_)) + sizeof(msgerror_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -3302,7 +3037,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -3504,8 +3239,8 @@ uint8_t* PaxosMsg::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.PaxosMsg)
   return target;
@@ -3725,21 +3460,19 @@ size_t PaxosMsg::ByteSizeLong() const {
     }
 
   }
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData PaxosMsg::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    PaxosMsg::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*PaxosMsg::GetClassData() const { return &_class_data_; }
-
-void PaxosMsg::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<PaxosMsg *>(to)->MergeFrom(
-      static_cast<const PaxosMsg &>(from));
+void PaxosMsg::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const PaxosMsg*>(
+      &from));
 }
-
 
 void PaxosMsg::MergeFrom(const PaxosMsg& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.PaxosMsg)
@@ -3843,7 +3576,7 @@ void PaxosMsg::MergeFrom(const PaxosMsg& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void PaxosMsg::CopyFrom(const PaxosMsg& from) {
@@ -3891,11 +3624,10 @@ void PaxosMsg::InternalSwap(PaxosMsg* other) {
           reinterpret_cast<char*>(&other->compressedentries_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata PaxosMsg::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[6]);
+std::string PaxosMsg::GetTypeName() const {
+  return "alisql.PaxosMsg";
 }
+
 
 // ===================================================================
 
@@ -3915,7 +3647,7 @@ class TestMsg1::_Internal {
 
 TestMsg1::TestMsg1(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -3923,9 +3655,9 @@ TestMsg1::TestMsg1(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:alisql.TestMsg1)
 }
 TestMsg1::TestMsg1(const TestMsg1& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&id_, &from.id_,
     static_cast<size_t>(reinterpret_cast<char*>(&c1_) -
     reinterpret_cast<char*>(&id_)) + sizeof(c1_));
@@ -3943,7 +3675,7 @@ TestMsg1::~TestMsg1() {
   // @@protoc_insertion_point(destructor:alisql.TestMsg1)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void TestMsg1::SharedDtor() {
@@ -3973,7 +3705,7 @@ void TestMsg1::Clear() {
         reinterpret_cast<char*>(&id_)) + sizeof(c1_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* TestMsg1::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -4012,7 +3744,7 @@ const char* TestMsg1::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -4045,8 +3777,8 @@ uint8_t* TestMsg1::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.TestMsg1)
   return target;
@@ -4070,21 +3802,19 @@ size_t TestMsg1::ByteSizeLong() const {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_c1());
   }
 
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData TestMsg1::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    TestMsg1::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*TestMsg1::GetClassData() const { return &_class_data_; }
-
-void TestMsg1::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<TestMsg1 *>(to)->MergeFrom(
-      static_cast<const TestMsg1 &>(from));
+void TestMsg1::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const TestMsg1*>(
+      &from));
 }
-
 
 void TestMsg1::MergeFrom(const TestMsg1& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.TestMsg1)
@@ -4102,7 +3832,7 @@ void TestMsg1::MergeFrom(const TestMsg1& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void TestMsg1::CopyFrom(const TestMsg1& from) {
@@ -4129,11 +3859,10 @@ void TestMsg1::InternalSwap(TestMsg1* other) {
           reinterpret_cast<char*>(&other->id_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata TestMsg1::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[7]);
+std::string TestMsg1::GetTypeName() const {
+  return "alisql.TestMsg1";
 }
+
 
 // ===================================================================
 
@@ -4153,7 +3882,7 @@ class TestMsg2::_Internal {
 
 TestMsg2::TestMsg2(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned),
   c2_(arena) {
   SharedCtor();
   if (!is_message_owned) {
@@ -4162,10 +3891,10 @@ TestMsg2::TestMsg2(::PROTOBUF_NAMESPACE_ID::Arena* arena,
   // @@protoc_insertion_point(arena_constructor:alisql.TestMsg2)
 }
 TestMsg2::TestMsg2(const TestMsg2& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message(),
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
       _has_bits_(from._has_bits_),
       c2_(from.c2_) {
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&id_, &from.id_,
     static_cast<size_t>(reinterpret_cast<char*>(&c1_) -
     reinterpret_cast<char*>(&id_)) + sizeof(c1_));
@@ -4183,7 +3912,7 @@ TestMsg2::~TestMsg2() {
   // @@protoc_insertion_point(destructor:alisql.TestMsg2)
   if (GetArenaForAllocation() != nullptr) return;
   SharedDtor();
-  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Delete<std::string>();
 }
 
 inline void TestMsg2::SharedDtor() {
@@ -4214,7 +3943,7 @@ void TestMsg2::Clear() {
         reinterpret_cast<char*>(&id_)) + sizeof(c1_));
   }
   _has_bits_.Clear();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+  _internal_metadata_.Clear<std::string>();
 }
 
 const char* TestMsg2::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
@@ -4269,7 +3998,7 @@ const char* TestMsg2::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
     }
     ptr = UnknownFieldParse(
         tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
         ptr, ctx);
     CHK_(ptr != nullptr);
   }  // while
@@ -4308,8 +4037,8 @@ uint8_t* TestMsg2::_InternalSerialize(
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
   }
   // @@protoc_insertion_point(serialize_to_array_end:alisql.TestMsg2)
   return target;
@@ -4342,21 +4071,19 @@ size_t TestMsg2::ByteSizeLong() const {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_c1());
   }
 
-  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData TestMsg2::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
-    TestMsg2::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*TestMsg2::GetClassData() const { return &_class_data_; }
-
-void TestMsg2::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
-                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
-  static_cast<TestMsg2 *>(to)->MergeFrom(
-      static_cast<const TestMsg2 &>(from));
+void TestMsg2::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const TestMsg2*>(
+      &from));
 }
-
 
 void TestMsg2::MergeFrom(const TestMsg2& from) {
 // @@protoc_insertion_point(class_specific_merge_from_start:alisql.TestMsg2)
@@ -4375,7 +4102,7 @@ void TestMsg2::MergeFrom(const TestMsg2& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
 void TestMsg2::CopyFrom(const TestMsg2& from) {
@@ -4403,11 +4130,10 @@ void TestMsg2::InternalSwap(TestMsg2* other) {
           reinterpret_cast<char*>(&other->id_));
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata TestMsg2::GetMetadata() const {
-  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
-      &descriptor_table_paxos_2eproto_getter, &descriptor_table_paxos_2eproto_once,
-      file_level_metadata_paxos_2eproto[8]);
+std::string TestMsg2::GetTypeName() const {
+  return "alisql.TestMsg2";
 }
+
 
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace alisql

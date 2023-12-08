@@ -1,6 +1,8 @@
 syntax = "proto2";
 package alisql;
 
+option optimize_for = LITE_RUNTIME;
+
 message LogEntry
 {
   required uint64 term = 1;

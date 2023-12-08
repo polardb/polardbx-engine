@@ -387,7 +387,7 @@ int Service::process(easy_request_t *r, void *args) {
   return EASY_OK;
 }
 
-bool MyParseFromArray(google::protobuf::Message &msg, const void *data,
+bool MyParseFromArray(google::protobuf::MessageLite &msg, const void *data,
                       int size) {
   google::protobuf::io::CodedInputStream decoder((uint8_t *)data, size);
   decoder.SetTotalBytesLimit(size);

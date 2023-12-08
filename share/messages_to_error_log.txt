@@ -12199,6 +12199,9 @@ ER_RAFT_APPLIER
 ER_RAFT_COMMIT
   eng "[Commit] %s"
 
+ER_RAFT_PROTO
+  eng "[Proto] %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

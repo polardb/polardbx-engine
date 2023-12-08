@@ -263,6 +263,7 @@ extra/IS/dependency/easy/src/libmyeasy.a
 extra/IS/src/libaliconsensus.a
 extra/IS/dependency/easy/src/libmyeasy_internal.a
 extra/IS/src/libaliconsensus_no_easy.a
+extra/IS/dependency/rocksdb-6.29.4
 install_manifest.txt
 
 mysql-test/run_query.log
