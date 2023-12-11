@@ -36,7 +36,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(29);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -57,7 +56,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(43);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -78,7 +76,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(57);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -99,7 +96,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(71);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -120,7 +116,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(85);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -141,7 +136,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(99);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -162,7 +156,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(113);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -183,7 +176,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(127);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -204,7 +196,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(141);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -242,7 +233,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(165);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -263,7 +253,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(179);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -284,7 +273,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(193);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -305,7 +293,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(207);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -326,7 +313,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(221);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -347,7 +333,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(235);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -368,7 +353,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(249);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -389,7 +373,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(263);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;
@@ -410,7 +393,6 @@ insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
-call dbms_consensus.purge_log(277);;
 show consensus logs;
 ERROR HY000: Lost connection to MySQL server during query
 xa recover;

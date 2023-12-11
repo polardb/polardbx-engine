@@ -6690,11 +6690,13 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
   if (!rli->gaq->inited) return 1;
 
   if(opt_consensus_index_buf_enabled && rli->info_thd->raft_replication_channel) {
-    //TODO::this buff is too large on defult(512*1*1024/2 * 8 =2MB), need optimizer @yanhua
-    const uint64 cache_size = rli->checkpoint_group
-                              * opt_consensus_large_event_count_limit 
-                              * opt_consensus_large_event_size_limit 
-                              / opt_consensus_large_event_split_size;
+    //max cache size is 128KB, so m_consensus_index_buf max buff size 128 * 8 = 1MB
+    const ulonglong MAX_CACHE_SIZE = 1024 * 128;
+    ulonglong cache_size = std::max((ulonglong)rli->checkpoint_group * 2,
+                                    opt_consensus_large_event_count_limit
+                                    * opt_consensus_large_event_size_limit
+                                    / opt_consensus_large_event_split_size);
+    cache_size = std::min(MAX_CACHE_SIZE, cache_size);
     ut_a(cache_size > 0);
     rli->m_consensus_index_buf = new Index_link_buf(cache_size);
     if(!rli->m_consensus_index_buf)

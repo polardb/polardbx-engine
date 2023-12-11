@@ -156,11 +156,11 @@ inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
   slot.store(index, std::memory_order_release);
   ret = advance_tail();
 
-  raft::info(ER_RAFT_APPLIER) << "add_index_advance_tail " << index
-    << ", old tail " << old_tail
-    << ", old count " << index - old_tail
-    << ", curr tail " << ret
-    << ", curr count " << index - ret;
+  // raft::info(ER_RAFT_APPLIER) << "add_index_advance_tail " << index
+  //   << ", old tail " << old_tail
+  //   << ", old count " << (index > old_tail ? index - old_tail : 0)
+  //   << ", curr tail " << ret
+  //   << ", curr count " << (index > ret ? index - ret : 0);
   return ret;
 }
 

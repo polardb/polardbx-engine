@@ -40,6 +40,7 @@ flush logs;
 show consensus logs;
 #purge local consensus_log before 100;
 call dbms_consensus.local_purge_log(100);
+--sleep 5
 --replace_column 2 # 3 #
 show consensus logs;
 #drop consensus_learner '$learner_cluster_info';
@@ -49,6 +50,7 @@ eval call dbms_consensus.drop_learner($learner_cluster_info);
 #purge consensus_log before 100;
 call dbms_consensus.purge_log(100);
 --replace_column 2 # 3 #
+--sleep 5
 show consensus logs;
 insert into t1 values(8);
 insert into t1 values(9);
@@ -56,5 +58,6 @@ flush logs;
 #purge force consensus_log before 100;
 call dbms_consensus.force_purge_log(100);
 --replace_column 2 # 3 #
+--sleep 5
 show consensus logs;
 drop table t1;

@@ -684,11 +684,11 @@ void update_consensus_apply_pos(Relay_log_info *rli,
       consensus_log_manager.set_real_apply_index(consensus_index);
       consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
 
-      raft::info(ER_RAFT_APPLIER) << "update_consensus_apply_pos: " << consensus_index
-                            << ", consensus_term: " << consensus_term
-                            << ", consensus_index: " << consensus_index
-                            << ", consensus_index_end_pos: " << consensus_index_end_pos
-                            << ", consensus_index_current_pos: " << ev->future_event_relay_log_pos;
+      // raft::info(ER_RAFT_APPLIER) << "update_consensus_apply_pos: " << consensus_index
+      //                       << ", consensus_term: " << consensus_term
+      //                       << ", consensus_index: " << consensus_index
+      //                       << ", consensus_index_end_pos: " << consensus_index_end_pos
+      //                       << ", consensus_index_current_pos: " << ev->future_event_relay_log_pos;
     }
 
     consensus_log_manager.set_apply_index_current_pos(ev->future_event_relay_log_pos);

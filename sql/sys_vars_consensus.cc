@@ -393,8 +393,8 @@ static Sys_var_ulonglong Sys_consensus_large_event_size_limit(
 
 static Sys_var_ulonglong Sys_consensus_large_event_count_limit(
        "consensus_large_event_count_limit", "Consensus large event count limit in one trx",
-       GLOBAL_VAR(opt_consensus_large_event_count_limit), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(1, ULLONG_MAX), DEFAULT(1), BLOCK_SIZE(1),
+       READ_ONLY GLOBAL_VAR(opt_consensus_large_event_count_limit), CMD_LINE(OPT_ARG),
+       VALID_RANGE(1, ULLONG_MAX), DEFAULT(2), BLOCK_SIZE(1),
        NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_deprecated_alias Sys_consensus_large_event_limit(
