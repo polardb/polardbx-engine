@@ -30,9 +30,19 @@ IF (CORES EQUAL 0)
   SET(CORES 1)
 ENDIF()
 
+set(CTEST_BIN ctest)
+if (DEFINED CTEST_BIN_PATH)
+  set(CTEST_BIN ${CTEST_BIN_PATH})
+endif()
+
+set(CTEST_EXTRA_OPTS "")
+if (DEFINED CTEST_XML_OUTPUT_DIRECTORY)
+  set(CTEST_EXTRA_OPTS "--output-junit ${CTEST_XML_OUTPUT_DIRECTORY}/${CTEST_XML_OUTPUT_FILE}")
+endif()
+
 ADD_CUSTOM_TARGET(
   test-unit
-  COMMAND ctest --progress --parallel ${CORES} --output-on-failure --timeout=300
+  COMMAND ${CTEST_BIN} --progress --parallel ${CORES} --output-on-failure --timeout=300 ${CTEST_EXTRA_OPTS}
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   USES_TERMINAL
 )

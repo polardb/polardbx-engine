@@ -1,0 +1,29 @@
+#!/usr/bin/bash
+
+CMAKE_BIN=${CMAKE_BIN_PATH}
+WORKING_SPACE_PATH=$(pwd)
+
+
+
+if [ ! -d "${CICD_BUILD_ROOT}" ]; then
+  mkdir ${CICD_BUILD_ROOT}
+fi
+
+if [ ! -d "${RESULT_PATH}" ]; then
+  mkdir -p ${RESULT_PATH}
+fi
+
+cat ${BOOST_PATH}.*  > ${BOOST_PATH}
+
+cd ${CICD_BUILD_ROOT} && \
+source ${DEVTOOLSET_ENABLE_PATH} && \
+${CMAKE_BIN} .. \
+ -DDOWNLOAD_BOOST=1 \
+ -DWITH_BOOST=extra \
+ -DCMAKE_BUILD_TYPE=Debug \
+ -DWITH_SSL=openssl \
+ -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
+ -DWITH_BOOST="../${BOOST_PATH}" \
+ -DWITH_TESTS=1 \
+ -DCTEST_BIN_PATH="${CTEST_BIN_PATH}" \
+ -DCTEST_OUTPUT_ON_FAILURE=1
