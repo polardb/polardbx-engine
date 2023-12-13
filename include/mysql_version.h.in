@@ -25,8 +25,13 @@
 #define LIBMYSQL_VERSION_ID         @MYSQL_VERSION_ID@
 
 #define RDS_RELEASE_DATE           "@RDS_RELEASE_DATE@"
-#define RDS_COMMIT_ID              "@RDS_COMMIT_ID@"
-#define POLARDB_X_ENGINE_VERSION        "2.0.0"
+#define POLARDB_X_ENGINE_VERSION   "2.0.0"
+
+#define BUILD_BRANCH                "@BUILD_BRANCH@"
+#define BUILD_COMMIT                "@BUILD_COMMIT@"
+#define BUILD_TYPE                  "@BUILD_TYPE@"
+#define BUILD_DATE                  __DATE__
+#define BUILD_TIME                  __TIME__
 
 #ifndef LICENSE
 #define LICENSE                     GPL

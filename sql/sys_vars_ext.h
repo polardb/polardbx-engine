@@ -43,5 +43,5 @@ extern "C" MYSQL_PLUGIN_IMPORT char innodb_version[SERVER_VERSION_LENGTH];
 
 extern void customize_server_version();
 
-extern void print_commit_id();
+extern void print_build_info();
 #endif /* SYS_VARS_EXT_INCLUDED */

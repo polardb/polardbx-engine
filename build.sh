@@ -234,7 +234,6 @@ parse_options "$@"
 get_mach_type
 get_os_type
 get_linux_version
-commit_id=`git rev-parse --short HEAD`
 
 if [ x"$build_type" = x"debug" ]; then
   build_type="Debug"
@@ -258,19 +257,20 @@ fi
 server_suffix="-""$server_suffix"
 
 if [ x"$build_type" = x"RelWithDebInfo" ]; then
-  COMMON_FLAGS="-O3 -g -fexceptions -fno-strict-aliasing"
+  COMMON_FLAGS="-O3 -g "
 elif [ x"$build_type" = x"Debug" ]; then
-  COMMON_FLAGS="-O0 -g3 -gdwarf-2 -fexceptions -fno-strict-aliasing"
+  COMMON_FLAGS="-g3 "
 fi
+
+COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing "
 
 if [ x"$mach_type" = x"x86_64" ]; then # X86
-  COMMON_FLAGS="$COMMON_FLAGS -fno-omit-frame-pointer -D_GLIBCXX_USE_CXX11_ABI=0"
+  COMMON_FLAGS="$COMMON_FLAGS"
 elif [ x"$mach_type" = x"aarch64" ]; then # ARM64
   # ARM64 needn't more flags
-  COMMON_FLAGS="$COMMON_FLAGS" #"-static-libstdc++ -static-libgcc"
+  COMMON_FLAGS="$COMMON_FLAGS -Wl,-Bsymbolic"
 fi
 
-COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always"
 export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
 
 CFLAGS="$COMMON_FLAGS"
@@ -340,7 +340,6 @@ else
       -DENABLE_GCOV=$gcov                \
       -DINSTALL_LAYOUT=STANDALONE        \
       -DMYSQL_MAINTAINER_MODE=0          \
-      -DWITH_EMBEDDED_SERVER=0           \
       -DWITH_SSL=openssl                 \
       -DWITH_ZLIB=bundled                \
       -DWITH_ZSTD=bundled                \
@@ -362,9 +361,7 @@ else
       -DWITH_TSAN=$tsan                  \
       -DWITH_UBSAN=$ubsan                \
       -DWITH_VALGRIND=$valg              \
-      -DENABLE_GPROF=0                   \
       -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
-      -DRDS_COMMIT_ID=$commit_id         \
       -DDOWNLOAD_BOOST=0                \
       -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
       -DWITH_UNIT_TESTS=0

@@ -166,9 +166,6 @@ INCLUDE(cpack_source_ignore_files)
 IF(NOT RDS_RELEASE_DATE)
   SET(RDS_RELEASE_DATE 19700101)
 ENDIF()
-IF(NOT RDS_COMMIT_ID)
-  SET(RDS_COMMIT_ID 00000000)
-ENDIF()
 
 # Defintions for windows version resources
 SET(PRODUCTNAME "MySQL Server")

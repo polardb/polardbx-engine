@@ -10700,7 +10700,7 @@ bool mysqld_get_one_option(int optid,
       break;
     case 'V':
       print_server_version();
-      print_commit_id();
+      print_build_info();
       exit(MYSQLD_SUCCESS_EXIT);
     case 'T':
       test_flags = argument ? (uint)atoi(argument) : 0;

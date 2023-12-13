@@ -83,7 +83,6 @@ $CMAKE_BIN .                            \
   -DWITH_PROTOBUF:STRING=bundled     \
   -DINSTALL_LAYOUT=STANDALONE        \
   -DMYSQL_MAINTAINER_MODE=0          \
-  -DWITH_EMBEDDED_SERVER=0           \
   -DWITH_SSL=openssl                 \
   -DWITH_ZLIB=bundled                \
   -DWITH_MYISAM_STORAGE_ENGINE=1     \
@@ -105,7 +104,6 @@ $CMAKE_BIN .                            \
   -DENABLED_LOCAL_INFILE=1           \
   -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
   -DRDS_RELEASE_DATE=%{release_date} \
-  -DRDS_COMMIT_ID=%{commit_id} \
   -DBUILD_AS_EXTERNAL=1 \
   -DMINIMAL_MAKE=1 \
 
@@ -143,7 +141,7 @@ fi
 
 ## if another version mysqld exists under timestamp dir, abort installation with error
 if [ -d %{copy_dir} ]; then
-    old_commit_id=$(%{copy_dir}/bin/mysqld --version | grep "^RDS_XCLUSTER_80" | awk '{print $4}')
+    old_commit_id=$(%{copy_dir}/bin/mysqld --version | grep -E "Build Commit|commit id" | awk '{print $4}')
     if [ "$old_commit_id" != "%{commit_id}" ]; then
        echo "ERROR: %{copy_dir} exists and old commit id '$old_commit_id' diff with new '%{commit_id}'"
        exit 1
@@ -156,7 +154,7 @@ fi
 ## latest bin and so file. we use rm && cp, instead of overwriting force copy
 ## which is dangerous for so file(can lead to calling process crash).
 if [ -d %{base_dir} ]; then
-    old_commit_id=$(%{base_dir}/bin/mysqld --version | grep "^RDS_XCLUSTER_80" | awk '{print $4}')
+    old_commit_id=$(%{base_dir}/bin/mysqld --version | grep -E "Build Commit|commit id" | awk '{print $4}')
     if [ "$old_commit_id" != "%{commit_id}" ]; then
         echo "Removing %{base_dir} and copying %{prefix} to %{base_dir}"
         rm -rf %{base_dir} && cp -rf %{prefix} %{base_dir}
@@ -172,7 +170,7 @@ fi
 ## 1. copy_dir exists and with equal version, means already installed, just skip
 ## 2. copy_dir not exists, copy to it
 if [ -d %{copy_dir} ]; then
-    old_commit_id=$(%{copy_dir}/bin/mysqld --version | grep "^RDS_XCLUSTER_80" | awk '{print $4}')
+    old_commit_id=$(%{copy_dir}/bin/mysqld --version | grep -E "Build Commit|commit id" | awk '{print $4}')
     if [ "$old_commit_id" == "%{commit_id}" ]; then
         echo "%{copy_dir} already contains the right version mysqld"
     fi

@@ -76,5 +76,5 @@ void build_version(const std::string &progname, std::string *destination) {
 }
 
 void print_polardbx_engine_version() {
-  printf("PolarDB-X Engine Ver %s \n", POLARDB_X_ENGINE_VERSION);
+  printf("PolarDB-X Engine Version: %s\n", POLARDB_X_ENGINE_VERSION);
 }

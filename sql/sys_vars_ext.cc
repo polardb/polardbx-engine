@@ -66,12 +66,15 @@ static char *rds_release_date_ptr = NULL;
 
 
 /**
-  Output the latest commit id for the MYSQLD binary.
+  Output the latest build info for the MYSQLD binary.
 
   @returns void.
 */
-void print_commit_id() {
-  printf("RDS_XCLUSTER_80 commit id: %s\n", RDS_COMMIT_ID);
+void print_build_info() {
+  printf("Engine Build Type: %s\n", BUILD_TYPE);
+  printf("Engine Build Branch: %s\n", BUILD_BRANCH);
+  printf("Engine Build Commit: %s\n", BUILD_COMMIT);
+  printf("Engine Build Time: %s %s\n", BUILD_DATE, BUILD_TIME);
 }
 
 /**
