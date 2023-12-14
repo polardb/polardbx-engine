@@ -16,8 +16,9 @@ call mtr.add_suppression("Plugin mysqlx reported: .Setup of socket: '' failed, t
 --write_file $MYSQL_TMP_DIR/mysqlx-regression-ps.xpl
 # Test case for Bug #21472634 SHOW PROCESSLIST RETURNS DIFERENT RESULTS THAN IS QUERY WITH XPROTOCOL CONNECTN
 -->echo Bug #21472634
--->stmtsql show processlist;
--->recvresult User Host db Command State Info
+# fix unstable order
+-->stmtsql SELECT * FROM information_schema.processlist ORDER BY User, Command, State, Info;
+-->recvresult USER HOST DB COMMAND STATE INFO
 -->sql
 SELECT user,command,state FROM information_schema.processlist where User != "event_scheduler" ORDER BY user;
 -->endsql

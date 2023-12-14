@@ -1,3 +1,4 @@
 t-rds-xcluster-80:
   pkgpara:
+    ALLOW_SAME: 1
     DOCKER: 1

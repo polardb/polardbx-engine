@@ -45,3 +45,10 @@ dbms_xa	prepare_with_trx_slot	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG
 dbms_xa	send_heartbeat	ADMIN_PROC	NULL
 mysql	dummy	ADMIN_PROC	NULL
 mysql	dummy_2	ADMIN_PROC	LONGLONG, VARCHAR
+polarx	changeset_fetch	ADMIN_PROC	NULL
+polarx	changeset_finish	ADMIN_PROC	NULL
+polarx	changeset_start	ADMIN_PROC	NULL
+polarx	changeset_stats	ADMIN_PROC	NULL
+polarx	changeset_stop	ADMIN_PROC	NULL
+polarx	changeset_times	ADMIN_PROC	NULL
+xrpc	perf_hist	ADMIN_PROC	VARCHAR

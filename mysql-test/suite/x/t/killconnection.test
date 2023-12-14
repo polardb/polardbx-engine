@@ -13,7 +13,7 @@ call mtr.add_suppression("Plugin mysqlx reported: '5.1: Unhandled message of typ
 --write_file $MYSQL_TMP_DIR/mysqlx-connection.xpl
 -->sql
 create user killsession@localhost identified by 'killsession';
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 -->endsql
 EOF
 
@@ -27,7 +27,7 @@ EOF
 -->fatalerrors
 -->sql
 set @current := connection_id();
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 kill %MYSQLTEST_CONNECTION_ID%;
 -->endsql
 -->expecterror ER_QUERY_INTERRUPTED
@@ -38,12 +38,12 @@ EOF
 
 --write_file $MYSQL_TMP_DIR/mysqlx-connection_killiunprivileged.xpl
 -->sql
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 -->endsql
 -->expecterror ER_KILL_DENIED_ERROR
 -->sql
 kill %MYSQLTEST_CONNECTION_ID%;
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 -->endsql
 EOF
 
@@ -51,7 +51,7 @@ EOF
 -->fatalerrors
 -->sql
 set @current := connection_id();
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 -->endsql
 -->expecterror ER_QUERY_INTERRUPTED
 -->sql
@@ -62,7 +62,7 @@ EOF
 --write_file $MYSQL_TMP_DIR/mysqlx-connection_killinvalid.xpl
 -->fatalerrors
 -->sql
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 -->endsql
 -->expecterror ER_NO_SUCH_THREAD
 -->sql
@@ -110,7 +110,7 @@ let $wait_for_status_variable =
 let $wait_for_status_value = 1, 0;
 source ../include/wait_for_status_variables.inc;
 --replace_regex /Execute/Query/
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 
 ###kill mysqlx protocol session using mysqlx protocol when mysqlxplugin installed (expect error again)
 --replace_regex /localhost:[0-9]*/localhost/ /Execute/Query/
@@ -123,7 +123,7 @@ let $wait_for_status_variable =
 let $wait_for_status_value = 2, 0;
 source ../include/wait_for_status_variables.inc;
 --replace_regex /Execute/Query/
-select USER,COMMAND,STATE from information_schema.processlist order by ID desc;
+select USER,COMMAND,STATE from information_schema.processlist order by User, Command, State, Info;
 ##expect Mysqlx_sessions_fatal_error incremented when killing its own session
 show status like 'Mysqlx_sessions%';
 

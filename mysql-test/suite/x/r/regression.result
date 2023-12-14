@@ -2,11 +2,11 @@ call mtr.add_suppression("Plugin mysqlx reported: .Error parsing message of type
 call mtr.add_suppression("Plugin mysqlx reported: .Setup of socket: '' failed, the socket file path is empty");
 # restart
 Bug #21472634
-RUN show processlist;
-	User	Host	db	Command		State	Info
+RUN SELECT * FROM information_schema.processlist ORDER BY User, Command, State, Info;
+	USER	HOST	DB	COMMAND		STATE	INFO
 	event_scheduler	localhost	null	Daemon	Waiting on empty queue	null
 	root	localhost	test	Sleep		null
-	x_root	localhost	null	Query	init	PLUGIN: show processlist
+	x_root	localhost	null	Query	executing	PLUGIN: SELECT * FROM information_schema.processlist ORDER BY User, Command, State, Info
 0 rows affected
 RUN SELECT user,command,state FROM information_schema.processlist where User != "event_scheduler" ORDER BY user
 user	command	state

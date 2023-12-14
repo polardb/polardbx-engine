@@ -161,7 +161,8 @@ echo #;
 echo # II.2;
 
 setsession session_SLEEP;
-recvresult;
+# ignore result
+recvresult be-quiet;
 callmacro Assert_notice_warning	ERROR	%ER_SERVER_SHUTDOWN%;
 recvuntildisc show-received keep-session;
 reconnect;

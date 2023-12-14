@@ -525,6 +525,10 @@ The following options may be given as the first argument:
  --enable-appliedindex-checker 
  enable applied index checker during ordered_commit
  (Defaults to on; use --skip-enable-appliedindex-checker to disable.)
+ --enable-changeset  Whether open the polarx changeset proc
+ (Defaults to on; use --skip-enable-changeset to disable.)
+ --enable-polarx-rpc Use new open PolarDB-X RPC
+ (Defaults to on; use --skip-enable-polarx-rpc to disable.)
  --end-markers-in-json 
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
@@ -651,6 +655,12 @@ The following options may be given as the first argument:
  Maximum amount of memory available for generating
  histograms
  --host-cache-size=# How many host names should be cached to avoid resolving.
+ --import-tablespace-iterator-interval[=#] 
+ This option is deprecated. Use
+ import_tablespace_iterator_interval_ms instead.
+ --import-tablespace-iterator-interval-ms[=#] 
+ The interval sleep between each import tablespace
+ iterator in microseconds
  --information-schema-stats-expiry=# 
  The number of seconds after which mysqld server will
  fetch data from storage engine and replace the data in
@@ -960,6 +970,8 @@ The following options may be given as the first argument:
  Number of seconds to wait for a block to be written to a
  connection before aborting the write
  -n, --new           Use very new possible "unsafe" functions
+ --new-rpc           This option is deprecated. Use enable_polarx_rpc instead.
+ (Defaults to on; use --skip-new-rpc to disable.)
  --no-dd-upgrade     Abort restart if automatic upgrade or downgrade of the
  data dictionary is needed. Deprecated option. Use
  --upgrade=NONE instead.
@@ -1292,6 +1304,101 @@ The following options may be given as the first argument:
  in plugin_dir. This option adds to the list specified by
  --plugin-load in an incremental way. Multiple
  --plugin-load-add are supported.
+ --polarx-rpc[=name] Enable or disable polarx_rpc plugin. Possible values are
+ ON, OFF, FORCE (don't start if the plugin fails to load).
+ --polarx-rpc-auto-cpu-affinity 
+ Enable auto thread CPU affinity(RO)
+ (Defaults to on; use --skip-polarx-rpc-auto-cpu-affinity to disable.)
+ --polarx-rpc-enable-epoll-in-tasker 
+ Enable tasker to do epoll(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-epoll-in-tasker to disable.)
+ --polarx-rpc-enable-kill-log 
+ Enable session kill log(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-kill-log to disable.)
+ --polarx-rpc-enable-perf-hist 
+ Enable performance histogram(RW)
+ --polarx-rpc-enable-tasker 
+ Enable balance tasker(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-tasker to disable.)
+ --polarx-rpc-enable-thread-pool-log 
+ Enable thread pool log(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-thread-pool-log to disable.)
+ --polarx-rpc-epoll-events-per-thread[=#] 
+ Number of event slots per epoll_wait invoking(RW)
+ --polarx-rpc-epoll-extra-groups[=#] 
+ Extra epoll groups(RO)
+ --polarx-rpc-epoll-group-ctx-refresh-time[=#] 
+ Epoll group context(shared session) refresh time in
+ ms(RW)
+ --polarx-rpc-epoll-group-dynamic-threads[=#] 
+ Expected non-base threads for each epoll group(RW)
+ --polarx-rpc-epoll-group-dynamic-threads-shrink-time[=#] 
+ Time of shrinking the thread pool when no stall occurs in
+ ms(RW)
+ --polarx-rpc-epoll-group-tasker-extend-step[=#] 
+ Tasker threads extend step(RW)
+ --polarx-rpc-epoll-group-tasker-multiply[=#] 
+ Workload factor of one thread to n queued tasks(RW)
+ --polarx-rpc-epoll-group-thread-deadlock-check-interval[=#] 
+ Interval of checking thread pool deadlock in ms(RW)
+ --polarx-rpc-epoll-group-thread-scale-thresh[=#] 
+ Thresh(number of stalled threads in one thread pool
+ group) of scaling the thread pool(RW)
+ --polarx-rpc-epoll-groups[=#] 
+ Epoll group number(auto calculate if set to 0)(RO)
+ --polarx-rpc-epoll-threads-per-group[=#] 
+ Base threads number for each epoll group(RO)
+ --polarx-rpc-epoll-timeout[=#] 
+ Timeout of epoll_wait in ms(RW)
+ --polarx-rpc-epoll-work-queue-capacity[=#] 
+ Capacity of work queue for each epoll group(RO)
+ --polarx-rpc-force-all-cores 
+ Enable thread CPU affinity to all CPU cores(RO)
+ --polarx-rpc-galaxy-protocol 
+ Is galaxy protocol(RW)
+ --polarx-rpc-galaxy-version[=#] 
+ Version of galaxy protocol(RW)
+ --polarx-rpc-max-allowed-packet[=#] 
+ Max size of packet which can receive(RW)
+ --polarx-rpc-max-cached-output-buffer-pages[=#] 
+ Max cached page number for output(RW)
+ --polarx-rpc-max-epoll-wait-total-threads[=#] 
+ Number of base threads which wait on epoll in each
+ group(don't limit it if set to 0)(RO)
+ --polarx-rpc-max-queued-messages[=#] 
+ Max queued message for each session(RW)
+ --polarx-rpc-mcs-spin-cnt[=#] 
+ MCS spin lock spin count before snooze(RW)
+ --polarx-rpc-min-auto-epoll-groups[=#] 
+ Minimum epoll group number calculated by auto(RO)
+ --polarx-rpc-multi-affinity-in-group 
+ Enable base thread bind to all cores in group(RO)
+ (Defaults to on; use --skip-polarx-rpc-multi-affinity-in-group to disable.)
+ --polarx-rpc-net-write-timeout[=#] 
+ Timeout for TCP write in ms(RW)
+ --polarx-rpc-request-cache-instances[=#] 
+ Instances number of request cache(RO)
+ --polarx-rpc-request-cache-max-length[=#] 
+ Max length of sql/plan which will store in request
+ cache(RO)
+ --polarx-rpc-request-cache-number[=#] 
+ Total cache number of XRPC requests(RO)
+ --polarx-rpc-session-poll-rwlock-spin-cnt[=#] 
+ Spin count of RW-lock before snooze for session pool(RW)
+ --polarx-rpc-shared-session-lifetime[=#] 
+ Life time for shared session in ms(RW)
+ --polarx-rpc-tcp-fixed-dealing-buf[=#] 
+ TCP fixed dealing buffer size(RW)
+ --polarx-rpc-tcp-keep-alive[=#] 
+ TCP keep alive thresh in s(RW)
+ --polarx-rpc-tcp-listen-queue[=#] 
+ TCP listen queue(RO)
+ --polarx-rpc-tcp-recv-buf[=#] 
+ TCP receive buffer size(not change if set to 0)(RW)
+ --polarx-rpc-tcp-send-buf[=#] 
+ TCP send buffer size(not change if set to 0)(RW)
+ --polarx-udf[=name] Enable or disable polarx_udf plugin. Possible values are
+ ON, OFF, FORCE (don't start if the plugin fails to load).
  -P, --port=#        Port number to use for connection or 0 to default to,
  my.cnf, $MYSQL_TCP_PORT, /etc/services, built-in default
  (3306), whatever comes first
@@ -1612,6 +1719,7 @@ The following options may be given as the first argument:
  general_log
  --rotate-log-table-last-name=name 
  Last rotated log table file name
+ --rpc-port[=#]      RPC port for PolarDB-X
  --rpl-read-size=#   The size for reads done from the binlog and relay log. It
  must be a multiple of 4kb. Making it larger might help
  with IO stalls while reading these files when they are
@@ -2102,6 +2210,8 @@ disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
 enable-appliedindex-checker TRUE
+enable-changeset TRUE
+enable-polarx-rpc TRUE
 end-markers-in-json FALSE
 enforce-gtid-consistency false
 eq-range-index-dive-limit 200
@@ -2131,6 +2241,8 @@ gtid-mode OFF
 help TRUE
 histogram-generation-max-mem-size 20000000
 host-cache-size 279
+import-tablespace-iterator-interval 10
+import-tablespace-iterator-interval-ms 10
 information-schema-stats-expiry 86400
 init-connect 
 init-file (No default value)
@@ -2231,6 +2343,7 @@ net-read-timeout 30
 net-retry-count 10
 net-write-timeout 60
 new FALSE
+new-rpc TRUE
 no-dd-upgrade FALSE
 offline-mode FALSE
 old FALSE
@@ -2328,6 +2441,48 @@ performance-schema-users-size -1
 persist-only-admin-x509-subject 
 persist-sensitive-variables-in-plaintext TRUE
 persisted-globals-load TRUE
+polarx-rpc ON
+polarx-rpc-auto-cpu-affinity TRUE
+polarx-rpc-enable-epoll-in-tasker TRUE
+polarx-rpc-enable-kill-log TRUE
+polarx-rpc-enable-perf-hist FALSE
+polarx-rpc-enable-tasker TRUE
+polarx-rpc-enable-thread-pool-log TRUE
+polarx-rpc-epoll-events-per-thread 4
+polarx-rpc-epoll-extra-groups 0
+polarx-rpc-epoll-group-ctx-refresh-time 10000
+polarx-rpc-epoll-group-dynamic-threads 0
+polarx-rpc-epoll-group-dynamic-threads-shrink-time 10000
+polarx-rpc-epoll-group-tasker-extend-step 2
+polarx-rpc-epoll-group-tasker-multiply 3
+polarx-rpc-epoll-group-thread-deadlock-check-interval 500
+polarx-rpc-epoll-group-thread-scale-thresh 2
+polarx-rpc-epoll-groups 0
+polarx-rpc-epoll-threads-per-group 4
+polarx-rpc-epoll-timeout 10000
+polarx-rpc-epoll-work-queue-capacity 256
+polarx-rpc-force-all-cores FALSE
+polarx-rpc-galaxy-protocol FALSE
+polarx-rpc-galaxy-version 0
+polarx-rpc-max-allowed-packet 67108864
+polarx-rpc-max-cached-output-buffer-pages 10
+polarx-rpc-max-epoll-wait-total-threads 0
+polarx-rpc-max-queued-messages 128
+polarx-rpc-mcs-spin-cnt 2000
+polarx-rpc-min-auto-epoll-groups 32
+polarx-rpc-multi-affinity-in-group TRUE
+polarx-rpc-net-write-timeout 10000
+polarx-rpc-request-cache-instances 16
+polarx-rpc-request-cache-max-length 1048576
+polarx-rpc-request-cache-number 1024
+polarx-rpc-session-poll-rwlock-spin-cnt 1
+polarx-rpc-shared-session-lifetime 60000
+polarx-rpc-tcp-fixed-dealing-buf 4096
+polarx-rpc-tcp-keep-alive 30
+polarx-rpc-tcp-listen-queue 128
+polarx-rpc-tcp-recv-buf 0
+polarx-rpc-tcp-send-buf 0
+polarx-udf ON
 port ####
 port-open-timeout 0
 preload-buffer-size 32768
@@ -2400,6 +2555,7 @@ require-secure-transport FALSE
 reset-consensus-prefetch-cache FALSE
 rotate-log-table FALSE
 rotate-log-table-last-name 
+rpc-port 33660
 rpl-read-size 8192
 rpl-stop-replica-timeout 31536000
 rpl-stop-slave-timeout 31536000

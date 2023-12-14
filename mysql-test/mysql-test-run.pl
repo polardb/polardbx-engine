@@ -299,6 +299,8 @@ our @DEFAULT_SUITES = qw(
   lizard
   innodb_gcn
   xcluster
+  changeset
+  polarx_rpc
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;

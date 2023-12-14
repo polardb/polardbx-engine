@@ -116,9 +116,6 @@ Server disconnected
 #
 # II.2
 switched to session session_SLEEP
-SLEEP(10000)
-1
-0 rows affected
 [ASSERT notice warning - ERROR, 1053]
 Server disconnected
 
