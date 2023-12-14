@@ -5,23 +5,23 @@ License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
 Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-BuildRequires: cmake >= 3.8.2
+# BuildRequires: cmake >= 3.8.2
 
-%if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
-BuildRequires: libarchive
-BuildRequires: ncurses-devel
-BuildRequires: bison
-%else
-BuildRequires: libaio-devel
-%endif
+# %if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
+# BuildRequires: libarchive
+# BuildRequires: ncurses-devel
+# BuildRequires: bison
+# %else
+# BuildRequires: libaio-devel
+# %endif
 
-BuildRequires: alios7u-2_32-gcc-10-repo
-BuildRequires: gcc >= 10.2.1
-BuildRequires: gcc-c++ >= 10.2.1
-BuildRequires: libstdc++-devel >= 10.2.1
-BuildRequires: binutils >= 2.35
+# BuildRequires: alios7u-2_32-gcc-10-repo
+# BuildRequires: gcc >= 10.2.1
+# BuildRequires: gcc-c++ >= 10.2.1
+# BuildRequires: libstdc++-devel >= 10.2.1
+# BuildRequires: binutils >= 2.35
 
-BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
+# BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
 
 
 Packager: jianwei.zhao@alibaba-inc.com
@@ -63,6 +63,8 @@ else
     CFLAGS="-O3 -g -fexceptions -static-libgcc -fno-omit-frame-pointer -fno-strict-aliasing"
     CXXFLAGS="-O3 -g -fexceptions -static-libgcc -fno-omit-frame-pointer -fno-strict-aliasing"
 fi
+
+source /opt/rh/devtoolset-11/enable
 
 CC=gcc
 CXX=g++
