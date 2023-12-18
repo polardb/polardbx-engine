@@ -257,12 +257,12 @@ fi
 server_suffix="-""$server_suffix"
 
 if [ x"$build_type" = x"RelWithDebInfo" ]; then
-  COMMON_FLAGS="-O3 -g "
+  COMMON_FLAGS="-O3 -g -D_FORTIFY_SOURCE=2 -static-libgcc -static-libstdc++ "
 elif [ x"$build_type" = x"Debug" ]; then
-  COMMON_FLAGS="-g3 "
+  COMMON_FLAGS="-O0 -g3 "
 fi
 
-COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing "
+COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always -fexceptions -fno-omit-frame-pointer -fstack-protector-strong "
 
 if [ x"$mach_type" = x"x86_64" ]; then # X86
   COMMON_FLAGS="$COMMON_FLAGS"

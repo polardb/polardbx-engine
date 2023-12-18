@@ -18,7 +18,7 @@
 
 --echo # report error when tilde is used in file name
 --error 2
---exec $MYSQL_PUMP --result-file=~/dump.sql
+--exec $MYSQL_PUMP --result-file=$MYSQLTEST_VARDIR/tmp/bug29343073/dump.sql
 
 
 --echo #

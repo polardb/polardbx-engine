@@ -11,5 +11,5 @@ Variable_name	Value
 rds_release_date	19900210
 set global rds_release_date="20230711";
 ERROR HY000: Variable 'rds_release_date' is a read only variable
-1
+0
 drop user test@localhost;

@@ -5,23 +5,21 @@ License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
 Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-# BuildRequires: cmake >= 3.8.2
+BuildRequires: cmake >= 3.8.2
 
-# %if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
-# BuildRequires: libarchive
-# BuildRequires: ncurses-devel
-# BuildRequires: bison
-# %else
-# BuildRequires: libaio-devel
-# %endif
+%if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
+BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static
+%else
+BuildRequires: libaio-devel
+%endif
 
-# BuildRequires: alios7u-2_32-gcc-10-repo
-# BuildRequires: gcc >= 10.2.1
-# BuildRequires: gcc-c++ >= 10.2.1
-# BuildRequires: libstdc++-devel >= 10.2.1
-# BuildRequires: binutils >= 2.35
+BuildRequires: alios7u-2_32-gcc-10-repo
+BuildRequires: gcc >= 10.2.1
+BuildRequires: gcc-c++ >= 10.2.1
+BuildRequires: libstdc++-devel >= 10.2.1
+BuildRequires: binutils >= 2.35
 
-# BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
+BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
 
 
 Packager: jianwei.zhao@alibaba-inc.com
@@ -40,7 +38,7 @@ as for embedding into mass-deployed software.
 %define MYSQL_GROUP root
 %define __os_install_post %{nil}
 %define commit_id %(git rev-parse --short HEAD)
-%define release_date 20231101
+%define release_date 20231201
 %define base_dir /u01/xcluster80
 %define copy_dir /u01/xcluster80_%{release_date}
 
@@ -60,11 +58,9 @@ if [ x"$mach_type" = x"aarch64" ]; then
     CFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
     CXXFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
 else
-    CFLAGS="-O3 -g -fexceptions -static-libgcc -fno-omit-frame-pointer -fno-strict-aliasing"
-    CXXFLAGS="-O3 -g -fexceptions -static-libgcc -fno-omit-frame-pointer -fno-strict-aliasing"
+    CFLAGS="-O3 -g -fexceptions  -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
+    CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
 fi
-
-source /opt/rh/devtoolset-11/enable
 
 CC=gcc
 CXX=g++
@@ -104,8 +100,6 @@ $CMAKE_BIN .                            \
   -DENABLED_LOCAL_INFILE=1           \
   -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
   -DRDS_RELEASE_DATE=%{release_date} \
-  -DBUILD_AS_EXTERNAL=1 \
-  -DMINIMAL_MAKE=1 \
 
 make -j `cat /proc/cpuinfo | grep processor| wc -l`
 

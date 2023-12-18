@@ -20,4 +20,6 @@ ${PERL_BIN} ${CICD_BUILD_ROOT}/mysql-test/mysql-test-run.pl \
   --parallel=${PARALLEL} \
   --report-features \
   --unit-tests-report \
+  --big-test \
+  --testcase-timeout=45 \
   --xml-report=${WORKING_SPACE_PATH}/${RESULT_PATH}/mtr_result.xml

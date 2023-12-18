@@ -373,7 +373,7 @@ The following options may be given as the first argument:
  Number of consensus io thread
  --consensus-large-batch-ratio[=#] 
  Large batch ratio of consensus server send at once
- --consensus-large-event-count-limit=# 
+ --consensus-large-event-count-limit[=#] 
  Consensus large event count limit in one trx
  --consensus-large-event-limit=# 
  This option is deprecated. Use
@@ -2042,7 +2042,7 @@ consensus-heartbeat-thread-cnt 0
 consensus-index-buf-enabled TRUE
 consensus-io-thread-cnt 3
 consensus-large-batch-ratio 50
-consensus-large-event-count-limit 1
+consensus-large-event-count-limit 2
 consensus-large-event-limit 1073741824
 consensus-large-event-size-limit 1073741824
 consensus-large-event-split-size 2097152
