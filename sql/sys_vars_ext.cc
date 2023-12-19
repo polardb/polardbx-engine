@@ -71,6 +71,7 @@ static char *rds_release_date_ptr = NULL;
   @returns void.
 */
 void print_build_info() {
+  printf("Engine Release Date: %s\n", RDS_RELEASE_DATE);
   printf("Engine Build Type: %s\n", BUILD_TYPE);
   printf("Engine Build Branch: %s\n", BUILD_BRANCH);
   printf("Engine Build Commit: %s\n", BUILD_COMMIT);
@@ -503,5 +504,13 @@ static Sys_var_bool Sys_force_index_percentage_cached(
     "force cached table index in memory when estimate query cost",
     GLOBAL_VAR(opt_force_index_pct_cached), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
+
+static Sys_var_ulong Sys_kill_idle_transaction(
+    "kill_idle_transaction_timeout",
+    "If non-zero, number of seconds to wait before killing idle "
+    "connections that have open transactions",
+    GLOBAL_VAR(kill_idle_transaction_timeout), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, LONG_TIMEOUT), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 /* RDS DEFINED */

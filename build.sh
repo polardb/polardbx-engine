@@ -257,7 +257,7 @@ fi
 server_suffix="-""$server_suffix"
 
 if [ x"$build_type" = x"RelWithDebInfo" ]; then
-  COMMON_FLAGS="-O3 -g -D_FORTIFY_SOURCE=2 -static-libgcc -static-libstdc++ "
+  COMMON_FLAGS="-O3 -g -D_FORTIFY_SOURCE=2  "
 elif [ x"$build_type" = x"Debug" ]; then
   COMMON_FLAGS="-O0 -g3 "
 fi

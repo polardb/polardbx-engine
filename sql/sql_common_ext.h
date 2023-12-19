@@ -50,6 +50,10 @@ extern const char *lock_instance_mode_names[];
 /* mysql instance lock mode */
 extern ulong lock_instance_mode;
 
+/** Kill the transaction that is idle when timeout,
+    in order to release the holded resources */
+extern ulong kill_idle_transaction_timeout;
+
 
 /* Report the readonly error or instance locked error */
 extern void err_readonly_or_instance_lock(THD *thd);

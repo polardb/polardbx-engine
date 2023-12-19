@@ -6510,9 +6510,6 @@ sub mysqld_arguments ($$$) {
     }
   }
 
-  # make explain select case stable
-  mtr_add_arg($args, "--loose-opt_force_index_pct_cached=1");
-
   if ($opt_lock_order) {
     my $lo_dep_1 = "$basedir/mysql-test/lock_order_dependencies.txt";
     my $lo_dep_2 =

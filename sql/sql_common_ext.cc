@@ -35,6 +35,8 @@ const char *lock_instance_mode_names[] = {
 /* mysql instance lock mode */
 ulong lock_instance_mode = 0;
 
+ulong kill_idle_transaction_timeout = 0;
+
 /* Report the readonly error or instance locked error */
 void err_readonly_or_instance_lock(THD *thd) {
   if (lock_instance_mode > LOCK_INSTANCE_NON)

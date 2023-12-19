@@ -251,6 +251,8 @@ innodb_vision_use_commit_snapshot_debug
 innodb_vision_use_commit_snapshot_debug
 keyring_operations
 keyring_operations
+kill_idle_transaction_timeout
+kill_idle_transaction_timeout
 lock_instance_mode
 lock_instance_mode
 log_replica_updates

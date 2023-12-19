@@ -709,6 +709,9 @@ The following options may be given as the first argument:
  Migrate from keyring plugin to keyring component.
  --keyring-migration-user=name 
  User to login to server.
+ --kill-idle-transaction-timeout=# 
+ If non-zero, number of seconds to wait before killing
+ idle connections that have open transactions
  -L, --language=name Client error messages in given language. May be given as
  a full path. Deprecated. Use --lc-messages-dir instead.
  --large-pages       Enable support for large pages
@@ -2145,6 +2148,7 @@ keyring-migration-port 0
 keyring-migration-source (No default value)
 keyring-migration-to-component FALSE
 keyring-migration-user (No default value)
+kill-idle-transaction-timeout 0
 large-pages FALSE
 lc-messages en_US
 lc-time-names en_US

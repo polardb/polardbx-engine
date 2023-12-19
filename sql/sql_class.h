@@ -118,6 +118,7 @@
 
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_interface.h"
+#include "sql/sql_common_ext.h"
 
 namespace im {
 namespace recycle_bin {
@@ -4870,6 +4871,15 @@ public:
 
   /** Get returning lex */
   im::Lex_returning *get_lex_returning() { return lex_returning.get(); }
+
+  /* Timeout on the blocked socket */
+  inline ulong get_wait_timeout(void) const {
+    if (in_active_multi_stmt_transaction() &&
+        kill_idle_transaction_timeout > 0 &&
+        kill_idle_transaction_timeout < variables.net_wait_timeout)
+      return kill_idle_transaction_timeout;
+    return variables.net_wait_timeout;
+  }
 };
 
 inline ulonglong thd_get_snapshot_gcn(THD *thd) {
