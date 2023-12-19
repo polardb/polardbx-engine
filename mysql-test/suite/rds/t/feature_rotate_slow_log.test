@@ -1,0 +1,57 @@
+connection default;
+
+select @@global.log_output into @saved_log_output;
+select @@global.slow_query_log into @saved_slow_query_log;
+
+set global log_output = 'TABLE';
+set global slow_query_log = ON;
+
+--replace_column 2 slow_log_1.csv
+show global variables like 'rotate_log_table_last_name';
+set session rotate_log_table = on;
+flush slow logs;
+
+--replace_column 2 slow_log_2.csv
+show global variables like 'rotate_log_table_last_name';
+
+create database db_1;
+use db_1;
+create table t(id int);
+begin;
+insert into t values(1);
+flush slow logs;
+
+--replace_column 2 slow_log_3.csv
+show global variables like 'rotate_log_table_last_name';
+
+lock table t read;
+--error ER_LOCK_OR_ACTIVE_TRANSACTION
+flush slow logs;
+unlock tables;
+
+
+create procedure proc_1() flush slow logs;
+call proc_1();
+call proc_1();
+call proc_1();
+delimiter |;
+--error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
+create function func_1() returns int begin flush slow logs; return 1; end|
+create function func_1() returns int begin call proc_1(); return 1; end|
+delimiter ;|
+--error ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG
+select func_1(), func_1(), func_1() from dual;
+drop function func_1;
+drop procedure proc_1;
+prepare abc from "flush slow logs";
+execute abc;
+execute abc;
+execute abc;
+deallocate prepare abc;
+
+
+
+drop database db_1;
+
+set global log_output =  @saved_log_output;
+set global slow_query_log = @saved_slow_query_log;

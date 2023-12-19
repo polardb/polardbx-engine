@@ -998,6 +998,7 @@ MySQL clients support the protocol:
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
+#include "sql/log_table.h"
 
 using std::max;
 using std::min;
@@ -4969,6 +4970,8 @@ int init_common_variables() {
 #endif
 
   if (get_options(&remaining_argc, &remaining_argv)) return 1;
+
+  im::update_rotate_log_table_last_name_ptr();
 
   /*
     The opt_bin_log can be false (binary log is disabled) only if

@@ -115,7 +115,8 @@ BEGIN
                                 'gtid_executed', 'gtid_purged',
                                 'group_replication_group_name',
                                 'keyring_file_data',
-                                'innodb_thread_sleep_delay')
+                                'innodb_thread_sleep_delay',
+                                'rotate_log_table_last_name')
   ORDER BY VARIABLE_NAME;
 
   -- Dump all persisted variables, those that may change.
@@ -215,7 +216,6 @@ BEGIN
     mysql.default_roles,
     mysql.db,
     mysql.func,
-    mysql.general_log,
     mysql.global_grants,
     mysql.help_category,
     mysql.help_keyword,

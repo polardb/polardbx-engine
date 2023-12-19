@@ -23675,7 +23675,7 @@ static MYSQL_SYSVAR_BOOL(vision_use_commit_snapshot_debug,
                          "find a suitable up_limit_tid for general Vision on",
                          NULL, NULL, false);
 
-static MYSQL_SYSVAR_BOOL(innodb_btree_sampling, srv_innodb_btree_sampling,
+static MYSQL_SYSVAR_BOOL(btree_sampling, srv_innodb_btree_sampling,
                          PLUGIN_VAR_OPCMDARG, "Support btree sampling.", NULL,
                          NULL, true);
 
@@ -23930,7 +23930,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(txn_cached_list_keep_size),
     MYSQL_SYSVAR(commit_snapshot_search_enabled),
     MYSQL_SYSVAR(vision_use_commit_snapshot_debug),
-    MYSQL_SYSVAR(innodb_btree_sampling),
+    MYSQL_SYSVAR(btree_sampling),
     nullptr};
 
 mysql_declare_plugin(innobase){

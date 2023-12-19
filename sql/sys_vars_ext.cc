@@ -31,6 +31,7 @@
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
 #include "sql/outline/outline_interface.h"
+#include "sql/log_table.h"
 #include "sql/sql_common_ext.h"
 #include "sql/sys_vars.h"
 #include "sql_statistics_common.h"
@@ -512,5 +513,17 @@ static Sys_var_ulong Sys_kill_idle_transaction(
     GLOBAL_VAR(kill_idle_transaction_timeout), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, LONG_TIMEOUT), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_rotate_log_table(
+    "rotate_log_table",
+    "Whether rotate the data file when flush slow_log or general_log",
+    SESSION_ONLY(rotate_log_table), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_charptr Sys_rotate_log_table_last_name(
+    "rotate_log_table_last_name", "Last rotated log table file name",
+    READ_ONLY GLOBAL_VAR(im::rotate_log_table_last_name_ptr),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(rotate_log_table_last_name),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
 
 /* RDS DEFINED */

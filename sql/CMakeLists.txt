@@ -677,6 +677,7 @@ SET(SQL_SHARED_SOURCES
   sequence_common.cc
   sequence_transaction.cc
   sql_sequence.cc
+  log_table.cc
   recycle_bin/recycle_table.cc
   recycle_bin/recycle.cc
   recycle_bin/recycle_parse.cc

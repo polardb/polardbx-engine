@@ -170,6 +170,8 @@ init_replica
 init_replica
 init_slave
 init_slave
+innodb_btree_sampling
+innodb_btree_sampling
 innodb_cleanout_disable
 innodb_cleanout_disable
 innodb_cleanout_max_cleans_on_page
@@ -208,8 +210,6 @@ innodb_freeze_db_if_no_cn_heartbeat_timeout_sec
 innodb_freeze_db_if_no_cn_heartbeat_timeout_sec
 innodb_global_query_wait_timeout
 innodb_global_query_wait_timeout
-innodb_innodb_btree_sampling
-innodb_innodb_btree_sampling
 innodb_lizard_stat_enabled
 innodb_lizard_stat_enabled
 innodb_log_spin_cpu_abs_lwm
@@ -395,6 +395,9 @@ replication_sender_observe_commit_only
 reset_consensus_prefetch_cache
 reset_consensus_prefetch_cache
 resultset_metadata
+rotate_log_table
+rotate_log_table_last_name
+rotate_log_table_last_name
 rpl_stop_replica_timeout
 rpl_stop_replica_timeout
 rpl_stop_slave_timeout

@@ -514,6 +514,8 @@ struct System_variables {
 
   bool sequence_read_skip_cache;
 
+  bool rotate_log_table;
+
   /** Gcn to read a snapshot by asof select. */
   ulonglong innodb_snapshot_gcn;
 

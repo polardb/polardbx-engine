@@ -1608,6 +1608,10 @@ The following options may be given as the first argument:
  are SSL/TLS, Unix socket or Shared Memory (on Windows).
  --reset-consensus-prefetch-cache 
  reset consensus prefetch_cache
+ --rotate-log-table  Whether rotate the data file when flush slow_log or
+ general_log
+ --rotate-log-table-last-name=name 
+ Last rotated log table file name
  --rpl-read-size=#   The size for reads done from the binlog and relay log. It
  must be a multiple of 4kb. Making it larger might help
  with IO stalls while reading these files when they are
@@ -2394,6 +2398,8 @@ report-port 0
 report-user (No default value)
 require-secure-transport FALSE
 reset-consensus-prefetch-cache FALSE
+rotate-log-table FALSE
+rotate-log-table-last-name 
 rpl-read-size 8192
 rpl-stop-replica-timeout 31536000
 rpl-stop-slave-timeout 31536000

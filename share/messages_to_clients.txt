@@ -10121,6 +10121,9 @@ ER_IMPLICIT_SAVEPOINT_FAILED
 ER_SAMPLE_WRONG_SEMANTIC
   eng "Sample hint syntax error. Not support WHERE, ORDER BY... or other clause. Not support special tables like temporary, view, spatial table or others."
 
+ER_ROTATE_REQUIRE_LOG_TABLE
+   eng "Rotate command must be working on log table"
+
 #
 #  End of RDS error message.
 #

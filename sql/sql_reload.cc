@@ -198,9 +198,18 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
     if (reopen_error_log()) result = true;
   }
 
-  if ((options & REFRESH_SLOW_LOG) && opt_slow_log &&
-      (log_output_options & LOG_FILE))
-    if (query_logger.reopen_log_file(QUERY_LOG_SLOW)) result = true;
+  if ((options & REFRESH_SLOW_LOG) && opt_slow_log)
+  {
+    if ((log_output_options & LOG_FILE)
+        && query_logger.reopen_log_file(QUERY_LOG_SLOW))
+      result = true;
+
+    /* Rotate slow log if support it. */
+    if ((log_output_options & LOG_TABLE)
+        && thd
+        && query_logger.rotate_log_table(thd, QUERY_LOG_SLOW))
+      result = true;
+  }
 
   if ((options & REFRESH_GENERAL_LOG) && opt_general_log &&
       (log_output_options & LOG_FILE))
