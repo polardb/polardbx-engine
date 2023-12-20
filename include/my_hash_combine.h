@@ -61,6 +61,8 @@ Steinar */
 #define MY_FUNCTIONAL_HASH_ROTL32(x, r) (x << r) | (x >> (32 - r))
 #endif /* _MSC_VER */
 
+#include <cstdint>
+
 template <typename SizeT>
 inline void my_hash_combine(SizeT &seed, SizeT value) {
   seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
