@@ -462,6 +462,7 @@ void Changeset::add_update(const std::string &pk_before, const std::string &pk_a
 }
 
 Changeset::Stats Changeset::update_stats() {
+  MutexLock lock(&mutex);
   stats_.memory_size = get_approximate_memory_size();
   stats_.file_count = file_list.size();
   if (tmp_file_name != nullptr) {

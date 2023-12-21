@@ -29,6 +29,8 @@ call polarx.changeset_stats('c3');
 
 insert into c3(str, value) values ("changeset4", "test4");
 
+--sleep 2
+
 call polarx.changeset_times('c3');
 
 call polarx.changeset_stats('c3');
