@@ -112,6 +112,7 @@ xa commit 'xa', 'test@0002' one phase;
 --echo # --------- case 4 ---------
 
 --connection con1
+set innodb_transaction_group = ON;
 xa start 'xa', 'test@0004';
 insert into t1 values(4);
 
@@ -153,11 +154,33 @@ select * from t1;
 xa end 'xa', 'test@0006';
 xa commit 'xa', 'test@0006' one phase;
 
+--echo # --------- case 5 ---------
+--connection con3
+set session transaction isolation level READ COMMITTED;
+
+set innodb_transaction_group = ON;
+
+show variables like "%isolation%";
+
+xa start 'xa', 'test@0007';
+
+# the changes made by ('xa', 'test@0004')  are visible
+select * from t1;
+
+# make changes
+insert into t1 values(7);
 
 --connection con1
+# test if ('xa', 'test@0004') can see the changes from ('xa', 'test@0007')
+select * from t1;
 # commit this XA transaction
 xa end 'xa', 'test@0004';
 xa commit 'xa', 'test@0004' one phase;
+
+--connection con3
+# commit this XA transaction
+xa end 'xa', 'test@0007';
+xa commit 'xa', 'test@0007' one phase;
 
 
 --connection con1

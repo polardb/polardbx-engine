@@ -64,6 +64,7 @@ id
 xa end 'xa', 'test@0002';
 xa commit 'xa', 'test@0002' one phase;
 # --------- case 4 ---------
+set innodb_transaction_group = ON;
 xa start 'xa', 'test@0004';
 insert into t1 values(4);
 set session transaction isolation level READ COMMITTED;
@@ -89,6 +90,29 @@ select * from t1;
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 xa end 'xa', 'test@0006';
 xa commit 'xa', 'test@0006' one phase;
+# --------- case 5 ---------
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+show variables like "%isolation%";
+Variable_name	Value
+transaction_isolation	READ-COMMITTED
+xa start 'xa', 'test@0007';
+select * from t1;
+id
+1
+2
+3
+4
+insert into t1 values(7);
+select * from t1;
+id
+1
+2
+3
+4
+7
 xa end 'xa', 'test@0004';
 xa commit 'xa', 'test@0004' one phase;
+xa end 'xa', 'test@0007';
+xa commit 'xa', 'test@0007' one phase;
 drop table t1;

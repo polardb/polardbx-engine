@@ -199,8 +199,6 @@ void VisionContainer::vision_open(trx_t *trx) {
     Snapshot_scn_vision v(vision->snapshot_scn(), 0);
     vision->m_up_limit_id = gcs_search_up_limit_tid<Snapshot_scn_vision>(v);
   }
-
-  vision_collect_trx_group_ids(trx, vision);
 }
 
 /**

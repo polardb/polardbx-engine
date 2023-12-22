@@ -96,8 +96,6 @@ bool trx_group_match_by_xid(const XID *lhs, const XID *rhs) {
   @param[in]    vision    current query view
 */
 void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
-  ut_ad(vision->group_ids.m_size == 0);
-  ut_ad(vision->group_ids.m_ids.empty());
 
   /** Restrict only user client thread */
   if (my_trx->mysql_thd == nullptr ||
