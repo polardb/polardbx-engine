@@ -654,7 +654,8 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
       }
 
       /* Send data if it is returning clause */
-      if (returning_stmt.send_data(thd)) {
+      if ((info.prev_errno == 0 || !thd->lex->is_ignore()) &&
+          returning_stmt.send_data(thd)) {
         has_error = true;
         break;
       }
@@ -1839,6 +1840,8 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
   ulonglong insert_id_for_cur_row = 0;
   DBUG_TRACE;
 
+  info->prev_errno = 0;
+
   /* Here we are using separate MEM_ROOT as this memory should be freed once we
      exit write_record() function. This is marked as not instumented as it is
      allocated for very short time in a very specific case.
@@ -1876,6 +1879,7 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
           report error as usual. We will not do any duplicate key processing.
         */
         info->last_errno = error;
+        info->prev_errno= error;
         table->file->print_error(error, MYF(0));
         /*
           If IGNORE option is used, handler errors will be downgraded
@@ -2063,6 +2067,7 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
                                                   table->record[0])) &&
               error != HA_ERR_RECORD_IS_THE_SAME) {
             info->last_errno = error;
+            info->prev_errno= error;
             myf error_flags = MYF(0);
             if (table->file->is_fatal_error(error))
               error_flags |= ME_FATALERROR;
@@ -2204,6 +2209,7 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
   } else if ((error = table->file->ha_write_row(table->record[0]))) {
     DEBUG_SYNC(thd, "write_row_noreplace");
     info->last_errno = error;
+    info->prev_errno = error;
     myf error_flags = MYF(0);
     if (table->file->is_fatal_error(error)) error_flags |= ME_FATALERROR;
     table->file->print_error(error, error_flags);
@@ -2234,6 +2240,7 @@ ok_or_after_trg_err:
 err : {
   myf error_flags = MYF(0); /**< Flag for fatal errors */
   info->last_errno = error;
+  info->prev_errno = error;
   if (table->file->is_fatal_error(error)) error_flags |= ME_FATALERROR;
 
   table->file->print_error(error, error_flags);

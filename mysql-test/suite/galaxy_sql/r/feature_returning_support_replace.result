@@ -1,0 +1,17 @@
+use test;
+create table returning (a int primary key, b int);
+insert into returning values (1,1), (2,2);
+call dbms_trans.returning('*', 'insert ignore into returning values(3,3),(3,4)');
+a	b
+3	3
+Warnings:
+Warning	1062	Duplicate entry '3' for key 'returning.PRIMARY'
+call dbms_trans.returning('*', 'replace into returning values(3,4), (1,10), (9,9)');
+a	b
+3	4
+1	10
+9	9
+call dbms_trans.returning('*', 'insert into returning values (3,5) on duplicate key update b=5');
+a	b
+3	5
+drop table returning;

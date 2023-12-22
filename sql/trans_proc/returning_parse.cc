@@ -223,6 +223,7 @@ bool deny_returning_clause_by_command(THD *thd, LEX *lex) {
   */
   if (thd->get_lex_returning()->is_returning_call() &&
       (lex->is_explain() || (lex->sql_command != SQLCOM_UPDATE &&
+                             lex->sql_command != SQLCOM_REPLACE &&
                              lex->sql_command != SQLCOM_DELETE &&
                              lex->sql_command != SQLCOM_INSERT))) {
     my_error(ER_NOT_SUPPORT_RETURNING_CLAUSE, MYF(0));
