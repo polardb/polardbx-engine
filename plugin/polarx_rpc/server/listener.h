@@ -204,7 +204,7 @@ public:
       /// only set reuse port on other inst
       ierr = insts[i]->listen_port(port, listener.get(), inst_cnt > 1);
       if (0 == ierr)
-        listener.release(); /// leak it to epoll
+        insts[i]->push_listener(std::move(listener)); /// push it to epoll
       else {
         {
           std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);

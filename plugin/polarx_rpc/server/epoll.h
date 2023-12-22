@@ -228,7 +228,10 @@ private:
 
   /// tcp set for visiting
   std::mutex tcp_lock_; /// no multiple reader so just mutex
-  std::set<CtcpConnection *> tcp_set_;
+  std::set<CtcpConnection *> tcp_set_{};
+
+  /// listener
+  std::unique_ptr<CepollCallback> listener_{};
 
   static inline int nonblock(int fd, int set) {
     int flags;
@@ -1054,6 +1057,10 @@ public:
       return iret;
     }
     return 0;
+  }
+
+  inline void push_listener(std::unique_ptr<CepollCallback> &&listener) {
+    listener_ = std::forward<std::unique_ptr<CepollCallback>>(listener);
   }
 
   inline void push_trigger(task_t &&task, int64_t trigger_time) {
