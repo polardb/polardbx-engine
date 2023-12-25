@@ -111,6 +111,11 @@ void Paxos::shutdown() {
   /* When Service::shutdown return, there is not backend worker left, so we can
    * release config_ now. */
   config_.reset();
+
+  if (threadHook != nullptr) {
+    delete threadHook;
+    threadHook = nullptr;
+  }
 }
 
 void Paxos::stop() {
@@ -3249,11 +3254,11 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
   log_->initMetaCache();
 
   /* Init Service */
-  srv_ = std::shared_ptr<Service>(new Service(this));
+  srv_ = std::make_shared<Service>(this);
   if (cs) srv_->cs = cs;
 
   srv_->init(ioThreadCnt, workThreadCnt, heartbeatTimeout_, memory_usage_count,
-             heartbeatThreadCnt);
+             heartbeatThreadCnt, threadHook);
 
   std::string curConfig = (*pConfig)[index - 1];
   /* Host format: [ipv6]:port, ipv4:port, we find the last ':' */

@@ -353,54 +353,11 @@ int ConsensusLogManager::init_service() {
       opt_cluster_id = get_consensus_info()->get_cluster_id();
     }
 
-    if (opt_recover_snapshot)
-    {
-      if (opt_cluster_log_type_instance)
-      {
-        raft::error(ER_RAFT_0) << "can't get consensus index of snapshot with logger mode ";
-        return -1;
-      }
-      if (consensus_log_manager.get_recovery_manager()
-              ->recover_remaining_pending_recovering_trxs()) {
-        return -1;
-      }
-      recovery_manager->clear();
-      if (start_consensus_apply_threads())
-        return -1;
-
-      std::string snapshot_file_name = mysql_real_data_home;
-      snapshot_file_name += "/mysql_binlog_snapshot";
-      std::ostringstream oss_apply_index;
-      uint64 apply_index = rli_info->get_consensus_apply_index();
-      oss_apply_index << apply_index;
-      std::string apply_index_str = oss_apply_index.str();
-      uint64 log_pos = 0;
-      char log_name[FN_REFLEN];
-      if (get_log_position(apply_index, false, log_name, &log_pos)) {
-        raft::error(ER_RAFT_0) << "Cann't find start index " << apply_index << " in binlog file.";
-        return -1;
-      }
-      std::string output_str = log_name;
-      const size_t last_slash_idx = output_str.find_last_of("\\/");
-      if (std::string::npos != last_slash_idx)
-      {
-        output_str.erase(0, last_slash_idx + 1);
-      }
-      output_str += "\t";
-      output_str += apply_index_str;
-
-      if (dump_cluster_info_to_file(snapshot_file_name, output_str))
-        return -1;
-
-      raft::info(ER_RAFT_0) << "Get the snapshot binlog pos successfully.";
-      return 1;
-    }
-
     // learner's cluster_info is empty or not contain @
-    bool is_learner = consensus_info->get_cluster_info() == "" ||
+    bool is_learner = consensus_info->get_cluster_info().empty() ||
 		    consensus_info->get_cluster_info().find('@') == std::string::npos;
     // get ip-port vector config
-    std::string empty_str = "";
+    std::string empty_str;
     std::vector<std::string> cluster_str_config;
     std::string cluster_info_str = is_learner ?
       consensus_info->get_cluster_learner_info() :
@@ -420,6 +377,7 @@ int ConsensusLogManager::init_service() {
     consensus_ptr->setConsensusAsync(opt_weak_consensus_mode);
     consensus_ptr->setReplicateWithCacheLog(opt_consensus_replicate_with_cache_log);
     consensus_ptr->setCompactOldMode(opt_consensus_old_compact_mode);
+    // todo keep IS log level sync with MySQL log
     consensus_ptr->setAlertLogLevel(alisql::Paxos::AlertLogLevel(opt_consensus_log_level + 3));
     consensus_ptr->setForceSyncEpochDiff(opt_consensus_force_sync_epoch_diff);
     consensus_ptr->setChecksumMode(opt_consensus_checksum);
@@ -432,6 +390,7 @@ int ConsensusLogManager::init_service() {
     consensus_ptr->setEnableAutoResetMatchIndex(opt_consensus_auto_reset_match_index);
     consensus_ptr->setEnableAutoLeaderTransfer(opt_consensus_auto_leader_transfer);
     consensus_ptr->setAutoLeaderTransferCheckSeconds(opt_consensus_auto_leader_transfer_check_seconds);
+    consensus_ptr->setThreadHook([](){my_thread_init();}, my_thread_end);
     if (!opt_consensus_force_recovery) {
       if (!is_learner) {
         // startup as normal node

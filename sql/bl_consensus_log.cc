@@ -45,7 +45,6 @@ void BLConsensusLog::init(uint64 mock_start_index_arg,
 
 int BLConsensusLog::getEntry(uint64_t logIndex, alisql::LogEntry &entry,
                              bool fastFail, uint64_t serverId) {
-  my_thread_init();
   uint64 term = 0;
   std::string log_content;
   Consensus_Log_Op_Type optype = NORMAL;
@@ -88,13 +87,11 @@ int BLConsensusLog::getEntry(uint64_t logIndex, alisql::LogEntry &entry,
 }
 
 uint64_t BLConsensusLog::getLeftSize(uint64_t startLogIndex) {
-  my_thread_init();
   return consensusLogManager_->get_left_log_size(startLogIndex, 0);
 }
 
 bool BLConsensusLog::getLeftSize(uint64_t startLogIndex,
                                  uint64_t maxPacketSize) {
-  my_thread_init();
   if (consensusLogManager_->get_left_log_size(startLogIndex, maxPacketSize) >
       maxPacketSize)
     return true;
@@ -124,7 +121,6 @@ uint64_t BLConsensusLog::getSafeLastLogIndex() {
 }
 
 uint64_t BLConsensusLog::appendWithCheck(const alisql::LogEntry &entry) {
-  my_thread_init();
   uint64 index = 0;
   if (entry.optype() == UNCERTAIN) {
     // optype UNCERTAIN means group commit replicate log send a fake log
@@ -150,7 +146,6 @@ uint64_t BLConsensusLog::appendWithCheck(const alisql::LogEntry &entry) {
 }
 
 uint64_t BLConsensusLog::append(const alisql::LogEntry &entry) {
-  my_thread_init();
   uint64 index = 0;
   if (entry.optype() == UNCERTAIN) {
     // optype UNCERTAIN means group commit replicate log send a fake log
@@ -176,7 +171,6 @@ uint64_t BLConsensusLog::append(const alisql::LogEntry &entry) {
 
 uint64_t BLConsensusLog::append(
     const ::google::protobuf::RepeatedPtrField<alisql::LogEntry> &entries) {
-  my_thread_init();
   std::vector<ConsensusLogEntry> log_vector;
   for (const auto &entry : entries) {
     uint flag = entry.info();
@@ -202,17 +196,14 @@ uint64_t BLConsensusLog::append(
 }
 
 void BLConsensusLog::truncateBackward(uint64_t firstIndex) {
-  my_thread_init();
   consensusLogManager_->truncate_log(firstIndex);
 }
 
 void BLConsensusLog::truncateForward(uint64_t lastIndex) {
-  my_thread_init();
   consensusLogManager_->purge_log(lastIndex);
 }
 
 int BLConsensusLog::getMetaData(const std::string &key, uint64_t *value) {
-  my_thread_init();
   if (consensusLogManager_->get_consensus_info()->consensus_init_info())
     return 1;
   if (key == "@keyVoteFor_@")
@@ -235,7 +226,6 @@ int BLConsensusLog::getMetaData(const std::string &key, uint64_t *value) {
 }
 
 int BLConsensusLog::getMetaData(const std::string &key, std::string &value) {
-  my_thread_init();
   if (consensusLogManager_->get_consensus_info()->consensus_init_info())
     return 1;
   if (key == "@keyMemberConfigure_@")
@@ -249,7 +239,6 @@ int BLConsensusLog::getMetaData(const std::string &key, std::string &value) {
 }
 
 int BLConsensusLog::setMetaData(const std::string &key, const uint64_t value) {
-  my_thread_init();
   if (key == "@keyVoteFor_@")
     consensusLogManager_->get_consensus_info()->set_vote_for(value);
   else if (key == "@keyCurrentTerm_@")
@@ -274,7 +263,6 @@ int BLConsensusLog::setMetaData(const std::string &key, const uint64_t value) {
 
 int BLConsensusLog::setMetaData(const std::string &key,
                                 const std::string &value) {
-  my_thread_init();
   if (key == "@keyMemberConfigure_@")
     consensusLogManager_->get_consensus_info()->set_cluster_info(value);
   else if (key == "@keyLearnerConfigure_@")

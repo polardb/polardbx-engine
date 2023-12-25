@@ -32,6 +32,35 @@ class Consensus;
 bool MyParseFromArray(google::protobuf::MessageLite &msg, const void *data,
                       int size);
 
+class ThreadHook {
+  friend class ThreadHookTrigger;
+ private:
+  std::function<void()> start;
+  std::function<void()> end;
+
+ public:
+  ThreadHook(std::function<void()> start, std::function<void()> end)
+      : start(std::move(start)), end(std::move(end)) {}
+};
+
+class ThreadHookTrigger {
+ private:
+  const ThreadHook *hook;
+ public:
+  explicit ThreadHookTrigger(ThreadHook *hook): hook(hook) {
+    if (hook != nullptr) {
+      hook->start();
+    }
+  }
+  ~ThreadHookTrigger() {
+    if (hook != nullptr) {
+      hook->end();
+    }
+  }
+};
+
+class easy_eio_start_wrapper;
+
 /**
  * @class Service
  *
@@ -46,7 +75,8 @@ class Service {
   virtual int init(uint64_t ioThreadCnt = 4, uint64_t workThreadCnt = 4,
                    uint64_t ConnectTimeout = 300,
                    bool memory_usage_count = false,
-                   uint64_t heartbeatThreadCnt = 0);
+                   uint64_t heartbeatThreadCnt = 0,
+                   ThreadHook *threadHook = nullptr);
   virtual int start(int port);
   virtual void closeThreadPool();
   virtual int shutdown();
@@ -122,6 +152,7 @@ class Service {
   std::shared_ptr<ThreadTimerService> tts_;
   Consensus *cons_;
 
+  std::shared_ptr<easy_eio_start_wrapper> eio_start_wrapper_ = nullptr;
 };      /* end of class Service */
 
 };      /* end of namespace alisql */

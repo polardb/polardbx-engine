@@ -97,7 +97,8 @@ extern easy_atomic_t easy_debug_uuid;
     easy_list_t                     user_list;      \
     easy_baseth_on_process_pt       *user_process;  \
     ev_timer                        user_timer;     \
-    easy_io_t                       *eio;
+    easy_io_t                       *eio;           \
+    void                            *user_data;
 
 ///// typedef
 typedef struct easy_io_thread_t easy_io_thread_t;

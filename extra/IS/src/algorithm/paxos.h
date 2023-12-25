@@ -543,6 +543,12 @@ class Paxos : public Consensus {
     option.extraStore = std::move(arg);
   }
 
+  void setThreadHook(const std::function<void()> &start,
+                     const std::function<void()> &end) {
+    delete threadHook;
+    threadHook = new ThreadHook(start, end);
+  }
+
   static void msleep(uint64_t t);
   void startElectionCallback();
   static void heartbeatCallback(std::weak_ptr<RemoteServer> wserver);
@@ -713,6 +719,8 @@ class Paxos : public Consensus {
   PaxosOption option;
   std::string host_; /* paxos connect host */
   uint port_;        /* paxos listen port */
+
+  ThreadHook *threadHook = nullptr;
 
  private:
   Paxos(const Paxos &other);                   // copy constructor

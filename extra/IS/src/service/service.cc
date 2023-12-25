@@ -16,15 +16,63 @@
  **/
 
 #include <easy_inet.h>
-#include <stdlib.h>
+#include <cstdlib>
 
 #include <memory>
 
 #include "consensus.h"
+#include "easy_io_struct.h"
 #include "msg_compress.h"
 #include "service.h"
 
 namespace alisql {
+
+template <typename T>
+void for_each(easy_list_t &list_head, std::function<void(T &)> f) {
+  for (easy_list_t *p = list_head.next; p != &list_head; p = p->next) {
+    f(*reinterpret_cast<T *>((char *)p - offsetof(T, list_node)));
+  }
+}
+
+void for_each(easy_thread_pool_t &pool,
+              const std::function<void(easy_baseth_t &)> &f) {
+  for (auto *th = reinterpret_cast<easy_baseth_t *>(&pool.data[0]);
+       (char *)th < pool.last;
+       th = reinterpret_cast<easy_baseth_t *>((char *)th + pool.member_size)) {
+    f(*th);
+  }
+}
+
+class easy_eio_start_wrapper {
+ private:
+  ThreadHook *hook;
+
+ public:
+  explicit easy_eio_start_wrapper(ThreadHook *hook) : hook(hook) {}
+
+  int operator()(easy_io_t *eio) {
+    if (eio == nullptr || eio->pool == nullptr) {
+      return EASY_ERROR;
+    }
+
+    if (eio->started) {
+      return EASY_ABORT;
+    }
+    for_each<easy_thread_pool_t>(
+        eio->thread_pool_list, [this](easy_thread_pool_t &tp) {
+          for_each(
+              tp, [this](easy_baseth_t &th) { th.user_data = (void *)(hook); });
+        });
+    return easy_eio_start(eio);
+  }
+};
+
+void *easy_baseth_on_start_wrapper(void *args) {
+  auto th = (easy_baseth_t *)args;
+  auto hook = (ThreadHook *)th->user_data;
+  ThreadHookTrigger trigger(hook);
+  return easy_baseth_on_start(args);
+}
 
 Service::Service(Consensus *cons) : cs(nullptr), cons_(cons) {}
 
@@ -33,23 +81,29 @@ uint64_t Service::workThreadCnt = 0;
 
 int Service::init(uint64_t ioThreadCnt, uint64_t workThreadCntArg,
                   uint64_t ConnectTimeout, bool memory_usage_count,
-                  uint64_t heartbeatThreadCnt) {
+                  uint64_t heartbeatThreadCnt, ThreadHook *threadHook) {
   /* TODO here we should use factory. */
 
   net_ = std::make_shared<EasyNet>(ioThreadCnt, ConnectTimeout,
                                    memory_usage_count);
 
-  pool_eio_ = easy_eio_create(NULL, 1);
+  pool_eio_ = easy_eio_create(nullptr, 1);
   pool_eio_->do_signal = 0;
-  workPool_ = easy_thread_pool_create(pool_eio_, workThreadCntArg,
-                                      Service::process, nullptr);
+
+  eio_start_wrapper_ = std::make_shared<easy_eio_start_wrapper>(threadHook);
+  workPool_ = easy_thread_pool_create_ex(pool_eio_, workThreadCntArg,
+                                         easy_baseth_on_start_wrapper,
+                                         Service::process, nullptr);
+
   workThreadCnt = workThreadCntArg;
 
-  if (heartbeatThreadCnt)
-    heartbeatPool_ = easy_thread_pool_create(pool_eio_, heartbeatThreadCnt,
-                                             Service::process, nullptr);
-  else
+  if (heartbeatThreadCnt) {
+    heartbeatPool_ = easy_thread_pool_create_ex(pool_eio_, heartbeatThreadCnt,
+                                                easy_baseth_on_start_wrapper,
+                                                Service::process, nullptr);
+  } else {
     heartbeatPool_ = nullptr;
+  }
 
   tts_ = std::make_shared<ThreadTimerService>();
 
@@ -60,13 +114,14 @@ int Service::init(uint64_t ioThreadCnt, uint64_t workThreadCntArg,
 }
 
 int Service::start(int port) {
-  if (easy_eio_start(pool_eio_)) return -4;
+  assert(eio_start_wrapper_ != nullptr);
+  if ((*eio_start_wrapper_)(pool_eio_)) return -4;
   shutdown_stage_1 = false;
   return net_->start(port);
 }
 
 void Service::closeThreadPool() {
-  if (shutdown_stage_1)  return;
+  if (shutdown_stage_1) return;
   easy_eio_shutdown(pool_eio_);
   easy_eio_stop(pool_eio_);
   easy_eio_wait(pool_eio_);

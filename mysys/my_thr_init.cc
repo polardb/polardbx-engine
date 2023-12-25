@@ -220,7 +220,7 @@ void my_thread_global_end() {
         are killed when we enter here.
       */
       if (THR_thread_count) /* purecov: begin inspected */
-        my_message_local(INFORMATION_LEVEL, EE_FAILED_TO_KILL_ALL_THREADS,
+        my_message_local(ERROR_LEVEL, EE_FAILED_TO_KILL_ALL_THREADS,
                          THR_thread_count);
         /* purecov: end */
 #endif
