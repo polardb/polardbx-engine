@@ -16,7 +16,6 @@ fi
 cat ${BOOST_PATH}.*  > ${BOOST_PATH}
 
 cd ${CICD_BUILD_ROOT} && \
-source ${DEVTOOLSET_ENABLE_PATH} && \
 ${CMAKE_BIN} .. \
  -DDOWNLOAD_BOOST=1 \
  -DWITH_BOOST=extra \

@@ -6,5 +6,4 @@ CORES=$(nproc)
 
 
 cd ${CICD_BUILD_ROOT} && \
-source ${DEVTOOLSET_ENABLE_PATH} && \
 ${CMAKE_BIN} --build . -- -j ${CORES}

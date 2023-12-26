@@ -1,15 +1,17 @@
 pipeline {
   agent {
     docker {
-      image 'reg.docker.alibaba-inc.com/polardb_x/mysql_dev:1.0-SNAPSHOT'
-      args '-v /home/xiedao.yy/Software:/opt/Software'
+      image 'hub.docker.alibaba-inc.com/aone-base-global/polardbx_engine:latest'
+      args '-v /home/xiedao.yy/Software:/opt/Software \
+            --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined \
+            --privileged'
     }
   }
 
   environment {
     CMAKE_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/cmake'
     CTEST_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/ctest'
-    DEVTOOLSET_ENABLE_PATH = '/opt/rh/devtoolset-11/enable'
 
     // relative path of project_root
     CICD_BUILD_ROOT = 'build'
@@ -17,6 +19,9 @@ pipeline {
     RESULT_PATH = "${CICD_BUILD_ROOT}/result"
     // CCACHE_DIR MUST USE ABSOLUTE PATH
     CCACHE_DIR = "${env.WORKSPACE}/${CICD_BUILD_ROOT}/.cache/ccache"
+
+    CMAKE_C_FLAGS = ""
+    CMAKE_CXX_FLAGS = ""
   }
   
   stages {
