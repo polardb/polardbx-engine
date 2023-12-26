@@ -161,6 +161,9 @@ extern bool opt_physical_backfill;
 /* enable polarx changeset udf */
 extern bool opt_enable_changeset;
 
+/* bloomfilter udf hash implementation */
+extern bool opt_support_bloomfilter_xxhash;
+
 enum enum_server_operational_state {
   SERVER_BOOTING,      /* Server is not operational. It is starting */
   SERVER_OPERATING,    /* Server is fully initialized and operating */

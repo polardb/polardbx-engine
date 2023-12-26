@@ -164,6 +164,8 @@ enable_physical_backfill
 enable_physical_backfill
 enable_polarx_rpc
 enable_polarx_rpc
+enable_udf_bloomfilter_xxhash
+enable_udf_bloomfilter_xxhash
 explain_format
 explain_format
 force_revise
@@ -567,6 +569,8 @@ thread_stack_warning
 thread_stack_warning
 tls_ciphersuites
 tls_ciphersuites
+udf_bloomfilter_xxhash
+udf_bloomfilter_xxhash
 use_secondary_engine
 weak_consensus_mode
 weak_consensus_mode

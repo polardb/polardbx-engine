@@ -1412,6 +1412,9 @@ bool opt_physical_backfill = true;
 
 bool opt_enable_changeset;
 
+/* bloomfilter udf hash implementation */
+bool opt_support_bloomfilter_xxhash = true;
+
 /**
   Limit of the total number of prepared statements in the server.
   Is necessary to protect the server against out-of-memory attacks.

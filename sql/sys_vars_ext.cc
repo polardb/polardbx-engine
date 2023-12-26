@@ -586,3 +586,11 @@ static Sys_var_bool Sys_enable_physical_backfill(
 
 static Sys_var_deprecated_alias Sys_physical_backfill_opt(
     "physical_backfill_opt", Sys_enable_physical_backfill);
+
+static Sys_var_bool Sys_enable_udf_bloomfilter_xxhash(
+    "enable_udf_bloomfilter_xxhash", "Whether support xxhash for bloomfilter",
+    READ_ONLY GLOBAL_VAR(opt_support_bloomfilter_xxhash), NO_CMD_LINE,
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_deprecated_alias Sys_udf_bloomfilter_xxhash(
+    "udf_bloomfilter_xxhash", Sys_enable_udf_bloomfilter_xxhash);
