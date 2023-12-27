@@ -258,16 +258,9 @@ bool lock_clust_rec_cons_read_sees(
   /* NOTE that we call this function while holding the search
   system latch. */
 
-  trx_id_t trx_id = row_get_rec_trx_id(rec, index, offsets);
-
-
   /** Lizard: the following codes is a check */
-  txn_rec_t txn_rec = {
-      trx_id,
-      lizard::row_get_rec_scn_id(rec, index, offsets),
-      lizard::row_get_rec_undo_ptr(rec, index, offsets),
-      lizard::row_get_rec_gcn(rec, index, offsets),
-  };
+  txn_rec_t txn_rec;
+  lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
   lizard::txn_rec_cleanout_state_by_misc(&txn_rec, pcur, rec, index, offsets);
 

@@ -2499,7 +2499,6 @@ bool trx_undo_prev_version_build(
 
   trx_undo_rec_t *undo_rec = nullptr;
   dtuple_t *entry;
-  trx_id_t rec_trx_id;
   ulint type;
   undo_no_t undo_no;
   table_id_t table_id;
@@ -2534,14 +2533,9 @@ bool trx_undo_prev_version_build(
     return true;
   }
 
-  rec_trx_id = row_get_rec_trx_id(rec, index, offsets);
-
   /** Lizard begin */
-  txn_rec.scn = lizard::row_get_rec_scn_id(rec, index, offsets);
-  txn_rec.undo_ptr = lizard::row_get_rec_undo_ptr(rec, index, offsets);
-  txn_rec.gcn = lizard::row_get_rec_gcn(rec, index, offsets);
+  lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
   assert_undo_ptr_allocated(txn_rec.undo_ptr);
-  txn_rec.trx_id = rec_trx_id;
   /** Lizard end */
 
   /* REDO rollback segments are used only for non-temporary objects.

@@ -479,6 +479,36 @@ ulint row_get_lizard_offset(const dict_index_t *index, ulint type,
 }
 
 /**
+  Read the txn from record
+
+  @param[in]      rec         record
+  @param[in]      index       dict_index_t, must be cluster index
+  @param[in]      offsets     rec_get_offsets(rec, index)
+  @param[out]     txn_rec     lizard transaction attributes
+*/
+void row_get_txn_rec(const rec_t *rec, const dict_index_t *index,
+                     const ulint *offsets, txn_rec_t *txn_rec) {
+  ulint offset;
+
+  ut_ad(index->is_clustered());
+  ut_ad(rec_offs_validate(rec, index, offsets));
+
+  offset = index->trx_id_offset;
+
+  if (!offset) {
+    offset = row_get_trx_id_offset(index, offsets);
+  }
+
+  txn_rec->trx_id = trx_read_trx_id(rec + offset);
+  offset += (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+  txn_rec->scn = trx_read_scn(rec + offset);
+  offset += DATA_SCN_ID_LEN;
+  txn_rec->undo_ptr = trx_read_undo_ptr(rec + offset);
+  offset += DATA_UNDO_PTR_LEN;
+  txn_rec->gcn = trx_read_gcn(rec + offset);
+}
+
+/**
   Write the scn and undo ptr into the update vector
   @param[in]      trx         transaction context
   @param[in]      index       index object
@@ -597,10 +627,7 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
   ut_ad(index->is_clustered());
   ut_ad(!index->table->is_intrinsic());
 
-  rec_txn.scn = row_get_rec_scn_id(rec, index, offsets);
-  rec_txn.undo_ptr = row_get_rec_undo_ptr(rec, index, offsets);
-  rec_txn.trx_id = rec_id;
-  rec_txn.gcn = row_get_rec_gcn(rec, index, offsets);
+  lizard::row_get_txn_rec(rec, index, offsets, &rec_txn);
 
   /** lookup the scn by UBA address */
   lizard::txn_rec_real_state_by_misc(&rec_txn, &cleanout);
@@ -642,12 +669,8 @@ bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
     return true;
   }
 
-  txn_rec_t txn_rec = {
-      trx_id,
-      row_get_rec_scn_id(rec, index, offsets),
-      row_get_rec_undo_ptr(rec, index, offsets),
-      row_get_rec_gcn(rec, index, offsets),
-  };
+  txn_rec_t txn_rec;
+  lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
   return !lizard::txn_rec_real_state_by_misc(&txn_rec);
 }

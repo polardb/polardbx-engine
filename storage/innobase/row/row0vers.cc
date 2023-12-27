@@ -1266,7 +1266,6 @@ dberr_t row_vers_build_for_consistent_read(
   DBUG_TRACE;
   const rec_t *version;
   rec_t *prev_version;
-  trx_id_t trx_id;
   mem_heap_t *heap = nullptr;
   byte *buf;
   dberr_t err;
@@ -1277,8 +1276,6 @@ dberr_t row_vers_build_for_consistent_read(
   ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_S));
 
   ut_ad(rec_offs_validate(rec, index, *offsets));
-
-  trx_id = row_get_rec_trx_id(rec, index, *offsets);
 
   assert_row_lizard_valid(rec, index, *offsets);
 
@@ -1333,15 +1330,8 @@ dberr_t row_vers_build_for_consistent_read(
     ut_a(!rec_offs_any_null_extern(index, prev_version, *offsets));
 #endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 
-    trx_id = row_get_rec_trx_id(prev_version, index, *offsets);
-
-    txn_rec_t txn_rec = {
-        trx_id,
-        lizard::row_get_rec_scn_id(prev_version, index, *offsets),
-        lizard::row_get_rec_undo_ptr(prev_version, index, *offsets),
-        lizard::row_get_rec_gcn(prev_version, index, *offsets),
-    };
-
+    txn_rec_t txn_rec;
+    lizard::row_get_txn_rec(prev_version, index, *offsets, &txn_rec);
     lizard::txn_rec_real_state_by_misc(&txn_rec);
     if (vision->modifications_visible(&txn_rec, index->table->name)) {
       /* The view already sees this version: we can copy

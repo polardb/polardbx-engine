@@ -210,6 +210,17 @@ ulint row_get_lizard_offset(const dict_index_t *index, ulint type,
                             const ulint *offsets);
 
 /**
+  Read the txn from record
+
+  @param[in]      rec         record
+  @param[in]      index       dict_index_t, must be cluster index
+  @param[in]      offsets     rec_get_offsets(rec, index)
+  @param[out]     txn_rec     lizard transaction attributes
+*/
+void row_get_txn_rec(const rec_t *rec, const dict_index_t *index,
+                     const ulint *offsets, txn_rec_t *txn_rec);
+
+/**
   Write the scn and undo ptr into the update vector
   @param[in]      index       index object
   @param[in]      update      update vector

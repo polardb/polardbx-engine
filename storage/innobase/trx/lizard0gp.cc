@@ -491,15 +491,8 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
   ut_ad(vision->is_asof_gcn());
 
 retry:
-  trx_id_t trx_id = row_get_rec_trx_id(rec, index, offsets);
-
-  /** Lizard: the following codes is a check */
-  txn_rec_t txn_rec = {
-      trx_id,
-      row_get_rec_scn_id(rec, index, offsets),
-      row_get_rec_undo_ptr(rec, index, offsets),
-      row_get_rec_gcn(rec, index, offsets),
-  };
+  txn_rec_t txn_rec;
+  lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
   active = txn_rec_cleanout_state_by_misc(&txn_rec, pcur, rec, index, offsets);
   /** 1. Already committed; */
@@ -516,7 +509,7 @@ retry:
     ut_ad(txn_rec.gcn == GCN_NULL);
 
     /** Find the prepared trx to wait, others should judge visible directly */
-    std::pair<trx_t *, trx_state_t> result = trx_rw_is_prepared(trx_id);
+    std::pair<trx_t *, trx_state_t> result = trx_rw_is_prepared(txn_rec.trx_id);
 
     switch (result.second) {
         /** 2.1. Still active, judge it for whether itself or not */
