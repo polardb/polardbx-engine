@@ -10,10 +10,13 @@ GET_TEST_TYPE() {
   elif [ "$1" = "MERGE_CHECK" ]; then
     res=$MERGE_CHECK
   else
-    res=0
+    #use daily regression by default
+    res=1
   fi
   echo "$res"
 }
 
 export TEST_TYPE_ENUM=0
 TEST_TYPE_ENUM=$(GET_TEST_TYPE "${TEST_TYPE}")
+
+echo "TEST_TYPE_ENUM: $TEST_TYPE_ENUM"

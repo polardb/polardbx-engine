@@ -1,7 +1,6 @@
 #!/usr/bin/bash
 source cicd/common.sh
 
-WORKING_SPACE_PATH=$(pwd)
 CORES=$(nproc)
 RETRY=3
 PARALLEL=${CORES}
@@ -24,5 +23,5 @@ if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ]; then
     --unit-tests-report \
     --big-test \
     -testcase-timeout=45 \
-    --xml-report="${WORKING_SPACE_PATH}"/"${RESULT_PATH}"/mtr_result.xml
+    --xml-report="${RESULT_PATH}"/mtr_result.xml
 fi

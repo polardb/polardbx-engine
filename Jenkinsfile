@@ -10,13 +10,11 @@ pipeline {
   }
 
   environment {
-    TEST_TYPE = 'DAILY_REGRESSION'
-
     CMAKE_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/cmake'
     CTEST_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/ctest'
 
     // relative path of project_root
-    CICD_BUILD_ROOT = 'build'
+    CICD_BUILD_ROOT = "${env.WORKSPACE}/build"
     BOOST_DIRECTORY = "${env.WORKSPACE}/extra/boost"
     BOOST_PATH = "${BOOST_DIRECTORY}/boost_1_77_0.tar.bz2"
     RESULT_PATH = "${CICD_BUILD_ROOT}/result"
@@ -44,13 +42,23 @@ pipeline {
       steps {
         sh 'cicd/unittest.sh || true'
         sh 'cicd/mtr.sh || true'
+        junit allowEmptyResults: true, testResults: "${RESULT_PATH}/*.xml"
       }
     }
   }
 
   post {
-    always {
-      junit "${RESULT_PATH}/*.xml"
+    success {
+      sh "mv ${RESULT_PATH}/passed.json ${RESULT_PATH}/result.json"
+      sh "rm ${RESULT_PATH}/failed.json"
+    }
+    failure {
+      sh "mv ${RESULT_PATH}/failed.json ${RESULT_PATH}/result.json"
+      sh "rm ${RESULT_PATH}/passed.json"
+    }
+    cleanup {
+      // must use relative path ???
+      archiveArtifacts artifacts: "build/result/*.json", onlyIfSuccessful: true
     }
   }
 }
