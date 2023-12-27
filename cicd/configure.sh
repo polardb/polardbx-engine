@@ -1,29 +1,38 @@
 #!/usr/bin/bash
 
+source cicd/common.sh
 CMAKE_BIN=${CMAKE_BIN_PATH}
-WORKING_SPACE_PATH=$(pwd)
 
 
 
 if [ ! -d "${CICD_BUILD_ROOT}" ]; then
-  mkdir ${CICD_BUILD_ROOT}
+  mkdir "${CICD_BUILD_ROOT}"
 fi
 
 if [ ! -d "${RESULT_PATH}" ]; then
-  mkdir -p ${RESULT_PATH}
+  mkdir -p "${RESULT_PATH}"
 fi
 
-cat ${BOOST_PATH}.*  > ${BOOST_PATH}
+cat "${BOOST_PATH}".*  > "${BOOST_PATH}"
 
-cd ${CICD_BUILD_ROOT} && \
-${CMAKE_BIN} .. \
- -DDOWNLOAD_BOOST=1 \
- -DWITH_BOOST=extra \
- -DCMAKE_BUILD_TYPE=Debug \
- -DWITH_SSL=openssl \
- -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
- -DWITH_BOOST="../${BOOST_PATH}" \
- -DWITH_TESTS=1 \
- -DCTEST_BIN_PATH="${CTEST_BIN_PATH}" \
- -DCTEST_OUTPUT_ON_FAILURE=1 \
- -DWITH_ASAN=1
+CMAKE_FLAGS=(
+"-DWITH_SSL=openssl"
+"-DWITH_TESTS=1"
+"-DDOWNLOAD_BOOST=1"
+"-DWITH_BOOST=${BOOST_DIRECTORY}"
+)
+
+if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ]; then
+  CMAKE_FLAGS+=(
+  "-DCMAKE_BUILD_TYPE=Debug"
+  "-DWITH_ASAN=1"
+  "-DWITH_TESTS=1"
+  )
+elif [ "${TEST_TYPE_ENUM}" -eq "${MERGE_CHECK}" ]; then
+  CMAKE_FLAGS+=(
+    "-DCMAKE_BUILD_TYPE=Release"
+    )
+fi
+
+cd "${CICD_BUILD_ROOT}" && \
+${CMAKE_BIN} .. "${CMAKE_FLAGS[@]}"

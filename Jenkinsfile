@@ -10,12 +10,15 @@ pipeline {
   }
 
   environment {
+    TEST_TYPE = 'DAILY_REGRESSION'
+
     CMAKE_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/cmake'
     CTEST_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/ctest'
 
     // relative path of project_root
     CICD_BUILD_ROOT = 'build'
-    BOOST_PATH = 'extra/boost/boost_1_77_0.tar.bz2' 
+    BOOST_DIRECTORY = "${env.WORKSPACE}/extra/boost"
+    BOOST_PATH = "${BOOST_DIRECTORY}/boost_1_77_0.tar.bz2"
     RESULT_PATH = "${CICD_BUILD_ROOT}/result"
     // CCACHE_DIR MUST USE ABSOLUTE PATH
     CCACHE_DIR = "${env.WORKSPACE}/${CICD_BUILD_ROOT}/.cache/ccache"

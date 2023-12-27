@@ -5,5 +5,5 @@ CORES=$(nproc)
 
 
 
-cd ${CICD_BUILD_ROOT} && \
-${CMAKE_BIN} --build . -- -j ${CORES}
+cd "${CICD_BUILD_ROOT}" && \
+${CMAKE_BIN} --build . -- -j "${CORES}"
