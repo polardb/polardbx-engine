@@ -397,7 +397,7 @@ bool Protocol_impl::send_impl(const Client_message_type_id mid,
   const Header_message_type_id header_mesage_id = mid;
   const int header_message_type_size = sizeof(Header_message_type_id);
   const std::size_t header_whole_message_size =
-#ifdef MYSQL8PLUS
+#if GOOGLE_PROTOBUF_VERSION / 1000000 >= 3
       msg.ByteSizeLong() + header_message_type_size;
 #else
       msg.ByteSize() + header_message_type_size;

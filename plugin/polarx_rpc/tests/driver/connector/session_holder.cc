@@ -313,7 +313,7 @@ xcl::Handler_result Session_holder::dump_notices(const xcl::XProtocol *protocol,
 
 void Session_holder::print_message(const std::string &direction,
                                    const xcl::XProtocol::Message &msg) {
-#ifdef MYSQL8PLUS
+#if GOOGLE_PROTOBUF_VERSION / 1000000 >= 3
   m_console.print(direction, msg.ByteSizeLong() + 1, " ", msg);
 #else
   m_console.print(direction, msg.ByteSize() + 1, " ", msg);

@@ -219,6 +219,11 @@ public:
     m_encoder
         ->template encode_field_delimited_header<tags::ColumnData::value>();
     m_encoder->encode_var_uint32(length);
+#if GOOGLE_PROTOBUF_VERSION / 1000000 >= 3
+    // Caution: trim before use the underlying buffer
+    // (only in new version of protobuf)
+    m_chunk.blocks[field_num]->coder->Trim();
+#endif
     m_encoder->encode_raw(m_chunk.blocks[field_num]->buf, written);
     if (!m_chunk.blocks[field_num]->extra.empty())
       m_encoder->encode_raw(reinterpret_cast<const uint8_t *>(

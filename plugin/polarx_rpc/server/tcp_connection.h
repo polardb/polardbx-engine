@@ -371,7 +371,7 @@ private:
     // feed the data to the command (up to the specified boundary)
     google::protobuf::io::CodedInputStream stream(
         reinterpret_cast<const uint8_t *>(data), static_cast<int>(length));
-#ifdef MYSQL8PLUS
+#if GOOGLE_PROTOBUF_VERSION / 1000000 >= 3
     stream.SetTotalBytesLimit(static_cast<int>(length));
 #else
     stream.SetTotalBytesLimit(static_cast<int>(length), -1 /*no warnings*/);
