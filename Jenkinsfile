@@ -42,13 +42,38 @@ pipeline {
       steps {
         sh 'cicd/unittest.sh || true'
         sh 'cicd/mtr.sh || true'
-        junit allowEmptyResults: true, testResults: "${RESULT_PATH}/*.xml"
+
+        script {
+          if (env.TEST_TYPE == 'DAILY_REGRESSION') {
+            def summary = junit allowEmptyResults: true, testResults: "${RESULT_PATH}/*.xml"
+            dingtalk(
+              robot: '44281ff8-2953-4369-97f8-137e09cbc486',
+              type: 'MARKDOWN',
+              title: '[PolarDB-X] DN 8032 Daily Regression',
+              text: [
+                "# [${env.JOB_NAME}](${env.JOB_URL})",
+                "---",
+                "- 任务: [${env.BUILD_DISPLAY_NAME}](${env.BUILD_URL})",
+                "- 状态: ${currentBuild.currentResult}",
+                "- 测试数量: ${summary.totalCount}",
+                "- 失败数量: ${summary.failCount}",
+                "- 跳过数量: ${summary.skipCount}",
+                "- 成功数量: ${summary.passCount}",
+                "- 持续时间: ${currentBuild.durationString}",
+              ]
+            )
+          }
+        }
       }
     }
   }
 
   post {
     success {
+      sh "mv ${RESULT_PATH}/passed.json ${RESULT_PATH}/result.json"
+      sh "rm ${RESULT_PATH}/failed.json"
+    }
+    unstable {
       sh "mv ${RESULT_PATH}/passed.json ${RESULT_PATH}/result.json"
       sh "rm ${RESULT_PATH}/failed.json"
     }
