@@ -45,7 +45,7 @@ pipeline {
 
         script {
           if (env.TEST_TYPE == 'DAILY_REGRESSION') {
-            def summary = junit allowEmptyResults: true, testResults: "${RESULT_PATH}/*.xml"
+            def summary = junit allowEmptyResults: true, testResults: "build/result/*.xml"
             dingtalk(
               robot: '44281ff8-2953-4369-97f8-137e09cbc486',
               type: 'MARKDOWN',

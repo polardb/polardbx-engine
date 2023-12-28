@@ -3366,7 +3366,7 @@ int Paxos::initAsLearner(std::string &strConfig, ClientService *cs,
   if (cs) srv_->cs = cs;
 
   srv_->init(ioThreadCnt, workThreadCnt, heartbeatTimeout_, memory_usage_count,
-             heartbeatThreadCnt);
+             heartbeatThreadCnt, threadHook);
   electionTimer_ = std::make_shared<ThreadTimer>(
       srv_->getThreadTimerService(), srv_, electionTimeout_, ThreadTimer::Stage,
       &Paxos::startElectionCallback, this);

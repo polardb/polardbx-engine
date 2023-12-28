@@ -72,6 +72,7 @@ class Service {
   explicit Service(Consensus *cons);
   virtual ~Service() = default;
 
+  // todo delete confusing default value of this function parameters
   virtual int init(uint64_t ioThreadCnt = 4, uint64_t workThreadCnt = 4,
                    uint64_t ConnectTimeout = 300,
                    bool memory_usage_count = false,
