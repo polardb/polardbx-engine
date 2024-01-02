@@ -139,11 +139,12 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
   while (prefetch_cache_size + buf_size > max_prefetch_cache_size &&
          prefetch_cache.size() > 0) {
     if (index > current_prefetch_request.load()) {
-      raft::warn(ER_RAFT_PREFETCH)  << "prefetch cache wait full"
-                      << ", channel_id " << channel_id
-                      << ", input_index " << index
-                      << ", start_index " << first_index_in_cache
-                      << " " << get_backtrace_str();
+      // raft::info(ER_RAFT_PREFETCH)  << "prefetch cache wait full"
+      //                 << ", channel_id " << channel_id
+      //                 << ", input_index " << index
+      //                 << ", start_index " << first_index_in_cache
+      //                 << ", current_prefetch_request " << current_prefetch_request.load()
+      //                 << " " << get_backtrace_str();
       if ((!stop_prefetch_flag) && (!from_beginning))
         mysql_cond_wait(&COND_prefetch_channel, &LOCK_prefetch_channel);
       mysql_mutex_unlock(&LOCK_prefetch_channel);

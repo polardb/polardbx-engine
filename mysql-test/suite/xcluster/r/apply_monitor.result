@@ -1,0 +1,61 @@
+create database db_crash_7;
+create table db_crash_7.t(c1 int, c2 longblob);
+insert into db_crash_7.t values(0, repeat('#', 10));
+drop database db_crash_7;
+SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
+CHANNEL_NAME	GROUP_NAME	LAST_HEARTBEAT_TIMESTAMP
+		0000-00-00 00:00:00.000000
+SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
+CHANNEL_NAME	SERVICE_STATE	REMAINING_DELAY	COUNT_TRANSACTIONS_RETRIES
+	OFF	NULL	0
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+CHANNEL_NAME	THREAD_ID	SERVICE_STATE
+	NULL	OFF
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_worker order by 1,2,3;
+CHANNEL_NAME	THREAD_ID	SERVICE_STATE
+	NULL	OFF
+	NULL	OFF
+	NULL	OFF
+	NULL	OFF
+	NULL	OFF
+	NULL	OFF
+	NULL	OFF
+	NULL	OFF
+SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
+CHANNEL_NAME	GROUP_NAME	LAST_HEARTBEAT_TIMESTAMP
+		0000-00-00 00:00:00.000000
+SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
+CHANNEL_NAME	SERVICE_STATE	REMAINING_DELAY	COUNT_TRANSACTIONS_RETRIES
+	ON	NULL	0
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+CHANNEL_NAME	THREAD_ID	SERVICE_STATE
+	48	ON
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_worker order by 1,2,3;
+CHANNEL_NAME	THREAD_ID	SERVICE_STATE
+	49	ON
+	50	ON
+	51	ON
+	52	ON
+	53	ON
+	54	ON
+	55	ON
+	56	ON
+SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
+CHANNEL_NAME	GROUP_NAME	LAST_HEARTBEAT_TIMESTAMP
+		0000-00-00 00:00:00.000000
+SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
+CHANNEL_NAME	SERVICE_STATE	REMAINING_DELAY	COUNT_TRANSACTIONS_RETRIES
+	ON	NULL	0
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+CHANNEL_NAME	THREAD_ID	SERVICE_STATE
+	48	ON
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_worker order by 1,2,3;
+CHANNEL_NAME	THREAD_ID	SERVICE_STATE
+	49	ON
+	50	ON
+	51	ON
+	52	ON
+	53	ON
+	54	ON
+	55	ON
+	56	ON

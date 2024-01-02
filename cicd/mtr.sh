@@ -2,7 +2,7 @@
 source cicd/common.sh
 
 CORES=$(nproc)
-RETRY=3
+RETRY=2
 PARALLEL=${CORES}
 PERL_BIN=perl
 

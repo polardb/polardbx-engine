@@ -1,7 +1,7 @@
 pipeline {
   agent {
     docker {
-      image 'hub.docker.alibaba-inc.com/aone-base-global/polardbx_engine:latest'
+      image 'reg.docker.alibaba-inc.com/polardb_x/mysql_dev:1.0-SNAPSHOT'
       args '-v /home/xiedao.yy/Software:/opt/Software \
             --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \

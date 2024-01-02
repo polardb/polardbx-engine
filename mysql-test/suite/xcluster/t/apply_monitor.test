@@ -1,0 +1,39 @@
+--source include/paxos.inc
+
+--source include/not_valgrind.inc
+--source include/not_windows.inc
+#--source include/have_innodb.inc
+--source include/have_binlog_format_row.inc
+--source include/have_log_bin.inc
+
+# connect 3 server. must have test database
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+
+# wait leader and find who is leader
+--connection conn1
+create database db_crash_7;
+create table db_crash_7.t(c1 int, c2 longblob);
+insert into db_crash_7.t values(0, repeat('#', 10));
+drop database db_crash_7;
+
+SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
+SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_worker order by 1,2,3;
+
+
+--sleep 5
+
+--connection conn2
+SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
+SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_worker order by 1,2,3;
+
+--connection conn3
+SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
+SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_worker order by 1,2,3;

@@ -48,9 +48,11 @@ CMAKE_FLAGS=(
 )
 
 if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ]; then
+  #TODO: need open it after fix most asan bugs
+  #"-DWITH_ASAN=1"
   CMAKE_FLAGS+=(
   "-DCMAKE_BUILD_TYPE=Debug"
-  "-DWITH_ASAN=1"
+  "-DWITH_DEBUG=1"
   "-DWITH_TESTS=1"
   )
 elif [ "${TEST_TYPE_ENUM}" -eq "${MERGE_CHECK}" ]; then

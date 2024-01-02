@@ -203,7 +203,7 @@ int table_replication_connection_status::rnd_next(void) {
   for (m_pos.set_at(&m_next_pos);
        m_pos.m_index < channel_map.get_max_channels(); m_pos.next()) {
     mi = channel_map.get_mi_at_pos(m_pos.m_index);
-    if (mi && mi->host[0]) {
+    if (mi && (mi->host[0] || Multisource_info::is_raft_channel(mi))) {
       make_row(mi);
       m_next_pos.set_after(&m_pos);
       channel_map.unlock();
@@ -261,7 +261,7 @@ int table_replication_connection_status::index_next(void) {
        m_pos.m_index < channel_map.get_max_channels(); m_pos.next()) {
     mi = channel_map.get_mi_at_pos(m_pos.m_index);
 
-    if (mi && mi->host[0]) {
+    if (mi && (mi->host[0] || Multisource_info::is_raft_channel(mi))) {
       if (m_opened_index->match(mi)) {
         if (!make_row(mi)) {
           m_next_pos.set_after(&m_pos);

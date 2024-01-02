@@ -22,6 +22,7 @@ CREATE UNIQUE INDEX test_index
 DROP INDEX `PRIMARY`
   ON performance_schema.replication_connection_status;
 
+set @@sql_mode='';
 CREATE TABLE test.create_select
   AS SELECT * from performance_schema.replication_connection_status;
 

@@ -272,12 +272,14 @@ ERROR HY000: Couldn't create channel: Channel name is either invalid or too long
 
 select channel_name from performance_schema.replication_connection_configuration;
 channel_name
+
 12345678901234567890
 12345678901234567890123456789012345678901234567890
 123456789012345678901234567890123456789012345678901234567890123
 
 select channel_name from performance_schema.replication_connection_status;
 channel_name
+
 12345678901234567890
 12345678901234567890123456789012345678901234567890
 123456789012345678901234567890123456789012345678901234567890123
@@ -286,6 +288,7 @@ select rpad(rcc.channel_name, 64, ' ') 'CHANNEL_RCC', rpad(rcs.channel_name, 64,
   from performance_schema.replication_connection_configuration rcc
 join performance_schema.replication_connection_status rcs on rcc.channel_name = rcs.channel_name;
 CHANNEL_RCC	CHANNEL_RCS	EXPECT 1
+                                                                	                                                                	1
 12345678901234567890                                            	12345678901234567890                                            	1
 12345678901234567890123456789012345678901234567890              	12345678901234567890123456789012345678901234567890              	1
 123456789012345678901234567890123456789012345678901234567890123 	123456789012345678901234567890123456789012345678901234567890123 	1
@@ -294,6 +297,7 @@ select rpad(rcc.channel_name, 64, ' ') 'CHANNEL_RCC', rpad(rcs.channel_name, 64,
   from performance_schema.replication_connection_configuration rcc
 left join replication_connection_status rcs on rcc.channel_name = rcs.channel_name;
 CHANNEL_RCC	CHANNEL_RCS	EXPECT 1
+                                                                	                                                                	1
 12345678901234567890                                            	12345678901234567890                                            	1
 12345678901234567890123456789012345678901234567890              	12345678901234567890123456789012345678901234567890              	1
 123456789012345678901234567890123456789012345678901234567890123 	123456789012345678901234567890123456789012345678901234567890123 	1
