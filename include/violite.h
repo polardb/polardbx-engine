@@ -55,6 +55,17 @@ struct Vio;
 #define USE_PPOLL_IN_VIO
 #endif
 
+#if defined(__linux__)
+# include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
+#ifdef USE_PPOLL_IN_VIO
+#undef USE_PPOLL_IN_VIO
+#include <signal.h>
+#include <atomic>
+#endif
+#endif
+#endif
+
 #if defined(__cplusplus) && defined(USE_PPOLL_IN_VIO)
 #include <signal.h>
 #include <atomic>
