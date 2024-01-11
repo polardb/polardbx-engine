@@ -124,7 +124,7 @@ bool Rpl_applier_reader::open(const char **errmsg) {
     rli->set_group_relay_log_name(m_linfo.log_file_name);
     rli->set_event_relay_log_pos(rli->get_group_relay_log_pos());
     rli->set_event_relay_log_name(rli->get_group_relay_log_name());
-    if ((relay_log_purge == 0 || rli->relay_log.is_raft_log) && rli->log_space_limit > 0) {
+    if ((relay_log_purge == 0 || rli->relay_log.is_xpaxos_log) && rli->log_space_limit > 0) {
       rli->log_space_limit = 0;
       LogErr(WARNING_LEVEL, ER_RELAY_LOG_SPACE_LIMIT_DISABLED);
     }
@@ -420,7 +420,7 @@ bool Rpl_applier_reader::purge_applied_logs() {
   if (!relay_log_purge) return false;
 
   // X-Paxos log don't purge either
-  if (m_rli->relay_log.is_raft_log) return false;
+  if (m_rli->relay_log.is_xpaxos_log) return false;
 
   Is_instance_backup_locked_result is_instance_locked =
       is_instance_backup_locked(m_rli->info_thd);

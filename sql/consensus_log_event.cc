@@ -459,11 +459,11 @@ Log_event::enum_skip_reason Stop_log_event::do_shall_skip(Relay_log_info *rli) {
    Events from ourself should be skipped, but they should not
    decrease the slave skip counter.
   */
-  if (Multisource_info::is_raft_channel(rli)) {
+  if (Multisource_info::is_xpaxos_channel(rli)) {
 #ifndef DBUG_OFF
-    bool is_raft =
-        Multisource_info::is_raft_replication_channel_name(rli->get_channel());
-    assert(is_raft);
+    bool is_xpaxos =
+        Multisource_info::is_xpaxos_replication_channel_name(rli->get_channel());
+    assert(is_xpaxos);
 #endif
     return Log_event::EVENT_SKIP_NOT;
   }

@@ -37,7 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/rpl_gtid_persist.h"
 #include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
-#include "sql/raft/raft0recovery.h"
+#include "sql/consensus/consensus_recovery.h"
 
 #include "lizard0undo.h"
 

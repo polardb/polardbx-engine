@@ -42,7 +42,7 @@
 #include "sql/sql_parse.h"  // stmt_causes_implicit_commit
 #include "sql/system_variables.h"
 
-#include "sql/raft/raft0err.h"
+#include "sql/consensus/consensus_err.h"
 
 bool set_gtid_next(THD *thd, const Gtid_specification &spec) {
   DBUG_TRACE;

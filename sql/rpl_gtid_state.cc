@@ -48,8 +48,8 @@
 #include "sql/sql_error.h"
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
-#include "sql/raft/raft0err.h"
-#include "sql/raft/raft0recovery.h"
+#include "sql/consensus/consensus_err.h"
+#include "sql/consensus/consensus_recovery.h"
 
 class Table_ref;
 
@@ -679,7 +679,7 @@ int Gtid_state::save(THD *thd) {
   assert(gtid_table_persistor != nullptr);
   assert(thd->owned_gtid.sidno > 0);
   assert(thd->se_persists_gtid());
-  //raft should not arrive here
+  //xpaxos should not arrive here
   assert(false);
   int error = 0;
 
@@ -714,7 +714,7 @@ int Gtid_state::save_gtids_of_last_binlog_into_table() {
     return ER_RPL_GTID_TABLE_CANNOT_OPEN;
   }
 
-  if (raft::Recovery_manager::instance().is_raft_instance_recovering())
+  if (xp::Recovery_manager::instance().is_xpaxos_instance_recovering())
     return ret;
 
   /*
@@ -890,7 +890,7 @@ void Gtid_state::update_gtids_impl_own_gtid(THD *thd, bool is_commit) {
     executed_gtids._add_gtid(thd->owned_gtid);
     thd->rpl_thd_ctx.session_gtids_ctx().notify_after_gtid_executed_update(thd);
     /* paxos replay thread can't add executed gtid to lost and not in table set */
-    if (thd->slave_thread && opt_bin_log && !opt_log_replica_updates && !thd->raft_replication_channel) {
+    if (thd->slave_thread && opt_bin_log && !opt_log_replica_updates && !thd->xpaxos_replication_channel) {
       lost_gtids._add_gtid(thd->owned_gtid);
       gtids_only_in_table._add_gtid(thd->owned_gtid);
     }

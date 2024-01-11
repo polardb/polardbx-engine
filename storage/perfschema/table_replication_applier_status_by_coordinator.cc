@@ -178,7 +178,7 @@ int table_replication_applier_status_by_coordinator::rnd_next(void) {
       status will be reported as part of
       'replication_applier_status_by_worker' table.
     */
-    if (mi && (mi->host[0] || Multisource_info::is_raft_channel(mi))
+    if (mi && (mi->host[0] || Multisource_info::is_xpaxos_channel(mi))
         && mi->rli && mi->rli->get_worker_count() > 0) {
       make_row(mi);
       m_next_pos.set_after(&m_pos);
@@ -249,7 +249,7 @@ int table_replication_applier_status_by_coordinator::index_next(void) {
       status will be reported as part of
       'replication_applier_status_by_worker' table.
     */
-    if (mi && (mi->host[0] || Multisource_info::is_raft_channel(mi))
+    if (mi && (mi->host[0] || Multisource_info::is_xpaxos_channel(mi))
         && mi->rli && mi->rli->get_worker_count() > 0) {
       if (m_opened_index->match(mi)) {
         res = make_row(mi);

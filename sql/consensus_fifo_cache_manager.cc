@@ -53,7 +53,7 @@ int ConsensusFifoCacheManager::init(uint64 max_log_cache_size_arg) {
   is_running = true;
   if (mysql_thread_create(key_thread_cleaner, &cleaner_handle, nullptr,
                           fifo_cleaner_wrapper, (void *)this)) {
-    raft::error(ER_RAFT_FIFO) << "Thread filo_cleaner create failed at "
+    xp::error(ER_XP_FIFO) << "Thread filo_cleaner create failed at "
                                  "ConsensusFifoCacheManager::init";
     abort();
   }
@@ -92,7 +92,7 @@ int ConsensusFifoCacheManager::get_log_from_cache(uint64 index, uint64 *term,
 
   size_t lasti = (rright + reserve_list_size - 1) % reserve_list_size;
   if (index > log_cache_list[lasti].index /* out of range */) {
-    raft::error(ER_RAFT_FIFO)
+    xp::error(ER_XP_FIFO)
         << "Consensus fifo cache is out of range, max index = ["
         << log_cache_list[lasti].index << "], Required index = [" << index
         << "] at ConsensusFifoCacheManager::get_log_from_cache";
@@ -127,7 +127,7 @@ int ConsensusFifoCacheManager::add_log_to_cache(uint64 term, uint64 index,
   if (rright != rleft) {
       const size_t lasti = (rright + reserve_list_size - 1) % reserve_list_size;
       if (index != log_cache_list[lasti].index  + 1) {
-        raft::error(ER_RAFT_FIFO)  << "fifo cache add invalid index, need strictly increasing"
+        xp::error(ER_XP_FIFO)  << "fifo cache add invalid index, need strictly increasing"
                           << ", input_index " << index
                           << ", start_index " << log_cache_list[rleft].index
                           << ", end_index " << log_cache_list[lasti].index
@@ -151,7 +151,7 @@ int ConsensusFifoCacheManager::add_log_to_cache(uint64 term, uint64 index,
   fifo_cache_size += buf_size;
   current_log_count++;
 
-  // raft::info(ER_RAFT_FIFO) << "add_log_to_fifo_cache"
+  // xp::info(ER_XP_FIFO) << "add_log_to_fifo_cache"
   //   << ", term " << term
   //   << ", index " << index
   //   << ", flag " << flag
@@ -169,7 +169,7 @@ int ConsensusFifoCacheManager::add_log_to_cache(uint64 term, uint64 index,
 int ConsensusFifoCacheManager::trunc_log_from_cache(uint64 index) {
   consensus_log_manager.set_cache_index(index - 1);
   mysql_rwlock_wrlock(&LOCK_consensuslog_cache);
-  raft::info(ER_RAFT_FIFO)  << "Truncate fifo before"
+  xp::info(ER_XP_FIFO)  << "Truncate fifo before"
                             << ", first index = [" << log_cache_list[rleft].index
                             << "], end index = [" << log_cache_list[(rright + reserve_list_size - 1) % reserve_list_size].index
                             << "], cache count = [" << (rright + reserve_list_size - rleft) % reserve_list_size
@@ -195,7 +195,7 @@ int ConsensusFifoCacheManager::trunc_log_from_cache(uint64 index) {
     cur_pos = (cur_pos + 1) % reserve_list_size;
   }
   rright = start_point;
-  raft::info(ER_RAFT_FIFO)  << "Truncate fifo after"
+  xp::info(ER_XP_FIFO)  << "Truncate fifo after"
                             << ", first index = [" << log_cache_list[rleft].index
                             << "], end index = [" << log_cache_list[(rright + reserve_list_size - 1) % reserve_list_size].index
                             << "], cache count = [" << (rright + reserve_list_size - rleft) % reserve_list_size
@@ -233,7 +233,7 @@ uint64 ConsensusFifoCacheManager::get_first_index_of_fifo_cache() {
 
 void ConsensusFifoCacheManager::set_lock_blob_index(
     uint64 lock_blob_index_arg) {
-  raft::info(ER_RAFT_FIFO)
+  xp::info(ER_XP_FIFO)
       << "Setting lock_lob_index = [" << lock_blob_index_arg
       << "] at ConsensusFifoCacheManager::set_lock_blob_index";
   lock_blob_index = lock_blob_index_arg;

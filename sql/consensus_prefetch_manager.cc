@@ -28,7 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "consensus_log_manager.h"
 #include "log.h"
 #include "mysql/thread_pool_priv.h"
-#include "raft/raft0err.h"
+#include "sql/consensus/consensus_err.h"
 #include "sql/sql_thd_internal_api.h"
 #include "storage/innobase/include/ut0dbg.h"
 
@@ -62,7 +62,7 @@ int ConsensusPreFetchChannel::init(uint64 id, uint64 max_cache_size,
     ref_count = 0;
     if (mysql_thread_create(key_thread_prefetch, &prefetch_thread_handle, NULL,
                             run_prefetch, (void *)this)) {
-      raft::error(ER_RAFT_PREFETCH) << "Fail to create thread run_prefetch.";
+      xp::error(ER_XP_PREFETCH) << "Fail to create thread run_prefetch.";
       abort();
     }
     inited = true;
@@ -104,7 +104,7 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
 
   if (stop_prefetch_flag || from_beginning) {
     mysql_mutex_unlock(&LOCK_prefetch_channel);
-    raft::info(ER_RAFT_PREFETCH) << "channel_id " << channel_id
+    xp::info(ER_XP_PREFETCH) << "channel_id " << channel_id
                                  << " prefetch stop, stop_prefetch_flag is "
                                  << stop_prefetch_flag
                                  << ", from_beginning is " << from_beginning;
@@ -119,7 +119,7 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
   } else if (first_index_in_cache != 0 &&
              (index < first_index_in_cache ||
               index > first_index_in_cache + prefetch_cache.size())) {
-    raft::info(ER_RAFT_PREFETCH) << "Consensus prefetch add cache not fit the "
+    xp::info(ER_XP_PREFETCH) << "Consensus prefetch add cache not fit the "
                                     "range , channel_id "
                                  << channel_id
                                  << " the first index in cache is  "
@@ -139,7 +139,7 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
   while (prefetch_cache_size + buf_size > max_prefetch_cache_size &&
          prefetch_cache.size() > 0) {
     if (index > current_prefetch_request.load()) {
-      // raft::info(ER_RAFT_PREFETCH)  << "prefetch cache wait full"
+      // xp::info(ER_XP_PREFETCH)  << "prefetch cache wait full"
       //                 << ", channel_id " << channel_id
       //                 << ", input_index " << index
       //                 << ", start_index " << first_index_in_cache
@@ -173,7 +173,7 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
     ConsensusLogEntry &old_log = prefetch_cache.back();
     if (old_log.index + 1 != index) {
       mysql_mutex_unlock(&LOCK_prefetch_channel);
-      raft::error(ER_RAFT_PREFETCH)  << "prefetch cache add invalid index, need strictly increasing"
+      xp::error(ER_XP_PREFETCH)  << "prefetch cache add invalid index, need strictly increasing"
                       << ", channel_id " << channel_id
                       << ", input_index " << index
                       << ", start_index " << first_index_in_cache
@@ -195,7 +195,7 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
 
   mysql_mutex_unlock(&LOCK_prefetch_channel);
 
-  // raft::info(ER_RAFT_FIFO) << "add_log_to_prefetch_cache"
+  // xp::info(ER_XP_FIFO) << "add_log_to_prefetch_cache"
   //   << ", term " << term
   //   << ", index " << index
   //   << ", flag " << flag
@@ -241,7 +241,7 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
       *flag = it->second.flag;
       ut_a(index == it->second.index);
       log_content.assign("");
-      raft::info(ER_RAFT_PREFETCH)
+      xp::info(ER_XP_PREFETCH)
           << "Consensus prefetch cache: get large trx consensus log(" << index
           << ") from large_trx_table.";
       mysql_mutex_unlock(&LOCK_prefetch_channel);
@@ -254,7 +254,7 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
       first_index_in_cache == 0 /* if fifo cache is empty */) {
     error = EMPTY;
   } else if (index < first_index_in_cache) {
-    raft::info(ER_RAFT_PREFETCH)
+    xp::info(ER_XP_PREFETCH)
         << "Consensus prefetch cache already swap out , channel_id "
         << channel_id << " the first index in cache is  "
         << first_index_in_cache.load() << ", the required index is " << index;
@@ -267,7 +267,7 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
     prefetch_cache_size = 0;
     error = ALREADY_SWAP_OUT;
   } else if (index >= first_index_in_cache + prefetch_cache.size()) {
-    raft::info(ER_RAFT_PREFETCH)
+    xp::info(ER_XP_PREFETCH)
         << "Consensus prefetch cache out of range , channel_id " << channel_id
         << " the max index in cache is  "
         << first_index_in_cache + prefetch_cache.size() - 1
@@ -373,7 +373,7 @@ int ConsensusPreFetchChannel::start_prefetch_thread() {
   mysql_mutex_unlock(&LOCK_prefetch_request);
   if (mysql_thread_create(key_thread_prefetch, &prefetch_thread_handle, NULL,
                           run_prefetch, (void *)this)) {
-    raft::error(ER_RAFT_PREFETCH) << "Fail to create thread run_prefetch.";
+    xp::error(ER_XP_PREFETCH) << "Fail to create thread run_prefetch.";
     abort();
   }
   return 0;
@@ -401,7 +401,7 @@ int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
     auto it = large_trx_table.lower_bound(index);
     large_trx_table.erase(it, large_trx_table.end());
   }
-  raft::info(ER_RAFT_PREFETCH)
+  xp::info(ER_XP_PREFETCH)
       << "Truncate prefetch before"
       << ", channel " << channel_id
       << ", first index = [" << first_index_in_cache.load() 
@@ -432,7 +432,7 @@ int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
   }
 
 
-  raft::info(ER_RAFT_PREFETCH)
+  xp::info(ER_XP_PREFETCH)
       << "Truncate prefetch after"
       << ", channel " << channel_id
       << ", first index = [" << first_index_in_cache.load() 
@@ -672,7 +672,7 @@ void *run_prefetch(void *arg) {
 
     // get log
     if (!channel->log_exist(index)) {
-      raft::info(ER_RAFT_PREFETCH) << "Consensus prefetch channel "
+      xp::info(ER_XP_PREFETCH) << "Consensus prefetch channel "
                                    << channel->get_channel_id()
                                    << " try to fetch index : " << index;
       if (consensus_log_manager.prefetch_log_directly(

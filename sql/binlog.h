@@ -317,7 +317,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   /* This is relay log */
   bool is_relay_log;
 
-  bool is_raft_log;
+  bool is_xpaxos_log;
 
   uint8 checksum_alg_reset;  // to contain a new value when binlog is rotated
   /*

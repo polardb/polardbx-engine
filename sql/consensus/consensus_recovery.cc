@@ -27,8 +27,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "libbinlogevents/include/binlog_event.h"
 #include "my_sys.h"
-#include "raft0err.h"
-#include "raft0recovery.h"
+#include "sql/consensus/consensus_err.h"
+#include "sql/consensus/consensus_recovery.h"
 #include "sql/binlog/binlog_xa_specification.h"
 #include "sql/binlog/lizard0recovery.h"
 #include "sql/binlog/recovery.h"
@@ -43,16 +43,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "storage/innobase/include/ut0dbg.h"
 #include "sql/binlog.h"
 
-namespace raft {
+namespace xp {
 
-bool Recovery_manager::is_raft_instance_recovering() const {
-  return !opt_initialize && is_raft_instance();
+bool Recovery_manager::is_xpaxos_instance_recovering() const {
+  return !opt_initialize && is_xpaxos_instance();
 }
 
 std::unique_ptr<binlog::Binlog_recovery> Recovery_manager::create_recovery(
     Binlog_file_reader &binlog_file_reader) {
   binlog::Binlog_recovery *recovery = nullptr;
-  if (is_raft_instance()) {
+  if (is_xpaxos_instance()) {
     recovery = new Consensus_binlog_recovery(binlog_file_reader);
   } else {
     recovery = new binlog::Binlog_recovery(binlog_file_reader);
@@ -166,7 +166,7 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
     if (this->m_is_malformed) break;
   }
 
-  raft::info(ER_RAFT_RECOVERY)
+  xp::info(ER_XP_RECOVERY)
       << "Consensus_binlog_recovery::recover end "
       << ", file_size " << m_reader.ifile()->length() << ", curr_position "
       << m_reader.position() << ", m_current_index " << m_current_index
@@ -185,7 +185,7 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
   //
   // if the last log is not integrated
   if (m_valid_index != m_current_index) {
-    raft::warn(ER_RAFT_RECOVERY)
+    xp::warn(ER_XP_RECOVERY)
         << "last consensus log is not integrated, "
         << "sync index should set to " << m_valid_index << " instead of "
         << m_current_index << ", with valid_pos " << m_valid_pos;
@@ -221,10 +221,10 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
 void Consensus_binlog_recovery::process_consensus_event(
     const Consensus_log_event &ev) {
   if (m_current_index > ev.get_index()) {
-    raft::error(ER_RAFT_RECOVERY) << "consensus log index out of order";
+    xp::error(ER_XP_RECOVERY) << "consensus log index out of order";
     exit(-1);
   } else if (m_end_pos < m_start_pos) {
-    raft::error(ER_RAFT_RECOVERY) << "consensus log structure broken";
+    xp::error(ER_XP_RECOVERY) << "consensus log structure broken";
     exit(-1);
   }
 
@@ -409,4 +409,4 @@ void Consensus_binlog_recovery::process_query_event(const Query_log_event &ev) {
   m_query_ev = nullptr;
 }
 
-}  // namespace raft
+}  // namespace xp

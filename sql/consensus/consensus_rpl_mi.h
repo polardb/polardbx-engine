@@ -24,15 +24,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#ifndef RAFT_RAFT0RPL_MI_H
-#define RAFT_RAFT0RPL_MI_H
+#ifndef XPAXOS_RPL_MI_H
+#define XPAXOS_RPL_MI_H
 
-#include "sql/raft/channel.h"
+#include "sql/consensus/consensus_channel.h"
 #include "sql/rpl_mi.h"
 
-class Raft_master_info final : public Master_info {
+class XPaxos_master_info final : public Master_info {
  public:
-  Raft_master_info(
+  XPaxos_master_info(
 #ifdef HAVE_PSI_INTERFACE
       PSI_mutex_key *param_key_info_run_lock,
       PSI_mutex_key *param_key_info_data_lock,
@@ -57,9 +57,9 @@ class Raft_master_info final : public Master_info {
             param_id, param_channel) {
   }
 
-  virtual ~Raft_master_info() {}
+  virtual ~XPaxos_master_info() {}
 
-  /** Raft channel */
-  virtual Channel_style style() const override { return Channel_style::Raft; }
+  /** XPaxos channel */
+  virtual Channel_style style() const override { return Channel_style::XPaxos; }
 };
 #endif

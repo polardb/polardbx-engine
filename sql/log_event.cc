@@ -5756,7 +5756,7 @@ int Rotate_log_event::do_update_pos(Relay_log_info *rli) {
                       : rli->is_in_group();
 
   if ((server_id != ::server_id || rli->replicate_same_server_id) &&
-      !is_relay_log_event() && !Multisource_info::is_raft_channel(rli) && !in_group) {
+      !is_relay_log_event() && !Multisource_info::is_xpaxos_channel(rli) && !in_group) {
     if (!is_mts_db_partitioned(rli) &&
         (server_id != ::server_id || rli->replicate_same_server_id)) {
       // force the coordinator to start a new binlog segment.

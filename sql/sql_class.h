@@ -4863,7 +4863,7 @@ public:
   /** Returning clause lex */
   std::unique_ptr<im::Lex_returning> lex_returning;
 
-  bool raft_replication_channel;
+  bool xpaxos_replication_channel;
 
   void reset_gcn_variables() {
     variables.innodb_snapshot_gcn = MYSQL_GCN_NULL;

@@ -1557,7 +1557,7 @@ std::pair<int, bool> commit_owned_gtids(THD *thd, bool all) {
       If GTID is not persisted by SE, write it to
       mysql.gtid_executed table.
     */
-    if (!thd->raft_replication_channel && thd->owned_gtid.sidno > 0 && !thd->se_persists_gtid()) {
+    if (!thd->xpaxos_replication_channel && thd->owned_gtid.sidno > 0 && !thd->se_persists_gtid()) {
       error = gtid_state->save(thd);
     }
   }

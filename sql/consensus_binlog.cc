@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 #include "consensus_log_manager.h"
-#include "raft/raft0thd.h"
 #include "sql/binlog.h"
 #include "sql/consensus_log_manager.h"
 #include "sql/bl_consensus_log.h"
@@ -106,7 +105,7 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size, Log_event *
       flag |= Consensus_log_event_flag::FLAG_BLOB;
     thd->consensus_index = consensus_log_manager.get_current_index();
     uint64 crc32 = opt_consensus_checksum? checksum_crc32(0, buffer, blen): 0;
-    raft::info(ER_RAFT_COMMIT) << "large_event_flush batch_size " << blen
+    xp::info(ER_XP_COMMIT) << "large_event_flush batch_size " << blen
         << ", total_batch_size " << total_batch_size
         << ", original buf_size " << total_size
         << ", consensus_index " << thd->consensus_index
@@ -192,7 +191,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size)
       flag = Consensus_log_event_flag::FLAG_LARGE_TRX;
       assert(total_batch_size < total_size);
       thd->consensus_index = consensus_log_manager.get_current_index();
-      raft::info(ER_RAFT_COMMIT) << "large_trx_flush batch_size " << batch_size
+      xp::info(ER_XP_COMMIT) << "large_trx_flush batch_size " << batch_size
           << ", buf_len " << ev->buf_len
           << ", max_log_size " << opt_consensus_max_log_size
           << ", large_trx_split_size " << opt_consensus_large_trx_split_size
@@ -255,7 +254,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size)
     total_batch_size += batch_size;
     flag = Consensus_log_event_flag::FLAG_LARGE_TRX_END;
     thd->consensus_index = consensus_log_manager.get_current_index();
-    raft::info(ER_RAFT_COMMIT) << "large_trx_flush batch_size " << batch_size
+    xp::info(ER_XP_COMMIT) << "large_trx_flush batch_size " << batch_size
         << ", total_batch_size " << total_batch_size
         << ", consensus_index " << thd->consensus_index;
     assert(total_batch_size == total_size && batch_size > 0);
@@ -287,7 +286,7 @@ bool MYSQL_BIN_LOG::open_for_normandy(
   myf flags = MY_WME | MY_NABP | MY_WAIT_IF_FULL;
   // xpaxos threads have no THD and can't report the WAITING_FULL state
   // TODO: add THD to xpaxos threads
-  if (is_relay_log && !is_raft_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
+  if (is_relay_log && !is_xpaxos_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
 
   if (!(name = my_strdup(key_memory_MYSQL_LOG_name, log_name, MYF(MY_WME)))) {
     name = const_cast<char*>(log_name);  // for the error message
@@ -348,12 +347,12 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
   // find last log name according to the binlog index
   if (!my_b_inited(&index_file)) {
     mysql_mutex_unlock(&LOCK_index);
-    raft::error(ER_RAFT_COMMIT) << "build consenus log index failed, can't init index file";
+    xp::error(ER_XP_COMMIT) << "build consenus log index failed, can't init index file";
     return 1;  
   }
   if ((error = find_log_pos(&log_info, NullS, false))) {
     if (error != LOG_INFO_EOF ) {
-      raft::error(ER_RAFT_COMMIT) << "find_log_pos() failed error: " << error;
+      xp::error(ER_XP_COMMIT) << "find_log_pos() failed error: " << error;
       mysql_mutex_unlock(&LOCK_index);
       return error;
     }
@@ -364,7 +363,7 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
     } while (!(error = find_next_log(&log_info, false/*need_lock_index=true*/)));
   }
   if (error != LOG_INFO_EOF) {
-      raft::error(ER_RAFT_COMMIT) << "find_log_pos() failed error: " << error;
+      xp::error(ER_XP_COMMIT) << "find_log_pos() failed error: " << error;
     mysql_mutex_unlock(&LOCK_index);
     return error;
   } else {
@@ -423,7 +422,7 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
     // end_io_cache(&log);
 
     if (!find_prev_consensus_log) {
-      raft::error(ER_RAFT_COMMIT) << "log file " << iter->c_str() << " do not contain prev_consensus_log_ev";
+      xp::error(ER_XP_COMMIT) << "log file " << iter->c_str() << " do not contain prev_consensus_log_ev";
       return 1;
     }
   }
@@ -507,11 +506,11 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term)
 
     if (!found)
     {
-      raft::warn(ER_RAFT_COMMIT) << "log file " << iter->c_str()
+      xp::warn(ER_XP_COMMIT) << "log file " << iter->c_str()
         << " cannot found last log term index, term is " << term;
     }
   }
-  raft::info(ER_RAFT_COMMIT) << "last log term is " << term << ", last log term index is " << consensus_log_manager.get_recovery_manager()->get_last_leader_term_index();
+  xp::info(ER_XP_COMMIT) << "last log term is " << term << ", last log term index is " << consensus_log_manager.get_recovery_manager()->get_last_leader_term_index();
   return !found;
 }
 
@@ -534,7 +533,7 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
   // use another io_cache , so do not need lock LOCK_log
   if (find_log_by_consensus_index(firstIndex, file_name))
   {
-    raft::error(ER_RAFT_RECOVERY) << "get_trx_end_index cannot find consensus index log " << firstIndex;
+    xp::error(ER_XP_RECOVERY) << "get_trx_end_index cannot find consensus index log " << firstIndex;
     return 0;
   }
 
@@ -547,7 +546,7 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
   //}
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name.c_str())) {
-    raft::error(ER_RAFT_RECOVERY) << "fail to open file " << file_name;
+    xp::error(ER_XP_RECOVERY) << "fail to open file " << file_name;
     return 0; // ??????
   }
 
@@ -595,7 +594,7 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex)
 
   // mysql_file_close(file, MYF(MY_WME));
   // end_io_cache(&log);
-  raft::info(ER_RAFT_RECOVERY) << "get_trx_end_index finish  "
+  xp::info(ER_XP_RECOVERY) << "get_trx_end_index finish  "
     << ", stop_scan " << stop_scan
     << ", firstIndex " << firstIndex
     << ", currentIndex " << currentIndex
@@ -670,7 +669,7 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
       }
       else if (!found && consensus_log_ev->get_index() > consensus_index)
       {
-        raft::info(ER_RAFT_COMMIT) << "directly read log error, log size is error";
+        xp::info(ER_XP_COMMIT) << "directly read log error, log size is error";
         abort();
       }
       break;
@@ -742,10 +741,10 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(const char* file_name, uint64 con
     fd_ev_p = &fd_ev;
   }
 
-  raft::info(ER_RAFT_COMMIT) << "directly read log reached consensus index " << consensus_index;
+  xp::info(ER_XP_COMMIT) << "directly read log reached consensus index " << consensus_index;
 
   if (!found)
-    raft::error(ER_RAFT_COMMIT) << "read log by consensus index failed";
+    xp::error(ER_XP_COMMIT) << "read log by consensus index failed";
 
   // mysql_file_close(file, MYF(MY_WME));
   // end_io_cache(&log);
@@ -970,7 +969,7 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id, const char
   thd->current_linfo = 0;
   mysql_mutex_unlock(&thd->LOCK_thd_data);
 
-  raft::info(ER_RAFT_COMMIT) << "channel_id " << channel_id
+  xp::info(ER_XP_COMMIT) << "channel_id " << channel_id
     << " prefetch log reached consensus index " << (uint64)current_index
     << ", current_term " << current_term
     << ", current_flag " << current_flag
@@ -1074,7 +1073,7 @@ int MYSQL_BIN_LOG::truncate_logs_from_index(std::vector<std::string> & files_lis
   mysql_mutex_lock(&LOCK_index);
   if (find_log_pos(&log_info, last_file.c_str(), false/*need_lock_index=false*/))
   {
-    raft::error(ER_RAFT_COMMIT) << "MYSQL_BIN_LOG::truncate_logs was called with file " << last_file.c_str()
+    xp::error(ER_XP_COMMIT) << "MYSQL_BIN_LOG::truncate_logs was called with file " << last_file.c_str()
           << " not listed in the index.";
     goto err;
   }
@@ -1082,7 +1081,7 @@ int MYSQL_BIN_LOG::truncate_logs_from_index(std::vector<std::string> & files_lis
 
   if (open_crash_safe_index_file())
   {
-    raft::error(ER_RAFT_COMMIT) << "MYSQL_BIN_LOG::remove_logs_from_index failed to "
+    xp::error(ER_XP_COMMIT) << "MYSQL_BIN_LOG::remove_logs_from_index failed to "
       "open the crash safe index file.";
     goto err;
   }
@@ -1096,7 +1095,7 @@ int MYSQL_BIN_LOG::truncate_logs_from_index(std::vector<std::string> & files_lis
 
   if (close_crash_safe_index_file())
   {
-    raft::error(ER_RAFT_COMMIT) << "MYSQL_BIN_LOG::remove_logs_from_index failed to "
+    xp::error(ER_XP_COMMIT) << "MYSQL_BIN_LOG::remove_logs_from_index failed to "
       "close the crash safe index file.";
     goto err;
   }
@@ -1104,7 +1103,7 @@ int MYSQL_BIN_LOG::truncate_logs_from_index(std::vector<std::string> & files_lis
 
   if (move_crash_safe_index_file_to_index_file(false/*need_lock_index=false*/))
   {
-    raft::error(ER_RAFT_COMMIT) << "MYSQL_BIN_LOG::remove_logs_from_index failed to "
+    xp::error(ER_XP_COMMIT) << "MYSQL_BIN_LOG::remove_logs_from_index failed to "
       "move crash safe index file to index file.";
     goto err;
   }
@@ -1116,7 +1115,7 @@ int MYSQL_BIN_LOG::truncate_logs_from_index(std::vector<std::string> & files_lis
   return 0;
 
 err:
-  raft::error(ER_RAFT_COMMIT) << "truncate log from index failed";
+  xp::error(ER_XP_COMMIT) << "truncate log from index failed";
   mysql_mutex_unlock(&LOCK_index);
   return 1;
 }
@@ -1146,7 +1145,7 @@ int MYSQL_BIN_LOG::truncate_files_after(std::string & file_name)
         found = true;
   }
 
-  raft::info(ER_RAFT_COMMIT) << "truncate_files_after file:" << file_name.c_str();
+  xp::info(ER_XP_COMMIT) << "truncate_files_after file:" << file_name.c_str();
 
   // truncate consensus log file index
   consensus_log_manager.get_log_file_index()->truncate_after(file_name);
@@ -1167,7 +1166,7 @@ int MYSQL_BIN_LOG::truncate_files_after(std::string & file_name)
   }
 
   if (error)
-    raft::error(ER_RAFT_COMMIT) << "truncate_files_after failed";
+    xp::error(ER_XP_COMMIT) << "truncate_files_after failed";
   return error;
 }
 
@@ -1180,25 +1179,25 @@ int MYSQL_BIN_LOG::truncate_single_file_by_consensus_index(const char* file_name
   mysql_mutex_assert_owner(&LOCK_log);
   if (find_pos_by_consensus_index(file_name, consensus_index, offset))
   {
-    raft::error(ER_RAFT_COMMIT) << "Failed to find pos by consensus index " << consensus_index << " when truncate ";
+    xp::error(ER_XP_COMMIT) << "Failed to find pos by consensus index " << consensus_index << " when truncate ";
     return -1;
   }
 
   if ((file = mysql_file_open(key_file_binlog, file_name,
     O_RDWR | O_BINARY, MYF(MY_WME))) < 0)
   {
-    raft::error(ER_RAFT_COMMIT) << "Failed to open the binlog file when truncate.";
+    xp::error(ER_XP_COMMIT) << "Failed to open the binlog file when truncate.";
     return -1;
   }
   if (my_chsize(file, *offset, 0, MYF(MY_WME)))
   {
-    raft::error(ER_RAFT_COMMIT) << "Failed to resize binlog file when truncate.";
+    xp::error(ER_XP_COMMIT) << "Failed to resize binlog file when truncate.";
     mysql_file_close(file, MYF(MY_WME));
     return -1;
   }
   else
   {
-    raft::info(ER_RAFT_COMMIT) << "Truncate binlog file " << file_name
+    xp::info(ER_XP_COMMIT) << "Truncate binlog file " << file_name
       << ", consensus_index " << consensus_index
       << ", Binlog trimmed to " << *offset << " position.";
     mysql_file_close(file, MYF(MY_WME));
@@ -1218,7 +1217,7 @@ int MYSQL_BIN_LOG::consensus_truncate_log(uint64 consensus_index)
       truncate_single_file_by_consensus_index(file_name.c_str(), consensus_index, &offset) ||
       m_binlog_file->truncate(offset))
   {
-    raft::error(ER_RAFT_COMMIT) << "Truncate cannot find consensus index log "
+    xp::error(ER_XP_COMMIT) << "Truncate cannot find consensus index log "
         << ", file_name " << file_name
         << ", consensus_index " << consensus_index
         << ", offset " << offset;
@@ -1227,7 +1226,7 @@ int MYSQL_BIN_LOG::consensus_truncate_log(uint64 consensus_index)
   else
   {
     update_binlog_end_pos();
-    raft::info(ER_RAFT_COMMIT) << "succ to truncate binlog file " << file_name.c_str()
+    xp::info(ER_XP_COMMIT) << "succ to truncate binlog file " << file_name.c_str()
                                 << ", consensus_index " << consensus_index
                                 << ", offset " << offset
                                 << ", position " << m_binlog_file->position();
@@ -1245,7 +1244,7 @@ int MYSQL_BIN_LOG::consensus_get_log_position(uint64 consensus_index, char* log_
   if (find_log_by_consensus_index(consensus_index, file_name) ||
     find_pos_by_consensus_index(file_name.c_str(), consensus_index, pos))
   {
-    raft::error(ER_RAFT_COMMIT) << "Get log position cannot find consensus index log " << consensus_index;
+    xp::error(ER_XP_COMMIT) << "Get log position cannot find consensus index log " << consensus_index;
     ret = 1;
   }
   strncpy(log_name, file_name.c_str(), FN_REFLEN);
@@ -1260,7 +1259,7 @@ int MYSQL_BIN_LOG::consensus_get_log_entry(uint64 consensus_index, uint64 *conse
   if (find_log_by_consensus_index(consensus_index, file_name) ||
     read_log_by_consensus_index(file_name.c_str(), consensus_index, consensus_term, log_content, outer, flag, need_content))
   {
-    raft::error(ER_RAFT_COMMIT) << "Get log entry cannot find consensus index log " << consensus_index;
+    xp::error(ER_XP_COMMIT) << "Get log entry cannot find consensus index log " << consensus_index;
     ret = 1;
   }
 
@@ -1275,7 +1274,7 @@ int MYSQL_BIN_LOG::consensus_prefetch_log_entries(THD *thd, uint64 channel_id, u
   if (find_log_by_consensus_index(consensus_index, file_name) ||
     prefetch_logs_of_file(thd, channel_id, file_name.c_str(), consensus_index))
   {
-    raft::error(ER_RAFT_COMMIT) << "Prefetch cannot find consensus index log " << consensus_index;
+    xp::error(ER_XP_COMMIT) << "Prefetch cannot find consensus index log " << consensus_index;
     ret = 1;
   }
 
@@ -1354,7 +1353,7 @@ static int init_consensus_event_timestamp(uchar *buf, size_t len)
     }
     if ((size_t)(header - buf) > len)
     {
-      raft::error(ER_RAFT_COMMIT) << "Found invalid event during init_consensus_event_timestamp.";
+      xp::error(ER_XP_COMMIT) << "Found invalid event during init_consensus_event_timestamp.";
       return 1; // report error to abort
     }
   }
@@ -1377,7 +1376,7 @@ static int revise_entry_and_write(MYSQL_BIN_LOG::Binlog_ofile *binlog_file, ucha
   }
   if ((size_t)(header - buf) != len)
   {
-    raft::error(ER_RAFT_COMMIT) << "Found invalid event during revise_entry_and_write.";
+    xp::error(ER_XP_COMMIT) << "Found invalid event during revise_entry_and_write.";
     return 1; // report error to abort
   }
   return binlog_file->write(buf, len);
@@ -1466,7 +1465,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
     real_buf_size = empty_log.length();
     /* save real data to cache */
     my_b_write(consensus_log_manager.get_cache(), log.buffer, log.buf_size);
-    raft::info(ER_RAFT_COMMIT) << "Large event: cache the current log"
+    xp::info(ER_XP_COMMIT) << "Large event: cache the current log"
                                << ", size " << log.buf_size
                                << ", cache size " << my_b_tell(consensus_log_manager.get_cache());
   }
@@ -1481,7 +1480,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
     /* save real data to cache, now cache has the integrated blob event */
     my_b_write(consensus_log_manager.get_cache(), log.buffer, log.buf_size);
     real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
-    raft::info(ER_RAFT_COMMIT) << "Large event: cache the current log finish"
+    xp::info(ER_XP_COMMIT) << "Large event: cache the current log finish"
                                << ", size " << log.buf_size
                                 << ", whole log " << real_buf_size;
   }
@@ -1496,7 +1495,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
   if (*index != log.index) {
     // leader write empty log entry with index 0
     if (log.index != 0) {
-      raft::error(ER_RAFT_COMMIT) << "Consensus Index Mismatch, system current index is " << *index
+      xp::error(ER_XP_COMMIT) << "Consensus Index Mismatch, system current index is " << *index
                             << ", but the log index is " << log.index;
       error = 1;
     } else {
@@ -1508,7 +1507,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
     DBUG_EXECUTE_IF("generate_bad_log_entry", real_buffer[real_buf_size / 2] += 1;);
     error = verify_checksum(real_buffer, real_buf_size);
     if (error)
-      raft::error(ER_RAFT_COMMIT) << "failed to verify checksum when accept consensus pkg, reject"
+      xp::error(ER_XP_COMMIT) << "failed to verify checksum when accept consensus pkg, reject"
         << ", term " << log.term
         << ", index " << *index
         << ", buf_size " << log.buf_size
@@ -1516,7 +1515,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log,
         << ", checksum " << log.checksum;
   }
 
-  // raft::info(ER_RAFT_COMMIT) << "append_consensus_log " 
+  // xp::info(ER_XP_COMMIT) << "append_consensus_log " 
   //   << ", term " << log.term
   //   << ", index " << *index
   //   << ", buf_size " << log.buf_size
@@ -1589,7 +1588,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
     *max_index = consensus_log_manager.get_current_index();
     if (*max_index != iter->index)
     {
-      raft::error(ER_RAFT_COMMIT) << "Consensus Index Mismatch, system current index is " << *max_index
+      xp::error(ER_XP_COMMIT) << "Consensus Index Mismatch, system current index is " << *max_index
                              << ", but the log index is " << iter->index;
       abort();
     }
@@ -1628,7 +1627,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
       real_buf_size = empty_log.length();
       /* save real data to cache */
       my_b_write(consensus_log_manager.get_cache(), iter->buffer, iter->buf_size);
-      raft::info(ER_RAFT_COMMIT) << "Large event: cache the current log"
+      xp::info(ER_XP_COMMIT) << "Large event: cache the current log"
                                 << ", size " << iter->buf_size
                                 << ", cache size " << my_b_tell(consensus_log_manager.get_cache());
     }
@@ -1644,7 +1643,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
       my_b_write(consensus_log_manager.get_cache(), iter->buffer, iter->buf_size);
       /* read the total cache */
       real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
-      raft::info(ER_RAFT_COMMIT) << "Large event: cache the current log finish"
+      xp::info(ER_XP_COMMIT) << "Large event: cache the current log finish"
                                 << ", size " << iter->buf_size
                                 << ", whole log " << real_buf_size;
     }
@@ -1659,7 +1658,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
       DBUG_EXECUTE_IF("generate_bad_log_entry", real_buffer[real_buf_size / 2] += 1;);
       error = verify_checksum(real_buffer, real_buf_size);
       if (error)
-        raft::warn(ER_RAFT_COMMIT) << "failed to verify checksum when accept consensus pkg, reject"
+        xp::warn(ER_XP_COMMIT) << "failed to verify checksum when accept consensus pkg, reject"
           << ", max_index " << *max_index
           << ", term " << iter->term
           << ", index " << iter->index
@@ -1668,7 +1667,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(std::vector<ConsensusLogEntry> &l
           << ", checksum " << iter->checksum;
     }
 
-    // raft::info(ER_RAFT_COMMIT) << "append_multi_consensus_logs " 
+    // xp::info(ER_XP_COMMIT) << "append_multi_consensus_logs " 
     //   << ", max_index " << *max_index
     //   << ", term " << iter->term
     //   << ", index " << iter->index
@@ -1766,13 +1765,13 @@ void MYSQL_BIN_LOG::consensus_before_commit(THD *thd) {
       (thd->consensus_index > consensus_log_manager.get_consensus_info()->get_start_apply_index())) )
   {
     // TODO: need write apply index to consensus info table???
-    raft::warn(ER_RAFT_COMMIT) << "Failed to commit ,because previous error or shutdown or leadership changed, system apply index:" 
+    xp::warn(ER_XP_COMMIT) << "Failed to commit ,because previous error or shutdown or leadership changed, system apply index:" 
       << consensus_log_manager.get_consensus_info()->get_start_apply_index()
       << " , thd consensus term:" << thd->consensus_term
       << ", consensus index:" << thd->consensus_index;
 
     if (thd->commit_error == THD::CE_NONE) {
-      raft::warn(ER_RAFT_COMMIT) <<
+      xp::warn(ER_XP_COMMIT) <<
           "'There are some dirty binlogs, restert to deal with them";
       flush_error_log_messages();
       abort();
@@ -1819,7 +1818,7 @@ void binlog_commit_pos_watcher(bool *is_running)
     log_name = consensus_log_manager.get_log_file_index()->get_last_log_file_name();
     Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
     if (binlog_file_reader.open(log_name.c_str())) {
-      raft::error(ER_RAFT_COMMIT) << "Thread binlog_commit_pos_watcher fails to open the binlog file " << log_name.c_str();
+      xp::error(ER_XP_COMMIT) << "Thread binlog_commit_pos_watcher fails to open the binlog file " << log_name.c_str();
       goto err;
     }
     skip = false;
@@ -1863,7 +1862,7 @@ void binlog_commit_pos_watcher(bool *is_running)
         {
           if (commitIndex < consensus_log_ev->get_index())
           {
-            raft::error(ER_RAFT_COMMIT) << "Thread binlog_commit_pos_watcher reports a unsafe commit position.";  // for defence
+            xp::error(ER_XP_COMMIT) << "Thread binlog_commit_pos_watcher reports a unsafe commit position.";  // for defence
             assert(0); // abort on debug mode
           }
           pos = binlog_file_reader.position() + consensus_log_ev->get_length();
@@ -1909,7 +1908,7 @@ err:
       if (retry < 60)
       {
         retry++;
-        raft::warn(ER_RAFT_COMMIT) << "Fail to find commit position. "
+        xp::warn(ER_XP_COMMIT) << "Fail to find commit position. "
           "It could be caused by a binlog truncation or a failed read_log_event. "
           "Just wait and reopen the file.";
       }
@@ -1927,7 +1926,7 @@ bool MYSQL_BIN_LOG::write_consensus_log(uint flag, uint64 term, uint64 length) {
   rev.common_footer->checksum_alg = static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
   if (!(rev.get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX))
     alisql_server->setLastNonCommitDepIndex(rev.get_index());
-  if (opt_consensuslog_revise && is_raft_log && is_relay_log)
+  if (opt_consensuslog_revise && is_xpaxos_log && is_relay_log)
     rev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
   if (write_event_to_binlog(&rev)) return true;
   if (!opt_initialize)
@@ -1976,7 +1975,7 @@ bool MYSQL_BIN_LOG::open_exist_binlog(const char *log_name,
   {
     if (error != LOG_INFO_EOF)
     {
-      raft::error(ER_RAFT_COMMIT) << "find_log_pos() failed error: " << error;
+      xp::error(ER_XP_COMMIT) << "find_log_pos() failed error: " << error;
       return error;
     }
   }
@@ -1991,7 +1990,7 @@ bool MYSQL_BIN_LOG::open_exist_binlog(const char *log_name,
 
   if (error != LOG_INFO_EOF)
   {
-    raft::error(ER_RAFT_COMMIT) << "find_log_pos() failed error: " << error;
+    xp::error(ER_XP_COMMIT) << "find_log_pos() failed error: " << error;
     return error;
   }
 
@@ -2109,7 +2108,7 @@ int flush_consensus_log(THD *thd, binlog_cache_data *,
     }
   });
   if (mark_as_rollback || (!opt_consensus_large_trx && is_large_trx)) {
-    raft::warn(ER_RAFT_COMMIT) <<
+    xp::warn(ER_XP_COMMIT) <<
         "Failed to flush log ,because consensus log is too large.";
     thd->mark_transaction_to_rollback(true);
     thd->commit_error = THD::CE_COMMIT_ERROR;

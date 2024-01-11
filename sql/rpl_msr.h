@@ -238,7 +238,7 @@ class Multisource_info {
   */
   inline const char *get_default_channel() { return default_channel; }
 
-  inline const char *get_raft_channel() { return raft_channel; }
+  inline const char *get_xpaxos_channel() { return xpaxos_channel; }
 
   /**
     Get the number of instances of Master_info in the map.
@@ -454,14 +454,14 @@ class Multisource_info {
     m_channel_map_lock->assert_some_wrlock();
   }
 
-  /** Raft replication channel. */
+  /** XPaxos replication channel. */
  private:
-  static const char *raft_channel;
+  static const char *xpaxos_channel;
 
  public:
-  static bool is_raft_replication_channel_name(const char *channel);
-  static bool is_raft_channel(const Master_info *mi);
-  static bool is_raft_channel(const Relay_log_info *rli);
+  static bool is_xpaxos_replication_channel_name(const char *channel);
+  static bool is_xpaxos_channel(const Master_info *mi);
+  static bool is_xpaxos_channel(const Relay_log_info *rli);
 };
 
 /**

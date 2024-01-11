@@ -54,7 +54,7 @@ get_key_value()
 usage()
 {
 cat <<EOF
-Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan|ubsan|valg] [-i none|master|raft] [-r]
+Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan|ubsan|valg] [-i none|master|xpaxos] [-r]
        Or
        $0 [-h | --help]
   -t                      Select the build type.
@@ -192,7 +192,7 @@ initialize()
   log_error=$dest_dir/mysql-err3.log
   " >> $dest_dir/my3.cnf
 
-  if [ x$initialize_type == x"raft" ]; then
+  if [ x$initialize_type == x"xpaxos" ]; then
     rm -rf $dest_dir/node1 $dest_dir/node2 $dest_dir/node3
     mkdir -p $dest_dir/node1/temp  $dest_dir/node2/temp  $dest_dir/node3/temp
     $dest_dir/bin/mysqld --defaults-file=$dest_dir/my1.cnf --initialize-insecure  --cluster-info='127.0.0.1:23451;127.0.0.1:23452;127.0.0.1:23453@1'

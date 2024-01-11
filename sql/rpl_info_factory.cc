@@ -60,8 +60,6 @@
 #include "sql_string.h"
 #include "thr_lock.h"
 
-#include "sql/raft/raft0consensus.h"
-
 /*
   Defines meta information on different repositories.
 */

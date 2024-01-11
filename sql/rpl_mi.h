@@ -44,7 +44,7 @@
 #include "sql/rpl_trx_boundary_parser.h"  // Transaction_boundary_parser
 #include "sql/sql_const.h"
 
-#include "sql/raft/channel.h"
+#include "sql/consensus/consensus_channel.h"
 
 class Rpl_info_handler;
 class Server_ids;

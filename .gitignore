@@ -127,6 +127,12 @@ plugin/x/protocol/protobuf/libmysqlxmessages.a
 plugin/x/protocol/protobuf/libmysqlxmessages_lite.a
 plugin/performance_point/libperformance_point.a
 plugin/rds_audit_log/librds_audit_log.a
+plugin/polarx_rpc/libpolarx_rpc.a
+plugin/polarx_rpc/libpolarx_rpc_client.a
+plugin/polarx_rpc/libpolarx_rpc_protobuf_full.a
+plugin/polarx_rpc/protobuf/
+plugin/polarx_rpc/protobuf_lite/
+plugin/polarx_udf/libpolarx_udf.a
 plugin_output_directory/
 router/include/
 router/router_config.h

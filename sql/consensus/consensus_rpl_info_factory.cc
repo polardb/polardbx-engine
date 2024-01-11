@@ -30,10 +30,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/table.h"
 #include "sql/rpl_msr.h"
 
-#include "sql/raft/raft0err.h"
-#include "sql/raft/raft0rpl_info_factory.h"
-#include "sql/raft/raft0rpl_mi.h"
-#include "sql/raft/raft0rpl_rli.h"
+#include "sql/consensus/consensus_err.h"
+#include "sql/consensus/consensus_rpl_info_factory.h"
+#include "sql/consensus/consensus_rpl_mi.h"
+#include "sql/consensus/consensus_rpl_rli.h"
 
 /* Consensus info table name */
 LEX_CSTRING CONSENSUS_INFO_NAME = {STRING_WITH_LEN("consensus_info")};
@@ -50,10 +50,10 @@ Rpl_info_factory::struct_file_data Rpl_info_factory::consensus_file_data;
 Master_info *Rpl_info_factory::new_mi_object(uint instances,
                                              const char *channel) {
   Master_info *mi = nullptr;
-  bool is_raft = Multisource_info::is_raft_replication_channel_name(channel);
+  bool is_xpaxos = Multisource_info::is_xpaxos_replication_channel_name(channel);
 
-  if (is_raft) {
-    mi = new Raft_master_info(
+  if (is_xpaxos) {
+    mi = new XPaxos_master_info(
 #ifdef HAVE_PSI_INTERFACE
         &key_source_info_run_lock, &key_source_info_data_lock,
         &key_source_info_sleep_lock, &key_source_info_thd_lock,
@@ -87,10 +87,10 @@ Relay_log_info *Rpl_info_factory::new_rli_object(bool is_slave_recovery,
                                                  const char *channel,
                                                  bool is_rli_fake) {
   Relay_log_info *rli = nullptr;
-  bool is_raft = Multisource_info::is_raft_replication_channel_name(channel);
+  bool is_xpaxos = Multisource_info::is_xpaxos_replication_channel_name(channel);
 
-  if (is_raft) {
-    rli = new Raft_relay_log_info(
+  if (is_xpaxos) {
+    rli = new XPaxos_relay_log_info(
         false,
 #ifdef HAVE_PSI_INTERFACE
         &key_relay_log_info_run_lock, &key_relay_log_info_data_lock,
@@ -151,7 +151,7 @@ Consensus_info *Rpl_info_factory::create_consensus_info() {
   }
 
   if (handler_dest->get_rpl_info_type() != INFO_REPOSITORY_TABLE) {
-    raft::error(ER_RAFT_0, "Consensus Info Respository should be TABLE");
+    xp::error(ER_XP_0, "Consensus Info Respository should be TABLE");
     goto err;
   }
 
@@ -174,7 +174,7 @@ err:
     consensus_info->set_rpl_info_handler(nullptr);
     delete consensus_info;
   }
-  raft::error(ER_RAFT_0) << "Creating consensus info " << msg;
+  xp::error(ER_XP_0) << "Creating consensus info " << msg;
   DBUG_RETURN(nullptr);
 }
 

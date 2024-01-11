@@ -24,10 +24,10 @@ bool opt_consensus_index_buf_enabled = false;
 
 void update_consensus_apply_index(Relay_log_info *rli, Log_event *ev) {
   /**
-   * 1. raft_replication_channel
+   * 1. xpaxos_replication_channel
    * 2. end_group of current consensus index or not
    */
-  if (!rli || !rli->info_thd->raft_replication_channel) return;
+  if (!rli || !rli->info_thd->xpaxos_replication_channel) return;
 
   if (rli->is_parallel_exec()) {
     /**
@@ -52,9 +52,9 @@ void mts_init_consensus_apply_index(Relay_log_info *rli,
   if (!rli || !rli->m_consensus_index_buf) return;
 
   // assert(rli->is_parallel_exec());
-  assert(rli->info_thd->raft_replication_channel);
+  assert(rli->info_thd->xpaxos_replication_channel);
 
-  raft::info(ER_RAFT_APPLIER) << "mts_init_consensus_apply_index " << consensus_index
+  xp::info(ER_XP_APPLIER) << "mts_init_consensus_apply_index " << consensus_index
     << ", rli " << rli;
 
   rli->m_consensus_index_buf->init_tail(consensus_index);
@@ -69,7 +69,7 @@ void mts_advance_consensus_apply_index(Relay_log_info *rli, Log_event *ev) {
     return;
 
   assert(rli->is_parallel_exec());
-  assert(rli->info_thd->raft_replication_channel);
+  assert(rli->info_thd->xpaxos_replication_channel);
 
   uint64 consensus_index =
       rli->m_consensus_index_buf->add_index_advance_tail(ev->consensus_real_index);
@@ -85,7 +85,7 @@ void mts_force_consensus_apply_index(Relay_log_info *rli,
   /** rli->m_consensus_index_buf will be inited in mts and xpaxos_replication */
   if (rli && rli->m_consensus_index_buf) {
     assert(rli->is_parallel_exec());
-    assert(rli->info_thd->raft_replication_channel);
+    assert(rli->info_thd->xpaxos_replication_channel);
     rli->m_consensus_index_buf->force_advance_tail(consensus_index);
   }
 
@@ -156,7 +156,7 @@ inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
   slot.store(index, std::memory_order_release);
   ret = advance_tail();
 
-  // raft::info(ER_RAFT_APPLIER) << "add_index_advance_tail " << index
+  // xp::info(ER_XP_APPLIER) << "add_index_advance_tail " << index
   //   << ", old tail " << old_tail
   //   << ", old count " << (index > old_tail ? index - old_tail : 0)
   //   << ", curr tail " << ret

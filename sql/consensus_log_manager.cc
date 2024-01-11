@@ -31,7 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "rpl_gtid.h"
 #include "sql_parse.h"
 #include "mysql/thread_pool_priv.h"
-#include "rpl_info_factory.h"
+#include "sql/rpl_info_factory.h"
 #include "rpl_replica.h"
 #include "rpl_msr.h"
 #include "sql/appliedindex_checker.h"
@@ -209,7 +209,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg, uint64 max_prefetc
       &consensus_state_change_thread_handle, NULL,
       run_consensus_stage_change, (void *) &consensus_state_change_is_running))
   {
-    raft::error(ER_RAFT_0) << "Fail to create thread run_consensus_stage_change.";
+    xp::error(ER_XP_0) << "Fail to create thread run_consensus_stage_change.";
     abort();
   }
   inited = true;
@@ -222,14 +222,14 @@ int ConsensusLogManager::init_consensus_info() {
   Consensus_info *consensus_info = get_consensus_info();
   if (!opt_consensus_force_recovery) {
     if (consensus_info->consensus_init_info()) {
-      raft::error(ER_RAFT_0) << "Fail to init consensus_info.";
+      xp::error(ER_XP_0) << "Fail to init consensus_info.";
       return -1;
     }
     if (consensus_info->get_cluster_info() == "" && consensus_info->get_cluster_learner_info() == "") {
       consensus_info->set_cluster_id(opt_cluster_id);
       // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
       if (!opt_cluster_info) {
-        raft::error(ER_RAFT_0) << "PolarDB-X Engine cluster_info must be set when the server is running "
+        xp::error(ER_XP_0) << "PolarDB-X Engine cluster_info must be set when the server is running "
                                << "with --initialize(-insecure) ";
         return -1;
       }
@@ -245,7 +245,7 @@ int ConsensusLogManager::init_consensus_info() {
       if (consensus_info->get_last_leader_term() != 0) {
         if (!opt_cluster_log_type_instance &&
           mysql_bin_log.init_last_index_of_term(consensus_info->get_last_leader_term())) {
-          raft::error(ER_RAFT_0) << "init_last_index_of_term for recovery failed";
+          xp::error(ER_XP_0) << "init_last_index_of_term for recovery failed";
           return -1;
         }
       }
@@ -265,7 +265,7 @@ int ConsensusLogManager::dump_cluster_info_to_file(std::string meta_file_name, s
   if (!my_access(meta_file_name.c_str(), F_OK) &&
     mysql_file_delete(0, meta_file_name.c_str(), MYF(0)))
   {
-    raft::error(ER_RAFT_0) << "Dump meta file failed, access file or delete file error";
+    xp::error(ER_XP_0) << "Dump meta file failed, access file or delete file error";
     return -1;
   }
   if ((meta_file= mysql_file_open(0,
@@ -274,14 +274,14 @@ int ConsensusLogManager::dump_cluster_info_to_file(std::string meta_file_name, s
                                   MYF(MY_WME))) < 0 ||
      mysql_file_sync(meta_file, MYF(MY_WME)) )
   {
-    raft::error(ER_RAFT_0) << "Dump meta file failed, create file error";
+    xp::error(ER_XP_0) << "Dump meta file failed, create file error";
     return -1;
   }
 
   if (my_write(meta_file, (const uchar*)output_str.c_str(), output_str.length(), MYF(MY_WME)) != output_str.length() ||
           mysql_file_sync(meta_file, MYF(MY_WME)))
   {
-    raft::error(ER_RAFT_0) << "Dump meta file failed, write meta error";
+    xp::error(ER_XP_0) << "Dump meta file failed, write meta error";
     return -1;
   }
 
@@ -314,7 +314,7 @@ int ConsensusLogManager::init_service() {
 				"Cluster_id: " + cluster_id_str;
       if (dump_cluster_info_to_file(meta_file_name, output_str) < 0)
         return -1;
-      raft::warn(ER_RAFT_0) << "Dump meta file successfully.";
+      xp::warn(ER_XP_0) << "Dump meta file successfully.";
       return 1;
     }
 
@@ -334,7 +334,7 @@ int ConsensusLogManager::init_service() {
       }
       // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
       if (!opt_cluster_info) {
-        raft::error(ER_RAFT_0) << "PolarDB-X Engine cluster_info must be set when the server is running "
+        xp::error(ER_XP_0) << "PolarDB-X Engine cluster_info must be set when the server is running "
                                << "with --initialize(-insecure) ";
         return -1;
       }
@@ -347,7 +347,7 @@ int ConsensusLogManager::init_service() {
       }
       // if change meta, flush sys info, force quit
       consensus_info->flush_info(true, true);
-      raft::warn(ER_RAFT_0) << "Force change meta to system table successfully.";
+      xp::warn(ER_XP_0) << "Force change meta to system table successfully.";
       return 1;
     } else {
       opt_cluster_id = get_consensus_info()->get_cluster_id();
@@ -440,7 +440,7 @@ int ConsensusLogManager::init_service() {
     consensus_info->set_cluster_id(opt_cluster_id);
     // reuse opt_cluster, if normal stands for cluster info, else stands for learner info
     if (!opt_cluster_info) {
-        raft::error(ER_RAFT_0) << "PolarDB-X Engine cluster_info must be set when the server is running "
+        xp::error(ER_XP_0) << "PolarDB-X Engine cluster_info must be set when the server is running "
                                << "with --initialize(-insecure) ";
       return -1;
     }
@@ -609,9 +609,9 @@ int ConsensusLogManager::write_log_entry(ConsensusLogEntry &log, uint64* consens
 end:
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::write_log_entry error, consensus index: " << *consensus_index;
+    xp::error(ER_XP_0) << "ConsensusLogManager::write_log_entry error, consensus index: " << *consensus_index;
   if (*consensus_index == 0)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::write_log_entry error, consensus index: " << *consensus_index << ", because of a failed term check.";
+    xp::error(ER_XP_0) << "ConsensusLogManager::write_log_entry error, consensus index: " << *consensus_index << ", because of a failed term check.";
   return error;
 }
 
@@ -652,7 +652,7 @@ int ConsensusLogManager::write_log_entries(std::vector<ConsensusLogEntry> &logs,
 end:
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::write_log_entries error, batch size: " << logs.size() << " ,  max consensus index: " << *max_index;
+    xp::error(ER_XP_0) << "ConsensusLogManager::write_log_entries error, batch size: " << logs.size() << " ,  max consensus index: " << *max_index;
   return error;
 
 }
@@ -675,7 +675,7 @@ int ConsensusLogManager::get_log_directly(uint64 consensus_index, uint64* consen
     error = 1;
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::get_log_directly error,  consensus index: " << consensus_index;
+    xp::error(ER_XP_0) << "ConsensusLogManager::get_log_directly error,  consensus index: " << consensus_index;
   else
     *checksum = opt_consensus_checksum
       ? checksum_crc32(0, get_uchar_str(log_content), log_content.size())
@@ -695,7 +695,7 @@ int ConsensusLogManager::prefetch_log_directly(THD* thd, uint64 channel_id, uint
     error = 1;
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::prefetch_log_directly error,  consensus index: " << consensus_index;
+    xp::error(ER_XP_0) << "ConsensusLogManager::prefetch_log_directly error,  consensus index: " << consensus_index;
   return error;
 }
 
@@ -718,7 +718,7 @@ int ConsensusLogManager::get_log_entry(uint64 channel_id, uint64 consensus_index
     uint64_t last_sync_index = sync_index;
     if (consensus_index > last_sync_index) {
       // don't prefetch log if it is not written to disk
-      raft::info(ER_RAFT_0) << "ConsensusLogManager::get_log_entry " << consensus_index << " fail, log has not been flushed to disk, sync index is " << last_sync_index;
+      xp::info(ER_XP_0) << "ConsensusLogManager::get_log_entry " << consensus_index << " fail, log has not been flushed to disk, sync index is " << last_sync_index;
       return 1;
     }
     ConsensusPreFetchChannel *channel = prefetch_manager->get_prefetch_channel(channel_id);
@@ -737,10 +737,10 @@ int ConsensusLogManager::get_log_entry(uint64 channel_id, uint64 consensus_index
   }
   else if (error == OUT_OF_RANGE)
   {
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::get_log_entry fail, out of fifo range. channel_id " << channel_id << " consensus index : " << consensus_index;
+    xp::error(ER_XP_0) << "ConsensusLogManager::get_log_entry fail, out of fifo range. channel_id " << channel_id << " consensus index : " << consensus_index;
   }
   if (error == 1)
-    raft::info(ER_RAFT_0) << "ConsensusLogManager::get_log_entry fail, channel_id " << channel_id << " consensus index: " << consensus_index << " ,start prefetch." ;
+    xp::info(ER_XP_0) << "ConsensusLogManager::get_log_entry fail, channel_id " << channel_id << " consensus index: " << consensus_index << " ,start prefetch." ;
   return error;
 }
 
@@ -769,7 +769,7 @@ int ConsensusLogManager::get_log_position(uint64 consensus_index, bool need_lock
   if (need_lock)
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::get_log_position error, consensus index: " << consensus_index;
+    xp::error(ER_XP_0) << "ConsensusLogManager::get_log_position error, consensus index: " << consensus_index;
   return error;
 }
 
@@ -785,11 +785,11 @@ uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index)
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
     if (retIndex == 0)
     {
-      raft::error(ER_RAFT_0) << "ConsensusLogManager: fail to find next trx index.";
+      xp::error(ER_XP_0) << "ConsensusLogManager: fail to find next trx index.";
       abort();
     }
   }
-  raft::info(ER_RAFT_0) << "ConsensusLogManager: "
+  xp::info(ER_XP_0) << "ConsensusLogManager: "
     << "input index: " << consensus_index
     << ", next transaction index is " << retIndex + 1;
   return retIndex + 1;
@@ -812,7 +812,7 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
 {
   int error = 0;
 
-  raft::warn(ER_RAFT_0) << "ConsensusLogManager::truncate_log before"
+  xp::warn(ER_XP_0) << "ConsensusLogManager::truncate_log before"
           << ", error: " << error
           << ", consensus index: " << consensus_index
           << ", status: " << status
@@ -830,7 +830,7 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
   if (log->consensus_truncate_log(consensus_index))
   {
     error = 1;
-    raft::error(ER_RAFT_0) << "Consensus Truncate log failed " << consensus_index;
+    xp::error(ER_XP_0) << "Consensus Truncate log failed " << consensus_index;
     abort();
   }
 
@@ -844,7 +844,7 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
   if (status == RELAY_LOG_WORKING) {
     if (rli_info->applier_reader
         && log->get_binlog_file()->position() < rli_info->applier_reader->relaylog_reader_position()) {
-      raft::error(ER_RAFT_COMMIT) << "relay log new position " << log->get_binlog_file()->position()
+      xp::error(ER_XP_COMMIT) << "relay log new position " << log->get_binlog_file()->position()
         << " is small then current relaylog_reader_position " << rli_info->applier_reader->relaylog_reader_position()
         << ", need abort and restart";
       abort();
@@ -866,7 +866,7 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index)
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   prefetch_manager->start_prefetch_threads();
 
-  raft::warn(ER_RAFT_0) << "ConsensusLogManager::truncate_log finish"
+  xp::warn(ER_XP_0) << "ConsensusLogManager::truncate_log finish"
           << ", error: " << error
           << ", consensus index: " << consensus_index
           << ", status: " << status
@@ -938,7 +938,7 @@ int ConsensusLogManager::purge_log(uint64 consensus_index)
                             false/*need_lock_index=false*/)))
       {
         char buff[22];
-        raft::error(ER_RAFT_0) << "next log error: " << error 
+        xp::error(ER_XP_0) << "next log error: " << error 
                                << "  offset: " << llstr(log_info->index_file_offset,buff) 
                                << "  log: " << rli_info->get_group_relay_log_name();
         error = 1;
@@ -949,7 +949,7 @@ int ConsensusLogManager::purge_log(uint64 consensus_index)
   }
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
-    raft::error(ER_RAFT_0) << "ConsensusLogManager::purge_log error, consensus index: " << consensus_index;
+    xp::error(ER_XP_0) << "ConsensusLogManager::purge_log error, consensus index: " << consensus_index;
   return error;
 }
 
@@ -974,7 +974,7 @@ int ConsensusLogManager::start_consensus_commit_pos_watcher()
       &consensus_commit_pos_watcher_thread_handle, NULL,
       run_consensus_commit_pos_watcher, (void *) &consensus_commit_pos_watcher_is_running))
   {
-    raft::error(ER_RAFT_0) << "Fail to create thread run_consensus_commit_pos_watcher.";
+    xp::error(ER_XP_0) << "Fail to create thread run_consensus_commit_pos_watcher.";
     return 1;
   }
   return 0;
@@ -1000,7 +1000,7 @@ void ConsensusLogManager::update_commit_pos(const std::string &log_name, uint64_
   mysql_mutex_unlock(&LOCK_consensus_commit_pos);
 
   if (opt_consensus_log_level >= 2)
-    raft::info(ER_RAFT_0) << "Report binlog commit position. fname: " << commit_pos.fname.c_str()
+    xp::info(ER_XP_0) << "Report binlog commit position. fname: " << commit_pos.fname.c_str()
       << ", pos: " << commit_pos.pos
       << ", index: " << commit_pos.index;
 }
@@ -1055,13 +1055,13 @@ void ConsensusLogManager::wait_apply_threads_stop()
 
 int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index)
 {  
-  raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_leader_degraded, consensus term: " << term << ", consensus index: " << index;
+  xp::info(ER_XP_0) << "ConsensusLogManager::wait_leader_degraded, consensus term: " << term << ", consensus index: " << index;
   int error = 0;
 
   DBUG_EXECUTE_IF("simulate_leader_degrade_slow", 
   { 
     my_sleep(10000000);
-    raft::info(ER_RAFT_0) << "wait_leader_degraded sleep 10 seconds"; 
+    xp::info(ER_XP_0) << "wait_leader_degraded sleep 10 seconds"; 
   });
 
   // switch event scheduler off
@@ -1106,7 +1106,7 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index)
   if (consensus_info->flush_info(true, true))
   {
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
-    raft::error(ER_RAFT_0) << "Failed in flush_info() called from ConsensusLog::wait_leader_degraded.";
+    xp::error(ER_XP_0) << "Failed in flush_info() called from ConsensusLog::wait_leader_degraded.";
     error = 1;
     goto end;
   }
@@ -1122,7 +1122,7 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index)
     wait_apply_threads_start();
   }
 end:
-  raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_leader_degraded finish, error " << error;
+  xp::info(ER_XP_0) << "ConsensusLogManager::wait_leader_degraded finish, error " << error;
   // recover prefetch
   prefetch_manager->enable_all_prefetch_channels();
   return error;
@@ -1130,7 +1130,7 @@ end:
 
 int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
 {
-  raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_follower_upgraded, consensus term: " << term << ", consensus index: " << index;
+  xp::info(ER_XP_0) << "ConsensusLogManager::wait_follower_upgraded, consensus term: " << term << ", consensus index: " << index;
   int error = 0;
   mysql_mutex_t *log_lock = nullptr;
 
@@ -1177,7 +1177,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   log_lock = binlog->get_log_lock();
   if (binlog->open_index_file(opt_binlog_index_name, opt_bin_logname, true)) {
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
-    raft::error(ER_RAFT_0) << "Failed in open_index_file() called from ConsensusLog::wait_follower_upgraded.";
+    xp::error(ER_XP_0) << "Failed in open_index_file() called from ConsensusLog::wait_follower_upgraded.";
     error = 1;
     goto end;
   }
@@ -1191,7 +1191,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   {
     mysql_mutex_unlock(log_lock);
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
-    raft::error(ER_RAFT_0) << "Failed in open_log() called from ConsensusLog::wait_follower_upgraded.";
+    xp::error(ER_XP_0) << "Failed in open_log() called from ConsensusLog::wait_follower_upgraded.";
     error = 2;
     goto end;
   }
@@ -1224,7 +1224,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
       executed gtid set, we disable adjusting temporarily.
     */
     //if (index > 0 && binlog->reset_previous_gtids_logged(index)) {
-    //  raft::error(ER_RAFT_0) << "Failed to reset previous gtids logged.";
+    //  xp::error(ER_XP_0) << "Failed to reset previous gtids logged.";
     //}
     consensus_info->set_last_leader_term(term);
   }
@@ -1233,7 +1233,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
   if (consensus_info->flush_info(true, true))
   {
     mysql_rwlock_unlock(&LOCK_consensuslog_status);
-    raft::error(ER_RAFT_0) << "Failed in flush_info() called from ConsensusLog::wait_follower_upgraded.";
+    xp::error(ER_XP_0) << "Failed in flush_info() called from ConsensusLog::wait_follower_upgraded.";
     error = 3;
     goto end;
   }
@@ -1247,12 +1247,12 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index)
     if (Events::start(&err_no))
     {
       Events::opt_event_scheduler = Events::EVENTS_OFF;
-      raft::error(ER_RAFT_0) << "Fail to set event_scheduler=on during "
+      xp::error(ER_XP_0) << "Fail to set event_scheduler=on during "
                       "wait_follower_upgraded, error " << err_no;
     }
   }
 end:
-  raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_follower_upgraded finish, error " << error;
+  xp::info(ER_XP_0) << "ConsensusLogManager::wait_follower_upgraded finish, error " << error;
 
   // recover prefetch
   prefetch_manager->enable_all_prefetch_channels();
@@ -1262,7 +1262,7 @@ end:
 
 int ConsensusLogManager::wait_follower_change_term(uint64 term)
 {
-  raft::info(ER_RAFT_0) << "ConsensusLogManager::wait_follower_change_term, consensus term: " << term;
+  xp::info(ER_XP_0) << "ConsensusLogManager::wait_follower_change_term, consensus term: " << term;
   current_term = term;
   return 0;
 }
@@ -1401,7 +1401,7 @@ void *run_consensus_stage_change(void *arg)
 
     if (error)
     {
-      raft::error(ER_RAFT_0) << "Consensus state change failed";
+      xp::error(ER_XP_0) << "Consensus state change failed";
       abort();
     }
   }
@@ -1413,9 +1413,9 @@ void *run_consensus_stage_change(void *arg)
 
 void *run_consensus_commit_pos_watcher(void *arg)
 {
-  raft::info(ER_RAFT_0) << "start consensus_commit_pos_watcher thread";
+  xp::info(ER_XP_0) << "start consensus_commit_pos_watcher thread";
   binlog_commit_pos_watcher((bool *)arg);
-  raft::info(ER_RAFT_0) << "stop consensus_commit_pos_watcher thread";
+  xp::info(ER_XP_0) << "stop consensus_commit_pos_watcher thread";
   return NULL;
 }
 
@@ -1427,7 +1427,7 @@ bool ConsensusLogManager::is_state_machine_ready()
 
 bool ConsensusLogManager::option_invalid(bool log_bin) {
   if (!log_bin) {
-    raft::error(ER_RAFT_0) << "PolarDB-X Engine log_bin must be set to ON";
+    xp::error(ER_XP_0) << "PolarDB-X Engine log_bin must be set to ON";
     return true;
   }
 

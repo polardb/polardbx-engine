@@ -24,15 +24,24 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#ifndef RAFT_CHANNEL_H
-#define RAFT_CHANNEL_H
+#include "sql/consensus/consensus_channel.h"
+#include "sql/rpl_msr.h"
 
-/** Replication channel style. */
-enum class Channel_style {
-  /** Master slave replication style. */
-  Tradition,
-  /** Leader follower consensous style. */
-  Raft,
-};
+/** Special channel name for xpaxos channel. */
+const char *Multisource_info::xpaxos_channel = "xpaxos_applier";
 
-#endif
+/** Whether channel is xpaxos replication according to channel name. */
+bool Multisource_info::is_xpaxos_replication_channel_name(const char *channel) {
+  if (!channel) return true;
+
+  return !strcmp(channel, default_channel) || !strcmp(channel, xpaxos_channel);
+}
+
+/** Whether channel is xpaxos replication according to master info. */
+bool Multisource_info::is_xpaxos_channel(const Master_info *mi) {
+  return mi && mi->style() == Channel_style::XPaxos;
+}
+/** Whether channel is xpaxos replication according to relay log info . */
+bool Multisource_info::is_xpaxos_channel(const Relay_log_info *rli) {
+  return rli && rli->style() == Channel_style::XPaxos;
+}

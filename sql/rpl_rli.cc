@@ -1643,7 +1643,7 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
     } else
       log_index_name = nullptr;
 
-    /** Overwrite log name if raft log. */
+    /** Overwrite log name if xpaxos log. */
     overwrite_log_name(&ln, &log_index_name);
 
     if (relay_log.open_index_file(log_index_name, ln, true)) {
@@ -1702,7 +1702,7 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
     mysql_mutex_lock(log_lock);
 
     switch (style()) {
-      case Channel_style::Raft:
+      case Channel_style::XPaxos:
         if (relay_log.open_exist_binlog(
                 ln, nullptr,
                 (max_relay_log_size ? max_relay_log_size : max_binlog_size),
@@ -1829,7 +1829,7 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
       set_group_relay_log_pos(BIN_LOG_HEADER_SIZE);
     }
 
-    if (!Multisource_info::is_raft_channel(mi) &&
+    if (!Multisource_info::is_xpaxos_channel(mi) &&
         !mi->is_gtid_only_mode() && is_group_relay_log_name_invalid(&msg)) {
       LogErr(ERROR_LEVEL, ER_RPL_MTS_RECOVERY_CANT_OPEN_RELAY_LOG,
              group_relay_log_name, std::to_string(group_relay_log_pos).c_str());
@@ -1842,7 +1842,7 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
   error_on_rli_init_info = false;
 
   /**TODO: */
-  if (!Multisource_info::is_raft_channel(mi)) {
+  if (!Multisource_info::is_xpaxos_channel(mi)) {
     if (flush_info(RLI_FLUSH_IGNORE_SYNC_OPT | RLI_FLUSH_IGNORE_GTID_ONLY)) {
       msg = "Error reading relay log configuration";
       error = 1;

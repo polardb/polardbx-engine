@@ -1424,7 +1424,7 @@ void warn_about_deprecated_binary(THD *thd)
 %token<lexer.keyword> NOCYCLE_SYM                   1210 /* MYSQL */
 %token<lexer.keyword> SEQUENCE_SYM                  1211 /* MYSQL */
 
-/* Tokens for raft */
+/* Tokens for xpaxos */
 %token<lexer.keyword> CONSENSUS_SYM              1212   /* MYSQL */
 %token<lexer.keyword> CONSENSUSLOG_SYM           1213   /* MYSQL */
 %token<lexer.keyword> XPAXOS_REPLICATION         1214   /* MYSQL */

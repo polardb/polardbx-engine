@@ -64,7 +64,7 @@
 #include "sql/table.h"
 
 #include "sql/lizard_rpl_rli.h"
-#include "sql/raft/channel.h"
+#include "sql/consensus/consensus_channel.h"
 #include "sql/rpl_applier_reader.h" // Rpl_applier_reader
 #include "replica_read_manager.h"
 
@@ -2164,9 +2164,9 @@ class Relay_log_info : public Rpl_info {
 
   virtual LOG_POS_COORD get_log_pos_coord(Relay_log_info *rli);
   virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position);
-  virtual void set_raft_relay_log_info() {}
-  virtual void set_raft_apply_ev_sequence() {}
-  virtual void update_raft_applied_index() {}
+  virtual void set_xpaxos_relay_log_info() {}
+  virtual void set_xpaxos_apply_ev_sequence() {}
+  virtual void update_xpaxos_applied_index() {}
 
  private:
   friend lizard::Begin_events_before_gtid_manager;

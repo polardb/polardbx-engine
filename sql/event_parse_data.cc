@@ -512,7 +512,7 @@ void Event_parse_data::check_originator_id(THD *thd) {
       (thd->system_thread == SYSTEM_THREAD_SLAVE_IO)) {
     DBUG_PRINT("info", ("Invoked object status set to SLAVESIDE_DISABLED."));
     if (((status == Event_parse_data::ENABLED) ||
-        (status == Event_parse_data::DISABLED)) && !thd->raft_replication_channel) {
+        (status == Event_parse_data::DISABLED)) && !thd->xpaxos_replication_channel) {
       /* PolarDB-X Engine set event_scheduler to OFF automatically if role is not leader */
       status = Event_parse_data::SLAVESIDE_DISABLED;
       status_changed = true;

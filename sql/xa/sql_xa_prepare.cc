@@ -262,7 +262,7 @@ bool detach_xa_transaction(THD *thd) {
   }
 
   if (DBUG_EVALUATE_IF("xaprep_trans_detach_fail", true, false) ||
-      xa::Transaction_cache::detach(trn_ctx, thd->raft_replication_channel)) {
+      xa::Transaction_cache::detach(trn_ctx, thd->xpaxos_replication_channel)) {
     MDL_context_backup_manager::instance().delete_backup(
         xid_state->get_xid()->key(), xid_state->get_xid()->key_length());
     ha_rollback_trans(thd, true);

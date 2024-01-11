@@ -125,7 +125,7 @@ static Sys_var_bool Sys_consensus_checksum(
 static bool fix_consensus_disable_election(sys_var *, THD *, enum_var_type)
 {
   if (!consensus_ptr->getConsensusAsync() && opt_consensus_disable_election)
-    raft::warn(ER_RAFT_0) << "Disable election while cluster is not in weak mode.";
+    xp::warn(ER_XP_0) << "Disable election while cluster is not in weak mode.";
   consensus_ptr->debugDisableElection = opt_consensus_disable_election;
   consensus_ptr->debugDisableStepDown = opt_consensus_disable_election;
   return false;
@@ -528,13 +528,13 @@ static bool fix_consensus_msg_compress_option(sys_var *, THD *, enum_var_type)
       if (address == "*:*")
         address = "";
       if (consensus_ptr->setMsgCompressOption(type, threshold, (bool)checksum, address) == 0)
-        raft::warn(ER_RAFT_0) << "Set consensus server " << (address == "" ? "all" : address.c_str())
+        xp::warn(ER_XP_0) << "Set consensus server " << (address == "" ? "all" : address.c_str())
                               << " msg compress option succeed: type(" << type
                               << "), threshold(" << threshold
                               << "), checksum(" << checksum
                               << ")";
       else
-          raft::warn(ER_RAFT_0) << "Set consensus server " << (address == "" ? "all" : address.c_str())
+          xp::warn(ER_XP_0) << "Set consensus server " << (address == "" ? "all" : address.c_str())
                                 << "msg compress option failed, wrong address!";
     }
   }
@@ -564,7 +564,7 @@ static bool check_consensus_msg_compress_option(sys_var *, THD *, set_var *var)
     uint32 type, threshold, checksum;
     if (std::sscanf(kv.c_str(),"%s %u %u %u", addr, &type, &threshold, &checksum) != 4)
     {
-      raft::warn(ER_RAFT_0) <<"Set consensus server msg compress option failed, wrong syntax!";
+      xp::warn(ER_XP_0) <<"Set consensus server msg compress option failed, wrong syntax!";
       return true;
     }
   }
@@ -701,7 +701,7 @@ static bool fix_consensus_flow_control(sys_var *, THD *, enum_var_type)
     if (std::sscanf(kv.c_str(),"%s %ld", addr, &fc) == 2)
     {
       serverid = consensus_ptr->getServerIdFromAddr(addr);
-      raft::warn(ER_RAFT_0) <<"Add consensus server " << serverid
+      xp::warn(ER_XP_0) <<"Add consensus server " << serverid
                             << " flow control " << fc;
       consensus_ptr->set_flow_control(serverid, fc);
     }

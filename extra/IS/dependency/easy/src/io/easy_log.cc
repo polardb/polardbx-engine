@@ -1,6 +1,6 @@
 extern const char *error_message_for_error_log(int mysql_errno);
 
-#include "sql/raft/raft0err.h"
+#include "sql/consensus/consensus_err.h"
 
 
 extern "C" {
@@ -48,23 +48,23 @@ void easy_log_format_default(int level, const char *file, int line,
 void raft_log_print(easy_log_level_t log_level, const char *message) {
   switch(log_level) {
     case EASY_LOG_OFF:
-      raft::system(ER_RAFT_PROTO) << message;
+      xp::system(ER_XP_PROTO) << message;
       break;
     case EASY_LOG_FATAL:
-      raft::fatal(ER_RAFT_PROTO) << message;
+      xp::fatal(ER_XP_PROTO) << message;
       break;
     case EASY_LOG_ERROR:
-      raft::error(ER_RAFT_PROTO) << message;
+      xp::error(ER_XP_PROTO) << message;
       break;
     case EASY_LOG_WARN:
-      raft::warn(ER_RAFT_PROTO) << message;
+      xp::warn(ER_XP_PROTO) << message;
       break;
     case EASY_LOG_INFO:
     case EASY_LOG_DEBUG:
     case EASY_LOG_TRACE:
-      raft::info(ER_RAFT_PROTO) << message;
+      xp::info(ER_XP_PROTO) << message;
     case EASY_LOG_ALL:
-      raft::system(ER_RAFT_PROTO) << message;
+      xp::system(ER_XP_PROTO) << message;
     default:
       break;
   }

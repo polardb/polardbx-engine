@@ -74,7 +74,7 @@
 #include "thr_mutex.h"
 
 #include "sql/gcn_log_event.h"
-#include "sql/raft/raft0err.h"
+#include "sql/consensus/consensus_err.h"
 #include "sql/gcn_log_event.h"
 
 #ifndef NDEBUG
@@ -149,9 +149,9 @@ bool handle_slave_worker_stop(Slave_worker *worker, Slave_job_item *job_item) {
     return (true);
   } else if (rli->exit_counter == rli->replica_parallel_workers) {
     // over steppers should exit with accepting STOP
-    bool need_check = (!Multisource_info::is_raft_channel(rli) || !rli->force_apply_queue_before_stop);
+    bool need_check = (!Multisource_info::is_xpaxos_channel(rli) || !rli->force_apply_queue_before_stop);
     if (group_index > rli->max_updated_index && need_check) {
-      raft::info(ER_RAFT_APPLIER) << "group_index(" << group_index
+      xp::info(ER_XP_APPLIER) << "group_index(" << group_index
                                   << ") > rli->max_updated_index(" << rli->max_updated_index
                                   << "), set running_status to STOP_ACCEPTED";
       worker->running_status = Slave_worker::STOP_ACCEPTED;

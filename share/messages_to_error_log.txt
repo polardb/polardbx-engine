@@ -12181,25 +12181,25 @@ ER_RECYCLE_BIN
 ER_OUTLINE
   eng "Statement outline : %s"
 
-ER_RAFT_0
+ER_XP_0
   eng "%s"
 
-ER_RAFT_RECOVERY
+ER_XP_RECOVERY
   eng "[Recovery] %s"
 
-ER_RAFT_FIFO
+ER_XP_FIFO
   eng "[FIFO] %s"
 
-ER_RAFT_PREFETCH
+ER_XP_PREFETCH
   eng "[Prefetch] %s"
 
-ER_RAFT_APPLIER
+ER_XP_APPLIER
   eng "[Applier] %s"
 
-ER_RAFT_COMMIT
+ER_XP_COMMIT
   eng "[Commit] %s"
 
-ER_RAFT_PROTO
+ER_XP_PROTO
   eng "[Proto] %s"
 
 ################################################################################

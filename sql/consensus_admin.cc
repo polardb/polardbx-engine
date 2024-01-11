@@ -543,7 +543,7 @@ int start_consensus_apply_threads()
 
       // Todo: mi must be itself
       /* If server id is not set, start_slave_thread() will say it */
-      if (mi && channel_map.is_raft_replication_channel_name(mi->get_channel()))
+      if (mi && channel_map.is_xpaxos_replication_channel_name(mi->get_channel()))
       {
         /* same as in start_slave() cache the global var values into rli's members */
         mi->rli->opt_replica_parallel_workers = opt_mts_replica_parallel_workers;
@@ -566,7 +566,7 @@ int start_consensus_apply_threads()
           @todo:have an option if the user wants to continue
           the replication for other channels.
           */
-          raft::error(ER_RAFT_0) << "Failed to create slave threads";
+          xp::error(ER_XP_0) << "Failed to create slave threads";
           error = 1;
         }
       }
@@ -595,12 +595,12 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
     {
       if (consensus_ptr->isShutdown())
       {
-        raft::info(ER_RAFT_APPLIER) << "Apply thread is terminated because of shutdown";
+        xp::info(ER_XP_APPLIER) << "Apply thread is terminated because of shutdown";
         DBUG_RETURN(1);
       }
 
       if (sql_slave_killed(rli->info_thd , rli)) {
-        raft::info(ER_RAFT_APPLIER) << "Apply thread is terminated because of slave_killed";
+        xp::info(ER_XP_APPLIER) << "Apply thread is terminated because of slave_killed";
         DBUG_RETURN(1);
       }
 
@@ -616,7 +616,7 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         opt_consensus_leader_stop_apply ||
         (opt_consensus_leader_stop_apply_time && (time_diff < (long)opt_consensus_leader_stop_apply_time)))
       {
-        raft::info(ER_RAFT_APPLIER) << "Apply thread stop, opt_consensus_leader_stop_apply: " << (opt_consensus_leader_stop_apply ? "true" : "false")
+        xp::info(ER_XP_APPLIER) << "Apply thread stop, opt_consensus_leader_stop_apply: " << (opt_consensus_leader_stop_apply ? "true" : "false")
                                     << ", seconds_behind_master: " << time_diff
                                     << ", opt_consensus_leader_stop_apply_time: " << opt_consensus_leader_stop_apply_time;
         opt_consensus_leader_stop_apply = false;
@@ -626,7 +626,7 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         rli->sql_thread_kill_accepted = true;
         rli->force_apply_queue_before_stop = true;
         mysql_mutex_unlock(consensus_log_manager.get_apply_thread_lock());
-        raft::info(ER_RAFT_APPLIER) << "Apply thread catchup commit index, consensus index: " << rli->get_consensus_apply_index()
+        xp::info(ER_XP_APPLIER) << "Apply thread catchup commit index, consensus index: " << rli->get_consensus_apply_index()
                                     << ", current term: " << consensus_log_manager.get_current_term()
                                     << ", apply term: " << consensus_log_manager.get_apply_term()
                                     << ", stop term: " << consensus_log_manager.get_stop_term();
@@ -684,7 +684,7 @@ void update_consensus_apply_pos(Relay_log_info *rli,
       consensus_log_manager.set_real_apply_index(consensus_index);
       consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
 
-      // raft::info(ER_RAFT_APPLIER) << "update_consensus_apply_pos: " << consensus_index
+      // xp::info(ER_XP_APPLIER) << "update_consensus_apply_pos: " << consensus_index
       //                       << ", consensus_term: " << consensus_term
       //                       << ", consensus_index: " << consensus_index
       //                       << ", consensus_index_end_pos: " << consensus_index_end_pos
@@ -716,7 +716,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
     recover_status = consensus_log_manager.get_consensus_info()->get_recover_status();
     assert(consensus_log_manager.get_status() == RELAY_LOG_WORKING);
     start_apply_index = consensus_log_manager.get_consensus_info()->get_start_apply_index();
-    raft::info(ER_RAFT_APPLIER) << "Apply thread start, recover status = " << recover_status
+    xp::info(ER_XP_APPLIER) << "Apply thread start, recover status = " << recover_status
                                 << ", start apply index = " << start_apply_index
                                 << ", rli consensus index " << rli->get_consensus_apply_index()
                                 << ", consensus_ptr CommitIndex " << consensus_ptr->getCommitIndex();
@@ -733,10 +733,10 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         uint64 next_index = consensus_log_manager.get_next_trx_index(recover_index);
         if (consensus_log_manager.get_log_position(next_index, false, log_name, &log_pos))
         {
-          raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
+          xp::error(ER_XP_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+        xp::info(ER_XP_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
                                     << "', next_index = " << next_index
                                     << ", rli apply index = " << recover_index;
@@ -745,7 +745,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
 
         if (consensus_log_manager.get_log_directly(recover_index, &recover_term, recover_log_content, &recover_outer, &recover_flag, &recover_checksum, false))
         {
-          raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find term by index " << recover_index;
+          xp::error(ER_XP_APPLIER) << "Apply thread cannot find term by index " << recover_index;
           abort();
         }
         rli->set_consensus_apply_index(recover_index);
@@ -759,10 +759,10 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
         uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
         if (consensus_log_manager.get_log_position(next_index, false, log_name,
                                                    &log_pos)) {
-          raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
+          xp::error(ER_XP_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+        xp::info(ER_XP_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
                                     << "', next_index = " << next_index
                                     << ", rli apply index = " << start_index;
@@ -771,7 +771,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
 
         if (consensus_log_manager.get_log_directly(start_index, &recover_term, recover_log_content, &recover_outer, &recover_flag, &recover_checksum, false))
         {
-          raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find term by index " << start_index;
+          xp::error(ER_XP_APPLIER) << "Apply thread cannot find term by index " << start_index;
           abort();
         }
         rli->set_consensus_apply_index(start_index);
@@ -791,10 +791,10 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           uint64 next_index = 1;
           if (consensus_log_manager.get_log_position(next_index, false,
                                                      log_name, &log_pos)) {
-            raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
+            xp::error(ER_XP_APPLIER) << "Apply thread cannot find start index " << next_index;
             abort();
           }
-          raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+          xp::info(ER_XP_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                       << "', pos = " << log_pos
                                       << "', next_index = " << next_index
                                       << ", rli apply index = " << start_index;
@@ -811,10 +811,10 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
           uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
           if (consensus_log_manager.get_log_position(next_index, false,
                                                      log_name, &log_pos)) {
-            raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
+            xp::error(ER_XP_APPLIER) << "Apply thread cannot find start index " << next_index;
             abort();
           }
-          raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+          xp::info(ER_XP_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                       << "', pos = " << log_pos
                                       << "', next_index = " << next_index
                                       << ", rli apply index = " << start_index;
@@ -826,17 +826,17 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
       }
       else
       {
-        raft::fatal(ER_RAFT_RECOVERY) << "should not reach here";
+        xp::fatal(ER_XP_RECOVERY) << "should not reach here";
         // these code will not reached anymore
         // start_apply_index != 0 && recover_status == RELAYLOG_WORKING is impossible
         uint64 start_index = max(start_apply_index, rli->get_consensus_apply_index());
         uint64 next_index = consensus_log_manager.get_next_trx_index(start_index);
         if (consensus_log_manager.get_log_position(next_index, false, log_name,
                                                    &log_pos)) {
-          raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
+          xp::error(ER_XP_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        raft::info(ER_RAFT_APPLIER) << "Apply thread group relay log file name = '" << log_name
+        xp::info(ER_XP_APPLIER) << "Apply thread group relay log file name = '" << log_name
                                     << "', pos = " << log_pos
                                     << ", rli apply index = " << start_index;
         rli->set_group_relay_log_name(log_name);
@@ -844,7 +844,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli, bool is_xpaxos_chan
 
         if (consensus_log_manager.get_log_directly(start_index, &recover_term, recover_log_content, &recover_outer, &recover_flag, &recover_checksum, false))
         {
-          raft::error(ER_RAFT_APPLIER) << "Apply thread cannot find start index " << next_index;
+          xp::error(ER_XP_APPLIER) << "Apply thread cannot find start index " << next_index;
           abort();
         }
         rli->set_consensus_apply_index(start_index);

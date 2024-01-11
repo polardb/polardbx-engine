@@ -1,7 +1,6 @@
-
 /*****************************************************************************
 
-Copyright (c) 2013, 2023, Alibaba and/or its affiliates. All Rights Reserved.
+Copyright (c) 2013, 2020, Alibaba and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -25,12 +24,24 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#ifndef RAFT_RAFT0RPL_INFO_FACTORY_H
-#define RAFT_RAFT0RPL_INFO_FACTORY_H
+#include "sql/consensus/consensus_err.h"
 
-#include "lex_string.h"
+namespace xp {
 
-extern LEX_CSTRING CONSENSUS_INFO_NAME;
+void logger::log_event(std::string msg) {
+  LogEvent()
+      .type(LOG_TYPE_ERROR)
+      .prio(m_level)
+      .errcode(m_err)
+      .subsys("XPaxos")
+      .verbatim(msg.c_str());
+}
 
-#endif
+logger::~logger() { log_event(m_oss.str()); }
 
+fatal::~fatal() {
+  log_event("[FATAL] " + m_oss.str());
+  assert(0);
+}
+
+}  // namespace xp

@@ -23,14 +23,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
-#ifndef MYSQL_RAFT0RECOVERY_H
-#define MYSQL_RAFT0RECOVERY_H
+#ifndef XPAXOS_RECOVERY_H
+#define XPAXOS_RECOVERY_H
 
 #include <memory>
 #include "sql/binlog/recovery.h"
 #include "sql/log_event.h"
 
-namespace raft {
+namespace xp {
 
 // Recovery_manager is a singleton class that manages the recovery process
 // for the consensus protocol.
@@ -41,12 +41,12 @@ class Recovery_manager {
     return instance;
   }
 
-  bool is_raft_instance_recovering() const;
+  bool is_xpaxos_instance_recovering() const;
 
-  bool is_raft_instance_initializing() const;
+  bool is_xpaxos_instance_initializing() const;
 
-  bool is_raft_instance() const {
-    // todo is raft instance by default for now
+  bool is_xpaxos_instance() const {
+    // todo is xpaxos instance by default for now
     return true;
   }
 
@@ -127,6 +127,6 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
   const Query_log_event *m_query_ev;
 };
 
-}  // namespace raft
+}  // namespace xp
 
-#endif  // MYSQL_RAFT0RECOVERY_H
+#endif  // XPAXOS_RECOVERY_H

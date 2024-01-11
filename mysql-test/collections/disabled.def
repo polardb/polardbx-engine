@@ -296,7 +296,7 @@ galaxy_sql.rdsaudit_log                           : WL#000 System variable 'main
 
 
 
-# raft not support
+# xcluster not support
 
 federated.federated                            : WL#001 x-cluster does not support master / slave mode
 federated.federated_archive                    : WL#001 x-cluster does not support master / slave mode
@@ -409,4 +409,4 @@ binlog_nogtid.binlog_gtid_simple_recovery        	 	: WL#21509040 binlog remove
 service_sys_var_registration.sys_var_service_cl       : WL#21509040 not support restart --log-in
 sys_vars.innodb_version_basic                         : WL#21509040 modify the version
 main.log_components_filter                            : WL#21509040 log timestamp unstable
-x.compression_level_lz4_server                        : WL#21509040 error from raft support, todo@yanhua
+x.compression_level_lz4_server                        : WL#21509040 error from xcluster support

@@ -28,7 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define CONSENSUS_LOG_MANAGER_INCLUDE
 
 #include "binlog.h"
-#include "rpl_rli.h"
+#include "sql/rpl_rli.h"
 #include "consensus_info.h"
 #include "consensus_prefetch_manager.h"
 #include "consensus_fifo_cache_manager.h"

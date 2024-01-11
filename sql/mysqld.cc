@@ -984,8 +984,8 @@ MySQL clients support the protocol:
 #include "sql/common/reload.h"
 
 #include "sql/binlog/lizard0recovery.h"
-#include "sql/raft/raft0err.h"
-#include "sql/raft/raft0recovery.h"
+#include "sql/consensus/consensus_err.h"
+#include "sql/consensus/consensus_recovery.h"
 #include "sql/consensus_info.h"
 #include "sql/consensus_log_index.h"
 #include "sql/consensus_recovery_manager.h"
@@ -2348,7 +2348,7 @@ static void close_connections(void) {
   Set_kill_conn set_kill_conn;
   thd_manager->do_for_all_thd(&set_kill_conn);
 
-  raft::info(ER_RAFT_0) << "Shutting down consensus module in close_connections";
+  xp::info(ER_XP_0) << "Shutting down consensus module in close_connections";
   consensus_log_manager.stop_consensus_commit_pos_watcher();
   // set close flag to stop workers and apply thread
   if (consensus_ptr && !opt_consensus_force_recovery) {
@@ -2508,7 +2508,7 @@ void unireg_abort(int exit_code) {
     mysqld::runtime::signal_parent(pipe_write_fd, 0);
   }
 #endif
-  raft::info(ER_RAFT_0) << "Shutting down consensus module in unireg_abort";
+  xp::info(ER_XP_0) << "Shutting down consensus module in unireg_abort";
   consensus_log_manager.stop_consensus_commit_pos_watcher();
   if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
     consensus_ptr->shutdown();
@@ -2616,7 +2616,7 @@ static void clean_up(bool print_message) {
   dd::shutdown();
 
   Events::deinit();
-  raft::info(ER_RAFT_0) << "Shutting down consensus module in clean_up";
+  xp::info(ER_XP_0) << "Shutting down consensus module in clean_up";
   consensus_log_manager.stop_consensus_commit_pos_watcher();
   my_sleep(5000);
   if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
@@ -6296,8 +6296,8 @@ static int init_server_components() {
   */
   if (delegates_init()) unireg_abort(MYSQLD_ABORT_EXIT);
 
-  /* need to configure logging for raft */
-  if (!opt_bin_log && raft::Recovery_manager::instance().is_raft_instance_recovering()) {
+  /* need to configure logging for xpaxos */
+  if (!opt_bin_log && xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
     LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--log-bin");
   }
 
@@ -6404,7 +6404,7 @@ static int init_server_components() {
                           log_bin_basename, ".index");
 
     /*
-      XCLUSTER_RESOLVE : don't set opt_binlog_index_name, otherwise, incorrect file
+      XPAXOS_RESOLVE : don't set opt_binlog_index_name, otherwise, incorrect file
       name would be used in following call path,
         Relay_log_info::rli_init_info() -> MYSQL_BIN_LOG::open_index_file()
     */
@@ -6952,7 +6952,7 @@ static int init_server_components() {
   if (consensus_log_manager.init(opt_consensus_log_cache_size, opt_consensus_prefetch_cache_size, opt_consensus_start_index))
     unireg_abort(MYSQLD_ABORT_EXIT);
   consensus_log_manager.set_binlog(&mysql_bin_log);
-  mysql_bin_log.is_raft_log = true;
+  mysql_bin_log.is_xpaxos_log = true;
 
   if (Recovered_xa_transactions::init()) {
     LogErr(ERROR_LEVEL, ER_OOM);
@@ -6989,7 +6989,7 @@ static int init_server_components() {
         mysql_mutex_unlock(log_lock);
       } else if (opt_initialize) {
         // in boostrap case but binlog_file_list is not empty
-        raft::error(ER_RAFT_0) << "--initialize specified but the binlog index file '"
+        xp::error(ER_XP_0) << "--initialize specified but the binlog index file '"
                                << mysql_bin_log.get_index_fname() << "' is not empty.";
         unireg_abort(MYSQLD_ABORT_EXIT);
       }
@@ -7015,7 +7015,7 @@ static int init_server_components() {
   else if (consensus_error > 0)
     unireg_abort(MYSQLD_SUCCESS_EXIT);
 
-  if (!raft::Recovery_manager::instance().is_raft_instance_recovering()) {
+  if (!xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
     if (ha_recover(0)) {
       unireg_abort(MYSQLD_ABORT_EXIT);
     }
@@ -7474,7 +7474,7 @@ int mysqld_main(int argc, char **argv)
 
   init_variable_default_paths();
 
-  raft::system(ER_RAFT_0) << "Raft server start.";
+  xp::system(ER_XP_0) << "XPaxos server start.";
 
   int heo_error;
 
@@ -8056,7 +8056,7 @@ int mysqld_main(int argc, char **argv)
   }
 
   if (opt_bin_log &&
-      !raft::Recovery_manager::instance().is_raft_instance_recovering()) {
+      !xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
     /*
       Initialize GLOBAL.GTID_EXECUTED and GLOBAL.GTID_PURGED from
       gtid_executed table and binlog files during server startup.

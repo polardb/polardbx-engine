@@ -738,7 +738,7 @@ THD::THD(bool enable_plugins)
       owned_commit_gcn(),
       owned_vision_gcn(),
       lex_returning(new im::Lex_returning(false, mem_root)),
-      raft_replication_channel(false) {
+      xpaxos_replication_channel(false) {
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);
@@ -1269,7 +1269,7 @@ void THD::cleanup(void) {
             &mdl_context, xs->get_xid()->key(), xs->get_xid()->key_length())) {
       LogErr(ERROR_LEVEL, ER_XA_CANT_CREATE_MDL_BACKUP);
     }
-    xa::Transaction_cache::detach(trn_ctx, this->raft_replication_channel);
+    xa::Transaction_cache::detach(trn_ctx, this->xpaxos_replication_channel);
   } else {
     xs->set_state(XID_STATE::XA_NOTR);
     trans_rollback(this);
@@ -3037,7 +3037,7 @@ bool THD::is_current_stmt_binlog_disabled() const {
 
 bool THD::is_current_stmt_binlog_log_replica_updates_disabled() const {
   return (!opt_bin_log 
-          || (slave_thread && (!opt_log_replica_updates || this->raft_replication_channel))
+          || (slave_thread && (!opt_log_replica_updates || this->xpaxos_replication_channel))
           || !mysql_bin_log.is_open());
 }
 

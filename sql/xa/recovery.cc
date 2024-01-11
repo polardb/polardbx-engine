@@ -250,7 +250,7 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
   XA_specification *xa_spec =
       (info.spec_list ? info.spec_list->find(xid) : nullptr);
 
-  raft::system(ER_RAFT_RECOVERY) << "recover_one_internal_trx "
+  xp::system(ER_XP_RECOVERY) << "recover_one_internal_trx "
                           << ", xid " << xa_trx.id;
 
   if (info.commit_list ? info.commit_list->count(xid) != 0
@@ -320,7 +320,7 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
     state_in_ht = info.xa_list_in_ht->find(xa_trx.id);
   }
 
-  raft::system(ER_RAFT_RECOVERY) << "recover_one_external_trx "
+  xp::system(ER_XP_RECOVERY) << "recover_one_external_trx "
                           << ", state: " << (int)state
                           << ", state_in_ht: " << (int)state_in_ht
                           << ", xid: " << xa_trx.id;
@@ -420,7 +420,7 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
   } else if (state == state_in_ht &&
              state_in_ht == enum_ha_recover_xa_state::PREPARED_IN_TC) {
     if (Recovered_xa_transactions::instance().add_prepared_xa_transaction(&xa_trx)) {
-      raft::fatal(ER_RAFT_RECOVERY) << "add prepared xa trx failed in collecting";
+      xp::fatal(ER_XP_RECOVERY) << "add prepared xa trx failed in collecting";
     }
   }
 }

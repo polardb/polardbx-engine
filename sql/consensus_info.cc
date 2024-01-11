@@ -150,7 +150,7 @@ int Consensus_info::flush_info(bool force, bool force_new_thd) {
   DBUG_RETURN(0);
 
 err:
-  raft::error(ER_RAFT_0, "Consensus info flush failed.");
+  xp::error(ER_XP_0, "Consensus info flush failed.");
   mysql_mutex_unlock(&LOCK_consensus_info);
   abort();
   DBUG_RETURN(1);

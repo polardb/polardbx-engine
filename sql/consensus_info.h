@@ -36,7 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <atomic>
 #include <string>
 
-#include "sql/raft/raft0err.h"
+#include "sql/consensus/consensus_err.h"
 
 #ifdef HAVE_PSI_INTERFACE
 extern PSI_mutex_key key_consensus_info_lock;

@@ -24,17 +24,17 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#include "sql/raft/raft0rpl_rli.h"
+#include "sql/consensus/consensus_rpl_rli.h"
 
 #include "sql/mysqld.h"
 #include "sql/rpl_replica.h"
 #include "sql/consensus_log_manager.h"
 #include "sql/bl_consensus_log.h"
 #include "sql/rpl_rli_pdb.h"
-#include "sql/raft/raft0err.h"
+#include "sql/consensus/consensus_err.h"
 #include "sql/log.h"
 
-Raft_relay_log_info::~Raft_relay_log_info()
+XPaxos_relay_log_info::~XPaxos_relay_log_info()
 {
   consensus_log_manager.set_relay_log_info(nullptr);
 }
@@ -58,7 +58,7 @@ void Relay_log_info::overwrite_log_name(const char **, const char **) {
  * @param[in/out]	log name
  * @param[in/out]	log index name
  */
-void Raft_relay_log_info::overwrite_log_name(const char **ln,
+void XPaxos_relay_log_info::overwrite_log_name(const char **ln,
                                              const char **log_index_name) {
   assert(relay_log.is_relay_log);
 
@@ -66,7 +66,7 @@ void Raft_relay_log_info::overwrite_log_name(const char **ln,
   *ln = opt_bin_logname;
   *log_index_name = opt_binlog_index_name;
 
-  relay_log.is_raft_log = true;
+  relay_log.is_xpaxos_log = true;
   return;
 }
 
@@ -76,7 +76,7 @@ LOG_POS_COORD Relay_log_info::get_log_pos_coord(Relay_log_info *rli) {
           0 };
 }
 
-LOG_POS_COORD Raft_relay_log_info::get_log_pos_coord(Relay_log_info *rli) {
+LOG_POS_COORD XPaxos_relay_log_info::get_log_pos_coord(Relay_log_info *rli) {
   return { const_cast<char*>(rli->get_group_relay_log_name()),
           rli->get_group_relay_log_pos(),
           rli->get_consensus_apply_index() };
@@ -93,7 +93,7 @@ int Relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)
   return 0;
 }
 
-int Raft_relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)
+int XPaxos_relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)
 {
   uint64 log_pos = 0;
   char log_name[FN_REFLEN];
@@ -112,17 +112,17 @@ int Raft_relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_positio
   return 0;
 }
 
-void Raft_relay_log_info::set_raft_relay_log_info()
+void XPaxos_relay_log_info::set_xpaxos_relay_log_info()
 {
   consensus_log_manager.set_relay_log_info(this);
 }
 
-void Raft_relay_log_info::set_raft_apply_ev_sequence()
+void XPaxos_relay_log_info::set_xpaxos_apply_ev_sequence()
 {
   consensus_log_manager.set_apply_ev_sequence(1);
 }
 
-void Raft_relay_log_info::update_raft_applied_index()
+void XPaxos_relay_log_info::update_xpaxos_applied_index()
 {
   ulonglong rli_appliedindex = 0;
   set_consensus_apply_index(gaq->lwm.consensus_index);
@@ -141,7 +141,7 @@ void Raft_relay_log_info::update_raft_applied_index()
    @retval    false    Success
    @retval    true     Error
  */
-bool Raft_relay_log_info::reset_group_relay_log_pos(const char **) {
+bool XPaxos_relay_log_info::reset_group_relay_log_pos(const char **) {
   group_relay_log_name[0] = 0;
   group_relay_log_pos = 0;
   event_relay_log_name[0] = 0;
@@ -159,13 +159,13 @@ bool Raft_relay_log_info::reset_group_relay_log_pos(const char **) {
      @retval    true     It is invalid. In this case, *errmsg is set to point to
                          the error message.
 */
-bool Raft_relay_log_info::is_group_relay_log_name_invalid(
+bool XPaxos_relay_log_info::is_group_relay_log_name_invalid(
     const char **)  {
   /** Didn't confirm it. */
   return false;
 }
 
-void Raft_relay_log_info::relay_log_number_to_name(uint number,
+void XPaxos_relay_log_info::relay_log_number_to_name(uint number,
                                               char name[FN_REFLEN + 1]) {
   char *str = strmake(name, log_bin_basename, FN_REFLEN + 1);
   sprintf(str, ".%06u", number);

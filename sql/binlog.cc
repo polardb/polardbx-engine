@@ -144,7 +144,7 @@
 #include "sql/consensus_log_manager.h"
 #include "sql/bl_consensus_log.h"
 #include "replica_read_manager.h"
-#include "sql/raft/raft0recovery.h"
+#include "sql/consensus/consensus_recovery.h"
 
 #include "polarx_proc/changeset_manager.h"
 
@@ -1597,7 +1597,7 @@ int binlog_cache_data::write_event(Log_event *ev) {
   if (opt_consensus_check_large_event) {
     if (newpos - oldpos > opt_consensus_large_event_size_limit ||
         DBUG_EVALUATE_IF("force_large_event", 1, 0)) {
-      raft::warn(ER_RAFT_COMMIT)
+      xp::warn(ER_XP_COMMIT)
           << "Log event too large, event type " << ev->get_type_str()
           << ", event size " << newpos - oldpos;
       mark_as_rollback = true;
@@ -1826,7 +1826,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
   if (thd->owned_gtid.sidno > 0) {
     assert(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
-    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || thd->raft_replication_channel))) {
+    if (!opt_bin_log || (thd->slave_thread && (!opt_log_replica_updates || thd->xpaxos_replication_channel))) {
       /*
         If the binary log is disabled for this thread (either by
         log_bin=0 or sql_log_bin=0 or by log_replica_updates=0 for a
@@ -1837,7 +1837,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
         (This only happens for DDL, since DML will save the GTID into
         table and release ownership inside ha_commit_trans.)
       */
-      if (!thd->raft_replication_channel && gtid_state->save(thd) != 0) {
+      if (!thd->xpaxos_replication_channel && gtid_state->save(thd) != 0) {
         gtid_state->update_on_rollback(thd);
         return 1;
       } else if (!has_commit_order_manager(thd)) {
@@ -3616,7 +3616,7 @@ MYSQL_BIN_LOG::MYSQL_BIN_LOG(uint *sync_period, bool relay_log)
       sync_period_ptr(sync_period),
       sync_counter(0),
       is_relay_log(relay_log),
-      is_raft_log(0),
+      is_xpaxos_log(0),
       checksum_alg_reset(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       relay_log_checksum_alg(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
       previous_gtid_set_relaylog(nullptr),
@@ -3892,7 +3892,7 @@ bool MYSQL_BIN_LOG::open(PSI_file_key log_file_key, const char *log_name,
 
   write_error = false;
   myf flags = MY_WME | MY_NABP | MY_WAIT_IF_FULL;
-  if (is_relay_log && !is_raft_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
+  if (is_relay_log && !is_xpaxos_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
 
   if (!(name = my_strdup(key_memory_MYSQL_LOG_name, log_name, MYF(MY_WME)))) {
     goto err;
@@ -4597,7 +4597,7 @@ bool MYSQL_BIN_LOG::find_first_log_not_in_gtid_set(char *binlog_file_name,
     switch (read_gtids_from_binlog(filename, nullptr, &binlog_previous_gtid_set,
                                    first_gtid,
                                    binlog_previous_gtid_set.get_sid_map(),
-                                   opt_source_verify_checksum, is_relay_log && !is_raft_log)) {
+                                   opt_source_verify_checksum, is_relay_log && !is_xpaxos_log)) {
       case ERROR:
         errmsg.assign(
             "Error reading header of binary log while looking for "
@@ -4661,7 +4661,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
     in order to correctly feed it with relay log events.
   */
 #ifndef NDEBUG
-  if (is_relay_log && !is_raft_log) {
+  if (is_relay_log && !is_xpaxos_log) {
     assert(trx_parser != nullptr);
     assert(lost_gtids == nullptr);
   }
@@ -4710,7 +4710,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
     last binlog file before the server restarts, so we remove
     its file name from filename_list.
   */
-  if (is_server_starting && !is_relay_log && !is_raft_log && !filename_list.empty())
+  if (is_server_starting && !is_relay_log && !is_xpaxos_log && !filename_list.empty())
     filename_list.pop_back();
 
   error = 0;
@@ -4738,7 +4738,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
                           filename, can_stop_reading, reached_first_file));
       switch (read_gtids_from_binlog(
           filename, all_gtids, reached_first_file ? lost_gtids : nullptr,
-          nullptr /* first_gtid */, sid_map, verify_checksum, is_relay_log && !is_raft_log)) {
+          nullptr /* first_gtid */, sid_map, verify_checksum, is_relay_log && !is_xpaxos_log)) {
         case ERROR: {
           error = 1;
           goto end;
@@ -4754,7 +4754,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
             start parsing the relay log to add GTID of transactions that might
             have spanned in distinct relaylog files.
           */
-          if (!is_relay_log || is_raft_log) can_stop_reading = true;
+          if (!is_relay_log || is_xpaxos_log) can_stop_reading = true;
           break;
         }
         case NO_GTIDS: {
@@ -4769,7 +4769,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
             GLOBAL.GTID_PURGED should be empty in the case.
           */
           if (binlog_gtid_simple_recovery && is_server_starting &&
-              (!is_relay_log || is_raft_log)) {
+              (!is_relay_log || is_xpaxos_log)) {
             assert(all_gtids->is_empty());
             assert(lost_gtids->is_empty());
             goto end;
@@ -4790,7 +4790,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
       events from the master in the case of GTID auto positioning be
       disabled.
     */
-    if (is_relay_log && !is_raft_log && filename_list.size() > 0) {
+    if (is_relay_log && !is_xpaxos_log && filename_list.size() > 0) {
       /*
         Suppose the following relaylog:
 
@@ -4878,7 +4878,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
     DBUG_PRINT("info", ("Iterating forwards through binary logs, looking for "
                         "the first binary log that contains both a "
                         "Previous_gtids_log_event and a Gtid_log_event."));
-    assert(!is_relay_log || is_raft_log);
+    assert(!is_relay_log || is_xpaxos_log);
     for (it = filename_list.begin(); it != filename_list.end(); it++) {
       /*
         We should pass a first_gtid to read_gtids_from_binlog when
@@ -4892,7 +4892,7 @@ bool MYSQL_BIN_LOG::init_gtid_sets(Gtid_set *all_gtids, Gtid_set *lost_gtids,
       switch (read_gtids_from_binlog(
           filename, nullptr, lost_gtids,
           binlog_gtid_simple_recovery ? nullptr : &first_gtid, sid_map,
-          verify_checksum, is_relay_log && !is_raft_log)) {
+          verify_checksum, is_relay_log && !is_xpaxos_log)) {
         case ERROR: {
           error = 1;
           [[fallthrough]];
@@ -5031,9 +5031,9 @@ bool MYSQL_BIN_LOG::open_binlog(
   }
 
   /*
-    don't set LOG_EVENT_BINLOG_IN_USE_F for the relay log && raft log
+    don't set LOG_EVENT_BINLOG_IN_USE_F for the relay log && xpaxos log
   */
-  if (!is_relay_log && !is_raft_log) {
+  if (!is_relay_log && !is_xpaxos_log) {
     s.common_header->flags |= LOG_EVENT_BINLOG_IN_USE_F;
   }
 
@@ -5059,15 +5059,15 @@ bool MYSQL_BIN_LOG::open_binlog(
   if (!s.is_valid()) goto err;
   s.dont_set_created = null_created_arg;
   /* Set LOG_EVENT_RELAY_LOG_F flag for relay log's FD */
-  if (is_relay_log && !is_raft_log) s.set_relay_log_event();
+  if (is_relay_log && !is_xpaxos_log) s.set_relay_log_event();
 
- if (opt_consensuslog_revise && is_relay_log && is_raft_log)
+ if (opt_consensuslog_revise && is_relay_log && is_xpaxos_log)
     s.consensus_extra_time = consensus_log_manager.get_event_timestamp();
 
   if (write_event_to_binlog(&s)) goto err;
 
   // write previous consensus index event
-  if (is_raft_log) {
+  if (is_xpaxos_log) {
     Previous_consensus_index_log_event prev_consensus_index_ev(consensus_log_manager.get_current_index());
     if (opt_consensuslog_revise && is_relay_log)
       prev_consensus_index_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
@@ -5082,7 +5082,7 @@ bool MYSQL_BIN_LOG::open_binlog(
     See further comments in the mysqld.
     /Alfranio
   */
-  if (current_thd || is_raft_log) {
+  if (current_thd || is_xpaxos_log) {
     Checkable_rwlock *sid_lock = nullptr;
     Gtid_set logged_gtids_binlog(global_sid_map, global_sid_lock);
     Gtid_set *previous_logged_gtids;
@@ -5115,9 +5115,9 @@ bool MYSQL_BIN_LOG::open_binlog(
     DBUG_PRINT("info", ("Generating PREVIOUS_GTIDS for %s file.",
                         is_relay_log ? "relaylog" : "binlog"));
     Previous_gtids_log_event prev_gtids_ev(previous_logged_gtids);
-    if (is_relay_log && !is_raft_log) prev_gtids_ev.set_relay_log_event();
+    if (is_relay_log && !is_xpaxos_log) prev_gtids_ev.set_relay_log_event();
     if (need_sid_lock) sid_lock->unlock();
-    if (opt_consensuslog_revise && is_relay_log && is_raft_log)
+    if (opt_consensuslog_revise && is_relay_log && is_xpaxos_log)
       prev_gtids_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
     if (write_event_to_binlog(&prev_gtids_ev)) goto err;
   } else  // !(current_thd)
@@ -5153,12 +5153,12 @@ bool MYSQL_BIN_LOG::open_binlog(
 
       DBUG_PRINT("info", ("Generating PREVIOUS_GTIDS for relaylog file."));
       Previous_gtids_log_event prev_gtids_ev(previous_gtid_set_relaylog);
-      if (!is_raft_log)
+      if (!is_xpaxos_log)
         prev_gtids_ev.set_relay_log_event();
 
       if (need_sid_lock) sid_lock->unlock();
 
-      if (opt_consensuslog_revise && is_relay_log && is_raft_log)
+      if (opt_consensuslog_revise && is_relay_log && is_xpaxos_log)
         prev_gtids_ev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
 
       if (write_event_to_binlog(&prev_gtids_ev)) goto err;
@@ -5304,7 +5304,7 @@ int MYSQL_BIN_LOG::move_crash_safe_index_file_to_index_file(
         /* This simulation causes the delete to fail */
         static char first_char = index_file_name[0];
         index_file_name[0] = 0;
-        raft::info(ER_RAFT_COMMIT) << "Retrying delete";
+        xp::info(ER_XP_COMMIT) << "Retrying delete";
         if (failure_trials == 1) index_file_name[0] = first_char;
       };);
       file_delete_status = !(mysql_file_delete(key_file_binlog_index,
@@ -5348,7 +5348,7 @@ int MYSQL_BIN_LOG::move_crash_safe_index_file_to_index_file(
       /* This simulation causes the rename to fail */
       static char first_char = index_file_name[0];
       index_file_name[0] = 0;
-      raft::info(ER_RAFT_COMMIT) << "Retrying rename";
+      xp::info(ER_XP_COMMIT) << "Retrying rename";
       if (failure_trials == 1) index_file_name[0] = first_char;
     };);
     file_rename_status =
@@ -5941,7 +5941,7 @@ int MYSQL_BIN_LOG::open_crash_safe_index_file() {
 
   if (!my_b_inited(&crash_safe_index_file)) {
     myf flags = MY_WME | MY_NABP | MY_WAIT_IF_FULL;
-    if (is_relay_log && !is_raft_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
+    if (is_relay_log && !is_xpaxos_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
 
     if ((file = my_open(crash_safe_index_file_name, O_RDWR | O_CREAT,
                         MYF(MY_WME))) < 0 ||
@@ -6155,7 +6155,7 @@ int MYSQL_BIN_LOG::purge_logs(const char *to_log, bool included,
   DBUG_EXECUTE_IF("crash_purge_before_update_index_after_truncate", DBUG_SUICIDE(););
 
   // Update gtid_state->lost_gtids
-  if (!is_relay_log || is_raft_log) {
+  if (!is_relay_log || is_xpaxos_log) {
     global_sid_lock->wrlock();
     error = init_gtid_sets(
         nullptr, const_cast<Gtid_set *>(gtid_state->get_lost_gtids()),
@@ -6754,9 +6754,9 @@ int MYSQL_BIN_LOG::new_file_impl(
       to change base names at some point.
     */
     Rotate_log_event r(new_name + dirname_length(new_name), 0, LOG_EVENT_OFFSET,
-                       (is_relay_log && !is_raft_log) ? Rotate_log_event::RELAY_LOG : 0);
+                       (is_relay_log && !is_xpaxos_log) ? Rotate_log_event::RELAY_LOG : 0);
 
-    if (opt_consensuslog_revise && is_relay_log && is_raft_log)
+    if (opt_consensuslog_revise && is_relay_log && is_xpaxos_log)
       r.consensus_extra_time = consensus_log_manager.get_event_timestamp();
 
     if (DBUG_EVALUATE_IF("fault_injection_new_file_rotate_event", (error = 1),
@@ -7856,7 +7856,7 @@ void MYSQL_BIN_LOG::close(
     mysql_mutex_assert_owner(&LOCK_log);
 
   if (atomic_log_state == LOG_OPENED) {
-    if (!is_raft_log && (exiting & LOG_CLOSE_STOP_EVENT) != 0) {
+    if (!is_xpaxos_log && (exiting & LOG_CLOSE_STOP_EVENT) != 0) {
       /**
         TODO(WL#7546): Change the implementation to Stop_event after write() is
         moved into libbinlogevents
@@ -7874,7 +7874,7 @@ void MYSQL_BIN_LOG::close(
     }
 
     /* The following update should not be done in relay log files */
-    if (!is_relay_log && !is_raft_log) {
+    if (!is_relay_log && !is_xpaxos_log) {
       my_off_t offset = BIN_LOG_HEADER_SIZE + FLAGS_OFFSET;
       uchar flags = 0;  // clearing LOG_EVENT_BINLOG_IN_USE_F
       (void)m_binlog_file->update(&flags, 1, offset);
@@ -8060,7 +8060,7 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
       LogErr(INFORMATION_LEVEL, ER_BINLOG_RECOVERING_AFTER_CRASH_USING,
              opt_name);
       // binlog::Binlog_recovery bl_recovery{binlog_file_reader};
-      auto bl_recovery_ptr = raft::Recovery_manager::instance().create_recovery(binlog_file_reader);
+      auto bl_recovery_ptr = xp::Recovery_manager::instance().create_recovery(binlog_file_reader);
       auto &bl_recovery = *bl_recovery_ptr;
       error = bl_recovery     //
                   .recover()  //
@@ -8104,7 +8104,7 @@ int MYSQL_BIN_LOG::open_binlog(const char *opt_name) {
       }
 
       /* Clear LOG_EVENT_BINLOG_IN_USE_F */
-      if (!is_raft_log) {
+      if (!is_xpaxos_log) {
         uchar flags = 0;
         if (ofile->update(&flags, 1, BIN_LOG_HEADER_SIZE + FLAGS_OFFSET)) {
           LogErr(ERROR_LEVEL,
@@ -8279,8 +8279,8 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
       return RESULT_SUCCESS;
     }
 
-    //raft apply not use 2pc for xa prepare, no prepare undo saved. we need fix it
-    if (thd->raft_replication_channel
+    //xpaxos apply not use 2pc for xa prepare, no prepare undo saved. we need fix it
+    if (thd->xpaxos_replication_channel
         && trx_coordinator::set_prepared_in_tc_in_engines(thd, all))
       return RESULT_ABORTED;
     return RESULT_SUCCESS;
@@ -8485,7 +8485,7 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
       if (thd && thd->lex &&
           (thd->lex->sql_command == SQLCOM_XA_COMMIT ||
            thd->lex->sql_command == SQLCOM_XA_ROLLBACK)) {
-        raft::warn(ER_RAFT_COMMIT) << "xa commit/rollback fail, restart to recover";
+        xp::warn(ER_XP_COMMIT) << "xa commit/rollback fail, restart to recover";
         flush_error_log_messages();
         abort();
       }
@@ -8688,7 +8688,7 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     for (THD *head = first_seen; head; head = head->next_to_commit) {
       binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(head);
       cache_mngr->reset();
-      raft::warn(ER_RAFT_COMMIT) << "Failed to commit ,because leadership changed, "
+      xp::warn(ER_XP_COMMIT) << "Failed to commit ,because leadership changed, "
                                "replicate log or check term failed";
       head->mark_transaction_to_rollback(true);
       head->commit_error = THD::CE_COMMIT_ERROR;
@@ -9311,7 +9311,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     DBUG_EXECUTE_IF("simulate_crash_after_sync_binlog", DBUG_SUICIDE(););
   }
 
-  //TODO @yanha, raft will not use binlog_sender, so leader no need do this
+  //TODO @yanha, xpaxos will not use binlog_sender, so leader no need do this
   // && thd->slave_thread
   if (update_binlog_end_pos_after_sync && flush_error == 0 && sync_error == 0 ) {
     THD *tmp_thd = final_queue;

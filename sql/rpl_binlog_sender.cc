@@ -1597,7 +1597,7 @@ uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader, my_of
     {
       create_time= uint4korr(event_ptr);
 #ifndef DBUG_OFF
-      raft::info(ER_RAFT_APPLIER) << "Binlog first user event timestamp is " << create_time;
+      xp::info(ER_XP_APPLIER) << "Binlog first user event timestamp is " << create_time;
 #endif
       break;
     }
@@ -1640,10 +1640,10 @@ int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index)
 #ifndef DBUG_OFF
         if (hb_info_counter < 3)
         {
-          raft::info(ER_RAFT_APPLIER) << "master sends heartbeat message";
+          xp::info(ER_XP_APPLIER) << "master sends heartbeat message";
           hb_info_counter++;
           if (hb_info_counter == 3)
-            raft::info(ER_RAFT_APPLIER) << "the rest of heartbeat info skipped ...";
+            xp::info(ER_XP_APPLIER) << "the rest of heartbeat info skipped ...";
         }
 #endif
         if (!hb_send)
@@ -1668,7 +1668,7 @@ int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index)
   }
   assert(current_index <= consensus_ptr->getCommitIndex());
 #ifndef DBUG_OFF
-  raft::info(ER_RAFT_APPLIER) << "master sends consensus index " << current_index;
+  xp::info(ER_XP_APPLIER) << "master sends consensus index " << current_index;
 #endif
 
   return 0;

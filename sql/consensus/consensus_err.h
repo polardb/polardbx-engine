@@ -23,8 +23,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 *****************************************************************************/
-#ifndef RAFT_RAFT0ERR_H
-#define RAFT_RAFT0ERR_H
+#ifndef XPAXOS_ERR_H
+#define XPAXOS_ERR_H
 
 #include <sstream>
 
@@ -33,7 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/components/services/log_shared.h"
 #include "mysqld_error.h"
 
-namespace raft {
+namespace xp {
 
 /** The class logger is the base class of all the error log related classes.
 It contains a std::ostringstream object.  The main purpose of this class is
@@ -49,7 +49,7 @@ class logger {
   @param[in]    args            Variable length argument list */
   template <class... Args>
   logger &log(int err, Args &&... args) {
-    assert(m_err == ER_RAFT_0);
+    assert(m_err == ER_XP_0);
 
     m_err = err;
 
@@ -147,7 +147,7 @@ class logger {
 
   /** Constructor
   @param[in]    level           Log error level */
-  explicit logger(loglevel level) : m_err(ER_RAFT_0), m_level(level) {}
+  explicit logger(loglevel level) : m_err(ER_XP_0), m_level(level) {}
 };
 
 /** The class info is used to emit informational log messages.  It is to be
@@ -240,6 +240,6 @@ class fatal : public logger {
   ~fatal() override;
 };
 
-}  // namespace raft
+}  // namespace xp
 
 #endif

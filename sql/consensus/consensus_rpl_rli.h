@@ -24,15 +24,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#ifndef RAFT_RAFT0RPL_RLI_H
-#define RAFT_RAFT0RPL_RLI_H
+#ifndef XPAXOS_RPL_RLI_H
+#define XPAXOS_RPL_RLI_H
 
 #include "sql/rpl_rli.h"
-#include "sql/raft/channel.h"
+#include "sql/consensus/consensus_channel.h"
 
-class Raft_relay_log_info final : public Relay_log_info {
+class XPaxos_relay_log_info final : public Relay_log_info {
  public:
-  Raft_relay_log_info(bool is_slave_recovery,
+  XPaxos_relay_log_info(bool is_slave_recovery,
 #ifdef HAVE_PSI_INTERFACE
                       PSI_mutex_key *param_key_info_run_lock,
                       PSI_mutex_key *param_key_info_data_lock,
@@ -55,9 +55,9 @@ class Raft_relay_log_info final : public Relay_log_info {
                        param_id, param_channel, is_rli_fake) {
   }
 
-  virtual ~Raft_relay_log_info();
+  virtual ~XPaxos_relay_log_info();
 
-  virtual Channel_style style() const override { return Channel_style::Raft; }
+  virtual Channel_style style() const override { return Channel_style::XPaxos; }
 
   /**
    * Overwrite log name and index log name if needed.
@@ -101,9 +101,9 @@ class Raft_relay_log_info final : public Relay_log_info {
 
   virtual LOG_POS_COORD get_log_pos_coord(Relay_log_info *rli) override;
   virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position) override;
-  virtual void set_raft_relay_log_info() override;
-  virtual void set_raft_apply_ev_sequence() override;
-  virtual void update_raft_applied_index() override;
+  virtual void set_xpaxos_relay_log_info() override;
+  virtual void set_xpaxos_apply_ev_sequence() override;
+  virtual void update_xpaxos_applied_index() override;
 };
 
 #endif

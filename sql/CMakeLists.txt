@@ -705,15 +705,12 @@ SET(SQL_SHARED_SOURCES
   lizard_rpl_binlog_sender.cc
   lizard_rpl_rli.cc
   sql_common_ext.cc
-  raft/raft0err.cc
-  raft/channel.cc
-  raft/raft0consensus.cc
-  raft/raft0rpl_info_factory.cc
-  raft/raft0rpl_info_handler.cc
-  raft/raft0rpl_rli.cc
-  raft/raft0thd.cc
-  raft/raft0recovery.cc
-
+  consensus/consensus_err.cc
+  consensus/consensus_channel.cc
+  consensus/consensus_rpl_info_factory.cc
+  consensus/consensus_rpl_info_handler.cc
+  consensus/consensus_rpl_rli.cc
+  consensus/consensus_recovery.cc
   consensus/consensus_common.cc
   consensus/consensus_proc.cc
   consensus_log_index.cc

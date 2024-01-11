@@ -73,7 +73,7 @@ select * from t1;
 # --base64-output=never flag is used on a binlog with base64 events.
 --echo ==== Test --base64-output=never on a binlog with row events ====
 
-# mysqlbinlog should fail # raft not support
+# mysqlbinlog should fail # xcluster not support
 #--replace_regex /#[0-9][0-9][0-9][0-9][0-9][0-9] .*/<#>/   /SET \@\@session.pseudo_thread_id.*/<#>/
 #error 1;
 #exec $MYSQL_BINLOG --base64-output=never suite/binlog/std_data/bug32407.001;

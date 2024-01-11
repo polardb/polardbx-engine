@@ -24,22 +24,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#include "sql/raft/raft0consensus.h"
+#ifndef XPAXOS_CHANNEL_H
+#define XPAXOS_CHANNEL_H
 
-#include "sql/rpl_mi.h"
-#include "sql/rpl_rli.h"
-#include "sql/rpl_msr.h"
-#include "sql/consensus_log_manager.h"
+/** Replication channel style. */
+enum class Channel_style {
+  /** Master slave replication style. */
+  Tradition,
+  /** Leader follower consensous style. */
+  XPaxos,
+};
 
-class Relay_log_info;
-
-void raft_server_bind_rli(Relay_log_info *rli) {
-  if (Multisource_info::is_raft_channel(rli)) {
-    assert(Multisource_info::is_raft_channel(rli->mi));
-    consensus_log_manager.set_relay_log_info(rli);
-  }
-
-  return;
-}
-
-
+#endif

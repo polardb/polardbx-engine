@@ -133,7 +133,7 @@ call mtr.add_suppression("Skip re-populating collations and character sets table
 call mtr.add_suppression("Skip updating information_schema metadata in InnoDB read-only mode");
 --enable_query_log
 
-#raft not support
+#xcluster not support
 #--let $restart_parameters = restart: --innodb-read-only
 #--source include/restart_mysqld.inc
 
