@@ -25,7 +25,7 @@
 #define SEQUENCE_COMMON_INCLUDED
 
 #if 0
-#include "binary_log_types.h"    // MYSQL_TYPE_LONGLONG
+#include "binary_log_types.h"  // MYSQL_TYPE_LONGLONG
 #endif
 #include "map_helpers.h"         // collation_unordered_map
 #include "sql/psi_memory_key.h"  // PSI_memory_key
@@ -219,18 +219,15 @@ class Sequence_property {
   plugin_ref m_plugin;
 };
 
-/* 
+/*
  *  Support some operation for sequence
- *  1. nextval_show(sequence) 
+ *  1. nextval_show(sequence)
  */
 struct Sequence_operation {
  public:
-  enum Operation_type {
-    OPERATION_NONE,
-    OPERATION_SHOW_CACHE
-  };
+  enum Operation_type { OPERATION_NONE, OPERATION_SHOW_CACHE };
 
-  Sequence_operation(): m_type(OPERATION_NONE) {}
+  Sequence_operation() : m_type(OPERATION_NONE) {}
 
   Sequence_operation(const Sequence_operation &operation) {
     m_type = operation.m_type;
@@ -241,22 +238,15 @@ struct Sequence_operation {
     return *this;
   }
 
-  void set_type(Operation_type type) { 
-    m_type = type;
-  }
+  void set_type(Operation_type type) { m_type = type; }
 
-  void reset() {
-    m_type = OPERATION_NONE; 
-  }
+  void reset() { m_type = OPERATION_NONE; }
 
-  bool is_show_cache() {
-    return m_type == OPERATION_SHOW_CACHE;
-  }
+  bool is_show_cache() { return m_type == OPERATION_SHOW_CACHE; }
 
  private:
   Operation_type m_type;
 };
-
 
 /** Support nextval_skip(sequence, value) */
 struct Sequence_skip {
@@ -318,7 +308,7 @@ class Sequence_scan {
 
   Sequence_scan()
       : m_mode(ORIGINAL_SCAN), m_batch(1), m_skip(), m_operation() {}
-  Sequence_scan(const Sequence_scan& seq_scan) : m_mode(seq_scan.m_mode) {}
+  Sequence_scan(const Sequence_scan &seq_scan) : m_mode(seq_scan.m_mode) {}
 
   void reset() {
     m_mode = ORIGINAL_SCAN;
@@ -373,8 +363,8 @@ typedef Sequence_operation::Operation_type Sequence_operation_type;
 */
 class Sequence_last_value {
  public:
-  Sequence_last_value(){}
-  virtual ~Sequence_last_value(){}
+  Sequence_last_value() {}
+  virtual ~Sequence_last_value() {}
 
   void set_version(ulonglong version) { m_version = version; }
   ulonglong get_version() { return m_version; }

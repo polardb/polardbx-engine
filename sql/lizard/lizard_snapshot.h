@@ -52,8 +52,8 @@ typedef enum {
 /* Snapshot Hint */
 /*------------------------------------------------------------------------------*/
 
-/** Snapshot hint interface, it's worked on TABLE_LIST object through SQL syntax;
-    like:
+/** Snapshot hint interface, it's worked on TABLE_LIST object through SQL
+   syntax; like:
 
     1) Snapshot scn hint
 
@@ -266,8 +266,8 @@ class Snapshot_time_vision : public Snapshot_vision {
   virtual bool is_vision() const override { return false; }
 
   virtual bool too_old() const override {
-      assert(0);
-      return false;
+    assert(0);
+    return false;
   }
 
   /**
@@ -277,8 +277,8 @@ class Snapshot_time_vision : public Snapshot_vision {
                 True if visible
   */
   virtual bool modification_visible(void *) const override {
-      assert(0);
-      return false;
+    assert(0);
+    return false;
   }
 
  private:

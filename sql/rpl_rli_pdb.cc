@@ -73,7 +73,6 @@
 #include "sql/transaction_info.h"
 #include "thr_mutex.h"
 
-#include "sql/gcn_log_event.h"
 #include "sql/consensus/consensus_err.h"
 #include "sql/gcn_log_event.h"
 
@@ -149,11 +148,12 @@ bool handle_slave_worker_stop(Slave_worker *worker, Slave_job_item *job_item) {
     return (true);
   } else if (rli->exit_counter == rli->replica_parallel_workers) {
     // over steppers should exit with accepting STOP
-    bool need_check = (!Multisource_info::is_xpaxos_channel(rli) || !rli->force_apply_queue_before_stop);
+    bool need_check = (!Multisource_info::is_xpaxos_channel(rli) ||
+                       !rli->force_apply_queue_before_stop);
     if (group_index > rli->max_updated_index && need_check) {
-      xp::info(ER_XP_APPLIER) << "group_index(" << group_index
-                                  << ") > rli->max_updated_index(" << rli->max_updated_index
-                                  << "), set running_status to STOP_ACCEPTED";
+      xp::info(ER_XP_APPLIER)
+          << "group_index(" << group_index << ") > rli->max_updated_index("
+          << rli->max_updated_index << "), set running_status to STOP_ACCEPTED";
       worker->running_status = Slave_worker::STOP_ACCEPTED;
       mysql_cond_signal(&worker->jobs_cond);
       mysql_mutex_unlock(&rli->exit_count_lock);
@@ -229,9 +229,7 @@ const char *info_slave_worker_fields[] = {
     "channel_name",
 
     // used by consensus
-    "checkpoint_consensus_apply_index",
-    "consensus_apply_index"
-    };
+    "checkpoint_consensus_apply_index", "consensus_apply_index"};
 
 /*
   Number of records in the mts partition hash below which
@@ -548,8 +546,7 @@ bool Slave_worker::read_info(Rpl_info_handler *from) {
       !!from->get_info(buffer, (size_t)nbytes, (uchar *)nullptr) ||
       !!from->get_info(channel, sizeof(channel), "") ||
       !!from->get_info(&temp_checkpoint_consensus_apply_index, 0UL) ||
-      !!from->get_info(&temp_consensus_apply_index,  0UL)      
-      )
+      !!from->get_info(&temp_consensus_apply_index, 0UL))
     return true;
 
   assert(nbytes <= no_bytes_in_map(&group_executed));
@@ -613,8 +610,7 @@ bool Slave_worker::write_info(Rpl_info_handler *to) {
       to->set_info(worker_checkpoint_seqno) || to->set_info(nbytes) ||
       to->set_info(buffer, (size_t)nbytes) || to->set_info(channel) ||
       to->set_info((ulong)checkpoint_consensus_apply_index) ||
-      to->set_info((ulong)(consensus_apply_index.load()))
-      )
+      to->set_info((ulong)(consensus_apply_index.load())))
     return true;
 
   return false;
@@ -1557,7 +1553,8 @@ void Slave_worker::do_report(loglevel level, int err_code, const char *msg,
   const char *log_name =
       const_cast<Slave_worker *>(this)->get_master_log_name();
   ulonglong log_pos = const_cast<Slave_worker *>(this)->get_master_log_pos();
-  ulonglong consensus_index = const_cast<Slave_worker*>(this)->get_consensus_apply_index() + 1;
+  ulonglong consensus_index =
+      const_cast<Slave_worker *>(this)->get_consensus_apply_index() + 1;
   bool is_group_replication_applier_channel =
       channel_map.is_group_replication_channel_name(c_rli->get_channel(), true);
   const Gtid_specification *gtid_next = &info_thd->variables.gtid_next;
@@ -1585,7 +1582,8 @@ void Slave_worker::do_report(loglevel level, int err_code, const char *msg,
                "Coordinator stopped because there were error(s) in the "
                "worker(s). "
                "The most recent failure being: Worker %u failed executing "
-               "transaction '%s' at master log %s, end_log_pos %llu, consensus_index %llu. "
+               "transaction '%s' at master log %s, end_log_pos %llu, "
+               "consensus_index %llu. "
                "See error log and/or "
                "performance_schema.replication_applier_status_by_worker "
                "table for "

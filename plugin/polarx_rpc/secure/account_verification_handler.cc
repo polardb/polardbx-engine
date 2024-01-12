@@ -41,8 +41,7 @@ err_t Account_verification_handler::authenticate(
     Authentication_interface &account_verificator,
     Authentication_info *authenication_info, const std::string &sasl_message) {
   /// return error if failed to init
-  if (m_err)
-    return m_err;
+  if (m_err) return m_err;
 
   std::size_t message_position = 0;
   std::string schema;
@@ -57,20 +56,18 @@ err_t Account_verification_handler::authenticate(
   authenication_info->m_tried_account_name = account;
   authenication_info->m_was_using_password = !passwd.empty();
 
-  if (account.empty())
-    return err_t::SQLError_access_denied();
+  if (account.empty()) return err_t::SQLError_access_denied();
 
   /// attach before authenticate
   assert(m_attached == std::thread::id());
   auto err = m_session.attach();
-  if (err)
-    return err;
+  if (err) return err;
   m_attached = std::this_thread::get_id();
   err = m_session.authenticate(account.c_str(), m_tcp.host().c_str(),
                                m_tcp.ip().c_str(), schema.c_str(), passwd,
                                account_verificator, false);
   /// detach
-  m_session.detach(); /// ignore result
+  m_session.detach();  /// ignore result
   m_attached = std::thread::id();
   if (UNLIKELY(!m_session.is_detach_and_tls_cleared()))
     sql_print_error("FATAL: polarx_rpc session not detach and cleared!");
@@ -80,8 +77,7 @@ err_t Account_verification_handler::authenticate(
 bool Account_verification_handler::extract_last_sub_message(
     const std::string &message, std::size_t &element_position,
     std::string &sub_message) const {
-  if (element_position >= message.size())
-    return true;
+  if (element_position >= message.size()) return true;
 
   sub_message = message.substr(element_position);
   element_position = std::string::npos;
@@ -92,8 +88,7 @@ bool Account_verification_handler::extract_last_sub_message(
 bool Account_verification_handler::extract_sub_message(
     const std::string &message, std::size_t &element_position,
     std::string &sub_message) {
-  if (element_position >= message.size())
-    return true;
+  if (element_position >= message.size()) return true;
 
   if (message[element_position] == '\0') {
     ++element_position;
@@ -133,8 +128,7 @@ err_t Account_verification_handler::verify_account(
     const std::string &user, const std::string &host, const std::string &passwd,
     Authentication_info *authenication_info) {
   Account_record record;
-  if (auto error = get_account_record(user, host, record))
-    return error;
+  if (auto error = get_account_record(user, host, record)) return error;
 
   auto account_verificator_id =
       get_account_verificator_id(record.auth_plugin_name);
@@ -189,8 +183,7 @@ err_t Account_verification_handler::get_account_record(
     const std::string &user, const std::string &host,
     Account_record &record) try {
   /// return error if failed to init
-  if (m_err)
-    return m_err;
+  if (m_err) return m_err;
 
   auto sql = get_sql(user, host);
   CbufferingCommandDelegate delegate;
@@ -228,16 +221,17 @@ std::string Account_verification_handler::get_sql(const std::string &user,
   //  - disconnect_on_expired_password
   // column `is_offline_mode_and_not_super_user` is set true if it
   //  - offline mode and user has not super priv
-  qb.put("/* xplugin authentication */ SELECT @@require_secure_transport, "
-         "`authentication_string`, `plugin`,"
-         "(`account_locked`='Y') as is_account_locked, "
-         "(`password_expired`!='N') as `is_password_expired`, "
-         "@@disconnect_on_expired_password as "
-         "`disconnect_on_expired_password`, "
-         "@@offline_mode and (`Super_priv`='N') as "
-         "`is_offline_mode_and_not_super_user`,"
-         "`ssl_type`, `ssl_cipher`, `x509_issuer`, `x509_subject` "
-         "FROM mysql.user WHERE ")
+  qb.put(
+        "/* xplugin authentication */ SELECT @@require_secure_transport, "
+        "`authentication_string`, `plugin`,"
+        "(`account_locked`='Y') as is_account_locked, "
+        "(`password_expired`!='N') as `is_password_expired`, "
+        "@@disconnect_on_expired_password as "
+        "`disconnect_on_expired_password`, "
+        "@@offline_mode and (`Super_priv`='N') as "
+        "`is_offline_mode_and_not_super_user`,"
+        "`ssl_type`, `ssl_cipher`, `x509_issuer`, `x509_subject` "
+        "FROM mysql.user WHERE ")
       .quote_string(user)
       .put(" = `user` AND ")
       .quote_string(host)
@@ -245,4 +239,4 @@ std::string Account_verification_handler::get_sql(const std::string &user,
   return qb.get();
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

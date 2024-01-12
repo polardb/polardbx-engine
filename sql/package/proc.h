@@ -81,8 +81,8 @@ namespace im {
    Native procedure interface
 */
 class Proc : public PSI_memory_base {
-
   static constexpr unsigned int PROC_PREALLOC_SIZE = 10;
+
  public:
   /**
      All the native procedures have uniform parse tree root.
@@ -97,8 +97,7 @@ class Proc : public PSI_memory_base {
   typedef PT_package_proc PT_proc_type;
 
   /* Container of proc parameters */
-  typedef Prealloced_array<enum_field_types, PROC_PREALLOC_SIZE>
-      Parameters;
+  typedef Prealloced_array<enum_field_types, PROC_PREALLOC_SIZE> Parameters;
 
   /* Column element */
   typedef struct st_column_element {
@@ -115,7 +114,7 @@ class Proc : public PSI_memory_base {
   typedef std::vector<const Parameters *> Parameters_list;
 
   /**
-  */
+   */
   enum class Result_type {
     RESULT_NONE,  // Initiail state
     RESULT_OK,    // Only OK or ERROR protocal
@@ -203,8 +202,6 @@ class Proc : public PSI_memory_base {
   Columns m_columns;
 };
 
-
-
 /**
   Interface of proc execution.
 
@@ -215,8 +212,8 @@ class Sql_cmd_proc : public Sql_cmd {
   enum class Priv_type { PRIV_NONE_ACL = 0, PRIV_SUPER_ACL };
 
  public:
-  explicit Sql_cmd_proc(THD *thd, mem_root_deque<Item *> *list, const Proc *proc,
-                        Priv_type priv_type)
+  explicit Sql_cmd_proc(THD *thd, mem_root_deque<Item *> *list,
+                        const Proc *proc, Priv_type priv_type)
       : m_thd(thd), m_list(list), m_proc(proc), m_priv_type(priv_type) {}
   /**
     Interface of Proc execution body.
@@ -282,7 +279,8 @@ class Sql_cmd_proc : public Sql_cmd {
 */
 class Sql_cmd_admin_proc : public Sql_cmd_proc {
  public:
-  explicit Sql_cmd_admin_proc(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+  explicit Sql_cmd_admin_proc(THD *thd, mem_root_deque<Item *> *list,
+                              const Proc *proc)
       : Sql_cmd_proc(thd, list, proc, Priv_type::PRIV_SUPER_ACL) {}
 
   virtual enum_sql_command sql_command_code() const override {
@@ -295,7 +293,8 @@ class Sql_cmd_admin_proc : public Sql_cmd_proc {
 */
 class Sql_cmd_trans_proc : public Sql_cmd_proc {
  public:
-  explicit Sql_cmd_trans_proc(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+  explicit Sql_cmd_trans_proc(THD *thd, mem_root_deque<Item *> *list,
+                              const Proc *proc)
       : Sql_cmd_proc(thd, list, proc, Priv_type::PRIV_NONE_ACL) {}
 
   virtual enum_sql_command sql_command_code() const override {

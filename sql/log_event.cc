@@ -179,8 +179,8 @@ Error_log_throttle slave_ignored_err_throttle(
 
 #include "ppi/ppi_statement.h"
 
-#include "sql/xa/lizard_xa_trx.h"
 #include "sql/gcn_log_event.h"
+#include "sql/xa/lizard_xa_trx.h"
 
 struct mysql_mutex_t;
 
@@ -396,7 +396,8 @@ static void inline slave_rows_error_report(enum loglevel level, int ha_error,
                                   : ER_UNKNOWN_ERROR,
                   "Could not execute %s event on table %s.%s;"
                   "%s handler error %s; "
-                  "the event's master log %s, end_log_pos %lu, consensus_index %llu, seq %llu",
+                  "the event's master log %s, end_log_pos %lu, consensus_index "
+                  "%llu, seq %llu",
                   type, table->s->db.str, table->s->table_name.str, buff,
                   handler_error == nullptr ? "<unknown>" : handler_error,
                   log_name, pos, index, seq);
@@ -405,7 +406,8 @@ static void inline slave_rows_error_report(enum loglevel level, int ha_error,
                   thd->is_error() ? thd->get_stmt_da()->mysql_errno()
                                   : ER_UNKNOWN_ERROR,
                   "Could not execute %s event on table %s.%s;"
-                  "%s the event's master log %s, end_log_pos %lu, consensus_index %llu, seq %llu",
+                  "%s the event's master log %s, end_log_pos %lu, "
+                  "consensus_index %llu, seq %llu",
                   type, table->s->db.str, table->s->table_name.str, buff,
                   log_name, pos, index, seq);
     }
@@ -857,10 +859,10 @@ static void print_set_option(IO_CACHE *file, uint32 bits_changed, uint32 option,
 time_t Log_event::get_time() {
   if (opt_consensuslog_revise && consensus_extra_time && is_control_event()) {
     if (!common_header->when.tv_sec && !common_header->when.tv_usec) {
-      common_header->when.tv_sec= le32toh(consensus_extra_time);
-      common_header->when.tv_usec= 0;
+      common_header->when.tv_sec = le32toh(consensus_extra_time);
+      common_header->when.tv_usec = 0;
     }
-    return (time_t) common_header->when.tv_sec;
+    return (time_t)common_header->when.tv_sec;
   }
   /* Not previously initialized */
   if (!common_header->when.tv_sec && !common_header->when.tv_usec) {
@@ -1037,7 +1039,7 @@ Log_event::Log_event(Log_event_header *header, Log_event_footer *footer)
      Mask out any irrelevant parts of the server_id
   */
   server_id = common_header->unmasked_server_id & opt_server_id_mask;
-  consensus_extra_time= 0;
+  consensus_extra_time = 0;
   consensus_index_end_pos = 0;
 }
 
@@ -1231,11 +1233,11 @@ bool Log_event::need_checksum() {
               which IO thread instantiates via queue_binlog_ver_3_event.
            */
            get_type_code() == binary_log::ROTATE_EVENT ||
-          /*
-            The previous event has its checksum option defined
-            according to the format description event.
-          */
-          get_type_code() == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
+           /*
+             The previous event has its checksum option defined
+             according to the format description event.
+           */
+           get_type_code() == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
            /*
               The previous event has its checksum option defined
               according to the format description event.
@@ -2503,8 +2505,7 @@ void Log_event::print_timestamp(IO_CACHE *file, time_t *ts) const {
 #endif /* !MYSQL_SERVER */
 
 #if defined(MYSQL_SERVER)
-Log_event::enum_skip_reason Log_event::continue_group(
-    Relay_log_info *rli) {
+Log_event::enum_skip_reason Log_event::continue_group(Relay_log_info *rli) {
   if (rli->slave_skip_counter == 1) return Log_event::EVENT_SKIP_IGNORE;
   return Log_event::do_shall_skip(rli);
 }
@@ -3210,7 +3211,7 @@ int Log_event::apply_event(Relay_log_info *rli) {
           assert(ev->get_type_code() == binary_log::GTID_LOG_EVENT ||
                  ev->get_type_code() == binary_log::ANONYMOUS_GTID_LOG_EVENT);
           if (b_ev_before_gtid_size > 0) {
-            ev =  rli->curr_group_da[0].data;
+            ev = rli->curr_group_da[0].data;
             assert(ev->get_type_code() == binary_log::GCN_LOG_EVENT);
           }
 #endif
@@ -3267,16 +3268,15 @@ int Log_event::apply_event(Relay_log_info *rli) {
     }
 
     DBUG_EXECUTE_IF("xpaxos_apply_prapare_xa_crash", {
-      if(get_type_code() == binary_log::XA_PREPARE_LOG_EVENT)
-        DBUG_SUICIDE();
+      if (get_type_code() == binary_log::XA_PREPARE_LOG_EVENT) DBUG_SUICIDE();
     });
 
     int error = do_apply_event(rli);
     if (error == 0) {
       /**
-        * update consensus apply index if
-        *  coordinator apply event;
-      */
+       * update consensus apply index if
+       *  coordinator apply event;
+       */
       update_consensus_apply_index(rli, this);
     }
     if (rli->is_processing_trx()) {
@@ -3346,8 +3346,8 @@ int Log_event::apply_event(Relay_log_info *rli) {
 #ifndef NDEBUG
   if (rli->last_assigned_worker)
     DBUG_PRINT("mts",
-               ("Assigning job %llu to worker %lu",
-               this->consensus_real_index, rli->last_assigned_worker->id));
+               ("Assigning job %llu to worker %lu", this->consensus_real_index,
+                rli->last_assigned_worker->id));
 #endif
 
 err:
@@ -5756,7 +5756,8 @@ int Rotate_log_event::do_update_pos(Relay_log_info *rli) {
                       : rli->is_in_group();
 
   if ((server_id != ::server_id || rli->replicate_same_server_id) &&
-      !is_relay_log_event() && !Multisource_info::is_xpaxos_channel(rli) && !in_group) {
+      !is_relay_log_event() && !Multisource_info::is_xpaxos_channel(rli) &&
+      !in_group) {
     if (!is_mts_db_partitioned(rli) &&
         (server_id != ::server_id || rli->replicate_same_server_id)) {
       // force the coordinator to start a new binlog segment.
@@ -6175,8 +6176,7 @@ bool Xid_log_event::do_commit(THD *thd_arg) {
   */
   if (!error) thd_arg->status_var.com_stat[SQLCOM_COMMIT]++;
 
-  if (!error)
-    im::execute_reload_on_slave(thd_arg, thd_arg->get_transaction());
+  if (!error) im::execute_reload_on_slave(thd_arg, thd_arg->get_transaction());
 
   return error;
 }

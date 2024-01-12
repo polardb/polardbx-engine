@@ -34,16 +34,16 @@ Created 2018-01-27 by Sunny Bains */
 #include "btr0pcur.h"
 #include "dict0dict.h"
 #include "os0thread-create.h"
+#include "ppi/ppi_disable.h"
 #include "row0mysql.h"
 #include "row0pread.h"
 #include "row0row.h"
 #include "row0vers.h"
-#include "ut0new.h"
 #include "sql/current_thd.h"
-#include "ppi/ppi_disable.h"
+#include "ut0new.h"
 
-#include "lizard0undo.h"
 #include "lizard0row.h"
+#include "lizard0undo.h"
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t parallel_read_thread_key;
@@ -752,7 +752,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
       Counter::inc(*(m_scan_ctx->m_config.m_ptr_n_rows_read_del_mark),
                    thread_id());
     }
-    
+
     bool skip{};
 
     if (page_is_leaf(cur->block->frame)) {

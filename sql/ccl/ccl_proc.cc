@@ -144,7 +144,7 @@ static Ccl_record *get_record(THD *thd, mem_root_deque<Item *> *list) {
   return record;
 }
 
-class Skip_readonly_check_helper{
+class Skip_readonly_check_helper {
  public:
   Skip_readonly_check_helper(THD *thd) : m_thd(thd) {
     m_skip_readonly_check = m_thd->is_cmd_skip_readonly();
@@ -158,7 +158,7 @@ class Skip_readonly_check_helper{
       m_thd->reset_skip_readonly_check();
   }
 
-private:
+ private:
   bool m_skip_readonly_check;
   THD *m_thd;
 };

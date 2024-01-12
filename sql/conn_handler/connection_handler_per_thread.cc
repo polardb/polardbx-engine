@@ -48,6 +48,7 @@
 #include "mysql_com.h"
 #include "mysqld_error.h"  // ER_*
 #include "pfs_thread_provider.h"
+#include "ppi/ppi_thread.h"
 #include "sql/auth/sql_internal_account.h"
 #include "sql/conn_handler/channel_info.h"  // Channel_info
 #include "sql/conn_handler/connection_handler_impl.h"
@@ -62,7 +63,6 @@
 #include "sql/sql_parse.h"             // do_command
 #include "sql/sql_thd_internal_api.h"  // thd_set_thread_stack
 #include "thr_mutex.h"
-#include "ppi/ppi_thread.h"
 
 // Initialize static members
 ulong Per_thread_connection_handler::blocked_pthread_count = 0;

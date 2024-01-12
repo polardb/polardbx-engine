@@ -30,8 +30,8 @@
 #include "my_dbug.h"
 #include "welcome_copyright_notice.h"
 
-#include "helper/to_string.h"
 #include "common/utils_string_parsing.h"
+#include "helper/to_string.h"
 #include "processor/commands/command.h"
 #include "processor/commands/mysqlxtest_error_names.h"
 
@@ -264,8 +264,7 @@ Driver_command_line_options::Driver_command_line_options(const int argc,
     }
   }
 
-  if (m_connection_options.port == 0)
-    m_connection_options.port = 33660;
+  if (m_connection_options.port == 0) m_connection_options.port = 33660;
   if (m_connection_options.host.empty())
     m_connection_options.host = "localhost";
 }

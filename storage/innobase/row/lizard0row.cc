@@ -36,18 +36,18 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "lizard0mon.h"
 #include "lizard0page.h"
-#include "lizard0undo.h"
 #include "lizard0tcn.h"
+#include "lizard0undo.h"
 
 #include "my_dbug.h"
 
+#include "lock0lock.h"
 #include "que0que.h"
 #include "row0ins.h"
 #include "row0log.h"
+#include "row0mysql.h"
 #include "row0row.h"
 #include "row0upd.h"
-#include "row0mysql.h"
-#include "lock0lock.h"
 
 #ifdef UNIV_DEBUG
 extern void page_zip_header_cmp(const page_zip_des_t *, const byte *);
@@ -140,13 +140,13 @@ void row_upd_index_entry_lizard_field(que_thr_t *thr, dtuple_t *entry,
   /** 2. Populate UBA */
   pos = index->get_sys_col_pos(DATA_UNDO_PTR);
   dfield = dtuple_get_nth_field(entry, pos);
-  ptr  = static_cast<byte*>(dfield_get_data(dfield));
+  ptr = static_cast<byte *>(dfield_get_data(dfield));
   trx_write_undo_ptr(ptr, txn_desc);
 
   /** 3. Populate GCN */
   pos = index->get_sys_col_pos(DATA_GCN_ID);
   dfield = dtuple_get_nth_field(entry, pos);
-  ptr  = static_cast<byte*>(dfield_get_data(dfield));
+  ptr = static_cast<byte *>(dfield_get_data(dfield));
   trx_write_gcn(ptr, txn_desc);
 }
 
@@ -198,15 +198,13 @@ void row_upd_rec_write_scn_and_uba(byte *ptr, const scn_t scn,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-void row_upd_rec_write_scn_and_undo_ptr(byte *ptr,
-                                        const scn_t scn,
+void row_upd_rec_write_scn_and_undo_ptr(byte *ptr, const scn_t scn,
                                         const undo_ptr_t undo_ptr,
-					const gcn_t gcn) {
+                                        const gcn_t gcn) {
   mach_write_to_8(ptr, scn);
   mach_write_to_8(ptr + DATA_SCN_ID_LEN, undo_ptr);
   mach_write_to_8(ptr + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN, gcn);
 }
-
 
 /**
   Modify the scn and undo_ptr of record. It will handle compress pages.
@@ -246,8 +244,7 @@ static void row_upd_rec_lizard_fields_low(rec_t *rec, page_zip_des_t *page_zip,
   @param[in]      txn       txn description
 */
 void row_upd_rec_lizard_fields(rec_t *rec, page_zip_des_t *page_zip,
-                               const dict_index_t *index,
-                               const ulint *offsets,
+                               const dict_index_t *index, const ulint *offsets,
                                const txn_desc_t *txn) {
   const txn_desc_t *txn_desc;
   ut_ad(index->is_clustered());
@@ -326,8 +323,8 @@ void row_upd_rec_lizard_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
   //              index->get_sys_col_pos(DATA_SCN_ID) == pos);
 
   if (page_zip) {
-    page_zip_write_scn_and_undo_ptr(page_zip, index, rec, offsets,
-                                    pos, scn, undo_ptr, gcn);
+    page_zip_write_scn_and_undo_ptr(page_zip, index, rec, offsets, pos, scn,
+                                    undo_ptr, gcn);
   } else {
     byte *field;
     ulint len;
@@ -355,8 +352,8 @@ bool validate_lizard_fields_in_record(const dict_index_t *index,
                                       const rec_t *rec, const ulint *offsets) {
   ulint len;
 
-  ut_a(scn_ptr_in_rec ==
-       const_cast<byte *>(rec_get_nth_field(index, rec, offsets, scn_pos, &len)));
+  ut_a(scn_ptr_in_rec == const_cast<byte *>(rec_get_nth_field(
+                             index, rec, offsets, scn_pos, &len)));
   ut_a(len == DATA_SCN_ID_LEN);
   ut_a(scn_ptr_in_rec + DATA_SCN_ID_LEN ==
        rec_get_nth_field(index, rec, offsets, scn_pos + 1, &len));
@@ -538,7 +535,6 @@ void trx_undo_update_rec_by_lizard_fields(const dict_index_t *index,
                          index);
   dfield_set_data(&(upd_field->new_val), buf, DATA_UNDO_PTR_LEN);
 
-
   upd_field = upd_get_nth_field(update, field_nth + 2);
   buf = static_cast<byte *>(mem_heap_alloc(heap, DATA_GCN_ID_LEN));
   trx_write_gcn(buf, txn_info.gcn);
@@ -571,9 +567,8 @@ byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,
 
   @return new pointer to mlog
 */
-byte* row_upd_write_lizard_vals_to_log(const dict_index_t *index,
-                                       const txn_rec_t *txn_rec,
-                                       byte *log_ptr,
+byte *row_upd_write_lizard_vals_to_log(const dict_index_t *index,
+                                       const txn_rec_t *txn_rec, byte *log_ptr,
                                        mtr_t *mtr MY_ATTRIBUTE((unused))) {
   ut_ad(index->is_clustered());
   ut_ad(mtr);
@@ -594,8 +589,8 @@ byte* row_upd_write_lizard_vals_to_log(const dict_index_t *index,
 }
 
 /**
-  Get the real SCN of a record by UBA, and write back to records in physical page,
-  when we make a btr update / delete.
+  Get the real SCN of a record by UBA, and write back to records in physical
+  page, when we make a btr update / delete.
   @param[in]      trx_id    trx_id of the transactions
                             who updates / deletes the record
   @param[in]      rec       record
@@ -606,8 +601,7 @@ byte* row_upd_write_lizard_vals_to_log(const dict_index_t *index,
 void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
                                          const dict_index_t *index,
                                          const ulint *offsets,
-                                         const buf_block_t *block,
-                                         mtr_t *mtr) {
+                                         const buf_block_t *block, mtr_t *mtr) {
   trx_id_t rec_id;
   bool cleanout;
   txn_rec_t rec_txn;
@@ -635,9 +629,9 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
   if (cleanout) {
     ut_ad(mtr_memo_contains_flagged(mtr, block, MTR_MEMO_PAGE_X_FIX));
     lizard::row_upd_rec_lizard_fields_in_cleanout(
-        const_cast<rec_t*>(rec),
-        const_cast<page_zip_des_t *>(buf_block_get_page_zip(block)),
-        index, offsets, &rec_txn);
+        const_cast<rec_t *>(rec),
+        const_cast<page_zip_des_t *>(buf_block_get_page_zip(block)), index,
+        offsets, &rec_txn);
 
     /** Write redo log */
     if (opt_cleanout_write_redo)
@@ -957,7 +951,7 @@ struct Cleanout {
         auto it = m_txns->find(trx_id);
         if (it != m_txns->end()) {
           txn_rec = it->second;
-	  ut_a(txn_rec.gcn != GCN_NULL);
+          ut_a(txn_rec.gcn != GCN_NULL);
           /** Modify the scn and undo ptr */
           row_upd_rec_lizard_fields_in_cleanout(
               rec, buf_block_get_page_zip(block), index, offsets, &txn_rec);
@@ -978,7 +972,7 @@ struct Cleanout {
     return cleaned;
   }
 
-/** All the committed txn information */
+  /** All the committed txn information */
   const Txn_commits *m_txns;
 };
 
@@ -1214,25 +1208,25 @@ void commit_cleanout_do(trx_t *trx, const txn_rec_t &txn_rec) {
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/
-  /* lizard field debug */
-  /*=============================================================================*/
+/* lizard field debug */
+/*=============================================================================*/
 
-  /**
-    Debug the scn id in record is initial state
-    @param[in]      rec       record
-    @param[in]      index     cluster index
-    @parma[in]      offsets   rec_get_offsets(rec, index)
+/**
+  Debug the scn id in record is initial state
+  @param[in]      rec       record
+  @param[in]      index     cluster index
+  @parma[in]      offsets   rec_get_offsets(rec, index)
 
-    @retval         true      Success
-  */
-  bool row_scn_initial(const rec_t *rec, const dict_index_t *index,
-                       const ulint *offsets) {
-    scn_id_t scn = row_get_rec_scn_id(rec, index, offsets);
-    ut_a(scn == SCN_NULL);
+  @retval         true      Success
+*/
+bool row_scn_initial(const rec_t *rec, const dict_index_t *index,
+                     const ulint *offsets) {
+  scn_id_t scn = row_get_rec_scn_id(rec, index, offsets);
+  ut_a(scn == SCN_NULL);
 
-    gcn_t gcn = row_get_rec_gcn(rec, index, offsets);
-    ut_a(gcn == GCN_NULL);
-    return true;
+  gcn_t gcn = row_get_rec_gcn(rec, index, offsets);
+  ut_a(gcn == GCN_NULL);
+  return true;
 }
 
 /**
@@ -1243,8 +1237,7 @@ void commit_cleanout_do(trx_t *trx, const txn_rec_t &txn_rec) {
 
   @retval         true      Success
 */
-bool row_undo_ptr_is_active(const rec_t *rec,
-                            const dict_index_t *index,
+bool row_undo_ptr_is_active(const rec_t *rec, const dict_index_t *index,
                             const ulint *offsets) {
   bool is_active = row_get_rec_undo_ptr_is_active(rec, index, offsets);
   ut_a(is_active);

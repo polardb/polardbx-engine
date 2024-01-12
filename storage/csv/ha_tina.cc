@@ -63,12 +63,12 @@ TODO:
 #include "mysql/psi/mysql_memory.h"
 #include "sql/derror.h"
 #include "sql/field.h"
+#include "sql/log_table.h"
 #include "sql/sql_class.h"
 #include "sql/sql_lex.h"
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "template_utils.h"
-#include "sql/log_table.h"
 
 using std::max;
 using std::min;
@@ -1645,7 +1645,6 @@ mysql_declare_plugin(csv){
     0,       /* flags                           */
 } mysql_declare_plugin_end;
 
-
 /* Rotate the csv data file by adding current_time into file name */
 int ha_tina::rotate_table(const char *name, const dd::Table *) {
   char name_buff[FN_REFLEN];
@@ -1678,10 +1677,11 @@ int ha_tina::rotate_table(const char *name, const dd::Table *) {
   write_meta_file(create_file, 0, false);
   mysql_file_close(create_file, MYF(0));
 
-  if ((create_file = mysql_file_create(
-           csv_key_file_data, fn_format(name_buff, name, "", CSV_EXT,
-                                        MY_REPLACE_EXT | MY_UNPACK_FILENAME),
-           0, O_RDWR | O_TRUNC, MYF(MY_WME))) < 0)
+  if ((create_file =
+           mysql_file_create(csv_key_file_data,
+                             fn_format(name_buff, name, "", CSV_EXT,
+                                       MY_REPLACE_EXT | MY_UNPACK_FILENAME),
+                             0, O_RDWR | O_TRUNC, MYF(MY_WME))) < 0)
     DBUG_RETURN(-1);
 
   mysql_file_close(create_file, MYF(0));

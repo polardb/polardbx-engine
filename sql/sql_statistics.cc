@@ -20,10 +20,10 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "my_murmur3.h"                                 // my_murmur3_32
-#include "my_sys.h"                                     // MY_WME
-#include "include/mysql/components/services/bits/psi_mutex_bits.h"   // PSI_mutex_key
+#include "include/mysql/components/services/bits/psi_mutex_bits.h"  // PSI_mutex_key
 #include "include/mysql/components/services/bits/psi_rwlock_bits.h"  // PSI_rwlock_key
+#include "my_murmur3.h"  // my_murmur3_32
+#include "my_sys.h"      // MY_WME
 #include "mysql/psi/mysql_memory.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_rwlock.h"
@@ -80,8 +80,6 @@ ST_FIELD_INFO index_stats_fields_info[] = {
      "Scan_used", 0},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
 
-
-
 /**
   We want to accumulate the memory, so define a new allocator.
 */
@@ -99,7 +97,7 @@ size_t hash<String_stats_type>::operator()(const String_stats_type &s) const {
   return murmur3_32(reinterpret_cast<const uchar *>(s.c_str()), s.size(), 0);
 }
 
-} // namespace std;
+}  // namespace std
 
 template String_stats_type::~basic_string();
 
@@ -160,8 +158,7 @@ Index_stats::Index_stats() {
 */
 void Index_stats::accumulate(Stats_data &data, size_t key_number) {
   if (key_number < MAX_KEY) rows_read += data.index_rows_read[key_number];
-  if (key_number < MAX_KEY)
-    scan_used += data.index_scan_used[key_number];
+  if (key_number < MAX_KEY) scan_used += data.index_scan_used[key_number];
 }
 
 /* Table_stats template specialization */
@@ -335,7 +332,8 @@ int Object_stats_cache::fill_table_stats(THD *thd, TABLE *table) {
         check_grant(thd, SELECT_ACL, &tmp_table, 1, UINT_MAX, 1))
       continue;
 
-    table->field[0]->store(table_schema, strlen(table_schema), system_charset_info);
+    table->field[0]->store(table_schema, strlen(table_schema),
+                           system_charset_info);
     table->field[1]->store(table_name, strlen(table_name), system_charset_info);
     table->field[2]->store((longlong)table_stats->rows_read, true);
     table->field[3]->store((longlong)table_stats->rows_changed, true);
@@ -382,13 +380,13 @@ int Object_stats_cache::fill_index_stats(THD *thd, TABLE *table) {
     tmp_table.db = table_schema;
     tmp_table.grant.privilege = 0;
 
-    if (check_access(thd, SELECT_ACL, tmp_table.db,
-                      &tmp_table.grant.privilege, 0, 0,
-                      is_infoschema_db(table_schema)) ||
-         check_grant(thd, SELECT_ACL, &tmp_table, 1, UINT_MAX, 1))
-        continue;
+    if (check_access(thd, SELECT_ACL, tmp_table.db, &tmp_table.grant.privilege,
+                     0, 0, is_infoschema_db(table_schema)) ||
+        check_grant(thd, SELECT_ACL, &tmp_table, 1, UINT_MAX, 1))
+      continue;
 
-    table->field[0]->store(table_schema, strlen(table_schema), system_charset_info);
+    table->field[0]->store(table_schema, strlen(table_schema),
+                           system_charset_info);
     table->field[1]->store(table_name, strlen(table_name), system_charset_info);
     table->field[2]->store(index_name, strlen(index_name), system_charset_info);
     table->field[3]->store((longlong)index_stats->rows_read, true);
@@ -416,13 +414,14 @@ void handler::update_table_statistics() {
 }
 
 void handler::update_index_statistics() {
-  if (!table || !table->s || !table->s->table_cache_key.str || !table->s->table_name.str)
+  if (!table || !table->s || !table->s->table_cache_key.str ||
+      !table->s->table_name.str)
     return;
 
   for (uint x = 0; x < table->s->keys; ++x) {
     if (stats_data.index_rows_read[x]) {
       table->s->stats_data.index_rows_read[x] += stats_data.index_rows_read[x];
-      table->s->stats_data.index_scan_used[x] ++;
+      table->s->stats_data.index_scan_used[x]++;
     }
   }
 }
@@ -431,11 +430,9 @@ void handler::update_index_statistics() {
   Accumulate the operated rows once statement end.
 */
 void handler::update_statistics() {
-  if (opt_tablestat)
-    update_table_statistics();
+  if (opt_tablestat) update_table_statistics();
 
-  if (opt_indexstat)
-    update_index_statistics();
+  if (opt_indexstat) update_index_statistics();
 
   stats_data.reset();
 }
@@ -451,8 +448,8 @@ int fill_schema_table_stats(THD *thd, Table_ref *tables,
   mysql_mutex_lock(&LOCK_open);
 
   for (const auto &key_and_value : *table_def_cache) {
-      TABLE_SHARE *share = key_and_value.second.get();
-      Object_stats_cache::instance()->update_table_stats(share);
+    TABLE_SHARE *share = key_and_value.second.get();
+    Object_stats_cache::instance()->update_table_stats(share);
   }
 
   mysql_mutex_unlock(&LOCK_open);
@@ -471,8 +468,8 @@ int fill_schema_index_stats(THD *thd, Table_ref *tables,
   mysql_mutex_lock(&LOCK_open);
 
   for (const auto &key_and_value : *table_def_cache) {
-      TABLE_SHARE *share = key_and_value.second.get();
-      Object_stats_cache::instance()->update_index_stats(share);
+    TABLE_SHARE *share = key_and_value.second.get();
+    Object_stats_cache::instance()->update_index_stats(share);
   }
 
   mysql_mutex_unlock(&LOCK_open);

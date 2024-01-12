@@ -26,22 +26,20 @@
 // #include "my_global.h"
 #include "bl_consensus_log.h"
 
-typedef struct interval
-{
+typedef struct interval {
   uint64 group_max;
   uint64 group_min;
   uint64 size;
 } intervalType;
 
-class AppliedIndexChecker
-{
-public:
+class AppliedIndexChecker {
+ public:
   void prepare(intervalType &inv);
   int commit(uint64 index);
   void reset(); /* reset if i am leader */
   const char *get_group_queue_status();
 
-private:
+ private:
   std::deque<intervalType> group_queue_;
   std::string status_buf_;
   std::mutex lock_;

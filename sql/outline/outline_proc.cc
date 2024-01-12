@@ -161,10 +161,7 @@ Outline_record *Sql_cmd_optimizer_outline_proc_add::get_record(THD *thd) {
   alloc_query(thd, res->ptr(), res->length(), record->query);
 
   return record;
-
 }
-
-
 
 /**
   Create record from parameters.
@@ -445,7 +442,6 @@ bool Sql_cmd_outline_proc_flush::pc_execute(THD *thd) {
 bool Sql_cmd_outline_proc_show::pc_execute(THD *) {
   DBUG_ENTER("Sql_cmd_outline_proc_show::pc_execute");
   DBUG_RETURN(false);
-
 }
 
 /**
@@ -459,7 +455,6 @@ bool Sql_cmd_outline_proc_show::pc_execute(THD *) {
 bool Sql_cmd_outline_proc_preview::pc_execute(THD *) {
   DBUG_ENTER("Sql_cmd_outline_proc_preview::pc_execute");
   DBUG_RETURN(false);
-
 }
 void Sql_cmd_outline_proc_show::send_result(THD *thd, bool error) {
   Protocol *protocol = thd->get_protocol();
@@ -492,8 +487,7 @@ void Sql_cmd_outline_proc_show::send_result(THD *thd, bool error) {
     protocol->store(result.stats.hit);
     protocol->store(result.stats.overflow);
     protocol->store_string(result.digest_text.c_str(),
-                           result.digest_text.length(),
-                           system_charset_info);
+                           result.digest_text.length(), system_charset_info);
 
     if (protocol->end_row()) DBUG_VOID_RETURN;
   }
@@ -533,15 +527,12 @@ void Sql_cmd_outline_proc_preview::send_result(THD *thd, bool error) {
     protocol->store_string(result->digest.c_str(), result->digest.length(),
                            system_charset_info);
     protocol->store_string(result->block_type.c_str(),
-                           result->block_type.length(),
-                           system_charset_info);
+                           result->block_type.length(), system_charset_info);
     protocol->store_string(result->block_name.c_str(),
-                           result->block_name.length(),
-                           system_charset_info);
+                           result->block_name.length(), system_charset_info);
     protocol->store(result->block);
     protocol->store_string(result->hint_text.c_str(),
-                           result->hint_text.length(),
-                           system_charset_info);
+                           result->hint_text.length(), system_charset_info);
     if (protocol->end_row()) DBUG_VOID_RETURN;
   }
 
@@ -557,4 +548,3 @@ void Sql_cmd_outline_proc_preview::send_result(THD *thd, bool error) {
 }
 
 } /* namespace im */
-

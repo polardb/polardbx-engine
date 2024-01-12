@@ -148,8 +148,7 @@ The caller must insert it into the correct list.
 trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
                                 page_no_t page_no, const page_size_t &page_size,
                                 scn_t gtid_trx_scn,
-                                lizard::purge_heap_t *purge_heap,
-                                mtr_t *mtr);
+                                lizard::purge_heap_t *purge_heap, mtr_t *mtr);
 
 /** Create a rollback segment in the given tablespace. This could be either
 the system tablespace, the temporary tablespace, or an undo tablespace.
@@ -214,7 +213,8 @@ constexpr uint32_t TRX_RSEG_HISTORY = 8;
 /** Lizard: TXN free list for undo log segment (4 + 8) bytes */
 
 /** Lizard: record free list node count */
-constexpr uint32_t TXN_RSEG_FREE_LIST_SIZE = (TRX_RSEG_HISTORY + FLST_BASE_NODE_SIZE);
+constexpr uint32_t TXN_RSEG_FREE_LIST_SIZE =
+    (TRX_RSEG_HISTORY + FLST_BASE_NODE_SIZE);
 /** Lizard: Free list base node */
 constexpr uint32_t TXN_RSEG_FREE_LIST = (TXN_RSEG_FREE_LIST_SIZE + 4);
 

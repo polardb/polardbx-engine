@@ -32,7 +32,7 @@ extern PSI_memory_key key_memory_PPS;
 
 /* Allocate the object */
 template <typename T, typename... Args>
-T *allocate_object(Args &&... args) {
+T *allocate_object(Args &&...args) {
   void *ptr = nullptr;
   T *obj = nullptr;
 

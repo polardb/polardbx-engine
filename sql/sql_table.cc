@@ -3538,7 +3538,6 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
 
   recycle_fk_invalidator.force_invalidate(thd);
 
-
   /*
     Dropping of temporary tables cannot be rolled back. On the other hand it
     can't fail at this stage. So to get nice error handling behavior

@@ -36,7 +36,7 @@ static const int kReservedVariableSizeData = 32;
 struct Block {
   NO_COPY_MOVE(Block);
 
-public:
+ public:
   google::protobuf::io::ArrayOutputStream *array;
   google::protobuf::io::CodedOutputStream *coder;
   uint8_t *buf;
@@ -74,7 +74,7 @@ public:
 struct Chunk {
   NO_COPY_MOVE(Chunk);
 
-public:
+ public:
   size_t field_num;
   size_t row_count;
   bool is_full;
@@ -83,8 +83,12 @@ public:
   Block **blocks;
 
   Chunk()
-      : field_num(0), row_count(0), is_full(false), buffer(nullptr),
-        null_bitmap(nullptr), blocks(nullptr) {}
+      : field_num(0),
+        row_count(0),
+        is_full(false),
+        buffer(nullptr),
+        null_bitmap(nullptr),
+        blocks(nullptr) {}
 
   ~Chunk() { clear(); }
 
@@ -106,8 +110,7 @@ public:
   inline void clear() {
     if (blocks != nullptr) {
       for (size_t i = 0; i < field_num; ++i) {
-        if (blocks[i] != nullptr)
-          delete blocks[i];
+        if (blocks[i] != nullptr) delete blocks[i];
         blocks[i] = nullptr;
       }
     }
@@ -123,8 +126,9 @@ public:
   }
 };
 
-template <typename Encoder_type> class XChunk_encoder_base {
-private:
+template <typename Encoder_type>
+class XChunk_encoder_base {
+ private:
   using Position = typename Encoder_type::Position;
   Encoder_type *m_encoder = nullptr;
   Position m_row_begin;
@@ -140,7 +144,7 @@ private:
   bool m_chunk_processing;
   bool m_row_processing;
 
-public:
+ public:
   explicit XChunk_encoder_base(Encoder_type *encoder)
       : m_encoder(encoder), m_chunk_in_use(false), m_chunk_processing(false) {}
 
@@ -201,10 +205,10 @@ public:
     assert(written <= k_block_size);
     size_t length = written + m_chunk.blocks[field_num]->extra.size();
     size_t encoded_length =
-        1 + /// tag
+        1 +  /// tag
         google::protobuf::io::CodedOutputStream::VarintSize32(
-            static_cast<google::protobuf::uint32>(length)) + /// len
-        length;                                              /// data
+            static_cast<google::protobuf::uint32>(length)) +  /// len
+        length;                                               /// data
     /// tag + len + tag + len
     m_encoder
         ->template ensure_buffer_size<kMaxVarintBytes + kMaxVarint32Bytes +
@@ -241,7 +245,7 @@ public:
       size_t length =
           m_chunk.blocks[i]->written() + m_chunk.blocks[i]->extra.size();
       size_t encoded_length =
-          1 + /// tag
+          1 +  /// tag
           google::protobuf::io::CodedOutputStream::VarintSize32(
               static_cast<google::protobuf::uint32>(length)) +
           length;
@@ -300,8 +304,7 @@ public:
     if (m_row_processing) {
       ++m_chunk.row_count;
       /// send it before null bitmap full
-      if (m_chunk.row_count >= k_block_size)
-        m_chunk.is_full = true;
+      if (m_chunk.row_count >= k_block_size) m_chunk.is_full = true;
       if (m_chunk.is_full) {
         send_chunk();
       }
@@ -368,8 +371,7 @@ public:
 
   void field_set(const char *const value, size_t length) {
     auto &block = m_chunk.blocks[m_num_fields];
-    if (block->fixed_size)
-      block->fixed_size = false;
+    if (block->fixed_size) block->fixed_size = false;
     // special case: empty SET
     if (0 == length) {
       assert(k_block_size - block->written() >= 2);
@@ -439,8 +441,7 @@ public:
 
   void field_string(const char *value, const size_t length) {
     auto &block = m_chunk.blocks[m_num_fields];
-    if (block->fixed_size)
-      block->fixed_size = false;
+    if (block->fixed_size) block->fixed_size = false;
 
     char zero = '\0';
     if (block->written() + kMaxVarint32Bytes + length + 1 > k_block_size) {
@@ -448,7 +449,7 @@ public:
       google::protobuf::io::CodedOutputStream stream(&string_stream);
       m_chunk.is_full = true;
       stream.WriteVarint32(static_cast<google::protobuf::uint32>(
-          length + 1)); // 1 byte for trailing '\0'
+          length + 1));  // 1 byte for trailing '\0'
       stream.WriteRaw(value, static_cast<int>(length));
       stream.WriteRaw(&zero, 1);
     } else {
@@ -508,8 +509,7 @@ public:
     assert(k_block_size - block->written() >= 4);
     block->coder->WriteLittleEndian32(
         google::protobuf::internal::WireFormatLite::EncodeFloat(value));
-    if (block->written() + 4 > k_block_size)
-      m_chunk.is_full = true;
+    if (block->written() + 4 > k_block_size) m_chunk.is_full = true;
     ++m_num_fields;
   }
 
@@ -518,8 +518,7 @@ public:
     assert(k_block_size - block->written() >= 8);
     block->coder->WriteLittleEndian64(
         google::protobuf::internal::WireFormatLite::EncodeDouble(value));
-    if (block->written() + 8 > k_block_size)
-      m_chunk.is_full = true;
+    if (block->written() + 8 > k_block_size) m_chunk.is_full = true;
     ++m_num_fields;
   }
 
@@ -529,8 +528,7 @@ public:
     std::string dec_bytes = dec.to_bytes();
 
     auto &block = m_chunk.blocks[m_num_fields];
-    if (block->fixed_size)
-      block->fixed_size = false;
+    if (block->fixed_size) block->fixed_size = false;
 
     if (block->written() + kMaxVarint32Bytes + dec_bytes.length() >
         k_block_size) {
@@ -567,8 +565,7 @@ public:
     std::string dec_bytes = dec.to_bytes();
 
     auto &block = m_chunk.blocks[m_num_fields];
-    if (block->fixed_size)
-      block->fixed_size = false;
+    if (block->fixed_size) block->fixed_size = false;
 
     if (block->written() + kMaxVarint32Bytes + dec_bytes.length() >
         k_block_size) {
@@ -592,10 +589,10 @@ public:
 
 class PolarX_Chunk_encoder
     : public XChunk_encoder_base<PolarX_Protocol_encoder> {
-public:
+ public:
   using Base = XChunk_encoder_base<PolarX_Protocol_encoder>;
   using Base::Base;
 };
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

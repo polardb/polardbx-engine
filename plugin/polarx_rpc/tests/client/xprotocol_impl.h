@@ -148,8 +148,8 @@ class Protocol_impl : public XProtocol,
       const Client_message_type_id mid, const Message &msg,
       XError *out_error) override;
 
-  std::unique_ptr<XQuery_result> execute_stmt(const PolarXRPC::Sql::StmtExecute &m,
-                                              XError *out_error) override;
+  std::unique_ptr<XQuery_result> execute_stmt(
+      const PolarXRPC::Sql::StmtExecute &m, XError *out_error) override;
 
   std::unique_ptr<Capabilities> execute_fetch_capabilities(
       XError *out_error) override;
@@ -161,13 +161,9 @@ class Protocol_impl : public XProtocol,
                               const std::string &schema,
                               const std::string &method = "") override;
 
-  uint64_t session_id() const override {
-    return m_sid;
-  }
+  uint64_t session_id() const override { return m_sid; }
 
-  virtual void set_session_id(uint64_t sid) override {
-    m_sid = sid;
-  }
+  virtual void set_session_id(uint64_t sid) override { m_sid = sid; }
 
  private:
   using CodedInputStream = google::protobuf::io::CodedInputStream;
@@ -243,7 +239,8 @@ class Protocol_impl : public XProtocol,
     handlers. Latest pushed handlers should be called first (called in
     reversed-pushed-order)
   */
-  Handler_result dispatch_received_notice(const PolarXRPC::Notice::Frame &frame);
+  Handler_result dispatch_received_notice(
+      const PolarXRPC::Notice::Frame &frame);
 
   /**
     Dispatch received messages to each registered handler. If the handler
@@ -305,8 +302,8 @@ XError Protocol_impl::authenticate_challenge_response(const std::string &user,
   }
 
   {
-    std::unique_ptr<Message> message{
-        recv_id(::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE, &error)};
+    std::unique_ptr<Message> message{recv_id(
+        ::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE, &error)};
 
     if (error) return error;
 

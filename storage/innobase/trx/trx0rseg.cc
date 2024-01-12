@@ -45,11 +45,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0purge.h"
 #include "trx0undo.h"
 
-#include "lizard0txn.h"
-#include "lizard0undo.h"
+#include "lizard0cleanout.h"
 #include "lizard0gcs.h"
 #include "lizard0mon.h"
-#include "lizard0cleanout.h"
+#include "lizard0txn.h"
+#include "lizard0undo.h"
 #include "lizard0undo0types.h"
 
 static std::atomic<uint32_t> active_rseg_init_threads{1};
@@ -273,10 +273,9 @@ static trx_rseg_t *trx_rseg_mem_initialize(ulint id, space_id_t space_id,
   return rseg;
 }
 
-static trx_rseg_t *trx_rseg_physical_initialize(trx_rseg_t *rseg,
-                                                lizard::purge_heap_t *purge_heap,
-                                                scn_t gtid_trx_scn,
-                                                mtr_t *mtr) {
+static trx_rseg_t *trx_rseg_physical_initialize(
+    trx_rseg_t *rseg, lizard::purge_heap_t *purge_heap, scn_t gtid_trx_scn,
+    mtr_t *mtr) {
   auto rseg_header =
       trx_rsegf_get_new(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
 
@@ -397,8 +396,7 @@ void trx_rseg_init_thread(void *arg, trx_id_t gtid_trx_scn) {
 trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
                                 page_no_t page_no, const page_size_t &page_size,
                                 scn_t gtid_trx_scn,
-                                lizard::purge_heap_t *purge_heap,
-                                mtr_t *mtr) {
+                                lizard::purge_heap_t *purge_heap, mtr_t *mtr) {
   auto rseg = static_cast<trx_rseg_t *>(
       ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(trx_rseg_t)));
 
@@ -612,7 +610,8 @@ void trx_rsegs_init_end() {
   purge_sys->rsegs_queue.clear();
 }
 
-void trx_rsegs_parallel_init(lizard::purge_heap_t *purge_heap) /*!< in: rseg queue */
+void trx_rsegs_parallel_init(
+    lizard::purge_heap_t *purge_heap) /*!< in: rseg queue */
 {
   purge_sys->rsegs_queue.clear();
   std::vector<IB_thread> threads;

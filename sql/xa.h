@@ -26,9 +26,9 @@
 
 #include <string.h>
 #include <sys/types.h>
+#include <atomic>
 #include <list>
 #include <mutex>
-#include <atomic>
 
 #include "lex_string.h"
 #include "libbinlogevents/include/control_events.h"  // XA_prepare_event

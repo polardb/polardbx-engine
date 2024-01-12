@@ -108,9 +108,9 @@ ST_FIELD_INFO innodb_purge_file_fields_info[] = {
  @return 0 on SUCCESS */
 
 static int innodb_purge_file_fill_table(
-    THD *thd,           /*!< in: thread */
+    THD *thd,          /*!< in: thread */
     Table_ref *tables, /*!< in/out: tables to fill */
-    Item *)             /*!< in: condition (not used) */
+    Item *)            /*!< in: condition (not used) */
 {
   Field **fields;
   TABLE *table;

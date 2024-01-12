@@ -30,10 +30,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2020-08-27 by Jianwei.zhao
  *******************************************************/
 
-#include "trx0trx.h"
 #include "lizard0trx.h"
-#include "lizard0row.h"
 #include "lizard0cleanout.h"
+#include "lizard0row.h"
+#include "trx0trx.h"
 
 namespace lizard {
 
@@ -60,7 +60,7 @@ void cleanout_rows_at_commit(trx_t *trx) {
   if (trx->is_rollback) {
     trx->cleanout_cursors->init();
     return;
-  } 
+  }
 
   auto undo_ptr = trx->txn_desc.undo_ptr;
   ut_ad(!undo_ptr_is_active(trx->txn_desc.undo_ptr));

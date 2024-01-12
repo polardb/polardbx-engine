@@ -8,10 +8,10 @@
 #include "../session/session_base.h"
 
 #include "executor.h"
-#include "meta.h"
 #include "expr.h"
 #include "handler_api.h"
 #include "log.h"
+#include "meta.h"
 
 using namespace PolarXRPC;
 
@@ -20,21 +20,22 @@ extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *files_charset_info;
 namespace rpc_executor {
 
 #ifdef XPLUGIN_LOG_DEBUG
-#define DEBUG_PRINT_PLAN(plan)  \
-  do {                          \
-    debug_print_request(plan);  \
-  } while(0)
+#define DEBUG_PRINT_PLAN(plan) \
+  do {                         \
+    debug_print_request(plan); \
+  } while (0)
 #else
 #define DEBUG_PRINT_PLAN(plan)
 #endif
 
 void debug_print_request(const ExecPlan::GetPlan &get_plan) {
   for (int64_t k = 0; k < get_plan.keys_size(); ++k) {
-    log_debug("ExecPlan should execute, table: %s.%s, index: %s, key parts offered: %d",
-              pb2ptr(get_plan.table_info().schema_name()),
-              pb2ptr(get_plan.table_info().name()),
-              parse_index_name(get_plan),
-              get_plan.keys().Get(k).keys().size());
+    log_debug(
+        "ExecPlan should execute, table: %s.%s, index: %s, key parts offered: "
+        "%d",
+        pb2ptr(get_plan.table_info().schema_name()),
+        pb2ptr(get_plan.table_info().name()), parse_index_name(get_plan),
+        get_plan.keys().Get(k).keys().size());
     for (int64_t i = 0; i < get_plan.keys(k).keys().size(); ++i) {
       switch (get_plan.keys(k).keys(i).value().type()) {
         case PolarXRPC::Datatypes::Scalar::V_SINT:
@@ -66,50 +67,46 @@ void convert_name_to_lowercase(const Datatypes::Scalar &name,
   const std::string &name_str = pb2str(name);
   std::unique_ptr<char[]> temp(new char[name_str.size() + 1]);
   // copy string data and terminator 0
-  memcpy(temp.get(), name_str.data(), name_str.size()+1);
+  memcpy(temp.get(), name_str.data(), name_str.size() + 1);
   my_casedn_str(files_charset_info, temp.get());
   output = std::move(temp);
 }
 
 int create_search_key(const PolarXRPC::ExecPlan::GetExpr &mysqlx_key,
-                      ExecKeyMeta *key_meta,
-                      SearchKey &search_key) {
+                      ExecKeyMeta *key_meta, SearchKey &search_key) {
   return search_key.init(key_meta, mysqlx_key);
 }
 
-int create_range_search_key(const RangeInfo &range_info,
-                            ExecKeyMeta *key_meta,
+int create_range_search_key(const RangeInfo &range_info, ExecKeyMeta *key_meta,
                             RangeSearchKey &range_key) {
   return range_key.init(key_meta, range_info);
 }
 
 int InlineScanNode::init(const ExecPlan::RangeScan &scan_msg,
-                         InternalDataSet &dataset,
-                         THD *thd) {
+                         InternalDataSet &dataset, THD *thd) {
   key_only_ = false;
   flags_ = scan_msg.flag();
-  const ExecPlan::GetExpr *begin_key = scan_msg.has_key() ?
-                                       &(scan_msg.key()) : nullptr;
-  const ExecPlan::GetExpr *end_key = scan_msg.has_end_key() ?
-                                     &(scan_msg.end_key()) : nullptr;
+  const ExecPlan::GetExpr *begin_key =
+      scan_msg.has_key() ? &(scan_msg.key()) : nullptr;
+  const ExecPlan::GetExpr *end_key =
+      scan_msg.has_end_key() ? &(scan_msg.end_key()) : nullptr;
   const RangeInfo range_info = {begin_key, end_key, true, true};
-  return init(scan_msg.table_info(), parse_index_name(scan_msg),
-              range_info, dataset, thd);
+  return init(scan_msg.table_info(), parse_index_name(scan_msg), range_info,
+              dataset, thd);
 }
 
 int InlineScanNode::init(const ExecPlan::KeyOnlyRangeScan &scan_msg,
-                         InternalDataSet &dataset,
-                         THD *thd) {
+                         InternalDataSet &dataset, THD *thd) {
   int ret = HA_EXEC_SUCCESS;
   key_only_ = true;
   flags_ = scan_msg.flag();
-  const ExecPlan::GetExpr *begin_key = scan_msg.has_key() ?
-                                       &(scan_msg.key()) : nullptr;
-  const ExecPlan::GetExpr *end_key = scan_msg.has_end_key() ?
-                                     &(scan_msg.end_key()) : nullptr;
+  const ExecPlan::GetExpr *begin_key =
+      scan_msg.has_key() ? &(scan_msg.key()) : nullptr;
+  const ExecPlan::GetExpr *end_key =
+      scan_msg.has_end_key() ? &(scan_msg.end_key()) : nullptr;
   const RangeInfo range_info = {begin_key, end_key, true, true};
-  if ((ret = init(scan_msg.table_info(), parse_index_name(scan_msg),
-                  range_info, dataset, thd))) {
+  if ((ret = init(scan_msg.table_info(), parse_index_name(scan_msg), range_info,
+                  dataset, thd))) {
   } else if ((ret = handler_set_key_read_only(table_))) {
     log_exec_error("handler_set_key_read_only failed, ret: %d", ret);
   }
@@ -117,8 +114,7 @@ int InlineScanNode::init(const ExecPlan::KeyOnlyRangeScan &scan_msg,
 }
 
 int InlineScanNode::init(const ExecPlan::TableScanPlan &scan_msg,
-                         InternalDataSet &dataset,
-                         THD *thd) {
+                         InternalDataSet &dataset, THD *thd) {
   int ret = HA_EXEC_SUCCESS;
   const ExecPlan::TableInfo &table_info = scan_msg.table_info();
   convert_name_to_lowercase(table_info.name(), table_name_ptr_);
@@ -129,27 +125,25 @@ int InlineScanNode::init(const ExecPlan::TableScanPlan &scan_msg,
   thd_ = thd;
   if ((table_status_ = ret = handler_open_table(thd_, schema_name, table_name,
                                                 HDL_READ, table_))) {
-    log_exec_error("handler_open_table failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_open_table failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   } else if (!(handler_lock_table(thd_, table_, TL_READ))) {
     ret = HA_ERR_INTERNAL_ERROR;
-    log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   } else if ((ret = table_->get_key(index_name, key_meta_))) {
-    log_exec_error("index not found, ret: %d, name: %s.%s.%s",
-                   ret, schema_name, table_name, index_name);
+    log_exec_error("index not found, ret: %d, name: %s.%s.%s", ret, schema_name,
+                   table_name, index_name);
   } else if ((ret = dataset.init(1, table_))) {
-    log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s", ret,
+                   schema_name, table_name);
   }
   return ret;
 }
 
 int InlineScanNode::init(const ExecPlan::TableInfo &table_info,
-                         const char *index_name,
-                         const RangeInfo &range_info,
-                         InternalDataSet &dataset,
-                         THD *thd) {
+                         const char *index_name, const RangeInfo &range_info,
+                         InternalDataSet &dataset, THD *thd) {
   int ret = HA_EXEC_SUCCESS;
   convert_name_to_lowercase(table_info.name(), table_name_ptr_);
   convert_name_to_lowercase(table_info.schema_name(), schema_name_ptr_);
@@ -158,22 +152,22 @@ int InlineScanNode::init(const ExecPlan::TableInfo &table_info,
   thd_ = thd;
   if ((table_status_ = ret = handler_open_table(thd_, schema_name, table_name,
                                                 HDL_READ, table_))) {
-    log_exec_error("handler_open_table failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_open_table failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   } else if (!(handler_lock_table(thd_, table_, TL_READ))) {
     ret = HA_ERR_INTERNAL_ERROR;
-    log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   } else if ((ret = table_->get_key(index_name, key_meta_))) {
-    log_exec_error("index not found, ret: %d, name: %s.%s.%s",
-                   ret, schema_name, table_name, index_name);
+    log_exec_error("index not found, ret: %d, name: %s.%s.%s", ret, schema_name,
+                   table_name, index_name);
   } else if ((ret = dataset.init(1, table_))) {
-    log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s",
-                   ret, schema_name, table_name);
-  } else if ((ret = create_range_search_key(range_info, key_meta_,
-                                            range_key_))) {
-    log_exec_error("create RangeSearchKey failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s", ret,
+                   schema_name, table_name);
+  } else if ((ret =
+                  create_range_search_key(range_info, key_meta_, range_key_))) {
+    log_exec_error("create RangeSearchKey failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   }
   return ret;
 }
@@ -184,8 +178,8 @@ int InlineScanNode::seek(InternalDataSet &dataset) {
   if ((ret = handler_seek(thd_, table_, key_meta_, range_key_, found))) {
     const char *table_name = table_name_ptr_.get();
     const char *schema_name = schema_name_ptr_.get();
-    log_exec_error("handler_seek failed, ret: %d, name %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_seek failed, ret: %d, name %s.%s", ret, schema_name,
+                   table_name);
   }
   if (found) {
     dataset.set_found();
@@ -200,8 +194,8 @@ int InlineScanNode::next(InternalDataSet &dataset) {
   if ((ret = handler_range_next(thd_, table_, found))) {
     const char *table_name = table_name_ptr_.get();
     const char *schema_name = schema_name_ptr_.get();
-    log_exec_error("handler_range_next failed, ret: %d, name %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_range_next failed, ret: %d, name %s.%s", ret,
+                   schema_name, table_name);
   }
   if (found) {
     dataset.set_found();
@@ -216,8 +210,8 @@ int InlineScanNode::index_first(InternalDataSet &dataset) {
   if ((ret = handler_index_first(thd_, table_, key_meta_, found))) {
     const char *table_name = table_name_ptr_.get();
     const char *schema_name = schema_name_ptr_.get();
-    log_exec_error("handler_index_first failed, ret: %d, name %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_index_first failed, ret: %d, name %s.%s", ret,
+                   schema_name, table_name);
   }
   if (found) {
     dataset.set_found();
@@ -232,8 +226,8 @@ int InlineScanNode::index_next(InternalDataSet &dataset) {
   if ((ret = handler_index_next(thd_, table_, found))) {
     const char *table_name = table_name_ptr_.get();
     const char *schema_name = schema_name_ptr_.get();
-    log_exec_error("handler_index_next failed, ret: %d, name %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_index_next failed, ret: %d, name %s.%s", ret,
+                   schema_name, table_name);
   }
   if (found) {
     dataset.set_found();
@@ -255,8 +249,7 @@ int InlineScanNode::finish(int error) {
 }
 
 int ScanNode::init(const PolarXRPC::ExecPlan::RangeScan &scan_msg,
-                   InternalDataSet &dataset,
-                   THD *thd) {
+                   InternalDataSet &dataset, THD *thd) {
   first_next_ = true;
   return inline_scan_node_.init(scan_msg, dataset, thd);
 }
@@ -272,13 +265,10 @@ int ScanNode::next(InternalDataSet &dataset) {
   return ret;
 }
 
-int ScanNode::finish(int error) {
-  return inline_scan_node_.finish(error);
-}
+int ScanNode::finish(int error) { return inline_scan_node_.finish(error); }
 
 int TableScanNode::init(const PolarXRPC::ExecPlan::TableScanPlan &scan_msg,
-                   InternalDataSet &dataset,
-                   THD *thd) {
+                        InternalDataSet &dataset, THD *thd) {
   first_next_ = true;
   return inline_scan_node_.init(scan_msg, dataset, thd);
 }
@@ -294,9 +284,7 @@ int TableScanNode::next(InternalDataSet &dataset) {
   return ret;
 }
 
-int TableScanNode::finish(int error) {
-  return inline_scan_node_.finish(error);
-}
+int TableScanNode::finish(int error) { return inline_scan_node_.finish(error); }
 
 int Executor::execute(const ExecPlan::AnyPlan &plan, const ParamsList &params,
                       polarx_rpc::CcommandDelegate &resultset, THD *thd,
@@ -306,15 +294,11 @@ int Executor::execute(const ExecPlan::AnyPlan &plan, const ParamsList &params,
   thd->reset_for_next_command();
   polarx_rpc::CsessionBase::begin_query(thd, query, query_len);
   switch (plan.plan_type()) {
-    case  PolarXRPC::ExecPlan::AnyPlan::GET:
-      ret = execute_get(plan.get_plan(),
-                        resultset,
-                        thd);
+    case PolarXRPC::ExecPlan::AnyPlan::GET:
+      ret = execute_get(plan.get_plan(), resultset, thd);
       break;
     case PolarXRPC::ExecPlan::AnyPlan::RANGE_SCAN:
-      ret = execute_scan(plan.range_scan(),
-                         resultset,
-                         thd);
+      ret = execute_scan(plan.range_scan(), resultset, thd);
       break;
     default:
       ret = build_and_execute(plan, resultset, thd);
@@ -354,8 +338,7 @@ int Executor::build_and_execute(const ExecPlan::AnyPlan &plan_msg,
 }
 
 int Executor::execute_get(const ExecPlan::GetPlan &get_plan,
-                          polarx_rpc::CcommandDelegate &resultset,
-                          THD *thd) {
+                          polarx_rpc::CcommandDelegate &resultset, THD *thd) {
   DEBUG_PRINT_PLAN(get_plan);
 
   int ret = HA_EXEC_SUCCESS;
@@ -375,31 +358,31 @@ int Executor::execute_get(const ExecPlan::GetPlan &get_plan,
     ExecKeyMeta *key_meta = nullptr;
     InternalDataSet dataset;
 
-    if ((ret = handler_open_table(thd, schema_name, table_name,
-                                  HDL_READ, table))) {
-      log_exec_error("handler_open_table failed, ret: %d, name: %s.%s",
-                     ret, schema_name, table_name);
+    if ((ret = handler_open_table(thd, schema_name, table_name, HDL_READ,
+                                  table))) {
+      log_exec_error("handler_open_table failed, ret: %d, name: %s.%s", ret,
+                     schema_name, table_name);
     } else if (!(handler_lock_table(thd, table, TL_READ))) {
       ret = HA_ERR_INTERNAL_ERROR;
-      log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s",
-                     ret, schema_name, table_name);
+      log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s", ret,
+                     schema_name, table_name);
     } else if ((ret = table->get_key(index_name, key_meta))) {
-      log_exec_error("index not found, ret: %d, name: %s.%s.%s",
-                     ret, schema_name, table_name, index_name);
+      log_exec_error("index not found, ret: %d, name: %s.%s.%s", ret,
+                     schema_name, table_name, index_name);
     } else if ((ret = dataset.init(1, table))) {
-      log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s",
-                     ret, schema_name, table_name);
+      log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s", ret,
+                     schema_name, table_name);
     } else {
       bool found = false;
       SearchKey search_key;
       if (get_plan.keys_size() <= 0) {
         ret = HA_ERR_KEY_NOT_FOUND;
         log_exec_error("should offer at least one key ret: %d, name: %s.%s",
-                        ret, schema_name, table_name);
-      } else if ((ret = create_search_key(get_plan.keys(0), key_meta,
-                                   search_key))) {
-        log_exec_error("create SearchKey failed, ret: %d, name: %s.%s",
                        ret, schema_name, table_name);
+      } else if ((ret = create_search_key(get_plan.keys(0), key_meta,
+                                          search_key))) {
+        log_exec_error("create SearchKey failed, ret: %d, name: %s.%s", ret,
+                       schema_name, table_name);
       } else if (search_key.is_impossible_where()) {
         // Empty dataset
         Protocol protocol(&resultset);
@@ -410,10 +393,9 @@ int Executor::execute_get(const ExecPlan::GetPlan &get_plan,
         }
       } else if ((ret = dataset.project_all())) {
         log_exec_error("DataSet project all failed, ret: %d", ret);
-      } else if ((ret = handler_get(thd, table, key_meta, search_key,
-                                    found))) {
-        log_exec_error("handler_get failed, ret: %d, name: %s.%s",
-                        ret, schema_name, table_name);
+      } else if ((ret = handler_get(thd, table, key_meta, search_key, found))) {
+        log_exec_error("handler_get failed, ret: %d, name: %s.%s", ret,
+                       schema_name, table_name);
       } else {
         // TODO: return error message instead of empty message.
         Protocol protocol(&resultset);
@@ -431,7 +413,7 @@ int Executor::execute_get(const ExecPlan::GetPlan &get_plan,
               } else if (found) {
                 if ((ret = protocol.write_row(dataset))) {
                   log_exec_error("write_row in execute_get failed, ret: %d",
-                                  ret);
+                                 ret);
                   break;
                 }
               } else {
@@ -445,7 +427,6 @@ int Executor::execute_get(const ExecPlan::GetPlan &get_plan,
           protocol.send_and_flush();
         }
       }
-
     }
     if (table) {
       handler_index_end(thd, table);
@@ -464,10 +445,9 @@ int Executor::execute_batch_get(const ExecPlan::GetPlan &batch_get_plan,
 }
 
 int Executor::execute_key_only_scan(
-                          const ExecPlan::KeyOnlyRangeScan &key_scan_plan,
-    polarx_rpc::CcommandDelegate &resultset,
-                          THD *thd) {
-   int ret = HA_EXEC_SUCCESS;
+    const ExecPlan::KeyOnlyRangeScan &key_scan_plan,
+    polarx_rpc::CcommandDelegate &resultset, THD *thd) {
+  int ret = HA_EXEC_SUCCESS;
   // THD *thd = handler_create_thd(false);
   if (!thd) {
     ret = HA_ERR_OUT_OF_MEM;
@@ -512,8 +492,7 @@ int Executor::execute_key_only_scan(
 }
 
 int Executor::execute_scan(const ExecPlan::RangeScan &scan_plan,
-                           polarx_rpc::CcommandDelegate &resultset,
-                           THD *thd) {
+                           polarx_rpc::CcommandDelegate &resultset, THD *thd) {
   int ret = HA_EXEC_SUCCESS;
   // THD *thd = handler_create_thd(false);
   if (!thd) {
@@ -557,8 +536,7 @@ int Executor::execute_scan(const ExecPlan::RangeScan &scan_plan,
 
 int PlanBuilder::create_plan_tree(const ExecPlan::AnyPlan &plan_msg,
                                   polarx_rpc::CcommandDelegate &resultset,
-                                  InternalDataSet &dataset,
-                                  THD *thd,
+                                  InternalDataSet &dataset, THD *thd,
                                   std::unique_ptr<PlanNode> &plan) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<ResponseNode> root_node(new ResponseNode());
@@ -579,10 +557,8 @@ int PlanBuilder::create_plan_tree(const ExecPlan::AnyPlan &plan_msg,
   return ret;
 }
 
-
 int PlanBuilder::create(const ExecPlan::AnyPlan &plan_msg,
-                        InternalDataSet &dataset,
-                        THD *thd,
+                        InternalDataSet &dataset, THD *thd,
                         std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   switch (plan_msg.plan_type()) {
@@ -590,8 +566,8 @@ int PlanBuilder::create(const ExecPlan::AnyPlan &plan_msg,
       ret = create_get_tree(plan_msg.get_plan(), dataset, thd, plan_node);
       break;
     case ExecPlan::AnyPlan::TABLE_SCAN:
-      ret = create_scan_tree(plan_msg.table_scan_plan(),  dataset, thd,
-                             plan_node);
+      ret =
+          create_scan_tree(plan_msg.table_scan_plan(), dataset, thd, plan_node);
       break;
     case ExecPlan::AnyPlan::TABLE_PROJECT:
       ret = create_project_tree(plan_msg.table_project(), dataset, thd,
@@ -616,16 +592,16 @@ int PlanBuilder::create(const ExecPlan::AnyPlan &plan_msg,
 }
 
 int PlanBuilder::create_aggr_tree(const ExecPlan::Aggr &aggr_msg,
-                                     InternalDataSet &dataset,
-                                     THD *thd,
-                                     std::unique_ptr<PlanNode> &plan_node) {
+                                  InternalDataSet &dataset, THD *thd,
+                                  std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<AggrNode> aggr_node(new (std::nothrow) AggrNode());
   const ExecPlan::AnyPlan &sub_read_msg = aggr_msg.sub_read_plan();
   if (!aggr_node) {
     ret = HA_ERR_OUT_OF_MEM;
     log_exec_error("aggr node new failed, ret: %d", ret);
-  } else if ((ret = create(sub_read_msg, dataset, thd, aggr_node->left_tree_))) {
+  } else if ((ret =
+                  create(sub_read_msg, dataset, thd, aggr_node->left_tree_))) {
     log_exec_error("aggr node create sub node failed, ret: %d", ret);
   } else if ((ret = aggr_node->init(aggr_msg, dataset))) {
     log_exec_error("aggr init node failed, ret: %d", ret);
@@ -640,8 +616,7 @@ int PlanBuilder::create_aggr_tree(const ExecPlan::Aggr &aggr_msg,
 }
 
 int PlanBuilder::create_project_tree(const ExecPlan::TableProject &project_msg,
-                                     InternalDataSet &dataset,
-                                     THD *thd,
+                                     InternalDataSet &dataset, THD *thd,
                                      std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<ProjectNode> project_node(new (std::nothrow) ProjectNode());
@@ -649,7 +624,8 @@ int PlanBuilder::create_project_tree(const ExecPlan::TableProject &project_msg,
   if (!project_node) {
     ret = HA_ERR_OUT_OF_MEM;
     log_exec_error("project node new failed, ret: %d", ret);
-  } else if ((ret = create(sub_read_msg, dataset, thd, project_node->left_tree_))) {
+  } else if ((ret = create(sub_read_msg, dataset, thd,
+                           project_node->left_tree_))) {
     log_exec_error("project node create sub node failed, ret: %d", ret);
   } else if ((ret = project_node->init(project_msg, dataset))) {
     log_exec_error("project init node failed, ret: %d", ret);
@@ -665,8 +641,7 @@ int PlanBuilder::create_project_tree(const ExecPlan::TableProject &project_msg,
 }
 
 int PlanBuilder::create_project_tree(const ExecPlan::Project &project_msg,
-                                     InternalDataSet &dataset,
-                                     THD *thd,
+                                     InternalDataSet &dataset, THD *thd,
                                      std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<ProjectNode> project_node(new (std::nothrow) ProjectNode());
@@ -690,8 +665,7 @@ int PlanBuilder::create_project_tree(const ExecPlan::Project &project_msg,
 }
 
 int PlanBuilder::create_filter_tree(const ExecPlan::Filter &filter_msg,
-                                    InternalDataSet &dataset,
-                                    THD *thd,
+                                    InternalDataSet &dataset, THD *thd,
                                     std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<FilterNode> filter_node(new (std::nothrow) FilterNode());
@@ -714,8 +688,7 @@ int PlanBuilder::create_filter_tree(const ExecPlan::Filter &filter_msg,
 }
 
 int PlanBuilder::create_get_tree(const ExecPlan::GetPlan &get_msg,
-                                 InternalDataSet &dataset,
-                                 THD *thd,
+                                 InternalDataSet &dataset, THD *thd,
                                  std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<GetNode> get_node(new (std::nothrow) GetNode());
@@ -734,8 +707,7 @@ int PlanBuilder::create_get_tree(const ExecPlan::GetPlan &get_msg,
 }
 
 int PlanBuilder::create_scan_tree(const ExecPlan::RangeScan &scan_msg,
-                                  InternalDataSet &dataset,
-                                  THD *thd,
+                                  InternalDataSet &dataset, THD *thd,
                                   std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<ScanNode> scan_node(new ScanNode());
@@ -754,8 +726,7 @@ int PlanBuilder::create_scan_tree(const ExecPlan::RangeScan &scan_msg,
 }
 
 int PlanBuilder::create_scan_tree(const ExecPlan::TableScanPlan &scan_msg,
-                                  InternalDataSet &dataset,
-                                  THD *thd,
+                                  InternalDataSet &dataset, THD *thd,
                                   std::unique_ptr<PlanNode> &plan_node) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<TableScanNode> scan_node(new TableScanNode());
@@ -823,8 +794,8 @@ int ProjectNode::init(const ExecPlan::TableProject &project_msg,
   for (int32_t i = 0; i < project_field_count; ++i) {
     ExprItem *item = nullptr;
     const char *field_name = nullptr;
-    if ((ret = expr_parser.parse_field(project_msg.fields(i), dataset,
-                                       item, field_name))) {
+    if ((ret = expr_parser.parse_field(project_msg.fields(i), dataset, item,
+                                       field_name))) {
       log_exec_error("ExprParser parse field failed, ret: %d", ret);
       break;
     }
@@ -838,7 +809,7 @@ int ProjectNode::init(const ExecPlan::TableProject &project_msg,
 }
 
 int ProjectNode::init(const ExecPlan::Project &project_msg,
-                          InternalDataSet &dataset) {
+                      InternalDataSet &dataset) {
   int ret = HA_EXEC_SUCCESS;
   int32_t project_expr_count = project_msg.exprs_size();
   int32_t project_name_count = project_msg.fields_size();
@@ -868,9 +839,7 @@ int ProjectNode::next(InternalDataSet &dataset) {
   return left_tree_->next(dataset);
 }
 
-int ProjectNode::finish(int error) {
-  return left_tree_->finish(error);
-}
+int ProjectNode::finish(int error) { return left_tree_->finish(error); }
 
 bool AggrNode::is_type_valid(PolarXRPC::ExecPlan::Aggr::AggrType type) {
   bool ret = true;
@@ -884,15 +853,17 @@ bool AggrNode::is_type_valid(PolarXRPC::ExecPlan::Aggr::AggrType type) {
   return ret;
 }
 
-int AggrNode::init(const PolarXRPC::ExecPlan::Aggr &aggr_msg, InternalDataSet &dataset) {
+int AggrNode::init(const PolarXRPC::ExecPlan::Aggr &aggr_msg,
+                   InternalDataSet &dataset) {
   int ret = HA_EXEC_SUCCESS;
 
   auto &expr_parser = ExprParser::instance();
-  ExprItem *item = nullptr; //now memory allocated and deallocated by expr_parser.
+  ExprItem *item =
+      nullptr;  // now memory allocated and deallocated by expr_parser.
 
   type_ = aggr_msg.type();
   if (!is_type_valid(type_)) {
-    ret = HA_EXEC_FAILURE; 
+    ret = HA_EXEC_FAILURE;
     log_exec_error("aggregation type is invalid");
   } else if ((ret = expr_parser.parse(aggr_msg.expr(), dataset, item))) {
     log_exec_error("ExprParser parse filter expr failed, ret: %d", ret);
@@ -906,7 +877,8 @@ int AggrNode::init(const PolarXRPC::ExecPlan::Aggr &aggr_msg, InternalDataSet &d
   return ret;
 }
 
-int AggrNode::init_aggr_expr(PolarXRPC::ExecPlan::Aggr::AggrType type, ExprItem *item) {
+int AggrNode::init_aggr_expr(PolarXRPC::ExecPlan::Aggr::AggrType type,
+                             ExprItem *item) {
 #ifdef MYSQL8
   return HA_EXEC_FAILURE;
 #else
@@ -914,38 +886,32 @@ int AggrNode::init_aggr_expr(PolarXRPC::ExecPlan::Aggr::AggrType type, ExprItem 
 
   assert(item != nullptr);
 
-  /* 
-     Item override operate new, all memory comes from mem_root, 
+  /*
+     Item override operate new, all memory comes from mem_root,
      add free at ~InternalDataSet.
   */
-  switch(type) {
-    case PolarXRPC::ExecPlan::Aggr::COUNT_FUNC:
-    {
+  switch (type) {
+    case PolarXRPC::ExecPlan::Aggr::COUNT_FUNC: {
       aggr_expr_ = new Item_sum_count(pos_, item);
       break;
     }
-    case PolarXRPC::ExecPlan::Aggr::SUM_FUNC:
-    {
+    case PolarXRPC::ExecPlan::Aggr::SUM_FUNC: {
       aggr_expr_ = new Item_sum_sum(pos_, item, false);
       break;
     }
-    case PolarXRPC::ExecPlan::Aggr::AVG_FUNC:
-    {
+    case PolarXRPC::ExecPlan::Aggr::AVG_FUNC: {
       aggr_expr_ = new Item_sum_avg(pos_, item, false);
       break;
     }
-    case PolarXRPC::ExecPlan::Aggr::MIN_FUNC:
-    {
+    case PolarXRPC::ExecPlan::Aggr::MIN_FUNC: {
       aggr_expr_ = new Item_sum_min(pos_, item);
       break;
     }
-    case PolarXRPC::ExecPlan::Aggr::MAX_FUNC:
-    {
+    case PolarXRPC::ExecPlan::Aggr::MAX_FUNC: {
       aggr_expr_ = new Item_sum_max(pos_, item);
       break;
     }
-    default:
-    {
+    default: {
       log_exec_error("unsupported aggr functions");
       ret = HA_EXEC_FAILURE;
     }
@@ -959,8 +925,7 @@ int AggrNode::init_aggr_expr(PolarXRPC::ExecPlan::Aggr::AggrType type, ExprItem 
 #endif
 }
 
-int AggrNode::next(InternalDataSet &dataset)
-{
+int AggrNode::next(InternalDataSet &dataset) {
   int ret = HA_EXEC_SUCCESS;
 
   if ((ret = left_tree_->next(dataset))) {
@@ -994,13 +959,10 @@ int AggrNode::calculate(InternalDataSet &dataset) {
   return ret;
 }
 
-int AggrNode::finish(int error) {
-  return left_tree_->finish(error);
-}
-
+int AggrNode::finish(int error) { return left_tree_->finish(error); }
 
 int FilterNode::init(const ExecPlan::Filter &filter_msg,
-                          InternalDataSet &dataset) {
+                     InternalDataSet &dataset) {
   int ret = HA_EXEC_SUCCESS;
   auto &expr_parser = ExprParser::instance();
   if ((ret = expr_parser.parse(filter_msg.expr(), dataset, condition_expr_))) {
@@ -1026,12 +988,9 @@ int FilterNode::next(InternalDataSet &dataset) {
   return ret;
 }
 
-int FilterNode::finish(int error) {
-  return left_tree_->finish(error);
-}
+int FilterNode::finish(int error) { return left_tree_->finish(error); }
 
-int GetNode::init(const ExecPlan::GetPlan &get_msg,
-                  InternalDataSet &dataset,
+int GetNode::init(const ExecPlan::GetPlan &get_msg, InternalDataSet &dataset,
                   THD *thd) {
   DEBUG_PRINT_PLAN(get_msg);
   int ret = HA_EXEC_SUCCESS;
@@ -1044,22 +1003,22 @@ int GetNode::init(const ExecPlan::GetPlan &get_msg,
   const char *index_name = parse_index_name(get_msg);
   if ((table_status_ = ret = handler_open_table(thd_, schema_name, table_name,
                                                 HDL_READ, table_))) {
-    log_exec_error("handler_open_table failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_open_table failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   } else if (!(handler_lock_table(thd_, table_, TL_READ))) {
     ret = HA_ERR_INTERNAL_ERROR;
-    log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("handler_lock_table failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   } else if ((ret = table_->get_key(index_name, key_meta_))) {
-    log_exec_error("index not found, ret: %d, name: %s.%s.%s",
-                   ret, schema_name, table_name, index_name);
+    log_exec_error("index not found, ret: %d, name: %s.%s.%s", ret, schema_name,
+                   table_name, index_name);
   } else if ((ret = dataset.init(1, table_))) {
-    log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s",
-                   ret, schema_name, table_name);
-  } else if ((ret = create_search_key(get_msg.keys(0), key_meta_,
-                                      search_key_))) {
-    log_exec_error("create SearchKey failed, ret: %d, name: %s.%s",
-                   ret, schema_name, table_name);
+    log_exec_error("InternalDataSet init failed, ret: %d, name %s.%s", ret,
+                   schema_name, table_name);
+  } else if ((ret =
+                  create_search_key(get_msg.keys(0), key_meta_, search_key_))) {
+    log_exec_error("create SearchKey failed, ret: %d, name: %s.%s", ret,
+                   schema_name, table_name);
   }
   return ret;
 }
@@ -1089,8 +1048,8 @@ int GetNode::next(InternalDataSet &dataset) {
     ret = handler_next_same(thd_, table_, search_key_, found);
   }
   if (ret) {
-    log_exec_error("handler_get failed, ret: %d, name: %s.%s",
-                   ret, schema_name_ptr_.get(), table_name_ptr_.get());
+    log_exec_error("handler_get failed, ret: %d, name: %s.%s", ret,
+                   schema_name_ptr_.get(), table_name_ptr_.get());
   }
   if (found) {
     dataset.set_found();
@@ -1107,4 +1066,4 @@ int GetNode::finish(int error) {
   return ret;
 }
 
-} // namespace executor
+}  // namespace rpc_executor

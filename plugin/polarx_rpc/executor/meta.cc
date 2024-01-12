@@ -3,19 +3,17 @@
 #ifndef MYSQL8
 #define MYSQL_SERVER
 #endif
-#include "sql/key.h"
 #include "sql/field.h"
+#include "sql/key.h"
 
-#include "meta.h"
 #include "log.h"
+#include "meta.h"
 
 using namespace PolarXRPC;
 
 namespace rpc_executor {
 
-
-int SearchKey::store_to_buffer(ExecKeyMeta *exec_key,
-                               const ExecKeyMap &expr) {
+int SearchKey::store_to_buffer(ExecKeyMeta *exec_key, const ExecKeyMap &expr) {
   int ret = HA_EXEC_SUCCESS;
   KEY *key_info = exec_key->key();
   KeyPartMap current_bit = 1;
@@ -27,10 +25,9 @@ int SearchKey::store_to_buffer(ExecKeyMeta *exec_key,
   key_buffer_.reset(new uchar[key_info->key_length]);
   if (!key_buffer_) {
     ret = HA_ERR_OUT_OF_MEM;
-    log_exec_error("new key buffer failed, ret: %d, key_length: %u",
-                   ret, key_info->key_length);
+    log_exec_error("new key buffer failed, ret: %d, key_length: %u", ret,
+                   key_info->key_length);
   } else {
-
     // search_key -> key_info -> my_table->record[0]
     int prefix_flag = 1;
     for (uint32_t i = 0; i < key_info->user_defined_key_parts; ++i) {
@@ -45,9 +42,10 @@ int SearchKey::store_to_buffer(ExecKeyMeta *exec_key,
           prefix_flag = 0;
           ret = HA_EXEC_SUCCESS;
         } else {
-          log_exec_error("unexpected error occurd when getting field from "
-                         "search_key, ret: %d, field: %s",
-                         ret, field->field_name);
+          log_exec_error(
+              "unexpected error occurd when getting field from "
+              "search_key, ret: %d, field: %s",
+              ret, field->field_name);
         }
       } else {
         if (prefix_flag == 0) {
@@ -93,9 +91,7 @@ int SearchKey::store_to_buffer(ExecKeyMeta *exec_key,
             break;
           case DataRep::STRING:
             field->set_notnull();
-            field->store(data.v_string_->data(),
-                         data.size_,
-                         field->charset());
+            field->store(data.v_string_->data(), data.size_, field->charset());
             break;
           default:
             ret = HA_ERR_UNSUPPORTED;
@@ -113,10 +109,10 @@ int SearchKey::store_to_buffer(ExecKeyMeta *exec_key,
     // my_table->record[0] -> key_buffer
     key_copy(key_buffer_.get(), key_info->table->record[0], key_info,
              used_length_);
-    using_full_key_ = (((KeyPartMap)1 << key_info->actual_key_parts) - 1) ==
-                      used_part_map_;
+    using_full_key_ =
+        (((KeyPartMap)1 << key_info->actual_key_parts) - 1) == used_part_map_;
   }
 
   return ret;
 }
-} // namespace executor
+}  // namespace rpc_executor

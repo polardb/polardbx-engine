@@ -5,25 +5,25 @@
 #include "../global_defines.h"
 
 #ifdef MYSQL8
-#  include "sql/current_thd.h"
+#include "sql/current_thd.h"
 #else
 #define MYSQL_SERVER
 #endif
-#include "sql/sql_class.h"
-#include "sql/my_decimal.h"
-#include "sql/item_func.h"
 #include "sql/item_cmpfunc.h"
+#include "sql/item_func.h"
+#include "sql/my_decimal.h"
+#include "sql/sql_class.h"
 
-#include "expr.h"
-#include "parse.h"
 #include "bloomfilter.h"
+#include "expr.h"
 #include "log.h"
+#include "parse.h"
 
 namespace rpc_executor {
 
 template <class ITEM>
 class Op1Factory {
-public:
+ public:
   static ITEM *create(ExprItem *param) {
     ITEM *item_op = new ITEM(param);
 #ifdef MYSQL8
@@ -39,7 +39,7 @@ public:
 
 template <class ITEM>
 class Op2Factory {
-public:
+ public:
   static ITEM *create(ExprItem *lhs, ExprItem *rhs) {
     ITEM *item_op = new ITEM(lhs, rhs);
 #ifdef MYSQL8
@@ -55,7 +55,7 @@ public:
 
 template <>
 class Op2Factory<Item_func_div> {
-public:
+ public:
   static Item_func_div *create(ExprItem *lhs, ExprItem *rhs) {
     POS pos;
     Item_func_div *item_op = new Item_func_div(pos, lhs, rhs);
@@ -72,7 +72,7 @@ public:
 
 template <>
 class Op2Factory<Item_func_isnull> {
-public:
+ public:
   static Item_func_isnull *create(ExprItem *lhs, ExprItem *rhs) {
     if (rhs->type() != ExprItem::NULL_ITEM) {
       log_exec_error("operator is_null takes a not null value as 2nd param");
@@ -92,7 +92,7 @@ public:
 
 template <>
 class Op2Factory<Item_func_isnotnull> {
-public:
+ public:
   static Item_func_isnotnull *create(ExprItem *lhs, ExprItem *rhs) {
     if (rhs->type() != ExprItem::NULL_ITEM) {
       log_exec_error("operator not_null takes a not null value as 2nd param");
@@ -116,8 +116,7 @@ ExprParser &ExprParser::instance() {
 }
 
 int ExprParser::parse(const ::PolarXRPC::Expr::Expr &arg,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   THD *thd = current_thd;
 
@@ -173,52 +172,54 @@ int ExprParser::parse(const ::PolarXRPC::Expr::Expr &arg,
 }
 
 int ExprParser::parse(const ::PolarXRPC::Expr::Operator &op,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
-  static std::unordered_map<std::string, std::function<ExprItem*(ExprItem*,ExprItem*)>> op2_map = {
-    {"+", Op2Factory<Item_func_plus>::create},
-    {"-", Op2Factory<Item_func_minus>::create},
-    {"*", Op2Factory<Item_func_mul>::create},
-    {"/", Op2Factory<Item_func_div>::create},
+  static std::unordered_map<std::string,
+                            std::function<ExprItem *(ExprItem *, ExprItem *)>>
+      op2_map = {{"+", Op2Factory<Item_func_plus>::create},
+                 {"-", Op2Factory<Item_func_minus>::create},
+                 {"*", Op2Factory<Item_func_mul>::create},
+                 {"/", Op2Factory<Item_func_div>::create},
 #ifdef MYSQL8PLUS
-    {"div", Op2Factory<Item_func_div_int>::create},
+                 {"div", Op2Factory<Item_func_div_int>::create},
 #else
-    {"div", Op2Factory<Item_func_int_div>::create},
+                 {"div", Op2Factory<Item_func_int_div>::create},
 #endif
-    {"%", Op2Factory<Item_func_mod>::create},
-    {">", Op2Factory<Item_func_gt>::create},
-    {">=", Op2Factory<Item_func_ge>::create},
-    {"<", Op2Factory<Item_func_lt>::create},
-    {"<=", Op2Factory<Item_func_le>::create},
-    {"==", Op2Factory<Item_func_eq>::create},
-    {"<=>", Op2Factory<Item_func_equal>::create},
-    {"!=", Op2Factory<Item_func_ne>::create},
-    {"&&", Op2Factory<Item_cond_and>::create},
-    {"||", Op2Factory<Item_cond_or>::create},
-    {"is", Op2Factory<Item_func_isnull>::create},
-    {"is_not", Op2Factory<Item_func_isnotnull>::create}
-  };
+                 {"%", Op2Factory<Item_func_mod>::create},
+                 {">", Op2Factory<Item_func_gt>::create},
+                 {">=", Op2Factory<Item_func_ge>::create},
+                 {"<", Op2Factory<Item_func_lt>::create},
+                 {"<=", Op2Factory<Item_func_le>::create},
+                 {"==", Op2Factory<Item_func_eq>::create},
+                 {"<=>", Op2Factory<Item_func_equal>::create},
+                 {"!=", Op2Factory<Item_func_ne>::create},
+                 {"&&", Op2Factory<Item_cond_and>::create},
+                 {"||", Op2Factory<Item_cond_or>::create},
+                 {"is", Op2Factory<Item_func_isnull>::create},
+                 {"is_not", Op2Factory<Item_func_isnotnull>::create}};
 
-  static std::unordered_map<std::string, std::function<ExprItem*(ExprItem*)>> op1_map = {
-    {"!", Op1Factory<Item_func_not>::create}
-  };
+  static std::unordered_map<std::string, std::function<ExprItem *(ExprItem *)>>
+      op1_map = {{"!", Op1Factory<Item_func_not>::create}};
 
   if (op.param_size() == 2) {
     const auto &iter = op2_map.find(op.name());
     if (op2_map.end() == iter) {
       ret = HA_ERR_UNSUPPORTED;
       log_exec_error("Expr parse, operator type not support %s",
-                    op.name().data());
+                     op.name().data());
     } else {
       ExprItem *lhs = nullptr;
       ExprItem *rhs = nullptr;
       if ((ret = parse(op.param(0), dataset, lhs))) {
-        log_exec_error("Expr parse left op of 2op failed, "
-                      "ret: %d", ret);
+        log_exec_error(
+            "Expr parse left op of 2op failed, "
+            "ret: %d",
+            ret);
       } else if ((ret = parse(op.param(1), dataset, rhs))) {
-        log_exec_error("Expr parse right op of 2op failed, "
-                      "ret: %d", ret);
+        log_exec_error(
+            "Expr parse right op of 2op failed, "
+            "ret: %d",
+            ret);
       } else {
         auto *item_op = (iter->second)(lhs, rhs);
         if (!item_op) {
@@ -229,17 +230,19 @@ int ExprParser::parse(const ::PolarXRPC::Expr::Operator &op,
         }
       }
     }
-  } else if (op.param_size() == 1)  {
+  } else if (op.param_size() == 1) {
     const auto &iter = op1_map.find(op.name());
     if (op1_map.end() == iter) {
       ret = HA_ERR_UNSUPPORTED;
       log_exec_error("Expr parse, operator type not support %s",
-                    op.name().data());
+                     op.name().data());
     } else {
       ExprItem *param = nullptr;
       if ((ret = parse(op.param(0), dataset, param))) {
-        log_exec_error("Expr parse op of 1op failed, "
-                      "ret: %d", ret);
+        log_exec_error(
+            "Expr parse op of 1op failed, "
+            "ret: %d",
+            ret);
       } else {
         auto *item_op = (iter->second)(param);
 
@@ -258,19 +261,25 @@ int ExprParser::parse(const ::PolarXRPC::Expr::Operator &op,
       ExprItem *last_item = nullptr;
       int last_param_idx = op.param_size() - 1;
       if ((ret = parse(op.param(last_param_idx), dataset, last_item))) {
-        log_exec_error("Expr parse last(%d) param failed, "
-                       "ret: %d", last_param_idx, ret);
+        log_exec_error(
+            "Expr parse last(%d) param failed, "
+            "ret: %d",
+            last_param_idx, ret);
       } else {
         for (int param_idx = last_param_idx - 1; param_idx >= 0; --param_idx) {
           ExprItem *another_item = nullptr;
           if ((ret = parse(op.param(param_idx), dataset, another_item))) {
-            log_exec_error("Expr parse %d param failed, "
-                           "ret: %d", param_idx, ret);
+            log_exec_error(
+                "Expr parse %d param failed, "
+                "ret: %d",
+                param_idx, ret);
           } else {
             last_item = (iter->second)(another_item, last_item);
             if (!last_item) {
-              log_exec_error("Expr parse generate op item failed, "
-                            "param_idx: %d, ret: %d", param_idx, ret);
+              log_exec_error(
+                  "Expr parse generate op item failed, "
+                  "param_idx: %d, ret: %d",
+                  param_idx, ret);
               ret = HA_ERR_OUT_OF_MEM;
               break;
             } else {
@@ -285,15 +294,14 @@ int ExprParser::parse(const ::PolarXRPC::Expr::Operator &op,
     } else {
       ret = HA_ERR_UNSUPPORTED;
       log_exec_error("Expr parse, operator count not support %s, %d",
-                      op.name().data(), op.param_size());
+                     op.name().data(), op.param_size());
     }
   }
   return ret;
 }
 
 int ExprParser::parse(const ::PolarXRPC::Datatypes::Scalar &literal,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   ::PolarXRPC::Datatypes::Scalar_Type type = literal.type();
   my_decimal decimal_value;
@@ -348,23 +356,20 @@ int ExprParser::parse(const ::PolarXRPC::Datatypes::Scalar &literal,
 }
 
 int ExprParser::parse(const ::PolarXRPC::Expr::Identifier &arg,
-                      InternalDataSet &dataset,
-                      ExprItem *&item,
+                      InternalDataSet &dataset, ExprItem *&item,
                       const bool is_function) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
 int ExprParser::parse(const ::PolarXRPC::Expr::ColumnIdentifier &arg,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
 int ExprParser::parse(const ::PolarXRPC::Expr::FunctionCall &func,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   const std::string &func_name = func.name().name();
   if (func_name != "bloomfilter") {
@@ -372,11 +377,13 @@ int ExprParser::parse(const ::PolarXRPC::Expr::FunctionCall &func,
     ret = HA_ERR_UNSUPPORTED;
     return ret;
   }
-  std::vector<ExprItem*> params(func.param_size(), nullptr);
+  std::vector<ExprItem *> params(func.param_size(), nullptr);
   for (int32_t i = 0; i < func.param_size(); ++i) {
     if ((ret = parse(func.param(i), dataset, params[i]))) {
-      log_exec_error("ExprParser parse FunctionCall.param failed, "
-                     "ret: %d, idx: %d", ret, i);
+      log_exec_error(
+          "ExprParser parse FunctionCall.param failed, "
+          "ret: %d, idx: %d",
+          ret, i);
       break;
     }
   }
@@ -403,18 +410,15 @@ int ExprParser::parse(const ::PolarXRPC::Expr::FunctionCall &func,
   return ret;
 }
 int ExprParser::parse(const ::PolarXRPC::Datatypes::Any &arg,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
 int ExprParser::parse(const ::PolarXRPC::Datatypes::Scalar::Octets &octets,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
-  item = new ::Item_string(octets.value().data(),
-                           octets.value().size(),
+  item = new ::Item_string(octets.value().data(), octets.value().size(),
                            &my_charset_bin);
   dataset.defer_delete_item(item);
   return ret;
@@ -425,22 +429,19 @@ int ExprParser::parse_placeholder(const Placeholder &arg_pos,
   return parse(tls_params->Get(arg_pos), dataset, item);
 }
 int ExprParser::parse(const ::PolarXRPC::Expr::Object &arg,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
 int ExprParser::parse(const ::PolarXRPC::Expr::Object::ObjectField &arg,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
 }
 int ExprParser::parse(const ::PolarXRPC::Expr::Array &arg,
-                      InternalDataSet &dataset,
-                      ExprItem *&item) const {
+                      InternalDataSet &dataset, ExprItem *&item) const {
   int ret = HA_EXEC_SUCCESS;
   abort();
   return ret;
@@ -454,9 +455,10 @@ int ExprParser::parse_fieldref(const FieldIndex &index,
     ProjectInfo &items = dataset.get_project_exprs();
     if (index >= items.size()) {
       ret = HA_ERR_TOO_MANY_FIELDS;
-      log_exec_error("Expr parse REF, "
-                     "field index > project expr size %u >= %lu",
-                     index, items.size());
+      log_exec_error(
+          "Expr parse REF, "
+          "field index > project expr size %u >= %lu",
+          index, items.size());
     } else {
       item = items[index].second;
     }
@@ -480,8 +482,7 @@ int ExprParser::parse_fieldref(const FieldIndex &index,
 }
 
 int ExprParser::parse_field(const ::PolarXRPC::Datatypes::Scalar &field_mark,
-                            InternalDataSet &dataset,
-                            ExprItem *&item,
+                            InternalDataSet &dataset, ExprItem *&item,
                             const char *&field_name) const {
   int ret = HA_EXEC_SUCCESS;
   const ::PolarXRPC::Datatypes::Scalar &real_field = real(field_mark);
@@ -489,16 +490,18 @@ int ExprParser::parse_field(const ::PolarXRPC::Datatypes::Scalar &field_mark,
   if (real_field.type() == ::PolarXRPC::Datatypes::Scalar::V_UINT) {
     uint64_t field_index = real_field.v_unsigned_int();
     if ((ret = dataset.get_field(field_index, field))) {
-      log_exec_error("ExprParse can not parse field, "
-                     "field_index: %lu, ret: %d",
-                     field_index, ret);
+      log_exec_error(
+          "ExprParse can not parse field, "
+          "field_index: %lu, ret: %d",
+          field_index, ret);
     }
   } else {
     const std::string &target_field_name = real_field.v_string().value();
     if ((ret = dataset.get_field(&target_field_name, field))) {
-      log_exec_error("ExprParse can not parse field, "
-                     "field_name: %s, ret: %d",
-                     target_field_name.data(), ret);
+      log_exec_error(
+          "ExprParse can not parse field, "
+          "field_name: %s, ret: %d",
+          target_field_name.data(), ret);
     }
   }
 
@@ -514,4 +517,4 @@ int ExprParser::parse_field(const ::PolarXRPC::Datatypes::Scalar &field_mark,
   return ret;
 }
 
-} // namespace executor
+}  // namespace rpc_executor

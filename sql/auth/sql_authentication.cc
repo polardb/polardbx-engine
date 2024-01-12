@@ -2245,16 +2245,16 @@ static bool read_client_connect_attrs(THD *thd, char **ptr,
 
   /* impose an artificial length limit of 64k */
   if (length > 65535) return true;
-  
+
   // parse endpoint
   {
     uchar *attributes = (uchar *)*ptr;
     const uchar *save = attributes;
 
     while ((size_t)(attributes - save) < length) {
-      size_t key_length = net_field_length((uchar**)&attributes);
+      size_t key_length = net_field_length((uchar **)&attributes);
       const uchar *key = attributes;
-      
+
       if ((size_t)(key - save + key_length) > length) break;
       attributes += key_length;
 
@@ -2265,7 +2265,7 @@ static bool read_client_connect_attrs(THD *thd, char **ptr,
       attributes += val_length;
 
       if (key_length == 12 && memcmp(key, "_endpoint_ip", key_length) == 0) {
-        thd->set_client_endpoint_ip((char*)val, val_length);
+        thd->set_client_endpoint_ip((char *)val, val_length);
         break;
       }
     }
@@ -4198,16 +4198,18 @@ int acl_authenticate(THD *thd, enum_server_command command) {
     if (command == COM_CONNECT) {
       if (im::internal_account_adjust_connection(thd, command)) {
         release_user_connection(thd);
-        my_error(ER_IA_TOO_MANY_CONNECTIONS, MYF(0), sctx->priv_user().str,
-                im::Internal_account_config::str(sctx->account_attr.get_type()));
+        my_error(
+            ER_IA_TOO_MANY_CONNECTIONS, MYF(0), sctx->priv_user().str,
+            im::Internal_account_config::str(sctx->account_attr.get_type()));
         return 1;
       }
     } else {
       assert(command == COM_CHANGE_USER);
       if (im::internal_account_change_connection(thd, command)) {
         release_user_connection(thd);
-        my_error(ER_IA_TOO_MANY_CONNECTIONS, MYF(0), sctx->priv_user().str,
-                im::Internal_account_config::str(sctx->account_attr.get_type()));
+        my_error(
+            ER_IA_TOO_MANY_CONNECTIONS, MYF(0), sctx->priv_user().str,
+            im::Internal_account_config::str(sctx->account_attr.get_type()));
         return 1;
       }
     }
@@ -4217,7 +4219,7 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       my_error(ER_CON_COUNT_ERROR, MYF(0));
       return 1;
     }
-    
+
     /*
       This is the default access rights for the current database.  It's
       set to 0 here because we don't have an active database yet (and we

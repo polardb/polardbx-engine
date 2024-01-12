@@ -181,7 +181,7 @@ class Connection_handler_manager {
     Get the connection count.
   */
   static uint get_connection_count();
-  
+
   /**
     Reset the max_used_connections counter to the number of current
     connections.
@@ -198,8 +198,7 @@ class Connection_handler_manager {
     /*
       Notify shutdown thread when last connection is done with its job
     */
-    if (connection_count == 0)
-      mysql_cond_signal(&COND_connection_count);
+    if (connection_count == 0) mysql_cond_signal(&COND_connection_count);
     mysql_mutex_unlock(&LOCK_connection_count);
   }
 

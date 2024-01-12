@@ -23,10 +23,10 @@
 #ifndef XA_RECOVERY_H_INCLUDED
 #define XA_RECOVERY_H_INCLUDED
 
-#include "sql/handler.h"    // XA_recover_txn
+#include "sql/handler.h"  // XA_recover_txn
+#include "sql/lizard0handler.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/xa.h"         // Xid_commit_list, Xa_state_list, XID, ...
-#include "sql/lizard0handler.h"	
 
 struct xarecover_st {
   int len, found_foreign_xids, found_my_xids;

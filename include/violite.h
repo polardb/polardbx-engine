@@ -56,7 +56,7 @@ struct Vio;
 #endif
 
 #if defined(__linux__)
-# include <linux/version.h>
+#include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
 #ifdef USE_PPOLL_IN_VIO
 #undef USE_PPOLL_IN_VIO

@@ -249,7 +249,7 @@ bool XRow_impl::get_set(const int32_t field_index,
 }
 
 bool XRow_impl::get_set(const int32_t field_index,
-             std::list<std::string> *out_data) const {
+                        std::list<std::string> *out_data) const {
   if (m_metadata->empty()) return false;
   if (Column_type::SET != (*m_metadata)[field_index].type) return false;
 

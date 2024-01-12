@@ -24,7 +24,7 @@
 
 #include <algorithm>
 
-#include "my_sys.h" // escape_string_for_mysql
+#include "my_sys.h"  // escape_string_for_mysql
 
 #include "../utility/error.h"
 
@@ -42,17 +42,18 @@ enum Block_enum {
 };
 
 class Sql_search_tags {
-public:
+ public:
   Sql_search_tags()
-      : m_state(Block_none), m_matching_chars_comment(0),
-        m_matching_chars_line_comment1(0), m_matching_chars_line_comment2(0),
+      : m_state(Block_none),
+        m_matching_chars_comment(0),
+        m_matching_chars_line_comment1(0),
+        m_matching_chars_line_comment2(0),
         m_escape_chars(0) {}
 
   bool should_ignore_block(const char character, const Block_enum try_block,
                            const char character_begin, const char character_end,
                            bool escape = false) {
-    if (m_state != try_block && m_state != Block_none)
-      return false;
+    if (m_state != try_block && m_state != Block_none) return false;
 
     if (m_state == Block_none) {
       if (character_begin == character) {
@@ -114,8 +115,7 @@ public:
       const char character, const Block_enum try_block_state,
       uint8_t &matching_chars, const char (&block_begin)[block_begin_length],
       const char (&block_end)[block_end_length]) {
-    if (m_state != try_block_state && m_state != Block_none)
-      return false;
+    if (m_state != try_block_state && m_state != Block_none) return false;
 
     if (m_state == Block_none) {
       return if_matching_switch_state(character, try_block_state,
@@ -140,8 +140,7 @@ public:
                             escape_sequence))
       return true;
 
-    if (should_ignore_block(character, Block_identifier, '`', '`'))
-      return true;
+    if (should_ignore_block(character, Block_identifier, '`', '`')) return true;
 
     if (should_ignore_block_multichar(character, Block_comment,
                                       m_matching_chars_comment, "/*", "*/"))
@@ -161,13 +160,12 @@ public:
   }
 
   bool operator()(const char query_character) {
-    if (should_be_ignored(query_character))
-      return false;
+    if (should_be_ignored(query_character)) return false;
 
     return query_character == '?';
   }
 
-private:
+ private:
   Block_enum m_state;
   uint8_t m_matching_chars_comment;
   uint8_t m_matching_chars_line_comment1;
@@ -176,7 +174,8 @@ private:
 };
 
 Query_formatter::Query_formatter(std::string &query)
-    : m_query(query), m_charset(&my_charset_utf8mb4_general_ci),
+    : m_query(query),
+      m_charset(&my_charset_utf8mb4_general_ci),
       m_last_tag_position(0) {}
 
 Query_formatter &Query_formatter::operator%(const char *value) {
@@ -187,8 +186,8 @@ Query_formatter &Query_formatter::operator%(const char *value) {
   return *this;
 }
 
-Query_formatter &
-Query_formatter::operator%(const No_escape<const char *> &value) {
+Query_formatter &Query_formatter::operator%(
+    const No_escape<const char *> &value) {
   validate_next_tag();
 
   put_value(value.m_value, strlen(value.m_value));
@@ -204,8 +203,8 @@ Query_formatter &Query_formatter::operator%(const std::string &value) {
   return *this;
 }
 
-Query_formatter &
-Query_formatter::operator%(const No_escape<std::string> &value) {
+Query_formatter &Query_formatter::operator%(
+    const No_escape<std::string> &value) {
   validate_next_tag();
 
   put_value(value.m_value.c_str(), value.m_value.length());
@@ -244,7 +243,7 @@ void Query_formatter::put_value(const char *value, std::size_t length) {
 
   // Concat value.
   reserve_buf(length).append(value, length);
-  m_prev_start_position = ++m_last_tag_position; // Jump to next.
+  m_prev_start_position = ++m_last_tag_position;  // Jump to next.
 }
 
 std::size_t Query_formatter::count_tags() const {
@@ -292,4 +291,4 @@ Query_formatter &Query_formatter::operator%(const RawString &raw_string) {
   return *this;
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

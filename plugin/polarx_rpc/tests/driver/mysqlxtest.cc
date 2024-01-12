@@ -38,8 +38,8 @@
 static void ignore_traces_from_libraries(enum loglevel ll, uint ecode,
                                          va_list args) {}
 #else
-static void ignore_traces_from_libraries(enum loglevel ll,
-                                         const char *format, va_list args) {}
+static void ignore_traces_from_libraries(enum loglevel ll, const char *format,
+                                         va_list args) {}
 #endif
 
 bool parse_mysql_connstring(const std::string &connstring,

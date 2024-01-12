@@ -36,16 +36,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <vector>
 
-#include "sql_string.h"
 #include "libbinlogevents/include/binlog_event.h"
+#include "sql_string.h"
 
 class Binlog_sender;
 
 namespace lizard {
 class Delay_binlog_sender {
  public:
-  Delay_binlog_sender(Binlog_sender *target)
-      : m_target(target), m_events() {}
+  Delay_binlog_sender(Binlog_sender *target) : m_target(target), m_events() {}
 
   void push_event(String &_packet, const char *_log_file, my_off_t _log_pos,
                   bool _in_exclude_group,
@@ -112,4 +111,4 @@ class Delay_binlog_sender {
 
 }  // namespace lizard
 
-#endif // DEFINED_LIZARD_RPL_BINLOG_SENDER
+#endif  // DEFINED_LIZARD_RPL_BINLOG_SENDER

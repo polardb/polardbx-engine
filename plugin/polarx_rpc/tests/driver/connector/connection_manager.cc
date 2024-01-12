@@ -260,40 +260,39 @@ void Connection_manager::close_active(const bool shutdown,
         m_console.print("closing session ", m_active_session_name, "\n");
 
       if (active_xconnection()->state().is_connected()) {
-/* no close needed
-        // send a close message and wait for the corresponding Ok message
-        active_xprotocol()->send(PolarXRPC::Connection::Close());
-        xcl::XProtocol::Server_message_type_id msgid;
-        xcl::XError error;
-        Message_ptr msg{
-            active_xprotocol()->recv_single_message(&msgid, &error)};
+        /* no close needed
+                // send a close message and wait for the corresponding Ok
+           message active_xprotocol()->send(PolarXRPC::Connection::Close());
+                xcl::XProtocol::Server_message_type_id msgid;
+                xcl::XError error;
+                Message_ptr msg{
+                    active_xprotocol()->recv_single_message(&msgid, &error)};
 
-        if (error) throw error;
+                if (error) throw error;
 
-        if (!be_quiet) m_console.print(*msg);
-        if (PolarXRPC::ServerMessages::OK != msgid)
-          throw xcl::XError(CR_COMMANDS_OUT_OF_SYNC,
-                            "Disconnect was expecting Mysqlx.Ok(bye!), but "
-                            "got the one above (one or more calls to -->recv "
-                            "are probably missing)");
+                if (!be_quiet) m_console.print(*msg);
+                if (PolarXRPC::ServerMessages::OK != msgid)
+                  throw xcl::XError(CR_COMMANDS_OUT_OF_SYNC,
+                                    "Disconnect was expecting Mysqlx.Ok(bye!),
+           but " "got the one above (one or more calls to -->recv " "are
+           probably missing)");
 
-        std::string text = static_cast<PolarXRPC::Ok *>(msg.get())->msg();
-        if (text != "bye!" && text != "tchau!")
-          throw xcl::XError(CR_COMMANDS_OUT_OF_SYNC,
-                            "Disconnect was expecting Mysqlx.Ok(bye!), but "
-                            "got the one above (one or more calls to -->recv "
-                            "are probably missing)");
+                std::string text = static_cast<PolarXRPC::Ok
+           *>(msg.get())->msg(); if (text != "bye!" && text != "tchau!") throw
+           xcl::XError(CR_COMMANDS_OUT_OF_SYNC, "Disconnect was expecting
+           Mysqlx.Ok(bye!), but " "got the one above (one or more calls to
+           -->recv " "are probably missing)");
 
-        if (!m_default_connection_options.dont_wait_for_disconnect) {
-          Message_ptr msg{
-              active_xprotocol()->recv_single_message(&msgid, &error)};
+                if (!m_default_connection_options.dont_wait_for_disconnect) {
+                  Message_ptr msg{
+                      active_xprotocol()->recv_single_message(&msgid, &error)};
 
-          if (!error && !be_quiet) {
-            m_console.print_error("Was expecting closure but got message:",
-                                  *msg);
-          }
-        }
-*/
+                  if (!error && !be_quiet) {
+                    m_console.print_error("Was expecting closure but got
+           message:", *msg);
+                  }
+                }
+        */
 
         active_xconnection()->close();
       }

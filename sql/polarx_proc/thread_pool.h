@@ -5,13 +5,12 @@
 #ifndef MYSQL_THREAD_POOL_H
 #define MYSQL_THREAD_POOL_H
 
-
-#include <deque>
-#include <vector>
-#include <cstdint>
-#include <cstdlib>
 #include <unistd.h>
 #include <csignal>
+#include <cstdint>
+#include <cstdlib>
+#include <deque>
+#include <vector>
 
 #include "lock.h"
 
@@ -23,20 +22,22 @@ struct TaskItem {
 
   void *arg;
 
-  TaskItem(void (*function1)(void *), void *arg1) : function(function1), arg(arg1) {}
+  TaskItem(void (*function1)(void *), void *arg1)
+      : function(function1), arg(arg1) {}
 
   ~TaskItem() = default;
 };
 
 class ThreadPool {
-public:
+ public:
   explicit ThreadPool(uint32_t count) : cv_(&mu_), thread_count_(count) {
     no_doing_thread_count_ = 0;
     shutdown_ = false;
     threads_.reserve(count);
     threads_.insert(threads_.begin(), count, 0);
     for (uint32_t i = 0; i < thread_count_; i++) {
-      if (pthread_create(&(threads_[i]), nullptr, &ThreadPool::BGThreadWrapper, this) != 0) {
+      if (pthread_create(&(threads_[i]), nullptr, &ThreadPool::BGThreadWrapper,
+                         this) != 0) {
         exit(-1);
       }
     }
@@ -47,12 +48,12 @@ public:
     shutdown_ = true;
     cv_.SignalAll();
     mu_.Unlock();
-    for (auto it: threads_) {
+    for (auto it : threads_) {
       pthread_join(it, nullptr);
     }
   }
 
-  static void *BGThreadWrapper(void *arg) {   //运行后台线程的容器
+  static void *BGThreadWrapper(void *arg) {  //运行后台线程的容器
     // ignore some signal
     sigset_t mysqld_signal_mask;
     sigemptyset(&mysqld_signal_mask);
@@ -89,7 +90,6 @@ public:
       mu_.Unlock();
       (*function)(arg);
     }
-
   }
 
   void Schedule(void (*function)(void *), void *arg) {  //添加任务，进行调度
@@ -110,7 +110,8 @@ public:
     return nullptr;
   }
 
-  static pthread_t StartThread(void (*function)(void *), void *arg) {   //直接新建线程运行任务，
+  static pthread_t StartThread(void (*function)(void *),
+                               void *arg) {  //直接新建线程运行任务，
     pthread_t t;
     auto *task = new TaskItem(function, arg);
     pthread_create(&t, nullptr, &StartThreadWrapper, task);
@@ -129,8 +130,7 @@ public:
     }
   }
 
-
-private:
+ private:
   Mutex mu_;
   CondVar cv_;
   deque<TaskItem> deque_;
@@ -144,8 +144,6 @@ extern ThreadPool *thread_pool;
 
 extern int InitThreadPool(uint32_t count);
 
+}  // namespace im
 
-} // namespace name
-
-
-#endif //MYSQL_THREAD_POOL_H
+#endif  // MYSQL_THREAD_POOL_H

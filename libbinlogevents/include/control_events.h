@@ -43,9 +43,9 @@
 #include <vector>
 
 #include "binlog_event.h"
+#include "control_consensus_events.h"  // consensus event definition
 #include "template_utils.h"
 #include "uuid.h"
-#include "control_consensus_events.h" // consensus event definition
 
 #include "compression/base.h"
 

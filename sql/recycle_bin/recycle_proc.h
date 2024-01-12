@@ -71,7 +71,6 @@ class Sql_cmd_recycle_proc_base : public Sql_cmd_admin_proc {
 
 */
 class Sql_cmd_recycle_proc_show : public Sql_cmd_recycle_proc_base {
-
  public:
   explicit Sql_cmd_recycle_proc_show(THD *thd, mem_root_deque<Item *> *list,
                                      const Proc *proc)
@@ -91,7 +90,6 @@ class Sql_cmd_recycle_proc_show : public Sql_cmd_recycle_proc_base {
   virtual void send_result(THD *thd, bool error) override;
 };
 
-
 class Recycle_proc_show : public Recycle_proc_base {
   using Sql_cmd_type = Sql_cmd_recycle_proc_show;
 
@@ -106,8 +104,7 @@ class Recycle_proc_show : public Recycle_proc_base {
   };
 
  public:
-  explicit Recycle_proc_show(PSI_memory_key key) :
-      Recycle_proc_base(key) {
+  explicit Recycle_proc_show(PSI_memory_key key) : Recycle_proc_base(key) {
     /* Result set protocol packet */
     m_result_type = Result_type::RESULT_SET;
 

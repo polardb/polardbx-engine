@@ -33,9 +33,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0page_h
 #define lizard0page_h
 
-#include "page0types.h"
 #include "lizard0scn0types.h"
 #include "lizard0undo0types.h"
+#include "page0types.h"
 
 struct dict_index_t;
 struct txn_desc_t;
@@ -53,13 +53,10 @@ namespace lizard {
   @param[in]      undo_ptr    undo_ptr
 */
 void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
-                                     const dict_index_t *index,
-                                     byte *rec,
-                                     const ulint *offsets,
-                                     ulint scn_col,
-                                     const scn_t scn,
-                                     const undo_ptr_t undo_ptr,
-				     const gcn_t gcn);
+                                     const dict_index_t *index, byte *rec,
+                                     const ulint *offsets, ulint scn_col,
+                                     const scn_t scn, const undo_ptr_t undo_ptr,
+                                     const gcn_t gcn);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**
@@ -75,8 +72,8 @@ bool lizard_page_attributes(page_t *page, const dict_index_t *index);
 }  // namespace lizard
 
 #if defined UNIV_DEBUG || defined lizard_DEBUG
-#define assert_lizard_page_attributes(page, index)   \
-  do {                                             \
+#define assert_lizard_page_attributes(page, index)     \
+  do {                                                 \
     ut_a(lizard::lizard_page_attributes(page, index)); \
   } while (0)
 #else
@@ -84,4 +81,3 @@ bool lizard_page_attributes(page_t *page, const dict_index_t *index);
 #endif /* UNIV_DEBUG || LIZARD_DEBUG define */
 
 #endif
-

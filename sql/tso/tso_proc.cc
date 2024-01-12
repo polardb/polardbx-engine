@@ -22,10 +22,10 @@
 
 #include "tso_proc.h"
 #include "my_inttypes.h"
-#include "sql/log.h"
-#include "sql/timestamp_service.h"
-#include "sql/protocol.h"
 #include "sql/ha_sequence.h"
+#include "sql/log.h"
+#include "sql/protocol.h"
+#include "sql/timestamp_service.h"
 
 namespace im {
 
@@ -44,7 +44,8 @@ Proc *Proc_get_timestamp::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_get_timestamp::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_get_timestamp::evoke_cmd(THD *thd,
+                                       mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Cmd_get_timestamp(thd, list, this);
 }
 
@@ -57,7 +58,7 @@ Sql_cmd *Proc_get_timestamp::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) c
   @retval       false         Success
 */
 bool Cmd_get_timestamp::pc_execute(THD *thd) {
-  bool  ret = false;
+  bool ret = false;
 
   assert(m_proc->get_result_type() == Proc::Result_type::RESULT_SET);
 

@@ -643,11 +643,11 @@ int Mts_submode_logical_clock::schedule_next_event(Relay_log_info *rli,
       ptr_group->last_committed = last_committed =
           static_cast<Gtid_log_event *>(ev)->last_committed;
 
-      // GalaxyEngine slave does not rotated as leader, so need decided logically
-      if (sequence_number == 1 || last_sequence_number == 0)
-      {
+      // GalaxyEngine slave does not rotated as leader, so need decided
+      // logically
+      if (sequence_number == 1 || last_sequence_number == 0) {
         first_event = true;
-        force_new_group= true;
+        force_new_group = true;
       }
       break;
 

@@ -149,8 +149,8 @@ void Outline_reader::row_warning(Conf_record *record, const char *when,
                                  const char *msg) {
   /* Report row warning if invalid rule */
   push_warning_printf(m_thd, Sql_condition::SL_WARNING, ER_OUTLINE_INVALID,
-                      ER_THD(m_thd, ER_OUTLINE_INVALID), record->get_id(),
-                      when, msg);
+                      ER_THD(m_thd, ER_OUTLINE_INVALID), record->get_id(), when,
+                      msg);
 }
 
 /**
@@ -160,7 +160,7 @@ void Outline_reader::row_warning(Conf_record *record, const char *when,
 */
 void Outline_reader::read_attributes(Conf_record *r) {
   DBUG_ENTER("Outline_reader::read_attributes");
-  Outline_record *record = dynamic_cast<Outline_record*>(r);
+  Outline_record *record = dynamic_cast<Outline_record *>(r);
   assert(record);
   record->reset();
   record->id = m_table->field[MYSQL_OUTLINE_FIELD_ID]->val_int();
@@ -436,7 +436,6 @@ err_and_close:
   commit_and_close_conf_table(thd);
   DBUG_RETURN(error);
 }
-
 
 /**
   Add new outline into outline table and insert outline cache.

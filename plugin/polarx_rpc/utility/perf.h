@@ -19,4 +19,4 @@ extern Chistogram g_cleanup_hist;
 extern Chistogram g_fin_hist;
 extern Chistogram g_auth_hist;
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

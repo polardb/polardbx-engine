@@ -26,16 +26,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/consensus/consensus_rpl_rli.h"
 
+#include "sql/bl_consensus_log.h"
+#include "sql/consensus/consensus_err.h"
+#include "sql/consensus_log_manager.h"
+#include "sql/log.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_replica.h"
-#include "sql/consensus_log_manager.h"
-#include "sql/bl_consensus_log.h"
 #include "sql/rpl_rli_pdb.h"
-#include "sql/consensus/consensus_err.h"
-#include "sql/log.h"
 
-XPaxos_relay_log_info::~XPaxos_relay_log_info()
-{
+XPaxos_relay_log_info::~XPaxos_relay_log_info() {
   consensus_log_manager.set_relay_log_info(nullptr);
 }
 
@@ -59,7 +58,7 @@ void Relay_log_info::overwrite_log_name(const char **, const char **) {
  * @param[in/out]	log index name
  */
 void XPaxos_relay_log_info::overwrite_log_name(const char **ln,
-                                             const char **log_index_name) {
+                                               const char **log_index_name) {
   assert(relay_log.is_relay_log);
 
   /** Use binlog file name although it's relay log object. */
@@ -71,64 +70,59 @@ void XPaxos_relay_log_info::overwrite_log_name(const char **ln,
 }
 
 LOG_POS_COORD Relay_log_info::get_log_pos_coord(Relay_log_info *rli) {
-  return { const_cast<char*>(rli->get_group_master_log_name()),
-          rli->get_group_master_log_pos(),
-          0 };
+  return {const_cast<char *>(rli->get_group_master_log_name()),
+          rli->get_group_master_log_pos(), 0};
 }
 
 LOG_POS_COORD XPaxos_relay_log_info::get_log_pos_coord(Relay_log_info *rli) {
-  return { const_cast<char*>(rli->get_group_relay_log_name()),
-          rli->get_group_relay_log_pos(),
-          rli->get_consensus_apply_index() };
+  return {const_cast<char *>(rli->get_group_relay_log_name()),
+          rli->get_group_relay_log_pos(), rli->get_consensus_apply_index()};
 }
 
-int Relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)
-{
+int Relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position) {
   if (relay_log.find_log_pos(linfo, get_group_relay_log_name(), 1)) {
-      LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG,
-        get_group_relay_log_name());
+    LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG,
+           get_group_relay_log_name());
     return 1;
   }
   log_position = get_group_relay_log_pos();
   return 0;
 }
 
-int XPaxos_relay_log_info::get_log_position(LOG_INFO *linfo, my_off_t &log_position)
-{
+int XPaxos_relay_log_info::get_log_position(LOG_INFO *linfo,
+                                            my_off_t &log_position) {
   uint64 log_pos = 0;
   char log_name[FN_REFLEN];
-  uint64 next_index = consensus_log_manager.get_next_trx_index(get_consensus_apply_index());
+  uint64 next_index =
+      consensus_log_manager.get_next_trx_index(get_consensus_apply_index());
   if (consensus_log_manager.get_log_position(next_index, false, log_name,
                                              &log_pos)) {
     sql_print_error("Mts recover cannot find start index %llu.", next_index);
     return 1;
   }
   if (relay_log.find_log_pos(linfo, log_name, 1)) {
-    LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG,
-      log_name);
+    LogErr(ERROR_LEVEL, ER_RPL_ERROR_LOOKING_FOR_LOG, log_name);
     return 1;
   }
   log_position = log_pos;
   return 0;
 }
 
-void XPaxos_relay_log_info::set_xpaxos_relay_log_info()
-{
+void XPaxos_relay_log_info::set_xpaxos_relay_log_info() {
   consensus_log_manager.set_relay_log_info(this);
 }
 
-void XPaxos_relay_log_info::set_xpaxos_apply_ev_sequence()
-{
+void XPaxos_relay_log_info::set_xpaxos_apply_ev_sequence() {
   consensus_log_manager.set_apply_ev_sequence(1);
 }
 
-void XPaxos_relay_log_info::update_xpaxos_applied_index()
-{
+void XPaxos_relay_log_info::update_xpaxos_applied_index() {
   ulonglong rli_appliedindex = 0;
   set_consensus_apply_index(gaq->lwm.consensus_index);
   rli_appliedindex = get_consensus_apply_index();
-  rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex? 0 :
-                      rli_appliedindex - opt_appliedindex_force_delay;
+  rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex
+                         ? 0
+                         : rli_appliedindex - opt_appliedindex_force_delay;
   mts_force_consensus_apply_index(this, rli_appliedindex);
 }
 
@@ -150,23 +144,22 @@ bool XPaxos_relay_log_info::reset_group_relay_log_pos(const char **) {
   return false;
 }
 
-  /**
-     Check if group_relay_log_name is in index file.
+/**
+   Check if group_relay_log_name is in index file.
 
-     @param [out] errmsg An error message is returned if error happens.
+   @param [out] errmsg An error message is returned if error happens.
 
-     @retval    false    It is valid.
-     @retval    true     It is invalid. In this case, *errmsg is set to point to
-                         the error message.
+   @retval    false    It is valid.
+   @retval    true     It is invalid. In this case, *errmsg is set to point to
+                       the error message.
 */
-bool XPaxos_relay_log_info::is_group_relay_log_name_invalid(
-    const char **)  {
+bool XPaxos_relay_log_info::is_group_relay_log_name_invalid(const char **) {
   /** Didn't confirm it. */
   return false;
 }
 
 void XPaxos_relay_log_info::relay_log_number_to_name(uint number,
-                                              char name[FN_REFLEN + 1]) {
+                                                     char name[FN_REFLEN + 1]) {
   char *str = strmake(name, log_bin_basename, FN_REFLEN + 1);
   sprintf(str, ".%06u", number);
 }

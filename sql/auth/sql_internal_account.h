@@ -26,8 +26,8 @@
 #include <stddef.h>
 #include <vector>
 #include "my_command.h"
-#include "mysql/psi/mysql_rwlock.h"  //mysql_rwlock_init
 #include "mysql/psi/mysql_mutex.h"
+#include "mysql/psi/mysql_rwlock.h"  //mysql_rwlock_init
 #include "mysql/status_var.h"
 #include "prealloced_array.h"  //Prealloced_array
 #include "sql/common/component.h"
@@ -350,7 +350,6 @@ class Internal_account_ctx {
   bool exceed_max_connection(THD *thd);
 
   ulonglong get_connection_count();
-
 
  private:
   std::vector<Account_array *> m_accounts;

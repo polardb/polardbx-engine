@@ -17,10 +17,10 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include "mysql/plugin.h"
 #include <mysql/components/services/log_builtins.h>
 #include <mysqld_error.h>
 #include "my_dbug.h"
-#include "mysql/plugin.h"
 #include "mysql/status_var.h"
 
 #include "service/registry.h"
@@ -43,7 +43,8 @@ static int galaxy_init(void *) {
 
   if ((udf_cnt = udf_registry->insert(
            {udf::UDF(bloomfilter_udf).def(), udf::UDF(hllndv_udf).def(),
-            udf::UDF(hyperloglog_udf).def(), udf::UDF(hashcheck_udf).def()})) != 4)
+            udf::UDF(hyperloglog_udf).def(), udf::UDF(hashcheck_udf).def()})) !=
+      4)
     return 1;
   return 0;
 }
@@ -60,9 +61,10 @@ static int galaxy_deinit(void *) {
 static char udf_list[PATH_MAX] = "hashcheck,bloomfilter,hyperloglog,hllndv";
 static char *p_udf_list = udf_list;
 static MYSQL_SYSVAR_STR(function_list, p_udf_list,
-  PLUGIN_VAR_READONLY | PLUGIN_VAR_NOCMDOPT | PLUGIN_VAR_NOCMDARG,
-  "list of user defined functions for PolarX",
-  nullptr, nullptr, nullptr);
+                        PLUGIN_VAR_READONLY | PLUGIN_VAR_NOCMDOPT |
+                            PLUGIN_VAR_NOCMDARG,
+                        "list of user defined functions for PolarX", nullptr,
+                        nullptr, nullptr);
 
 #define MYSQL_PLUGIN_VAR_HEADER \
   int flags;                    \
@@ -86,8 +88,8 @@ static SHOW_VAR galaxy_status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"polarx_udf_number_hllndv_calls", (char *)&udf::udf_counter.hllndv_counter,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
-    {"polarx_udf_number_hashcheck_calls", (char*)&udf::udf_counter.hashcheck_counter, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
+    {"polarx_udf_number_hashcheck_calls",
+     (char *)&udf::udf_counter.hashcheck_counter, SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {NULL, NULL, SHOW_LONG, SHOW_SCOPE_GLOBAL},
 };
 
@@ -107,12 +109,12 @@ mysql_declare_plugin(polarx_udf){
     "Alibaba Cloud PolarDB-X", /*   author                          */
     "PolarDB-X Plugin",        /*   description                     */
     PLUGIN_LICENSE_PROPRIETARY,
-    gs::galaxy_init,           /*   init function (when loaded)     */
-    NULL,                      /*   check uninstall function        */
-    gs::galaxy_deinit,         /*   deinit function (when unloaded) */
-    0x0101,                    /*   version                         */
-    gs::galaxy_status_vars,    /*   status variables                */
-    gs::galaxy_system_vars,    /*   system variables                */
+    gs::galaxy_init,        /*   init function (when loaded)     */
+    NULL,                   /*   check uninstall function        */
+    gs::galaxy_deinit,      /*   deinit function (when unloaded) */
+    0x0101,                 /*   version                         */
+    gs::galaxy_status_vars, /*   status variables                */
+    gs::galaxy_system_vars, /*   system variables                */
     NULL,
     0,
 } mysql_declare_plugin_end;

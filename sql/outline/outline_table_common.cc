@@ -37,12 +37,10 @@ const char *outline_error_msg[] = {
     "Outline index's hint, digest, or scope is invalid"};
 
 bool Outline_record::check_valid(const char **msg) const {
-  if (type == Outline_type::UNKNOWN || pos < 1)
-  {
+  if (type == Outline_type::UNKNOWN || pos < 1) {
     *msg = outline_error_msg[0];
     return false;
-  }
-  else if (type == Outline_type::OPTIMIZER) {
+  } else if (type == Outline_type::OPTIMIZER) {
     if (blank(digest) || blank(hint)) {
       *msg = outline_error_msg[1];
       return false;

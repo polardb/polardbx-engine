@@ -23,11 +23,11 @@
  */
 //--------------------------------------------------------------------------------------------------
 
-#include <vector>
 #include <stack>
+#include <vector>
 
-#include "utils_string_parsing.h"
 #include "template_utils.h"
+#include "utils_string_parsing.h"
 
 namespace shcore {
 namespace mysql {
@@ -145,7 +145,7 @@ size_t determineStatementRanges(const char *sql, size_t length,
         char quote = *tail++;
 
         if (input_context_stack.empty() || input_context_stack.top() == "-") {
-          _again:
+        _again:
           // Quoted string/id. Skip this in a local loop if is opening quote.
           while (tail < end && *tail != quote) {
             // Skip any escaped character too.
@@ -155,9 +155,9 @@ size_t determineStatementRanges(const char *sql, size_t length,
           if (*tail == quote) {
             if (*(tail + 1) == quote) {
               tail += 2;
-              goto _again; // double quote in quote treated as escaped quote
+              goto _again;  // double quote in quote treated as escaped quote
             }
-            tail++; // Skip trailing quote char to if one was there.
+            tail++;  // Skip trailing quote char to if one was there.
           } else {
             std::string q;
             q.assign(&quote, 1);

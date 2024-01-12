@@ -3594,8 +3594,7 @@ static void ibuf_insert_to_index_page(
       just write dummy trx_id(0), roll_ptr(0) */
       /* Also, just write dummy scn(0), roll_ptr(0) */
       btr_cur_update_in_place_log(BTR_KEEP_SYS_FLAG, rec, index, update, 0, 0,
-                                  nullptr,
-                                  mtr);
+                                  nullptr, mtr);
 
       DBUG_EXECUTE_IF("crash_after_log_ibuf_upd_inplace",
                       log_buffer_flush_to_disk();

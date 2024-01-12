@@ -98,7 +98,4 @@ void Ccl_queue_hint::print(const THD *thd, String *str) {
   str->append(STRING_WITH_LEN(") "));
 }
 
-
-
-
 } /* namespace im */

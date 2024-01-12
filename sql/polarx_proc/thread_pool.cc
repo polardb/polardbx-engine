@@ -12,7 +12,7 @@ int InitThreadPool(uint32_t count) {
   thread_pool = new ThreadPool(count);
   return 0;
 }
-}
+}  // namespace im
 
 void UninitChangesetThreadPool() {
   delete im::thread_pool;

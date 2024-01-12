@@ -24,9 +24,11 @@ class Log_event;
 extern bool opt_consensus_index_buf_enabled;
 
 void update_consensus_apply_index(Relay_log_info *rli, Log_event *ev);
-void mts_init_consensus_apply_index(Relay_log_info *rli, uint64 consensus_index);
+void mts_init_consensus_apply_index(Relay_log_info *rli,
+                                    uint64 consensus_index);
 void mts_advance_consensus_apply_index(Relay_log_info *rli, Log_event *ev);
-void mts_force_consensus_apply_index(Relay_log_info *rli, uint64 consensus_index);
+void mts_force_consensus_apply_index(Relay_log_info *rli,
+                                     uint64 consensus_index);
 
 class Index_link_buf {
  public:
@@ -54,10 +56,9 @@ class Index_link_buf {
   /** force advance the tail pointer in the buffer .
 
   @see force_advance_tail()
-  
+
   @return tail position in original unit*/
   void force_advance_tail(uint64 index);
-
 
   /** init the tail pointer in the buffer .
 
@@ -89,7 +90,7 @@ class Index_link_buf {
 
   void unlock();
 
- private :
+ private:
   /** Capacity of the buffer. */
   uint64 m_capacity;
 
@@ -99,7 +100,7 @@ class Index_link_buf {
   /**
    * Tail pointer in the buffer (expressed in original unit).
    * Lastest setted index.
-  */
+   */
   std::atomic<uint64> m_tail;
 
   /** atomic lock*/

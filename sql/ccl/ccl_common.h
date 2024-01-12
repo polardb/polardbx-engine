@@ -50,7 +50,7 @@ extern PSI_rwlock_key key_rwlock_rule_container;
 
 /* Ccl object allocator */
 template <typename T, typename... Args>
-T *allocate_ccl_object(Args &&... args) {
+T *allocate_ccl_object(Args &&...args) {
   return allocate_object<T, Args...>(key_memory_ccl,
                                      std::forward<Args>(args)...);
 }
@@ -90,6 +90,3 @@ struct hash<im::String_ccl> {
 } /* namespace std */
 
 #endif
-
-
-

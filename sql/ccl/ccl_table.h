@@ -202,4 +202,3 @@ bool del_ccl_rule(THD *thd, Conf_record *record);
 } /* namespace im */
 
 #endif
-

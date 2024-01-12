@@ -50,8 +50,10 @@ bool opt_enable_rds_priv_strategy = false;
 
 /** Those privileges are not opened to normal user */
 static int guard_privs[4] = {
-    MYSQL_USER_FIELD_SHUTDOWN_PRIV, MYSQL_USER_FIELD_FILE_PRIV,
-    MYSQL_USER_FIELD_SUPER_PRIV, MYSQL_USER_FIELD_CREATE_TABLESPACE_PRIV,
+    MYSQL_USER_FIELD_SHUTDOWN_PRIV,
+    MYSQL_USER_FIELD_FILE_PRIV,
+    MYSQL_USER_FIELD_SUPER_PRIV,
+    MYSQL_USER_FIELD_CREATE_TABLESPACE_PRIV,
 };
 
 /* Global variable inner_schema_list string pointer */
@@ -657,7 +659,7 @@ Inner_schema_access *Inner_schema_access::instance() {
 /**
  */
 ACL_internal_access_result Inner_schema_access::check(ulong want_access,
-                                                      ulong *,  bool) const {
+                                                      ulong *, bool) const {
   /**
     Relax SELECT/INDEX/GRANT privileges.
   */
@@ -712,7 +714,7 @@ bool ACL_inner_schema_register(bool bootstrap) {
   pos2 = t_str.find(SEPARATOR);
   while (pos2 != std::string::npos) {
     register_schema_access(t_str.substr(pos1, pos2 - pos1),
-                        Inner_schema_access::instance());
+                           Inner_schema_access::instance());
     pos1 = pos2 + strlen(SEPARATOR);
     pos2 = t_str.find(SEPARATOR, pos1);
   }

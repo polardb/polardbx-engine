@@ -292,9 +292,8 @@ XError Protocol_impl::authenticate_sha256_memory(const std::string &user,
       auto nonce = auth_continue.auth_data();
       char sha256_scramble[32] = {0};
       if (xcl::generate_sha256_scramble(
-              reinterpret_cast<unsigned char *>(sha256_scramble),
-              32, pass.c_str(), pass.length(), nonce.c_str(),
-              nonce.length()))
+              reinterpret_cast<unsigned char *>(sha256_scramble), 32,
+              pass.c_str(), pass.length(), nonce.c_str(), nonce.length()))
         return XError{CR_UNKNOWN_ERROR, ER_TEXT_HASHING_FUNCTION_FAILED};
 
       std::string scramble_hex(2 * 32 + 1, '\0');
@@ -587,7 +586,6 @@ void Protocol_impl::dispatch_send_message(const Client_message_type_id id,
 }
 
 XError Protocol_impl::recv_ok() {
-
   return recv_id(PolarXRPC::ServerMessages::OK);
 }
 
@@ -837,15 +835,17 @@ std::unique_ptr<Protocol_impl::Message> Protocol_impl::alloc_message(
       ret_val.reset(new PolarXRPC::Resultset::TokenDone());
       break;
 
-     case PolarXRPC::ServerMessages::RESULTSET_GET_FILE_INFO_OK:
-         ret_val.reset(new PolarXRPC::PhysicalBackfill::GetFileInfoOperator());
-         break;
-     case PolarXRPC::ServerMessages::RESULTSET_TRANSFER_FILE_DATA_OK:
-         ret_val.reset(new PolarXRPC::PhysicalBackfill::TransferFileDataOperator());
-         break;
-     case PolarXRPC::ServerMessages::RESULTSET_FILE_MANAGE_OK:
-         ret_val.reset(new PolarXRPC::PhysicalBackfill::FileManageOperatorResponse());
-         break;
+    case PolarXRPC::ServerMessages::RESULTSET_GET_FILE_INFO_OK:
+      ret_val.reset(new PolarXRPC::PhysicalBackfill::GetFileInfoOperator());
+      break;
+    case PolarXRPC::ServerMessages::RESULTSET_TRANSFER_FILE_DATA_OK:
+      ret_val.reset(
+          new PolarXRPC::PhysicalBackfill::TransferFileDataOperator());
+      break;
+    case PolarXRPC::ServerMessages::RESULTSET_FILE_MANAGE_OK:
+      ret_val.reset(
+          new PolarXRPC::PhysicalBackfill::FileManageOperatorResponse());
+      break;
     default:
       break;
   }
@@ -862,7 +862,8 @@ XError Protocol_impl::recv_id(
   if (out_error) return out_error;
 
   if (PolarXRPC::ServerMessages::ERROR == out_mid) {
-    const ::PolarXRPC::Error &error = *static_cast<PolarXRPC::Error *>(msg.get());
+    const ::PolarXRPC::Error &error =
+        *static_cast<PolarXRPC::Error *>(msg.get());
 
     return details::make_xerror(error);
   }
@@ -884,7 +885,8 @@ XProtocol::Message *Protocol_impl::recv_id(
   if (*out_error) return nullptr;
 
   if (PolarXRPC::ServerMessages::ERROR == out_mid) {
-    const ::PolarXRPC::Error &error = *static_cast<PolarXRPC::Error *>(msg.get());
+    const ::PolarXRPC::Error &error =
+        *static_cast<PolarXRPC::Error *>(msg.get());
 
     *out_error = details::make_xerror(error);
     return nullptr;

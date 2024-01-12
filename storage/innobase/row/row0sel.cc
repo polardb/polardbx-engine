@@ -76,10 +76,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
-#include "lizard0dict.h"
 #include "lizard0cleanout.h"
-#include "lizard0undo.h"
+#include "lizard0dict.h"
 #include "lizard0gp.h"
+#include "lizard0undo.h"
 
 /** Maximum number of rows to prefetch; MySQL interface has another parameter */
 constexpr uint32_t SEL_MAX_N_PREFETCH = 16;
@@ -694,7 +694,7 @@ static inline void sel_enqueue_prefetched_row(
 /** Builds a previous version of a clustered index record for a consistent read
  @return DB_SUCCESS or error code */
 [[nodiscard]] static dberr_t row_sel_build_prev_vers(
-    lizard::Vision *vision,        /*!< in: read view */
+    lizard::Vision *vision,     /*!< in: read view */
     dict_index_t *index,        /*!< in: plan node for table */
     rec_t *rec,                 /*!< in: record in a clustered index */
     ulint **offsets,            /*!< in/out: offsets returned by
@@ -1763,9 +1763,8 @@ skip_lock:
       if (!lock_clust_rec_cons_read_sees(rec, index, offsets,
                                          /**TODO: cleanout logic */
                                          nullptr, node->vision)) {
-        err = row_sel_build_prev_vers(node->vision, index, rec, &offsets,
-                                      &heap, &plan->old_vers_heap, &old_vers,
-                                      &mtr);
+        err = row_sel_build_prev_vers(node->vision, index, rec, &offsets, &heap,
+                                      &plan->old_vers_heap, &old_vers, &mtr);
 
         if (err != DB_SUCCESS) {
           goto lock_wait_or_error;
@@ -4845,7 +4844,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   if (!prebuilt->sql_stat_start) {
     /* No need to set an intention lock or assign a read view */
 
-    //if (!MVCC::is_view_active(trx->read_view)
+    // if (!MVCC::is_view_active(trx->read_view)
     if (!trx->vision.is_active() && !srv_read_only_mode &&
         prebuilt->select_lock_type == LOCK_NONE) {
       ib::error(ER_IB_MSG_1031) << "MySQL is trying to perform a"

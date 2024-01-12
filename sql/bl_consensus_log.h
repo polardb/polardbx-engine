@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 #ifndef BL_CONSENSUS_LOG_INCLUDE
 #define BL_CONSENSUS_LOG_INCLUDE
 
@@ -33,17 +32,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "consensus_fifo_cache_manager.h"
 #include "consensus_log_manager.h"
 
-#include "paxos_log.h"
 #include "paxos.h"
+#include "paxos_log.h"
 
 namespace alisql {
 class AliSQLServer;
 class Paxos;
 }  // namespace alisql
 
-struct ConsensusStateChange
-{
-  alisql::Paxos::StateType state; 
+struct ConsensusStateChange {
+  alisql::Paxos::StateType state;
   uint64 term;
   uint64 index;
 };

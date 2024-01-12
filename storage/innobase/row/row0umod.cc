@@ -54,8 +54,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "debug_sync.h"
 
-#include "lizard0row.h"
 #include "lizard0dbg.h"
+#include "lizard0row.h"
 
 /* Considerations on undoing a modify operation.
 (1) Undoing a delete marking: all index records should be found. Some of

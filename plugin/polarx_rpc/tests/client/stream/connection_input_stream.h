@@ -64,9 +64,7 @@ class Connection_input_stream
 
   pb_int64 GetLeftAllowedToRead() const { return m_allowed_io_size; }
 
-  void ClearIOError() {
-    m_io_error = {};
-  }
+  void ClearIOError() { m_io_error = {}; }
   XError GetIOError() const {
     if (m_io_error) {
       DBUG_LOG("debug", "Connection_input_stream::GetIOError() = {error_code:"

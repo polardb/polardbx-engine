@@ -4,10 +4,10 @@
 
 #pragma once
 
+#include <sys/types.h>
 #include <cstdint>
 #include <functional>
 #include <string>
-#include <sys/types.h>
 #include <vector>
 
 #include "../global_defines.h"
@@ -20,7 +20,7 @@
 namespace polarx_rpc {
 
 class CcallbackCommandDelegate : public CcommandDelegate {
-public:
+ public:
   struct Field_value {
     Field_value();
     Field_value(const Field_value &other);
@@ -53,7 +53,7 @@ public:
     void clear();
     std::vector<Field_value *> fields;
 
-  private:
+   private:
     void clone_fields(const Row_data &other);
   };
 
@@ -72,12 +72,12 @@ public:
     return CS_TEXT_REPRESENTATION;
   }
 
-private:
+ private:
   Start_row_callback m_start_row;
   End_row_callback m_end_row;
   Row_data *m_current_row = nullptr;
 
-private:
+ private:
   int start_row() override;
 
   int end_row() override;
@@ -107,4 +107,4 @@ private:
                  const CHARSET_INFO *const valuecs) override;
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

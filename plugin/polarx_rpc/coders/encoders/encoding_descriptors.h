@@ -210,7 +210,7 @@ struct FileManageOK {
   static constexpr uint32_t server_id = 24;
 };
 
-} // namespace tags
+}  // namespace tags
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

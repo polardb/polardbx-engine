@@ -92,10 +92,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0roll.h"
 #endif /* !UNIV_HOTBACKUP */
 
-#include "lizard0undo.h"
-#include "lizard0row.h"
-#include "lizard0page.h"
 #include "lizard0dict.h"
+#include "lizard0page.h"
+#include "lizard0row.h"
+#include "lizard0undo.h"
 
 #include <array>
 
@@ -3139,8 +3139,8 @@ dberr_t btr_cur_pessimistic_insert(
   if (thr != nullptr && !index->table->is_intrinsic() &&
       !(flags & BTR_NO_UNDO_LOG_FLAG)) {
     lizard::row_lizard_cleanout_when_modify_rec(
-        thr_get_trx(thr)->id, const_cast<rec_t *>(rec),
-        index, offsets, btr_cur_get_block(cursor), mtr);
+        thr_get_trx(thr)->id, const_cast<rec_t *>(rec), index, offsets,
+        btr_cur_get_block(cursor), mtr);
   }
 
   /* Append the info about the update in the undo log */
@@ -4273,12 +4273,12 @@ return_after_reservations:
 /** Writes the redo log record for delete marking or unmarking of an index
  record. */
 static inline void btr_cur_del_mark_set_clust_rec_log(
-    rec_t *rec,          /*!< in: record */
-    dict_index_t *index, /*!< in: index of the record */
-    trx_id_t trx_id,     /*!< in: transaction id */
-    roll_ptr_t roll_ptr, /*!< in: roll ptr to the undo log record */
+    rec_t *rec,               /*!< in: record */
+    dict_index_t *index,      /*!< in: index of the record */
+    trx_id_t trx_id,          /*!< in: transaction id */
+    roll_ptr_t roll_ptr,      /*!< in: roll ptr to the undo log record */
     const txn_rec_t *txn_rec, /*!< in: lizard info in the record */
-    mtr_t *mtr)          /*!< in: mtr */
+    mtr_t *mtr)               /*!< in: mtr */
 {
   byte *log_ptr = nullptr;
 
@@ -4446,9 +4446,9 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   /** Lizard: Do the cleanout. */
   if (thr != nullptr && !index->table->is_intrinsic() &&
       !(flags & BTR_NO_UNDO_LOG_FLAG)) {
-    lizard::row_lizard_cleanout_when_modify_rec(
-        thr_get_trx(thr)->id, const_cast<rec_t *>(rec),
-        index, offsets, block, mtr);
+    lizard::row_lizard_cleanout_when_modify_rec(thr_get_trx(thr)->id,
+                                                const_cast<rec_t *>(rec), index,
+                                                offsets, block, mtr);
   }
 
   err =
@@ -4499,8 +4499,8 @@ dberr_t btr_cur_del_mark_set_clust_rec(
 
   assert_lizard_page_attributes(page_align(rec), index);
 
-  btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr,
-                                     &txn_rec, mtr);
+  btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr, &txn_rec,
+                                     mtr);
 
   btr_cur_t cleanout_cursor;
   btr_cur_position(index, rec, block, &cleanout_cursor);

@@ -20,7 +20,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef SQL_OUTLINE_OUTLINE_RELOAD_INCLUDED
 #define SQL_OUTLINE_OUTLINE_RELOAD_INCLUDED
 
@@ -31,7 +30,7 @@ class THD;
 namespace im {
 
 class Outline_reload : public Reload {
-public:
+ public:
   Outline_reload() {}
 
   virtual ~Outline_reload() {}

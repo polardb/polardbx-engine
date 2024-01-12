@@ -94,9 +94,7 @@ class Bool_validator : public Validator {
   using Type = Argument_value::Type;
 
  public:
-  Type get_type() const override {
-    return Type::k_bool;
-  }
+  Type get_type() const override { return Type::k_bool; }
 };
 
 /**
@@ -104,9 +102,7 @@ class Bool_validator : public Validator {
 */
 class String_validator : public Validator {
  public:
-  Type get_type() const override {
-    return Type::k_string;
-  }
+  Type get_type() const override { return Type::k_string; }
 };
 
 /**
@@ -114,9 +110,7 @@ class String_validator : public Validator {
 */
 class Integer_validator : public Validator {
  public:
-  Type get_type() const override {
-    return Type::k_integer;
-  }
+  Type get_type() const override { return Type::k_integer; }
 };
 
 /**
@@ -125,9 +119,7 @@ class Integer_validator : public Validator {
 */
 class Object_validator : public Validator {
  public:
-  Type get_type() const override {
-    return Type::k_object;
-  }
+  Type get_type() const override { return Type::k_object; }
 };
 
 /**
@@ -137,9 +129,7 @@ class Array_of_strings_validator : public Validator {
  private:
   class Is_valid_array_visitor : public Default_visitor {
    public:
-    void visit_string(const std::string &value) override {
-      m_valid = true;
-    }
+    void visit_string(const std::string &value) override { m_valid = true; }
 
     void visit_array(const Argument_array &values) override {
       m_valid = true;

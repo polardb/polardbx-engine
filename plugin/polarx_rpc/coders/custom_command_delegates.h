@@ -17,7 +17,7 @@ static constexpr ulong DEFAULT_CAPABILITIES =
     CLIENT_PS_MULTI_RESULTS;
 
 class CstmtCommandDelegate : public CstreamingCommandDelegate {
-public:
+ public:
   template <class T>
   CstmtCommandDelegate(CsessionBase &session, CpolarxEncoder &encoder,
                        T &&flush, bool compact_metadata, ulong capabilities)
@@ -66,4 +66,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

@@ -146,7 +146,7 @@ bool LizardTablespace::interpret_file() {
   @retval         DB_SUCCESS        success
 */
 dberr_t LizardTablespace::check_file_status(const Datafile &file,
-                                          file_status_t &reason_if_failed) {
+                                            file_status_t &reason_if_failed) {
   dberr_t err = DB_SUCCESS;
   os_file_stat_t stat;
 
@@ -158,30 +158,30 @@ dberr_t LizardTablespace::check_file_status(const Datafile &file,
 
   reason_if_failed = FILE_STATUS_VOID;
   switch (err) {
-  case DB_FAIL:
-    lizard_error(ER_LIZARD) << "Check file failed on " << file.name();
-    err = DB_ERROR;
-    reason_if_failed = FILE_STATUS_RW_PERMISSION_ERROR;
-    break;
-  case DB_SUCCESS:
-    if (stat.type == OS_FILE_TYPE_FILE) {
-      if (!stat.rw_perm) {
-        lizard_error(ER_LIZARD)
-            << "The " << file.name() << " must be writable or readable";
-        err = DB_ERROR;
-        reason_if_failed = FILE_STATUS_READ_WRITE_ERROR;
-      }
-    } else {
-      lizard_error(ER_LIZARD) << "The " << file.name() << " file is not "
-                              << " a regular InnoDB data file";
+    case DB_FAIL:
+      lizard_error(ER_LIZARD) << "Check file failed on " << file.name();
       err = DB_ERROR;
-      reason_if_failed = FILE_STATUS_NOT_REGULAR_FILE_ERROR;
-    }
-    break;
-  case DB_NOT_FOUND:
-    break;
-  default:
-    ut_ad(0);
+      reason_if_failed = FILE_STATUS_RW_PERMISSION_ERROR;
+      break;
+    case DB_SUCCESS:
+      if (stat.type == OS_FILE_TYPE_FILE) {
+        if (!stat.rw_perm) {
+          lizard_error(ER_LIZARD)
+              << "The " << file.name() << " must be writable or readable";
+          err = DB_ERROR;
+          reason_if_failed = FILE_STATUS_READ_WRITE_ERROR;
+        }
+      } else {
+        lizard_error(ER_LIZARD) << "The " << file.name() << " file is not "
+                                << " a regular InnoDB data file";
+        err = DB_ERROR;
+        reason_if_failed = FILE_STATUS_NOT_REGULAR_FILE_ERROR;
+      }
+      break;
+    case DB_NOT_FOUND:
+      break;
+    default:
+      ut_ad(0);
   }
 
   return err;
@@ -228,7 +228,7 @@ dberr_t LizardTablespace::file_not_found(Datafile &file, bool create_new_db) {
   @return         DB_SUCCESS        success
 */
 dberr_t LizardTablespace::check_file_spec(bool create_new_db,
-                                        ulint min_expected_size) {
+                                          ulint min_expected_size) {
   dberr_t err = DB_SUCCESS;
 
   ut_ad(!m_ignore_read_only);
@@ -253,8 +253,7 @@ dberr_t LizardTablespace::check_file_spec(bool create_new_db,
 
     if (err == DB_NOT_FOUND) {
       err = file_not_found(*it, create_new_db);
-      if (err != DB_SUCCESS)
-        break;
+      if (err != DB_SUCCESS) break;
     } else if (err != DB_SUCCESS) {
       lizard_error(ER_LIZARD)
           << "Check file status " << it->name() << " failed ";
@@ -351,8 +350,7 @@ dberr_t LizardTablespace::open_or_create(bool create_new_db,
       file_found(*it);
     }
 
-    if (err != DB_SUCCESS)
-      return err;
+    if (err != DB_SUCCESS) return err;
 
 #if !defined(NO_FALLOCATE) && defined(UNIV_LINUX)
     /* Note: This should really be per node and not per

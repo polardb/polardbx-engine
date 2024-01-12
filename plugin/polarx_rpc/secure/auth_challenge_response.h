@@ -62,12 +62,12 @@ using Sasl_mysql41_auth =
 template <Account_verification_interface::Account_type Auth_type,
           typename Auth_verificator_t>
 class Sasl_challenge_response_auth : public Authentication_interface {
-public:
+ public:
   explicit Sasl_challenge_response_auth(Account_verification_handler *handler)
       : m_verification_handler(handler), m_state(S_starting) {}
 
-  static Authentication_interface_ptr
-  create(CtcpConnection &tcp, SHA256_password_cache_interface *cache);
+  static Authentication_interface_ptr create(
+      CtcpConnection &tcp, SHA256_password_cache_interface *cache);
 
   Response handle_start(const std::string &, const std::string &,
                         const std::string &) override;
@@ -81,7 +81,7 @@ public:
     return m_auth_info;
   }
 
-private:
+ private:
   Account_verification_handler_ptr m_verification_handler;
   Authentication_info m_auth_info;
 
@@ -181,4 +181,4 @@ err_t Sasl_challenge_response_auth<Account_type, Auth_verificator_t>::
                                                 &m_auth_info);
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

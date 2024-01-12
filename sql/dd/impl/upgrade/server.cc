@@ -907,8 +907,8 @@ bool upgrade_system_schemas(THD *thd) {
           check.repair_tables(thd) ||
           dd::tables::DD_properties::instance().set(
               thd, "MYSQLD_VERSION_UPGRADED", MYSQL_VERSION_ID) ||
-      Minor_upgrade_ctx::instance()->save_and_set_extra_mvu_version(
-          thd, Minor_upgrade_ctx::get_target_extra_mvu_version());
+          Minor_upgrade_ctx::instance()->save_and_set_extra_mvu_version(
+              thd, Minor_upgrade_ctx::get_target_extra_mvu_version());
   }
   create_upgrade_file();
   bootstrap_error_handler.set_log_error(true);

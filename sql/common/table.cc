@@ -201,8 +201,7 @@ void log_conf_error(int nr, Conf_error err) {
 bool Conf_reader::setup_table() {
   DBUG_ENTER("Conf_reader::setup_table");
   m_read_record_info = init_table_iterator(m_thd, m_table, false, false);
-  if (m_read_record_info == nullptr)
-    DBUG_RETURN(true);
+  if (m_read_record_info == nullptr) DBUG_RETURN(true);
 
   m_table->use_all_columns();
   DBUG_RETURN(false);
@@ -291,15 +290,15 @@ int Conf_writer::write_row(Conf_record *record) {
   DBUG_RETURN(0);
 }
 
-  /**
-    Delete the record from table.
-    Only push warning if not found the record in table.
+/**
+  Delete the record from table.
+  Only push warning if not found the record in table.
 
-    @param[in/out]  record        the row
+  @param[in/out]  record        the row
 
-    @retval         false         Success
-    @retval         true          Failure
-  */
+  @retval         false         Success
+  @retval         true          Failure
+*/
 bool Conf_writer::delete_row_by_id(Conf_record *record) {
   int error;
   uchar user_key[MAX_KEY_LENGTH];

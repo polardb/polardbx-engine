@@ -77,7 +77,7 @@ class Thd_parser_context {
 */
 class Thd_backup_parser_state {
  public:
-  Thd_backup_parser_state(THD * thd)
+  Thd_backup_parser_state(THD *thd)
       : m_thd(thd), m_saved_parser_state(thd->m_parser_state) {}
 
   ~Thd_backup_parser_state() { m_thd->m_parser_state = m_saved_parser_state; }
@@ -89,7 +89,7 @@ class Thd_backup_parser_state {
 
 class Parser_error_handler : public Internal_error_handler {
  public:
-  Parser_error_handler(THD * thd) : m_thd(thd) {
+  Parser_error_handler(THD *thd) : m_thd(thd) {
     thd->push_internal_handler(this);
   }
 

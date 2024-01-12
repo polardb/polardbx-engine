@@ -37,10 +37,10 @@ namespace polarx_rpc {
 namespace protocol {
 
 class Encoding_buffer final {
-public:
+ public:
   constexpr static uint32_t k_page_size = 4096;
 
-public:
+ public:
   explicit Encoding_buffer(Encoding_pool *local_pool)
       : m_local_pool(local_pool) {
     assert(k_page_size == local_pool->get_page_size());
@@ -69,12 +69,12 @@ public:
     }
   }
 
-  template <uint32_t size> void ensure_buffer_size() {
+  template <uint32_t size>
+  void ensure_buffer_size() {
     static_assert(size < k_page_size,
                   "Page size might be too small to put those data in.");
 
-    if (!m_current->is_at_least(size))
-      get_next_page();
+    if (!m_current->is_at_least(size)) get_next_page();
   }
 
   bool ensure_buffer_size(const uint32_t size) {
@@ -93,8 +93,7 @@ public:
   inline bool is_empty() const {
     auto page = m_front;
     while (page) {
-      if (page->get_used_bytes() > 0)
-        return false;
+      if (page->get_used_bytes() > 0) return false;
       page = page->m_next_page;
     }
     return true;
@@ -103,9 +102,9 @@ public:
   Page *m_front;
   Page *m_current;
 
-private:
+ private:
   Encoding_pool *const m_local_pool;
 };
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

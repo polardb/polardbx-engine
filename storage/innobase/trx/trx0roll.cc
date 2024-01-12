@@ -221,51 +221,53 @@ static dberr_t trx_rollback_low(trx_t *trx) {
       ut_ad(!trx_is_autocommit_non_locking(trx));
 
       {
-      /* Acquire rseg mutex in order in advance */
-      lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+        /* Acquire rseg mutex in order in advance */
+        lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
 
-      /** Lizard: Deal with txn undo firstly under one mtr */
-      if (rseg_mutex_wrapper.txn_rseg_updated()) {
-        txn_undo_ptr_t *undo_ptr = &trx->rsegs.m_txn;
+        /** Lizard: Deal with txn undo firstly under one mtr */
+        if (rseg_mutex_wrapper.txn_rseg_updated()) {
+          txn_undo_ptr_t *undo_ptr = &trx->rsegs.m_txn;
 
-        mtr_wrapper.start();
+          mtr_wrapper.start();
 
-        trx_undo_set_state_at_prepare(trx, undo_ptr->txn_undo, true, &mtr);
-      }
-
-      if (rseg_mutex_wrapper.redo_rseg_updated()) {
-        /* Change the undo log state back from
-        TRX_UNDO_PREPARED to TRX_UNDO_ACTIVE
-        so that if the system gets killed,
-        recovery will perform the rollback. */
-        trx_undo_ptr_t *undo_ptr = &trx->rsegs.m_redo;
-
-        mtr_wrapper.start();
-
-        // trx->rsegs.m_redo.rseg->latch();
-
-        if (undo_ptr->insert_undo != nullptr) {
-          ut_ad(lizard::trx_is_txn_rseg_updated(trx));
-          trx_undo_set_state_at_prepare(trx, undo_ptr->insert_undo, true, &mtr);
+          trx_undo_set_state_at_prepare(trx, undo_ptr->txn_undo, true, &mtr);
         }
 
-        if (undo_ptr->update_undo != nullptr) {
-          ut_ad(lizard::trx_is_txn_rseg_updated(trx));
+        if (rseg_mutex_wrapper.redo_rseg_updated()) {
+          /* Change the undo log state back from
+          TRX_UNDO_PREPARED to TRX_UNDO_ACTIVE
+          so that if the system gets killed,
+          recovery will perform the rollback. */
+          trx_undo_ptr_t *undo_ptr = &trx->rsegs.m_redo;
 
-          trx_undo_gtid_set(trx, undo_ptr->update_undo, false);
-          trx_undo_set_state_at_prepare(trx, undo_ptr->update_undo, true, &mtr);
+          mtr_wrapper.start();
+
+          // trx->rsegs.m_redo.rseg->latch();
+
+          if (undo_ptr->insert_undo != nullptr) {
+            ut_ad(lizard::trx_is_txn_rseg_updated(trx));
+            trx_undo_set_state_at_prepare(trx, undo_ptr->insert_undo, true,
+                                          &mtr);
+          }
+
+          if (undo_ptr->update_undo != nullptr) {
+            ut_ad(lizard::trx_is_txn_rseg_updated(trx));
+
+            trx_undo_gtid_set(trx, undo_ptr->update_undo, false);
+            trx_undo_set_state_at_prepare(trx, undo_ptr->update_undo, true,
+                                          &mtr);
+          }
+          // trx->rsegs.m_redo.rseg->unlatch();
+
+          /* Persist the XA ROLLBACK, so that crash
+          recovery will replay the rollback in case
+          the redo log gets applied past this point. */
+          // mtr.commit();
+          // ut_ad(mtr.commit_lsn() > 0 || !mtr_t::s_logging.is_enabled());
         }
-        // trx->rsegs.m_redo.rseg->unlatch();
+        lsn = mtr_wrapper.commit();
 
-        /* Persist the XA ROLLBACK, so that crash
-        recovery will replay the rollback in case
-        the redo log gets applied past this point. */
-        // mtr.commit();
-        // ut_ad(mtr.commit_lsn() > 0 || !mtr_t::s_logging.is_enabled());
-      }
-      lsn = mtr_wrapper.commit();
-
-      rseg_mutex_wrapper.release_mutex();
+        rseg_mutex_wrapper.release_mutex();
       }
 
       /** Debug crash. */

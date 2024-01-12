@@ -20,7 +20,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef SQL_RECYCLE_BIN_RECYCLE_INCLUDED
 #define SQL_RECYCLE_BIN_RECYCLE_INCLUDED
 
@@ -79,6 +78,7 @@ class Recycle_lex {
     lex_end(&m_lex);
     m_thd->lex = m_backed_up_lex;
   }
+
  private:
   THD *m_thd;
   LEX *m_backed_up_lex;

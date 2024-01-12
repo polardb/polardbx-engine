@@ -10,20 +10,20 @@
 
 #include "global_defines.h"
 #ifndef MYSQL8
-#include "sql_plugin.h"
 #include <my_global.h>
+#include "sql_plugin.h"
 #endif
-#include "sql/log.h"
 #include <mysql.h>
 #include <mysql/plugin.h>
 #include <mysql/service_my_plugin_log.h>
+#include "sql/log.h"
 
 #define POLARX_RPC_PLUGIN_NAME "polarx_rpc"
 
 namespace polarx_rpc {
 class Cserver;
 class CrequestCache;
-} // namespace polarx_rpc
+}  // namespace polarx_rpc
 
 struct polarx_rpc_info_t final {
   /// server
@@ -40,8 +40,8 @@ struct polarx_rpc_info_t final {
   std::atomic<int64> tcp_connections = {0};
   std::atomic<int64> tcp_closing = {0};
   //// session count use polarx_rpc::g_session_count;
-  std::atomic<int64> total_sessions = {0}; /// include internal session
-  std::atomic<int64> threads = {0};        /// working threads(without watchdog)
+  std::atomic<int64> total_sessions = {0};  /// include internal session
+  std::atomic<int64> threads = {0};  /// working threads(without watchdog)
   std::atomic<int64> sql_hit = {0};
   std::atomic<int64> sql_miss = {0};
   std::atomic<int64> sql_evict = {0};

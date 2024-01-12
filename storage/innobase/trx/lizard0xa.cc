@@ -31,16 +31,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "lizard0xa.h"
-#include "lizard0read0types.h"
-#include "lizard0undo.h"
-#include "m_ctype.h"
-#include "mysql/plugin.h"
-#include "sql/xa.h"
-#include "trx0sys.h"
 #include "ha_innodb.h"
 #include "lizard0ha_innodb.h"
-#include "sql/sql_class.h"
+#include "lizard0read0types.h"
+#include "lizard0undo.h"
 #include "lizard0ut.h"
+#include "m_ctype.h"
+#include "mysql/plugin.h"
+#include "sql/sql_class.h"
+#include "sql/xa.h"
+#include "trx0sys.h"
 
 #include "sql/sql_class.h"
 #include "sql/sql_plugin_var.h"
@@ -96,7 +96,6 @@ bool trx_group_match_by_xid(const XID *lhs, const XID *rhs) {
   @param[in]    vision    current query view
 */
 void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
-
   /** Restrict only user client thread */
   if (my_trx->mysql_thd == nullptr ||
       my_trx->mysql_thd->system_thread != NON_SYSTEM_THREAD ||
@@ -142,7 +141,7 @@ struct my_hash<uint64_t> {
 /* We assume to have `unsigned long int' value with at least 32 bits.  */
 #define HASHWORDBITS 32
 template <>
-struct my_hash<char [XIDDATASIZE]> {
+struct my_hash<char[XIDDATASIZE]> {
   uint64_t operator()(const char key[XIDDATASIZE]) {
     uint64_t hval, g;
     const char *str = key;
@@ -190,7 +189,7 @@ uint64_t hash_xid(const XID *xid) {
 }
 
 struct TrxSysLockable {
-  static TrxSysLockable& instance() {
+  static TrxSysLockable &instance() {
     static TrxSysLockable m_instance;
     return m_instance;
   }
@@ -358,4 +357,3 @@ bool trx_slot_check_validity(const trx_t *trx) {
 
 }  // namespace xa
 }  // namespace lizard
-

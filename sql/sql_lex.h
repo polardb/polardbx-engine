@@ -1346,16 +1346,13 @@ class Query_block : public Query_term {
 
   bool add_item_to_list(Item *item);
   bool add_ftfunc_to_list(Item_func_match *func);
-  Table_ref *add_table_to_list(THD *thd, Table_ident *table, const char *alias,
-                               ulong table_options,
-                               thr_lock_type flags = TL_UNLOCK,
-                               enum_mdl_type mdl_type = MDL_SHARED_READ,
-                               List<Index_hint> *hints = nullptr,
-                               List<String> *partition_names = nullptr,
-                               LEX_STRING *option = nullptr,
-                               Parse_context *pc = nullptr,
-                               Sequence_scan_mode seq_scan_mode = 
-                               Sequence_scan_mode::ORIGINAL_SCAN);
+  Table_ref *add_table_to_list(
+      THD *thd, Table_ident *table, const char *alias, ulong table_options,
+      thr_lock_type flags = TL_UNLOCK, enum_mdl_type mdl_type = MDL_SHARED_READ,
+      List<Index_hint> *hints = nullptr,
+      List<String> *partition_names = nullptr, LEX_STRING *option = nullptr,
+      Parse_context *pc = nullptr,
+      Sequence_scan_mode seq_scan_mode = Sequence_scan_mode::ORIGINAL_SCAN);
 
   /**
     Add item to the hidden part of select list
@@ -2230,9 +2227,10 @@ class Query_block : public Query_term {
   Item *resolve_rollup_item(THD *thd, Item *item);
   bool resolve_rollup(THD *thd);
 
- /* change setup_wild to public because we need to call it */
+  /* change setup_wild to public because we need to call it */
  public:
   bool setup_wild(THD *thd);
+
  private:
   bool setup_order_final(THD *thd);
   bool setup_group(THD *thd);

@@ -33,12 +33,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0cleanout_h
 #define lizard0cleanout_h
 
+#include "buf0block_hint.h"
 #include "buf0types.h"
 #include "page0types.h"
 #include "rem0types.h"
 #include "trx0types.h"
 #include "ut0mutex.h"
-#include "buf0block_hint.h"
 
 #include "lizard0undo0types.h"
 #include "lizard0ut.h"
@@ -143,7 +143,7 @@ void txn_undo_hash_close();
 */
 void btr_cur_upd_lizard_fields_clust_rec_log(const rec_t *rec,
                                              const dict_index_t *index,
-                                             const txn_rec_t* txn_rec,
+                                             const txn_rec_t *txn_rec,
                                              mtr_t *mtr);
 
 /**
@@ -205,6 +205,7 @@ class Page {
   const page_id_t &page() const { return m_page_id; }
 
   const dict_index_t *index() const { return m_index; }
+
  private:
   page_id_t m_page_id;
   const dict_index_t *m_index;

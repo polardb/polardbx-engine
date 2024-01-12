@@ -198,16 +198,14 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
     if (reopen_error_log()) result = true;
   }
 
-  if ((options & REFRESH_SLOW_LOG) && opt_slow_log)
-  {
-    if ((log_output_options & LOG_FILE)
-        && query_logger.reopen_log_file(QUERY_LOG_SLOW))
+  if ((options & REFRESH_SLOW_LOG) && opt_slow_log) {
+    if ((log_output_options & LOG_FILE) &&
+        query_logger.reopen_log_file(QUERY_LOG_SLOW))
       result = true;
 
     /* Rotate slow log if support it. */
-    if ((log_output_options & LOG_TABLE)
-        && thd
-        && query_logger.rotate_log_table(thd, QUERY_LOG_SLOW))
+    if ((log_output_options & LOG_TABLE) && thd &&
+        query_logger.rotate_log_table(thd, QUERY_LOG_SLOW))
       result = true;
   }
 
@@ -239,8 +237,10 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
         than it would help them)
        */
       tmp_write_to_binlog = 0;
-      //TODO @yanhua, need it ?? with mysqld.cc: mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
-      // if (mysql_bin_log.is_open()) {
+      // TODO @yanhua, need it ?? with mysqld.cc:
+      // mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true,
+      // true);
+      //  if (mysql_bin_log.is_open()) {
       if (!mysql_bin_log.is_closed()) {
         if (mysql_bin_log.rotate_and_purge(thd, true)) *write_to_binlog = -1;
       }

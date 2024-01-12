@@ -391,9 +391,8 @@ void Rpl_info_table_access::drop_thd(THD *thd) {
     thd_created = false;
   }
 
-  if (old_thd)
-  {
+  if (old_thd) {
     old_thd->store_globals();
-    old_thd= NULL;
+    old_thd = NULL;
   }
 }

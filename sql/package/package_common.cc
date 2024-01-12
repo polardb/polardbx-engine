@@ -26,4 +26,4 @@
 #include "my_murmur3.h"  // my_murmur3_32
 #include "sql/common/component.h"
 
-namespace im {} /* namespace std */
+namespace im {}  // namespace im

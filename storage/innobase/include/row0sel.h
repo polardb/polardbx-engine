@@ -347,9 +347,9 @@ struct sel_node_t {
 
   // ReadView *read_view;
   lizard::Vision *vision;
-                            /*!< if the query is a non-locking
-                             consistent read, its read view is
-                             placed here, otherwise NULL */
+  /*!< if the query is a non-locking
+   consistent read, its read view is
+   placed here, otherwise NULL */
   bool consistent_read;      /*!< true if the select is a consistent,
                               non-locking read */
   order_node_t *order_by;    /*!< order by column definition, or

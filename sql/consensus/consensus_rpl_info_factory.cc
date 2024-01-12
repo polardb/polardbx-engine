@@ -27,8 +27,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 #include "sql/consensus_info.h"
 #include "sql/rpl_info_factory.h"
-#include "sql/table.h"
 #include "sql/rpl_msr.h"
+#include "sql/table.h"
 
 #include "sql/consensus/consensus_err.h"
 #include "sql/consensus/consensus_rpl_info_factory.h"
@@ -50,7 +50,8 @@ Rpl_info_factory::struct_file_data Rpl_info_factory::consensus_file_data;
 Master_info *Rpl_info_factory::new_mi_object(uint instances,
                                              const char *channel) {
   Master_info *mi = nullptr;
-  bool is_xpaxos = Multisource_info::is_xpaxos_replication_channel_name(channel);
+  bool is_xpaxos =
+      Multisource_info::is_xpaxos_replication_channel_name(channel);
 
   if (is_xpaxos) {
     mi = new XPaxos_master_info(
@@ -87,7 +88,8 @@ Relay_log_info *Rpl_info_factory::new_rli_object(bool is_slave_recovery,
                                                  const char *channel,
                                                  bool is_rli_fake) {
   Relay_log_info *rli = nullptr;
-  bool is_xpaxos = Multisource_info::is_xpaxos_replication_channel_name(channel);
+  bool is_xpaxos =
+      Multisource_info::is_xpaxos_replication_channel_name(channel);
 
   if (is_xpaxos) {
     rli = new XPaxos_relay_log_info(
@@ -194,4 +196,3 @@ void Rpl_info_factory::init_consensus_repo_metadata() {
   Consensus_info::set_nullable_fields(&consensus_table_data.nullable_fields);
   Consensus_info::set_nullable_fields(&consensus_file_data.nullable_fields);
 }
-

@@ -57,11 +57,13 @@ bool match_field_value(const Message &expected_msg, const Message &msg,
         expected_notice->type() == notice->type()) {
       std::unique_ptr<Message> expected_notice_payload{
           parser::get_notice_message_from_text(
-              static_cast<PolarXRPC::Notice::Frame_Type>(expected_notice->type()),
+              static_cast<PolarXRPC::Notice::Frame_Type>(
+                  expected_notice->type()),
               "", nullptr, true)};
       std::unique_ptr<Message> actual_notice_payload{
           parser::get_notice_message_from_text(
-              static_cast<PolarXRPC::Notice::Frame_Type>(expected_notice->type()),
+              static_cast<PolarXRPC::Notice::Frame_Type>(
+                  expected_notice->type()),
               "", nullptr, true)};
 
       if (nullptr == expected_notice_payload.get()) {

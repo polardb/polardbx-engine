@@ -5,21 +5,21 @@
 #ifndef MYSQL_CHANGESET_COMMON_H
 #define MYSQL_CHANGESET_COMMON_H
 
+#include <atomic>
 #include <list>
 #include <map>
-#include <unordered_map>
-#include <string>
-#include <sstream>
-#include <utility>
 #include <memory>
-#include <atomic>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <utility>
 
 #include <mysql.h>
 
-#include "sql/psi_memory_key.h"
-#include "mysql/service_mysql_alloc.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
+#include "mysql/service_mysql_alloc.h"
+#include "sql/psi_memory_key.h"
 
 namespace im {
 
@@ -29,10 +29,7 @@ static const uint64_t MAX_MEMORY_SIZE = 1 << 22;
 // 1024 * 1024 * 32
 static const uint64_t MAX_MEMORY_LIMIT = 1 << 25;
 
-enum ChangeType {
-  DELETE,
-  INSERT
-};
+enum ChangeType { DELETE, INSERT };
 
 struct FileHeader {
   unsigned int pk_size;
@@ -40,9 +37,10 @@ struct FileHeader {
 };
 
 class DBTableName {
-public:
+ public:
   DBTableName() {}
-  DBTableName(std::string a, std::string b) : db_name(std::move(a)),tb_name(std::move(b)){}
+  DBTableName(std::string a, std::string b)
+      : db_name(std::move(a)), tb_name(std::move(b)) {}
 
   std::string db_name;
   std::string tb_name;
@@ -64,41 +62,33 @@ public:
  *
  */
 class Change {
-public:
-  Change(ChangeType t, std::string pk) : pk(std::move(pk)), type(t), next(nullptr) {}
+ public:
+  Change(ChangeType t, std::string pk)
+      : pk(std::move(pk)), type(t), next(nullptr) {}
 
-  std::string &get_primary_key() {
-    return this->pk;
-  }
+  std::string &get_primary_key() { return this->pk; }
 
-  ChangeType get_change_type() {
-    return type;
-  }
+  ChangeType get_change_type() { return type; }
 
-  Change *get_next() {
-    return next.get();
-  }
+  Change *get_next() { return next.get(); }
 
-  void set_next(std::unique_ptr<Change> &ptr) {
-    this->next = std::move(ptr);
-  }
+  void set_next(std::unique_ptr<Change> &ptr) { this->next = std::move(ptr); }
 
   void *operator new(size_t size) {
-    return my_malloc(key_memory_CS_PRIMARY_KEY_CACHE, size, MYF(MY_WME | ME_FATALERROR));
+    return my_malloc(key_memory_CS_PRIMARY_KEY_CACHE, size,
+                     MYF(MY_WME | ME_FATALERROR));
   }
 
-  void operator delete(void* ptr) {
-    my_free(ptr);
-  }
+  void operator delete(void *ptr) { my_free(ptr); }
 
-private:
+ private:
   std::string pk;
-  ChangeType type;     // type of this change
+  ChangeType type;  // type of this change
   std::unique_ptr<Change> next;
 };
 
 class ChangeSetCache {
-public:
+ public:
   uint64_t insert_count;
   uint64_t update_count;
   uint64_t delete_count;
@@ -107,12 +97,11 @@ public:
   mutable std::list<std::pair<my_off_t, std::unique_ptr<Change>>> current_pks;
 
   void *operator new(size_t size) {
-    return my_malloc(key_memory_CS_PRIMARY_KEY_CACHE, size, MYF(MY_WME | ME_FATALERROR));
+    return my_malloc(key_memory_CS_PRIMARY_KEY_CACHE, size,
+                     MYF(MY_WME | ME_FATALERROR));
   }
 
-  void operator delete(void* ptr) {
-    my_free(ptr);
-  }
+  void operator delete(void *ptr) { my_free(ptr); }
 
   ChangeSetCache() {
     insert_count = 0;
@@ -121,9 +110,7 @@ public:
     current_pos = 0;
   }
 
-  void add_save_point(my_off_t pos) {
-    current_pos = pos;
-  }
+  void add_save_point(my_off_t pos) { current_pos = pos; }
 
   void rollback_to_save_point(my_off_t pos) {
     for (auto it = current_pks.begin(); it != current_pks.end(); ++it) {
@@ -155,25 +142,23 @@ public:
   }
 };
 
-}
+}  // namespace im
 
 namespace std {
-  template <>
-  struct hash<im::DBTableName>
-  {
-    std::size_t operator()(const im::DBTableName& k) const
-    {
-      using std::hash;
-      using std::string;
-  
-      // Compute individual hash values for first,
-      // second and third and combine them using XOR
-      // and bit shifting:
-  
-      return ((hash<string>()(k.db_name)
-              ^ (hash<string>()(k.tb_name) << 1)) >> 1);
-    }
-  };
-}
+template <>
+struct hash<im::DBTableName> {
+  std::size_t operator()(const im::DBTableName &k) const {
+    using std::hash;
+    using std::string;
 
-#endif //MYSQL_CHANGESET_COMMON_H
+    // Compute individual hash values for first,
+    // second and third and combine them using XOR
+    // and bit shifting:
+
+    return ((hash<string>()(k.db_name) ^ (hash<string>()(k.tb_name) << 1)) >>
+            1);
+  }
+};
+}  // namespace std
+
+#endif  // MYSQL_CHANGESET_COMMON_H

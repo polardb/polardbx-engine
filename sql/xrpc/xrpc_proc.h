@@ -15,7 +15,7 @@ namespace im {
 extern LEX_CSTRING XRPC_PROC_SCHEMA;
 
 class Xrpc_proc_base : public Proc {
-public:
+ public:
   explicit Xrpc_proc_base(PSI_memory_key key) : Proc(key) {}
 
   /* Setting timestamp native procedure schema */
@@ -25,7 +25,7 @@ public:
 };
 
 class Proc_perf_hist : public Xrpc_proc_base {
-public:
+ public:
   explicit Proc_perf_hist(PSI_memory_key key) : Xrpc_proc_base(key) {
     m_result_type = Result_type::RESULT_SET;
     m_parameters.push_back(MYSQL_TYPE_VARCHAR);
@@ -45,20 +45,21 @@ public:
 };
 
 class Cmd_perf_hist : public Sql_cmd_admin_proc {
-public:
+ public:
 #ifdef MYSQL8PLUS
   Cmd_perf_hist(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
 #else
   Cmd_perf_hist(THD *thd, List<Item> *list, const Proc *proc)
 #endif
-      : Sql_cmd_admin_proc(thd, list, proc) {}
+      : Sql_cmd_admin_proc(thd, list, proc) {
+  }
 
   bool pc_execute(THD *thd) final;
 
   void send_result(THD *thd, bool error) final;
 
-private:
+ private:
   std::string name_;
 };
 
-} // namespace im
+}  // namespace im

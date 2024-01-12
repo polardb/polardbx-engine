@@ -360,7 +360,6 @@ class Ccl_proc_show : public Ccl_proc_base {
   }
 };
 
-
 /**
   5) dbms_ccl.flush_ccl_queue();
 

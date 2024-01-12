@@ -34,8 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef SQL_XA_SPECIFICATION_H
 #define SQL_XA_SPECIFICATION_H
 
+#include "sql/lizard/lizard_rpl_gcn.h"  // MyGCN...
 #include "sql/xa.h"
-#include "sql/lizard/lizard_rpl_gcn.h" // MyGCN...
 
 /**
  * Transaction coordinator should write log to complete XA,
@@ -52,15 +52,11 @@ class XA_specification {
 
   virtual ~XA_specification() {}
 
-  virtual std::string print() {
-    return m_gcn.print();
-  }
+  virtual std::string print() { return m_gcn.print(); }
 
   virtual void clear() { m_gcn.reset(); }
 
-  XA_specification(const XA_specification &other) {
-    m_gcn = other.gcn();
-  }
+  XA_specification(const XA_specification &other) { m_gcn = other.gcn(); }
 
   XA_specification &operator=(const XA_specification &other) {
     if (this != &other) {
@@ -70,7 +66,7 @@ class XA_specification {
   }
 
   void set_gcn(const MyGCN &gcn) { m_gcn = gcn; }
-  const MyGCN& gcn() const { return m_gcn; }
+  const MyGCN &gcn() const { return m_gcn; }
 
   [[nodiscard]] virtual XA_specification *clone() const {
     return new XA_specification(*this);

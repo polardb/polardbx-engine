@@ -31,9 +31,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "lizard0purge.h"
-#include "lizard0scn.h"
-#include "lizard0gcs.h"
 #include "lizard0dbg.h"
+#include "lizard0gcs.h"
+#include "lizard0scn.h"
 
 #include "mtr0log.h"
 #include "trx0purge.h"
@@ -394,4 +394,3 @@ void Purge_blocked_stat::retained_by_time(purge_blocked_cause_t cause,
 }
 
 }  // namespace lizard
-

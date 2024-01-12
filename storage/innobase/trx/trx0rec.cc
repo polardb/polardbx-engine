@@ -57,9 +57,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0rseg.h"
 #include "ut0mem.h"
 
-#include "my_dbug.h"
-#include "lizard0undo.h"
 #include "lizard0row.h"
+#include "lizard0undo.h"
+#include "my_dbug.h"
 
 namespace dd {
 class Spatial_reference_system;
@@ -1740,13 +1740,10 @@ byte *trx_undo_update_rec_get_sys_cols(
   return (const_cast<byte *>(ptr));
 }
 
-byte *trx_undo_update_rec_get_update(const byte *ptr, const dict_index_t *index,
-                                     ulint type, trx_id_t trx_id,
-                                     roll_ptr_t roll_ptr, ulint info_bits,
-                                     mem_heap_t *heap, upd_t **upd,
-                                     lob::undo_vers_t *lob_undo,
-                                     type_cmpl_t &type_cmpl,
-                                     txn_info_t txn_info) {
+byte *trx_undo_update_rec_get_update(
+    const byte *ptr, const dict_index_t *index, ulint type, trx_id_t trx_id,
+    roll_ptr_t roll_ptr, ulint info_bits, mem_heap_t *heap, upd_t **upd,
+    lob::undo_vers_t *lob_undo, type_cmpl_t &type_cmpl, txn_info_t txn_info) {
   DBUG_TRACE;
 
   upd_field_t *upd_field;
@@ -2493,8 +2490,7 @@ bool trx_undo_prev_version_build(
     mtr_t *index_mtr ATTRIB_USED_ONLY_IN_DEBUG, const rec_t *rec,
     const dict_index_t *const index, ulint *offsets, mem_heap_t *heap,
     rec_t **old_vers, mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
-    lob::undo_vers_t *lob_undo,
-    const lizard::Vision *vision) {
+    lob::undo_vers_t *lob_undo, const lizard::Vision *vision) {
   DBUG_TRACE;
 
   trx_undo_rec_t *undo_rec = nullptr;
@@ -2546,8 +2542,8 @@ bool trx_undo_prev_version_build(
 
   mtr_start(&txn_mtr);
   if (trx_undo_get_undo_rec(roll_ptr, &txn_rec, heap, is_temp,
-                            index->table->name, &undo_rec,
-                            is_as_of, &txn_mtr)) {
+                            index->table->name, &undo_rec, is_as_of,
+                            &txn_mtr)) {
     if (v_status & TRX_UNDO_PREV_IN_PURGE) {
       /* We are fetching the record being purged */
       undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp);

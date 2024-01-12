@@ -27,7 +27,7 @@ inline uint get_valid_charset_collation(const CHARSET_INFO *resultset_cs,
 }
 
 class CconvertIfNecessary {
-public:
+ public:
   CconvertIfNecessary(const CHARSET_INFO *resultset_cs, const char *value,
                       const size_t value_length, const CHARSET_INFO *value_cs) {
     if (is_value_charset_valid(resultset_cs, value_cs)) {
@@ -53,10 +53,10 @@ public:
   const char *get_ptr() const { return m_ptr; }
   size_t get_length() const { return m_len; }
 
-private:
+ private:
   const char *m_ptr;
   size_t m_len;
   std::unique_ptr<char[]> m_buff;
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

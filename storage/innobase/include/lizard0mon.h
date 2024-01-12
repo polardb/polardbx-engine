@@ -404,4 +404,3 @@ void txn_lookup_stat(txn_lookup_entry entry);
   } while (0)
 
 #endif  // lizard0mon_h
-

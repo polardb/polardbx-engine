@@ -71,9 +71,8 @@ template size_t Pair_key_icase_hash<std::string, std::string>::operator()(
 
 } /* namespace im */
 
-
 namespace std {
-template<typename F, typename S>
+template <typename F, typename S>
 size_t hash<im::Pair_key_type<F, S>>::operator()(
     const im::Pair_key_type<F, S> &p) const {
   return hash<F>()(static_cast<const F>(p.first)) ^

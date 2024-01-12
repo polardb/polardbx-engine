@@ -22,7 +22,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  */
 
-#include "my_sys.h" // escape_string_for_mysql
+#include "my_sys.h"  // escape_string_for_mysql
 
 #include "../utility/error.h"
 
@@ -42,7 +42,7 @@ const std::string RETURNING_CLAUSE = "call dbms_trans.returning('?', '?')";
 namespace {
 
 class Arg_inserter {
-public:
+ public:
   explicit Arg_inserter(Query_string_builder *qb) : m_qb(qb) {}
 
   void operator()() {
@@ -50,7 +50,8 @@ public:
     m_qb->format() % Query_formatter::No_escape<const char *>(k_value_null);
   }
 
-  template <typename Value_type> void operator()(const Value_type &value) {
+  template <typename Value_type>
+  void operator()(const Value_type &value) {
     m_qb->format() % value;
   }
 
@@ -58,11 +59,11 @@ public:
     m_qb->format() % value;
   }
 
-private:
+ private:
   Query_string_builder *m_qb;
 };
 
-} // namespace
+}  // namespace
 
 std::string get_returning_field(const std::string &hint, size_t pos) {
   std::string fields = "*";
@@ -145,4 +146,4 @@ void Sql_statement_builder::build(const std::string &query,
   m_qb->format_finalize();
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

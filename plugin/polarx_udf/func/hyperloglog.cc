@@ -19,29 +19,29 @@
 
 #include "../service/udf.h"
 
-#include <vector>
-#include <string>
 #include <math.h>
 #include <stdint.h>
-#include <math.h>
 #include <cstring>
+#include <string>
+#include <vector>
 
-#define HLL_P 14  /* The greater is P, the smaller the error. */
-#define HLL_Q (64-HLL_P)  /* The number of bits of the hash value used for */
-                          /*  determining the number of leading zeros. */
-#define HLL_REGISTERS (1<<HLL_P)  /* With P=14, 16384 registers. */
-#define HLL_P_MASK (HLL_REGISTERS-1)  /* Mask to index register. */
-#define HLL_BITS 6  /* Enough to count up to 63 leading zeroes. */
-#define HLL_REGISTER_MAX ((1<<HLL_BITS)-1)
-#define HLL_ALPHA_INF 0.721347520444481703680  /* constant for 0.5/ln(2) */
+#define HLL_P 14           /* The greater is P, the smaller the error. */
+#define HLL_Q (64 - HLL_P) /* The number of bits of the hash value used for */
+                           /*  determining the number of leading zeros. */
+#define HLL_REGISTERS (1 << HLL_P)     /* With P=14, 16384 registers. */
+#define HLL_P_MASK (HLL_REGISTERS - 1) /* Mask to index register. */
+#define HLL_BITS 6 /* Enough to count up to 63 leading zeroes. */
+#define HLL_REGISTER_MAX ((1 << HLL_BITS) - 1)
+#define HLL_ALPHA_INF 0.721347520444481703680 /* constant for 0.5/ln(2) */
 
-template<class HashT>
+template <class HashT>
 class HyperLogLog {
   class Registers {
-  public:
+   public:
     Registers() {
-      /* Allocate 1 byte more explicitly to avoid the out-of-bounds arrayaccess */
-      m_regs.resize((HLL_REGISTERS * HLL_BITS / 8) + 1 , 0);
+      /* Allocate 1 byte more explicitly to avoid the out-of-bounds arrayaccess
+       */
+      m_regs.resize((HLL_REGISTERS * HLL_BITS / 8) + 1, 0);
     }
 
     inline size_t size() const { return m_regs.size(); }
@@ -58,7 +58,8 @@ class HyperLogLog {
     inline uint8_t get(uint16_t pos) const {
       uint32_t byte = pos * HLL_BITS / 8;
       uint32_t bit = (pos * HLL_BITS) & 7;
-      return ((m_regs[byte] >> bit) | (m_regs[byte+1] << (8-bit))) & HLL_REGISTER_MAX;
+      return ((m_regs[byte] >> bit) | (m_regs[byte + 1] << (8 - bit))) &
+             HLL_REGISTER_MAX;
     }
 
     inline void set(uint16_t pos, uint8_t val) {
@@ -66,8 +67,8 @@ class HyperLogLog {
       uint32_t bit = (pos * HLL_BITS) & 7;
       m_regs[byte] &= ~(HLL_REGISTER_MAX << bit);
       m_regs[byte] |= (val << bit);
-      m_regs[byte+1] &= ~(HLL_REGISTER_MAX >> (8-bit));
-      m_regs[byte+1] |= (val >> (8-bit));
+      m_regs[byte + 1] &= ~(HLL_REGISTER_MAX >> (8 - bit));
+      m_regs[byte + 1] |= (val >> (8 - bit));
     }
 
     inline void ReplaceIfGreater(uint16_t pos, uint8_t val) {
@@ -86,8 +87,8 @@ class HyperLogLog {
     void GetHistogram(std::vector<int> &reghisto) const {
       if (HLL_REGISTERS == 16384 && HLL_BITS == 6) {
         const uint8_t *r = m_regs.data();
-        uint8_t r0, r1, r2, r3, r4, r5, r6, r7, r8, r9,
-                      r10, r11, r12, r13, r14, r15;
+        uint8_t r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14,
+            r15;
         for (int j = 0; j < 1024; j++) {
           /* Handle 16 registers per iteration. */
           r0 = r[0] & 63;
@@ -138,11 +139,11 @@ class HyperLogLog {
       return m_regs.data();
     }
 
-  private:
+   private:
     std::vector<uint8_t> m_regs;
   };
 
-public:
+ public:
   void add(uint8_t *p, size_t len) {
     uint64_t hash = m_hash(p, len);
     m_registers.ReplaceIfGreater(position(hash), ZeroRunLength(hash));
@@ -154,25 +155,23 @@ public:
 
     std::vector<int> reghisto(64, 0);
     m_registers.GetHistogram(reghisto);
-    double z = m * tau((m-reghisto[HLL_Q+1])/(double)m);
+    double z = m * tau((m - reghisto[HLL_Q + 1]) / (double)m);
     for (int j = HLL_Q; j >= 1; --j) {
-        z += reghisto[j];
-        z *= 0.5;
+      z += reghisto[j];
+      z *= 0.5;
     }
-    z += m * sigma(reghisto[0]/(double)m);
-    E = llroundl(HLL_ALPHA_INF*m*m/z);
+    z += m * sigma(reghisto[0] / (double)m);
+    E = llroundl(HLL_ALPHA_INF * m * m / z);
 
     return (size_t)E;
   }
 
-  void merge(HyperLogLog<HashT> &hll) {
-    m_registers.merge(hll.m_registers);
-  }
+  void merge(HyperLogLog<HashT> &hll) { m_registers.merge(hll.m_registers); }
 
   void inline reset() { m_registers.reset(); }
 
   /* The reg data size should be 1 byte less than its real size. */
-  inline size_t GetRegSize() const { return m_registers.size()-1; }
+  inline size_t GetRegSize() const { return m_registers.size() - 1; }
 
   int InitRegs(uint8_t *buf, size_t len) {
     if (len < GetRegSize()) return -1;
@@ -190,7 +189,7 @@ public:
     return 0;
   }
 
-private:
+ private:
   /* Helper function sigma as defined in
    * "New cardinality estimation algorithms for HyperLogLog sketches"
    * Otmar Ertl, arXiv:1702.01284 */
@@ -204,7 +203,7 @@ private:
       zPrime = z;
       z += x * y;
       y += y;
-    } while(zPrime != z);
+    } while (zPrime != z);
     return z;
   }
 
@@ -220,14 +219,12 @@ private:
       x = sqrt(x);
       zPrime = z;
       y *= 0.5;
-      z -= pow(1 - x, 2)*y;
-    } while(zPrime != z);
+      z -= pow(1 - x, 2) * y;
+    } while (zPrime != z);
     return z / 3;
   }
 
-  static inline uint16_t position(uint16_t hash) {
-    return (hash & HLL_P_MASK);
-  }
+  static inline uint16_t position(uint16_t hash) { return (hash & HLL_P_MASK); }
 
   static uint8_t ZeroRunLength(uint64_t hash) {
     uint8_t rl = 1;
@@ -240,38 +237,37 @@ private:
     return rl;
   }
 
-private:
+ private:
   HashT m_hash;
   Registers m_registers;
 };
 
 class MurmurHash {
-public:
-  MurmurHash(uint64_t seed = 0xadc83b19ULL) :
-    m_seed(seed) {}
+ public:
+  MurmurHash(uint64_t seed = 0xadc83b19ULL) : m_seed(seed) {}
   ~MurmurHash() {}
 
-  uint64_t operator() (uint8_t *p, size_t len) {
+  uint64_t operator()(uint8_t *p, size_t len) {
     const uint64_t m = 0xc6a4a7935bd1e995;
     const int r = 47;
     uint64_t h = m_seed ^ (len * m);
-    const uint8_t *data = (const uint8_t *) p;
-    const uint8_t *end = data + (len-(len&7));
+    const uint8_t *data = (const uint8_t *)p;
+    const uint8_t *end = data + (len - (len & 7));
 
-    while(data != end) {
+    while (data != end) {
       uint64_t k;
 
 #ifdef WORDS_BIGENDIAN
-      k = (uint64_t) data[0];
-      k |= (uint64_t) data[1] << 8;
-      k |= (uint64_t) data[2] << 16;
-      k |= (uint64_t) data[3] << 24;
-      k |= (uint64_t) data[4] << 32;
-      k |= (uint64_t) data[5] << 40;
-      k |= (uint64_t) data[6] << 48;
-      k |= (uint64_t) data[7] << 56;
+      k = (uint64_t)data[0];
+      k |= (uint64_t)data[1] << 8;
+      k |= (uint64_t)data[2] << 16;
+      k |= (uint64_t)data[3] << 24;
+      k |= (uint64_t)data[4] << 32;
+      k |= (uint64_t)data[5] << 40;
+      k |= (uint64_t)data[6] << 48;
+      k |= (uint64_t)data[7] << 56;
 #else
-      k = *((const uint64_t*)data);
+      k = *((const uint64_t *)data);
 #endif
 
       k *= m;
@@ -282,15 +278,28 @@ public:
       data += 8;
     }
 
-    switch(len & 7) {
-    case 7: h ^= (uint64_t)data[6] << 48; /* fall-thru */ __attribute__ ((fallthrough));
-    case 6: h ^= (uint64_t)data[5] << 40; /* fall-thru */ __attribute__ ((fallthrough));
-    case 5: h ^= (uint64_t)data[4] << 32; /* fall-thru */ __attribute__ ((fallthrough));
-    case 4: h ^= (uint64_t)data[3] << 24; /* fall-thru */ __attribute__ ((fallthrough));
-    case 3: h ^= (uint64_t)data[2] << 16; /* fall-thru */ __attribute__ ((fallthrough));
-    case 2: h ^= (uint64_t)data[1] << 8; /* fall-thru */ __attribute__ ((fallthrough));
-    case 1: h ^= (uint64_t)data[0];
-            h *= m; /* fall-thru */
+    switch (len & 7) {
+      case 7:
+        h ^= (uint64_t)data[6] << 48; /* fall-thru */
+        __attribute__((fallthrough));
+      case 6:
+        h ^= (uint64_t)data[5] << 40; /* fall-thru */
+        __attribute__((fallthrough));
+      case 5:
+        h ^= (uint64_t)data[4] << 32; /* fall-thru */
+        __attribute__((fallthrough));
+      case 4:
+        h ^= (uint64_t)data[3] << 24; /* fall-thru */
+        __attribute__((fallthrough));
+      case 3:
+        h ^= (uint64_t)data[2] << 16; /* fall-thru */
+        __attribute__((fallthrough));
+      case 2:
+        h ^= (uint64_t)data[1] << 8; /* fall-thru */
+        __attribute__((fallthrough));
+      case 1:
+        h ^= (uint64_t)data[0];
+        h *= m; /* fall-thru */
     };
 
     h ^= h >> r;
@@ -299,18 +308,17 @@ public:
     return h;
   }
 
-private:
+ private:
   uint64_t m_seed;
 };
 
-
-  /*
+/*
 bool hyperloglog_init(UDF_INIT *initid, UDF_ARGS *args, char *message);
 void hyperloglog_deinit(UDF_INIT *initid);
 void hyperloglog_clear(UDF_INIT *initid, char *is_null, char *error);
-void hyperloglog_add(UDF_INIT *initid, UDF_ARGS *args, char *is_null, char *error);
-char *hyperloglog(UDF_INIT *initid, UDF_ARGS *args, char *result,
-	                unsigned long *length, char *is_null, char *error);
+void hyperloglog_add(UDF_INIT *initid, UDF_ARGS *args, char *is_null, char
+*error); char *hyperloglog(UDF_INIT *initid, UDF_ARGS *args, char *result,
+                      unsigned long *length, char *is_null, char *error);
 bool hllndv_init(UDF_INIT *initid, UDF_ARGS *args, char *message);
 void hllndv_deinit(UDF_INIT *initid);
 void hllndv_clear(UDF_INIT *initid, char *is_null, char *error);
@@ -318,19 +326,18 @@ void hllndv_add(UDF_INIT *initid, UDF_ARGS *args, char *is_null, char *error);
 longlong hllndv(UDF_INIT *initid, UDF_ARGS *args, char *is_null, char *error);
 */
 
-bool hyperloglog_init(UDF_INIT *initid, UDF_ARGS *args, char *message)
-{
+bool hyperloglog_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
   if (args->arg_count != 1) {
     strcpy(message, "HyperLogLog accepts only one argument");
     return 1;
   }
 
   switch (args->arg_type[0]) {
-  case ROW_RESULT:
-    strcpy(message, "HyperLogLog cannot accept row type arguent");
-    return 1;
-  default:
-    break;
+    case ROW_RESULT:
+      strcpy(message, "HyperLogLog cannot accept row type arguent");
+      return 1;
+    default:
+      break;
   }
 
   HyperLogLog<MurmurHash> *hll = new (std::nothrow) HyperLogLog<MurmurHash>();
@@ -338,50 +345,46 @@ bool hyperloglog_init(UDF_INIT *initid, UDF_ARGS *args, char *message)
   initid->const_item = 0;
   initid->maybe_null = 0;
   initid->max_length = hll->GetRegSize();
-  initid->ptr = (char *) hll;
+  initid->ptr = (char *)hll;
   return 0;
 }
 
-void hyperloglog_deinit(UDF_INIT *initid)
-{
+void hyperloglog_deinit(UDF_INIT *initid) {
   if (initid->ptr) {
-    HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+    HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
     initid->ptr = NULL;
     delete hll;
   }
 }
 
-void hyperloglog_clear(UDF_INIT *initid,
-                       char *is_null MY_ATTRIBUTE((unused)),
-                       char *error MY_ATTRIBUTE((unused)))
-{
-  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+void hyperloglog_clear(UDF_INIT *initid, char *is_null MY_ATTRIBUTE((unused)),
+                       char *error MY_ATTRIBUTE((unused))) {
+  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
   hll->reset();
 }
 
 void hyperloglog_add(UDF_INIT *initid, UDF_ARGS *args,
                      char *is_null MY_ATTRIBUTE((unused)),
-                     char *error MY_ATTRIBUTE((unused)))
-{
-  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+                     char *error MY_ATTRIBUTE((unused))) {
+  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
   if (!args->args[0]) {
     hll->add(NULL, 0);
     return;
   }
 
   switch (args->arg_type[0]) {
-  case STRING_RESULT:
-  case DECIMAL_RESULT:
-    hll->add((uint8_t *) args->args[0], args->lengths[0]);
-    break;
-  case INT_RESULT:
-    hll->add((uint8_t *) args->args[0], sizeof(longlong));
-    break;
-  case REAL_RESULT:
-    hll->add((uint8_t *) args->args[0], sizeof(double));
-    break;
-  default:
-    break;
+    case STRING_RESULT:
+    case DECIMAL_RESULT:
+      hll->add((uint8_t *)args->args[0], args->lengths[0]);
+      break;
+    case INT_RESULT:
+      hll->add((uint8_t *)args->args[0], sizeof(longlong));
+      break;
+    case REAL_RESULT:
+      hll->add((uint8_t *)args->args[0], sizeof(double));
+      break;
+    default:
+      break;
   }
 }
 
@@ -389,7 +392,7 @@ char *hyperloglog(UDF_INIT *initid MY_ATTRIBUTE((unused)),
                   UDF_ARGS *args MY_ATTRIBUTE((unused)), char *result,
                   unsigned long *length, char *is_null MY_ATTRIBUTE((unused)),
                   char *error) {
-  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
   if (*length < hll->GetRegSize()) {
     *error = 1;
     *length = hll->GetRegSize();
@@ -417,19 +420,18 @@ void hyperloglog_udf(gs::udf::Udf_definition *def) {
   def->m_func = (Udf_func_any)hyperloglog;
 }
 
-bool hllndv_init(UDF_INIT *initid, UDF_ARGS *args, char *message)
-{
+bool hllndv_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
   if (args->arg_count != 1) {
     strcpy(message, "HLLNDV accepts only one argument");
     return 1;
   }
 
   switch (args->arg_type[0]) {
-  case ROW_RESULT:
-    strcpy(message, "HLLNDV cannot accept row type arguent");
-    return 1;
-  default:
-    break;
+    case ROW_RESULT:
+      strcpy(message, "HLLNDV cannot accept row type arguent");
+      return 1;
+    default:
+      break;
   }
 
   HyperLogLog<MurmurHash> *hll = new (std::nothrow) HyperLogLog<MurmurHash>();
@@ -437,50 +439,46 @@ bool hllndv_init(UDF_INIT *initid, UDF_ARGS *args, char *message)
   initid->const_item = 0;
   initid->maybe_null = 0;
   initid->max_length = hll->GetRegSize();
-  initid->ptr = (char *) hll;
+  initid->ptr = (char *)hll;
   return 0;
 }
 
-void hllndv_deinit(UDF_INIT *initid)
-{
+void hllndv_deinit(UDF_INIT *initid) {
   if (initid->ptr) {
-    HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+    HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
     initid->ptr = NULL;
     delete hll;
   }
 }
 
-void hllndv_clear(UDF_INIT *initid,
-                       char *is_null MY_ATTRIBUTE((unused)),
-                       char *error MY_ATTRIBUTE((unused)))
-{
-  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+void hllndv_clear(UDF_INIT *initid, char *is_null MY_ATTRIBUTE((unused)),
+                  char *error MY_ATTRIBUTE((unused))) {
+  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
   hll->reset();
 }
 
 void hllndv_add(UDF_INIT *initid, UDF_ARGS *args,
-                     char *is_null MY_ATTRIBUTE((unused)),
-                     char *error MY_ATTRIBUTE((unused)))
-{
-  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+                char *is_null MY_ATTRIBUTE((unused)),
+                char *error MY_ATTRIBUTE((unused))) {
+  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
   if (!args->args[0]) {
     hll->add(NULL, 0);
     return;
   }
 
   switch (args->arg_type[0]) {
-  case STRING_RESULT:
-  case DECIMAL_RESULT:
-    hll->add((uint8_t *) args->args[0], args->lengths[0]);
-    break;
-  case INT_RESULT:
-    hll->add((uint8_t *) args->args[0], sizeof(longlong));
-    break;
-  case REAL_RESULT:
-    hll->add((uint8_t *) args->args[0], sizeof(double));
-    break;
-  default:
-    break;
+    case STRING_RESULT:
+    case DECIMAL_RESULT:
+      hll->add((uint8_t *)args->args[0], args->lengths[0]);
+      break;
+    case INT_RESULT:
+      hll->add((uint8_t *)args->args[0], sizeof(longlong));
+      break;
+    case REAL_RESULT:
+      hll->add((uint8_t *)args->args[0], sizeof(double));
+      break;
+    default:
+      break;
   }
 }
 
@@ -488,11 +486,11 @@ longlong hllndv(UDF_INIT *initid MY_ATTRIBUTE((unused)),
                 UDF_ARGS *args MY_ATTRIBUTE((unused)),
                 char *is_null MY_ATTRIBUTE((unused)),
                 char *error MY_ATTRIBUTE((unused))) {
-  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *) initid->ptr;
+  HyperLogLog<MurmurHash> *hll = (HyperLogLog<MurmurHash> *)initid->ptr;
 
   gs::udf::udf_counter.hllndv_counter++;
 
-  return (longlong) hll->count();
+  return (longlong)hll->count();
 }
 
 void hllndv_udf(gs::udf::Udf_definition *def) {
@@ -505,4 +503,3 @@ void hllndv_udf(gs::udf::Udf_definition *def) {
   def->m_func_clear = (Udf_func_clear)hllndv_clear;
   def->m_func = (Udf_func_any)hllndv;
 }
-

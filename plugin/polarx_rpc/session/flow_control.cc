@@ -9,13 +9,11 @@
 namespace polarx_rpc {
 
 void CflowControl::wait_begin() {
-  if (thd_ != nullptr)
-    thd_wait_begin(thd_, THD_WAIT_USER_LOCK);
+  if (thd_ != nullptr) thd_wait_begin(thd_, THD_WAIT_USER_LOCK);
 }
 
 void CflowControl::wait_end() {
-  if (thd_ != nullptr)
-    thd_wait_end(thd_);
+  if (thd_ != nullptr) thd_wait_end(thd_);
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

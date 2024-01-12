@@ -54,7 +54,7 @@ size_t hash<im::String_outline>::operator()(const im::String_outline &s) const {
   return murmur3_32(reinterpret_cast<const uchar *>(s.c_str()), s.size(), 0);
 }
 
-template<typename F, typename S>
+template <typename F, typename S>
 size_t hash<im::Pair_key_type<F, S>>::operator()(
     const im::Pair_key_type<F, S> &p) const {
   return hash<F>()(static_cast<const F>(p.first)) ^
@@ -64,4 +64,4 @@ size_t hash<im::Pair_key_type<F, S>>::operator()(
 template size_t
 hash<im::Pair_key_type<im::String_outline, im::String_outline>>::operator()(
     const im::Pair_key_type<im::String_outline, im::String_outline> &p) const;
-} /* namespace im */
+}  // namespace std

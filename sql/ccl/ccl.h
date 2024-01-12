@@ -297,16 +297,16 @@ class Ccl_rule_set : public PSI_memory_base, public Disable_copy_base {
     3) Ccl_rule
   */
 
-
-
   /**
    Revision History:
    -----------------
    1. Add ccl queue strategy
-      -- It allocated several rules according to variable ccl_queue_bucket_count,
-         Every bucket controled the concurrency count by ccl_queue_bucket_size.
+      -- It allocated several rules according to variable
+   ccl_queue_bucket_count, Every bucket controled the concurrency count by
+   ccl_queue_bucket_size.
 
-         So it use array to save all queue rules, and mapped the position by hash value.
+         So it use array to save all queue rules, and mapped the position by
+   hash value.
   */
   using Intact_object_rules = Ccl_rule_map_type<Ccl_rule>;
   using Intact_value_type = Intact_object_rules::value_type;
@@ -551,7 +551,6 @@ class Ccl_rule_set : public PSI_memory_base, public Disable_copy_base {
   by lock.
 */
 class System_ccl : public PSI_memory_base, public Disable_copy_base {
-
  public:
   System_ccl(PSI_memory_key key)
       : PSI_memory_base(key),

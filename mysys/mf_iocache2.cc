@@ -42,8 +42,8 @@
 #include "my_io.h"
 #include "my_sys.h"
 #include "mysql/psi/mysql_file.h"
-#include "template_utils.h"
 #include "mysql/psi/mysql_mutex.h"
+#include "template_utils.h"
 
 /*
   Copy contents of an IO_CACHE to a file.
@@ -86,7 +86,6 @@ int my_b_copy_to_file(IO_CACHE *cache, FILE *file) {
   return 0;
 }
 
-
 my_off_t my_b_append_tell(IO_CACHE *info) {
 /*
   Sometimes we want to make sure that the variable is not put into
@@ -126,9 +125,8 @@ my_off_t my_b_append_tell(IO_CACHE *info) {
       Save the value of mysql_file_tell in res so we can see it when studying
       coredump
     */
-    assert(info->end_of_file -
-                    (info->append_read_pos - info->write_buffer) ==
-                (res = mysql_file_tell(info->file, MYF(0))));
+    assert(info->end_of_file - (info->append_read_pos - info->write_buffer) ==
+           (res = mysql_file_tell(info->file, MYF(0))));
     mysql_file_seek(info->file, save_pos, MY_SEEK_SET, MYF(0));
   }
 #endif
@@ -141,7 +139,6 @@ my_off_t my_b_safe_tell(IO_CACHE *info) {
   if (unlikely(info->type == SEQ_READ_APPEND)) return my_b_append_tell(info);
   return my_b_tell(info);
 }
-
 
 /*
   Make next read happen at the given position

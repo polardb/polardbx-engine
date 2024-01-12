@@ -518,7 +518,7 @@ bool update_server_I_S_metadata(THD *thd) {
   DBUG_EXECUTE_IF("test_i_s_metadata_version",
                   { actual_version = UNKNOWN_PLUGIN_VERSION; });
 
- if (d->get_target_I_S_version() == actual_version &&
+  if (d->get_target_I_S_version() == actual_version &&
       upgrade_ctx->get_target_extra_I_S_version() == extra_version &&
       !dd::bootstrap::DD_bootstrap_ctx::instance().dd_upgrade_done())
     return false;

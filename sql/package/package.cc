@@ -25,7 +25,8 @@
 
   Internal native mysql package.
 
-  DBMS package is designed as collections of procedures which are for administration.
+  DBMS package is designed as collections of procedures which are for
+  administration.
 
   Not only procedure but also other type of object that implemented the package
   interface.

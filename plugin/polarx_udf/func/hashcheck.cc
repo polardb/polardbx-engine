@@ -1,7 +1,7 @@
+#include <string.h>
 #include <boost/crc.hpp>
 #include <cstdlib>
 #include <string>
-#include <string.h>
 
 #include "../service/udf.h"
 
@@ -76,18 +76,17 @@ const uint64_t HashCheckCaculator::fact_r = 2;
 const char HashCheckCaculator::separator_tag = 0xff;
 const char HashCheckCaculator::null_tag = 0xfe;
 
-
 bool hashcheck_init(UDF_INIT *initid, UDF_ARGS *args, char *message);
 void hashcheck_deinit(UDF_INIT *initid);
 void hashcheck_reset(UDF_INIT *initid, UDF_ARGS *args, unsigned char *is_null,
                      unsigned char *error);
-void hashcheck_clear(UDF_INIT *initid, unsigned char *is_null, unsigned char *error);
+void hashcheck_clear(UDF_INIT *initid, unsigned char *is_null,
+                     unsigned char *error);
 void hashcheck_add(UDF_INIT *initid, UDF_ARGS *args, unsigned char *is_null,
                    unsigned char *error);
 longlong hashcheck(UDF_INIT *initid, UDF_ARGS *args, unsigned char *is_null,
-                    unsigned char *error);
+                   unsigned char *error);
 void hashcheck_udf(gs::udf::Udf_definition *def);
-
 
 bool hashcheck_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
   if (args->arg_count == 0) {
@@ -156,8 +155,7 @@ void hashcheck_add(UDF_INIT *initid, UDF_ARGS *args, unsigned char *,
 }
 
 longlong hashcheck(UDF_INIT *initid, UDF_ARGS *, unsigned char *is_null,
-                    unsigned char *) {
-
+                   unsigned char *) {
   gs::udf::udf_counter.hashcheck_counter++;
   HashCheckCaculator *caculator =
       reinterpret_cast<HashCheckCaculator *>(initid->ptr);
@@ -183,5 +181,5 @@ void hashcheck_udf(gs::udf::Udf_definition *def) {
   def->m_func_deinit = (Udf_func_deinit)hashcheck_deinit;
   def->m_func_add = (Udf_func_add)hashcheck_add;
   def->m_func_clear = (Udf_func_clear)hashcheck_clear;
-  def->m_func = (Udf_func_any) hashcheck;
+  def->m_func = (Udf_func_any)hashcheck;
 }

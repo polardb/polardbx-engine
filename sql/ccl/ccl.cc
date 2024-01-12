@@ -29,11 +29,11 @@
 #include "sql/ccl/ccl_hint.h"
 #include "sql/current_thd.h"
 #include "sql/derror.h"  // ER_THD
+#include "sql/mysqld_thd_manager.h"
 #include "sql/sql_class.h"
 #include "sql/sql_error.h"
 #include "sql/sql_lex.h"
 #include "sql/table.h"
-#include "sql/mysqld_thd_manager.h"
 
 /**
   Concurrency control module.
@@ -45,7 +45,7 @@ namespace im {
 ulong ccl_wait_timeout = CCL_LONG_WAIT;
 
 /* The max waiting count when concurrency control */
-ulonglong ccl_max_waiting_count = CCL_DEFAULT_WAITING_COUNT; 
+ulonglong ccl_max_waiting_count = CCL_DEFAULT_WAITING_COUNT;
 
 /**
   Comply the rule when execute the statement.
@@ -123,7 +123,6 @@ bool Ccl_comply::comply_queue(THD *thd, LEX *lex, Ccl_queue_hint *hint) {
 
   DBUG_RETURN(false);
 }
-
 
 /**
   End the statement if comply some rule.
@@ -331,7 +330,8 @@ size_t Ccl_rule_set::delete_command_rule(ulonglong rule_id) {
 /* Clear command container */
 void Ccl_rule_set::clear_command_rule() {
   m_command_size.store(0);
-  if (m_command_rule) destroy_object<Ccl_rule>(m_command_rule);;
+  if (m_command_rule) destroy_object<Ccl_rule>(m_command_rule);
+  ;
   m_command_rule = nullptr;
 }
 
@@ -560,7 +560,7 @@ size_t Ccl_rule_set::insert_keyword_rules(std::vector<Ccl_record *> &rules,
   size_t num = 0;
   Ccl_rule *rule = nullptr;
   DBUG_ENTER("Ccl_rule_set::insert_keyword_rules");
-  for (auto it = rules.cbegin(); it != rules.cend();  ++it) {
+  for (auto it = rules.cbegin(); it != rules.cend(); ++it) {
     Ccl_record *record = *it;
     rule = allocate_ccl_object<Ccl_rule>(record, key_memory_ccl);
     if (!rule->bind_slot(level)) {
@@ -589,7 +589,7 @@ size_t Ccl_rule_set::insert_command_rules(std::vector<Ccl_record *> &rules,
   size_t num = 0;
   Ccl_rule *rule = nullptr;
   DBUG_ENTER("Ccl_rule_set::insert_command_rules");
-  for (auto it = rules.cbegin(); it != rules.cend();  ++it) {
+  for (auto it = rules.cbegin(); it != rules.cend(); ++it) {
     Ccl_record *record = *it;
     if (m_command_rule != nullptr) {
       if (level == Ccl_error_level::CCL_CRITICAL) {
@@ -933,15 +933,15 @@ void Ccl_slot::enter_cond(THD *thd, ulonglong version) {
                  __LINE__);
   thd_wait_begin(thd, THD_WAIT_SLEEP);
 
-  if(m_concurrency_count == 0) {
+  if (m_concurrency_count == 0) {
     my_error(ER_CCL_REFUSE_QUERY, MYF(0));
-    goto end;    
+    goto end;
   }
 
-  if(ccl_max_waiting_count != 0 && m_waiting >= ccl_max_waiting_count) {
+  if (ccl_max_waiting_count != 0 && m_waiting >= ccl_max_waiting_count) {
     my_error(ER_CCL_MAX_WAITING_COUNT, MYF(0));
     goto end;
-  } 
+  }
   /**
     Wait requirement:
     1) retry times is not more than ccl_wait_timeout.

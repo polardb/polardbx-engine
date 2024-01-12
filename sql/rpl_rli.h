@@ -63,10 +63,10 @@
 #include "sql/system_variables.h"
 #include "sql/table.h"
 
-#include "sql/lizard_rpl_rli.h"
-#include "sql/consensus/consensus_channel.h"
-#include "sql/rpl_applier_reader.h" // Rpl_applier_reader
 #include "replica_read_manager.h"
+#include "sql/consensus/consensus_channel.h"
+#include "sql/lizard_rpl_rli.h"
+#include "sql/rpl_applier_reader.h"  // Rpl_applier_reader
 
 class Commit_order_manager;
 class Master_info;
@@ -689,7 +689,7 @@ class Relay_log_info : public Rpl_info {
     max_binlog_size.
   */
  protected:
-  //TODO @yanhua, unnecessary atomic
+  // TODO @yanhua, unnecessary atomic
   std::atomic<ulonglong> consensus_apply_index;
   /**
      Event group means a group of events of a transaction. group_relay_log_name
@@ -1186,7 +1186,8 @@ class Relay_log_info : public Rpl_info {
 
   bool curr_group_seen_gtid;   // current group started with Gtid-event or not
   /** TODO: Cons_log_index <12-07-23, zanye.zjy> */
-  bool curr_group_seen_gcn;    // Lizard: current group started with Gcn-event or not
+  bool curr_group_seen_gcn;  // Lizard: current group started with Gcn-event or
+                             // not
 
  public:
   bool curr_group_seen_begin;  // current group started with B-event or not
@@ -1630,11 +1631,11 @@ class Relay_log_info : public Rpl_info {
     event_relay_log_number = number;
   }
 
+  inline ulonglong get_consensus_apply_index() const {
+    return consensus_apply_index;
+  }
 
-  inline ulonglong get_consensus_apply_index() const { return consensus_apply_index; }
-
-  inline void set_consensus_apply_index(ulonglong log_index)
-  {
+  inline void set_consensus_apply_index(ulonglong log_index) {
     consensus_apply_index = log_index;
   }
 

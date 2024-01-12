@@ -264,7 +264,7 @@ enum mlog_id_t {
 
   // /** Lizard: update the lizard fields (scn, uba) in compact format */
   // MLOG_COMP_REC_CLUST_LIZARD_UPDATE_80027 = 80,
-  
+
   /** Lizard: GCN metadata when commit. */
   MLOG_GCN_METADATA = 81,
 

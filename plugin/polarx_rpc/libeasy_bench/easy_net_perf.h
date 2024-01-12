@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <getopt.h>
 #include <easy_io.h>
+#include <getopt.h>
 
 namespace polarx_rpc {
 

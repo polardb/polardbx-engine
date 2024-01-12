@@ -27,7 +27,6 @@
 #include "my_inttypes.h"
 #include "sql_string.h"
 
-
 class THD;
 class Item;
 class Query_block;

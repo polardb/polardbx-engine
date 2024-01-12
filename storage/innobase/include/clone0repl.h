@@ -34,12 +34,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <vector>
 #include "clone0monitor.h"
+#include "lizard0scn.h"
 #include "os0thread-create.h"
 #include "sql/rpl_gtid.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0sys.h"
-#include "lizard0scn.h"
 
 class Clone_persist_gtid;
 

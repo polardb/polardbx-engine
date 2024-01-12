@@ -105,7 +105,7 @@ class Package : public PSI_memory_base {
   }
 
   template <typename T>
-  const Proc_map *get_all_element(){
+  const Proc_map *get_all_element() {
     return m_map<T>();
   }
 
@@ -135,4 +135,3 @@ class Package : public PSI_memory_base {
 } /* namespace im */
 
 #endif
-

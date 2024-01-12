@@ -28,8 +28,8 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "sql/sql_lex.h"
 
-#include "sql/outline/outline_digest.h"
 #include "sql/common/reload.h"
+#include "sql/outline/outline_digest.h"
 #include "sql/outline/outline_reload.h"
 
 #include <stack>
@@ -100,7 +100,6 @@ void outline_destroy() {
   System_outline::m_system_outline = nullptr;
   DBUG_VOID_RETURN;
 }
-
 
 /**
   Flush outline cache if force_clean is true and fill new outlines.
@@ -329,8 +328,7 @@ bool preview_statement_outline(THD *thd, LEX_CSTRING &db, LEX_CSTRING &query,
 
   size_t i = 1;
   while (table_list) {
-    generate_outline_preview(thd, db.str, buff, i,
-                             table_list, container);
+    generate_outline_preview(thd, db.str, buff, i, table_list, container);
     table_list = table_list->next_global;
     i++;
   }
@@ -368,7 +366,7 @@ void Query_blocks_list::reset_query_blocks_list() {
 /**
   Add the select query block into the global list.
 */
-void Query_blocks_list::add_to_query_blocks(Query_block *select_lex){
+void Query_blocks_list::add_to_query_blocks(Query_block *select_lex) {
   *(select_lex->prev_qb = all_query_blocks_last) = select_lex;
   all_query_blocks_last = &select_lex->next_qb;
 }

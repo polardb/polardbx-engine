@@ -27,8 +27,8 @@ Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
 #ifndef lizard0iv_h
 #define lizard0iv_h
 
-#include "univ.i"
 #include "hash0hash.h"
+#include "univ.i"
 
 namespace lizard {
 
@@ -193,7 +193,7 @@ class Atomic_random_array
   virtual bool do_before_operation(size_t pos) override {
     uint loop = 0;
     bool expected;
-    uint used_index = (pos%512) * 64;
+    uint used_index = (pos % 512) * 64;
   retry:
     if (loop++ > ATOMIC_RANDOM_ARRAY_RETRY_MAX_TIMES) return true;
 
@@ -207,7 +207,7 @@ class Atomic_random_array
 
   virtual void do_after_operation(bool required, size_t pos) override {
     if (required) {
-      m_used[(pos%512) * 64].store(false);
+      m_used[(pos % 512) * 64].store(false);
     }
   }
 

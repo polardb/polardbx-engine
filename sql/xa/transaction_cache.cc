@@ -61,9 +61,9 @@
 #include "sql/transaction_info.h"
 #include "sql/xa/transaction_cache.h"
 #include "sql_string.h"
+#include "storage/innobase/include/ut0log.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
-#include "storage/innobase/include/ut0log.h"
 
 #include <iostream>
 
@@ -96,7 +96,8 @@ xa::Transaction_cache::Transaction_cache()
 }
 #endif /* HAVE_PSI_INTERFACE */
 
-bool xa::Transaction_cache::detach(Transaction_ctx *transaction, bool force_logged) {
+bool xa::Transaction_cache::detach(Transaction_ctx *transaction,
+                                   bool force_logged) {
   bool res = false;
   XID_STATE *xs = transaction->xid_state();
   XID xid = *(xs->get_xid());

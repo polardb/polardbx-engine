@@ -5243,7 +5243,7 @@ NUM_RETRIES_ON_PARTIAL_IO times to read/write the complete data.
   ssize_t n_bytes = os_file_io(type, file, buf, n, offset, err, nullptr);
 
   PPI_STATEMENT_CALL(end_statement_IO_operation)(ppi_statement, &data, 1, n);
-  
+
   os_n_pending_reads.fetch_sub(1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_READS);
 

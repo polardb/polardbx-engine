@@ -35,7 +35,7 @@ extern std::atomic<int> g_session_count;
 class Csession final : public CsessionBase {
   NO_COPY_MOVE(Csession);
 
-private:
+ private:
   /// epoll info(always valid)
   CmtEpoll &epoll_;
 
@@ -61,9 +61,12 @@ private:
   /// cascade error
   err_t last_error_;
 
-public:
+ public:
   explicit Csession(CmtEpoll &epoll, CtcpConnection &tcp, const uint64_t &sid)
-      : CsessionBase(sid), epoll_(epoll), tcp_(tcp), shutdown_(false),
+      : CsessionBase(sid),
+        epoll_(epoll),
+        tcp_(tcp),
+        shutdown_(false),
         encoder_(sid) {
     g_session_count.fetch_add(1, std::memory_order_acq_rel);
   }
@@ -99,8 +102,7 @@ public:
     CautoMcsSpinLock lck(queue_lock_, mcs_spin_cnt);
     if (message_queue_.empty()) {
       need_notify = true;
-      if (enable_perf_hist)
-        schedule_time_ = Ctime::steady_ns();
+      if (enable_perf_hist) schedule_time_ = Ctime::steady_ns();
     } else if (message_queue_.size() >= max_queued_messages)
       return false;
     message_queue_.emplace(std::forward<msg_t>(msg));
@@ -108,4 +110,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

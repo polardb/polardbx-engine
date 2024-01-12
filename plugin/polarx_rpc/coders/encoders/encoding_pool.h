@@ -32,7 +32,7 @@ namespace polarx_rpc {
 namespace protocol {
 
 class Page {
-public:
+ public:
   Page(const uint32_t size, char *data_ptr)
       : m_begin_data(reinterpret_cast<uint8_t *>(data_ptr)),
         m_end_data(m_begin_data + size),
@@ -65,7 +65,7 @@ public:
 };
 
 class Encoding_pool {
-public:
+ public:
   explicit Encoding_pool(const uint32_t local_cache, const uint32_t page_size)
       : m_local_cache(local_cache), m_page_size(page_size) {}
 
@@ -112,12 +112,12 @@ public:
 
   uint32_t get_page_size() const { return m_page_size; }
 
-private:
+ private:
   const uint32_t m_local_cache = 0;
   const uint32_t m_page_size = 0;
   Page *m_empty_pages = nullptr;
   uint32_t m_pages = 0;
 };
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

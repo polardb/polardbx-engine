@@ -43,6 +43,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fil0fil.h"
 #include "hash0hash.h"
 #include "ibuf0ibuf.h"
+#include "lizard0tcn.h"
 #include "log0recv.h"
 #include "log0write.h"
 #include "my_dbug.h"
@@ -55,7 +56,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "ut0byte.h"
 #include "ut0rnd.h"
-#include "lizard0tcn.h"
 
 /** The number of blocks from the LRU_old pointer onward, including
 the block pointed to, must be buf_pool->LRU_old_ratio/BUF_LRU_OLD_RATIO_DIV

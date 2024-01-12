@@ -58,6 +58,7 @@
 #include "mysql_time.h"
 #include "mysqld_error.h"
 #include "pfs_thread_provider.h"
+#include "plugin/polarx_rpc/utility/atomicex.h"
 #include "rwlock_scoped_lock.h"
 #include "sql/auth/sql_internal_account.h"
 #include "sql/auth/sql_security_ctx.h"
@@ -78,7 +79,6 @@
 #include "sql/sql_thd_internal_api.h"  // thd_set_thread_stack
 #include "sql/system_variables.h"
 #include "thr_mutex.h"
-#include "plugin/polarx_rpc/utility/atomicex.h"
 
 #include "ppi/ppi_statement.h"
 
@@ -753,7 +753,7 @@ bool Srv_session::module_deinit() {
 */
 bool Srv_session::is_valid(const Srv_session *session) {
   assert(session != nullptr);
-  if (session->safe_session) return true; /// fast bypass for PolarDB-X RPC
+  if (session->safe_session) return true;  /// fast bypass for PolarDB-X RPC
   const bool is_valid_session = ((session->m_state > SRV_SESSION_CREATED) &&
                                  (session->m_state < SRV_SESSION_CLOSED));
 

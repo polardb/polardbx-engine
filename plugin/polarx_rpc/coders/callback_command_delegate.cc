@@ -13,10 +13,10 @@ CcallbackCommandDelegate::Field_value::Field_value()
     : is_unsigned(false), is_string(false) {}
 
 CcallbackCommandDelegate::Field_value::Field_value(const Field_value &other)
-    : value(other.value), is_unsigned(other.is_unsigned),
+    : value(other.value),
+      is_unsigned(other.is_unsigned),
       is_string(other.is_string) {
-  if (other.is_string)
-    value.v_string = new std::string(*other.value.v_string);
+  if (other.is_string) value.v_string = new std::string(*other.value.v_string);
 }
 
 CcallbackCommandDelegate::Field_value::Field_value(const longlong &num,
@@ -52,15 +52,13 @@ CcallbackCommandDelegate::Field_value::Field_value(const char *str,
 }
 
 CcallbackCommandDelegate::Field_value::~Field_value() {
-  if (is_string)
-    delete value.v_string;
+  if (is_string) delete value.v_string;
 }
 
 CcallbackCommandDelegate::Row_data::~Row_data() { clear(); }
 
 void CcallbackCommandDelegate::Row_data::clear() {
-  for (auto f : fields)
-    delete f;
+  for (auto f : fields) delete f;
   fields.clear();
 }
 
@@ -105,16 +103,14 @@ void CcallbackCommandDelegate::reset() {
 int CcallbackCommandDelegate::start_row() {
   if (m_start_row) {
     m_current_row = m_start_row();
-    if (!m_current_row)
-      return true;
+    if (!m_current_row) return true;
   } else
     m_current_row = nullptr;
   return false;
 }
 
 int CcallbackCommandDelegate::end_row() {
-  if (m_end_row && !m_end_row(m_current_row))
-    return true;
+  if (m_end_row && !m_end_row(m_current_row)) return true;
   return false;
 }
 
@@ -127,8 +123,7 @@ ulong CcallbackCommandDelegate::get_client_capabilities() {
 /****** Getting data ******/
 int CcallbackCommandDelegate::get_null() {
   try {
-    if (m_current_row)
-      m_current_row->fields.push_back(nullptr);
+    if (m_current_row) m_current_row->fields.push_back(nullptr);
   } catch (std::exception &ignore) {
     return true;
   }
@@ -137,8 +132,7 @@ int CcallbackCommandDelegate::get_null() {
 
 int CcallbackCommandDelegate::get_integer(longlong value) {
   try {
-    if (m_current_row)
-      m_current_row->fields.push_back(new Field_value(value));
+    if (m_current_row) m_current_row->fields.push_back(new Field_value(value));
   } catch (std::exception &e) {
     return true;
   }
@@ -158,8 +152,7 @@ int CcallbackCommandDelegate::get_longlong(longlong value,
 
 int CcallbackCommandDelegate::get_decimal(const decimal_t *value) {
   try {
-    if (m_current_row)
-      m_current_row->fields.push_back(new Field_value(*value));
+    if (m_current_row) m_current_row->fields.push_back(new Field_value(*value));
   } catch (std::exception &e) {
     return true;
   }
@@ -168,8 +161,7 @@ int CcallbackCommandDelegate::get_decimal(const decimal_t *value) {
 
 int CcallbackCommandDelegate::get_double(double value, uint32) {
   try {
-    if (m_current_row)
-      m_current_row->fields.push_back(new Field_value(value));
+    if (m_current_row) m_current_row->fields.push_back(new Field_value(value));
   } catch (std::exception &e) {
     return true;
   }
@@ -178,8 +170,7 @@ int CcallbackCommandDelegate::get_double(double value, uint32) {
 
 int CcallbackCommandDelegate::get_date(const MYSQL_TIME *value) {
   try {
-    if (m_current_row)
-      m_current_row->fields.push_back(new Field_value(*value));
+    if (m_current_row) m_current_row->fields.push_back(new Field_value(*value));
   } catch (std::exception &e) {
     return true;
   }
@@ -188,8 +179,7 @@ int CcallbackCommandDelegate::get_date(const MYSQL_TIME *value) {
 
 int CcallbackCommandDelegate::get_time(const MYSQL_TIME *value, uint) {
   try {
-    if (m_current_row)
-      m_current_row->fields.push_back(new Field_value(*value));
+    if (m_current_row) m_current_row->fields.push_back(new Field_value(*value));
   } catch (std::exception &e) {
     return true;
   }
@@ -198,8 +188,7 @@ int CcallbackCommandDelegate::get_time(const MYSQL_TIME *value, uint) {
 
 int CcallbackCommandDelegate::get_datetime(const MYSQL_TIME *value, uint) {
   try {
-    if (m_current_row)
-      m_current_row->fields.push_back(new Field_value(*value));
+    if (m_current_row) m_current_row->fields.push_back(new Field_value(*value));
   } catch (std::exception &e) {
     return true;
   }
@@ -217,4 +206,4 @@ int CcallbackCommandDelegate::get_string(const char *const value, size_t length,
   return false;
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

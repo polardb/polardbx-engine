@@ -34,7 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define GCN_EVENT_H
 
 #include "control_events.h"
-#include "sql/lizard/lizard_rpl_gcn.h" // MyGCN...
+#include "sql/lizard/lizard_rpl_gcn.h"  // MyGCN...
 
 namespace binary_log {
 /**

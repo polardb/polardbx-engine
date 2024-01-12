@@ -33,8 +33,8 @@
 
 #include "sql/item_sequence_func.h"
 #include "sql/parse_tree_items.h"
-#include "sql/sql_sequence.h"
 #include "sql/protocol.h"
+#include "sql/sql_sequence.h"
 
 /**
   @addtogroup Sequence Engine
@@ -98,8 +98,6 @@ bool Item_func_nextval::parse_parameter() {
 
   return false;
 }
-
-
 
 /**
   All sequence function first parameter is table_ident.
@@ -321,9 +319,6 @@ bool Item_func_currval::add_table_to_lex_list(Parse_context *pc) {
     return true;
 
   return false;
-
 }
 
-
 /// @} (end of group Sequence Engine)
-

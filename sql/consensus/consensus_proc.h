@@ -177,8 +177,8 @@ class Consensus_proc : public Proc, public Disable_copy_base {
     return ss.str();
   }
 
-  [[nodiscard]] const std::vector<const Consensus_proc_type *> &
-  consensus_proc_params() const {
+  [[nodiscard]] const std::vector<const Consensus_proc_type *>
+      &consensus_proc_params() const {
     return m_consensus_proc_params;
   }
 

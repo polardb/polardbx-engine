@@ -806,16 +806,16 @@ MySQL clients support the protocol:
 #include "sql/mdl_context_backup.h"  // mdl_context_backup_manager
 #include "sql/my_decimal.h"
 #include "sql/mysqld_daemon.h"
-#include "sql/mysqld_thd_manager.h"     // Global_THD_manager
-#include "sql/opt_costconstantcache.h"  // delete_optimizer_cost_module
-#include "sql/range_optimizer/range_optimizer.h"  // range_optimizer_init
-#include "sql/options_mysqld.h"                   // OPT_THREAD_CACHE_SIZE
-#include "sql/partitioning/partition_handler.h"   // partitioning_init
-#include "sql/persisted_variable.h"               // Persisted_variables_cache
+#include "sql/mysqld_thd_manager.h"              // Global_THD_manager
+#include "sql/opt_costconstantcache.h"           // delete_optimizer_cost_module
+#include "sql/options_mysqld.h"                  // OPT_THREAD_CACHE_SIZE
+#include "sql/partitioning/partition_handler.h"  // partitioning_init
+#include "sql/persisted_variable.h"              // Persisted_variables_cache
 #include "sql/plugin_table.h"
 #include "sql/protocol.h"
 #include "sql/psi_memory_key.h"  // key_memory_MYSQL_RELAY_LOG_index
 #include "sql/query_options.h"
+#include "sql/range_optimizer/range_optimizer.h"    // range_optimizer_init
 #include "sql/replication.h"                        // thd_enter_cond
 #include "sql/resourcegroups/resource_group_mgr.h"  // init, post_init
 #ifdef _WIN32
@@ -887,12 +887,12 @@ MySQL clients support the protocol:
 #include "violite.h"
 #include "my_openssl_fips.h"  // OPENSSL_ERROR_LENGTH, set_fips_mode
 
-#include "sql/package/package_interface.h"
 #include "plugin/performance_point/pps_server.h"
-#include "sql/sequence_common.h"
-#include "sql/outline/outline_interface.h"
-#include "sys_vars_ext.h"
 #include "sql/ccl/ccl_interface.h"
+#include "sql/outline/outline_interface.h"
+#include "sql/package/package_interface.h"
+#include "sql/sequence_common.h"
+#include "sys_vars_ext.h"
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "storage/perfschema/pfs_server.h"
@@ -968,6 +968,7 @@ MySQL clients support the protocol:
 #include <mysql/components/services/mysql_rwlock_service.h>
 #include <mysql/components/services/ongoing_transaction_query_service.h>
 #include "sql/auth/dynamic_privileges_impl.h"
+#include "sql/common/reload.h"
 #include "sql/dd/dd.h"                   // dd::shutdown
 #include "sql/dd/dd_kill_immunizer.h"    // dd::DD_kill_immunizer
 #include "sql/dd/dictionary.h"           // dd::get_dictionary
@@ -981,24 +982,23 @@ MySQL clients support the protocol:
 #include "sql/server_component/mysql_server_keyring_lockable_imp.h"
 #include "sql/server_component/persistent_dynamic_loader_imp.h"
 #include "sql/srv_session.h"
-#include "sql/common/reload.h"
 
 #include "sql/binlog/lizard0recovery.h"
+#include "sql/bl_consensus_log.h"
 #include "sql/consensus/consensus_err.h"
 #include "sql/consensus/consensus_recovery.h"
 #include "sql/consensus_info.h"
 #include "sql/consensus_log_index.h"
-#include "sql/consensus_recovery_manager.h"
 #include "sql/consensus_log_manager.h"
 #include "sql/consensus_prefetch_manager.h"
+#include "sql/consensus_recovery_manager.h"
 #include "sql/sys_vars_consensus.h"
-#include "sql/bl_consensus_log.h"
 
 #include "sql/dd/recycle_bin/dd_recycle.h"
+#include "sql/log_table.h"
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
-#include "sql/log_table.h"
 
 using std::max;
 using std::min;
@@ -2273,8 +2273,8 @@ class Set_kill_conn : public Do_THD_Impl {
                      post_kill_notification, (killing_thd));
       /// and THD PolarDB-X RPC cb
       if (likely(killing_thd != nullptr))
-        MYSQL_CALLBACK(killing_thd->polarx_rpc_monitor,
-                       post_kill_notification, (killing_thd));
+        MYSQL_CALLBACK(killing_thd->polarx_rpc_monitor, post_kill_notification,
+                       (killing_thd));
     }
 
     if (killing_thd->is_killable && killing_thd->kill_immunizer == nullptr) {
@@ -2512,7 +2512,7 @@ void unireg_abort(int exit_code) {
   consensus_log_manager.stop_consensus_commit_pos_watcher();
   if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
     consensus_ptr->shutdown();
-  } 
+  }
 
   clean_up(!is_help_or_validate_option() && !daemon_launcher_quiet &&
            (exit_code || !opt_initialize)); /* purecov: inspected */
@@ -4511,11 +4511,13 @@ SHOW_VAR com_status_vars[] = {
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_STOP_GROUP_REPLICATION]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
-    {"xpaxos_replication_start", (char*) offsetof(System_status_var,
-                      com_stat[(uint) SQLCOM_START_XPAXOS_REPLICATION]),
+    {"xpaxos_replication_start",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_START_XPAXOS_REPLICATION]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
-    {"xpaxos_replication_stop",  (char*) offsetof(System_status_var,
-                      com_stat[(uint) SQLCOM_STOP_XPAXOS_REPLICATION]),
+    {"xpaxos_replication_stop",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_STOP_XPAXOS_REPLICATION]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"stmt_execute", (char *)offsetof(System_status_var, com_stmt_execute),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -4880,8 +4882,7 @@ int init_common_variables() {
       key_BINLOG_LOCK_commit_queue, key_BINLOG_LOCK_done,
       key_BINLOG_LOCK_flush_queue, key_BINLOG_LOCK_log,
       key_BINLOG_LOCK_binlog_end_pos, key_BINLOG_LOCK_sync,
-      key_BINLOG_LOCK_sync_queue, key_BINLOG_LOCK_xids,
-      key_BINLOG_LOCK_rotate,
+      key_BINLOG_LOCK_sync_queue, key_BINLOG_LOCK_xids, key_BINLOG_LOCK_rotate,
       key_BINLOG_LOCK_wait_for_group_turn, key_BINLOG_COND_done,
       key_BINLOG_COND_flush_queue, key_BINLOG_update_cond,
       key_BINLOG_prep_xids_cond, key_BINLOG_COND_wait_for_group_turn,
@@ -5434,7 +5435,7 @@ static int init_thread_environment() {
   mysql_mutex_init(key_LOCK_global_conn_mem_limit, &LOCK_global_conn_mem_limit,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(im::key_LOCK_internal_account_string,
-		   &im::LOCK_internal_account_string, MY_MUTEX_INIT_FAST);
+                   &im::LOCK_internal_account_string, MY_MUTEX_INIT_FAST);
   return 0;
 }
 
@@ -6297,7 +6298,8 @@ static int init_server_components() {
   if (delegates_init()) unireg_abort(MYSQLD_ABORT_EXIT);
 
   /* need to configure logging for xpaxos */
-  if (!opt_bin_log && xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
+  if (!opt_bin_log &&
+      xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
     LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--log-bin");
   }
 
@@ -6404,8 +6406,8 @@ static int init_server_components() {
                           log_bin_basename, ".index");
 
     /*
-      XPAXOS_RESOLVE : don't set opt_binlog_index_name, otherwise, incorrect file
-      name would be used in following call path,
+      XPAXOS_RESOLVE : don't set opt_binlog_index_name, otherwise, incorrect
+      file name would be used in following call path,
         Relay_log_info::rli_init_info() -> MYSQL_BIN_LOG::open_index_file()
     */
     // if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
@@ -6417,8 +6419,8 @@ static int init_server_components() {
     // }
 
     // if (log_bin_basename == nullptr || log_bin_index == nullptr) {
-    //   LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN, (int)FN_LEN);
-    //   unireg_abort(MYSQLD_ABORT_EXIT);
+    //   LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN,
+    //   (int)FN_LEN); unireg_abort(MYSQLD_ABORT_EXIT);
     // }
   }
 
@@ -6949,7 +6951,9 @@ static int init_server_components() {
   }
 
   // init and bind binlog to consensus log
-  if (consensus_log_manager.init(opt_consensus_log_cache_size, opt_consensus_prefetch_cache_size, opt_consensus_start_index))
+  if (consensus_log_manager.init(opt_consensus_log_cache_size,
+                                 opt_consensus_prefetch_cache_size,
+                                 opt_consensus_start_index))
     unireg_abort(MYSQLD_ABORT_EXIT);
   consensus_log_manager.set_binlog(&mysql_bin_log);
   mysql_bin_log.is_xpaxos_log = true;
@@ -6989,8 +6993,9 @@ static int init_server_components() {
         mysql_mutex_unlock(log_lock);
       } else if (opt_initialize) {
         // in boostrap case but binlog_file_list is not empty
-        xp::error(ER_XP_0) << "--initialize specified but the binlog index file '"
-                               << mysql_bin_log.get_index_fname() << "' is not empty.";
+        xp::error(ER_XP_0)
+            << "--initialize specified but the binlog index file '"
+            << mysql_bin_log.get_index_fname() << "' is not empty.";
         unireg_abort(MYSQLD_ABORT_EXIT);
       }
     }
@@ -6999,13 +7004,12 @@ static int init_server_components() {
   /* Initialize the optimizer cost module */
   init_optimizer_cost_module(true);
 
-  ReplicaInitializer replica_initializer(opt_initialize, /*opt_skip_replica_start*/ true,
-                                         rpl_channel_filters,
-                                         &opt_replica_skip_errors);
+  ReplicaInitializer replica_initializer(
+      opt_initialize, /*opt_skip_replica_start*/ true, rpl_channel_filters,
+      &opt_replica_skip_errors);
 
   /* If running with --initialize, do not start replication. */
-  if (!opt_initialize &&
-      !opt_consensus_force_recovery &&
+  if (!opt_initialize && !opt_consensus_force_recovery &&
       consensus_log_manager.init_consensus_info())
     unireg_abort(MYSQLD_ABORT_EXIT);
 
@@ -7495,7 +7499,7 @@ int mysqld_main(int argc, char **argv)
   if (!opt_validate_config) adjust_related_options(&requested_open_files);
 
   im::internal_guard_strategy_init(opt_initialize);
-  
+
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
   if (heo_error == 0) {
     if (!is_help_or_validate_option() && !opt_initialize) {
@@ -7818,7 +7822,7 @@ int mysqld_main(int argc, char **argv)
   keyring_lockable_init();
 
   pre_init_performance_point();
-  
+
   my_init_signals();
   /*
     Install server's my_abort routine to assure my_aborts prints signal info
@@ -8017,7 +8021,6 @@ int mysqld_main(int argc, char **argv)
   if (!server_id_supplied)
     LogErr(INFORMATION_LEVEL, ER_WARN_NO_SERVERID_SPECIFIED);
 
-
   /*
     For GalaxyEngine:
     bin_log must be set to ON
@@ -8084,7 +8087,8 @@ int mysqld_main(int argc, char **argv)
 
     purged_gtids_from_binlog.dbug_print("purged_gtids_from_binlog");
     gtids_in_binlog.dbug_print("gtids_in_binlog");
-    binlog::log_gtid_set(&purged_gtids_from_binlog, false, "purged_gtids_from_binlog");
+    binlog::log_gtid_set(&purged_gtids_from_binlog, false,
+                         "purged_gtids_from_binlog");
     binlog::log_gtid_set(&gtids_in_binlog, false, "gtids_in_binlog");
 
     if (!gtids_in_binlog.is_empty() &&
@@ -8093,7 +8097,8 @@ int mysqld_main(int argc, char **argv)
       if (!executed_gtids->is_empty())
         gtids_in_binlog_not_in_table.remove_gtid_set(executed_gtids);
 
-      binlog::log_gtid_set(&gtids_in_binlog_not_in_table, false, "gtids_in_binlog_not_in_table");
+      binlog::log_gtid_set(&gtids_in_binlog_not_in_table, false,
+                           "gtids_in_binlog_not_in_table");
 
       /*
         Save unsaved GTIDs into gtid_executed table, in the following
@@ -8303,21 +8308,22 @@ int mysqld_main(int argc, char **argv)
 
   binlog_unsafe_map_init();
 
-//  ReplicaInitializer replica_initializer(opt_initialize, opt_skip_replica_start,
-//                                         rpl_channel_filters,
-//                                         &opt_replica_skip_errors);
-//
-//  /* If running with --initialize, do not start replication. */
-//  if (!opt_initialize &&
-//      !opt_consensus_force_recovery &&
-//      consensus_log_manager.init_consensus_info())
-//    unireg_abort(MYSQLD_ABORT_EXIT);
-//
-//  int consensus_error = consensus_log_manager.init_service();
-//  if (consensus_error < 0)
-//    unireg_abort(MYSQLD_ABORT_EXIT);
-//  else if (consensus_error > 0)
-//    unireg_abort(MYSQLD_SUCCESS_EXIT);
+  //  ReplicaInitializer replica_initializer(opt_initialize,
+  //  opt_skip_replica_start,
+  //                                         rpl_channel_filters,
+  //                                         &opt_replica_skip_errors);
+  //
+  //  /* If running with --initialize, do not start replication. */
+  //  if (!opt_initialize &&
+  //      !opt_consensus_force_recovery &&
+  //      consensus_log_manager.init_consensus_info())
+  //    unireg_abort(MYSQLD_ABORT_EXIT);
+  //
+  //  int consensus_error = consensus_log_manager.init_service();
+  //  if (consensus_error < 0)
+  //    unireg_abort(MYSQLD_ABORT_EXIT);
+  //  else if (consensus_error > 0)
+  //    unireg_abort(MYSQLD_SUCCESS_EXIT);
 
 #ifdef WITH_LOCK_ORDER
   if (!opt_initialize) {
@@ -9217,54 +9223,45 @@ struct my_option my_long_options[] = {
      "Set the language used for the month names and the days of the week.",
      &lc_time_names_name, &lc_time_names_name, nullptr, GET_STR, REQUIRED_ARG,
      0, 0, 0, nullptr, 0, nullptr},
-    {"cluster-learner-node", OPT_CLUSTER,
-       "Cluster learner node type",
-       &opt_cluster_learner_node, &opt_cluster_learner_node, 0, GET_BOOL,
-       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-    {"cluster-log-type-node", OPT_CLUSTER,
-       "Cluster log type instance",
-       &opt_cluster_log_type_instance, &opt_cluster_log_type_instance, 0, GET_BOOL,
-       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-    {"cluster-info", OPT_CLUSTER,
-      "Cluster nodes ip-port information",
-      &opt_cluster_info, &opt_cluster_info, 0, GET_STR,
-      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-    {"cluster-purged-gtid", OPT_CLUSTER,
-      "Cluster set the purged gtid",
-      &opt_cluster_purged_gtid, &opt_cluster_purged_gtid, 0, GET_STR,
-      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    {"cluster-learner-node", OPT_CLUSTER, "Cluster learner node type",
+     &opt_cluster_learner_node, &opt_cluster_learner_node, 0, GET_BOOL,
+     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+    {"cluster-log-type-node", OPT_CLUSTER, "Cluster log type instance",
+     &opt_cluster_log_type_instance, &opt_cluster_log_type_instance, 0,
+     GET_BOOL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+    {"cluster-info", OPT_CLUSTER, "Cluster nodes ip-port information",
+     &opt_cluster_info, &opt_cluster_info, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0,
+     0, 0},
+    {"cluster-purged-gtid", OPT_CLUSTER, "Cluster set the purged gtid",
+     &opt_cluster_purged_gtid, &opt_cluster_purged_gtid, 0, GET_STR,
+     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
     {"cluster-current-term", OPT_CLUSTER,
-      "Cluster nodes current term  information",
-      &opt_cluster_current_term, &opt_cluster_current_term, 0, GET_ULL,
-      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+     "Cluster nodes current term  information", &opt_cluster_current_term,
+     &opt_cluster_current_term, 0, GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
     {"cluster-force-recover-index", OPT_CLUSTER,
-      "Cluster restore from leader set apply index point",
-      &opt_cluster_force_recover_index, &opt_cluster_force_recover_index, 0, GET_ULL,
-      REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-    {"cluster-force-change-meta", OPT_CLUSTER,
-       "Cluster force to change meta",
-       &opt_cluster_force_change_meta, &opt_cluster_force_change_meta, 0, GET_BOOL,
-       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-    {"cluster-dump-meta", OPT_CLUSTER,
-       "Cluster dump meta",
-       &opt_cluster_dump_meta, &opt_cluster_dump_meta, 0, GET_BOOL,
-       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+     "Cluster restore from leader set apply index point",
+     &opt_cluster_force_recover_index, &opt_cluster_force_recover_index, 0,
+     GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+    {"cluster-force-change-meta", OPT_CLUSTER, "Cluster force to change meta",
+     &opt_cluster_force_change_meta, &opt_cluster_force_change_meta, 0,
+     GET_BOOL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+    {"cluster-dump-meta", OPT_CLUSTER, "Cluster dump meta",
+     &opt_cluster_dump_meta, &opt_cluster_dump_meta, 0, GET_BOOL, REQUIRED_ARG,
+     0, 0, 0, 0, 0, 0},
     {"cluster-force-single-mode", OPT_CLUSTER,
-       "Cluster force to use single mode",
-       &opt_cluster_force_single_mode, &opt_cluster_force_single_mode, 0, GET_BOOL,
-       REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+     "Cluster force to use single mode", &opt_cluster_force_single_mode,
+     &opt_cluster_force_single_mode, 0, GET_BOOL, REQUIRED_ARG, 0, 0, 0, 0, 0,
+     0},
     {"cluster-mts-recover-use-index", OPT_CLUSTER,
-       "Cluster use idex to recover mts",
-       &opt_mts_recover_use_index, &opt_mts_recover_use_index, 0, GET_BOOL,
-       REQUIRED_ARG, 1, 0, 0, 0, 0, 0 },
-    {"cluster-start-index", OPT_CLUSTER,
-       "Cluster start valid index",
-       &opt_consensus_start_index, &opt_consensus_start_index, 0, GET_ULL,
-       REQUIRED_ARG, 1, 1, ULLONG_MAX, 0, 0, 0 },
+     "Cluster use idex to recover mts", &opt_mts_recover_use_index,
+     &opt_mts_recover_use_index, 0, GET_BOOL, REQUIRED_ARG, 1, 0, 0, 0, 0, 0},
+    {"cluster-start-index", OPT_CLUSTER, "Cluster start valid index",
+     &opt_consensus_start_index, &opt_consensus_start_index, 0, GET_ULL,
+     REQUIRED_ARG, 1, 1, ULLONG_MAX, 0, 0, 0},
     {"recover-snapshot", 0,
      "recover from the backup of cloud storage and output the committed index",
-     &opt_recover_snapshot, &opt_recover_snapshot,
-     0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+     &opt_recover_snapshot, &opt_recover_snapshot, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+     0, 0, 0},
     {"log-bin", OPT_BIN_LOG,
      "Configures the name prefix to use for binary log files. If the --log-bin "
      "option is not supplied, the name prefix defaults to \"binlog\". If the "
@@ -10223,16 +10220,18 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"Reload_slave", (char *)im::reload_entry_status, SHOW_ARRAY,
      SHOW_SCOPE_ALL},
-    {"consensus_fifo_cache_used_size", (char*) &show_fifo_cache_size, SHOW_FUNC,
-      SHOW_SCOPE_GLOBAL},
-    {"first_index_in_consensus_fifo_cache", (char*) &show_first_index_in_fifo_cache, SHOW_FUNC,
-      SHOW_SCOPE_GLOBAL},
-    {"consensus_fifo_cache_log_count", (char*) &show_log_count_in_fifo_cache, SHOW_FUNC,
-      SHOW_SCOPE_GLOBAL},
-    {"appliedindex_checker_queue", (char*) &show_appliedindex_checker_queue, SHOW_FUNC, 
-      SHOW_SCOPE_GLOBAL},
-    {"consensus_easy_pool_size", reinterpret_cast<char*>(const_cast<long int*>(&alisql::easy_pool_alloc_byte)), SHOW_LONG,
-      SHOW_SCOPE_GLOBAL},
+    {"consensus_fifo_cache_used_size", (char *)&show_fifo_cache_size, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"first_index_in_consensus_fifo_cache",
+     (char *)&show_first_index_in_fifo_cache, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"consensus_fifo_cache_log_count", (char *)&show_log_count_in_fifo_cache,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"appliedindex_checker_queue", (char *)&show_appliedindex_checker_queue,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"consensus_easy_pool_size",
+     reinterpret_cast<char *>(
+         const_cast<long int *>(&alisql::easy_pool_alloc_byte)),
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {

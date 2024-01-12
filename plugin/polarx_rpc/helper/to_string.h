@@ -38,18 +38,21 @@ inline std::string to_string(const my_gcvt_arg_type arg_type, T value) {
   return buffer;
 }
 
-} // namespace detail
+}  // namespace detail
 
-template <typename T> inline std::string to_string(T value) {
+template <typename T>
+inline std::string to_string(T value) {
   return std::to_string(value);
 }
 
-template <> inline std::string to_string<double>(double value) {
+template <>
+inline std::string to_string<double>(double value) {
   return detail::to_string(MY_GCVT_ARG_DOUBLE, value);
 }
 
-template <> inline std::string to_string<float>(float value) {
+template <>
+inline std::string to_string<float>(float value) {
   return detail::to_string(MY_GCVT_ARG_FLOAT, value);
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

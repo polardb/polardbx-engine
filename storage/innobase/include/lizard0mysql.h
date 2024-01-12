@@ -2,8 +2,8 @@
 #ifndef lizard0mysql_h
 #define lizard0mysql_h
 
-#include "lizard0scn.h"
 #include "lizard0read0types.h"
+#include "lizard0scn.h"
 #include "sql/lizard/lizard_snapshot.h"
 
 struct row_prebuilt_t;
@@ -77,8 +77,8 @@ struct asof_query_context_t {
 
   @return           dberr_t     DB_SUCCESS if convert successfully or it's not
                                 a flashback query.
-                                ERROR: DB_AS_OF_INTERNAL, DB_SNAPSHOT_OUT_OF_RANGE,
-                                DB_AS_OF_TABLE_DEF_CHANGED
+                                ERROR: DB_AS_OF_INTERNAL,
+  DB_SNAPSHOT_OUT_OF_RANGE, DB_AS_OF_TABLE_DEF_CHANGED
 */
 dberr_t prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt);
 
@@ -92,5 +92,5 @@ dberr_t prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt);
 dberr_t prebuilt_unbind_flashback_query(row_prebuilt_t *prebuilt);
 
 extern int convert_timestamp_to_scn(THD *thd, utc_t utc, scn_t *scn);
-}
+}  // namespace lizard
 #endif

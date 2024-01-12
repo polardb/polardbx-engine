@@ -39,12 +39,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0lst.h"
 #include "ut0mutex.h"
 
+#include "lizard0scn.h"
 #include "lizard0scn0types.h"
 #include "lizard0undo0types.h"
-#include "lizard0scn.h"
 
-#include "trx0types.h"
 #include "dict0mem.h"
+#include "trx0types.h"
 
 #include "lizard0xa0types.h"
 

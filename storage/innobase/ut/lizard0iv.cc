@@ -28,7 +28,6 @@ Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
 #include "lizard0tcn.h"
 #include "ut0new.h"
 
-
 namespace lizard {
 
 /** Constructor */
@@ -51,7 +50,6 @@ Lru_list<Element_type, Key_type, Value_type, Prealloc>::Lru_list() : hash() {
 template <typename Element_type, typename Key_type, typename Value_type,
           size_t Prealloc>
 Lru_list<Element_type, Key_type, Value_type, Prealloc>::~Lru_list() {
-
   /** 1.LOCK lru mutex */
   /** 2.LOCK hash mutex */
   /**
@@ -138,4 +136,3 @@ template Lru_list<tcn_node_t, trx_id_t, tcn_t, LRU_TCN_SIZE>::Lru_list();
 template Lru_list<tcn_node_t, trx_id_t, tcn_t, LRU_TCN_SIZE>::~Lru_list();
 
 }  // namespace lizard
-

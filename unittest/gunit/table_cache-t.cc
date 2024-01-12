@@ -145,8 +145,8 @@ class Mock_share : public TABLE_SHARE {
   ~Mock_share() { m_mem_root.Clear(); }
 
   TABLE *create_table(THD *thd) {
-    TABLE *result =
-        (TABLE *)my_malloc(PSI_NOT_INSTRUMENTED, sizeof(TABLE), MYF(MY_ZEROFILL));
+    TABLE *result = (TABLE *)my_malloc(PSI_NOT_INSTRUMENTED, sizeof(TABLE),
+                                       MYF(MY_ZEROFILL));
     new (result) TABLE;
 
     result->s = this;

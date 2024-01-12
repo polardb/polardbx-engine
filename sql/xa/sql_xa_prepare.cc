@@ -103,8 +103,7 @@ bool Sql_cmd_xa_prepare::execute(THD *thd) {
 
   if (!st) {
     if (!thd->is_engine_ha_data_detached() ||
-        !(st = applier_reset_xa_trans(thd)))
-    {
+        !(st = applier_reset_xa_trans(thd))) {
       /** Delay set OK status because some other result sets are also returned
       when calling dbms_xa proc. */
       if (!m_delay_ok) {

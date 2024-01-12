@@ -33,9 +33,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "dict0dd.h"
 #include "dict0mem.h"
-#include "row0mysql.h"
 #include "lizard0data0types.h"
 #include "lizard0undo.h"
+#include "row0mysql.h"
 
 namespace lizard {
 
@@ -93,8 +93,8 @@ void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap) {
                          false, phy_pos, v_added, v_dropped);
 
   dict_mem_table_add_col(table, heap, "DB_GCN_ID", DATA_SYS,
-                         DATA_GCN_ID | DATA_NOT_NULL, DATA_GCN_ID_LEN,
-                         false, phy_pos, v_added, v_dropped);
+                         DATA_GCN_ID | DATA_NOT_NULL, DATA_GCN_ID_LEN, false,
+                         phy_pos, v_added, v_dropped);
 }
 
 /**
@@ -415,9 +415,8 @@ bool lizard_dict_index_check(const dict_index_t *index, bool check_table) {
       field = index->get_field(i);
       col = field->col;
       if (col->is_virtual()) {
-        col_name = dict_table_get_v_col_name(
-                      index->table,
-                      ((dict_v_col_t*)(col))->v_pos);
+        col_name = dict_table_get_v_col_name(index->table,
+                                             ((dict_v_col_t *)(col))->v_pos);
       } else {
         col_name = index->table->get_col_name(col->ind);
       }

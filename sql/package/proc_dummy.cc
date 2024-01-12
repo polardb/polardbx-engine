@@ -24,8 +24,8 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/sql_security_ctx.h"
 
-#include "sql/package/proc.h"
 #include "sql/package/package_parse.h"
+#include "sql/package/proc.h"
 #include "sql/package/proc_dummy.h"
 
 #include "sql/protocol.h"

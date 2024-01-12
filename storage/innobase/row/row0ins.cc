@@ -64,9 +64,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <debug_sync.h>
 #include "my_dbug.h"
 
-#include "lizard0row.h"
 #include "lizard0dict.h"
 #include "lizard0page.h"
+#include "lizard0row.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there

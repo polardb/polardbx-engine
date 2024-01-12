@@ -24,11 +24,11 @@
 #include "sql/protocol.h"
 #include "sql/sql_parse.h"  // sql_command_flags...
 #include "sql/xa/sql_xa_prepare.h"
-#include "sql/xa/transaction_cache.h" // xa::Transaction_cache::find...
+#include "sql/xa/transaction_cache.h"  // xa::Transaction_cache::find...
 
+#include "sql/lizard_binlog.h"
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/xa/lizard_xa_trx.h"
-#include "sql/lizard_binlog.h"
 
 namespace im {
 enum XA_status {
@@ -87,7 +87,8 @@ Sql_cmd *Xa_proc_find_by_xid::evoke_cmd(THD *thd,
 
   @retval     true if parsing error.
 */
-bool get_gtrid(const mem_root_deque<Item *> *list, char *gtrid, unsigned &length) {
+bool get_gtrid(const mem_root_deque<Item *> *list, char *gtrid,
+               unsigned &length) {
   char buff[128];
 
   String str(buff, sizeof(buff), system_charset_info);
@@ -187,7 +188,8 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
     DBUG_VOID_RETURN;
   }
 
-  std::shared_ptr<Transaction_ctx> transaction = xa::Transaction_cache::find(&xid);
+  std::shared_ptr<Transaction_ctx> transaction =
+      xa::Transaction_cache::find(&xid);
   if (transaction) {
     /** Case 1: Found in transaction cache. */
     xs = transaction->xid_state();
@@ -196,7 +198,7 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
     state is not always accurate. It's OK for the procedure, but can't be
     used to do other thing. */
     xa_status =
-        xs->is_real_attached() ? XA_status::ATTACHED: XA_status::DETACHED;
+        xs->is_real_attached() ? XA_status::ATTACHED : XA_status::DETACHED;
 
     gcn = MYSQL_GCN_NULL;
 
@@ -412,4 +414,4 @@ Sql_cmd *Xa_proc_advance_gcn_no_flush::evoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
-}
+}  // namespace im

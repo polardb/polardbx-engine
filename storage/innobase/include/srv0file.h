@@ -28,7 +28,6 @@
 #ifndef srv0file_h
 #define srv0file_h
 
-
 #ifdef UNIV_PFS_THREAD
 /* File purge thread PFS key */
 extern mysql_pfs_key_t srv_file_purge_thread_key;

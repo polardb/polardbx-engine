@@ -125,8 +125,8 @@ extern uint ibuf_debug;
 #include "ut0new.h"
 #endif /* !UNIV_HOTBACKUP */
 
-#include "lizard0dict.h"
 #include "lizard0data0types.h"
+#include "lizard0dict.h"
 #include "lizard0scn.h"
 #include "lizard0undo.h"
 

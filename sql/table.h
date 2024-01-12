@@ -61,11 +61,10 @@
 #include "sql/sql_sort.h"  // Sort_result
 #include "thr_lock.h"
 #include "typelib.h"
-#include "sql/mem_root_array.h"
 
-#include "sql/sql_statistics_common.h"  // Stats_data
-#include "sql/sequence_common.h"  // Sequence_property, Sequence_scan, Sequence_last_value
 #include "sql/lizard/lizard_snapshot.h"
+#include "sql/sequence_common.h"  // Sequence_property, Sequence_scan, Sequence_last_value
+#include "sql/sql_statistics_common.h"  // Stats_data
 
 class Field;
 class Field_longlong;
@@ -77,12 +76,12 @@ class Histogram;
 namespace im {
 class Entity_guard;
 class Reload;
-}
+}  // namespace im
 
 namespace im {
 class Entity_guard;
 class Reload;
-}
+}  // namespace im
 
 class ACL_internal_schema_access;
 class ACL_internal_table_access;

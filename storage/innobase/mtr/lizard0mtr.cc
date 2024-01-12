@@ -33,8 +33,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mtr0mtr.h"
 #include "trx0trx.h"
 
-#include "lizard0undo.h"
 #include "lizard0mtr.h"
+#include "lizard0undo.h"
 
 namespace lizard {
 

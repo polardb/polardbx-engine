@@ -77,7 +77,7 @@
 #include "sql_string.h"
 #include "thr_mutex.h"
 
-#include "sql/consensus_log_manager.h"      // ConsensusLogManager
+#include "sql/consensus_log_manager.h"  // ConsensusLogManager
 
 class Item;
 
@@ -89,23 +89,22 @@ using std::min;
   what follows. For now, this is just used to get the number of
   fields.
 */
-const char *info_rli_fields[] = {
-    "number_of_lines",
-    "group_relay_log_name",
-    "group_relay_log_pos",
-    "group_master_log_name",
-    "group_master_log_pos",
-    "sql_delay",
-    "number_of_workers",
-    "id",
-    "channel_name",
-    "privilege_checks_user",
-    "privilege_checks_hostname",
-    "require_row_format",
-    "require_table_primary_key_check",
-    "assign_gtids_to_anonymous_transactions_type",
-    "assign_gtids_to_anonymous_transactions_value",
-    "consensus_apply_index"};
+const char *info_rli_fields[] = {"number_of_lines",
+                                 "group_relay_log_name",
+                                 "group_relay_log_pos",
+                                 "group_master_log_name",
+                                 "group_master_log_pos",
+                                 "sql_delay",
+                                 "number_of_workers",
+                                 "id",
+                                 "channel_name",
+                                 "privilege_checks_user",
+                                 "privilege_checks_hostname",
+                                 "require_row_format",
+                                 "require_table_primary_key_check",
+                                 "assign_gtids_to_anonymous_transactions_type",
+                                 "assign_gtids_to_anonymous_transactions_value",
+                                 "consensus_apply_index"};
 
 Relay_log_info::Relay_log_info(bool is_slave_recovery,
 #ifdef HAVE_PSI_INTERFACE
@@ -209,10 +208,10 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       key_RELAYLOG_LOCK_index, key_RELAYLOG_LOCK_commit, PSI_NOT_INSTRUMENTED,
       PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, key_RELAYLOG_LOCK_log,
       key_RELAYLOG_LOCK_log_end_pos, key_RELAYLOG_LOCK_sync,
-      PSI_NOT_INSTRUMENTED, key_RELAYLOG_LOCK_xids, key_RELAYLOG_LOCK_rotate, PSI_NOT_INSTRUMENTED,
-      PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, key_RELAYLOG_update_cond,
-      PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, key_file_relaylog,
-      key_file_relaylog_index, key_file_relaylog_cache,
+      PSI_NOT_INSTRUMENTED, key_RELAYLOG_LOCK_xids, key_RELAYLOG_LOCK_rotate,
+      PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED,
+      key_RELAYLOG_update_cond, PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED,
+      key_file_relaylog, key_file_relaylog_index, key_file_relaylog_cache,
       key_file_relaylog_index_cache);
 #endif
 
@@ -1234,7 +1233,8 @@ bool Relay_log_info::cached_charset_compare(char *charset) const {
   return false;
 }
 
-int Relay_log_info::stmt_done(my_off_t event_master_log_pos, uint64_t event_consensus_index) {
+int Relay_log_info::stmt_done(my_off_t event_master_log_pos,
+                              uint64_t event_consensus_index) {
   clear_flag(IN_STMT);
 
   assert(!belongs_to_client());
@@ -1299,7 +1299,7 @@ void Relay_log_info::cleanup_context(THD *thd, bool error) {
     "context cleanup" function.
   */
   if (error) {
-    //trans_rollback_stmt maybe response error, we need overwrite_status here
+    // trans_rollback_stmt maybe response error, we need overwrite_status here
     thd->get_stmt_da()->set_overwrite_status(true);
     trans_rollback_stmt(thd);  // if a "statement transaction"
     trans_rollback(thd);       // if a "real transaction"
@@ -1829,8 +1829,8 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
       set_group_relay_log_pos(BIN_LOG_HEADER_SIZE);
     }
 
-    if (!Multisource_info::is_xpaxos_channel(mi) &&
-        !mi->is_gtid_only_mode() && is_group_relay_log_name_invalid(&msg)) {
+    if (!Multisource_info::is_xpaxos_channel(mi) && !mi->is_gtid_only_mode() &&
+        is_group_relay_log_name_invalid(&msg)) {
       LogErr(ERROR_LEVEL, ER_RPL_MTS_RECOVERY_CANT_OPEN_RELAY_LOG,
              group_relay_log_name, std::to_string(group_relay_log_pos).c_str());
       error = 1;
@@ -2292,11 +2292,9 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
       return true;
     }
   }
-  
-  if (lines >= LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX)
-  {
-    if (!!from->get_info(&temp_consensus_apply_index, 0UL))
-      return true;
+
+  if (lines >= LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX) {
+    if (!!from->get_info(&temp_consensus_apply_index, 0UL)) return true;
   } else {
     // If the file contains the TYPE, then the VALUE is mandatory.
     if (lines >=

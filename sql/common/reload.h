@@ -46,7 +46,7 @@ extern SHOW_VAR reload_entry_status[];
   Base class for different reload type.
 */
 class Reload {
-public:
+ public:
   Reload() {}
   virtual ~Reload() {}
 

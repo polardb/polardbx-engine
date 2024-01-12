@@ -1943,7 +1943,8 @@ dberr_t os_file_write_retry(IORequest &type, const char *name,
 inline void ppi_io_request_conversion(PPI_IO_data *data, IORequest &type) {
   const auto now = std::chrono::steady_clock::now();
   data->start_time = std::chrono::duration_cast<std::chrono::microseconds>(
-                   now.time_since_epoch()).count();
+                         now.time_since_epoch())
+                         .count();
   if (type.is_read()) {
     if (type.is_log())
       data->io_type = PPI_IO_NONE;

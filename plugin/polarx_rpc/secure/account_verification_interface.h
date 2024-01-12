@@ -30,7 +30,7 @@
 namespace polarx_rpc {
 
 class Account_verification_interface {
-public:
+ public:
   enum Account_type {
     Account_native = 1,
     Account_sha256 = 2,
@@ -42,18 +42,17 @@ public:
   Account_verification_interface() = default;
   Account_verification_interface(const Account_verification_interface &) =
       delete;
-  Account_verification_interface &
-  operator=(const Account_verification_interface &) = delete;
+  Account_verification_interface &operator=(
+      const Account_verification_interface &) = delete;
 
   virtual const std::string &get_salt() const = 0;
-  virtual bool
-  verify_authentication_string(const std::string &user, const std::string &host,
-                               const std::string &client_string,
-                               const std::string &db_string) const = 0;
+  virtual bool verify_authentication_string(
+      const std::string &user, const std::string &host,
+      const std::string &client_string, const std::string &db_string) const = 0;
   virtual ~Account_verification_interface() = default;
 };
 
 typedef std::unique_ptr<Account_verification_interface>
     Account_verification_interface_ptr;
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

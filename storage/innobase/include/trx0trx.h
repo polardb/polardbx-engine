@@ -57,13 +57,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/handler.h"  // Xa_state_list
 #include "srv0srv.h"
 
-#include "lizard0undo0types.h"
-#include "lizard0read0read.h"
-#include "lizard0trx.h"
 #include "lizard0gp0types.h"
-#include "lizard0xa.h"
+#include "lizard0read0read.h"
 #include "lizard0tcn.h"
-
+#include "lizard0trx.h"
+#include "lizard0undo0types.h"
+#include "lizard0xa.h"
 
 namespace binlog {
 class Binlog_xa_specification;

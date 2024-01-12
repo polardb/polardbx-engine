@@ -61,7 +61,7 @@ static constexpr uint32_t MIN_EPOLL_WAIT_TOTAL_THREADS = 4;
 static constexpr uint32_t MAX_EPOLL_WAIT_TOTAL_THREADS = 128;
 static constexpr uint32_t MAX_EPOLL_EVENTS_PER_THREAD = 16;
 
-static constexpr uint32_t MAX_EPOLL_TIMEOUT = 60 * 1000; /// 60s
+static constexpr uint32_t MAX_EPOLL_TIMEOUT = 60 * 1000;  /// 60s
 
 static constexpr uint32_t MAX_TCP_KEEP_ALIVE = 7200;
 static constexpr uint32_t MIN_TCP_LISTEN_QUEUE = 1;
@@ -76,7 +76,7 @@ class CmtEpoll;
  * General interface for epoll callback.
  */
 class CepollCallback {
-public:
+ public:
   virtual ~CepollCallback() = default;
 
   virtual void set_fd(int fd) = 0;
@@ -100,13 +100,13 @@ public:
  * Timer/worker task.
  */
 struct task_t final {
-private:
+ private:
   void *run_ctx_;
   void (*run_)(void *);
   void *del_ctx_;
   void (*del_)(void *);
 
-public:
+ public:
   task_t()
       : run_ctx_(nullptr), run_(nullptr), del_ctx_(nullptr), del_(nullptr) {}
   task_t(void *run_ctx, void (*run)(void *), void *del_ctx, void (*del)(void *))
@@ -114,8 +114,10 @@ public:
 
   task_t(const task_t &another) = default;
   task_t(task_t &&another) noexcept
-      : run_ctx_(another.run_ctx_), run_(another.run_),
-        del_ctx_(another.del_ctx_), del_(another.del_) {
+      : run_ctx_(another.run_ctx_),
+        run_(another.run_),
+        del_ctx_(another.del_ctx_),
+        del_(another.del_) {
     another.run_ctx_ = nullptr;
     another.run_ = nullptr;
     another.del_ctx_ = nullptr;
@@ -141,25 +143,24 @@ public:
   explicit operator bool() const { return run_ != nullptr; }
 
   void call() const {
-    if (run_ != nullptr)
-      run_(run_ctx_);
+    if (run_ != nullptr) run_(run_ctx_);
   }
 
   void fin() const {
-    if (del_ != nullptr)
-      del_(del_ctx_);
+    if (del_ != nullptr) del_(del_ctx_);
   }
 };
 
 /// The inherited class should has private destructor to prevent alloc on stack.
-template <class T> class Ctask {
+template <class T>
+class Ctask {
   NO_COPY_MOVE(Ctask);
 
-protected:
+ protected:
   Ctask() = default;
   virtual ~Ctask() = default;
 
-private:
+ private:
   static void run_routine(void *ctx) {
     auto task = reinterpret_cast<T *>(ctx);
     task->run();
@@ -170,7 +171,7 @@ private:
     delete task;
   }
 
-public:
+ public:
   // Caution: Must call this function with object by new.
   task_t gen_task() {
     return {this, Ctask::run_routine, this, Ctask::del_routine};
@@ -182,7 +183,7 @@ class CtcpConnection;
 class CmtEpoll final {
   NO_COPY_MOVE(CmtEpoll);
 
-private:
+ private:
   /// group info
   const uint32_t group_id_;
 
@@ -215,19 +216,19 @@ private:
   /// dynamic threads scale
   int base_thread_count_;
   std::atomic<int> stall_count_;
-  std::atomic<int> worker_count_; /// work with epoll
-  std::atomic<int> tasker_count_; /// work without epoll
+  std::atomic<int> worker_count_;  /// work with epoll
+  std::atomic<int> tasker_count_;  /// work without epoll
   std::atomic<int64_t> last_scale_time_;
   std::atomic<int64_t> last_tasker_time_;
   std::mutex scale_lock_;
-  std::atomic<int> session_count_; /// all session under this epoll
+  std::atomic<int> session_count_;  /// all session under this epoll
 
   /// watch dog deadlock check
   size_t last_head_;
   intptr_t last_loop_;
 
   /// tcp set for visiting
-  std::mutex tcp_lock_; /// no multiple reader so just mutex
+  std::mutex tcp_lock_;  /// no multiple reader so just mutex
   std::set<CtcpConnection *> tcp_set_{};
 
   /// listener
@@ -240,12 +241,10 @@ private:
       r = ::fcntl(fd, F_GETFL);
     } while (UNLIKELY(r == -1 && errno == EINTR));
 
-    if (UNLIKELY(r == -1))
-      return -errno;
+    if (UNLIKELY(r == -1)) return -errno;
 
     /** Bail out now if already set/clear. */
-    if (!!(r & O_NONBLOCK) == !!set)
-      return 0;
+    if (!!(r & O_NONBLOCK) == !!set) return 0;
 
     if (set != 0)
       flags = r | O_NONBLOCK;
@@ -256,8 +255,7 @@ private:
       r = ::fcntl(fd, F_SETFL, flags);
     } while (UNLIKELY(r == -1 && errno == EINTR));
 
-    if (UNLIKELY(r != 0))
-      return -errno;
+    if (UNLIKELY(r != 0)) return -errno;
     return 0;
   }
 
@@ -294,8 +292,7 @@ private:
                            bool epoll_wait) {
     std::lock_guard<std::mutex> lck(affinity_lock_);
 
-    if (!with_affinity_ || 0 == CPU_COUNT(&cpus_))
-      return;
+    if (!with_affinity_ || 0 == CPU_COUNT(&cpus_)) return;
 
     /// two cases:
     ///   1. single CPU affinity(base thread and no multi_affinity_in_group)
@@ -376,10 +373,9 @@ private:
     while (true) {
       /// try pop and run task first
       while (true) {
-        task_t t; /// pop one task at a time(more efficient with multi-thread)
+        task_t t;  /// pop one task at a time(more efficient with multi-thread)
         int64_t start_time = 0;
-        if (enable_perf_hist)
-          start_time = Ctime::steady_ns();
+        if (enable_perf_hist) start_time = Ctime::steady_ns();
 
         /// get one from queue.
         work_queue_.pop(t);
@@ -390,15 +386,13 @@ private:
           g_work_queue_hist.update(static_cast<double>(work_queue_time) / 1e9);
         }
 
-        if (!t)
-          break;
+        if (!t) break;
         t.call();
         t.fin();
       }
 
       if (!base_thread) {
-        if (UNLIKELY(shrink_thread_pool(is_worker)))
-          break;
+        if (UNLIKELY(shrink_thread_pool(is_worker))) break;
       } else if (plugin_info.exit.load(std::memory_order_acquire)) {
         /// shutdown exit
         std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
@@ -420,7 +414,7 @@ private:
 
       auto timeout = epoll_timeout;
       if (UNLIKELY(timeout <= 0))
-        timeout = 1; /// busy waiting not allowed
+        timeout = 1;  /// busy waiting not allowed
       else if (UNLIKELY(timeout > MAX_EPOLL_TIMEOUT))
         timeout = MAX_EPOLL_TIMEOUT;
 
@@ -457,7 +451,7 @@ private:
       wait_cnt_.fetch_add(1, std::memory_order_release);
       if (!work_queue_.empty()) {
         wait_cnt_.fetch_sub(1, std::memory_order_release);
-        continue; /// dealing task first
+        continue;  /// dealing task first
       }
       int n;
       if (epoll_wait)
@@ -506,21 +500,18 @@ private:
       /// connection context.
       auto index = 0;
       for (auto i = 0; i < n; ++i) {
-        if (events[i].data.fd == eventfd_)
-          continue; /// ignore it
+        if (events[i].data.fd == eventfd_) continue;  /// ignore it
         auto cb = reinterpret_cast<CepollCallback *>(events[i].data.ptr);
         assert(cb != nullptr);
         auto bret = cb->events(events[i].events, index, total);
-        if (!bret)
-          delete cb;
+        if (!bret) delete cb;
         ++index;
       }
 
       /// timer task only one thread is ok
       if (timer_lock_.try_lock(timer_lock_node)) {
         int64_t timer_start_time = 0;
-        if (enable_perf_hist)
-          timer_start_time = Ctime::steady_ns();
+        if (enable_perf_hist) timer_start_time = Ctime::steady_ns();
 
         timer_tasks.clear();
         auto now_time = Ctime::steady_ms();
@@ -552,26 +543,24 @@ private:
         if (last_cleanup_.compare_exchange_strong(last_time, now_time)) {
           /// only one thread do this
           int64_t cleanup_start_time = 0;
-          if (enable_perf_hist)
-            cleanup_start_time = Ctime::steady_ns();
+          if (enable_perf_hist) cleanup_start_time = Ctime::steady_ns();
 
           uintptr_t first = 0;
           for (auto i = 0; i < extra_ctx_.BUFFERED_REUSABLE_SESSION_COUNT;
                ++i) {
             std::unique_ptr<reusable_session_t> s;
             auto bret = extra_ctx_.reusable_sessions.pop(s);
-            if (!bret)
-              break;
+            if (!bret) break;
             /// 10 min lifetime
             if (now_time - s->start_time_ms > shared_session_lifetime)
-              s.reset(); /// release
+              s.reset();  /// release
             else {
               auto ptr_val = reinterpret_cast<uintptr_t>(s.get());
-              extra_ctx_.reusable_sessions.push(std::move(s)); /// put it back
+              extra_ctx_.reusable_sessions.push(std::move(s));  /// put it back
               if (0 == first)
                 first = ptr_val;
               else if (ptr_val == first)
-                break; /// all checked
+                break;  /// all checked
             }
           }
 
@@ -596,18 +585,28 @@ private:
   }
 
   explicit CmtEpoll(uint32_t group_id, size_t work_queue_depth)
-      : group_id_(group_id), work_queue_(work_queue_depth), wait_cnt_(0),
-        loop_cnt_(0), last_cleanup_(0), affinity_version_(0),
-        with_affinity_(false), base_thread_count_(0), stall_count_(0),
-        worker_count_(0), tasker_count_(0), last_scale_time_(0),
-        last_tasker_time_(0), session_count_(0), last_head_(0), last_loop_(0) {
+      : group_id_(group_id),
+        work_queue_(work_queue_depth),
+        wait_cnt_(0),
+        loop_cnt_(0),
+        last_cleanup_(0),
+        affinity_version_(0),
+        with_affinity_(false),
+        base_thread_count_(0),
+        stall_count_(0),
+        worker_count_(0),
+        tasker_count_(0),
+        last_scale_time_(0),
+        last_tasker_time_(0),
+        session_count_(0),
+        last_head_(0),
+        last_loop_(0) {
     /// clear cpu set
     CPU_ZERO(&cpus_);
 
     /// init epoll
-    epfd_ = ::epoll_create(0xFFFF); // 65535
-    if (UNLIKELY(epfd_ < 0))
-      throw std::runtime_error(std::strerror(errno));
+    epfd_ = ::epoll_create(0xFFFF);  // 65535
+    if (UNLIKELY(epfd_ < 0)) throw std::runtime_error(std::strerror(errno));
 
     /// init eventfd
     eventfd_ = ::eventfd(0, EFD_NONBLOCK);
@@ -619,7 +618,7 @@ private:
     /// register it
     ::epoll_event event;
     event.data.fd = eventfd_;
-    event.events = EPOLLIN | EPOLLET; /// only notify one
+    event.events = EPOLLIN | EPOLLET;  /// only notify one
     auto iret = ::epoll_ctl(epfd_, EPOLL_CTL_ADD, eventfd_, &event);
     if (UNLIKELY(iret != 0)) {
       ::close(eventfd_);
@@ -675,7 +674,7 @@ private:
     return cpus;
   }
 
-public:
+ public:
   static inline std::atomic<int> &global_thread_count() {
     static std::atomic<int> g_cnt(0);
     return g_cnt;
@@ -701,15 +700,13 @@ public:
             if (force_all_cores) {
               /// get all cores from /proc/cpuinfo
               auto info_map = CcpuInfo::get_cpu_info();
-              if (info_map.size() > 0)
-                cores = info_map.size();
+              if (info_map.size() > 0) cores = info_map.size();
             } else {
               /// get all available cores from thread context
               cpu_set_t cpu;
               CPU_ZERO(&cpu);
               auto iret = sched_getaffinity(getpid(), sizeof(cpu), &cpu);
-              if (LIKELY(0 == iret))
-                cores = CPU_COUNT(&cpu);
+              if (LIKELY(0 == iret)) cores = CPU_COUNT(&cpu);
             }
           }
 
@@ -734,12 +731,10 @@ public:
           }
           /// dealing extra group
           auto extra = epoll_extra_groups;
-          if (extra > MAX_EPOLL_EXTRA_GROUPS)
-            extra = MAX_EPOLL_EXTRA_GROUPS;
+          if (extra > MAX_EPOLL_EXTRA_GROUPS) extra = MAX_EPOLL_EXTRA_GROUPS;
           groups += extra;
         }
-        if (UNLIKELY(groups > MAX_EPOLL_GROUPS))
-          groups = MAX_EPOLL_GROUPS;
+        if (UNLIKELY(groups > MAX_EPOLL_GROUPS)) groups = MAX_EPOLL_GROUPS;
 
         auto total_epoll_wait_threads = max_epoll_wait_total_threads;
         if (0 == total_epoll_wait_threads)
@@ -796,8 +791,7 @@ public:
 
   /// Caution: invoker should have all available cores
   static inline void rebind_core() {
-    if (!auto_cpu_affinity)
-      return;
+    if (!auto_cpu_affinity) return;
 
     size_t inst_cnt;
     const auto insts = get_instance(inst_cnt);
@@ -806,14 +800,12 @@ public:
     cpu_set_t new_cpus;
     CPU_ZERO(&new_cpus);
     auto iret = sched_getaffinity(getpid(), sizeof(new_cpus), &new_cpus);
-    if (UNLIKELY(iret != 0))
-      return;
+    if (UNLIKELY(iret != 0)) return;
 
     /// compare within scoped lock
     std::lock_guard<std::mutex> lck(available_cpus_lock());
     auto &cpus = available_cpus();
-    if (LIKELY(CPU_EQUAL(&cpus, &new_cpus)))
-      return;
+    if (LIKELY(CPU_EQUAL(&cpus, &new_cpus))) return;
 
     /// CPUs changed
     std::ostringstream oss;
@@ -900,9 +892,8 @@ public:
           for (uint32_t thread_id = 0; thread_id < threads; ++thread_id) {
             auto affinity = affinities[inst_id * threads + thread_id].processor;
             if (!CPU_ISSET(affinity, &inst.cpus_)) {
-              CPU_SET(affinity, &inst.cpus_); /// add to group set
-              if (thread_id != 0)
-                oss << ',';
+              CPU_SET(affinity, &inst.cpus_);  /// add to group set
+              if (thread_id != 0) oss << ',';
               oss << affinity;
             }
           }
@@ -917,7 +908,7 @@ public:
           first = true;
           for (auto i = 0; i < CPU_SETSIZE; ++i) {
             if (CPU_ISSET(i, &new_cpus)) {
-              CPU_SET(i, &inst.cpus_); /// add to group set
+              CPU_SET(i, &inst.cpus_);  /// add to group set
               if (first) {
                 oss << i;
                 first = false;
@@ -938,8 +929,7 @@ public:
     /// update original
     CPU_ZERO(&cpus);
     for (auto i = 0; i < CPU_SETSIZE; ++i) {
-      if (CPU_ISSET(i, &new_cpus))
-        CPU_SET(i, &cpus);
+      if (CPU_ISSET(i, &new_cpus)) CPU_SET(i, &cpus);
     }
   }
 
@@ -949,13 +939,10 @@ public:
   inline int add_fd(int fd, uint32_t events, CepollCallback *cb,
                     bool tcp = true) const {
     auto iret = nonblock(fd, 1);
-    if (UNLIKELY(iret != 0))
-      return iret;
-    if (tcp && UNLIKELY((iret = nodelay(fd, 1)) != 0))
-      return iret;
+    if (UNLIKELY(iret != 0)) return iret;
+    if (tcp && UNLIKELY((iret = nodelay(fd, 1)) != 0)) return iret;
     auto tmp = tcp_keep_alive;
-    if (UNLIKELY(tmp > MAX_TCP_KEEP_ALIVE))
-      tmp = MAX_TCP_KEEP_ALIVE;
+    if (UNLIKELY(tmp > MAX_TCP_KEEP_ALIVE)) tmp = MAX_TCP_KEEP_ALIVE;
     if (tcp && tmp > 0 && UNLIKELY((iret = keepalive(fd, 1, tmp)) != 0))
       return iret;
 
@@ -963,14 +950,13 @@ public:
     event.data.ptr = cb;
     event.events = events;
     cb->set_fd(fd);
-    cb->fd_pre_register(); /// pre register before epoll add
+    cb->fd_pre_register();  /// pre register before epoll add
     DBG_LOG(("polarx_rpc epoll add fd %d", fd));
     iret = ::epoll_ctl(epfd_, EPOLL_CTL_ADD, fd, &event);
     DBG_LOG(("polarx_rpc epoll add fd %d done ret %d", fd, iret));
     if (UNLIKELY(iret != 0)) {
       auto bret = cb->fd_rollback_register();
-      if (!bret)
-        delete cb;
+      if (!bret) delete cb;
       return -errno;
     }
     return 0;
@@ -999,8 +985,7 @@ public:
 
   static inline int check_port(uint16_t port) {
     auto fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (UNLIKELY(fd <= 0))
-      return -errno;
+    if (UNLIKELY(fd <= 0)) return -errno;
     sockaddr_in address;
     ::memset(&address, 0, sizeof(address));
     if (::inet_pton(AF_INET, "127.0.0.1", &address.sin_addr.s_addr) != 1) {
@@ -1028,8 +1013,7 @@ public:
     address.sin_addr.s_addr = htonl(INADDR_ANY);
     address.sin_port = htons(port);
     auto fd = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (UNLIKELY(fd <= 0))
-      return -errno;
+    if (UNLIKELY(fd <= 0)) return -errno;
     int sock_op = 1;
     ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &sock_op, sizeof(sock_op));
     if (reuse)
@@ -1069,8 +1053,7 @@ public:
 
     /// reuse work queue spin conf
     CautoMcsSpinLock lck(timer_lock_, mcs_spin_cnt);
-    if (UNLIKELY(!timer_heap_.peak(last_time)))
-      last_time = trigger_time + 1;
+    if (UNLIKELY(!timer_heap_.peak(last_time))) last_time = trigger_time + 1;
     timer_heap_.push(std::forward<task_t>(task), trigger_time, id);
     lck.unlock();
 
@@ -1083,8 +1066,7 @@ public:
 
   inline bool push_work(task_t &&task) {
     auto bret = work_queue_.push(std::forward<task_t>(task));
-    if (!bret)
-      return false;
+    if (!bret) return false;
 
     /// read with write barrier
     auto waiting = wait_cnt_.fetch_add(0, std::memory_order_acq_rel);
@@ -1112,7 +1094,7 @@ public:
     }
     /// consumer not moved
     auto tail = work_queue_.tail();
-    if (head != tail) /// not empty
+    if (head != tail)  /// not empty
       return true;
     /// check epoll wait exists
     auto loop = loop_cnt_.load(std::memory_order_acquire);
@@ -1125,7 +1107,7 @@ public:
       last_loop_ = loop;
       return false;
     }
-    return true; /// empty task but no thread wait on epoll
+    return true;  /// empty task but no thread wait on epoll
   }
 
   inline void force_scale_thread_pool() {
@@ -1147,7 +1129,7 @@ public:
               session_count_.load(std::memory_order_acquire),
               global_thread_count().load(std::memory_order_acquire));
       }
-      return; /// ignore if worker more than session
+      return;  /// ignore if worker more than session
     }
 
     /// force scale one thread
@@ -1184,8 +1166,7 @@ public:
 
     auto multiply = epoll_group_tasker_multiply;
     auto multiply_low = multiply / 2;
-    if (multiply_low < 1)
-      multiply_low = 1;
+    if (multiply_low < 1) multiply_low = 1;
 
     if (pending * 2 > work_queue_.capacity() ||
         pending > multiply_low * (workers + taskers)) {
@@ -1193,7 +1174,7 @@ public:
 
       if (pending * 2 <= work_queue_.capacity() &&
           pending <= multiply * (workers + taskers))
-        return; /// still under thresh
+        return;  /// still under thresh
 
       /// need balance
       std::lock_guard<std::mutex> lck(scale_lock_);
@@ -1208,8 +1189,7 @@ public:
       if (workers + taskers < sessions &&
           workers + taskers < static_cast<int>(pending)) {
         auto extend = (pending - workers - taskers) / multiply;
-        if (0 == extend)
-          extend = 1;
+        if (0 == extend) extend = 1;
         if (extend > epoll_group_tasker_extend_step)
           extend = epoll_group_tasker_extend_step;
 
@@ -1257,7 +1237,7 @@ public:
     else if (workers >= prefer_thread_count) {
       if (stalled > workers / 4)
         last_scale_time_.store(Ctime::steady_ms(), std::memory_order_release);
-      return; /// do nothing
+      return;  /// do nothing
     }
 
     /// do scale if needed(recheck in lock)
@@ -1281,7 +1261,7 @@ public:
               session_count_.load(std::memory_order_acquire),
               global_thread_count().load(std::memory_order_acquire));
       }
-      return; /// ignore if worker more than session
+      return;  /// ignore if worker more than session
     }
 
     auto scaled = false;
@@ -1398,11 +1378,11 @@ public:
     tcp_set_.erase(tcp);
   }
 
-  template <class Visitor> inline void visit_tcp(Visitor &&visitor) {
+  template <class Visitor>
+  inline void visit_tcp(Visitor &&visitor) {
     std::lock_guard<std::mutex> lck(tcp_lock_);
-    for (const auto &tcp : tcp_set_)
-      visitor(tcp);
+    for (const auto &tcp : tcp_set_) visitor(tcp);
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

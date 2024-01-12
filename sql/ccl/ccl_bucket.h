@@ -26,13 +26,12 @@
 #include "my_inttypes.h"
 
 /* CCL queue bucket count predefined MAX and DEFAULT value */
-#define CCL_QUEUE_BUCKET_COUNT_MAX        64
-#define CCL_QUEUE_BUCKET_COUNT_DEFAULT    4
+#define CCL_QUEUE_BUCKET_COUNT_MAX 64
+#define CCL_QUEUE_BUCKET_COUNT_DEFAULT 4
 
 /* CCL queue bucket size predefined MAX and DEFAULT value */
-#define CCL_QUEUE_BUCKET_SIZE_MAX         4096
-#define CCL_QUEUE_BUCKET_SIZE_DEFAULT     64
-
+#define CCL_QUEUE_BUCKET_SIZE_MAX 4096
+#define CCL_QUEUE_BUCKET_SIZE_DEFAULT 64
 
 namespace im {
 
@@ -47,8 +46,5 @@ extern void ccl_queue_buckets_init(ulonglong bucket_count,
                                    ulonglong bucket_size);
 
 } /* namespace im */
-
-
-
 
 #endif

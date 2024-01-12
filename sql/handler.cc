@@ -725,7 +725,8 @@ int ha_init_errors(void) {
          "Too many nested sub-expressions in a full-text search");
   SETMSG(HA_ERR_SNAPSHOT_OUT_OF_RANGE, ER_DEFAULT(ER_SNAPSHOT_OUT_OF_RANGE));
   SETMSG(HA_ERR_AS_OF_INTERNAL, ER_DEFAULT(ER_FLASHBACK_INTERNAL_ERROR));
-  SETMSG(HA_ERR_AS_OF_TABLE_DEF_CHANGED, ER_DEFAULT(ER_AS_OF_TABLE_DEF_CHANGED));
+  SETMSG(HA_ERR_AS_OF_TABLE_DEF_CHANGED,
+         ER_DEFAULT(ER_AS_OF_TABLE_DEF_CHANGED));
   SETMSG(HA_ERR_SNAPSHOT_TOO_OLD, ER_DEFAULT(ER_SNAPSHOT_TOO_OLD));
   SETMSG(HA_ERR_GP_WAIT_TIMEOUT, ER_DEFAULT(ER_GP_WAIT_TIMEOUT));
   /* Register the error messages for use with my_error(). */
@@ -1557,7 +1558,8 @@ std::pair<int, bool> commit_owned_gtids(THD *thd, bool all) {
       If GTID is not persisted by SE, write it to
       mysql.gtid_executed table.
     */
-    if (!thd->xpaxos_replication_channel && thd->owned_gtid.sidno > 0 && !thd->se_persists_gtid()) {
+    if (!thd->xpaxos_replication_channel && thd->owned_gtid.sidno > 0 &&
+        !thd->se_persists_gtid()) {
       error = gtid_state->save(thd);
     }
   }
@@ -5253,11 +5255,9 @@ int ha_create_table(THD *thd, const char *path, const char *db,
           dd::get_dictionary()->is_dd_table_name(db, table_name)) &&
         (table.file->ht->flags & HTON_SUPPORTS_ATOMIC_DDL)) {
       if (recycled) {
-        if (thd->dd_client()->store<dd::Table>(table_def))
-          error = 1;
+        if (thd->dd_client()->store<dd::Table>(table_def)) error = 1;
       } else {
-        if (thd->dd_client()->update<dd::Table>(table_def))
-          error = 1;
+        if (thd->dd_client()->update<dd::Table>(table_def)) error = 1;
       }
     }
   }

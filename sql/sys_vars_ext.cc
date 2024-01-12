@@ -28,10 +28,10 @@
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_bucket.h"
 #include "sql/ccl/ccl_interface.h"
+#include "sql/log_table.h"
+#include "sql/outline/outline_interface.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
-#include "sql/outline/outline_interface.h"
-#include "sql/log_table.h"
 #include "sql/sql_common_ext.h"
 #include "sql/sys_vars.h"
 #include "sql_statistics_common.h"
@@ -55,8 +55,8 @@
 #include "plugin/performance_point/pps_server.h"
 #include "sql/ha_sequence.h"
 
-#include "sql/xa/lizard_xa_trx.h"
 #include "sql/replica_read_manager.h"
+#include "sql/xa/lizard_xa_trx.h"
 
 /* Global scope variables */
 char innodb_version[SERVER_VERSION_LENGTH];
@@ -101,8 +101,8 @@ void customize_server_version() {
       rds_version > MYSQL_VERSION_PATCH ? rds_version : MYSQL_VERSION_PATCH;
 
   snprintf(tmp_version, SERVER_VERSION_LENGTH, "%d.%d.%d%s",
-          MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, version_patch,
-          MYSQL_VERSION_EXTRA);
+           MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, version_patch,
+           MYSQL_VERSION_EXTRA);
 
   strxmov(innodb_version, tmp_version, NullS);
 }
@@ -125,17 +125,15 @@ static bool check_lock_instance_mode(sys_var *, THD *, set_var *var) {
   return false;
 }
 
-
 /**
   RDS DEFINED variables
 */
-static Sys_var_uint Sys_rds_version(
-    "rds_version",
-    "The mysql patch version",
-    GLOBAL_VAR(rds_version), CMD_LINE(OPT_ARG),
-    VALID_RANGE(1, 999), DEFAULT(MYSQL_VERSION_PATCH),
-    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(0), ON_UPDATE(fix_server_version));
+static Sys_var_uint Sys_rds_version("rds_version", "The mysql patch version",
+                                    GLOBAL_VAR(rds_version), CMD_LINE(OPT_ARG),
+                                    VALID_RANGE(1, 999),
+                                    DEFAULT(MYSQL_VERSION_PATCH), BLOCK_SIZE(1),
+                                    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+                                    ON_UPDATE(fix_server_version));
 
 static Sys_var_charptr Sys_rds_release_date(
     "rds_release_date", "RDS RPM package release date",
@@ -160,10 +158,9 @@ static bool update_inner_user(sys_var *, THD *, enum_var_type) {
 
 static Sys_var_charptr Sys_rds_kill_user_list(
     "rds_kill_user_list", "user can kill non-super user, string split by ','",
-    GLOBAL_VAR(ia_config.user_str[IA_type::KILL_USER]),
-    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(0),
-    &Plock_internal_account_string, NOT_IN_BINLOG, ON_CHECK(NULL),
-    ON_UPDATE(update_kill_user));
+    GLOBAL_VAR(ia_config.user_str[IA_type::KILL_USER]), CMD_LINE(REQUIRED_ARG),
+    IN_FS_CHARSET, DEFAULT(0), &Plock_internal_account_string, NOT_IN_BINLOG,
+    ON_CHECK(NULL), ON_UPDATE(update_kill_user));
 
 static Sys_var_ulong Sys_rds_kill_connections(
     "rds_kill_connections", "Max conenction count for rds kill user",
@@ -229,7 +226,8 @@ static Sys_var_bool Sys_opt_performance_point_enabled(
     "performance_point_enabled",
     "whether open the performance point system plugin",
     READ_ONLY GLOBAL_VAR(opt_performance_point_enabled), CMD_LINE(OPT_ARG),
-    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr));
 
 static Sys_var_ulong Sys_performance_point_iostat_volume_size(
     "performance_point_iostat_volume_size",
@@ -257,12 +255,9 @@ static Sys_var_bool Sys_opt_performance_point_dbug_enabled(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_charptr Sys_client_endpoint_ip(
-  "client_endpoint_ip",
-  "The endpoint ip that client use to connect.",
-  SESSION_VAR(client_endpoint_ip),
-  CMD_LINE(REQUIRED_ARG),
-  IN_SYSTEM_CHARSET, DEFAULT(0),
-  NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    "client_endpoint_ip", "The endpoint ip that client use to connect.",
+    SESSION_VAR(client_endpoint_ip), CMD_LINE(REQUIRED_ARG), IN_SYSTEM_CHARSET,
+    DEFAULT(0), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static bool set_owned_vision_gcn_on_update(sys_var *, THD *thd, enum_var_type) {
   if (thd->variables.innodb_snapshot_gcn == MYSQL_GCN_NULL) {
@@ -305,8 +300,9 @@ static Sys_var_bool Sys_innodb_current_snapshot_gcn(
     "innodb_current_snapshot_seq",
     "Get snapshot_seq from innodb,"
     "the value is current max snapshot sequence and plus one",
-    HINT_UPDATEABLE SESSION_ONLY(innodb_current_snapshot_gcn), CMD_LINE(OPT_ARG),
-    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    HINT_UPDATEABLE SESSION_ONLY(innodb_current_snapshot_gcn),
+    CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));
 
 /**
   If enable the hb_freezer, pretend to send heartbeat before updating, so it
@@ -344,9 +340,8 @@ extern bool opt_gcn_write_event;
 static Sys_var_bool Sys_gcn_write_event(
     "gcn_write_event",
     "Writting a gcn event which content is gcn number for every transaction.",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_gcn_write_event),
-    CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(0), ON_UPDATE(0));
+    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_gcn_write_event), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_ulong Sys_ccl_wait_timeout(
     "ccl_wait_timeout", "Timeout in seconds to wait when concurrency control.",
@@ -356,9 +351,8 @@ static Sys_var_ulong Sys_ccl_wait_timeout(
 static Sys_var_ulong Sys_ccl_max_waiting(
     "ccl_max_waiting_count", "max waiting count in one ccl rule or bucket",
     GLOBAL_VAR(im::ccl_max_waiting_count), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(0, INT_MAX64),
-    DEFAULT(CCL_DEFAULT_WAITING_COUNT), BLOCK_SIZE(1), NO_MUTEX_GUARD,
-    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    VALID_RANGE(0, INT_MAX64), DEFAULT(CCL_DEFAULT_WAITING_COUNT),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static bool update_ccl_queue(sys_var *, THD *, enum_var_type) {
   im::System_ccl::instance()->get_queue_buckets()->init_queue_buckets(
@@ -450,9 +444,8 @@ static Sys_var_bool Sys_opt_outline_enabled(
 static Sys_var_bool Sys_outline_allowed_sql_digest_truncate(
     "outline_allowed_sql_digest_truncate",
     "Whether allowed the incomplete of sql digest when add outline",
-    SESSION_VAR(outline_allowed_sql_digest_truncate),
-    CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD,
-    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    SESSION_VAR(outline_allowed_sql_digest_truncate), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
                                        "Whether to make implicit savepoint for "
                                        "each INSERT/DELETE/UPDATE statement",
@@ -462,52 +455,43 @@ static Sys_var_bool Sys_auto_savepoint("auto_savepoint",
                                        ON_UPDATE(0));
 
 extern uint64_t opt_replica_read_timeout;
-static const uint64_t DEFAULT_REPLICA_READ_TIMEOUT = 3000; // ms
+static const uint64_t DEFAULT_REPLICA_READ_TIMEOUT = 3000;  // ms
 
 static Sys_var_ulonglong Sys_replica_read_timeout(
-      "replica_read_timeout",
-      "Maximum wait period (milliseconds) when performing replica consistent reads",
-      GLOBAL_VAR(opt_replica_read_timeout),
-      CMD_LINE(REQUIRED_ARG),
-      VALID_RANGE(1, 3600000),
-      DEFAULT(DEFAULT_REPLICA_READ_TIMEOUT),
-      BLOCK_SIZE(1),
-      NO_MUTEX_GUARD, NOT_IN_BINLOG,
-      ON_CHECK(NULL),
-      ON_UPDATE(NULL));
+    "replica_read_timeout",
+    "Maximum wait period (milliseconds) when performing replica consistent "
+    "reads",
+    GLOBAL_VAR(opt_replica_read_timeout), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 3600000), DEFAULT(DEFAULT_REPLICA_READ_TIMEOUT),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL),
+    ON_UPDATE(NULL));
 
-static bool check_read_lsn(sys_var *, THD *, set_var *var)
-{
-	ulonglong read_lsn = var->save_result.ulonglong_value;
-	return !replica_read_manager.wait_for_lsn(read_lsn);
+static bool check_read_lsn(sys_var *, THD *, set_var *var) {
+  ulonglong read_lsn = var->save_result.ulonglong_value;
+  return !replica_read_manager.wait_for_lsn(read_lsn);
 }
 
 static Sys_var_ulonglong Sys_read_lsn(
-      "read_lsn",
-      "Minimun log applied index required for replica consistent reads",
-      SESSION_VAR(opt_read_lsn),
-      CMD_LINE(REQUIRED_ARG),
-      VALID_RANGE(0, LONG_LONG_MAX),
-      DEFAULT(0),
-      BLOCK_SIZE(1),
-      NO_MUTEX_GUARD, NOT_IN_BINLOG,
-      ON_CHECK(check_read_lsn),
-      ON_UPDATE(NULL));
+    "read_lsn",
+    "Minimun log applied index required for replica consistent reads",
+    SESSION_VAR(opt_read_lsn), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, LONG_LONG_MAX), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_read_lsn), ON_UPDATE(NULL));
 
 extern bool opt_consensus_index_buf_enabled;
 static Sys_var_bool Sys_mts_consensus_index_buf_enabled(
-       "consensus_index_buf_enabled",
-       "Whether to enable Relay_log_info::consensus_index_buf",
-       GLOBAL_VAR(opt_consensus_index_buf_enabled), CMD_LINE(OPT_ARG),
-       DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    "consensus_index_buf_enabled",
+    "Whether to enable Relay_log_info::consensus_index_buf",
+    GLOBAL_VAR(opt_consensus_index_buf_enabled), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 extern bool opt_disable_wait_commitindex;
 static Sys_var_bool Sys_disable_wait_commitindex(
-       "disable_wait_commitindex",
-       "Whether to wait commitdex when applying binlog in follower, "
-       "it may detory the cluster data if some crash happen",
-       GLOBAL_VAR(opt_disable_wait_commitindex), CMD_LINE(OPT_ARG),
-       DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    "disable_wait_commitindex",
+    "Whether to wait commitdex when applying binlog in follower, "
+    "it may detory the cluster data if some crash happen",
+    GLOBAL_VAR(opt_disable_wait_commitindex), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 extern bool opt_force_index_pct_cached;
 static Sys_var_bool Sys_force_index_percentage_cached(

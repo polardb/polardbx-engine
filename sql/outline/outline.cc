@@ -261,7 +261,8 @@ void System_outline::clear(size_t pos) {
 
   @param[out]   container       Result container
 */
-void System_outline::aggregate_outline(Outline_show_result_container *container) {
+void System_outline::aggregate_outline(
+    Outline_show_result_container *container) {
   typename Outline_show_result_container::const_iterator orc_it;
   for (size_t i = 0; i < m_elements; i++) {
     /* Loop all the partition */
@@ -490,4 +491,3 @@ Outline_group::~Outline_group() {
 }
 
 } /*namespace im */
-

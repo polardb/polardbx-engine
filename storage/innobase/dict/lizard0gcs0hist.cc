@@ -37,14 +37,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/types/object_table.h"
 #include "sql/dd/types/object_table_definition.h"
 
-#include "lizard0scn.h"
+#include "dict0dd.h"
 #include "lizard0gcs.h"
+#include "lizard0scn.h"
 #include "pars0pars.h"
 #include "que0que.h"
+#include "row0sel.h"
 #include "srv0srv.h"
 #include "trx0trx.h"
-#include "row0sel.h"
-#include "dict0dd.h"
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t scn_history_thread_key;
@@ -61,7 +61,7 @@ PSI_memory_key commit_snapshot_mem_key;
 namespace lizard {
 
 /** How many partition of commit snapshot buffer. */
-ulint srv_commit_snapshot_partition= 8;
+ulint srv_commit_snapshot_partition = 8;
 
 /** Commit snapshot buffer size. */
 ulint srv_commit_snapshot_capacity = 60;
@@ -340,7 +340,6 @@ void srv_scn_history_thread(void) {
           << SCN_HISTORY_TABLE_FULL_NAME << ": " << ut_strerr(err);
     }
 
-
     if (scn_history_start_shutdown) break;
 
     os_event_reset(scn_history_event);
@@ -498,10 +497,10 @@ Item *CBuffer<Item>::biggest_less_equal_than(const Item &lhs) {
   }
 }
 
-template<typename Item>
+template <typename Item>
 Item *CBuffer<Item>::biggest_less_than(const Item &lhs) {
   Item *ptr = nullptr;
-  if((ptr = m_ring_sec.biggest_less_than(lhs)) != nullptr) {
+  if ((ptr = m_ring_sec.biggest_less_than(lhs)) != nullptr) {
     return ptr;
   } else {
     return m_ring_min.biggest_less_than(lhs);

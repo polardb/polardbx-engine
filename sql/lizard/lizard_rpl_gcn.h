@@ -29,6 +29,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <string>
 #include "my_dbug.h"
+#include <limits>
 
 typedef uint64_t my_scn_t;
 typedef uint64_t my_gcn_t;

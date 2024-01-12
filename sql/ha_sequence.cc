@@ -277,9 +277,9 @@ int Sequence_share::handle_specific_error(int error, ulonglong *local_values) {
     case HA_ERR_SEQUENCE_SKIP_ERROR:
       if (opt_only_report_warning_when_skip_sequence) {
         memcpy(local_values, m_caches, sizeof(m_caches));
-        push_warning_printf(current_thd, Sql_condition::SL_WARNING,
-                            ER_SEQUENCE_SKIP_ERROR,
-                            "Nextval skipped to is not valid, nothing will be done");
+        push_warning_printf(
+            current_thd, Sql_condition::SL_WARNING, ER_SEQUENCE_SKIP_ERROR,
+            "Nextval skipped to is not valid, nothing will be done");
         DBUG_RETURN(0);
       }
       DBUG_RETURN(error);
@@ -562,8 +562,7 @@ int Sequence_share::calc_digital_next_round(ulonglong *durable,
 
   /* Step 1: decide the begin value */
   if (m_caches[SF_NEXTVAL] == 0) {
-    if (m_caches[SF_ROUND] == 0)
-      /* Take start value as the begining */
+    if (m_caches[SF_ROUND] == 0) /* Take start value as the begining */
       begin = m_caches[SF_START];
     else
       /* Next round from minvalue */
@@ -672,7 +671,7 @@ int Sequence_share::reload_cache(TABLE *table, bool *changed, SR_ctx *sr_ctx) {
     DBUG_RETURN(HA_ERR_SEQUENCE_INVALID);
 
   /* Step 1: overlap the cache using durable values */
-  for (field_info = seq_fields; field_info->field_name; field_info++) 
+  for (field_info = seq_fields; field_info->field_name; field_info++)
     m_caches[field_info->field_num] = durable[field_info->field_num];
 
   if (m_type == Sequence_type::DIGITAL) {
@@ -702,14 +701,9 @@ int Sequence_share::reload_cache(TABLE *table, bool *changed, SR_ctx *sr_ctx) {
           "increment %llu "
           "cache %llu "
           "cycle %llu \n",
-          durable[SF_CURRVAL],
-          durable[SF_NEXTVAL],
-          durable[SF_MINVALUE],
-          durable[SF_MAXVALUE],
-          durable[SF_START],
-          durable[SF_INCREMENT],
-          durable[SF_CACHE],
-          durable[SF_CYCLE]);
+          durable[SF_CURRVAL], durable[SF_NEXTVAL], durable[SF_MINVALUE],
+          durable[SF_MAXVALUE], durable[SF_START], durable[SF_INCREMENT],
+          durable[SF_CACHE], durable[SF_CYCLE]);
 #endif
   DBUG_RETURN(0);
 }
@@ -779,7 +773,7 @@ bool ha_sequence::setup_base_engine() {
   handlerton *hton;
   DBUG_ENTER("ha_sequence::setup_base_engine");
   assert((table_share && table_share->sequence_property->is_sequence()) ||
-              !table_share);
+         !table_share);
 
   if (table_share) {
     hton = table_share->sequence_property->db_type();
@@ -999,7 +993,7 @@ bool ha_sequence::fill_into_sequence_fields(THD *thd, TABLE *table,
   for (field = table->field, field_info = seq_fields; *field;
        field++, field_info++) {
     assert(!memcmp(field_info->field_name, (*field)->field_name,
-                        strlen(field_info->field_name)));
+                   strlen(field_info->field_name)));
 
     ulonglong value = local_values[field_info->field_num];
     (*field)->set_notnull();
@@ -1044,7 +1038,7 @@ bool ha_sequence::fill_sequence_fields_from_thd(THD *thd, TABLE *table) {
   for (field = table->field, field_info = seq_fields; *field;
        field++, field_info++) {
     assert(!memcmp(field_info->field_name, (*field)->field_name,
-                        strlen(field_info->field_name)));
+                   strlen(field_info->field_name)));
     ulonglong value = entry->m_values[field_info->field_num];
     (*field)->set_notnull();
     (*field)->store(value, true);
@@ -1118,7 +1112,6 @@ int ha_sequence::rnd_next(uchar *buf) {
   }
 
   if (start_of_scan) {
-
     start_of_scan = 0;
 
     /**
@@ -1455,15 +1448,13 @@ int ha_sequence::external_lock(THD *thd, int lock_type) {
   @retval         0         Success
   @retval         ~0        Failure
 */
-int ha_sequence::scroll_sequence(
-    TABLE *table, Sequence_cache_request cache_request,
-    Share_locker_helper *helper, SR_ctx *sr_ctx) {
+int ha_sequence::scroll_sequence(TABLE *table,
+                                 Sequence_cache_request cache_request,
+                                 Share_locker_helper *helper, SR_ctx *sr_ctx) {
   DBUG_ENTER("ha_sequence::scroll_sequence");
-  assert(cache_request ==
-                  Sequence_cache_request::CACHE_REQUEST_NEED_LOAD ||
-              cache_request == Sequence_cache_request::CACHE_REQUEST_ROUND_OUT);
-  assert(m_share->m_cache_state !=
-              Sequence_cache_state::CACHE_STATE_LOADING);
+  assert(cache_request == Sequence_cache_request::CACHE_REQUEST_NEED_LOAD ||
+         cache_request == Sequence_cache_request::CACHE_REQUEST_ROUND_OUT);
+  assert(m_share->m_cache_state != Sequence_cache_state::CACHE_STATE_LOADING);
   (void)(cache_request);
   helper->loading();
 
@@ -1517,8 +1508,8 @@ ha_sequence::Bitmap_helper::~Bitmap_helper() {
 */
 void ha_sequence::print_error(int error, myf errflag) {
   THD *thd = ha_thd();
-  const char *sequence_db = const_cast<char*>("???");
-  const char *sequence_name = const_cast<char*>("???");
+  const char *sequence_db = const_cast<char *>("???");
+  const char *sequence_name = const_cast<char *>("???");
   DBUG_ENTER("ha_sequence::print_error");
 
   if (table_share) {
@@ -1657,23 +1648,21 @@ static int sequence_initialize(void *p) {
 static struct st_mysql_storage_engine sequence_storage_engine = {
     MYSQL_HANDLERTON_INTERFACE_VERSION};
 
-mysql_declare_plugin(sequence) {
-  MYSQL_STORAGE_ENGINE_PLUGIN,
-  &sequence_storage_engine,
-  sequence_plugin_name,
-  sequence_plugin_author,
-  "Sequence Storage Engine Helper",
-  PLUGIN_LICENSE_GPL,
-  sequence_initialize, /* Plugin Init */
-  nullptr,                                 /* Plugin Check uninstall */
-  nullptr,                                 /* Plugin Deinit */
-  0x0100,                                  /* 1.0 */
-  nullptr,                                 /* status variables */
-  nullptr,                                 /* system variables */
-  nullptr,                                 /* config options */
-  0,                                       /* flags */
-}
-mysql_declare_plugin_end;
-
+mysql_declare_plugin(sequence){
+    MYSQL_STORAGE_ENGINE_PLUGIN,
+    &sequence_storage_engine,
+    sequence_plugin_name,
+    sequence_plugin_author,
+    "Sequence Storage Engine Helper",
+    PLUGIN_LICENSE_GPL,
+    sequence_initialize, /* Plugin Init */
+    nullptr,             /* Plugin Check uninstall */
+    nullptr,             /* Plugin Deinit */
+    0x0100,              /* 1.0 */
+    nullptr,             /* status variables */
+    nullptr,             /* system variables */
+    nullptr,             /* config options */
+    0,                   /* flags */
+} mysql_declare_plugin_end;
 
 /// @} (end of group Sequence Engine)

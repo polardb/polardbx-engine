@@ -223,14 +223,15 @@ bool Query_result::next_resultset(XError *out_error) {
     return false;
   }
 
-  if (m_holder.is_one_of(
-          {::PolarXRPC::ServerMessages::RESULTSET_FETCH_DONE_MORE_OUT_PARAMS})) {
+  if (m_holder.is_one_of({::PolarXRPC::ServerMessages::
+                              RESULTSET_FETCH_DONE_MORE_OUT_PARAMS})) {
     m_is_out_param_resultset = true;
   }
 
-  if (!m_holder.is_one_of({::PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA,
-                           ::PolarXRPC::ServerMessages::RESULTSET_ROW,
-                           ::PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK})) {
+  if (!m_holder.is_one_of(
+          {::PolarXRPC::ServerMessages::RESULTSET_COLUMN_META_DATA,
+           ::PolarXRPC::ServerMessages::RESULTSET_ROW,
+           ::PolarXRPC::ServerMessages::SQL_STMT_EXECUTE_OK})) {
     m_holder.clear_cached_message();
   }
 

@@ -38,9 +38,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0page.h"
 #include "row0row.h"
 #include "srv0conc.h"
-#include "trx0trx.h"
 #include "srv0srv.h"
 #include "srv0start.h"
+#include "trx0trx.h"
 
 class THD;
 
@@ -576,4 +576,3 @@ void gp_wait_timeout_thread() {
 }
 
 }  // namespace lizard
-

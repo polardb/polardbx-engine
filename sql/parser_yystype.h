@@ -57,7 +57,7 @@
 #include "sql/window_lex.h"           // enum_window_frame_unit
 #include "sql/xa.h"                   // xa_option_words
 #include "thr_lock.h"                 // thr_lock_type
-				      //
+                                      //
 #include "sql/lizard/lizard_snapshot.h"
 
 class Index_hint;

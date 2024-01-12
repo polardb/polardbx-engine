@@ -113,7 +113,7 @@
 
 #include "ppi/ppi_statement.h"
 
-#include "sql/lizard/lizard_rpl_gcn.h" // my_gcn_t, struct MyGCN...
+#include "sql/lizard/lizard_rpl_gcn.h"  // my_gcn_t, struct MyGCN...
 #include "sql/trans_proc/returning_parse.h"
 
 #include "sql/ccl/ccl.h"
@@ -357,14 +357,16 @@ class Thd_mem_cnt {
 */
 typedef struct rpl_event_coordinates {
   rpl_event_coordinates() = default;
-  rpl_event_coordinates(const char *tmp_file_name, my_off_t tmp_pos, uint64_t tmp_consensus_index = 0)
-    : file_name(const_cast<char *>(tmp_file_name)), pos(tmp_pos), consensus_index(tmp_consensus_index)
-  {}
+  rpl_event_coordinates(const char *tmp_file_name, my_off_t tmp_pos,
+                        uint64_t tmp_consensus_index = 0)
+      : file_name(const_cast<char *>(tmp_file_name)),
+        pos(tmp_pos),
+        consensus_index(tmp_consensus_index) {}
 
   char *file_name;  // binlog file name (directories stripped)
   my_off_t pos;     // event's position in the binlog file
 
-  uint64_t consensus_index; // log index
+  uint64_t consensus_index;  // log index
 
 } LOG_POS_COORD;
 
@@ -957,7 +959,7 @@ struct PS_PARAM;
   used in AUDIT LOG plugin
 */
 class AUDIT_trx_ctx {
-public:
+ public:
   typedef enum {
     AUDIT_TRX_NONE,
     AUDIT_TRX_ACTIVE,
@@ -968,7 +970,7 @@ public:
   unsigned long long start_time;
   unsigned long long trx_id;
 
-public:
+ public:
   AUDIT_trx_ctx() {
     state = AUDIT_TRX_IDLE;
     start_time = 0;
@@ -982,13 +984,9 @@ public:
     }
   }
 
-  void end_transaction() {
-    state = AUDIT_TRX_IDLE;
-  }
+  void end_transaction() { state = AUDIT_TRX_IDLE; }
 
-  void set_trx_id(unsigned long long id) {
-    trx_id = id;
-  }
+  void set_trx_id(unsigned long long id) { trx_id = id; }
 };
 
 /**
@@ -1138,7 +1136,8 @@ class THD : public MDL_context_owner,
   Relay_log_info *rli_slave;
 
   /* changeset cache */
-  std::unordered_map<im::DBTableName, std::unique_ptr<im::ChangeSetCache>> changeset_map;
+  std::unordered_map<im::DBTableName, std::unique_ptr<im::ChangeSetCache>>
+      changeset_map;
 
   /* Is transaction commit still pending */
   bool tx_commit_pending;
@@ -1955,10 +1954,9 @@ class THD : public MDL_context_owner,
    */
   /**@{*/
 
-public:
-  enum Consensus_error
-  {
-    CSS_NONE= 0,
+ public:
+  enum Consensus_error {
+    CSS_NONE = 0,
     CSS_LEADERSHIP_CHANGE,
     CSS_LOG_TOO_LARGE,
     CSS_SHUTDOWN,
@@ -2142,7 +2140,7 @@ public:
 
   class Autonomous_trx_rw : public Attachable_trx {
    public:
-    bool is_read_only() const override{ return false; }
+    bool is_read_only() const override { return false; }
     Autonomous_trx_rw(THD *thd, Attachable_trx *prev_trx);
     ~Autonomous_trx_rw();
 
@@ -4737,17 +4735,15 @@ public:
   */
   bool is_secondary_storage_engine_eligible() const;
 
-  LEX_STRING *get_rds_audit_event_buf() {
-    return rds_audit_event_buf;
-  }
+  LEX_STRING *get_rds_audit_event_buf() { return rds_audit_event_buf; }
 
   void set_rds_audit_event_buf(LEX_STRING *event_buf) {
     rds_audit_event_buf = event_buf;
   }
 
-  void set_client_endpoint_ip(char* endpoint_ip, size_t len) {
-    session_sysvar_res_mgr.update(&variables.client_endpoint_ip,
-                                  endpoint_ip, len);
+  void set_client_endpoint_ip(char *endpoint_ip, size_t len) {
+    session_sysvar_res_mgr.update(&variables.client_endpoint_ip, endpoint_ip,
+                                  len);
   }
 
  private:

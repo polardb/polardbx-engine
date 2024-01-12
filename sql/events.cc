@@ -960,7 +960,8 @@ bool Events::init(bool opt_noacl_or_bootstrap) {
     goto end;
   }
 
-  /* Leader will set opt_event_scheduler to ON later if opt_configured_event_scheduler is ON */
+  /* Leader will set opt_event_scheduler to ON later if
+   * opt_configured_event_scheduler is ON */
   opt_configured_event_scheduler = opt_event_scheduler;
   opt_event_scheduler = EVENTS_OFF;
 

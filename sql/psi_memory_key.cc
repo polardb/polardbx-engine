@@ -396,7 +396,8 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_persisted_variables_unordered_set,
      "Persisted_variables::unordered_set", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
      "Memory allocated for in-memory sets for persisted variables"},
-    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0,
+     PSI_DOCUMENT_ME},
     {&key_memory_CS_PRIMARY_KEY_CACHE, "changeset_primary_key_cache", 0, 0,
      "Memory allocated for primary keys of changeset cache"},
     {&key_memory_CS_PRIMARY_KEY, "changeset_primary_key", 0, 0,
@@ -404,8 +405,7 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_CS_RESULT_BUFFER, "changeset_result_buffer", 0, 0,
      "Memory allocated for fetching result of changeset"},
     {&key_memory_CS_FILE_NAME, "changeset_file_name", 0, 0,
-     "Memory allocated for filename of changeset"}
-};
+     "Memory allocated for filename of changeset"}};
 
 void register_server_memory_keys() {
   const char *category = "sql";

@@ -113,9 +113,9 @@ bool File_purge::add_file(ulint id, const char *path,
       &success);
 
   if (!success) {
-    ib::error(ER_IB_MSG_392) << "Cannot open temp data file for read-write: '"
-                             << path << "'"
-                             << " when add file into purge list";
+    ib::error(ER_IB_MSG_392)
+        << "Cannot open temp data file for read-write: '" << path << "'"
+        << " when add file into purge list";
 
     /** Temp file maybe has been purged */
     ut::free(const_cast<char *>(path));
@@ -126,8 +126,8 @@ bool File_purge::add_file(ulint id, const char *path,
   file_size = os_file_get_size(handle);
   os_file_close(handle);
 
-  file_purge_node_t *node = static_cast<file_purge_node_t *>(
-      ut::malloc(sizeof(file_purge_node_t)));
+  file_purge_node_t *node =
+      static_cast<file_purge_node_t *>(ut::malloc(sizeof(file_purge_node_t)));
 
   node->m_log_ddl_id = id;
   node->m_file_path = const_cast<char *>(path);
@@ -145,8 +145,8 @@ bool File_purge::add_file(ulint id, const char *path,
   node->m_current_size = file_size;
 
   if (srv_print_data_file_purge_process)
-    ib::info(ER_IB_MSG_FILE_PURGE) << "File purge add file : " << id << ";"
-                                   << path;
+    ib::info(ER_IB_MSG_FILE_PURGE)
+        << "File purge add file : " << id << ";" << path;
 
   mutex_enter(&m_mutex);
   UT_LIST_ADD_LAST(m_list, node);
@@ -193,15 +193,14 @@ std::pair<int, ulint> File_purge::purge_file(ulint size, bool force) {
                                << node->m_file_path << "'"
                                << " when purge file from list";
       /* Maybe delete by DBA, so remove file directly */
-      if (err == OS_FILE_NOT_FOUND)
-        remove_file(node);
+      if (err == OS_FILE_NOT_FOUND) remove_file(node);
 
       return std::make_pair(-1, 0);
     }
 
     if (srv_print_data_file_purge_process)
-      ib::info(ER_IB_MSG_FILE_PURGE) << "File purge purge file : "
-                                     << node->m_file_path;
+      ib::info(ER_IB_MSG_FILE_PURGE)
+          << "File purge purge file : " << node->m_file_path;
 
     os_offset_t file_size = os_file_get_size(handle);
     if (!force && file_size > size) {
@@ -272,8 +271,8 @@ void File_purge::remove_file(file_purge_node_t *node) {
 #endif
 
   if (srv_print_data_file_purge_process)
-    ib::info(ER_IB_MSG_FILE_PURGE) << "File purge remove file : "
-                                   << node->m_file_path;
+    ib::info(ER_IB_MSG_FILE_PURGE)
+        << "File purge remove file : " << node->m_file_path;
   ut::free(node->m_file_path);
   ut::free(node->m_original_path);
   ut::free(node);
@@ -301,8 +300,8 @@ char *File_purge::generate_file(const char *filepath) {
   char *new_file = Fil_path::make(new_path, temp_filename, NO_EXT, false);
 
   if (srv_print_data_file_purge_process)
-    ib::info(ER_IB_MSG_FILE_PURGE) << "File purge generate file : " << filepath
-                                   << ";" << new_file;
+    ib::info(ER_IB_MSG_FILE_PURGE)
+        << "File purge generate file : " << filepath << ";" << new_file;
   return new_file;
 }
 
@@ -325,8 +324,8 @@ dberr_t row_purge_single_table_tablespace(space_id_t space_id,
                                 new_filepath);
 
   if (srv_print_data_file_purge_process)
-    ib::info(ER_IB_MSG_FILE_PURGE) << "File purge write log : " << log_id << ";"
-                                   << new_filepath;
+    ib::info(ER_IB_MSG_FILE_PURGE)
+        << "File purge write log : " << log_id << ";" << new_filepath;
 
   if (!fil_space_exists_in_mem(space_id, nullptr, true, false)) {
     if (fil_purge_file(filepath, new_filepath)) {

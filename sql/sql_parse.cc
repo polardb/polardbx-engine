@@ -78,9 +78,10 @@
 #include "prealloced_array.h"
 #include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
-#include "sql/auth/sql_internal_account.h" // IA_type::KILL_USER
+#include "sql/auth/sql_internal_account.h"  // IA_type::KILL_USER
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/binlog.h"  // purge_source_logs
+#include "sql/ccl/ccl_interface.h"
 #include "sql/clone_handler.h"
 #include "sql/comp_creator.h"
 #include "sql/create_field.h"
@@ -174,28 +175,27 @@
 #include "sql/table.h"
 #include "sql/table_cache.h"  // table_cache_manager
 #include "sql/thd_raii.h"
+#include "sql/trans_proc/returning_parse.h"
 #include "sql/transaction.h"  // trans_rollback_implicit
 #include "sql/transaction_info.h"
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "violite.h"
-#include "sql/trans_proc/returning_parse.h"
-#include "sql/ccl/ccl_interface.h"
 
 #ifdef WITH_LOCK_ORDER
 #include "sql/debug_lock_order.h"
 #endif /* WITH_LOCK_ORDER */
-#include "ppi/ppi_statement.h"
-#include "sql/xa/lizard_xa_trx.h"
-#include "sql/ccl/ccl.h"
-#include "sql/recycle_bin/recycle.h"
-#include "sql/recycle_bin/recycle_parse.h"
-#include "sql/outline/outline_digest.h"
-#include "sql/outline/outline_interface.h"
-#include "sql/consensus_admin.h"
 #include "bl_consensus_log.h"
 #include "consensus_log_manager.h"
+#include "ppi/ppi_statement.h"
+#include "sql/ccl/ccl.h"
+#include "sql/consensus_admin.h"
+#include "sql/outline/outline_digest.h"
+#include "sql/outline/outline_interface.h"
+#include "sql/recycle_bin/recycle.h"
+#include "sql/recycle_bin/recycle_parse.h"
+#include "sql/xa/lizard_xa_trx.h"
 
 namespace resourcegroups {
 class Resource_group;
@@ -439,9 +439,8 @@ bool stmt_causes_implicit_commit(const THD *thd, uint mask) {
   @retval false This statement shall NOT cause an implicit savepoint
 
 */
-bool stmt_causes_implicit_savepoint(const THD *thd)
-{
-  bool retval= false;
+bool stmt_causes_implicit_savepoint(const THD *thd) {
+  bool retval = false;
 
   /*
     No need to make implicit savepoint if
@@ -451,22 +450,19 @@ bool stmt_causes_implicit_savepoint(const THD *thd)
     - or not in multi-statement transaction,
     - or statement is run by system thread (ie, bootstrap thread).
   */
-  if (thd->variables.auto_savepoint &&
-      !thd->in_sub_stmt &&
-      !thd->sp_runtime_ctx &&
-      thd->in_active_multi_stmt_transaction() &&
+  if (thd->variables.auto_savepoint && !thd->in_sub_stmt &&
+      !thd->sp_runtime_ctx && thd->in_active_multi_stmt_transaction() &&
       (thd->system_thread == NON_SYSTEM_THREAD)) {
-
     switch (thd->lex->sql_command) {
-    case SQLCOM_UPDATE:
-    case SQLCOM_INSERT:
-    case SQLCOM_INSERT_SELECT:
-    case SQLCOM_DELETE:
-    case SQLCOM_DELETE_MULTI:
-    case SQLCOM_UPDATE_MULTI:
-      retval= true;
-    default:
-      break;
+      case SQLCOM_UPDATE:
+      case SQLCOM_INSERT:
+      case SQLCOM_INSERT_SELECT:
+      case SQLCOM_DELETE:
+      case SQLCOM_DELETE_MULTI:
+      case SQLCOM_UPDATE_MULTI:
+        retval = true;
+      default:
+        break;
     }
   }
 
@@ -482,8 +478,7 @@ bool stmt_causes_implicit_savepoint(const THD *thd)
   @retval false Success
 
 */
-bool stmt_makes_implicit_savepoint(THD *thd)
-{
+bool stmt_makes_implicit_savepoint(THD *thd) {
   LEX_STRING saved_ident = thd->lex->ident;
 
   /*
@@ -512,7 +507,6 @@ bool stmt_makes_implicit_savepoint(THD *thd)
 
   return false;
 }
-
 
 /**
   @brief Iterates over all post replication filter actions registered and
@@ -728,7 +722,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SHOW_COLLATIONS] =
       CF_STATUS_COMMAND | CF_HAS_RESULT_SET | CF_REEXECUTION_FRAGILE;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] = CF_STATUS_COMMAND;
-  sql_command_flags[SQLCOM_SHOW_CONSENSUS_LOGS]= CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUS_LOGS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_SLAVE_HOSTS] = CF_STATUS_COMMAND;
   sql_command_flags[SQLCOM_SHOW_BINLOG_EVENTS] = CF_STATUS_COMMAND;
@@ -1068,7 +1062,8 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SLAVE_STOP] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_START_GROUP_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_STOP_GROUP_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
-  sql_command_flags[SQLCOM_START_XPAXOS_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_START_XPAXOS_REPLICATION] |=
+      CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_STOP_XPAXOS_REPLICATION] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_BEGIN] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CHANGE_MASTER] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -1079,7 +1074,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_PURGE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_PURGE_BEFORE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_BINLOGS] |= CF_ALLOW_PROTOCOL_PLUGIN;
-  sql_command_flags[SQLCOM_SHOW_CONSENSUS_LOGS]= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_CONSENSUS_LOGS] = CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_CONSENSUSLOG_EVENTS] = CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_OPEN_TABLES] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_HA_OPEN] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -2595,7 +2590,7 @@ done:
                      cn.c_str());
 
   PPI_STATEMENT_CALL(end_statement)
-        (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
+  (thd, thd->ppi_thread, thd->ppi_statement_stat.get());
 
   /* COM_STMT_PREPARE is handled in sql_prepare.cc .  */
   if (command == COM_QUERY || command == COM_STMT_EXECUTE) {
@@ -3208,7 +3203,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
   }
 
   if (consensus_command_limit(thd)) {
-    xp::error() << "command could not be executed because of consensus command limit";
+    xp::error()
+        << "command could not be executed because of consensus command limit";
     return 1;
   }
 
@@ -3756,7 +3752,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
 
     case SQLCOM_START_XPAXOS_REPLICATION: {
       consensus_log_manager.lock_consensus(true);
-      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
+      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING &&
+          !opt_cluster_log_type_instance)
         res = start_slave_cmd(thd);
       else
         my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
@@ -3785,15 +3782,14 @@ int mysql_execute_command(THD *thd, bool first_level) {
       }
 
       consensus_log_manager.lock_consensus(true);
-      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING && !opt_cluster_log_type_instance)
-      {
-        res= stop_slave_cmd(thd);
+      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING &&
+          !opt_cluster_log_type_instance) {
+        res = stop_slave_cmd(thd);
         LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
-                          thd->m_main_security_ctx.user().str,
-                          thd->m_main_security_ctx.host_or_ip().str,
-                          thd->query().str, res);
-      }
-      else
+               thd->m_main_security_ctx.user().str,
+               thd->m_main_security_ctx.host_or_ip().str, thd->query().str,
+               res);
+      } else
         my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
       consensus_log_manager.unlock_consensus();
       break;
@@ -4411,16 +4407,16 @@ int mysql_execute_command(THD *thd, bool first_level) {
       */
       if (!handle_reload_request(thd, lex->type, first_table,
                                  &write_to_binlog)) {
-
         {
-          /// @attention a hack to pass mysql-test
-          #ifndef NDEBUG
-          if (thd->variables.opt_consensus_safe_for_reset_master && consensus_ptr && consensus_ptr->getLog()) {
+/// @attention a hack to pass mysql-test
+#ifndef NDEBUG
+          if (thd->variables.opt_consensus_safe_for_reset_master &&
+              consensus_ptr && consensus_ptr->getLog()) {
             alisql::LogEntry entry1;
             consensus_ptr->getLog()->getEmptyEntry(entry1);
             consensus_ptr->replicateLog(entry1);
           }
-          #endif
+#endif
         }
 
         /*
@@ -4931,13 +4927,13 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_RESTART_SERVER:
     case SQLCOM_CREATE_SRS:
     case SQLCOM_DROP_SRS: {
-    case SQLCOM_ADMIN_PROC:
-    case SQLCOM_TRANS_PROC:
-      assert(lex->m_sql_cmd != nullptr);
+      case SQLCOM_ADMIN_PROC:
+      case SQLCOM_TRANS_PROC:
+        assert(lex->m_sql_cmd != nullptr);
 
-      res = lex->m_sql_cmd->execute(thd);
+        res = lex->m_sql_cmd->execute(thd);
 
-      break;
+        break;
     }
     case SQLCOM_ALTER_USER: {
       LEX_USER *user, *tmp_user;
@@ -5509,7 +5505,7 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
       If rewriting does not happen here, thd->m_rewritten_query is still
       empty from being reset in alloc_query().
     */
-    if (thd->rewritten_query().length() == 0) mysql_rewrite_query(thd); 
+    if (thd->rewritten_query().length() == 0) mysql_rewrite_query(thd);
 
     if (thd->rewritten_query().length()) {
       lex->safe_to_cache_query = false;  // see comments below
@@ -6355,7 +6351,6 @@ Table_ref *Query_block::add_table_to_list(
     list 'table_list'.
   */
   if (!sequence_query) m_table_list.link_in_list(ptr, &ptr->next_local);
-
 
   ptr->next_name_resolution_table = nullptr;
   ptr->partition_names = partition_names;
@@ -7443,9 +7438,9 @@ bool parse_sql(THD *thd, Parser_state *parser_state,
 
   if (ret_value == 0 && thd->m_digest) {
     /* invoke index outline */
-    im::invoke_outlines(
-        thd, thd->db().str, &thd->m_digest->m_digest_storage,
-        im::calculate_strip_length_for_explain(&thd->m_digest->m_digest_storage));
+    im::invoke_outlines(thd, thd->db().str, &thd->m_digest->m_digest_storage,
+                        im::calculate_strip_length_for_explain(
+                            &thd->m_digest->m_digest_storage));
   }
 
   if ((ret_value == 0) && (parser_state->m_digest_psi != nullptr)) {

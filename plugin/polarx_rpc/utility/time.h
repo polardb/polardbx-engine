@@ -18,7 +18,7 @@ class Ctime final {
   NO_CONSTRUCTOR(Ctime);
   NO_COPY_MOVE(Ctime);
 
-public:
+ public:
   static inline int64_t system_ms() {
     //    auto now_time = std::chrono::system_clock::now();
     //    return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -60,4 +60,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

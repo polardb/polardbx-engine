@@ -62,7 +62,7 @@ typedef enum {
   MYSQL_AUDIT_AUTHENTICATION_CLASS = 11,
   MYSQL_AUDIT_MESSAGE_CLASS = 12,
   MYSQL_AUDIT_RDS_CONNECTION_CLASS = 13, /* Used for RDS Audit Log */
-  MYSQL_AUDIT_RDS_QUERY_CLASS = 14, /* Used for RDS Audit Log */
+  MYSQL_AUDIT_RDS_QUERY_CLASS = 14,      /* Used for RDS Audit Log */
   /* This item must be last in the list. */
   MYSQL_AUDIT_CLASS_MASK_SIZE
 } mysql_event_class_t;
@@ -632,9 +632,8 @@ typedef enum {
   MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT = 1 << 1
 } mysql_event_rds_connection_subclass_t;
 
-#define MYSQL_AUDIT_RDS_CONNECTION_ALL     \
-  (MYSQL_AUDIT_RDS_CONNECTION_CONNECT |    \
-   MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT)
+#define MYSQL_AUDIT_RDS_CONNECTION_ALL \
+  (MYSQL_AUDIT_RDS_CONNECTION_CONNECT | MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT)
 
 /**
   @struct mysql_event_rds_connection
@@ -689,8 +688,7 @@ typedef enum {
   MYSQL_AUDIT_RDS_QUERY_RESULT = 1 << 0,
 } mysql_event_rds_query_subclass_t;
 
-#define MYSQL_AUDIT_RDS_QUERY_ALL            \
-  (MYSQL_AUDIT_RDS_QUERY_RESULT)
+#define MYSQL_AUDIT_RDS_QUERY_ALL (MYSQL_AUDIT_RDS_QUERY_RESULT)
 
 /**
   @struct mysql_event_rds_query
@@ -714,7 +712,7 @@ struct mysql_event_rds_query {
   MYSQL_LEX_CSTRING ip;
   /** Host */
   MYSQL_LEX_CSTRING host;
- /** Database name */
+  /** Database name */
   MYSQL_LEX_CSTRING db;
   /** MySQL command */
   enum enum_server_command command;

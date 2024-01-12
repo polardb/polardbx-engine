@@ -43,29 +43,30 @@
 #include "protobuf/polarx_exec_plan.pb.h"
 #include "protobuf/polarx_expect.pb.h"
 #include "protobuf/polarx_notice.pb.h"
+#include "protobuf/polarx_physical_backfill.pb.h"
 #include "protobuf/polarx_resultset.pb.h"
 #include "protobuf/polarx_session.pb.h"
 #include "protobuf/polarx_sql.pb.h"
-#include "protobuf/polarx_physical_backfill.pb.h"
 
 #ifdef WIN32
 #pragma warning(pop)
 #endif  // WIN32
 
-#define POLARX_COLUMN_BYTES_CONTENT_TYPE_GEOMETRY 0x0001 // GEOMETRY (WKB encoding)
-#define POLARX_COLUMN_BYTES_CONTENT_TYPE_JSON     0x0002 // JSON (text encoding)
-#define POLARX_COLUMN_BYTES_CONTENT_TYPE_XML      0x0003 // XML (text encoding)
+#define POLARX_COLUMN_BYTES_CONTENT_TYPE_GEOMETRY \
+  0x0001                                              // GEOMETRY (WKB encoding)
+#define POLARX_COLUMN_BYTES_CONTENT_TYPE_JSON 0x0002  // JSON (text encoding)
+#define POLARX_COLUMN_BYTES_CONTENT_TYPE_XML 0x0003   // XML (text encoding)
 
-#define POLARX_COLUMN_DATETIME_CONTENT_TYPE_DATE     0x0001
+#define POLARX_COLUMN_DATETIME_CONTENT_TYPE_DATE 0x0001
 #define POLARX_COLUMN_DATETIME_CONTENT_TYPE_DATETIME 0x0002
 
-#define POLARX_COLUMN_FLAGS_UINT_ZEROFILL 0x0001    // UINT zerofill
-#define POLARX_COLUMN_FLAGS_DOUBLE_UNSIGNED 0x0001  // DOUBLE 0x0001 unsigned
-#define POLARX_COLUMN_FLAGS_FLOAT_UNSIGNED 0x0001   // FLOAT  0x0001 unsigned
-#define POLARX_COLUMN_FLAGS_DECIMAL_UNSIGNED 0x0001 // DECIMAL 0x0001 unsigned
-#define POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD 0x0001   // BYTES  0x0001 rightpad
+#define POLARX_COLUMN_FLAGS_UINT_ZEROFILL 0x0001     // UINT zerofill
+#define POLARX_COLUMN_FLAGS_DOUBLE_UNSIGNED 0x0001   // DOUBLE 0x0001 unsigned
+#define POLARX_COLUMN_FLAGS_FLOAT_UNSIGNED 0x0001    // FLOAT  0x0001 unsigned
+#define POLARX_COLUMN_FLAGS_DECIMAL_UNSIGNED 0x0001  // DECIMAL 0x0001 unsigned
+#define POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD 0x0001    // BYTES  0x0001 rightpad
 #define POLARX_COLUMN_FLAGS_DATETIME_TIMESTAMP \
-  0x0001 // DATETIME 0x0001 timestamp
+  0x0001  // DATETIME 0x0001 timestamp
 
 #define POLARX_COLUMN_FLAGS_NOT_NULL 0x0010
 #define POLARX_COLUMN_FLAGS_PRIMARY_KEY 0x0020

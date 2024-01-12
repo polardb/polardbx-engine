@@ -65,7 +65,6 @@ void pre_init_performance_point() {
   register_table_iostat();
 
   pps_server_inited = true;
-
 }
 
 void destroy_performance_point() {

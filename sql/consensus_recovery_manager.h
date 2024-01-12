@@ -86,7 +86,7 @@ class Pending_recovering_trx {
  private:
   bool processed;
 
-  handlerton & ht;
+  handlerton &ht;
   const xid_type type;
   const enum_ha_recover_xa_state current_state;
   const enum_ha_recover_xa_state next_state;

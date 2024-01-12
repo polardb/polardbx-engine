@@ -44,7 +44,7 @@ class Cserver final {
           plugin_info.inited.store(true, std::memory_order_release);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        continue; /// fast retry
+        continue;  /// fast retry
       }
 
       /// check thread pool
@@ -54,8 +54,7 @@ class Cserver final {
         auto &inst = *insts[i];
         if (inst.worker_stall_since_last_check())
           inst.force_scale_thread_pool();
-        if (enable_tasker)
-          inst.balance_tasker();
+        if (enable_tasker) inst.balance_tasker();
       }
 
       /// check available cores
@@ -73,8 +72,7 @@ class Cserver final {
       }
       const auto gather_ns = Ctime::steady_ns();
       /// kill them
-      for (auto &s : killed_sessions)
-        s->remote_kill(true);
+      for (auto &s : killed_sessions) s->remote_kill(true);
       const auto killed_number = killed_sessions.size();
       killed_sessions.clear();
       const auto clean_ns = Ctime::steady_ns();
@@ -99,7 +97,7 @@ class Cserver final {
                             "Plugin polarx_rpc watch dog exit.");
   }
 
-public:
+ public:
   Cserver() noexcept(false) {
 #ifdef MYSQL8
     auto port = opt_rpc_port;
@@ -139,4 +137,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

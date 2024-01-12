@@ -66,9 +66,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 
 #include "lizard0gcs.h"
+#include "lizard0purge.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
-#include "lizard0purge.h"
 #include "lizard0xa.h"
 
 #include "lizard_iface.h"
@@ -314,7 +314,7 @@ void trx_purge_add_update_undo_to_history(
                  mtr);
 
   /* lizard: TRX_UNDO_TRX_NO is reserved */
-  //mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
+  // mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
 
   /* Write information about delete markings to the undo log header */
 
@@ -337,8 +337,8 @@ void trx_purge_add_update_undo_to_history(
 @param[in,out]  rseg_hdr        Rollback segment header
 @param[in]      log_hdr         Undo log segment header
 @param[in,out]  mtr             Mini-transaction. */
-void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr,
-                                     trx_ulogf_t *log_hdr, mtr_t *mtr) {
+void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr, trx_ulogf_t *log_hdr,
+                              mtr_t *mtr) {
   flst_remove(rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE,
               mtr);
 
@@ -458,7 +458,7 @@ static void trx_purge_truncate_rseg_history(
   rseg->latch();
 
   /** Lizard: It's possible limit->scn > rseg->last_scn */
-  if(rseg->last_page_no != FIL_NULL && limit->scn > rseg->last_scn) {
+  if (rseg->last_page_no != FIL_NULL && limit->scn > rseg->last_scn) {
     mutex_exit(&(rseg->mutex));
     return;
   }
@@ -2232,14 +2232,13 @@ void Purge_groups_t::distribute_if_needed() {
 @param[out]     blocked          is blocked by retention
 @return number of undo log pages handled in the batch */
 static ulint trx_purge_attach_undo_recs(const ulint n_purge_threads,
-                                        ulint batch_size,
-                                        bool *blocked) {
+                                        ulint batch_size, bool *blocked) {
   ulint n_pages_handled = 0;
 
   ut_a(n_purge_threads > 0);
   ut_a(n_purge_threads <= MAX_PURGE_THREADS);
 
-  if (blocked) *blocked = false; // lizard
+  if (blocked) *blocked = false;  // lizard
 
   purge_sys->limit = purge_sys->iter;
 
@@ -2297,7 +2296,7 @@ static ulint trx_purge_attach_undo_recs(const ulint n_purge_threads,
     } else if (rec.undo_rec == nullptr) {
       break;
     } else if (rec.undo_rec == &trx_purge_blocked_rec) {
-      if (blocked) *blocked = true; // lizard
+      if (blocked) *blocked = true;  // lizard
       break;
     }
 
@@ -2398,7 +2397,7 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
 {
   que_thr_t *thr = nullptr;
   ulint n_pages_handled;
-  //scn_t old_scn;
+  // scn_t old_scn;
 
   ut_a(n_purge_threads > 0);
 
@@ -2411,13 +2410,13 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
 
   purge_sys->view_active = false;
 
-  //old_scn = purge_sys->vision.snapshot_scn();
+  // old_scn = purge_sys->vision.snapshot_scn();
   lizard::trx_clone_oldest_vision(&purge_sys->vision);
   /* In the following special case, the purge view will back down:
   If all transactions are with no GTIDs within a GTID persistence cycle,
   and then one transation has GTID, Clone_persist_gtid will return an older
   scn which leading to purge view fallback.*/
-  //ut_a(old_scn <= purge_sys->vision.snapshot_scn());
+  // ut_a(old_scn <= purge_sys->vision.snapshot_scn());
 
   purge_sys->view_active = true;
 

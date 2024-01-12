@@ -234,8 +234,7 @@ MYSQL_RDS_AUDIT_LOG::MYSQL_RDS_AUDIT_LOG(const char *dir, ulong n_buf_size,
                                          ulong log_strategy, ulong log_policy,
                                          ulong log_conn_policy,
                                          ulong log_stmt_policy,
-                                         ulong log_version,
-                                         bool enable)
+                                         ulong log_version, bool enable)
     : m_enabled(false),
       log_dir(dir),
       m_file_id(0),
@@ -354,8 +353,7 @@ void MYSQL_RDS_AUDIT_LOG::rotate_log_file_low() {
 
   if (new_log_fd == -1) {
     char errbuf[MYSQL_ERRMSG_SIZE];
-    LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_FAILED_TO_CREATE_FILE,
-                 new_log_name,
+    LogPluginErr(ERROR_LEVEL, ER_AUDIT_LOG_FAILED_TO_CREATE_FILE, new_log_name,
                  my_errno(),
                  my_strerror(errbuf, MYSQL_ERRMSG_SIZE, my_errno()));
     DBUG_VOID_RETURN;
@@ -624,11 +622,9 @@ void MYSQL_RDS_AUDIT_LOG::set_log_version(enum_log_version version) {
 
   LOCK_log.wrlock();
   LogPluginErr(INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_VERSION,
-               log_version_names[m_version],
-               log_version_names[version]);
+               log_version_names[m_version], log_version_names[version]);
 
   if (m_enabled) {
-
     if (is_buffered_write(m_strategy)) {
       /* Make sure all logs have been flushed to disk. */
       flush_log_buf(true);
@@ -653,13 +649,12 @@ extern const char *log_statement_policy_names[];
 void MYSQL_RDS_AUDIT_LOG::set_log_policy(enum_log_policy policy) {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::set_log_policy");
 
-  LogPluginErr(INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_POLICY,
-               log_policy_names[m_policy],
-               log_connection_policy_names[m_conn_policy],
-               log_statement_policy_names[m_stmt_policy],
-               log_policy_names[policy],
-               log_connection_policy_names[m_conn_policy],
-log_statement_policy_names[m_stmt_policy]);
+  LogPluginErr(
+      INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_POLICY,
+      log_policy_names[m_policy], log_connection_policy_names[m_conn_policy],
+      log_statement_policy_names[m_stmt_policy], log_policy_names[policy],
+      log_connection_policy_names[m_conn_policy],
+      log_statement_policy_names[m_stmt_policy]);
 
   m_policy = policy;
   DBUG_VOID_RETURN;
@@ -676,13 +671,12 @@ void MYSQL_RDS_AUDIT_LOG::set_log_connection_policy(
     enum_log_connection_policy conn_policy) {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::set_log_connection_policy");
 
-  LogPluginErr(INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_POLICY,
-               log_policy_names[m_policy],
-               log_connection_policy_names[m_conn_policy],
-               log_statement_policy_names[m_stmt_policy],
-               log_policy_names[m_policy],
-               log_connection_policy_names[conn_policy],
-               log_statement_policy_names[m_stmt_policy]);
+  LogPluginErr(
+      INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_POLICY,
+      log_policy_names[m_policy], log_connection_policy_names[m_conn_policy],
+      log_statement_policy_names[m_stmt_policy], log_policy_names[m_policy],
+      log_connection_policy_names[conn_policy],
+      log_statement_policy_names[m_stmt_policy]);
 
   m_conn_policy = conn_policy;
   DBUG_VOID_RETURN;
@@ -693,13 +687,12 @@ void MYSQL_RDS_AUDIT_LOG::set_log_statement_policy(
     enum_log_statement_policy stmt_policy) {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::set_log_statement_policy");
 
-  LogPluginErr(INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_POLICY,
-               log_policy_names[m_policy],
-               log_connection_policy_names[m_conn_policy],
-               log_statement_policy_names[m_stmt_policy],
-               log_policy_names[m_policy],
-               log_connection_policy_names[m_conn_policy],
-               log_statement_policy_names[stmt_policy]);
+  LogPluginErr(
+      INFORMATION_LEVEL, ER_AUDIT_LOG_SWITCH_LOG_POLICY,
+      log_policy_names[m_policy], log_connection_policy_names[m_conn_policy],
+      log_statement_policy_names[m_stmt_policy], log_policy_names[m_policy],
+      log_connection_policy_names[m_conn_policy],
+      log_statement_policy_names[stmt_policy]);
 
   m_stmt_policy = stmt_policy;
   DBUG_VOID_RETURN;
@@ -777,7 +770,7 @@ bool MYSQL_RDS_AUDIT_LOG::buf_full_handle(uint thread_id, ulong len) {
     buf_full_cond_wait(RDS_AUDIT_BUF_FULL_WAIT_TIME);
     retry = true;
   } else {
-    if (log_event_max_drop_size < len ) {
+    if (log_event_max_drop_size < len) {
       log_event_max_drop_size = len;
     }
     log_events_lost++;
@@ -963,7 +956,6 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
 
   switch (event_class) {
     case MYSQL_AUDIT_RDS_CONNECTION_CLASS: {
-
       if (m_policy == LOG_QUERIES) {
         skipped = true;
         goto skip_write_log;
@@ -986,23 +978,22 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
       thread_id = event_rds_connection->thread_id;
 
       switch (m_version) {
-      case MYSQL_V1:
-        serialized_len = m_serializer->serialize_connection_event_v1(
-          event_rds_connection, buf, buf_len);
-        break;
-      case MYSQL_V3:
-        serialized_len = m_serializer->serialize_connection_event_v3(
-            event_rds_connection, buf, buf_len);
-        break;
-      default:
-        assert(0);
+        case MYSQL_V1:
+          serialized_len = m_serializer->serialize_connection_event_v1(
+              event_rds_connection, buf, buf_len);
+          break;
+        case MYSQL_V3:
+          serialized_len = m_serializer->serialize_connection_event_v3(
+              event_rds_connection, buf, buf_len);
+          break;
+        default:
+          assert(0);
       }
 
       break;
     }
 
     case MYSQL_AUDIT_RDS_QUERY_CLASS: {
-
       if (m_policy == LOG_LOGINS) {
         skipped = true;
         goto skip_write_log;
@@ -1034,16 +1025,16 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
       thread_id = event_rds_query->thread_id;
 
       switch (m_version) {
-      case MYSQL_V1:
-        serialized_len = m_serializer->serialize_query_event_v1(event_rds_query,
-                                                                buf, buf_len);
-        break;
-      case MYSQL_V3:
-        serialized_len = m_serializer->serialize_query_event_v3(event_rds_query,
-                                                                buf, buf_len);
-        break;
-      default:
-        assert(0);
+        case MYSQL_V1:
+          serialized_len = m_serializer->serialize_query_event_v1(
+              event_rds_query, buf, buf_len);
+          break;
+        case MYSQL_V3:
+          serialized_len = m_serializer->serialize_query_event_v3(
+              event_rds_query, buf, buf_len);
+          break;
+        default:
+          assert(0);
       }
 
       break;

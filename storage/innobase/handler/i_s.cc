@@ -279,9 +279,8 @@ static int i_s_common_deinit(void *p); /*!< in/out: table schema object */
 /** Auxiliary function to store time_t value in MYSQL_TYPE_DATETIME
  field.
  @return 0 on success */
-int field_store_time_t(
-    Field *field, /*!< in/out: target field for storage */
-    time_t time)  /*!< in: value to store */
+int field_store_time_t(Field *field, /*!< in/out: target field for storage */
+                       time_t time)  /*!< in: value to store */
 {
   MYSQL_TIME my_time;
   struct tm tm_time;
@@ -306,10 +305,9 @@ int field_store_time_t(
 
 /** Auxiliary function to store char* value in MYSQL_TYPE_STRING field.
  @return 0 on success */
-int field_store_string(
-    Field *field,    /*!< in/out: target field for storage */
-    const char *str) /*!< in: NUL-terminated utf-8 string,
-                     or NULL */
+int field_store_string(Field *field,    /*!< in/out: target field for storage */
+                       const char *str) /*!< in: NUL-terminated utf-8 string,
+                                        or NULL */
 {
   int ret;
 

@@ -962,7 +962,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           // continue when IGNORE clause is used.
           continue;
         }
-        
+
         if ((im::guard_record(thd, table, im::Guard_type::GUARD_UPDATE))) {
           error = 1;
           break;

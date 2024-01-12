@@ -38,8 +38,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/xa.h"
 #include "sql/xa/lizard_xa_trx.h"
 
-#include "sql/xa_specification.h"
 #include "lizard_iface.h"
+#include "sql/xa_specification.h"
 #include "sql_string.h"
 
 class THD;

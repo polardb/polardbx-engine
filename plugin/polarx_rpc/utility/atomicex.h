@@ -19,10 +19,10 @@ namespace polarx_rpc {
 class CspinLock final {
   NO_COPY_MOVE(CspinLock);
 
-private:
+ private:
   std::atomic_flag lock_;
 
-public:
+ public:
   inline void lock(size_t spin_cnt) {
     Cbackoff backoff;
     size_t spin = 0;
@@ -46,10 +46,10 @@ public:
 class CautoSpinLock final {
   NO_COPY(CautoSpinLock);
 
-private:
+ private:
   CspinLock *lock_;
 
-public:
+ public:
   CautoSpinLock() : lock_(nullptr) {}
 
   explicit CautoSpinLock(CspinLock &lock, size_t spin_cnt) : lock_(&lock) {
@@ -65,8 +65,7 @@ public:
   CautoSpinLock &operator=(CautoSpinLock &&another) = delete;
 
   ~CautoSpinLock() {
-    if (LIKELY(lock_ != nullptr))
-      lock_->unlock();
+    if (LIKELY(lock_ != nullptr)) lock_->unlock();
   }
 
   inline bool lock(CspinLock &lock, size_t spin_cnt) {
@@ -99,7 +98,7 @@ public:
 class CmcsSpinLock final {
   NO_COPY_MOVE(CmcsSpinLock);
 
-public:
+ public:
   struct mcs_spin_node_t final {
     std::atomic<mcs_spin_node_t *> next;
     std::atomic_flag locked;
@@ -108,10 +107,10 @@ public:
     mcs_spin_node_t() {}
   };
 
-private:
+ private:
   std::atomic<mcs_spin_node_t *> lock_;
 
-public:
+ public:
   CmcsSpinLock() : lock_(nullptr) {}
 
   inline void lock(mcs_spin_node_t &cur_node, const size_t spin_cnt) {
@@ -120,8 +119,7 @@ public:
     cur_node.locked.test_and_set(std::memory_order_relaxed);
     /// CAS lock(acquire for lock enter, release for cur_node info)
     auto prev = lock_.exchange(&cur_node, std::memory_order_acq_rel);
-    if (LIKELY(nullptr == prev))
-      return;
+    if (LIKELY(nullptr == prev)) return;
     /// need spin and wait
     prev->next.store(&cur_node, std::memory_order_release);
     Cbackoff backoff;
@@ -166,11 +164,11 @@ public:
 class CautoMcsSpinLock final {
   NO_COPY_MOVE(CautoMcsSpinLock);
 
-private:
+ private:
   CmcsSpinLock *lock_;
   CmcsSpinLock::mcs_spin_node_t node_;
 
-public:
+ public:
   CautoMcsSpinLock() : lock_(nullptr) {}
 
   explicit CautoMcsSpinLock(CmcsSpinLock &lock, size_t spin_cnt)
@@ -179,8 +177,7 @@ public:
   }
 
   ~CautoMcsSpinLock() {
-    if (LIKELY(lock_ != nullptr))
-      lock_->unlock(node_);
+    if (LIKELY(lock_ != nullptr)) lock_->unlock(node_);
   }
 
   inline bool lock(CmcsSpinLock &lock, size_t spin_cnt) {
@@ -214,7 +211,7 @@ public:
 class CspinRWLock final {
   NO_COPY_MOVE(CspinRWLock);
 
-private:
+ private:
   static constexpr uintptr_t RWLOCK_PART_BITS = sizeof(uintptr_t) * 4;
   static constexpr uintptr_t RWLOCK_PART_OVERFLOW = static_cast<uintptr_t>(1)
                                                     << RWLOCK_PART_BITS;
@@ -226,10 +223,10 @@ private:
 #define RWLOCK_WRITE_COUNT(_x) ((_x)&RWLOCK_PART_MASK)
 
   std::atomic<uintptr_t>
-      lock_counter_; /// high part read lock, low part write lock
+      lock_counter_;  /// high part read lock, low part write lock
   std::atomic<std::thread::id> writer_;
 
-public:
+ public:
   CspinRWLock() : lock_counter_(0), writer_(std::thread::id()) {}
 
   inline bool read_lock(const bool wait, const size_t spin_cnt) {
@@ -251,8 +248,7 @@ public:
           return true;
         }
         /// other thread hold the write lock, or wait for write
-        if (UNLIKELY(!wait))
-          return false;
+        if (UNLIKELY(!wait)) return false;
         size_t spin = 0;
         do {
           if (UNLIKELY(++spin >= spin_cnt)) {
@@ -286,7 +282,7 @@ public:
     auto old_cnt = lock_counter_.load(std::memory_order_acquire);
     /// CAS or spin wait
     while (true) {
-      if (LIKELY(0 == old_cnt)) { /// no holder
+      if (LIKELY(0 == old_cnt)) {  /// no holder
         if (LIKELY(lock_counter_.compare_exchange_weak(
                 old_cnt, old_cnt + RWLOCK_WRITE_ADD, std::memory_order_acquire,
                 std::memory_order_relaxed))) {
@@ -295,8 +291,7 @@ public:
         }
       } else if (LIKELY(0 == RWLOCK_WRITE_COUNT(old_cnt))) {
         /// no zero, zero writer, so someone hold read lock
-        if (UNLIKELY(!wait))
-          return false;
+        if (UNLIKELY(!wait)) return false;
         /// add write mark and wait reader exit
         if (LIKELY(lock_counter_.compare_exchange_weak(
                 old_cnt, old_cnt + RWLOCK_WRITE_ADD, std::memory_order_acquire,
@@ -331,8 +326,7 @@ public:
           return true;
         }
         /// other thread hold the write lock, or wait for write
-        if (UNLIKELY(!wait))
-          return false;
+        if (UNLIKELY(!wait)) return false;
         size_t spin = 0;
         do {
           if (UNLIKELY(++spin >= spin_cnt)) {
@@ -350,7 +344,7 @@ public:
     /// single thread scope, so relaxed
     auto old_cnt = lock_counter_.load(std::memory_order_relaxed);
     assert(RWLOCK_WRITE_COUNT(old_cnt) >= 1);
-    if (LIKELY(1 == RWLOCK_WRITE_COUNT(old_cnt))) /// last one
+    if (LIKELY(1 == RWLOCK_WRITE_COUNT(old_cnt)))  /// last one
       writer_.store(std::thread::id(), std::memory_order_relaxed);
     const auto before_cnt =
         lock_counter_.fetch_sub(RWLOCK_WRITE_ADD, std::memory_order_release);
@@ -361,11 +355,11 @@ public:
 class CautoSpinRWLock final {
   NO_COPY_MOVE(CautoSpinRWLock);
 
-private:
+ private:
   CspinRWLock &lock_;
   bool write_;
 
-public:
+ public:
   explicit CautoSpinRWLock(CspinRWLock &lock, bool write, size_t spin_cnt)
       : lock_(lock), write_(write) {
     if (UNLIKELY(write_))
@@ -382,11 +376,9 @@ public:
   }
 
   bool downgrade() {
-    if (UNLIKELY(!write_))
-      return false;
+    if (UNLIKELY(!write_)) return false;
 
-    if (UNLIKELY(!lock_.read_lock(false, 0)))
-      return false;
+    if (UNLIKELY(!lock_.read_lock(false, 0))) return false;
     lock_.write_unlock();
 
     write_ = false;
@@ -394,4 +386,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

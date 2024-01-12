@@ -17,14 +17,13 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef PLUGIN_GALAXY_UDF_UDF_H
 #define PLUGIN_GALAXY_UDF_UDF_H
 
 #include <functional>
 
-#include "my_inttypes.h"
 #include "my_compiler.h"
+#include "my_inttypes.h"
 
 #include "mysql/udf_registration_types.h"
 
@@ -87,7 +86,6 @@ class UDF {
 }  // namespace udf
 
 }  // namespace gs
-
 
 /** All the udf initialization function declaration */
 void bloomfilter_udf(gs::udf::Udf_definition *def);

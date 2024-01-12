@@ -24,9 +24,9 @@
 
 #pragma once
 
+#include <google/protobuf/wire_format_lite.h>
 #include <cassert>
 #include <cstdint>
-#include <google/protobuf/wire_format_lite.h>
 
 namespace polarx_rpc {
 namespace protocol {
@@ -35,7 +35,8 @@ namespace primitives {
 
 namespace base {
 
-template <uint64_t length, uint64_t value> struct Varint_length_value {
+template <uint64_t length, uint64_t value>
+struct Varint_length_value {
   static void encode(uint8_t *&) {
     static_assert(0 == length, "Length must be grater then zero.");
     static_assert(length,
@@ -44,29 +45,33 @@ template <uint64_t length, uint64_t value> struct Varint_length_value {
   }
 };
 
-template <uint64_t value> struct Varint_length_value<1, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<1, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F);
   }
 };
 
-template <uint64_t value> struct Varint_length_value<2, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<2, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F);
   }
 };
 
-template <uint64_t value> struct Varint_length_value<3, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<3, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F);
   }
 };
 
-template <uint64_t value> struct Varint_length_value<4, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<4, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 14) & 0x7F) | 0x80);
@@ -74,8 +79,9 @@ template <uint64_t value> struct Varint_length_value<4, value> {
   }
 };
 
-template <uint64_t value> struct Varint_length_value<5, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<5, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 14) & 0x7F) | 0x80);
@@ -84,8 +90,9 @@ template <uint64_t value> struct Varint_length_value<5, value> {
   }
 };
 
-template <uint64_t value> struct Varint_length_value<6, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<6, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 14) & 0x7F) | 0x80);
@@ -95,8 +102,9 @@ template <uint64_t value> struct Varint_length_value<6, value> {
   }
 };
 
-template <uint64_t value> struct Varint_length_value<7, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<7, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 14) & 0x7F) | 0x80);
@@ -107,8 +115,9 @@ template <uint64_t value> struct Varint_length_value<7, value> {
   }
 };
 
-template <uint64_t value> struct Varint_length_value<8, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<8, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 14) & 0x7F) | 0x80);
@@ -120,8 +129,9 @@ template <uint64_t value> struct Varint_length_value<8, value> {
   }
 };
 
-template <uint64_t value> struct Varint_length_value<9, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<9, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 14) & 0x7F) | 0x80);
@@ -134,8 +144,9 @@ template <uint64_t value> struct Varint_length_value<9, value> {
   }
 };
 
-template <uint64_t value> struct Varint_length_value<10, value> {
-  static void encode(uint8_t *&out) { // NOLINT
+template <uint64_t value>
+struct Varint_length_value<10, value> {
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = static_cast<uint8_t>((value & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 7) & 0x7F) | 0x80);
     *(out++) = static_cast<uint8_t>(((value >> 14) & 0x7F) | 0x80);
@@ -149,7 +160,8 @@ template <uint64_t value> struct Varint_length_value<10, value> {
   }
 };
 
-template <uint64_t length> struct Varint_length {
+template <uint64_t length>
+struct Varint_length {
   static void encode(uint8_t *&, const uint64_t) {
     static_assert(0 == length, "Length must be grater then zero.");
     static_assert(length,
@@ -158,29 +170,33 @@ template <uint64_t length> struct Varint_length {
   }
 };
 
-template <> struct Varint_length<1> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<1> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F);
   }
 };
 
-template <> struct Varint_length<2> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<2> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F);
   }
 };
 
-template <> struct Varint_length<3> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<3> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F);
   }
 };
 
-template <> struct Varint_length<4> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<4> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F) | 0x80;
@@ -188,8 +204,9 @@ template <> struct Varint_length<4> {
   }
 };
 
-template <> struct Varint_length<5> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<5> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F) | 0x80;
@@ -198,8 +215,9 @@ template <> struct Varint_length<5> {
   }
 };
 
-template <> struct Varint_length<6> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<6> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F) | 0x80;
@@ -209,8 +227,9 @@ template <> struct Varint_length<6> {
   }
 };
 
-template <> struct Varint_length<7> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<7> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F) | 0x80;
@@ -221,8 +240,9 @@ template <> struct Varint_length<7> {
   }
 };
 
-template <> struct Varint_length<8> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<8> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F) | 0x80;
@@ -234,8 +254,9 @@ template <> struct Varint_length<8> {
   }
 };
 
-template <> struct Varint_length<9> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<9> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F) | 0x80;
@@ -248,8 +269,9 @@ template <> struct Varint_length<9> {
   }
 };
 
-template <> struct Varint_length<10> {
-  static void encode(uint8_t *&out, const uint64_t value) { // NOLINT
+template <>
+struct Varint_length<10> {
+  static void encode(uint8_t *&out, const uint64_t value) {  // NOLINT
     *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 7) & 0x7F) | 0x80;
     *(out++) = static_cast<uint8_t>((value >> 14) & 0x7F) | 0x80;
@@ -265,7 +287,7 @@ template <> struct Varint_length<10> {
 
 struct Varint {
   template <typename Value_type>
-  static void encode(uint8_t *&out, Value_type value) { // NOLINT
+  static void encode(uint8_t *&out, Value_type value) {  // NOLINT
     while (value > 0x7F) {
       *(out++) = static_cast<uint8_t>(value & 0x7F) | 0x80;
       value >>= 7;
@@ -277,20 +299,25 @@ struct Varint {
 
 struct Fixint {};
 
-template <uint32_t length> struct Fixint_length {};
+template <uint32_t length>
+struct Fixint_length {};
 
-template <> struct Fixint_length<1> {
-  template <uint8_t value> static void encode(uint8_t *&out) { // NOLINT
+template <>
+struct Fixint_length<1> {
+  template <uint8_t value>
+  static void encode(uint8_t *&out) {  // NOLINT
     *(out++) = value;
   }
 
-  static void encode_value(uint8_t *&out, const uint8_t value) { // NOLINT
+  static void encode_value(uint8_t *&out, const uint8_t value) {  // NOLINT
     *(out++) = value;
   }
 };
 
-template <> struct Fixint_length<4> {
-  template <uint32_t value> static void encode(uint8_t *&out) { // NOLINT
+template <>
+struct Fixint_length<4> {
+  template <uint32_t value>
+  static void encode(uint8_t *&out) {  // NOLINT
 #if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
     *reinterpret_cast<uint32_t *>(out) = __builtin_bswap32(value);
     out += 4;
@@ -300,7 +327,7 @@ template <> struct Fixint_length<4> {
 #endif
   }
 
-  static void encode_value(uint8_t *&out, const uint32_t value) { // NOLINT
+  static void encode_value(uint8_t *&out, const uint32_t value) {  // NOLINT
 #if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
     *reinterpret_cast<uint32_t *>(out) = __builtin_bswap32(value);
     out += 4;
@@ -311,8 +338,10 @@ template <> struct Fixint_length<4> {
   }
 };
 
-template <> struct Fixint_length<8> {
-  template <uint64_t value> static void encode(uint8_t *&out) { // NOLINT
+template <>
+struct Fixint_length<8> {
+  template <uint64_t value>
+  static void encode(uint8_t *&out) {  // NOLINT
 #if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
     *reinterpret_cast<uint64_t *>(out) = __builtin_bswap64(value);
     out += 8;
@@ -322,7 +351,7 @@ template <> struct Fixint_length<8> {
 #endif
   }
 
-  static void encode_value(uint8_t *&out, const uint64_t value) { // NOLINT
+  static void encode_value(uint8_t *&out, const uint64_t value) {  // NOLINT
 #if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
     *reinterpret_cast<uint64_t *>(out) = __builtin_bswap64(value);
     out += 8;
@@ -334,7 +363,7 @@ template <> struct Fixint_length<8> {
 };
 
 class Helper {
-public:
+ public:
   using WireType = google::protobuf::internal::WireFormatLite::WireType;
 
   static constexpr uint32_t encode_field_tag(const uint32_t field_no,
@@ -360,32 +389,23 @@ public:
   }
 
   static int get_varint_length(const uint64_t value) {
-    if (value < 0x0000000000000080)
-      return 1;
-    if (value < 0x0000000000004000)
-      return 2;
-    if (value < 0x0000000000200000)
-      return 3;
-    if (value < 0x0000000010000000)
-      return 4;
-    if (value < 0x0000000800000000)
-      return 5;
-    if (value < 0x0000040000000000)
-      return 6;
-    if (value < 0x0002000000000000)
-      return 7;
-    if (value < 0x0100000000000000)
-      return 8;
-    if (value < 0x8000000000000000)
-      return 9;
+    if (value < 0x0000000000000080) return 1;
+    if (value < 0x0000000000004000) return 2;
+    if (value < 0x0000000000200000) return 3;
+    if (value < 0x0000000010000000) return 4;
+    if (value < 0x0000000800000000) return 5;
+    if (value < 0x0000040000000000) return 6;
+    if (value < 0x0002000000000000) return 7;
+    if (value < 0x0100000000000000) return 8;
+    if (value < 0x8000000000000000) return 9;
 
     return 10;
   }
 };
 
-} // namespace base
+}  // namespace base
 
-} // namespace primitives
+}  // namespace primitives
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

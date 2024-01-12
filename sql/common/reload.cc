@@ -46,14 +46,14 @@ SHOW_VAR reload_entry_status[] = {
   Ignore the error when reload.
 */
 class Reload_error_handler : public Dummy_error_handler {
-public:
+ public:
   Reload_error_handler(THD *thd) : m_thd(thd) {
     m_thd->push_internal_handler(this);
   }
 
   virtual ~Reload_error_handler() { m_thd->pop_internal_handler(); }
 
-private:
+ private:
   THD *m_thd;
 };
 
@@ -99,18 +99,18 @@ const Reload *lookup_reload_entry(const char *key, std::size_t len) {
 const Reload *lookup_reload_entry(const char *db, std::size_t db_len,
                                   const char *table_name,
                                   std::size_t table_name_len) {
-    std::stringstream ss;
-    ss << db << '\0' << table_name << '\0';
-    std::string key = ss.str();
-    assert(key.length() == (db_len + table_name_len + 2));
-    (void)db_len;
-    (void)table_name_len;
+  std::stringstream ss;
+  ss << db << '\0' << table_name << '\0';
+  std::string key = ss.str();
+  assert(key.length() == (db_len + table_name_len + 2));
+  (void)db_len;
+  (void)table_name_len;
 
-    auto it = reload_entries.find(key);
-    if (it == reload_entries.end())
-      return nullptr;
-    else
-      return it->second;
+  auto it = reload_entries.find(key);
+  if (it == reload_entries.end())
+    return nullptr;
+  else
+    return it->second;
 }
 /**
   Remove reload entry by key.

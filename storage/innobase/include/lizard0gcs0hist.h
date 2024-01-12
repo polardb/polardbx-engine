@@ -40,8 +40,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sync0rw.h"
 #include "trx0types.h"
 
-#include "lizard0scn0types.h"
 #include "lizard0mon.h"
+#include "lizard0scn0types.h"
 
 #include "sql/lizard/lizard_snapshot.h"
 
@@ -138,8 +138,6 @@ extern void srv_scn_history_thread_deinit();
 */
 extern scn_transform_result_t try_scn_transform_by_utc(const ulint utc);
 
-
-
 /**------------------------------------------------------------------------*/
 /** Transaction Commit Number Snapshot */
 /**------------------------------------------------------------------------*/
@@ -213,7 +211,7 @@ class CRing {
     return m_items + seq % m_capacity;
   }
 
-  /** 
+  /**
    * Find the biggest item which is less than argument.
    *
    * @retval	item pointer
@@ -251,7 +249,7 @@ class CBuffer {
 
   void add(Item &item, utc_t utc_sec);
 
-  /** 
+  /**
    * Find the biggest item which is less than argument.
    *
    * @retval	item pointer

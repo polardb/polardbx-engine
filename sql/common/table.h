@@ -53,7 +53,8 @@ class Conf_reader {
 
   virtual ~Conf_reader() {}
 
-  virtual void row_warning(Conf_record *record, const char *when, const char *msg) = 0;
+  virtual void row_warning(Conf_record *record, const char *when,
+                           const char *msg) = 0;
 
   virtual void print_ha_error(int errcode) = 0;
 
@@ -84,7 +85,6 @@ class Conf_reader {
   MEM_ROOT *m_mem_root;
   unique_ptr_destroy_only<RowIterator> m_read_record_info;
 };
-
 
 class Conf_writer {
  public:

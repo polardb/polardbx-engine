@@ -62,8 +62,8 @@ extern void update_rotate_log_table_last_name_ptr();
   Struture used to save current runtime context
 */
 struct Statement_context {
-  Statement_context(){}
-  ~Statement_context(){}
+  Statement_context() {}
+  ~Statement_context() {}
 
   /* Option_bits */
   ulonglong m_thd_option_bits;

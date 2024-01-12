@@ -440,7 +440,6 @@ class Rpl_info_handler {
    * #11004688 */
   virtual int do_flush_info_force_new_thd(const bool force) = 0;
 
-
  public:
   int flush_info_force_new_thd(const bool force) {
     return do_flush_info_force_new_thd(force);

@@ -210,7 +210,6 @@ class Multisource_info {
     return default_channel_mi;
   }
 
-
   void reset_default_channel_mi() {
     m_channel_map_lock->assert_some_lock();
     default_channel_mi = NULL;

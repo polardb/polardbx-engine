@@ -913,7 +913,8 @@ row_prebuilt_t *row_create_prebuilt(
   prebuilt->clust_pcur->m_cleanout_pages = ut::new_<lizard::Cleanout_pages>();
 
   prebuilt->pcur->m_cleanout_cursors = ut::new_<lizard::Cleanout_cursors>();
-  prebuilt->clust_pcur->m_cleanout_cursors = ut::new_<lizard::Cleanout_cursors>();
+  prebuilt->clust_pcur->m_cleanout_cursors =
+      ut::new_<lizard::Cleanout_cursors>();
 
   prebuilt->pcur->reset();
   prebuilt->clust_pcur->reset();
@@ -989,7 +990,7 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
 
   ut::delete_(prebuilt->pcur->m_cleanout_cursors);
   ut::delete_(prebuilt->clust_pcur->m_cleanout_cursors);
-  prebuilt->pcur->m_cleanout_cursors= nullptr;
+  prebuilt->pcur->m_cleanout_cursors = nullptr;
   prebuilt->clust_pcur->m_cleanout_cursors = nullptr;
 
   ut::free(prebuilt->mysql_template);
@@ -4657,7 +4658,6 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
       prebuilt->select_lock_type == LOCK_NONE && index->is_clustered() &&
       (check_keys || prebuilt->trx->mysql_n_tables_locked == 0) &&
       !prebuilt->ins_sel_stmt) {
-
     if (!check_keys && prebuilt->m_mysql_table &&
         prebuilt->m_mysql_table->table_snapshot.is_vision()) {
       goto skip_parallel_read;
@@ -4684,11 +4684,11 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
 
         if (!check_keys) {
           return (row_mysql_parallel_select_count_star(trx, indexes, n_threads,
-                                                       n_rows,
-                                                       n_del_mark));
+                                                       n_rows, n_del_mark));
         }
 
-        return (parallel_check_table(trx, index, n_threads, n_rows, n_del_mark));
+        return (
+            parallel_check_table(trx, index, n_threads, n_rows, n_del_mark));
       }
 
       if (!check_keys) {
@@ -4705,7 +4705,7 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
 
 // #ifdef UNIV_DEBUG
 skip_parallel_read:
-// #endif /* UNIV_DEBUG */
+  // #endif /* UNIV_DEBUG */
 
   bool contains_null;
   rec_t *rec = nullptr;
@@ -4747,7 +4747,7 @@ loop:
     case DB_AS_OF_TABLE_DEF_CHANGED:
     case DB_SNAPSHOT_TOO_OLD:
     case DB_GP_WAIT_TIMEOUT:
-    /** Flashback query error end. */
+      /** Flashback query error end. */
       goto func_exit;
     default: {
       const char *doing = check_keys ? "CHECK TABLE" : "COUNT(*)";

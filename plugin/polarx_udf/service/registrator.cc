@@ -31,17 +31,17 @@ namespace udf {
    @retval        false   Success
 */
 bool Registrator::udf_register(gs::udf::Udf_definition def) {
- switch (def.m_type) {
-   case UDFTYPE_FUNCTION:
-     return m_udf_registry.udf_register(def.m_name, def.m_result, def.m_func,
-                                        def.m_func_init, def.m_func_deinit);
-   case UDFTYPE_AGGREGATE:
-     return m_udf_registry_aggregate.udf_register(
-         def.m_name, def.m_result, def.m_func, def.m_func_init,
-         def.m_func_deinit, def.m_func_add, def.m_func_clear);
- }
+  switch (def.m_type) {
+    case UDFTYPE_FUNCTION:
+      return m_udf_registry.udf_register(def.m_name, def.m_result, def.m_func,
+                                         def.m_func_init, def.m_func_deinit);
+    case UDFTYPE_AGGREGATE:
+      return m_udf_registry_aggregate.udf_register(
+          def.m_name, def.m_result, def.m_func, def.m_func_init,
+          def.m_func_deinit, def.m_func_add, def.m_func_clear);
+  }
 
- return true;
+  return true;
 }
 
 /**

@@ -67,11 +67,11 @@
 #include "typelib.h"
 #include "unsafe_string_append.h"
 
-#include "sql/lizard_rpl_binlog_sender.h"
-#include "scope_guard.h"  // create_scope_guard
 #include "mysql/service_thd_wait.h"
-#include "sql/consensus_log_manager.h"
+#include "scope_guard.h"  // create_scope_guard
 #include "sql/bl_consensus_log.h"
+#include "sql/consensus_log_manager.h"
+#include "sql/lizard_rpl_binlog_sender.h"
 
 #define READ_CONSENSUS_LOG()                                        \
   consensus_log_manager.lock_consensus(true);                       \
@@ -289,7 +289,6 @@ void Binlog_sender::init() {
   DBUG_PRINT("info", ("Initial packet->alloced_length: %zu",
                       m_packet.alloced_length()));
 
-
   READ_CONSENSUS_LOG();
   if (!consensus_log->is_open()) {
     set_fatal_error("Binary log is not open");
@@ -451,7 +450,7 @@ void Binlog_sender::run() {
     consensus_log->lock_index();
     if (!consensus_log->is_open()) {
       if (consensus_log->open_index_file(consensus_log->get_index_fname(),
-                                        log_file, false)) {
+                                         log_file, false)) {
         set_fatal_error(
             "Binary log is not open and failed to open index file "
             "to retrieve next file.");
@@ -469,7 +468,7 @@ void Binlog_sender::run() {
       };);
       if (is_index_file_reopened_on_binlog_disable)
         consensus_log->close(LOG_CLOSE_INDEX, true /*need_lock_log=true*/,
-                            true /*need_lock_index=true*/);
+                             true /*need_lock_index=true*/);
       set_fatal_error("could not find next log");
       break;
     }
@@ -603,7 +602,7 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
   bool in_exclude_group = false;
 
   /* read the first user log_event to get the correct timestamp */
-  uint32 fake_create_time= find_first_user_event_timestamp(&reader, end_pos);
+  uint32 fake_create_time = find_first_user_event_timestamp(&reader, end_pos);
 
   while (likely(log_pos < end_pos) || end_pos == 0) {
     uchar *event_ptr = nullptr;
@@ -643,17 +642,15 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
     Sender_context_guard ctx_guard(*this, event_type);
 
     // GalaxyEngine: only send committed binlog
-    if (event_type == binary_log::CONSENSUS_LOG_EVENT)
-    {
-      uint64_t next_consensus_index= uint8korr(event_ptr +
-          binary_log::Consensus_event::CONSENSUS_INDEX_OFFSET);
-      if (wait_commit_index_update(log_pos, next_consensus_index))
-        return 1;
+    if (event_type == binary_log::CONSENSUS_LOG_EVENT) {
+      uint64_t next_consensus_index = uint8korr(
+          event_ptr + binary_log::Consensus_event::CONSENSUS_INDEX_OFFSET);
+      if (wait_commit_index_update(log_pos, next_consensus_index)) return 1;
     }
 
     log_pos = reader.position();
 
-     /* X-Cluster revises event before send it out */
+    /* X-Cluster revises event before send it out */
     revise_event(event_ptr, event_len, fake_create_time, log_pos);
 
     /*
@@ -705,7 +702,8 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
 
       /** Cannot send Gcn_log_event immediately, because only by reading the
       gtid event can we know whether the transaction should be skipped. */
-      if (event_type == binary_log::GCN_LOG_EVENT || event_type == binary_log::CONSENSUS_LOG_EVENT) {
+      if (event_type == binary_log::GCN_LOG_EVENT ||
+          event_type == binary_log::CONSENSUS_LOG_EVENT) {
         m_delay_sender.push_event(m_packet, log_file, log_pos, in_exclude_group,
                                   event_type);
         continue;
@@ -873,7 +871,8 @@ inline int Binlog_sender::wait_with_heartbeat(my_off_t log_pos) {
       return 0;
     }
     consensus_log->unlock_binlog_end_pos();
-    auto lock = create_scope_guard([&] { this->consensus_log->lock_binlog_end_pos(); });
+    auto lock =
+        create_scope_guard([&] { this->consensus_log->lock_binlog_end_pos(); });
 #ifndef NDEBUG
     if (hb_info_counter < 3) {
       LogErr(INFORMATION_LEVEL, ER_RPL_BINLOG_MASTER_SENDS_HEARTBEAT);
@@ -1421,8 +1420,7 @@ inline int Binlog_sender::send_packet_and_flush() {
   return (send_packet() || flush_net());
 }
 
-int Binlog_sender::before_send_hook(const char *log_file,
-                                           my_off_t log_pos) {
+int Binlog_sender::before_send_hook(const char *log_file, my_off_t log_pos) {
   if (m_observe_transmission &&
       RUN_HOOK(binlog_transmit, before_send_event,
                (m_thd, m_flag, &m_packet, log_file, log_pos))) {
@@ -1432,8 +1430,7 @@ int Binlog_sender::before_send_hook(const char *log_file,
   return 0;
 }
 
-int Binlog_sender::after_send_hook(const char *log_file,
-                                          my_off_t log_pos) {
+int Binlog_sender::after_send_hook(const char *log_file, my_off_t log_pos) {
   if (m_observe_transmission &&
       RUN_HOOK(binlog_transmit, after_send_event,
                (m_thd, m_flag, &m_packet, log_file, log_pos))) {
@@ -1576,34 +1573,31 @@ void Binlog_sender::calc_shrink_buffer_size(size_t current_size) {
   m_new_shrink_size = ALIGN_SIZE(new_size);
 }
 
-
-uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader, my_off_t end_pos)
-{
+uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader,
+                                                      my_off_t end_pos) {
   my_off_t old_pos, log_pos;
   String tmp;
   tmp.copy(m_packet);
   tmp.length(m_packet.length());
-  uint32 create_time= 0;
+  uint32 create_time = 0;
 
-  old_pos= log_pos= reader->position();
-  while(log_pos < end_pos)
-  {
-    uchar* event_ptr;
-    uint32 event_len= 0;
-    if (unlikely(read_event(*reader,
-                            &event_ptr, &event_len)))
-      break;
-    if (!Log_event::is_local_event_type(static_cast<Log_event_type>(event_ptr[EVENT_TYPE_OFFSET])))
-    {
-      create_time= uint4korr(event_ptr);
+  old_pos = log_pos = reader->position();
+  while (log_pos < end_pos) {
+    uchar *event_ptr;
+    uint32 event_len = 0;
+    if (unlikely(read_event(*reader, &event_ptr, &event_len))) break;
+    if (!Log_event::is_local_event_type(
+            static_cast<Log_event_type>(event_ptr[EVENT_TYPE_OFFSET]))) {
+      create_time = uint4korr(event_ptr);
 #ifndef DBUG_OFF
-      xp::info(ER_XP_APPLIER) << "Binlog first user event timestamp is " << create_time;
+      xp::info(ER_XP_APPLIER)
+          << "Binlog first user event timestamp is " << create_time;
 #endif
       break;
     }
-    log_pos= reader->position();
+    log_pos = reader->position();
   }
-  reader->seek(old_pos); // rewind
+  reader->seek(old_pos);  // rewind
   m_packet.copy(tmp);
   m_packet.length(tmp.length());
   set_last_pos(reader->position());
@@ -1613,55 +1607,47 @@ uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader, my_of
 /*
   PolarDB-X Engine: checkCommitIndex to make sure only send committed log
 */
-int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index)
-{
+int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index) {
 #ifndef DBUG_OFF
-  ulong hb_info_counter= 0;
+  ulong hb_info_counter = 0;
 #endif
-  longlong sec_cnt= 0;
-  bool hb_send= false;
+  longlong sec_cnt = 0;
+  bool hb_send = false;
   String tmp;
   uint64_t current_index;
   /* heartbeat period is measured by second */
-  uint ratio = std::max(1000000ULL / opt_consensus_check_commit_index_interval, 1ULL);
-  while (consensus_ptr->checkCommitIndex(index - 1,
-      consensus_log_manager.get_current_term()) < index)
-  {
+  uint ratio =
+      std::max(1000000ULL / opt_consensus_check_commit_index_interval, 1ULL);
+  while (consensus_ptr->checkCommitIndex(
+             index - 1, consensus_log_manager.get_current_term()) < index) {
     my_sleep(opt_consensus_check_commit_index_interval);
-    if (unlikely(m_thd->killed))
-      return 1;
+    if (unlikely(m_thd->killed)) return 1;
     // send heartbeat event
-    if (m_heartbeat_period.count() > 0)
-    {
+    if (m_heartbeat_period.count() > 0) {
       sec_cnt++;
-      if (m_heartbeat_period.count() == (sec_cnt / ratio))
-      {
-        sec_cnt= 0;
+      if (m_heartbeat_period.count() == (sec_cnt / ratio)) {
+        sec_cnt = 0;
 #ifndef DBUG_OFF
-        if (hb_info_counter < 3)
-        {
+        if (hb_info_counter < 3) {
           xp::info(ER_XP_APPLIER) << "master sends heartbeat message";
           hb_info_counter++;
           if (hb_info_counter == 3)
             xp::info(ER_XP_APPLIER) << "the rest of heartbeat info skipped ...";
         }
 #endif
-        if (!hb_send)
-        {
+        if (!hb_send) {
           /* Save a copy of the buffer content. */
           tmp.copy(m_packet);
           tmp.length(m_packet.length());
-          hb_send= true;
+          hb_send = true;
         }
 
-        if (send_heartbeat_event(log_pos))
-          return 1;
+        if (send_heartbeat_event(log_pos)) return 1;
       }
     }
   }
-  current_index= index;
-  if (hb_send)
-  {
+  current_index = index;
+  if (hb_send) {
     /* Restore the copy back. */
     m_packet.copy(tmp);
     m_packet.length(tmp.length());
@@ -1674,27 +1660,26 @@ int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index)
   return 0;
 }
 
-void Binlog_sender::revise_event(uchar *event_ptr, size_t event_len, uint32 fake_ctime, my_off_t log_pos)
-{
-  Log_event_type event_type= (Log_event_type)event_ptr[EVENT_TYPE_OFFSET];
-  /* X-Cluster: hack the timestamp of the first several events in each binlog file */
+void Binlog_sender::revise_event(uchar *event_ptr, size_t event_len,
+                                 uint32 fake_ctime, my_off_t log_pos) {
+  Log_event_type event_type = (Log_event_type)event_ptr[EVENT_TYPE_OFFSET];
+  /* X-Cluster: hack the timestamp of the first several events in each binlog
+   * file */
   if ((event_type == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
-       event_type == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT)
-      && fake_ctime != 0)
-  {
+       event_type == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT) &&
+      fake_ctime != 0) {
     int4store(event_ptr, fake_ctime);
   }
 
   /* X-Cluster: unset relay_log flag if exists */
-  if (uint2korr(event_ptr + FLAGS_OFFSET) & LOG_EVENT_RELAY_LOG_F)
-  {
+  if (uint2korr(event_ptr + FLAGS_OFFSET) & LOG_EVENT_RELAY_LOG_F) {
     event_ptr[FLAGS_OFFSET] &= ~LOG_EVENT_RELAY_LOG_F;
   }
 
-  /* X-Cluster: reset each binlog event's log_pos (end_log_pos) to the correct value */
+  /* X-Cluster: reset each binlog event's log_pos (end_log_pos) to the correct
+   * value */
   int4store(event_ptr + LOG_POS_OFFSET, log_pos);
 
   /* X-Cluster: recalculate the checksum if necessary */
-  if (event_checksum_on())
-    calc_event_checksum(event_ptr, event_len);
+  if (event_checksum_on()) calc_event_checksum(event_ptr, event_len);
 }

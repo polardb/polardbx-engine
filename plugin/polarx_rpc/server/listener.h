@@ -12,7 +12,7 @@
 
 #include "../global_defines.h"
 #ifdef MYSQL8
-#include "sql/hostname_cache.h" // ip_to_hostname
+#include "sql/hostname_cache.h"  // ip_to_hostname
 #else
 #include "sql/hostname.h"
 #endif
@@ -33,7 +33,7 @@ namespace polarx_rpc {
 class Clistener final : public CepollCallback {
   NO_COPY_MOVE(Clistener);
 
-private:
+ private:
   CmtEpoll &epoll_;
   int fd_;
 
@@ -55,7 +55,7 @@ private:
       port = ntohs(((const sockaddr_in6 &)client_addr).sin6_port);
     }
     ip = host.c_str();
-    host.resize(ip.size()); /// remove tail
+    host.resize(ip.size());  /// remove tail
 
     // turn IP to hostname for auth uses
     if (!opt_skip_name_resolve) {
@@ -75,8 +75,7 @@ private:
       }
       if (hostname) {
         host = hostname;
-        if (hostname != my_localhost)
-          my_free(hostname);
+        if (hostname != my_localhost) my_free(hostname);
       }
     }
     return true;
@@ -127,9 +126,9 @@ private:
           /// to avoid missing epoll_in
           tcp->pre_events();
           auto bret = tcp->events(EPOLLIN, 0, 1);
-          assert(bret); /// still keep the reference, so never fail
+          assert(bret);  /// still keep the reference, so never fail
         } else {
-          tcp->fin("failed to add to epoll"); /// close socket
+          tcp->fin("failed to add to epoll");  /// close socket
           {
             std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
             if (plugin_info.plugin_info != nullptr)
@@ -140,8 +139,8 @@ private:
         }
         auto after = tcp->sub_reference();
         if (after > 0) {
-          assert(0 == err); /// must be successfully registered
-          tcp.release();    /// still reference, leak it to epoll
+          assert(0 == err);  /// must be successfully registered
+          tcp.release();     /// still reference, leak it to epoll
         }
         /// or free by unique_ptr
       }
@@ -149,8 +148,8 @@ private:
       /// dealing accept error
       auto err = errno;
       if (LIKELY(EWOULDBLOCK == err || EAGAIN == err))
-        break; /// The socket is marked nonblocking and no connections are
-               /// present to be accepted.
+        break;  /// The socket is marked nonblocking and no connections are
+                /// present to be accepted.
       else if (err != EINTR) {
         {
           std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
@@ -173,7 +172,7 @@ private:
     return true;
   }
 
-public:
+ public:
   static void start(uint16_t port) {
     /// check port first
     auto check_times = 0;
@@ -181,7 +180,7 @@ public:
     do {
       ierr = CmtEpoll::check_port(port);
       if (0 == ierr)
-        break; /// good
+        break;  /// good
       else
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     } while (++check_times < 3);
@@ -204,7 +203,7 @@ public:
       /// only set reuse port on other inst
       ierr = insts[i]->listen_port(port, listener.get(), inst_cnt > 1);
       if (0 == ierr)
-        insts[i]->push_listener(std::move(listener)); /// push it to epoll
+        insts[i]->push_listener(std::move(listener));  /// push it to epoll
       else {
         {
           std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
@@ -223,4 +222,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

@@ -209,10 +209,10 @@ struct Slave_job_group {
   longlong last_committed;   // commit parent timestamp
   longlong sequence_number;  // transaction's logical timestamp
 
-  //TODO @yanhua, unused
+  // TODO @yanhua, unused
   uint64_t checkpoint_consensus_index;
 
-  uint64_t consensus_index;   // group's consensus index
+  uint64_t consensus_index;  // group's consensus index
   /*
     After Coordinator has seen a new FD event, it sets this member to
     point to the new event, once per worker. Coordinator does so
@@ -243,7 +243,8 @@ struct Slave_job_group {
     Coordinator fills the struct with defaults and options at starting of
     a group distribution.
   */
-  void reset(my_off_t master_pos, ulonglong seqno, uint64_t consensus_index_ptr) {
+  void reset(my_off_t master_pos, ulonglong seqno,
+             uint64_t consensus_index_ptr) {
     master_log_pos = master_pos;
     group_master_log_pos = group_relay_log_pos = 0;
     group_master_log_name = nullptr;  // todo: remove
@@ -603,7 +604,7 @@ class Slave_worker final : public Relay_log_info {
   /* Initial value of FD-for-execution version until it's gets known. */
   ulong server_version;
 
-  //TODO @yanhua, unused
+  // TODO @yanhua, unused
   ulonglong checkpoint_consensus_apply_index;
 
   enum en_running_state {

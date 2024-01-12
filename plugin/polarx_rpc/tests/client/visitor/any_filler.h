@@ -41,18 +41,21 @@ class Any_filler : public Argument_visitor {
 
   void visit_null() override {
     m_any->set_type(::PolarXRPC::Datatypes::Any_Type_SCALAR);
-    m_any->mutable_scalar()->set_type(::PolarXRPC::Datatypes::Scalar_Type_V_NULL);
+    m_any->mutable_scalar()->set_type(
+        ::PolarXRPC::Datatypes::Scalar_Type_V_NULL);
   }
 
   void visit_integer(const int64_t value) override {
     m_any->set_type(::PolarXRPC::Datatypes::Any_Type_SCALAR);
-    m_any->mutable_scalar()->set_type(::PolarXRPC::Datatypes::Scalar_Type_V_SINT);
+    m_any->mutable_scalar()->set_type(
+        ::PolarXRPC::Datatypes::Scalar_Type_V_SINT);
     m_any->mutable_scalar()->set_v_signed_int(value);
   }
 
   void visit_uinteger(const uint64_t value) override {
     m_any->set_type(::PolarXRPC::Datatypes::Any_Type_SCALAR);
-    m_any->mutable_scalar()->set_type(::PolarXRPC::Datatypes::Scalar_Type_V_UINT);
+    m_any->mutable_scalar()->set_type(
+        ::PolarXRPC::Datatypes::Scalar_Type_V_UINT);
     m_any->mutable_scalar()->set_v_unsigned_int(value);
   }
 
@@ -65,13 +68,15 @@ class Any_filler : public Argument_visitor {
 
   void visit_float(const float value) override {
     m_any->set_type(::PolarXRPC::Datatypes::Any_Type_SCALAR);
-    m_any->mutable_scalar()->set_type(::PolarXRPC::Datatypes::Scalar_Type_V_FLOAT);
+    m_any->mutable_scalar()->set_type(
+        ::PolarXRPC::Datatypes::Scalar_Type_V_FLOAT);
     m_any->mutable_scalar()->set_v_float(value);
   }
 
   void visit_bool(const bool value) override {
     m_any->set_type(::PolarXRPC::Datatypes::Any_Type_SCALAR);
-    m_any->mutable_scalar()->set_type(::PolarXRPC::Datatypes::Scalar_Type_V_BOOL);
+    m_any->mutable_scalar()->set_type(
+        ::PolarXRPC::Datatypes::Scalar_Type_V_BOOL);
     m_any->mutable_scalar()->set_v_bool(value);
   }
 

@@ -10,18 +10,18 @@
 #include "../common_define.h"
 #include "../server/server_variables.h"
 
-#include "buffer.h"
 #include "../coders/protocol_fwd.h"
+#include "buffer.h"
 
 namespace polarx_rpc {
 
-static constexpr size_t DEFAULT_BUFFER_SIZE = 0x1000; /// 4KB
+static constexpr size_t DEFAULT_BUFFER_SIZE = 0x1000;  /// 4KB
 
 class CbufferedOutputStream final
     : public google::protobuf::io::ZeroCopyOutputStream {
   NO_COPY(CbufferedOutputStream);
 
-private:
+ private:
   std::vector<Cbuffer> buffers_;
   int buffer_index_;
   size_t bytes_total_;
@@ -35,7 +35,7 @@ private:
     }
   }
 
-public:
+ public:
   CbufferedOutputStream() : buffer_index_(-1), bytes_total_(0) {}
   CbufferedOutputStream(CbufferedOutputStream &&another) noexcept
       : buffers_(std::move(another.buffers_)),
@@ -57,17 +57,14 @@ public:
 
   inline void clear() {
     auto cache_pages = max_cached_output_buffer_pages;
-    if (UNLIKELY(buffers_.size() > cache_pages))
-      buffers_.resize(cache_pages);
-    for (auto &buf : buffers_)
-      buf.pos() = 0;
+    if (UNLIKELY(buffers_.size() > cache_pages)) buffers_.resize(cache_pages);
+    for (auto &buf : buffers_) buf.pos() = 0;
     buffer_index_ = -1;
     bytes_total_ = 0;
   }
 
   inline void *reserve(size_t sz) {
-    if (sz > DEFAULT_BUFFER_SIZE)
-      return nullptr;
+    if (sz > DEFAULT_BUFFER_SIZE) return nullptr;
 
     init();
     auto buf = &buffers_[buffer_index_];
@@ -149,8 +146,7 @@ public:
       clear();
     else {
       assert(buffer_index_ >= b.index);
-      for (auto i = buffer_index_; i > b.index; --i)
-        buffers_[i].pos() = 0;
+      for (auto i = buffer_index_; i > b.index; --i) buffers_[i].pos() = 0;
       buffer_index_ = b.index;
       buffers_[buffer_index_].pos() = b.buf_pos;
       bytes_total_ = b.bytes_total;
@@ -158,4 +154,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

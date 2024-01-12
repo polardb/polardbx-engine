@@ -13,7 +13,7 @@
 #define OS_PATH_SEPARATOR_ALT '\\'
 #endif
 
-#endif // MYSQL_TABLESPACEDATAFILE_H
+#endif  // MYSQL_TABLESPACEDATAFILE_H
 
 #include "../coders/protocol_fwd.h"
 #include "../polarx_rpc.h"
@@ -32,14 +32,14 @@ extern const char *fil_path_to_mysql_datadir;
 namespace rpc_executor {
 
 class Physical_backfill {
-public:
+ public:
   static Physical_backfill &instance() {
     static Physical_backfill physical_backfill;
     return physical_backfill;
   }
 
   class File_desc_info {
-  public:
+   public:
     File file;
 
     File_desc_info() { file = -1; }
@@ -56,23 +56,23 @@ public:
       const PolarXRPC::PhysicalBackfill::GetFileInfoOperator &msg,
       PolarXRPC::PhysicalBackfill::GetFileInfoOperator &out_msg);
 
-  polarx_rpc::err_t
-  pre_allocate(const PolarXRPC::PhysicalBackfill::FileManageOperator &msg);
+  polarx_rpc::err_t pre_allocate(
+      const PolarXRPC::PhysicalBackfill::FileManageOperator &msg);
 
-  polarx_rpc::err_t
-  read_buffer(const PolarXRPC::PhysicalBackfill::TransferFileDataOperator &msg,
-              PolarXRPC::PhysicalBackfill::TransferFileDataOperator &out_msg);
+  polarx_rpc::err_t read_buffer(
+      const PolarXRPC::PhysicalBackfill::TransferFileDataOperator &msg,
+      PolarXRPC::PhysicalBackfill::TransferFileDataOperator &out_msg);
 
-  polarx_rpc::err_t
-  write_buffer(const PolarXRPC::PhysicalBackfill::TransferFileDataOperator &msg,
-               PolarXRPC::PhysicalBackfill::TransferFileDataOperator &out_msg);
+  polarx_rpc::err_t write_buffer(
+      const PolarXRPC::PhysicalBackfill::TransferFileDataOperator &msg,
+      PolarXRPC::PhysicalBackfill::TransferFileDataOperator &out_msg);
 
-  polarx_rpc::err_t
-  clone_file(const PolarXRPC::PhysicalBackfill::FileManageOperator &msg,
-             MYSQL_THD thd);
+  polarx_rpc::err_t clone_file(
+      const PolarXRPC::PhysicalBackfill::FileManageOperator &msg,
+      MYSQL_THD thd);
 
-  polarx_rpc::err_t
-  delete_file(const PolarXRPC::PhysicalBackfill::FileManageOperator &msg);
+  polarx_rpc::err_t delete_file(
+      const PolarXRPC::PhysicalBackfill::FileManageOperator &msg);
 
   void normalize_table_name_low(char *norm_name, const char *name);
 #ifndef MYSQL8
@@ -113,4 +113,4 @@ inline void os_normalize_path(char *str) {
     }
   }
 }
-} // namespace rpc_executor
+}  // namespace rpc_executor

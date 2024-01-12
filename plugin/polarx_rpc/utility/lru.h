@@ -12,8 +12,9 @@
 
 namespace polarx_rpc {
 
-template <class K, class V> class CcopyableLru final {
-private:
+template <class K, class V>
+class CcopyableLru final {
+ private:
   size_t max_count_;
   mutable std::mutex lock_;
   std::list<std::pair<K, V>> lru_list_;
@@ -22,7 +23,7 @@ private:
   std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> lru_map_;
   size_t count_;
 
-public:
+ public:
   explicit CcopyableLru(size_t max_count = 128)
       : max_count_(max_count), count_(0) {}
 
@@ -33,8 +34,7 @@ public:
   inline V get(const K &key) {
     std::lock_guard<std::mutex> lck(lock_);
     auto it = lru_map_.find(key);
-    if (lru_map_.end() == it)
-      return {};
+    if (lru_map_.end() == it) return {};
     /// found and copy it
     V v(it->second->second);
     /// move it to first
@@ -45,7 +45,8 @@ public:
   }
 
   /// return evict count
-  template <class KK, class VV> inline size_t put(KK &&k, VV &&v) {
+  template <class KK, class VV>
+  inline size_t put(KK &&k, VV &&v) {
     std::lock_guard<std::mutex> lck(lock_);
 
     /// push front new one
@@ -82,4 +83,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

@@ -51,7 +51,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <time.h>
 
 #include <chrono>
-#include "my_systime.h"
 #include "btr0sea.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
@@ -61,6 +60,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0stats_bg.h"
 #include "fsp0sysspace.h"
 #include "ha_prototypes.h"
+#include "my_systime.h"
 #endif /* !UNIV_HOTBACKUP */
 #include "ibuf0ibuf.h"
 #ifndef UNIV_HOTBACKUP
@@ -1756,7 +1756,8 @@ void srv_export_innodb_status(void) {
     export_vars.innodb_purge_trx_scn_age = 0;
   } else {
     /* Add 1 as done_trx_no always points to the next transaction ID. */
-    export_vars.innodb_purge_trx_scn_age = (ulint)(max_trx_scn - done_trx_scn + 1);
+    export_vars.innodb_purge_trx_scn_age =
+        (ulint)(max_trx_scn - done_trx_scn + 1);
   }
 
   if (low_limit_scn == 0 || max_trx_scn < low_limit_scn) {
@@ -2985,8 +2986,7 @@ static void srv_purge_coordinator_suspend(
                             thread slot */
     ulint rseg_history_len, /*!< in: history list length
                             before last purge */
-    bool is_blocked_by_retention)
-{
+    bool is_blocked_by_retention) {
   ut_ad(!srv_read_only_mode);
   ut_a(slot->type == SRV_PURGE);
 

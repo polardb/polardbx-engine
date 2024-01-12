@@ -4,4 +4,4 @@ namespace rpc_executor {
 
 thread_local const ParamsList *tls_params = nullptr;
 
-} // namespace executor
+}  // namespace rpc_executor

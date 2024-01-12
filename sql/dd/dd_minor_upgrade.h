@@ -93,7 +93,6 @@ class Minor_upgrade_ctx {
   uint m_extra_mvu_version;
 };
 
-
 }  // namespace dd
 
 #endif

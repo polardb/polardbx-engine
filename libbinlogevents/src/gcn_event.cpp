@@ -31,10 +31,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
   Created 2023-06-20 by Jianwei.zhao
  *******************************************************/
 
-#include "binlog_event.h"
 #include "gcn_event.h"
-#include "event_reader_macros.h"
+#include "binlog_event.h"
 #include "event_reader.h"
+#include "event_reader_macros.h"
 
 #include "lizard_iface.h"
 
@@ -44,9 +44,7 @@ Gcn_event::Gcn_event()
     : Binary_log_event(GCN_LOG_EVENT), flags(0), commit_gcn(MYSQL_GCN_NULL) {}
 
 Gcn_event::Gcn_event(const char *buf, const Format_description_event *fde)
-    : Binary_log_event(&buf, fde),
-      flags(0),
-      commit_gcn(MYSQL_GCN_NULL) {
+    : Binary_log_event(&buf, fde), flags(0), commit_gcn(MYSQL_GCN_NULL) {
   /*
      The layout of the buffer is as follows:
      +------------+
@@ -61,7 +59,7 @@ Gcn_event::Gcn_event(const char *buf, const Format_description_event *fde)
 
   READER_TRY_SET(flags, read<uint8_t>);
 
-  //DBUG_ASSERT(flags != 0);
+  // DBUG_ASSERT(flags != 0);
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {
     READER_TRY_SET(commit_gcn, read<uint64_t>);

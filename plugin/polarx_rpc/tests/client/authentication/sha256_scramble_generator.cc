@@ -33,7 +33,7 @@
 
 #include <openssl/evp.h>
 
-#include "my_dbug.h"     /* DBUG instrumentation */
+#include "my_dbug.h" /* DBUG instrumentation */
 
 namespace xcl {
 namespace sha256_password {

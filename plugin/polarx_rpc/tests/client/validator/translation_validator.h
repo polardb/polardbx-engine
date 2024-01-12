@@ -24,8 +24,8 @@
 
 #include "my_dbug.h"
 
-#include "value_validator.h"
 #include "../visitor/assign_visitor.h"
+#include "value_validator.h"
 
 namespace xcl {
 

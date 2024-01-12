@@ -383,7 +383,7 @@ class Transaction_ctx {
   bool trans_begin_hook_invoked;
 
  public:
-   im::Reload *reload_entries[im::MAX_RELOAD_ENTRY_COUNT];
+  im::Reload *reload_entries[im::MAX_RELOAD_ENTRY_COUNT];
 };
 
 /**

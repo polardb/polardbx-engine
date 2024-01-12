@@ -27,12 +27,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "libbinlogevents/include/binlog_event.h"
 #include "my_sys.h"
-#include "sql/consensus/consensus_err.h"
-#include "sql/consensus/consensus_recovery.h"
+#include "sql/binlog.h"
 #include "sql/binlog/binlog_xa_specification.h"
 #include "sql/binlog/lizard0recovery.h"
 #include "sql/binlog/recovery.h"
 #include "sql/binlog/tools/iterators.h"
+#include "sql/consensus/consensus_err.h"
+#include "sql/consensus/consensus_recovery.h"
 #include "sql/consensus_log_manager.h"
 #include "sql/consensus_recovery_manager.h"
 #include "sql/gcn_log_event.h"
@@ -41,7 +42,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/mysqld.h"
 #include "sql/xa/xid_extract.h"
 #include "storage/innobase/include/ut0dbg.h"
-#include "sql/binlog.h"
 
 namespace xp {
 
@@ -105,17 +105,23 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
           m_blob_flag_list.push_back(m_current_flag);
           uint64 split_len = opt_consensus_large_event_split_size;
           uint64 blob_start_pos = m_start_pos;
-          uint64 blob_end_pos = (m_blob_index_list.size() == 1 ? m_end_pos : (m_start_pos + split_len));
+          uint64 blob_end_pos =
+              (m_blob_index_list.size() == 1 ? m_end_pos
+                                             : (m_start_pos + split_len));
           assert(m_rci_ev == nullptr);
           for (size_t i = 0; i < m_blob_index_list.size() && !error; ++i) {
-            m_log_content.assign(ev->temp_buf + blob_start_pos - m_start_pos, blob_end_pos - blob_start_pos);
-            const uint64 current_crc32 = opt_consensus_checksum
-              ? checksum_crc32(0, get_uchar_str(m_log_content), m_log_content.size())
-              : 0;
-            error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-                m_blob_term_list[i], m_blob_index_list[i], m_log_content.size(),
-                get_uchar_str(m_log_content), false,
-                m_blob_flag_list[i], current_crc32);
+            m_log_content.assign(ev->temp_buf + blob_start_pos - m_start_pos,
+                                 blob_end_pos - blob_start_pos);
+            const uint64 current_crc32 =
+                opt_consensus_checksum
+                    ? checksum_crc32(0, get_uchar_str(m_log_content),
+                                     m_log_content.size())
+                    : 0;
+            error = consensus_log_manager.get_fifo_cache_manager()
+                        ->add_log_to_cache(
+                            m_blob_term_list[i], m_blob_index_list[i],
+                            m_log_content.size(), get_uchar_str(m_log_content),
+                            false, m_blob_flag_list[i], current_crc32);
             blob_start_pos = blob_end_pos;
             blob_end_pos = blob_end_pos + split_len > m_end_pos
                                ? m_end_pos
@@ -131,14 +137,17 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
         } else {
           fetch_binlog_by_offset(m_reader, m_start_pos, m_end_pos, m_rci_ev,
                                  m_log_content);
-          const uint64 current_crc32 = opt_consensus_checksum
-            ? checksum_crc32(0, get_uchar_str(m_log_content), m_log_content.size())
-            : 0;
+          const uint64 current_crc32 =
+              opt_consensus_checksum
+                  ? checksum_crc32(0, get_uchar_str(m_log_content),
+                                   m_log_content.size())
+                  : 0;
           // copy log to buffer
-          error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-              m_current_term, m_current_index, m_log_content.size(),
-              get_uchar_str(m_log_content), (m_rci_ev != nullptr),
-              m_current_flag, current_crc32);
+          error =
+              consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
+                  m_current_term, m_current_index, m_log_content.size(),
+                  get_uchar_str(m_log_content), (m_rci_ev != nullptr),
+                  m_current_flag, current_crc32);
           m_begin_consensus = false;
           if (!(m_current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX)) {
             m_valid_index = m_current_index;
@@ -166,16 +175,18 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
     if (this->m_is_malformed) break;
   }
 
-  xp::info(ER_XP_RECOVERY)
-      << "Consensus_binlog_recovery::recover end "
-      << ", file_size " << m_reader.ifile()->length() << ", curr_position "
-      << m_reader.position() << ", m_current_index " << m_current_index
-      << ", m_start_pos " << m_start_pos << ", m_end_pos " << m_end_pos
-      << ", m_valid_pos " << m_valid_pos << ", m_valid_index " << m_valid_index
-      << ", m_is_malformed " << m_is_malformed << ", m_in_transaction "
-      << m_in_transaction << ", get_error_type  " << m_reader.get_error_type()
-      << ", get_error " << it.get_error_number() << ", get_error_message "
-      << it.get_error_message();
+  xp::info(ER_XP_RECOVERY) << "Consensus_binlog_recovery::recover end "
+                           << ", file_size " << m_reader.ifile()->length()
+                           << ", curr_position " << m_reader.position()
+                           << ", m_current_index " << m_current_index
+                           << ", m_start_pos " << m_start_pos << ", m_end_pos "
+                           << m_end_pos << ", m_valid_pos " << m_valid_pos
+                           << ", m_valid_index " << m_valid_index
+                           << ", m_is_malformed " << m_is_malformed
+                           << ", m_in_transaction " << m_in_transaction
+                           << ", get_error_type  " << m_reader.get_error_type()
+                           << ", get_error " << it.get_error_number()
+                           << ", get_error_message " << it.get_error_message();
 
   if (m_start_pos < m_valid_pos && m_end_pos > m_valid_pos) {
     m_end_pos = m_valid_pos;
@@ -210,7 +221,8 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
       spec_list = m_xa_spec_recovery->xa_spec_list();
     }
 
-    this->m_no_engine_recovery = ha_recover(&this->m_internal_xids, &xa_list, spec_list);
+    this->m_no_engine_recovery =
+        ha_recover(&this->m_internal_xids, &xa_list, spec_list);
     if (this->m_no_engine_recovery) {
       this->m_failure_message.assign("Recovery failed in storage engines");
     }
@@ -282,8 +294,8 @@ void Consensus_binlog_recovery::process_external_xid(
           state == enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE) {
         // XA PREPARE EVENT
         if (found->second == enum_ha_recover_xa_state::PREPARED_IN_TC) {
-          // If it was found already, must have been committed or rolled back, it
-          // can't be in prepared state
+          // If it was found already, must have been committed or rolled back,
+          // it can't be in prepared state
           this->m_is_malformed = true;
           this->m_failure_message.assign(
               "XA_prepare_log_event holds an invalid XID");

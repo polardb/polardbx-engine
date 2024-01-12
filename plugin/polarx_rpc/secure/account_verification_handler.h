@@ -39,11 +39,11 @@ namespace polarx_rpc {
 class CtcpConnection;
 
 class Account_verification_handler {
-public:
+ public:
   explicit Account_verification_handler(CtcpConnection &tcp)
       : m_tcp(tcp), m_session(0) {
     m_err = m_session.init(0);
-    if (!m_err) /// detach when initialized
+    if (!m_err)  /// detach when initialized
       m_session.detach();
     if (UNLIKELY(!m_session.is_detach_and_tls_cleared()))
       sql_print_error("FATAL: polarx_rpc session not detach and cleared!");
@@ -54,7 +54,7 @@ public:
       Account_verification_interface *verificator)
       : m_tcp(tcp), m_session(0), m_account_type(account_type) {
     m_err = m_session.init(0);
-    if (!m_err) /// detach when initialized
+    if (!m_err)  /// detach when initialized
       m_session.detach();
     if (UNLIKELY(!m_session.is_detach_and_tls_cleared()))
       sql_print_error("FATAL: polarx_rpc session not detach and cleared!");
@@ -80,7 +80,7 @@ public:
   virtual const Account_verification_interface *get_account_verificator(
       Account_verification_interface::Account_type account_type) const;
 
-private:
+ private:
   typedef std::map<Account_verification_interface::Account_type,
                    Account_verification_interface_ptr>
       Account_verificator_list;
@@ -112,7 +112,7 @@ private:
   static std::string get_sql(const std::string &user, const std::string &host);
 
   CtcpConnection &m_tcp;
-  CsessionBase m_session; /// internal session for auth
+  CsessionBase m_session;  /// internal session for auth
   std::thread::id m_attached{std::thread::id()};
   err_t m_err;
   Account_verificator_list m_verificators;
@@ -123,4 +123,4 @@ private:
 typedef std::unique_ptr<Account_verification_handler>
     Account_verification_handler_ptr;
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

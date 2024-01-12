@@ -69,7 +69,6 @@ class Connection_impl : public XConnection {
   XError set_read_timeout(const int deadline_seconds) override;
   XError set_write_timeout(const int deadline_seconds) override;
 
-
  private:
   XError connect(sockaddr *sockaddr, const std::size_t addr_size);
 

@@ -140,9 +140,9 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 
+#include "sql/consensus_admin.h"
 #include "sql/ppi/ppi_table_iostat.h"
 #include "sql/sql_statistics_common.h"
-#include "sql/consensus_admin.h"
 #include "sql_show_consensus.h"
 
 /* @see dynamic_privileges_table.cc */
@@ -314,7 +314,6 @@ bool Sql_cmd_show_binlogs::check_privileges(THD *thd) {
 
 bool Sql_cmd_show_binlogs::execute_inner(THD *thd) { return show_binlogs(thd); }
 
-
 bool Sql_cmd_show_consensus_logs::check_privileges(THD *thd) {
   return check_global_access(thd, SUPER_ACL | REPL_CLIENT_ACL);
 }
@@ -330,7 +329,6 @@ bool Sql_cmd_show_consensuslog_events::check_privileges(THD *thd) {
 bool Sql_cmd_show_consensuslog_events::execute_inner(THD *thd) {
   return mysql_show_consensuslog_events(thd, consensus_index);
 }
-
 
 bool Sql_cmd_show_create_database::check_privileges(THD *) { return false; }
 
@@ -5083,9 +5081,11 @@ ST_SCHEMA_TABLE schema_tables[] = {
      fill_alisql_cluster_learner_source, nullptr, nullptr, false},
     {"ALISQL_CLUSTER_PREFETCH_CHANNEL", alisql_cluster_prefetch_channel_info,
      fill_alisql_cluster_prefetch_channel, nullptr, nullptr, false},
-    {"ALISQL_CLUSTER_CONSENSUS_STATUS", alisql_cluster_consensus_status_fields_info,
+    {"ALISQL_CLUSTER_CONSENSUS_STATUS",
+     alisql_cluster_consensus_status_fields_info,
      fill_alisql_cluster_consensus_status, nullptr, nullptr, false},
-    {"ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE", alisql_cluster_consensus_membership_change_fields_info,
+    {"ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE",
+     alisql_cluster_consensus_membership_change_fields_info,
      fill_alisql_cluster_consensus_membership_change, nullptr, nullptr, false},
     {"CONSENSUS_COMMIT_POSITION", consensus_commit_pos_info,
      fill_consensus_commit_pos, nullptr, nullptr, false},

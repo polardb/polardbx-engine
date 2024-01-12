@@ -22,7 +22,7 @@ namespace polarx_rpc {
 class CsessionBase {
   NO_COPY_MOVE(CsessionBase);
 
-protected:
+ protected:
   const uint64_t sid_;
 
   /// kill flag and check in working state
@@ -49,7 +49,7 @@ protected:
   static void default_completion_handler(void *ctx, unsigned int sql_errno,
                                          const char *err_msg);
 
-public:
+ public:
   explicit CsessionBase(uint64_t sid)
       : sid_(sid), killed_(false), mysql_session_(nullptr), last_sql_errno_(0) {
     plugin_info.total_sessions.fetch_add(1, std::memory_order_release);
@@ -114,4 +114,4 @@ public:
   static void end_query(THD *thd);
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

@@ -332,8 +332,10 @@ class Binlog_recovery {
   void process_gcn_event(const Gcn_log_event &ev);
 
  public:
-  void gather_internal_xa_spec(const my_xid xid, const Binlog_xa_specification &spec);
-  void gather_external_xa_spec(const XID &xid, const Binlog_xa_specification &spec);
+  void gather_internal_xa_spec(const my_xid xid,
+                               const Binlog_xa_specification &spec);
+  void gather_external_xa_spec(const XID &xid,
+                               const Binlog_xa_specification &spec);
 
  protected:
   Binlog_xa_specification m_xa_spec;

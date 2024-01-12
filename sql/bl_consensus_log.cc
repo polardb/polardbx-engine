@@ -130,13 +130,14 @@ uint64_t BLConsensusLog::appendWithCheck(const alisql::LogEntry &entry) {
     uint flag = entry.info();
     if (entry.optype() == CONFIGCHANGE)
       flag |= Consensus_log_event_flag::FLAG_CONFIG_CHANGE;
-    ConsensusLogEntry log_entry = {entry.term(),
-                                   entry.index(),
-                                   entry.value().length(),
-                                   (uchar*)const_cast<char*>(entry.value().c_str()),
-                                   entry.optype() == CONFIGCHANGE,
-                                   flag,
-                                   entry.checksum()};
+    ConsensusLogEntry log_entry = {
+        entry.term(),
+        entry.index(),
+        entry.value().length(),
+        (uchar *)const_cast<char *>(entry.value().c_str()),
+        entry.optype() == CONFIGCHANGE,
+        flag,
+        entry.checksum()};
     if (consensusLogManager_->write_log_entry(log_entry, &index,
                                               true /*check term*/)) {
       abort();
@@ -155,13 +156,14 @@ uint64_t BLConsensusLog::append(const alisql::LogEntry &entry) {
     uint flag = entry.info();
     if (entry.optype() == CONFIGCHANGE)
       flag |= Consensus_log_event_flag::FLAG_CONFIG_CHANGE;
-    ConsensusLogEntry log_entry = {entry.term(),
-                                   entry.index(),
-                                   entry.value().length(),
-                                   (uchar*)const_cast<char*>(entry.value().c_str()),
-                                   entry.optype() == CONFIGCHANGE,
-                                   flag,
-                                   entry.checksum()};
+    ConsensusLogEntry log_entry = {
+        entry.term(),
+        entry.index(),
+        entry.value().length(),
+        (uchar *)const_cast<char *>(entry.value().c_str()),
+        entry.optype() == CONFIGCHANGE,
+        flag,
+        entry.checksum()};
     if (consensusLogManager_->write_log_entry(log_entry, &index)) {
       abort();
     }
@@ -179,7 +181,7 @@ uint64_t BLConsensusLog::append(
     ConsensusLogEntry log = {entry.term(),
                              entry.index(),
                              entry.value().length(),
-                             (uchar*)const_cast<char*>(entry.value().c_str()),
+                             (uchar *)const_cast<char *>(entry.value().c_str()),
                              entry.optype() == CONFIGCHANGE,
                              flag,
                              entry.checksum()};

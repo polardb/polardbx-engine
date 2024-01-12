@@ -3605,7 +3605,7 @@ struct Buf_fetch {
   /** Hash table lock. */
   rw_lock_t *m_hash_lock{};
 
-  bool m_bp_hit{true}; // for txn page statistics
+  bool m_bp_hit{true};  // for txn page statistics
 
   friend T;
 };

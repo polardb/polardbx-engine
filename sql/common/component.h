@@ -188,9 +188,6 @@ void split(const char *str, const char *separator, C *container) {
   return;
 }
 
-
-
-
 /**
   Pls inherit this class and make sure explicitly call effect()
   within DEBUG mode, in order to avoid unnamed objects with

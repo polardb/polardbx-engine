@@ -570,9 +570,11 @@ bool Sql_cmd_consensus_proc_configure_follower::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
   uint64_t election_weight =
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
-  bool force_sync = (m_list->size() != 3 ?
-      false :
-      consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++));
+  bool force_sync =
+      (m_list->size() != 3
+           ? false
+           : consensus_proc_params[consensus_proc_params_idx++]->get_bool(
+                 *it++));
 
   res = consensus_ptr->configureMember(node_id, force_sync, election_weight);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
@@ -606,9 +608,11 @@ bool Sql_cmd_consensus_proc_configure_learner::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
   uint64_t source_node_id =
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
-  bool use_applied = (m_list->size() != 3 ?
-      false :
-      consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++));
+  bool use_applied =
+      (m_list->size() != 3
+           ? false
+           : consensus_proc_params[consensus_proc_params_idx++]->get_bool(
+                 *it++));
 
   res = consensus_ptr->configureLearner(target_node_id, source_node_id,
                                         use_applied);

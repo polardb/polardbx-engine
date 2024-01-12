@@ -32,14 +32,14 @@
 #include <utility>
 #include <vector>
 
-#include "errmsg.h"
 #include "../../client/mysqlxclient/xconnection.h"
 #include "../../client/mysqlxclient/xmessage.h"
 #include "../../client/mysqlxclient/xprotocol.h"
 #include "../../client/mysqlxclient/xsession.h"
-#include "session_holder.h"
 #include "../../driver/formatters/console.h"
 #include "../../driver/processor/variable_container.h"
+#include "errmsg.h"
+#include "session_holder.h"
 
 using Message_ptr = std::unique_ptr<xcl::XProtocol::Message>;
 

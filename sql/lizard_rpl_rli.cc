@@ -32,10 +32,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "sql/lizard_rpl_rli.h"
+#include "sql/gcn_log_event.h"
 #include "sql/log_event.h"
 #include "sql/rpl_rli.h"
 #include "sql/rpl_rli_pdb.h"
-#include "sql/gcn_log_event.h"
 
 void start_sjg_and_enque_gaq(Relay_log_info *rli, Log_event *ev) {
   Slave_job_group group = Slave_job_group();
@@ -43,7 +43,8 @@ void start_sjg_and_enque_gaq(Relay_log_info *rli, Log_event *ev) {
   rli->mts_groups_assigned++;
 
   rli->curr_group_isolated = false;
-  group.reset(ev->common_header->log_pos, rli->mts_groups_assigned, ev->consensus_index);
+  group.reset(ev->common_header->log_pos, rli->mts_groups_assigned,
+              ev->consensus_index);
   // the last occupied GAQ's array index
   gaq->assigned_group_index = gaq->en_queue(&group);
   DBUG_PRINT("info", ("gaq_idx= %ld  gaq->size=%zu", gaq->assigned_group_index,
@@ -56,8 +57,7 @@ void start_sjg_and_enque_gaq(Relay_log_info *rli, Log_event *ev) {
 }
 
 namespace lizard {
-bool Begin_events_before_gtid_manager::is_b_events_before_gtid(
-    Log_event *ev) {
+bool Begin_events_before_gtid_manager::is_b_events_before_gtid(Log_event *ev) {
   /** TODO: Cons_log_index <12-07-23, zanye.zjy> */
   return is_gcn_event(ev);
 }

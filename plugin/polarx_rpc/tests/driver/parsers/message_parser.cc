@@ -123,11 +123,11 @@ Message *get_notice_message_from_text(const PolarXRPC::Notice::Frame_Type type,
     case PolarXRPC::Notice::Frame_Type_SESSION_VARIABLE_CHANGED:
       return details::parse_serialize_message<
           PolarXRPC::Notice::SessionVariableChanged>(text_payload, out_error,
-                                                  allow_partial_messaged);
+                                                     allow_partial_messaged);
     case PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED:
       return details::parse_serialize_message<
           PolarXRPC::Notice::SessionStateChanged>(text_payload, out_error,
-                                               allow_partial_messaged);
+                                                  allow_partial_messaged);
     default:
       return nullptr;
   }

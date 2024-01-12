@@ -101,9 +101,7 @@ class Session_impl : public XSession {
 
   Argument_uobject get_connect_attrs() const override;
 
-  uint64_t session_id() const override {
-    return m_protocol->session_id();
-  }
+  uint64_t session_id() const override { return m_protocol->session_id(); }
 
   void set_session_id(uint64_t sid) override {
     m_protocol->set_session_id(sid);

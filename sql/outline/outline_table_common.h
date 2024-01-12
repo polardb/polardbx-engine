@@ -140,4 +140,3 @@ struct Outline_record : public Conf_record {
 } /* namespace im */
 
 #endif
-

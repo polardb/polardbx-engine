@@ -136,9 +136,9 @@ bool Log_table::lock_log_table() {
     assert(0);
   }
 
-  m_table_list = new (m_thd->mem_root) Table_ref(
-      schema_name, schema_length, table_name, table_length, table_name,
-      TL_WRITE, MDL_EXCLUSIVE);
+  m_table_list = new (m_thd->mem_root)
+      Table_ref(schema_name, schema_length, table_name, table_length,
+                table_name, TL_WRITE, MDL_EXCLUSIVE);
 
   m_table_list->open_strategy = Table_ref::OPEN_IF_EXISTS;
   m_table_list->open_type = OT_BASE_ONLY;

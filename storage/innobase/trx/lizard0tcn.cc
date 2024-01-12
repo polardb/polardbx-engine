@@ -28,13 +28,13 @@ Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
 #include "lizard0tcn.h"
 #include "btr0pcur.h"
 #include "buf0buf.h"
+#include "lizard0dbg.h"
 #include "lizard0iv.h"
 #include "lizard0mon.h"
 #include "lizard0row.h"
+#include "lizard0undo.h"
 #include "lizard0undo0types.h"
 #include "trx0trx.h"
-#include "lizard0dbg.h"
-#include "lizard0undo.h"
 
 namespace lizard {
 
@@ -156,4 +156,3 @@ void deallocate_block_tcn(buf_block_t *block) {
 }
 
 }  // namespace lizard
-

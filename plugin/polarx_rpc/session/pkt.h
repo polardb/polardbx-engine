@@ -38,4 +38,4 @@ struct msg_t final {
   std::unique_ptr<ProtoMsg> msg;
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

@@ -54,7 +54,6 @@ extern ulong lock_instance_mode;
     in order to release the holded resources */
 extern ulong kill_idle_transaction_timeout;
 
-
 /* Report the readonly error or instance locked error */
 extern void err_readonly_or_instance_lock(THD *thd);
 

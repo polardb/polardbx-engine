@@ -166,8 +166,7 @@ static bool get_security_context_value(MYSQL_THD thd, const char *option,
                                        Result_type *result) {
   MYSQL_SECURITY_CONTEXT scontext;
 
-  if (thd_get_security_context(thd, &scontext))
-    return false;
+  if (thd_get_security_context(thd, &scontext)) return false;
 
   return false == security_context_get_option(scontext, option, result);
 }
@@ -191,8 +190,7 @@ bool CsessionBase::has_authenticated_user_a_super_priv() const {
 std::string CsessionBase::get_user_name() const {
   MYSQL_LEX_CSTRING result{"", 0};
 
-  if (get_security_context_value(get_thd(), "user", &result))
-    return result.str;
+  if (get_security_context_value(get_thd(), "user", &result)) return result.str;
 
   return "";
 }
@@ -259,8 +257,7 @@ err_t CsessionBase::authenticate(const char *user, const char *host,
                                  Authentication_interface &account_verification,
                                  bool allow_expired_passwords) {
   auto error = switch_to_user(user, host, ip, db);
-  if (error)
-    return err_t::SQLError_access_denied();
+  if (error) return err_t::SQLError_access_denied();
 
   if (!is_acl_disabled()) {
     auto authenticated_user_name = get_authenticated_user_name();
@@ -272,8 +269,7 @@ err_t CsessionBase::authenticate(const char *user, const char *host,
     if (!is_acl_disabled()) {
       error = account_verification.authenticate_account(
           authenticated_user_name, authenticated_user_host, passwd);
-      if (error)
-        return error;
+      if (error) return error;
     }
 
     /// switch to user
@@ -307,7 +303,7 @@ err_t CsessionBase::authenticate(const char *user, const char *host,
     PSI_THREAD_CALL(set_thread_account)
     (user_name.c_str(), static_cast<int>(user_name.length()),
      host_or_ip.c_str(), static_cast<int>(host_or_ip.length()));
-#endif // HAVE_PSI_THREAD_INTERFACE
+#endif  // HAVE_PSI_THREAD_INTERFACE
 
     return err_t::Success();
   }
@@ -355,7 +351,7 @@ err_t CsessionBase::execute_sql(const char *sql, size_t sql_len,
   data.com_query.query = sql;
   data.com_query.length = static_cast<unsigned int>(sql_len);
 #ifndef MYSQL8
-  data.com_query.version = 0; /// only for MySQL57
+  data.com_query.version = 0;  /// only for MySQL57
 #elif defined(MYSQL8PLUS)
   data.com_query.parameters = nullptr;
   data.com_query.parameter_count = 0;
@@ -415,8 +411,7 @@ void CsessionBase::remote_kill(bool log) {
   if (thd != nullptr) {
     mysql_mutex_lock(&thd->LOCK_thd_data);
     // Lock held and awake with kill.
-    if (thd->killed != THD::KILL_CONNECTION)
-      thd->awake(THD::KILL_CONNECTION);
+    if (thd->killed != THD::KILL_CONNECTION) thd->awake(THD::KILL_CONNECTION);
     mysql_mutex_unlock(&thd->LOCK_thd_data);
   }
 }
@@ -449,8 +444,7 @@ bool CsessionBase::is_api_ready() {
 }
 
 bool CsessionBase::is_detach_and_tls_cleared() {
-  if (mysql_session_ != nullptr && mysql_session_->is_attached())
-    return false;
+  if (mysql_session_ != nullptr && mysql_session_->is_attached()) return false;
 #ifdef MYSQL8
   return nullptr == current_thd && nullptr == THR_MALLOC;
 #else
@@ -540,8 +534,7 @@ void CsessionBase::begin_query(THD *thd, const char *query, uint len) {
     thd->swap_rewritten_query(empty);
   }
 #else
-  if (thd->rewritten_query.length())
-    thd->rewritten_query.mem_free();
+  if (thd->rewritten_query.length()) thd->rewritten_query.mem_free();
 #endif
   thd->set_query(query, len);
 #ifdef MYSQL8PLUS
@@ -569,8 +562,7 @@ void CsessionBase::cleanup_and_mark_sleep(THD *thd) {
     thd->swap_rewritten_query(empty);
   }
 #else
-  if (thd->rewritten_query.length())
-    thd->rewritten_query.mem_free();
+  if (thd->rewritten_query.length()) thd->rewritten_query.mem_free();
 #endif
 
   /** Freeing the memroot will leave the THD::work_part_info invalid. */
@@ -600,4 +592,4 @@ void CsessionBase::end_query(THD *thd) {
   Global_THD_manager::get_instance()->dec_thread_running();
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

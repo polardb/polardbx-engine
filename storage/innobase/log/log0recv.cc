@@ -2069,16 +2069,11 @@ static byte *recv_parse_or_apply_log_rec_body(
 
     case MLOG_REC_CLUST_LIZARD_UPDATE:
       ut_ad(!page || fil_page_type_is_index(page_type));
-      if (nullptr != (ptr = mlog_parse_index(
-                          ptr, end_ptr,
-                          &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
-        ptr = lizard::btr_cur_parse_lizard_fields_upd_clust_rec(ptr,
-                                                                end_ptr,
-                                                                page,
-                                                                page_zip,
-                                                                index);
+        ptr = lizard::btr_cur_parse_lizard_fields_upd_clust_rec(
+            ptr, end_ptr, page, page_zip, index);
       }
       break;
 

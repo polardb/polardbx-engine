@@ -32,8 +32,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "mysql/status_var.h"
 
-#include "lizard0mon.h"
 #include "lizard0gcs.h"
+#include "lizard0mon.h"
 #include "lizard0undo.h"
 
 namespace lizard {
@@ -48,8 +48,7 @@ lizard_stats_t lizard_stats;
 
 static void export_lizard_status(void) {
   if (gcs != nullptr) {
-    lizard_vars.txn_undo_log_free_list_len =
-        gcs->txn_undo_log_free_list_len;
+    lizard_vars.txn_undo_log_free_list_len = gcs->txn_undo_log_free_list_len;
     lizard_vars.txn_undo_log_cached = gcs->txn_undo_log_cached;
   } else {
     lizard_vars.txn_undo_log_free_list_len = 0;
@@ -84,8 +83,7 @@ static void export_lizard_status(void) {
   lizard_vars.txn_undo_lost_trx_id_mismatch =
       lizard_stats.txn_undo_lost_trx_id_mismatch;
 
-  lizard_vars.txn_undo_lookup_by_uba =
-      lizard_stats.txn_undo_lookup_by_uba;
+  lizard_vars.txn_undo_lookup_by_uba = lizard_stats.txn_undo_lookup_by_uba;
 
   lizard_vars.cleanout_page_collect = lizard_stats.cleanout_page_collect;
 
@@ -121,30 +119,19 @@ static void export_lizard_status(void) {
       lizard_stats.buf_pool_write_req_index;
   lizard_vars.innodb_buffer_pool_write_req_sys =
       lizard_stats.buf_pool_write_req_sys;
-  lizard_vars.innodb_buffer_pool_flush_undo =
-      lizard_stats.buf_pool_flush_undo;
-  lizard_vars.innodb_buffer_pool_flush_txn =
-      lizard_stats.buf_pool_flush_txn;
+  lizard_vars.innodb_buffer_pool_flush_undo = lizard_stats.buf_pool_flush_undo;
+  lizard_vars.innodb_buffer_pool_flush_txn = lizard_stats.buf_pool_flush_txn;
   lizard_vars.innodb_buffer_pool_flush_index =
       lizard_stats.buf_pool_flush_index;
-  lizard_vars.innodb_buffer_pool_flush_sys =
-      lizard_stats.buf_pool_flush_sys;
-  lizard_vars.innodb_buffer_pool_read_undo =
-      lizard_stats.buf_pool_read_undo;
-  lizard_vars.innodb_buffer_pool_read_txn =
-      lizard_stats.buf_pool_read_txn;
-  lizard_vars.innodb_buffer_pool_read_index =
-      lizard_stats.buf_pool_read_index;
-  lizard_vars.innodb_buffer_pool_read_sys =
-      lizard_stats.buf_pool_read_sys;
-  lizard_vars.innodb_buffer_pool_evit_undo =
-      lizard_stats.buf_pool_evit_undo;
-  lizard_vars.innodb_buffer_pool_evit_txn =
-      lizard_stats.buf_pool_evit_txn;
-  lizard_vars.innodb_buffer_pool_evit_index =
-      lizard_stats.buf_pool_evit_index;
-  lizard_vars.innodb_buffer_pool_evit_sys =
-      lizard_stats.buf_pool_evit_sys;
+  lizard_vars.innodb_buffer_pool_flush_sys = lizard_stats.buf_pool_flush_sys;
+  lizard_vars.innodb_buffer_pool_read_undo = lizard_stats.buf_pool_read_undo;
+  lizard_vars.innodb_buffer_pool_read_txn = lizard_stats.buf_pool_read_txn;
+  lizard_vars.innodb_buffer_pool_read_index = lizard_stats.buf_pool_read_index;
+  lizard_vars.innodb_buffer_pool_read_sys = lizard_stats.buf_pool_read_sys;
+  lizard_vars.innodb_buffer_pool_evit_undo = lizard_stats.buf_pool_evit_undo;
+  lizard_vars.innodb_buffer_pool_evit_txn = lizard_stats.buf_pool_evit_txn;
+  lizard_vars.innodb_buffer_pool_evit_index = lizard_stats.buf_pool_evit_index;
+  lizard_vars.innodb_buffer_pool_evit_sys = lizard_stats.buf_pool_evit_sys;
 
   // txn undo page hit
   lizard_vars.innodb_buffer_pool_txn_r_hit =
@@ -158,8 +145,7 @@ static void export_lizard_status(void) {
 
   // txn loopup entry
   for (size_t i = 0; i < lizard::TXN_ENTRY_COUNT; i++) {
-    lizard_vars.innodb_buffer_pool_txn_lookup[i] =
-        lizard_stats.txn_lookup[i];
+    lizard_vars.innodb_buffer_pool_txn_lookup[i] = lizard_stats.txn_lookup[i];
   }
 
   // get free page

@@ -77,12 +77,15 @@ bool check_stack_overrun(const THD *thd, long margin, unsigned char *buf) {
   long stack_used =
       used_stack(thd->thread_stack, reinterpret_cast<char *>(&stack_used));
 
-  if (stack_used >= (long) thread_stack_warning) {
+  if (stack_used >= (long)thread_stack_warning) {
     char *ebuff = new (std::nothrow) char[MYSQL_ERRMSG_SIZE];
     if (ebuff) {
-      const char *query = (thd->query().str != NULL) ? thd->query().str : "Query is empty";
-      snprintf(ebuff, MYSQL_ERRMSG_SIZE, "stack used(%ld) more than thread_stack_warning(%lu). "
-			"Current query is '%s'.", stack_used, thread_stack_warning, query);
+      const char *query =
+          (thd->query().str != NULL) ? thd->query().str : "Query is empty";
+      snprintf(ebuff, MYSQL_ERRMSG_SIZE,
+               "stack used(%ld) more than thread_stack_warning(%lu). "
+               "Current query is '%s'.",
+               stack_used, thread_stack_warning, query);
       fprintf(stderr, "%s\n", ebuff);
       delete[] ebuff;
     }

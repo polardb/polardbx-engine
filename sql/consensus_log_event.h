@@ -116,7 +116,7 @@ The decoding of the event on the slave side is done by its superclass,
 binary_log::Heartbeat_event.
 
 ****************************************************************************/
-class Previous_consensus_index_log_event final 
+class Previous_consensus_index_log_event final
     : public binary_log::Previous_consensus_index_event,
       public Log_event {
  public:
@@ -172,7 +172,7 @@ The decoding of the event on the slave side is done by its superclass,
 binary_log::Heartbeat_event.
 
 ****************************************************************************/
-class Consensus_cluster_info_log_event final 
+class Consensus_cluster_info_log_event final
     : public binary_log::Consensus_cluster_info_event,
       public Log_event {
  public:
@@ -221,9 +221,9 @@ class Consensus_cluster_info_log_event final
       SET_STRING_INFO_LENGTH_LENGTH + 36U;
 };
 
-class Consensus_empty_log_event final 
-  : public binary_log::Consensus_empty_event,
-    public Log_event {
+class Consensus_empty_log_event final
+    : public binary_log::Consensus_empty_event,
+      public Log_event {
  public:
 #ifndef MYSQL_CLIENT
   /**

@@ -498,7 +498,6 @@ XError Session_impl::set_capability(const Mysqlx_capability capability,
 XError Session_impl::set_capability(const Mysqlx_capability capability,
                                     const Argument_object &value,
                                     const bool required) {
-
   return details::set_object_capability(
       m_context.get(), &get_capabilites(required), capability, value);
 }
@@ -506,7 +505,6 @@ XError Session_impl::set_capability(const Mysqlx_capability capability,
 XError Session_impl::set_capability(const Mysqlx_capability capability,
                                     const Argument_uobject &value,
                                     const bool required) {
-
   return details::set_object_capability(
       m_context.get(), &get_capabilites(required), capability, value);
 }
@@ -514,15 +512,14 @@ XError Session_impl::set_capability(const Mysqlx_capability capability,
 XError Session_impl::connect(const char *host, const uint16_t port,
                              const char *user, const char *pass,
                              const char *schema) {
-
   if (is_connected())
     return XError{CR_ALREADY_CONNECTED, ER_TEXT_ALREADY_CONNECTED};
 
   Session_connect_timeout_scope_guard timeout_guard{this};
   auto &connection = get_protocol().get_connection();
-  const auto result = connection.connect(details::value_or_empty_string(host),
-                                         port ? port : 33660,
-                                         m_context->m_internet_protocol);
+  const auto result =
+      connection.connect(details::value_or_empty_string(host),
+                         port ? port : 33660, m_context->m_internet_protocol);
   if (result) return result;
 
   const auto connection_type = connection.state().get_connection_type();
@@ -533,7 +530,6 @@ XError Session_impl::connect(const char *host, const uint16_t port,
 
 XError Session_impl::reauthenticate(const char *user, const char *pass,
                                     const char *schema) {
-
   if (!is_connected())
     return XError{CR_CONNECTION_ERROR, ER_TEXT_NOT_CONNECTED};
 
@@ -607,12 +603,13 @@ void Session_impl::setup_general_notices_handler() {
   auto context = m_context;
 
   m_protocol->add_notice_handler(
-      [context](XProtocol *p MY_ATTRIBUTE((unused)),
-                const bool is_global MY_ATTRIBUTE((unused)),
-                const PolarXRPC::Notice::Frame::Type type MY_ATTRIBUTE((unused)),
-                const char *payload MY_ATTRIBUTE((unused)),
-                const uint32_t payload_size MY_ATTRIBUTE(
-                    (unused))) -> Handler_result {
+      [context](
+          XProtocol *p MY_ATTRIBUTE((unused)),
+          const bool is_global MY_ATTRIBUTE((unused)),
+          const PolarXRPC::Notice::Frame::Type type MY_ATTRIBUTE((unused)),
+          const char *payload MY_ATTRIBUTE((unused)),
+          const uint32_t payload_size MY_ATTRIBUTE(
+              (unused))) -> Handler_result {
         return context->m_consume_all_notices ? Handler_result::Consumed
                                               : Handler_result::Continue;
       },
@@ -634,7 +631,6 @@ void Session_impl::setup_session_notices_handler() {
 
 void Session_impl::setup_server_supported_features(
     const PolarXRPC::Connection::Capabilities *capabilities) {
-
   for (const auto &capability : capabilities->capabilities()) {
     if ("authentication.mechanisms" == capability.name()) {
       std::vector<std::string> names_of_auth_methods;
@@ -660,43 +656,43 @@ XError Session_impl::authenticate(const char *user, const char *pass,
   auto &protocol = get_protocol();
   auto &connection = protocol.get_connection();
 
-/* capabilities not support on polarx rpc
-  // After adding pipelining to mysqlxclient, all requests below should
-  // be merged into single send operation, followed by a read operation/s
-  if (!m_required_capabilities.empty()) {
-    Capabilities_builder builder;
+  /* capabilities not support on polarx rpc
+    // After adding pipelining to mysqlxclient, all requests below should
+    // be merged into single send operation, followed by a read operation/s
+    if (!m_required_capabilities.empty()) {
+      Capabilities_builder builder;
 
-    auto required_capabilities_set =
-        builder.clear()
-            .add_capabilities_from_object(m_required_capabilities)
-            .get_result();
-    auto error = protocol.execute_set_capability(required_capabilities_set);
+      auto required_capabilities_set =
+          builder.clear()
+              .add_capabilities_from_object(m_required_capabilities)
+              .get_result();
+      auto error = protocol.execute_set_capability(required_capabilities_set);
 
-    if (error) return error;
-  }
+      if (error) return error;
+    }
 
-  for (const auto &capability : m_optional_capabilities) {
-    Capabilities_builder builder;
-    auto optional_capabilities_set =
-        builder.clear()
-            .add_capability(capability.first, capability.second)
-            .get_result();
-    const auto error =
-        protocol.execute_set_capability(optional_capabilities_set);
+    for (const auto &capability : m_optional_capabilities) {
+      Capabilities_builder builder;
+      auto optional_capabilities_set =
+          builder.clear()
+              .add_capability(capability.first, capability.second)
+              .get_result();
+      const auto error =
+          protocol.execute_set_capability(optional_capabilities_set);
 
-    // Optional capabilities might fail
-    if (error.is_fatal() || details::is_client_error(error)) return error;
-  }
+      // Optional capabilities might fail
+      if (error.is_fatal() || details::is_client_error(error)) return error;
+    }
 
-  if (needs_servers_capabilities()) {
-    XError out_error;
-    const auto capabilities = protocol.execute_fetch_capabilities(&out_error);
+    if (needs_servers_capabilities()) {
+      XError out_error;
+      const auto capabilities = protocol.execute_fetch_capabilities(&out_error);
 
-    if (out_error) return out_error;
+      if (out_error) return out_error;
 
-    setup_server_supported_features(capabilities.get());
-  }
-*/
+      setup_server_supported_features(capabilities.get());
+    }
+  */
 
   const auto is_secure_connection =
       connection.state().is_ssl_activated() ||
@@ -801,17 +797,18 @@ std::vector<Auth> Session_impl::get_methods_sequence_from_auto(
 
   // Sequence like PLAIN, SHA256 or PLAIN, MYSQL41 will always fail
   // in case when PLAIN is going to fail still it may be used in future.
-  const Auth plain_or_mysql41 = /*can_use_plain ? Auth::k_plain : */Auth::k_mysql41;
+  const Auth plain_or_mysql41 =
+      /*can_use_plain ? Auth::k_plain : */ Auth::k_mysql41;
 
   switch (auto_authentication) {
     case Auth::k_auto_fallback:
-      return {plain_or_mysql41/*, Auth::k_sha256_memory*/};
+      return {plain_or_mysql41 /*, Auth::k_sha256_memory*/};
 
     case Auth::k_auto_from_capabilities:  // fall-through
     case Auth::k_auto:
       if (can_use_plain)
-        return {/*Auth::k_sha256_memory, Auth::k_plain, */Auth::k_mysql41};
-      return {/*Auth::k_sha256_memory, */Auth::k_mysql41};
+        return {/*Auth::k_sha256_memory, Auth::k_plain, */ Auth::k_mysql41};
+      return {/*Auth::k_sha256_memory, */ Auth::k_mysql41};
 
     default:
       return {};
@@ -868,7 +865,6 @@ Session_impl::validate_and_adjust_auth_methods(std::vector<Auth> auth_methods,
 Handler_result Session_impl::handle_notices(
     std::shared_ptr<Context> context, const PolarXRPC::Notice::Frame::Type type,
     const char *payload, const uint32_t payload_size) {
-
   if (PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED == type) {
     PolarXRPC::Notice::SessionStateChanged session_changed;
 
@@ -893,14 +889,14 @@ std::string Session_impl::get_method_from_auth(const Auth auth) {
       return "AUTO";
     case Auth::k_mysql41:
       return "MYSQL41";
-//    case Auth::k_sha256_memory:
-//      return "SHA256_MEMORY";
+      //    case Auth::k_sha256_memory:
+      //      return "SHA256_MEMORY";
     case Auth::k_auto_from_capabilities:
       return "FROM_CAPABILITIES";
     case Auth::k_auto_fallback:
       return "FALLBACK";
-//    case Auth::k_plain:
-//      return "PLAIN";
+      //    case Auth::k_plain:
+      //      return "PLAIN";
     default:
       return "UNKNOWN";
   }

@@ -69,7 +69,6 @@ class Ccl_comply_handler {
   bool m_complied;
 };
 
-
 class Ccl_comply_wrapper {
  public:
   explicit Ccl_comply_wrapper(THD *thd);
@@ -86,4 +85,3 @@ void do_ccl_comply_queue_or_rule(THD *thd, LEX *lex, Table_ref *table_list);
 } /* namespace im */
 
 #endif
-

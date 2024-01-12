@@ -1,14 +1,14 @@
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 #include "../global_defines.h"
 
 #include "bloomfilter.h"
-#include "meta.h"
 #include "expr.h"
-#include "murmurhash3.h"
 #include "log.h"
+#include "meta.h"
+#include "murmurhash3.h"
 
 #ifndef MYSQL8
 static inline std::string to_string(const String &str) {
@@ -25,12 +25,14 @@ constexpr int64_t LONG_SIZE = sizeof(long long);
 constexpr int64_t FLOAT_SIZE = sizeof(float);
 constexpr int64_t DOUBLE_SIZE = sizeof(double);
 
-int BloomFilterItem::init(std::vector<ExprItem*> &param_exprs) {
+int BloomFilterItem::init(std::vector<ExprItem *> &param_exprs) {
   int ret = HA_EXEC_SUCCESS;
   if (param_exprs.size() != 5) {
     ret = HA_ERR_UNSUPPORTED;
-    log_exec_error("BloomFilterItem needs  4 params, "
-                   "actually get %lu", param_exprs.size());
+    log_exec_error(
+        "BloomFilterItem needs  4 params, "
+        "actually get %lu",
+        param_exprs.size());
   } else {
     target_item_ = param_exprs[0];
     total_bits_ = param_exprs[1]->val_int();
@@ -40,11 +42,12 @@ int BloomFilterItem::init(std::vector<ExprItem*> &param_exprs) {
     String *bitmap_str = param_exprs[4]->val_str(&str_buffer);
     bitmap_size_ = bitmap_str->length();
     bitmap_ = bitmap_str->ptr();
-    if (bitmap_size_ < (total_bits_+BITS_PER_BYTE-1)/BITS_PER_BYTE) {
+    if (bitmap_size_ < (total_bits_ + BITS_PER_BYTE - 1) / BITS_PER_BYTE) {
       ret = HA_ERR_UNSUPPORTED;
-      log_exec_error("BloomFilterItem param wrong, bitmap too small, "
-                     "total_bits: %ld, bitmap_size: %ld",
-                     total_bits_, bitmap_size_);
+      log_exec_error(
+          "BloomFilterItem param wrong, bitmap too small, "
+          "total_bits: %ld, bitmap_size: %ld",
+          total_bits_, bitmap_size_);
     }
   }
   return ret;
@@ -84,9 +87,10 @@ int BloomFilterItem::may_contain(bool &contain) {
       String *key_str = target_item_->val_str(&str_buffer);
       if (!key_str) {
         ret = HA_ERR_INTERNAL_ERROR;
-        log_exec_error("BloomFilterItem hash for string, string is null, "
-                       "item->is_null(): %d, item->null_value: %d",
-                       target_item_->is_null(), target_item_->null_value);
+        log_exec_error(
+            "BloomFilterItem hash for string, string is null, "
+            "item->is_null(): %d, item->null_value: %d",
+            target_item_->is_null(), target_item_->null_value);
       } else {
         MurmurHash3_x64_128(key_str->ptr(), key_str->length(), 0, hash_bytes);
       }
@@ -101,35 +105,38 @@ int BloomFilterItem::may_contain(bool &contain) {
       int64_t data = target_item_->val_int();
       if (target_item_->null_value) {
         ret = HA_ERR_INTERNAL_ERROR;
-        log_exec_error("target_item_->val_* return null value, "
-                       "target_item_->is_null(): %d",
-                       target_item_->is_null());
+        log_exec_error(
+            "target_item_->val_* return null value, "
+            "target_item_->is_null(): %d",
+            target_item_->is_null());
       } else {
         MurmurHash3_x64_128(&data, INT_SIZE, 0, hash_bytes);
       }
       break;
     }
-    
+
     case MYSQL_TYPE_LONGLONG: {
       int64_t data = target_item_->val_int();
       if (target_item_->null_value) {
         ret = HA_ERR_INTERNAL_ERROR;
-        log_exec_error("target_item_->val_* return null value, "
-                       "target_item_->is_null(): %d",
-                       target_item_->is_null());
+        log_exec_error(
+            "target_item_->val_* return null value, "
+            "target_item_->is_null(): %d",
+            target_item_->is_null());
       } else {
         MurmurHash3_x64_128(&data, LONG_SIZE, 0, hash_bytes);
       }
       break;
     }
-    
+
     case MYSQL_TYPE_FLOAT: {
       float data = static_cast<float>(target_item_->val_real());
       if (target_item_->null_value) {
         ret = HA_ERR_INTERNAL_ERROR;
-        log_exec_error("target_item_->val_* return null value, "
-                       "target_item_->is_null(): %d",
-                       target_item_->is_null());
+        log_exec_error(
+            "target_item_->val_* return null value, "
+            "target_item_->is_null(): %d",
+            target_item_->is_null());
       } else {
         MurmurHash3_x64_128(&data, FLOAT_SIZE, 0, hash_bytes);
       }
@@ -140,9 +147,10 @@ int BloomFilterItem::may_contain(bool &contain) {
       double data = target_item_->val_real();
       if (target_item_->null_value) {
         ret = HA_ERR_INTERNAL_ERROR;
-        log_exec_error("target_item_->val_* return null value, "
-                       "target_item_->is_null(): %d",
-                       target_item_->is_null());
+        log_exec_error(
+            "target_item_->val_* return null value, "
+            "target_item_->is_null(): %d",
+            target_item_->is_null());
       } else {
         MurmurHash3_x64_128(&data, DOUBLE_SIZE, 0, hash_bytes);
       }
@@ -152,27 +160,27 @@ int BloomFilterItem::may_contain(bool &contain) {
     default:
       ret = HA_ERR_UNSUPPORTED;
       // contain remains true
-      log_exec_error("BloomFilterItem hash on target_item_ failed, "
-                     "data_type: %d does not support",
+      log_exec_error(
+          "BloomFilterItem hash on target_item_ failed, "
+          "data_type: %d does not support",
 #ifdef MYSQL8
-                     target_item_->data_type());
+          target_item_->data_type());
 #else
-                     target_item_->field_type());
+          target_item_->field_type());
 #endif
   }
 
   if (!ret) {
-    int64_t hash1 = *(reinterpret_cast<int64_t*>(hash_bytes));
-    int64_t hash2 = *(reinterpret_cast<int64_t*>(hash_bytes + 8));
-    log_debug("BloomFilterItem murmurhash3 result: "
-              "hash1: %ld, %02x %02x %02x %02x %02x %02x %02x %02x "
-              "hash2: %ld, %02x %02x %02x %02x %02x %02x %02x %02x",
-              hash1,
-              hash_bytes[0], hash_bytes[1] ,hash_bytes[2], hash_bytes[3],
-              hash_bytes[4], hash_bytes[5] ,hash_bytes[6], hash_bytes[7],
-              hash2,
-              hash_bytes[8], hash_bytes[9] ,hash_bytes[10], hash_bytes[11],
-              hash_bytes[12], hash_bytes[13] ,hash_bytes[14], hash_bytes[15]);
+    int64_t hash1 = *(reinterpret_cast<int64_t *>(hash_bytes));
+    int64_t hash2 = *(reinterpret_cast<int64_t *>(hash_bytes + 8));
+    log_debug(
+        "BloomFilterItem murmurhash3 result: "
+        "hash1: %ld, %02x %02x %02x %02x %02x %02x %02x %02x "
+        "hash2: %ld, %02x %02x %02x %02x %02x %02x %02x %02x",
+        hash1, hash_bytes[0], hash_bytes[1], hash_bytes[2], hash_bytes[3],
+        hash_bytes[4], hash_bytes[5], hash_bytes[6], hash_bytes[7], hash2,
+        hash_bytes[8], hash_bytes[9], hash_bytes[10], hash_bytes[11],
+        hash_bytes[12], hash_bytes[13], hash_bytes[14], hash_bytes[15]);
 
     int64_t combined_hash = hash1;
     int64_t max_int64 = std::numeric_limits<int64_t>::max();
@@ -190,4 +198,4 @@ int BloomFilterItem::may_contain(bool &contain) {
   return ret;
 }
 
-} // namespace executor
+}  // namespace rpc_executor

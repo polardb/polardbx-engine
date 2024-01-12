@@ -402,7 +402,8 @@ constexpr size_t TRX_SYS_N_RSEGS = 128;
 of undo tablespace is always created and found in --innodb-undo-directory. */
 constexpr size_t FSP_MIN_UNDO_TABLESPACES = 2 + FSP_IMPLICIT_TXN_TABLESPACES;
 constexpr size_t FSP_MAX_UNDO_TABLESPACES = TRX_SYS_N_RSEGS - 1;
-constexpr size_t FSP_IMPLICIT_UNDO_TABLESPACES = 2 + FSP_IMPLICIT_TXN_TABLESPACES;
+constexpr size_t FSP_IMPLICIT_UNDO_TABLESPACES =
+    2 + FSP_IMPLICIT_TXN_TABLESPACES;
 constexpr size_t FSP_MAX_ROLLBACK_SEGMENTS = TRX_SYS_N_RSEGS;
 
 #endif /* fsp0types_h */

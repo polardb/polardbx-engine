@@ -396,7 +396,9 @@ void Transaction_dependency_tracker::update_max_committed(THD *thd) {
 
 int64 Transaction_dependency_tracker::step() { return m_commit_order.step(); }
 
-int64 Transaction_dependency_tracker::step_down() { return m_commit_order.step_down(); }
+int64 Transaction_dependency_tracker::step_down() {
+  return m_commit_order.step_down();
+}
 
 void Transaction_dependency_tracker::rotate() {
   m_commit_order.rotate();

@@ -71,8 +71,8 @@
 #include "thr_lock.h"            // thr_lock_type
 #include "typelib.h"
 
+#include "sql/lizard0handler.h"
 #include "sql/sql_statistics_common.h"  // Stats_data
-#include "sql/lizard0handler.h"	
 
 class Alter_info;
 class Create_field;
@@ -6976,9 +6976,9 @@ class handler {
 
  public:
   void update_statistics();
-  
+
   virtual int ha_flush_cache(TABLE *, void *) { return HA_ERR_WRONG_COMMAND; }
-    /* Rotate storage engine data file */
+  /* Rotate storage engine data file */
   int ha_rotate_table(const char *name, const dd::Table *table_def);
   virtual int rotate_table(const char *, const dd::Table *) {
     return HA_ERR_WRONG_COMMAND;

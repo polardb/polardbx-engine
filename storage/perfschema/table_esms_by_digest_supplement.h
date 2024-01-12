@@ -46,7 +46,6 @@ class PFS_index_esms_by_digest_supplement : public PFS_index_esms_by_digest {
   PFS_index_esms_by_digest_supplement() : PFS_index_esms_by_digest() {}
 
   virtual ~PFS_index_esms_by_digest_supplement() {}
-
 };
 
 struct row_esms_by_digest_supplement {

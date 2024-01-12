@@ -66,8 +66,8 @@ static const String_type EXTRA_IS_DD_VERSION_STRING("EXTRA_IS_VERSION");
 
 static const String_type EXTRA_PS_DD_VERSION_STRING("EXTRA_PS_VERSION");
 
-static const String_type
-    EXTRA_MYSQLD_VERSION_UPGRADED_STRING("EXTRA_MYSQLD_VERSION_UPGRADED");
+static const String_type EXTRA_MYSQLD_VERSION_UPGRADED_STRING(
+    "EXTRA_MYSQLD_VERSION_UPGRADED");
 
 /**
   Version for mysql.* system tables that are visible to user.

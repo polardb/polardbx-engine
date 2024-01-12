@@ -31,8 +31,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "fil0fil.h"
-#include "lizard0fsp.h"
 #include "lizard0dict.h"
+#include "lizard0fsp.h"
 
 /** Zeus tablespace */
 fil_space_t *fil_space_t::s_lizard_space = nullptr;
@@ -41,8 +41,7 @@ fil_space_t *fil_space_t::s_lizard_space = nullptr;
 @param[in]	name		Tablespace name
 @return true if it is an lizard tablespace name */
 bool Fil_path::is_lizard_tablespace_name(const std::string &name) {
-  if (name.empty())
-    return false;
+  if (name.empty()) return false;
 
   std::string filename(name);
   std::size_t lizard_length =
@@ -68,4 +67,3 @@ fil_space_t *fil_space_get_lizard_space() {
 }
 
 } /* namespace lizard */
-

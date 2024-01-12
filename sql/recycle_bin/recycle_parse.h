@@ -44,7 +44,4 @@ extern void recycle_state_rewrite(const THD *thd,
 
 } /* namespace im */
 
-
-
-
 #endif

@@ -29,4 +29,4 @@ struct epoll_group_ctx_t final {
   epoll_group_ctx_t() : reusable_sessions(BUFFERED_REUSABLE_SESSION_COUNT) {}
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

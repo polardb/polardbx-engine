@@ -45,7 +45,6 @@ class Trans_proc_base : public Proc {
   }
 };
 
-
 /* Backup current execution context */
 class Sub_statement_context {
  public:

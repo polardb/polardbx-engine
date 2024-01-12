@@ -27,24 +27,24 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef XPAXOS_RPL_RLI_H
 #define XPAXOS_RPL_RLI_H
 
-#include "sql/rpl_rli.h"
 #include "sql/consensus/consensus_channel.h"
+#include "sql/rpl_rli.h"
 
 class XPaxos_relay_log_info final : public Relay_log_info {
  public:
   XPaxos_relay_log_info(bool is_slave_recovery,
 #ifdef HAVE_PSI_INTERFACE
-                      PSI_mutex_key *param_key_info_run_lock,
-                      PSI_mutex_key *param_key_info_data_lock,
-                      PSI_mutex_key *param_key_info_sleep_lock,
-                      PSI_mutex_key *param_key_info_thd_lock,
-                      PSI_mutex_key *param_key_info_data_cond,
-                      PSI_mutex_key *param_key_info_start_cond,
-                      PSI_mutex_key *param_key_info_stop_cond,
-                      PSI_mutex_key *param_key_info_sleep_cond,
+                        PSI_mutex_key *param_key_info_run_lock,
+                        PSI_mutex_key *param_key_info_data_lock,
+                        PSI_mutex_key *param_key_info_sleep_lock,
+                        PSI_mutex_key *param_key_info_thd_lock,
+                        PSI_mutex_key *param_key_info_data_cond,
+                        PSI_mutex_key *param_key_info_start_cond,
+                        PSI_mutex_key *param_key_info_stop_cond,
+                        PSI_mutex_key *param_key_info_sleep_cond,
 #endif
-                      uint param_id, const char *param_channel,
-                      bool is_rli_fake)
+                        uint param_id, const char *param_channel,
+                        bool is_rli_fake)
       : Relay_log_info(is_slave_recovery,
 #ifdef HAVE_PSI_INTERFACE
                        param_key_info_run_lock, param_key_info_data_lock,
@@ -97,10 +97,12 @@ class XPaxos_relay_log_info final : public Relay_log_info {
     @param[in, out] name      The full path of the relay log (per-channel)
                               to be read by the slave worker.
   */
-  virtual void relay_log_number_to_name(uint number, char name[FN_REFLEN + 1]) override;
+  virtual void relay_log_number_to_name(uint number,
+                                        char name[FN_REFLEN + 1]) override;
 
   virtual LOG_POS_COORD get_log_pos_coord(Relay_log_info *rli) override;
-  virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position) override;
+  virtual int get_log_position(LOG_INFO *linfo,
+                               my_off_t &log_position) override;
   virtual void set_xpaxos_relay_log_info() override;
   virtual void set_xpaxos_apply_ev_sequence() override;
   virtual void update_xpaxos_applied_index() override;

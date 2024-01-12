@@ -46,7 +46,6 @@ LEX_CSTRING CCL_SCHEMA_NAME = {C_STRING_WITH_LEN("mysql")};
 /* ccl table name */
 LEX_CSTRING CCL_TABLE_NAME = {C_STRING_WITH_LEN("concurrency_control")};
 
-
 const char *CCL_TABLE_ALIAS = "concurrency_control";
 
 /* Whether the table is concurrency_control */
@@ -82,7 +81,8 @@ static const TABLE_FIELD_TYPE mysql_ccl_table_fields[MYSQL_CCL_FIELD_COUNT] = {
 static const TABLE_FIELD_DEF ccl_table_def = {MYSQL_CCL_FIELD_COUNT,
                                               mysql_ccl_table_fields};
 
-const char *ccl_rule_type_str[] = {"SELECT", "UPDATE", "INSERT", "DELETE", "QUEUE"};
+const char *ccl_rule_type_str[] = {"SELECT", "UPDATE", "INSERT", "DELETE",
+                                   "QUEUE"};
 const char ccl_rule_state_str[] = {'N', 'Y'};
 const char ccl_rule_ordered_str[] = {'N', 'Y'};
 
@@ -123,8 +123,7 @@ Conf_error open_ccl_table(THD *thd, TABLE_LIST_PTR &table_list, bool write) {
 */
 bool ccl_end_trans(THD *thd, bool rollback) {
   bool result;
-  if ((result = conf_end_trans(thd, rollback)))
-    reload_ccl_rules(thd);
+  if ((result = conf_end_trans(thd, rollback))) reload_ccl_rules(thd);
   return result;
 }
 /**

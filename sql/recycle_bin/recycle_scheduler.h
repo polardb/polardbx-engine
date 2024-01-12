@@ -32,7 +32,6 @@
 #include "sql/common/component.h"
 #include "sql/error_handler.h"
 
-
 class THD;
 
 namespace im {
@@ -63,7 +62,7 @@ extern bool recycle_scheduler_purge_table_print;
 
 /* recycle object allocator */
 template <typename T, typename... Args>
-T *allocate_recycle_object(Args &&... args) {
+T *allocate_recycle_object(Args &&...args) {
   return allocate_object<T, Args...>(key_memory_recycle,
                                      std::forward<Args>(args)...);
 }

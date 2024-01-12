@@ -4,15 +4,15 @@
 
 #pragma once
 
-#include <list>
 #include <functional>
+#include <list>
 
 #include "callback_command_delegate.h"
 
 namespace polarx_rpc {
 
 class CbufferingCommandDelegate : public CcallbackCommandDelegate {
-public:
+ public:
   CbufferingCommandDelegate()
       : CcallbackCommandDelegate(
             std::bind(&CbufferingCommandDelegate::begin_row_cb, this),
@@ -31,7 +31,7 @@ public:
     CcommandDelegate::reset();
   }
 
-private:
+ private:
   Resultset m_resultset;
 
   Row_data *begin_row_cb() {
@@ -42,4 +42,4 @@ private:
   bool end_row_cb(Row_data *row) { return true; }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

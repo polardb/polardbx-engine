@@ -63,11 +63,11 @@
 #endif
 
 // copy from 5.7 mysql_global.h
-#ifndef O_SHARE                 /* Probably not windows */
-#define O_SHARE         0       /* Flag to my_open for shared files */
+#ifndef O_SHARE   /* Probably not windows */
+#define O_SHARE 0 /* Flag to my_open for shared files */
 #endif
 #ifndef O_BINARY
-#define O_BINARY        0       /* Flag to my_open for binary files */
+#define O_BINARY 0 /* Flag to my_open for binary files */
 #endif
 
 /**

@@ -16,7 +16,7 @@ class CcpuInfo final {
   NO_CONSTRUCTOR(CcpuInfo);
   NO_COPY_MOVE(CcpuInfo);
 
-public:
+ public:
   struct cpu_info_t final {
     int processor;
     int physical_id;
@@ -25,8 +25,7 @@ public:
     inline bool operator<(const cpu_info_t &another) const {
       if (physical_id != another.physical_id)
         return physical_id < another.physical_id;
-      if (core_id != another.core_id)
-        return core_id < another.core_id;
+      if (core_id != another.core_id) return core_id < another.core_id;
       return processor < another.processor;
     }
 
@@ -44,8 +43,7 @@ public:
   static std::map<int, cpu_info_t> get_cpu_info() {
     /// ::popen("grep -E \"processor|physical id|core id\" /proc/cpuinfo", "r");
     std::ifstream cpuinfo("/proc/cpuinfo");
-    if (!cpuinfo.is_open())
-      return {};
+    if (!cpuinfo.is_open()) return {};
     std::map<int, cpu_info_t> result;
     std::string line;
     auto processor = -1, physical_id = -1, core_id = -1;
@@ -68,13 +66,11 @@ public:
       } else if (processor >= 0 && physical_id < 0 &&
                  0 == ::strncmp("physical id", buf, 11)) {
         auto i = ::strchr(buf + 11, ':');
-        if (i != nullptr)
-          physical_id = ::atoi(i + 1);
+        if (i != nullptr) physical_id = ::atoi(i + 1);
       } else if (processor >= 0 && core_id < 0 &&
                  0 == ::strncmp("core id", buf, 7)) {
         auto i = ::strchr(buf + 7, ':');
-        if (i != nullptr)
-          core_id = ::atoi(i + 1);
+        if (i != nullptr) core_id = ::atoi(i + 1);
       }
 
       if (processor >= 0 && physical_id >= 0 && core_id >= 0) {
@@ -89,4 +85,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

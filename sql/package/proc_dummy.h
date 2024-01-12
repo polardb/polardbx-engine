@@ -43,7 +43,8 @@ extern const LEX_CSTRING PROC_DUMMY_SCHEMA;
 */
 class Sql_cmd_proc_dummy : public Sql_cmd_admin_proc {
  public:
-  explicit Sql_cmd_proc_dummy(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+  explicit Sql_cmd_proc_dummy(THD *thd, mem_root_deque<Item *> *list,
+                              const Proc *proc)
       : Sql_cmd_admin_proc(thd, list, proc) {}
 
   /**
@@ -72,9 +73,12 @@ class Proc_dummy : public Proc {
 
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *evoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
 
-  virtual const std::string str() const override { return std::string("dummy"); }
+  virtual const std::string str() const override {
+    return std::string("dummy");
+  }
 
   virtual const std::string qname() const override {
     std::stringstream ss;
@@ -88,7 +92,8 @@ class Proc_dummy : public Proc {
 */
 class Sql_cmd_proc_dummy_2 : public Sql_cmd_admin_proc {
  public:
-  explicit Sql_cmd_proc_dummy_2(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+  explicit Sql_cmd_proc_dummy_2(THD *thd, mem_root_deque<Item *> *list,
+                                const Proc *proc)
       : Sql_cmd_admin_proc(thd, list, proc) {}
 
   /**
@@ -154,9 +159,12 @@ class Proc_dummy_2 : public Proc {
 
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *evoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
 
-  virtual const std::string str() const override { return std::string("dummy_2"); }
+  virtual const std::string str() const override {
+    return std::string("dummy_2");
+  }
 
   virtual const std::string qname() const override {
     std::stringstream ss;

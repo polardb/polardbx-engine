@@ -37,7 +37,7 @@
 namespace polarx_rpc {
 
 class Query_string_builder {
-public:
+ public:
   Query_string_builder(size_t reserve = 256);
 
   inline void set_charset(const CHARSET_INFO *charset) {
@@ -108,7 +108,7 @@ public:
   inline void format_finalize() {
     if (m_formatter) {
       m_formatter->finalize();
-      m_formatter.reset(); // Free it.
+      m_formatter.reset();  // Free it.
     }
   }
 
@@ -120,8 +120,7 @@ public:
 
   template <typename I>
   Query_string_builder &put_list(I begin, I end, const std::string &sep = ",") {
-    if (std::distance(begin, end) == 0)
-      return *this;
+    if (std::distance(begin, end) == 0) return *this;
     put(*begin);
     for (++begin; begin != end; ++begin) {
       put(sep);
@@ -133,8 +132,7 @@ public:
   template <typename I, typename P>
   Query_string_builder &put_list(I begin, I end, P push,
                                  const std::string &sep = ",") {
-    if (std::distance(begin, end) == 0)
-      return *this;
+    if (std::distance(begin, end) == 0) return *this;
     push(*begin, this);
     for (++begin; begin != end; ++begin) {
       put(sep);
@@ -149,7 +147,7 @@ public:
 
   const std::string &get() const { return m_str; }
 
-private:
+ private:
   std::string m_str;
   bool m_in_quoted;
   bool m_in_identifier;
@@ -159,4 +157,4 @@ private:
   std::unique_ptr<Query_formatter> m_formatter;
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

@@ -30,32 +30,32 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2020-04-02 by Jianwei.zhao
  *******************************************************/
 
+#include "page0types.h"
 #include "trx0rec.h"
-#include "trx0undo.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"
-#include "page0types.h"
+#include "trx0undo.h"
 
-#include "sql_plugin_var.h"
-#include "sql_error.h"
 #include "sql_class.h"
+#include "sql_error.h"
+#include "sql_plugin_var.h"
 
 #include "ha_innodb.h"
 
-#include "lizard0scn.h"
+#include "lizard0cleanout.h"
 #include "lizard0gcs.h"
+#include "lizard0mon.h"
+#include "lizard0mysql.h"
+#include "lizard0row.h"
+#include "lizard0scn.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
-#include "lizard0mon.h"
-#include "lizard0cleanout.h"
-#include "lizard0mysql.h"
-#include "lizard0row.h"
 #include "lizard0xa.h"
 
 void trx_undo_read_xid(
     const trx_ulogf_t *log_hdr, /*!< in: undo log header */
-    XID *xid);            /*!< out: X/Open XA Transaction Identification */
+    XID *xid); /*!< out: X/Open XA Transaction Identification */
 
 #ifndef UNIV_HOTBACKUP
 /** Write X/Open XA Transaction Identification (XID) to undo log header */
@@ -504,7 +504,7 @@ void trx_undo_hdr_init_cmmt(trx_ulogf_t *log_hdr, mtr_t *mtr) {
   @param[in]      mtr           current mtr context
 */
 void trx_undo_hdr_write_cmmt(trx_ulogf_t *log_hdr, commit_mark_t &cmmt,
-                            mtr_t *mtr) {
+                             mtr_t *mtr) {
   /** Here must hold the SX/X lock on the page */
   ut_ad(mtr_memo_contains_page_flagged(
       mtr, log_hdr, MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
@@ -588,7 +588,6 @@ commit_mark_t txn_undo_hdr_read_prev_cmmt(const trx_ulogf_t *log_hdr,
 */
 void trx_undo_hdr_add_space_for_txn(page_t *undo_page, trx_ulogf_t *log_hdr,
                                     mtr_t *mtr) {
-
   trx_upagef_t *page_hdr;
   ulint free;
   ulint new_free;
@@ -803,8 +802,8 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   txn_undo_hdr->prev_image.gcn =
       mach_read_from_8(undo_header + TXN_UNDO_PREV_GCN);
 
-  txn_undo_hdr->state = mtr_read_ulint(undo_header + TXN_UNDO_LOG_STATE,
-                                       MLOG_2BYTES, mtr);
+  txn_undo_hdr->state =
+      mtr_read_ulint(undo_header + TXN_UNDO_LOG_STATE, MLOG_2BYTES, mtr);
 
   txn_undo_hdr->ext_flag =
       mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
@@ -1349,7 +1348,7 @@ static dberr_t txn_undo_assign_undo(trx_t *trx, txn_undo_ptr_t *undo_ptr,
                                 trx_undo_t::Gtid_storage::NONE, &mtr);
 
   if (undo == nullptr) {
-     err = txn_undo_get_free(trx, rseg, type, trx->id, trx->xid, &undo);
+    err = txn_undo_get_free(trx, rseg, type, trx->id, trx->xid, &undo);
 
     if (err != DB_SUCCESS) {
       goto func_exit;
@@ -1383,7 +1382,7 @@ func_exit:
 
   @return           DB_SUCCESS  Success
 */
-dberr_t trx_always_assign_txn_undo(trx_t *trx){
+dberr_t trx_always_assign_txn_undo(trx_t *trx) {
   dberr_t err = DB_SUCCESS;
   trx_undo_t *undo = nullptr;
   txn_undo_ptr_t *undo_ptr = nullptr;
@@ -1453,8 +1452,8 @@ void trx_init_txn_desc(trx_t *trx) { trx->txn_desc.reset(); }
   @retval         scn       commit scn struture
 */
 commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
-                             trx_undo_t *undo, page_t *undo_hdr_page,
-                             ulint hdr_offset, bool *serialised, mtr_t *mtr) {
+                              trx_undo_t *undo, page_t *undo_hdr_page,
+                              ulint hdr_offset, bool *serialised, mtr_t *mtr) {
   trx_usegf_t *seg_hdr;
   trx_ulogf_t *undo_hdr;
   commit_mark_t cmmt = COMMIT_MARK_NULL;
@@ -1618,7 +1617,7 @@ static void trx_purge_add_txn_undo_to_history(trx_t *trx,
                  mtr);
 
   /* lizard: TRX_UNDO_TRX_NO is reserved */
-  //mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
+  // mlog_write_ull(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
 
   /* Write information about delete markings to the undo log header */
   if (!undo->del_marks) {
@@ -1779,7 +1778,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
     /* A running transaction always has the number field inited to
     TRX_ID_MAX */
 
-    //trx->no = TRX_ID_MAX;
+    // trx->no = TRX_ID_MAX;
 
     assert_undo_commit_mark_initial(undo);
     assert_trx_commit_mark_initial(trx);
@@ -1825,7 +1824,7 @@ lsn_t txn_prepare_low(
     mtr_t *mtr) {
   ut_ad(mtr);
 
-  //trx_rseg_t *rseg = undo_ptr->rseg;
+  // trx_rseg_t *rseg = undo_ptr->rseg;
 
   /* Change the undo log segment states from TRX_UNDO_ACTIVE to
   TRX_UNDO_PREPARED: these modifications to the file data
@@ -1835,9 +1834,9 @@ lsn_t txn_prepare_low(
   // rseg->latch();
 
   ut_ad(undo_ptr->txn_undo);
-    /* It is not necessary to obtain trx->undo_mutex here
-    because only a single OS thread is allowed to do the
-    transaction prepare for this transaction. */
+  /* It is not necessary to obtain trx->undo_mutex here
+  because only a single OS thread is allowed to do the
+  transaction prepare for this transaction. */
   trx_undo_set_state_at_prepare(trx, undo_ptr->txn_undo, false, mtr);
 
   // rseg->unlatch();
@@ -2035,8 +2034,7 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
 
   ut_ad(mutex_own(&rseg->mutex));
 
-  rseg_hdr =
-      trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
+  rseg_hdr = trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
 
   undo_page = trx_undo_page_get(page_id_t(rseg->space_id, hdr_addr.page),
                                 rseg->page_size, mtr);
@@ -2072,7 +2070,7 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
                    MLOG_4BYTES, mtr);
 
   flst_add_first(rseg_hdr + TXN_RSEG_FREE_LIST,
-                undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
+                 undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
   gcs->txn_undo_log_free_list_len.fetch_add(1);
 
@@ -2307,7 +2305,7 @@ static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
   /** If the undo record start from undo segment header, it's normal
       undo log data page.
   */
-  //ut_a(undo_page_start != (TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_HDR_SIZE));
+  // ut_a(undo_page_start != (TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_HDR_SIZE));
   (void)undo_page_start;
 
   /** ----------------------------------------------------------*/
@@ -2322,8 +2320,7 @@ static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
   real_trx_state = mach_read_from_2(seg_hdr + TRX_UNDO_STATE);
 
   /** real_trx_state should only be the following states */
-  ut_a(real_trx_state == TRX_UNDO_ACTIVE ||
-       real_trx_state == TRX_UNDO_CACHED ||
+  ut_a(real_trx_state == TRX_UNDO_ACTIVE || real_trx_state == TRX_UNDO_CACHED ||
        real_trx_state == TRX_UNDO_PREPARED_80028 ||
        real_trx_state == TRX_UNDO_PREPARED ||
        real_trx_state == TRX_UNDO_PREPARED_IN_TC ||
@@ -2333,9 +2330,9 @@ static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
   /** Phase 6: The offset (minus TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE)
   is a fixed multiple of TRX_UNDO_LOG_HDR_SIZE */
   lizard_ut_ad(undo_addr.offset >= TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE);
-  lizard_ut_ad((undo_addr.offset
-                  - (TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE))
-               % TRX_UNDO_LOG_GTID_HDR_SIZE == 0);
+  lizard_ut_ad((undo_addr.offset - (TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE)) %
+                   TRX_UNDO_LOG_GTID_HDR_SIZE ==
+               0);
 
   /** ----------------------------------------------------------*/
   /** Phase 7: Check the flag in undo hdr, should be TRX_UNDO_FLAG_TXN,
@@ -2382,8 +2379,8 @@ static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
   record. Then, we get txn state in txn undo header to determine what's
   the real state of the transaction. */
   if (txn_undo_hdr.state == TXN_UNDO_LOG_ACTIVE) {
-    lizard_ut_ad(mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG)
-                   == undo_addr.offset);
+    lizard_ut_ad(mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG) ==
+                 undo_addr.offset);
     lizard_ut_ad(real_trx_state == TRX_UNDO_ACTIVE ||
                  real_trx_state == TRX_UNDO_PREPARED_80028 ||
                  real_trx_state == TRX_UNDO_PREPARED ||
@@ -2401,7 +2398,7 @@ still_active:
   txn_lookup_t_set(txn_lookup, txn_undo_hdr, txn_undo_hdr.image,
                    txn_state_t::TXN_STATE_ACTIVE);
   if (!have_mtr) mtr_commit(mtr);
-  return true; 
+  return true;
 
 already_commit:
   assert_commit_mark_allocated(txn_undo_hdr.image);
@@ -2464,8 +2461,7 @@ static bool txn_undo_hdr_lookup_strict(txn_rec_t *txn_rec) {
 
   @return         bool          whether corresponding trx is active.
 */
-bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
-                             txn_lookup_t *txn_lookup,
+bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec, txn_lookup_t *txn_lookup,
                              mtr_t *txn_mtr) {
   bool ret;
   undo_addr_t undo_addr;
@@ -2671,9 +2667,9 @@ void Undo_retention::refresh_stat_data() {
 
   snprintf(status, sizeof(status),
            "space:{file:%lu, used:%lu, limit:%lu, reserved:%lu}, "
-           "time:{top:%lu, now:%lu}", file_size, used_size,
-           mb_to_pages(space_limit), mb_to_pages(space_reserve),
-           m_last_top_utc, current_utc());
+           "time:{top:%lu, now:%lu}",
+           file_size, used_size, mb_to_pages(space_limit),
+           mb_to_pages(space_reserve), m_last_top_utc, current_utc());
   mutex_exit(&m_mutex);
 }
 
@@ -2723,7 +2719,6 @@ bool Undo_retention::purge_advise() {
 
 /* Init undo_retention */
 void undo_retention_init() {
-
   /* Init the lizard undo retention mutex. */
   Undo_retention::instance()->init_mutex();
 
@@ -2731,7 +2726,8 @@ void undo_retention_init() {
   Undo_retention::instance()->refresh_stat_data();
 }
 
-void Undo_retention::get_stat_data(ulint *used_size, ulint *file_size, ulint *retained_time) {
+void Undo_retention::get_stat_data(ulint *used_size, ulint *file_size,
+                                   ulint *retained_time) {
   *used_size = pages_to_mb(m_total_used_size.load());
   *file_size = pages_to_mb(m_total_file_size.load());
   *retained_time = current_utc() - m_last_top_utc;
@@ -2788,7 +2784,7 @@ void XA_specification_strategy::overwrite_gtid_storage(trx_t *trx) {
   ut_ad(trx == m_trx);
   ut_ad(has_gtid());
 
-  if (trx->rsegs.m_redo.rseg !=nullptr && trx_is_redo_rseg_updated(trx)) {
+  if (trx->rsegs.m_redo.rseg != nullptr && trx_is_redo_rseg_updated(trx)) {
     undo = trx->rsegs.m_redo.update_undo;
     if (undo) {
       undo->m_gtid_storage = decide_gtid_storage();
@@ -2810,7 +2806,7 @@ void XA_specification_strategy::get_gtid_info(Gtid_desc &gtid_desc) {
   gtid_desc.m_info.fill(0);
   auto char_buf = reinterpret_cast<char *>(&gtid_desc.m_info[0]);
   auto len = gtid.to_string(sid, char_buf);
-  ut_a((size_t) len <= GTID_INFO_SIZE);
+  ut_a((size_t)len <= GTID_INFO_SIZE);
   gtid_desc.m_is_set = true;
 }
 

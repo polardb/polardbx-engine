@@ -74,9 +74,7 @@ class Gcn_log_event : public binary_log::Gcn_event, public Log_event {
 
   ~Gcn_log_event() override {}
 
-  size_t get_data_size() override {
-    return POST_HEADER_LENGTH;
-  }
+  size_t get_data_size() override { return POST_HEADER_LENGTH; }
 
   static size_t get_event_length(enum_binlog_checksum_alg alg) {
     return LOG_EVENT_HEADER_LEN + POST_HEADER_LENGTH +

@@ -23,6 +23,7 @@
 #include <assert.h>
 
 #include "field.h"
+#include "ha_sequence.h"
 #include "handler.h"  // table->file->xxx()
 #include "log.h"      // sql_print_error
 #include "mysqld.h"
@@ -31,7 +32,6 @@
 #include "table.h"
 #include "timestamp_service.h"
 #include "transaction.h"  // trans_commit_stmt
-#include "ha_sequence.h"
 
 /**
   Initialize timestamp service
@@ -99,7 +99,7 @@ bool TimestampService::open_base_table(thr_lock_type lock_type) {
     close_thread_tables(m_thd);
     m_thd->get_stmt_da()->set_overwrite_status(true);
     char errmsg[256] = {0};
-    sprintf(errmsg,"Can not open table [%s.%s]", m_db_name, m_table_name);
+    sprintf(errmsg, "Can not open table [%s.%s]", m_db_name, m_table_name);
     my_error(ER_TIMESTAMP_SERVICE_ERROR, MYF(0), errmsg);
     m_thd->get_stmt_da()->set_overwrite_status(false);
     ret = true;
@@ -126,7 +126,7 @@ bool TimestampService::get_timestamp(uint64_t &ts, const uint64_t batch) {
   assert(is_initialized());
   assert(m_table->file);
 
-	/* Check the number of timestamp value requested */
+  /* Check the number of timestamp value requested */
   if (batch < TIMESTAMP_SEQUENCE_MIN_BATCH_SIZE ||
       batch > TIMESTAMP_SEQUENCE_MAX_BATCH_SIZE) {
     char errmsg[256] = {0};

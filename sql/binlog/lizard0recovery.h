@@ -25,7 +25,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 /** @file sql/lizard0recovery.h
- 
+
   Transaction coordinator log recovery
 
   Created 2023-06-14 by Jianwei.zhao
@@ -34,8 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef SQL_BINLOG_LIZARD0RECOVERY_H
 #define SQL_BINLOG_LIZARD0RECOVERY_H
 
-#include "sql/mem_root_allocator.h"
 #include "sql/binlog/binlog_xa_specification.h"
+#include "sql/mem_root_allocator.h"
 #include "sql/xa.h"
 
 #include "sql/lizard0handler.h"
@@ -52,14 +52,12 @@ class XA_spec_recovery {
                    static_cast<size_t>(my_getpagesize())),
         m_spec_list(&m_mem_root) {}
 
-  void add(const my_xid xid,const Binlog_xa_specification &spec);
+  void add(const my_xid xid, const Binlog_xa_specification &spec);
   void add(const XID &xid, const Binlog_xa_specification &spec);
 
   XA_spec_list *xa_spec_list() { return &m_spec_list; }
 
-  void clear() {
-    m_spec_list.clear();
-  }
+  void clear() { m_spec_list.clear(); }
 
  private:
   MEM_ROOT m_mem_root;

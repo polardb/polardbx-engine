@@ -169,4 +169,4 @@ void easy_net_perf() {
   th.detach();
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

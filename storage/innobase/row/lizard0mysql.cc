@@ -1,15 +1,14 @@
 
+#include "ha_innodb.h"
+#include "row0mysql.h"
 #include "sql/table.h"
 #include "trx0purge.h"
-#include "row0mysql.h"
-#include "ha_innodb.h"
 
-#include "lizard0mysql.h"
-#include "lizard0gcs0hist.h"
 #include "lizard0gcs.h"
-#include "sql/sql_class.h"
+#include "lizard0gcs0hist.h"
+#include "lizard0mysql.h"
 #include "sql/lizard/lizard_snapshot.h"
-
+#include "sql/sql_class.h"
 
 /* To get current session thread default THD */
 THD *thd_get_current_thd();
@@ -51,10 +50,10 @@ static scn_t convert_timestamp_to_scn_low(utc_t user_utc, dberr_t *err) {
     if we just return trans_res.err. So we turn to as DB_AS_OF_INTERNAL */
     *err = DB_AS_OF_INTERNAL;
   } else if (trans_res.state == SCN_TRANSFORM_STATE::NOT_FOUND) {
-
     /** TODO: Check if it's a next interval query <10-10-20, zanye.zjy> */
 
-    /* case 3: can't find the appropriate records in innodb_flashback_snapshot */
+    /* case 3: can't find the appropriate records in innodb_flashback_snapshot
+     */
     *err = DB_SNAPSHOT_OUT_OF_RANGE;
   } else if (utc_distance(trans_res.utc, user_utc) >
              2 * SRV_SCN_HISTORY_INTERVAL_MAX) {
@@ -90,19 +89,19 @@ int convert_timestamp_to_scn(THD *thd, utc_t utc, scn_t *scn) {
 
   @return           dberr_t     DB_SUCCESS if convert successfully or it's not
                                 a flashback query.
-                                ERROR: DB_AS_OF_INTERNAL, DB_SNAPSHOT_OUT_OF_RANGE,
-                                DB_AS_OF_TABLE_DEF_CHANGED, DB_SNAPSHOT_TOO_OLD
+                                ERROR: DB_AS_OF_INTERNAL,
+  DB_SNAPSHOT_OUT_OF_RANGE, DB_AS_OF_TABLE_DEF_CHANGED, DB_SNAPSHOT_TOO_OLD
 */
 dberr_t prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt) {
   TABLE *table;
- // trx_t *trx;
- // bool err = false;
+  // trx_t *trx;
+  // bool err = false;
   dict_index_t *clust_index;
   Snapshot_vision *snapshot_vision = nullptr;
   ut_ad(prebuilt);
 
   table = prebuilt->m_mysql_table;
-  //trx = prebuilt->trx;
+  // trx = prebuilt->trx;
 
   /* forbid as-of query */
   if (!srv_force_normal_query_if_fbq) return DB_SUCCESS;
@@ -110,16 +109,16 @@ dberr_t prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt) {
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_assigned()) return DB_SUCCESS;
 
-//  if (trx) {
-//    /* Change gcn on vision to current snapshot gcn. */
-//    gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
-//    if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
+    //  if (trx) {
+    //    /* Change gcn on vision to current snapshot gcn. */
+    //    gcn_t gcn = thd_get_snapshot_gcn(trx->mysql_thd);
+    //    if (gcn != GCN_NULL) trx->vision.set_asof_gcn(gcn);
     /* Set gcn on m_asof_query if exist. */
-//    if (trx->vision.is_asof_gcn()) {
-//      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
-//      return DB_SUCCESS;
-//    }
-//  }
+    //    if (trx->vision.is_asof_gcn()) {
+    //      prebuilt->m_asof_query.set(SCN_NULL, trx->vision.get_asof_gcn());
+    //      return DB_SUCCESS;
+    //    }
+    //  }
 
 #if defined TURN_MVCC_SEARCH_TO_AS_OF
 

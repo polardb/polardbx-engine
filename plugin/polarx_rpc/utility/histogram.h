@@ -23,7 +23,7 @@ namespace polarx_rpc {
 class Chistogram final {
   NO_COPY_MOVE(Chistogram);
 
-private:
+ private:
   static constexpr auto HISTOGRAM_NSLOTS = 128;
 
   /** Number of elements in each array */
@@ -84,9 +84,11 @@ private:
     cumulative_nevents_ = nevents;
   }
 
-public:
+ public:
   Chistogram(size_t size, double range_min, double range_max)
-      : array_size_(size), range_min_(range_min), range_max_(range_max),
+      : array_size_(size),
+        range_min_(range_min),
+        range_max_(range_max),
         range_deduct_(::log(range_min)),
         range_mult_((size - 1) / (::log(range_max) - range_deduct_)) {
     buffers_.reset(new uint64_t[size * (HISTOGRAM_NSLOTS + 2)]);
@@ -97,8 +99,7 @@ public:
       throw std::runtime_error("Bad buffer not aligned");
 
     /// reset all first
-    for (auto i = 0; i < array_size_ * (HISTOGRAM_NSLOTS + 2); ++i)
-      ptr[i] = 0;
+    for (auto i = 0; i < array_size_ * (HISTOGRAM_NSLOTS + 2); ++i) ptr[i] = 0;
 
     cumulative_array_ = ptr;
     ptr += array_size_;
@@ -131,8 +132,7 @@ public:
       for (auto i = 0; i < array_size_; ++i)
         interm_slots_[s][i].exchange(0, std::memory_order_relaxed);
     }
-    for (auto i = 0; i < array_size_; ++i)
-      cumulative_array_[i] = 0;
+    for (auto i = 0; i < array_size_; ++i) cumulative_array_[i] = 0;
     cumulative_nevents_ = 0;
   }
 
@@ -143,18 +143,15 @@ public:
 
     uint64_t maxcnt = 0;
     for (auto i = 0; i < array_size_; ++i) {
-      if (cumulative_array_[i] > maxcnt)
-        maxcnt = cumulative_array_[i];
+      if (cumulative_array_[i] > maxcnt) maxcnt = cumulative_array_[i];
     }
-    if (maxcnt == 0)
-      return {};
+    if (maxcnt == 0) return {};
 
     std::string result(
         "       value  ------------- distribution ------------- count\n");
     char buf[1024];
     for (auto i = 0; i < array_size_; i++) {
-      if (0 == cumulative_array_[i])
-        continue;
+      if (0 == cumulative_array_[i]) continue;
 
       auto width =
           static_cast<int>(::floor(cumulative_array_[i] * 40. / maxcnt + 0.5));
@@ -170,4 +167,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

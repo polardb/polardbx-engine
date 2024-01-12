@@ -83,7 +83,9 @@ class Object_guard : public Guard {
 
   Object_guard(const Object_guard &src);
 
-  virtual Object_guard *clone() const override { return new Object_guard(*this); }
+  virtual Object_guard *clone() const override {
+    return new Object_guard(*this);
+  }
 
   virtual Object_guard *clone(MEM_ROOT *mem_root) const override {
     return new (mem_root) Object_guard(*this);
@@ -194,7 +196,7 @@ class Entity_guard : public Guard {
 
   virtual Entity_guard *clone() const override = 0;
 
-  virtual Entity_guard *clone(MEM_ROOT *mem_root) const override= 0;
+  virtual Entity_guard *clone(MEM_ROOT *mem_root) const override = 0;
 
   virtual void destroy() const override = 0;
 };
@@ -283,7 +285,8 @@ class Dynamic_privilege_entity_guard : public Entity_guard {
   virtual const String_type object_name() override;
 
   virtual Dynamic_privilege_entity_guard *clone() const override;
-  virtual Dynamic_privilege_entity_guard *clone(MEM_ROOT *mem_root) const override;
+  virtual Dynamic_privilege_entity_guard *clone(
+      MEM_ROOT *mem_root) const override;
   /**
     Explicit call destroy if placement new object
   */
@@ -447,7 +450,8 @@ class Mysql_internal_schema_access : public ACL_internal_schema_access {
 
   ~Mysql_internal_schema_access() {}
 
-  ACL_internal_access_result check(ulong want_access, ulong *, bool) const override;
+  ACL_internal_access_result check(ulong want_access, ulong *,
+                                   bool) const override;
 
   const ACL_internal_table_access *lookup(const char *name) const override;
 
@@ -468,7 +472,8 @@ class Inner_schema_access : public ACL_internal_schema_access {
 
   ~Inner_schema_access() {}
 
-  ACL_internal_access_result check(ulong want_access, ulong *save_priv, bool any_combination_will_do) const override;
+  ACL_internal_access_result check(ulong want_access, ulong *save_priv,
+                                   bool any_combination_will_do) const override;
 
   const ACL_internal_table_access *lookup(const char *name) const override;
 

@@ -124,7 +124,8 @@ bool Rpl_applier_reader::open(const char **errmsg) {
     rli->set_group_relay_log_name(m_linfo.log_file_name);
     rli->set_event_relay_log_pos(rli->get_group_relay_log_pos());
     rli->set_event_relay_log_name(rli->get_group_relay_log_name());
-    if ((relay_log_purge == 0 || rli->relay_log.is_xpaxos_log) && rli->log_space_limit > 0) {
+    if ((relay_log_purge == 0 || rli->relay_log.is_xpaxos_log) &&
+        rli->log_space_limit > 0) {
       rli->log_space_limit = 0;
       LogErr(WARNING_LEVEL, ER_RELAY_LOG_SPACE_LIMIT_DISABLED);
     }
@@ -148,8 +149,7 @@ void Rpl_applier_reader::close() {
   m_errmsg = nullptr;
 }
 
-my_off_t Rpl_applier_reader::relaylog_reader_position()
-{
+my_off_t Rpl_applier_reader::relaylog_reader_position() {
   return m_relaylog_file_reader.position();
 }
 

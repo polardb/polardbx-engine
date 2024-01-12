@@ -13,8 +13,8 @@
 #include "my_compiler.h"
 #include "mysql/service_command.h"
 
-#include "../global_defines.h"
 #include "../common_define.h"
+#include "../global_defines.h"
 #include "../utility/error.h"
 
 namespace polarx_rpc {
@@ -22,7 +22,7 @@ namespace polarx_rpc {
 class CcommandDelegate {
   NO_COPY(CcommandDelegate);
 
-public:
+ public:
   struct info_t final {
     uint64_t affected_rows{0};
     uint64_t last_insert_id{0};
@@ -38,7 +38,7 @@ public:
 
   using field_types_t = std::vector<field_type_t>;
 
-public:
+ public:
   CcommandDelegate() = default;
   virtual ~CcommandDelegate() = default;
 
@@ -101,7 +101,7 @@ public:
 
   virtual enum cs_text_or_binary representation() const = 0;
 
-protected:
+ protected:
   info_t info_;
   field_types_t field_types_;
   uint sql_errno_ = 0;
@@ -112,7 +112,7 @@ protected:
   bool streaming_metadata_ = false;
   bool got_eof_ = false;
 
-public:
+ public:
   /*** Getting metadata ***/
   /*
     Indicates beginning of metadata for the result set
@@ -125,9 +125,9 @@ public:
     true  an error occurred, server will abort the command
     false ok
   */
-  virtual int
-  start_result_metadata(uint num_cols, uint flags MY_ATTRIBUTE((unused)),
-                        const CHARSET_INFO *resultcs MY_ATTRIBUTE((unused))) {
+  virtual int start_result_metadata(
+      uint num_cols, uint flags MY_ATTRIBUTE((unused)),
+      const CHARSET_INFO *resultcs MY_ATTRIBUTE((unused))) {
     field_types_.clear();
 
     /*
@@ -168,9 +168,9 @@ public:
     true  an error occurred, server will abort the command
     false ok
   */
-  virtual int
-  field_metadata(struct st_send_field *field,
-                 const CHARSET_INFO *charset MY_ATTRIBUTE((unused))) {
+  virtual int field_metadata(struct st_send_field *field,
+                             const CHARSET_INFO *charset
+                                 MY_ATTRIBUTE((unused))) {
     field_type_t type = {field->type, field->flags};
     field_types_.push_back(type);
 
@@ -351,10 +351,10 @@ public:
     true  an error occurred, server will abort the command
     false ok
   */
-  virtual int
-  get_string(const char *const value MY_ATTRIBUTE((unused)),
-             size_t length MY_ATTRIBUTE((unused)),
-             const CHARSET_INFO *const valuecs MY_ATTRIBUTE((unused))) {
+  virtual int get_string(const char *const value MY_ATTRIBUTE((unused)),
+                         size_t length MY_ATTRIBUTE((unused)),
+                         const CHARSET_INFO *const valuecs
+                             MY_ATTRIBUTE((unused))) {
     return 0;
   }
 
@@ -399,7 +399,7 @@ public:
   */
   virtual void shutdown(int flag MY_ATTRIBUTE((unused))) { killed_ = true; }
 
-private:
+ private:
   static int call_start_result_metadata(void *ctx, uint num_cols, uint flags,
                                         const CHARSET_INFO *resultcs) {
     auto self = static_cast<CcommandDelegate *>(ctx);
@@ -422,15 +422,13 @@ private:
 
   static int call_start_row(void *ctx) {
     auto self = static_cast<CcommandDelegate *>(ctx);
-    if (self->streaming_metadata_)
-      return false;
+    if (self->streaming_metadata_) return false;
     return self->start_row();
   }
 
   static int call_end_row(void *ctx) {
     auto self = static_cast<CcommandDelegate *>(ctx);
-    if (self->streaming_metadata_)
-      return false;
+    if (self->streaming_metadata_) return false;
     return self->end_row();
   }
 
@@ -509,4 +507,4 @@ private:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

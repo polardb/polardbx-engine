@@ -34,8 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0gp_h
 
 #include "lizard0gp0types.h"
-#include "ut0mutex.h"
 #include "trx0trx.h"
+#include "ut0mutex.h"
 
 #ifdef UNIV_PFS_THREAD
 extern mysql_pfs_key_t srv_gp_wait_timeout_thread_key;

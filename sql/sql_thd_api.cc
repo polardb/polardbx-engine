@@ -658,8 +658,7 @@ void thd_wait_begin(MYSQL_THD thd, int wait_type) {
                  (thd, wait_type));
   /// invoke THD PolarDB-X RPC cb after global
   if (likely(thd != nullptr))
-    MYSQL_CALLBACK(thd->polarx_rpc_monitor, thd_wait_begin,
-                   (thd, wait_type));
+    MYSQL_CALLBACK(thd->polarx_rpc_monitor, thd_wait_begin, (thd, wait_type));
 }
 
 /**

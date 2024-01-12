@@ -32,12 +32,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0api.h"
 #include "clone0clone.h"
 #include "lizard0gcs.h"
+#include "sql/consensus/consensus_recovery.h"
 #include "sql/field.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_gtid_persist.h"
 #include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
-#include "sql/consensus/consensus_recovery.h"
 
 #include "lizard0undo.h"
 
@@ -120,7 +120,9 @@ void Clone_persist_gtid::set_persist_gtid(trx_t *trx, bool set) {
   static_cast<void>(has_gtid(trx, thd, thd_check));
 
   /* For attachable transaction, skip both set and reset. */
-  if (thd == nullptr || (thd->is_attachable_transaction_active() && !thd->is_autonomous_transaction()) ||
+  if (thd == nullptr ||
+      (thd->is_attachable_transaction_active() &&
+       !thd->is_autonomous_transaction()) ||
       trx->internal) {
     return;
   }
@@ -309,7 +311,8 @@ bool Clone_persist_gtid::has_gtid(trx_t *trx, THD *&thd, bool &passed_check) {
   /* Attachable transactions can be started and committed while
   the main transaction is in progress. We don't want to consider
   GTID persistence for such transactions. */
-  if ((thd->is_attachable_transaction_active() && !thd->is_autonomous_transaction())) {
+  if ((thd->is_attachable_transaction_active() &&
+       !thd->is_autonomous_transaction())) {
     return (false);
   }
 
@@ -556,8 +559,7 @@ void Clone_persist_gtid::flush_gtids(THD *thd) {
     m_compression_gtid_counter = 0;
     /* Write non-innodb GTIDs before compression. */
     err = write_other_gtids();
-    if (err == 0)
-      err = gtid_table_persistor->compress(thd);
+    if (err == 0) err = gtid_table_persistor->compress(thd);
   }
   if (err != 0) {
     ib::error(ER_IB_CLONE_GTID_PERSIST) << "Error persisting GTIDs to table";

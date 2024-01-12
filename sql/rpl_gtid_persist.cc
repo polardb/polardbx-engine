@@ -258,7 +258,6 @@ int Gtid_table_persistor::write_row(TABLE *table, const char *sid,
   if (DBUG_EVALUATE_IF("simulate_err_on_write_gtid_into_table", (error = -1),
                        error)) {
     if (error == HA_ERR_FOUND_DUPP_KEY) {
-
       /* Ignore the duplicate key error, log a warning for it. */
       LogErr(WARNING_LEVEL, ER_GTID_ALREADY_ADDED_BY_USER,
              Gtid_table_access_context::TABLE_NAME.str);

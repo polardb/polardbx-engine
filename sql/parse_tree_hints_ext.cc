@@ -44,8 +44,10 @@ bool PT_hint_sample_percentage::contextualize(Parse_context *pc) {
     double pct = my_strtod(sample_pct.str, &end, &error);
     if (error) break;
 
-    if (pct < 0.0) pct = 0.0;
-    else if (pct > 100.0) pct = 100.0;
+    if (pct < 0.0)
+      pct = 0.0;
+    else if (pct > 100.0)
+      pct = 100.0;
 
     Opt_hints_global *global_hint = get_global_hints(pc);
     if (global_hint->is_specified(type())) {
@@ -65,4 +67,3 @@ bool PT_hint_sample_percentage::contextualize(Parse_context *pc) {
   my_error(ER_SAMPLE_WRONG_SEMANTIC, MYF(0), "");
   return true;
 }
-

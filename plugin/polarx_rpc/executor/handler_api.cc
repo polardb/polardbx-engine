@@ -3,14 +3,14 @@
 #ifndef MYSQL8
 #define MYSQL_SERVER
 #endif
-#include "sql/mysqld.h"
 #include "sql/binlog.h"
-#include "sql/handler.h"
 #include "sql/field.h"
+#include "sql/handler.h"
 #include "sql/key.h"
-#include "sql/transaction.h"
-#include "sql/sql_class.h"
+#include "sql/mysqld.h"
 #include "sql/sql_base.h"
+#include "sql/sql_class.h"
+#include "sql/transaction.h"
 #ifndef MYSQL8
 #include "sql/rds_audit_log.h"
 #endif
@@ -21,41 +21,41 @@
 namespace rpc_executor {
 
 namespace handler {
-  int check_table_init(ExecTable *exec_table) {
-    int ret = HA_EXEC_SUCCESS;
-    if (!exec_table) {
-      ret = HA_ERR_INTERNAL_ERROR;
-      log_exec_error("exec_table is null");
-    } else if (!exec_table->is_init()) {
-      ret = HA_ERR_INTERNAL_ERROR;
-      log_exec_error("exec_table not init");
-    }
-    return ret;
+int check_table_init(ExecTable *exec_table) {
+  int ret = HA_EXEC_SUCCESS;
+  if (!exec_table) {
+    ret = HA_ERR_INTERNAL_ERROR;
+    log_exec_error("exec_table is null");
+  } else if (!exec_table->is_init()) {
+    ret = HA_ERR_INTERNAL_ERROR;
+    log_exec_error("exec_table not init");
   }
+  return ret;
+}
 
-  int check_key_init(ExecKeyMeta *exec_key) {
-    int ret = HA_EXEC_SUCCESS;
-    if (!exec_key) {
-      ret = HA_ERR_INTERNAL_ERROR;
-      log_exec_error("exec_key is null");
-    } else if (!exec_key->is_init()) {
-      ret = HA_ERR_INTERNAL_ERROR;
-      log_exec_error("exec_key not init");
-    }
-    return ret;
+int check_key_init(ExecKeyMeta *exec_key) {
+  int ret = HA_EXEC_SUCCESS;
+  if (!exec_key) {
+    ret = HA_ERR_INTERNAL_ERROR;
+    log_exec_error("exec_key is null");
+  } else if (!exec_key->is_init()) {
+    ret = HA_ERR_INTERNAL_ERROR;
+    log_exec_error("exec_key not init");
   }
+  return ret;
+}
 
-  int check_meta_init(ExecTable *exec_table, ExecKeyMeta *exec_key) {
-    int ret = HA_EXEC_SUCCESS;
-    if ((ret = check_table_init(exec_table))) {
-      // table init error, should check in handler_open_table
-    } else if ((ret = check_key_init(exec_key))) {
-      // key init error, should check in handler_open_table
-    }
-    return ret;
+int check_meta_init(ExecTable *exec_table, ExecKeyMeta *exec_key) {
+  int ret = HA_EXEC_SUCCESS;
+  if ((ret = check_table_init(exec_table))) {
+    // table init error, should check in handler_open_table
+  } else if ((ret = check_key_init(exec_key))) {
+    // key init error, should check in handler_open_table
   }
+  return ret;
+}
 
-} // namespace handler
+}  // namespace handler
 
 THD *handler_create_thd(bool enable_binlog) {
   THD *thd;
@@ -95,9 +95,7 @@ void handler_close_thd(THD *thd) {
   delete (thd);
 }
 
-void handler_thd_attach(THD *thd,
-                        THD **original_thd) {
-
+void handler_thd_attach(THD *thd, THD **original_thd) {
   if (original_thd) {
     *original_thd = current_thd;
   }
@@ -105,12 +103,8 @@ void handler_thd_attach(THD *thd,
   thd->store_globals();
 }
 
-void handler_set_thd_source(THD *thd,
-                            const char *host_or_ip,
-                            const char *host,
-                            const char *ip,
-                            uint16_t port,
-                            const char *user) {
+void handler_set_thd_source(THD *thd, const char *host_or_ip, const char *host,
+                            const char *ip, uint16_t port, const char *user) {
   thd->peer_port = port;
   thd->m_main_security_ctx.set_host_or_ip_ptr(host_or_ip, strlen(host_or_ip));
   thd->m_main_security_ctx.set_host_ptr(host, strlen(host));
@@ -118,11 +112,8 @@ void handler_set_thd_source(THD *thd,
   thd->m_main_security_ctx.set_user_ptr(user, strlen(user));
 }
 
-int handler_open_table(THD *thd,
-                       const char *db_name,
-                       const char *table_name,
-                       int lock_type,
-                       ExecTable *&exec_table) {
+int handler_open_table(THD *thd, const char *db_name, const char *table_name,
+                       int lock_type, ExecTable *&exec_table) {
   int ret = HA_EXEC_SUCCESS;
   std::unique_ptr<ExecTable> new_exec_table(new (std::nothrow) ExecTable());
   if (!new_exec_table) {
@@ -132,11 +123,11 @@ int handler_open_table(THD *thd,
     THD_STAGE_INFO(thd, stage_opening_tables);
     auto &tables = new_exec_table->tables;
     Open_table_context table_ctx(thd, 0);
-    thr_lock_type lock_mode  = (lock_type <= HDL_READ) ? TL_READ : TL_WRITE;
+    thr_lock_type lock_mode = (lock_type <= HDL_READ) ? TL_READ : TL_WRITE;
 
 #ifdef MYSQL8PLUS
-    tables = Table_ref(db_name, strlen(db_name), table_name,
-                        strlen(table_name), table_name, lock_mode);
+    tables = Table_ref(db_name, strlen(db_name), table_name, strlen(table_name),
+                       table_name, lock_mode);
 #else
     tables.init_one_table(db_name, strlen(db_name), table_name,
                           strlen(table_name), table_name, lock_mode);
@@ -147,26 +138,28 @@ int handler_open_table(THD *thd,
       MDL_REQUEST_INIT(&tables.mdl_request, MDL_key::TABLE, db_name, table_name,
                        MDL_EXCLUSIVE, MDL_TRANSACTION);
     } else {
-      MDL_REQUEST_INIT(&tables.mdl_request, MDL_key::TABLE, db_name, table_name,
-                       (lock_mode > TL_READ) ? MDL_SHARED_WRITE : MDL_SHARED_READ,
-                       MDL_TRANSACTION);
+      MDL_REQUEST_INIT(
+          &tables.mdl_request, MDL_key::TABLE, db_name, table_name,
+          (lock_mode > TL_READ) ? MDL_SHARED_WRITE : MDL_SHARED_READ,
+          MDL_TRANSACTION);
     }
 
     if ((ret = open_table(thd, &tables, &table_ctx))) {
-      log_exec_error("call open_table failed, "
-                     "ret: %d, name: %s.%s, lock_type: %d",
-                     ret, db_name, table_name, lock_type);
+      log_exec_error(
+          "call open_table failed, "
+          "ret: %d, name: %s.%s, lock_type: %d",
+          ret, db_name, table_name, lock_type);
     } else if ((ret = new_exec_table->init(tables.table))) {
-      log_exec_error("Executor table init failed, "
-                     "ret: %d,name: %s.%s, lock_type: %d",
-                     ret, db_name, table_name, lock_type);
+      log_exec_error(
+          "Executor table init failed, "
+          "ret: %d,name: %s.%s, lock_type: %d",
+          ret, db_name, table_name, lock_type);
     } else {
 #ifdef MYSQL8
       lizard::simulate_snapshot_clause(thd, &tables);
       /// set vision manually
       auto hint = tables.snapshot_hint;
-      if (hint != nullptr)
-        hint->evoke_vision(tables.table, thd);
+      if (hint != nullptr) hint->evoke_vision(tables.table, thd);
 #endif
       // In any other case this function fails,
       // new_exec_table will be released by unique_ptr
@@ -183,9 +176,7 @@ long long thd_test_options(const MYSQL_THD thd, long long test_options) {
 }
 #endif
 
-int handler_close_table(THD *thd,
-                        ExecTable *&exec_table,
-                        int mode) {
+int handler_close_table(THD *thd, ExecTable *&exec_table, int mode) {
   int ret = HA_EXEC_SUCCESS;
 
   TABLE *my_table = exec_table->table();
@@ -226,12 +217,9 @@ int handler_set_no_key_read_only(ExecTable *exec_table) {
 }
 
 // --------------------------- CRUD API ---------------------------------------
-int handler_index_read_impl(THD *thd,
-                            ExecTable *exec_table,
-                            ExecKeyMeta *exec_key,
-                            uchar *search_buf,
-                            key_part_map part_map,
-                            ha_rkey_function read_flags,
+int handler_index_read_impl(THD *thd, ExecTable *exec_table,
+                            ExecKeyMeta *exec_key, uchar *search_buf,
+                            key_part_map part_map, ha_rkey_function read_flags,
                             bool &found) {
   TABLE *my_table = exec_table->table();
   uint32_t idx_to_use = exec_key->index();
@@ -242,22 +230,22 @@ int handler_index_read_impl(THD *thd,
   ::handler *handle = my_table->file;
 
   if ((ret = handle->ha_index_init(idx_to_use, true /* sorted */))) {
-    log_exec_error("handler index init failed, ret: %d, idx_to_use: %d",
-                   ret, idx_to_use);
+    log_exec_error("handler index init failed, ret: %d, idx_to_use: %d", ret,
+                   idx_to_use);
   } else {
     if (0 == part_map) {
       // TODO: See what kind of get we should offer and if we can optimize so
       // many if else
       ret = handle->ha_index_first(my_table->record[0]);
     } else {
-      ret = handle->ha_index_read_map(my_table->record[0],
-                                      search_buf, part_map, read_flags);
+      ret = handle->ha_index_read_map(my_table->record[0], search_buf, part_map,
+                                      read_flags);
     }
     if (ret == HA_ERR_KEY_NOT_FOUND || ret == HA_ERR_END_OF_FILE) {
       ret = HA_EXEC_SUCCESS;
     } else if (ret) {
-      log_exec_error("handler index read failed, ret: %d, flags: %d",
-                     ret, read_flags);
+      log_exec_error("handler index read failed, ret: %d, flags: %d", ret,
+                     read_flags);
     } else {
       thd->inc_examined_row_count(1);
       found = true;
@@ -267,11 +255,8 @@ int handler_index_read_impl(THD *thd,
   return ret;
 }
 
-int handler_get(THD *thd,
-                ExecTable *exec_table,
-                ExecKeyMeta *exec_key,
-                const SearchKey &search_key,
-                bool &found) {
+int handler_get(THD *thd, ExecTable *exec_table, ExecKeyMeta *exec_key,
+                const SearchKey &search_key, bool &found) {
   // exec_table and exec_key must be generated from handler_open_table and
   // should have been checked there.
   assert(HA_EXEC_SUCCESS == handler::check_meta_init(exec_table, exec_key));
@@ -281,17 +266,14 @@ int handler_get(THD *thd,
     ret = HA_ERR_INTERNAL_ERROR;
     log_exec_error("THD is NULL");
   } else {
-    ret = handler_index_read_impl(thd, exec_table, exec_key,
-                                  search_key.key_buffer(),
-                                  search_key.used_part_map(),
-                                  HA_READ_KEY_EXACT, found);
+    ret = handler_index_read_impl(
+        thd, exec_table, exec_key, search_key.key_buffer(),
+        search_key.used_part_map(), HA_READ_KEY_EXACT, found);
   }
   return ret;
 }
 
-int handler_index_first(THD *thd,
-                        ExecTable *exec_table,
-                        ExecKeyMeta *exec_key,
+int handler_index_first(THD *thd, ExecTable *exec_table, ExecKeyMeta *exec_key,
                         bool &found) {
   // exec_table and exec_key must be generated from handler_open_table and
   // should have been checked there.
@@ -305,8 +287,8 @@ int handler_index_first(THD *thd,
   ::handler *handle = my_table->file;
 
   if ((ret = handle->ha_index_init(idx_to_use, true /* sorted */))) {
-    log_exec_error("handler index init failed, ret: %d, idx_to_use: %d",
-                   ret, idx_to_use);
+    log_exec_error("handler index init failed, ret: %d, idx_to_use: %d", ret,
+                   idx_to_use);
   } else if ((ret = handle->ha_index_first(my_table->record[0]))) {
     if (ret == HA_ERR_KEY_NOT_FOUND || ret == HA_ERR_END_OF_FILE) {
       ret = HA_EXEC_SUCCESS;
@@ -321,9 +303,7 @@ int handler_index_first(THD *thd,
   return ret;
 }
 
-int handler_index_next(THD *thd,
-                       ExecTable *exec_table,
-                       bool &found) {
+int handler_index_next(THD *thd, ExecTable *exec_table, bool &found) {
   assert(HA_EXEC_SUCCESS == handler::check_table_init(exec_table));
 
   int ret = HA_EXEC_SUCCESS;
@@ -346,10 +326,8 @@ int handler_index_next(THD *thd,
   return ret;
 }
 
-int handler_next_same(THD *thd,
-                      ExecTable *exec_table,
-                      const SearchKey &search_key,
-                      bool &found) {
+int handler_next_same(THD *thd, ExecTable *exec_table,
+                      const SearchKey &search_key, bool &found) {
   assert(HA_EXEC_SUCCESS == handler::check_table_init(exec_table));
 
   int ret = HA_EXEC_SUCCESS;
@@ -388,11 +366,8 @@ int handler_index_end(THD *thd, ExecTable *exec_table) {
   return HA_EXEC_SUCCESS;
 }
 
-int handler_seek(THD *thd,
-                 ExecTable *exec_table,
-                 ExecKeyMeta *exec_key,
-                 const RangeSearchKey &range_key,
-                 bool &found) {
+int handler_seek(THD *thd, ExecTable *exec_table, ExecKeyMeta *exec_key,
+                 const RangeSearchKey &range_key, bool &found) {
   // exec_table and exec_key must be generated from handler_open_table and
   // should have been checked there.
   assert(HA_EXEC_SUCCESS == handler::check_meta_init(exec_table, exec_key));
@@ -406,23 +381,21 @@ int handler_seek(THD *thd,
     ::handler *handle = my_table->file;
     uint32_t idx_to_use = exec_key->index();
     if ((ret = handle->ha_index_init(idx_to_use, false))) {
-      log_exec_error("handler index init failed, ret: %d, idx_to_use: %d",
-                     ret, idx_to_use);
+      log_exec_error("handler index init failed, ret: %d, idx_to_use: %d", ret,
+                     idx_to_use);
     } else {
 #ifdef MYSQL8
       ret = handle->ha_read_range_first(range_key.begin_range(),
-                                        range_key.end_range(),
-                                        false, false);
+                                        range_key.end_range(), false, false);
 #else
       ret = handle->read_range_first(range_key.begin_range(),
-                                     range_key.end_range(),
-                                     false, false);
+                                     range_key.end_range(), false, false);
 #endif
       if (ret == HA_ERR_KEY_NOT_FOUND || ret == HA_ERR_END_OF_FILE) {
         ret = HA_EXEC_SUCCESS;
       } else if (ret) {
         log_exec_error("handler range first failed, ret: %d, idx_to_use: %d",
-                      ret, idx_to_use);
+                       ret, idx_to_use);
       } else {
         thd->inc_examined_row_count(1);
         found = true;
@@ -515,8 +488,7 @@ int handler_delete_rec(TABLE *my_table) {
 }
 */
 
-MYSQL_LOCK *handler_lock_table(THD *thd,
-                               ExecTable *exec_table,
+MYSQL_LOCK *handler_lock_table(THD *thd, ExecTable *exec_table,
                                thr_lock_type lock_mode) {
   TABLE *my_table = exec_table->table();
   my_table->reginfo.lock_type = lock_mode;
@@ -528,5 +500,4 @@ MYSQL_LOCK *handler_lock_table(THD *thd,
   return thd->lock;
 }
 
-}  // namespace executor
-
+}  // namespace rpc_executor

@@ -101,7 +101,7 @@ typedef struct tcn_node_t {
 
   explicit tcn_node_t() {
     hash = nullptr;
-    list.prev= nullptr;
+    list.prev = nullptr;
     list.next = nullptr;
     trx_id = 0;
     scn = SCN_NULL;

@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include <chrono> // NOLINT(build/c++11)
+#include <chrono>  // NOLINT(build/c++11)
 
 namespace polarx_rpc {
 namespace chrono {
@@ -50,5 +50,5 @@ inline bool is_valid(const Time_point &p) {
   return p.time_since_epoch().count() > 0;
 }
 
-} // namespace chrono
-} // namespace polarx_rpc
+}  // namespace chrono
+}  // namespace polarx_rpc

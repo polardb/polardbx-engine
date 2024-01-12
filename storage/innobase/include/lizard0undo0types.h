@@ -68,7 +68,6 @@ struct trx_undo_t;
      0x80 TRX_UNDO_FLAG_TXN
 */
 
-
 /** Those will exist all kinds of undo log header*/
 /*-------------------------------------------------------------*/
 /** Size of scn within undo log header */
@@ -84,7 +83,7 @@ struct trx_undo_t;
 /** Flag determine that if it is active in UBA */
 /*-------------------------------------------------------------*/
 /**  */
-#define UNDO_ADDR_T_ACTIVE   0
+#define UNDO_ADDR_T_ACTIVE 0
 #define UNDO_ADDR_T_COMMITED 1
 /*-------------------------------------------------------------*/
 
@@ -150,7 +149,6 @@ inline bool operator==(const slot_addr_t &lhs, const slot_addr_t &rhs) {
 
 #define SLOT_POS_UNUSED (SLOT_POS_SPACE_ID + SLOT_WIDTH_SPACE_ID)
 #define SLOT_WIDTH_UNUSED 7
-
 
 /** Undo block address (UBA) */
 struct undo_addr_t {
@@ -339,8 +337,8 @@ struct txn_undo_ptr_t {
   TXN_UNDO_LOG_COMMITED and TXN_UNDO_LOG_PURGED) in TXN header. And also, that's
   mean these TXN headers are existing.
 
-  By contrast, TXN_STATE_REUSE / TXN_STATE_UNDO_CORRUPTED mean that the TXN headers
-  are non-existing.
+  By contrast, TXN_STATE_REUSE / TXN_STATE_UNDO_CORRUPTED mean that the TXN
+  headers are non-existing.
 
   * TXN_STATE_ACTIVE: A txn header is initialized as TXN_STATE_ACTIVE when the
   transaction begins.
@@ -356,9 +354,9 @@ struct txn_undo_ptr_t {
   transactions. These TXN headers are reinited as TXN_STATE_ACTIVE, but for
   those UBAs who also pointed at them, are supposed to be TXN_STATE_REUSE.
 
-  * TXN_STATE_UNDO_CORRUPTED: In fact, TXN_STATE_REUSE also lost their TXN headers,
-  but TXN_STATE_UNDO_CORRUPTED is a abnormal state for some special cases, for
-  example, page corrupt or TXN file unexpectedly removed.
+  * TXN_STATE_UNDO_CORRUPTED: In fact, TXN_STATE_REUSE also lost their TXN
+  headers, but TXN_STATE_UNDO_CORRUPTED is a abnormal state for some special
+  cases, for example, page corrupt or TXN file unexpectedly removed.
 
   So the life cycle of TXN hedaer:
 

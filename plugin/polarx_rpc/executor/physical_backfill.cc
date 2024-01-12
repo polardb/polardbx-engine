@@ -14,7 +14,7 @@
 #include "physical_backfill.h"
 #include "sql/mysqld.h"
 #include "sql/sql_class.h"
-#include "sql/sql_table.h" // build_table_filename
+#include "sql/sql_table.h"  // build_table_filename
 
 #ifndef _WIN32
 
@@ -244,9 +244,10 @@ polarx_rpc::err_t Physical_backfill::write_buffer(
           my_write(file_desc_info.file, (const uchar *)msg.buffer().c_str(),
                    msg.buffer_len(), MYF(MY_WME));
       if (written_len != msg.buffer_len()) {
-        log_exec_error("ER_X_CAN_NOT_WRITE_BUF the written buffer len %ld is "
-                       "not equal to the request len %ld for file:%s",
-                       written_len, msg.buffer_len(), file_path.c_str());
+        log_exec_error(
+            "ER_X_CAN_NOT_WRITE_BUF the written buffer len %ld is "
+            "not equal to the request len %ld for file:%s",
+            written_len, msg.buffer_len(), file_path.c_str());
         m = "the written buffer len ";
         m += written_len;
         m += " is not equal to the request len ";
@@ -309,7 +310,6 @@ polarx_rpc::err_t Physical_backfill::pre_allocate(
         int ret = MyFSHelper::fallocate(file_desc_info.file, 0, 0, size);
 #endif
         if (ret != 0) {
-
           log_exec_error(
               "posix_fallocate(): Failed to preallocate data for file %s , "
               "desired size %llu Operating system error number %d. "
@@ -374,7 +374,6 @@ polarx_rpc::err_t Physical_backfill::clone_file(
       return polarx_rpc::err_t(ER_X_BAD_FILE_INFO, m);
     } else {
       for (int i = 0; i < file_infos.size(); i = i + 2) {
-
         const auto src_file_path = file_infos.Get(i).directory();
         const auto clone_file_path = file_infos.Get(i + 1).directory();
 
@@ -605,8 +604,7 @@ int Physical_backfill::my_copy_interrutable(const char *from, const char *to,
 
     /* sync the destination file */
     if (MyFlags & MY_SYNC) {
-      if (my_sync(to_file, MyFlags))
-        goto err;
+      if (my_sync(to_file, MyFlags)) goto err;
     }
 
     if (my_close(from_file, MyFlags) | my_close(to_file, MyFlags))
@@ -654,8 +652,7 @@ int Physical_backfill::my_copy_interrutable(const char *from, const char *to,
   }
 
 err:
-  if (from_file >= 0)
-    (void)my_close(from_file, MyFlags);
+  if (from_file >= 0) (void)my_close(from_file, MyFlags);
   if (to_file >= 0) {
     (void)my_close(to_file, MyFlags);
     /* attempt to delete the to-file we've partially written */
@@ -663,4 +660,4 @@ err:
   }
   DBUG_RETURN(-1);
 } /* my_copy */
-} // namespace rpc_executor
+}  // namespace rpc_executor

@@ -93,7 +93,7 @@ class Recycle_context_wrapper {
 
   bool is_error() { return m_error_handler.is_error(); }
 
-private:
+ private:
   THD *m_thd;
   MDL_savepoint m_mdl_savepoint;
   Recycle_error_handler m_error_handler;
@@ -140,11 +140,10 @@ class Timestamp_timezone_guard {
   @retval         drop_continue   Should continue to drop table
   @retval         error           Report client error
 */
-Recycle_result
-recycle_base_table(THD *thd, std::set<handlerton *> *post_ddl_htons,
-                   Foreign_key_parents_invalidator *fk_invalidator,
-                   bool only_self, Table_ref *table_list,
-                   HA_CREATE_INFO *original_create_info);
+Recycle_result recycle_base_table(
+    THD *thd, std::set<handlerton *> *post_ddl_htons,
+    Foreign_key_parents_invalidator *fk_invalidator, bool only_self,
+    Table_ref *table_list, HA_CREATE_INFO *original_create_info);
 
 /**
   dbms_recycle.show_tables result

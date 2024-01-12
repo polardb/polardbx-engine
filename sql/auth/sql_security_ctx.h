@@ -34,7 +34,7 @@
 #include "mysql_com.h"    // USERNAME_LENGTH
 #include "sql/auth/auth_common.h"
 #include "sql/auth/partial_revokes.h"
-#include "sql/auth/sql_internal_account.h" //struct ACCOUNT_ATTR
+#include "sql/auth/sql_internal_account.h"  //struct ACCOUNT_ATTR
 #include "sql/sql_const.h"
 #include "sql_string.h"
 

@@ -312,7 +312,7 @@ static inline char *ullstr(longlong value, char *buff) {
 }
 
 #define STRING_WITH_LEN(X) (X), ((sizeof(X) - 1))
-#define C_STRING_WITH_LEN(X) (const_cast<char *>(X)), ((size_t) (sizeof(X) - 1))
+#define C_STRING_WITH_LEN(X) (const_cast<char *>(X)), ((size_t)(sizeof(X) - 1))
 
 /**
   Skip trailing space (ASCII spaces only).
@@ -372,6 +372,5 @@ static inline void lex_cstring_set(LEX_CSTRING *lex_str, const char *c_str) {
 static inline uchar *get_uchar_str(std::string &str) {
   return (uchar *)const_cast<char *>(str.c_str());
 }
-
 
 #endif  // M_STRING_INCLUDED

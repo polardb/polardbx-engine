@@ -302,7 +302,7 @@ static my_time_t get_epoch_time(ulonglong nr) {
   my_longlong_to_datetime_with_warn(nr, &t_mysql_time, MYF(0));
 
   /* Convert MYSQL_TIME to epoch time */
-  return  my_tz_OFFSET0->TIME_to_gmt_sec(&t_mysql_time, &not_used);
+  return my_tz_OFFSET0->TIME_to_gmt_sec(&t_mysql_time, &not_used);
 }
 
 /**
@@ -329,7 +329,7 @@ void Recycle_scheduler::run(THD *thd) {
 
   std::vector<Recycle_show_result *> container;
   MEM_ROOT mem_root(key_memory_recycle, MEM_ROOT_BLOCK_SIZE);
-  while(is_running()) {
+  while (is_running()) {
     thd_proc_info(thd, "Recycle scheduler collect tables");
     ulonglong lc_version = recycle_scheduler_loop_version;
     ulonglong lc_retention = recycle_bin_retention;

@@ -16,12 +16,12 @@ namespace polarx_rpc {
 class Cbuffer final {
   NO_COPY(Cbuffer);
 
-private:
+ private:
   std::unique_ptr<uint8_t[]> buf_;
   size_t pos_;
   size_t cap_;
 
-public:
+ public:
   Cbuffer() : pos_(0), cap_(0) {}
   explicit Cbuffer(size_t sz) : buf_(new uint8_t[sz]), pos_(0), cap_(sz) {}
   Cbuffer(Cbuffer &&another) noexcept
@@ -52,4 +52,4 @@ public:
   inline const size_t &cap() const { return cap_; }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

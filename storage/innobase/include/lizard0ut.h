@@ -35,8 +35,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <stdint.h>
 #include <atomic>
+#include <ctime>  // std::time_t ...
 #include <vector>
-#include <ctime>    // std::time_t ...
 
 /** Number of microseconds read from the system clock */
 typedef int64_t ib_time_system_us_t;

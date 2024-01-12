@@ -180,5 +180,6 @@ class ha_tina : public handler {
   int find_current_row(uchar *buf);
   int chain_append();
 
-  virtual int rotate_table(const char *name, const dd::Table *table_def) override;
+  virtual int rotate_table(const char *name,
+                           const dd::Table *table_def) override;
 };

@@ -211,30 +211,29 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0cleanout.h"
 #include "lizard0dict.h"
 #include "lizard0fsp.h"
-#include "lizard0mon.h"
-#include "lizard0read0read.h"
-#include "lizard0scn.h"
 #include "lizard0gcs.h"
+#include "lizard0gcs0hist.h"
+#include "lizard0gp.h"
+#include "lizard0mon.h"
+#include "lizard0mysql.h"
+#include "lizard0read0read.h"
+#include "lizard0row.h"
+#include "lizard0scn.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
-#include "lizard0row.h"
-#include "lizard0gcs0hist.h"
-#include "lizard0mysql.h"
-#include "lizard0gp.h"
 
 #include "handler/i_s_ext.h"
-#include "srv0file.h"
-#include "lizard0xa.h"
-#include "lizard0tcn.h"
 #include "lizard0ha_innodb.h"
+#include "lizard0tcn.h"
+#include "lizard0xa.h"
 #include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
+#include "srv0file.h"
 
 #include "sql/xa_specification.h"
 
 #include "sys_vars_ext.h"
 
 static char *innodb_version_str = (char *)innodb_version;
-
 
 #ifndef UNIV_HOTBACKUP
 
@@ -1855,7 +1854,7 @@ static handler *innobase_create_handler(handlerton *hton, TABLE_SHARE *table,
 /** Function to increase the record of rows read delete mark in TABLE_STATISTICS
  and EVENTS_STATEMENTS_SUMMARY_BY_DIGEST_SUPPLEMENT.
 @param[in]	rows	number of rows read with delete mark */
-static inline void inc_rows_read_del_mark_record(Stats_data& stats_data,
+static inline void inc_rows_read_del_mark_record(Stats_data &stats_data,
                                                  ulonglong rows) {
   /* increase the record of rows read with delete mark in statistic tables. */
   stats_data.rds_rows_read_del_mark += rows;
@@ -4191,8 +4190,9 @@ static bool innobase_dict_recover(dict_recovery_mode_t dict_recovery_mode,
       log_ddl = ut::new_withkey<Log_DDL>(UT_NEW_THIS_FILE_PSI_KEY);
 
       /** Open innodb_flashback_snapshot table */
-      dict_sys->scn_hist = dd_table_open_on_name(
-          thd, nullptr, SCN_HISTORY_TABLE_FULL_NAME, false, DICT_ERR_IGNORE_NONE);
+      dict_sys->scn_hist =
+          dd_table_open_on_name(thd, nullptr, SCN_HISTORY_TABLE_FULL_NAME,
+                                false, DICT_ERR_IGNORE_NONE);
   }
 
   switch (dict_recovery_mode) {
@@ -5299,12 +5299,11 @@ static int innodb_init(void *p) {
   innobase_hton->unlock_hton_log = innobase_unlock_hton_log;
   innobase_hton->collect_hton_log_info = innobase_collect_hton_log_info;
   innobase_hton->fill_is_table = innobase_fill_i_s_table;
-  innobase_hton->flags = HTON_SUPPORTS_EXTENDED_KEYS |
-                         HTON_SUPPORTS_FOREIGN_KEYS | HTON_SUPPORTS_ATOMIC_DDL |
-                         HTON_CAN_RECREATE | HTON_SUPPORTS_SECONDARY_ENGINE |
-                         HTON_SUPPORTS_TABLE_ENCRYPTION |
-                         HTON_SUPPORTS_GENERATED_INVISIBLE_PK |
-                         HTON_SUPPORTS_RECYCLE_BIN;
+  innobase_hton->flags =
+      HTON_SUPPORTS_EXTENDED_KEYS | HTON_SUPPORTS_FOREIGN_KEYS |
+      HTON_SUPPORTS_ATOMIC_DDL | HTON_CAN_RECREATE |
+      HTON_SUPPORTS_SECONDARY_ENGINE | HTON_SUPPORTS_TABLE_ENCRYPTION |
+      HTON_SUPPORTS_GENERATED_INVISIBLE_PK | HTON_SUPPORTS_RECYCLE_BIN;
 
   innobase_hton->replace_native_transaction_in_thd = innodb_replace_trx_in_thd;
   innobase_hton->file_extensions = ha_innobase_exts;
@@ -6133,7 +6132,6 @@ static int innobase_rollback(handlerton *hton, /*!< in: InnoDB handlerton */
 
   if (rollback_trx ||
       !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
-
     assert_trx_commit_mark_initial(trx);
     if (trx_is_started(trx)) {
       ut_ad(trx->txn_desc.cmmt.gcn == lizard::GCN_NULL);
@@ -6967,8 +6965,7 @@ void innobase_build_v_templ(const TABLE *table, const dict_table_t *ib_table,
                             dict_vcol_templ_t *s_templ,
                             const dict_add_v_col_t *add_v, bool locked,
                             const char *share_tbl_name) {
-  ulint ncol = ib_table->n_cols -
-    DATA_N_SYS_COLS - DATA_N_LIZARD_COLS;
+  ulint ncol = ib_table->n_cols - DATA_N_SYS_COLS - DATA_N_LIZARD_COLS;
   ulint n_v_col = ib_table->n_v_cols;
   bool marker[REC_MAX_N_FIELDS];
 
@@ -16936,7 +16933,7 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
     case DB_AS_OF_TABLE_DEF_CHANGED:
     case DB_SNAPSHOT_TOO_OLD:
     case DB_GP_WAIT_TIMEOUT:
-    /** Flashback query error end. */
+      /** Flashback query error end. */
       *num_rows = HA_POS_ERROR;
       return convert_error_code_to_mysql(ret, 0, m_user_thd);
     case DB_INTERRUPTED:
@@ -17452,8 +17449,7 @@ static void calculate_index_size_stats(const dict_table_t *ib_table,
 inline double index_pct_cached(const dict_index_t *index) {
   const ulint n_leaf = index->stat_n_leaf_pages;
 
-  if (opt_force_index_pct_cached)
-    return 1.0;
+  if (opt_force_index_pct_cached) return 1.0;
 
   if (n_leaf == 0) {
     return (0.0);
@@ -20318,7 +20314,6 @@ static int innobase_xa_prepare(handlerton *hton, /*!< in: InnoDB handlerton */
 
   if (prepare_trx ||
       (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))) {
-
     /* We were instructed to prepare the whole transaction, or
     this is an SQL statement end and autocommit is on */
 
@@ -23534,9 +23529,9 @@ static MYSQL_SYSVAR_BOOL(
     false);
 
 static MYSQL_SYSVAR_ULONG(commit_cleanout_max_rows,
-                          lizard::commit_cleanout_max_rows,
-                          PLUGIN_VAR_OPCMDARG, "max cleanout rows at commit",
-                          NULL, NULL, COMMIT_CLEANOUT_DEFAULT_ROWS, 0,
+                          lizard::commit_cleanout_max_rows, PLUGIN_VAR_OPCMDARG,
+                          "max cleanout rows at commit", NULL, NULL,
+                          COMMIT_CLEANOUT_DEFAULT_ROWS, 0,
                           COMMIT_CLEANOUT_MAX_NUM, 0);
 
 static MYSQL_SYSVAR_ENUM(cleanout_mode, lizard::cleanout_mode,
@@ -23560,8 +23555,8 @@ static MYSQL_SYSVAR_ULONG(txn_undo_page_reuse_max_percent,
                           lizard::txn_undo_page_reuse_max_percent,
                           PLUGIN_VAR_OPCMDARG,
                           "The max percent of txn undo page that can be reused",
-                          NULL, NULL, TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF, 0,
-                          100, 0);
+                          NULL, NULL, TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF, 0, 100,
+                          0);
 
 static MYSQL_SYSVAR_BOOL(scn_history_task_enabled,
                          lizard::srv_scn_history_task_enabled,
@@ -23591,24 +23586,24 @@ static MYSQL_SYSVAR_ULONG(undo_retention,
                           lizard::Undo_retention::retention_time,
                           PLUGIN_VAR_OPCMDARG,
                           "Retention time of undo data in seconds", NULL,
-                          lizard::Undo_retention::on_update_and_start,
-                          0, 0, UINT_MAX32, 0);
+                          lizard::Undo_retention::on_update_and_start, 0, 0,
+                          UINT_MAX32, 0);
 
 static MYSQL_SYSVAR_ULONG(undo_space_supremum_size,
                           lizard::Undo_retention::space_limit,
                           PLUGIN_VAR_OPCMDARG,
                           "Upper limitation size of undo file space in MiB",
                           lizard::Undo_retention::check_limit,
-                          lizard::Undo_retention::on_update,
-                          100 * 1024, 0, UINT_MAX32, 0);
+                          lizard::Undo_retention::on_update, 100 * 1024, 0,
+                          UINT_MAX32, 0);
 
 static MYSQL_SYSVAR_ULONG(undo_space_reserved_size,
                           lizard::Undo_retention::space_reserve,
                           PLUGIN_VAR_OPCMDARG,
                           "Reserved (infimum) size of undo file space in MiB",
                           lizard::Undo_retention::check_reserve,
-                          lizard::Undo_retention::on_update,
-                          0, 0, UINT_MAX32, 0);
+                          lizard::Undo_retention::on_update, 0, 0, UINT_MAX32,
+                          0);
 
 static const char *innodb_tcn_cache_level_names[] = {
     "none",   /* Disable */
@@ -23617,8 +23612,8 @@ static const char *innodb_tcn_cache_level_names[] = {
     NullS};
 
 static TYPELIB innodb_tcn_cache_level_typelib = {
-    array_elements(innodb_tcn_cache_level_names) - 1, "innodb_tcn_cache_level_typelib",
-    innodb_tcn_cache_level_names, NULL};
+    array_elements(innodb_tcn_cache_level_names) - 1,
+    "innodb_tcn_cache_level_typelib", innodb_tcn_cache_level_names, NULL};
 
 static MYSQL_SYSVAR_ENUM(tcn_cache_level, lizard::innodb_tcn_cache_level,
                          PLUGIN_VAR_OPCMDARG,
@@ -23959,7 +23954,8 @@ mysql_declare_plugin(innobase){
     i_s_innodb_ft_index_cache, i_s_innodb_ft_index_table, i_s_innodb_tables,
     i_s_innodb_tablestats, i_s_innodb_indexes, i_s_innodb_tablespaces,
     i_s_innodb_columns, i_s_innodb_virtual, i_s_innodb_cached_indexes,
-    i_s_innodb_session_temp_tablespaces, i_s_innodb_data_file_purge
+    i_s_innodb_session_temp_tablespaces,
+    i_s_innodb_data_file_purge
 
     mysql_declare_plugin_end;
 
@@ -24781,8 +24777,7 @@ void ha_innobase::get_create_info(const char *table, const dd::Table *table_def,
 
     int error = dd_table_open_on_dd_obj(m_thd, client, *table_def, nullptr,
                                         norm_name, dict_table, nullptr);
-    if (error != 0)
-      return;
+    if (error != 0) return;
   } else {
     dict_table = dd_table_open_on_name_in_mem(norm_name, false);
     ut_ad(dict_table->is_temporary());
@@ -24792,7 +24787,7 @@ void ha_innobase::get_create_info(const char *table, const dd::Table *table_def,
   ut_ad(!dict_table->is_temporary());
 
   if (dict_table) {
-    if (dict_table->data_dir_path !=nullptr)
+    if (dict_table->data_dir_path != nullptr)
       create_info->data_file_name =
           strmake_root(m_thd->mem_root, dict_table->data_dir_path,
                        strlen(dict_table->data_dir_path));

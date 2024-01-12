@@ -38,14 +38,21 @@ struct Error_entry {
   unsigned int error_index;
 
   Error_entry(const char *name, int error_code, const char *description)
-      : name(name), error_code(error_code), description(description),
-        odbc_state(nullptr), jdbc_state(nullptr), error_index(0) {}
+      : name(name),
+        error_code(error_code),
+        description(description),
+        odbc_state(nullptr),
+        jdbc_state(nullptr),
+        error_index(0) {}
 
   Error_entry(const char *name, int error_code, const char *description,
               const char *odbc_state, const char *jdbc_state,
               unsigned int error_index)
-      : name(name), error_code(error_code), description(description),
-        odbc_state(odbc_state), jdbc_state(jdbc_state),
+      : name(name),
+        error_code(error_code),
+        description(description),
+        odbc_state(odbc_state),
+        jdbc_state(jdbc_state),
         error_index(error_index) {}
 };
 

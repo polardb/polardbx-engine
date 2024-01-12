@@ -21,11 +21,11 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/ccl/ccl_common.h"
+#include <boost/algorithm/string/case_conv.hpp>
 #include "my_inttypes.h"
 #include "my_murmur3.h"                 // my_murmur3_32
 #include "my_sys.h"                     // MY_WME, MY_FATALERROR
 #include "mysql/service_mysql_alloc.h"  // my_malloc
-#include <boost/algorithm/string/case_conv.hpp>
 
 namespace im {
 

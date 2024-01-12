@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "buf0types.h"
 #include "data0type.h"
 #include "dict0types.h"
+#include "lizard0data0types.h"
 #include "mach0data.h"
 #include "mem0mem.h"
 #include "mtr0types.h"
@@ -51,7 +52,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "univ.i"
 #include "ut0crc32.h"
-#include "lizard0data0types.h"
 
 /* Compression level to be used by zlib. Settable by user. */
 extern uint page_zip_level;
@@ -62,7 +62,7 @@ constexpr uint32_t DEFAULT_COMPRESSION_LEVEL = 6;
 #define PAGE_ZIP_START PAGE_NEW_SUPREMUM_END
 /** Size of trx related fields: TRX_ID, ROLL_PTR, SCN_ID and UNDO_PTR */
 constexpr uint32_t PAGE_ZIP_TRX_FIELDS_SIZE =
-  (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN + DATA_LIZARD_TOTAL_LEN);
+    (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN + DATA_LIZARD_TOTAL_LEN);
 /** Predefine the sum of DIR_SLOT, TRX_ID & ROLL_PTR */
 constexpr uint32_t PAGE_ZIP_CLUST_LEAF_SLOT_SIZE =
     PAGE_ZIP_DIR_SLOT_SIZE + PAGE_ZIP_TRX_FIELDS_SIZE;

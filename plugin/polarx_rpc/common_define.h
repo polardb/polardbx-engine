@@ -8,102 +8,102 @@
 // Disable/default class copy & move.
 //
 
-#define NO_CONSTRUCTOR(_class)                                                 \
-public:                                                                        \
-  _class() = delete;                                                           \
-                                                                               \
-private:
+#define NO_CONSTRUCTOR(_class) \
+ public:                       \
+  _class() = delete;           \
+                               \
+ private:
 
-#define NO_COPY_MOVE(_class)                                                   \
-public:                                                                        \
-  _class(const _class &another) = delete;                                      \
-  _class(_class &&another) = delete;                                           \
-  _class &operator=(const _class &another) = delete;                           \
-  _class &operator=(_class &&another) = delete;                                \
-                                                                               \
-private:
+#define NO_COPY_MOVE(_class)                         \
+ public:                                             \
+  _class(const _class &another) = delete;            \
+  _class(_class &&another) = delete;                 \
+  _class &operator=(const _class &another) = delete; \
+  _class &operator=(_class &&another) = delete;      \
+                                                     \
+ private:
 
-#define NO_COPY(_class)                                                        \
-public:                                                                        \
-  _class(const _class &another) = delete;                                      \
-  _class &operator=(const _class &another) = delete;                           \
-                                                                               \
-private:
+#define NO_COPY(_class)                              \
+ public:                                             \
+  _class(const _class &another) = delete;            \
+  _class &operator=(const _class &another) = delete; \
+                                                     \
+ private:
 
-#define NO_MOVE(_class)                                                        \
-public:                                                                        \
-  _class(_class &&another) = delete;                                           \
-  _class &operator=(_class &&another) = delete;                                \
-                                                                               \
-private:
+#define NO_MOVE(_class)                         \
+ public:                                        \
+  _class(_class &&another) = delete;            \
+  _class &operator=(_class &&another) = delete; \
+                                                \
+ private:
 
-#define DEFAULT_COPY_MOVE(_class)                                              \
-public:                                                                        \
-  _class(const _class &another) = default;                                     \
-  _class(_class &&another) = default;                                          \
-  _class &operator=(const _class &another) = default;                          \
-  _class &operator=(_class &&another) = default;                               \
-                                                                               \
-private:
+#define DEFAULT_COPY_MOVE(_class)                     \
+ public:                                              \
+  _class(const _class &another) = default;            \
+  _class(_class &&another) = default;                 \
+  _class &operator=(const _class &another) = default; \
+  _class &operator=(_class &&another) = default;      \
+                                                      \
+ private:
 
-#define DEFAULT_COPY(_class)                                                   \
-public:                                                                        \
-  _class(const _class &another) = default;                                     \
-  _class &operator=(const _class &another) = default;                          \
-                                                                               \
-private:
+#define DEFAULT_COPY(_class)                          \
+ public:                                              \
+  _class(const _class &another) = default;            \
+  _class &operator=(const _class &another) = default; \
+                                                      \
+ private:
 
-#define DEFAULT_MOVE(_class)                                                   \
-public:                                                                        \
-  _class(_class &&another) = default;                                          \
-  _class &operator=(_class &&another) = default;                               \
-                                                                               \
-private:
+#define DEFAULT_MOVE(_class)                     \
+ public:                                         \
+  _class(_class &&another) = default;            \
+  _class &operator=(_class &&another) = default; \
+                                                 \
+ private:
 
 //
 // Platform.
 //
 
 #if defined(__x86_64__) || defined(_M_X64)
-#  define IS_X64 1
+#define IS_X64 1
 #else
-#  define IS_X64 0
+#define IS_X64 0
 #endif
 
 #if defined(__arm__)
-#  define IS_ARM 1
+#define IS_ARM 1
 #else
-#  define IS_ARM 0
+#define IS_ARM 0
 #endif
 
 #if defined(__aarch64__)
-#  define IS_AARCH64 1
+#define IS_AARCH64 1
 #else
-#  define IS_AARCH64 0
+#define IS_AARCH64 0
 #endif
 
 #if defined(__powerpc64__)
-#  define IS_PPC64 1
+#define IS_PPC64 1
 #else
-#  define IS_PPC64 0
+#define IS_PPC64 0
 #endif
 
 #if defined(mips) || defined(__mips__) || defined(__mips)
-#  define IS_MIPS 1
+#define IS_MIPS 1
 #else
-#  define IS_MIPS 0
+#define IS_MIPS 0
 #endif
 
 #if defined(__hppa__)
-#  define IS_RISCV 1
+#define IS_RISCV 1
 #else
-#  define IS_RISCV 0
+#define IS_RISCV 0
 #endif
 
 #if defined(__s390x__)
-#  define IS_S390X 1
+#define IS_S390X 1
 #else
-#  define IS_S390X 0
+#define IS_S390X 0
 #endif
 
 //
@@ -112,11 +112,11 @@ private:
 
 /**
  * Notes:
- * Starting from Intel's Sandy Bridge, spatial prefetcher is now pulling pairs of 64-byte cache
- * lines at a time, so we have to align to 128 bytes rather than 64.
- * ARM's big.LITTLE architecture has asymmetric cores and "big" cores have 128-byte cache line size.
- * powerpc64 has 128-byte cache line size.
- * arm, mips, mips64, and riscv64 have 32-byte cache line size.
+ * Starting from Intel's Sandy Bridge, spatial prefetcher is now pulling pairs
+ * of 64-byte cache lines at a time, so we have to align to 128 bytes rather
+ * than 64. ARM's big.LITTLE architecture has asymmetric cores and "big" cores
+ * have 128-byte cache line size. powerpc64 has 128-byte cache line size. arm,
+ * mips, mips64, and riscv64 have 32-byte cache line size.
  */
 
 #if IS_X64
@@ -138,37 +138,32 @@ static constexpr size_t CACHE_LINE_FETCH_ALIGN = CACHE_LINE_SIZE;
 
 #if defined(_MSC_VER)
 
-#  define ALIGNED_(x) __declspec(align(x))
-#  define UNUSED
+#define ALIGNED_(x) __declspec(align(x))
+#define UNUSED
 
 #elif defined(__GNUC__)
 
-#  define ALIGNED_(x) __attribute__((aligned(x)))
-#  define UNUSED_ __attribute__((unused))
+#define ALIGNED_(x) __attribute__((aligned(x)))
+#define UNUSED_ __attribute__((unused))
 
 #else
-#  error "Unknown compiler."
+#error "Unknown compiler."
 #endif
 
-template<class T>
+template <class T>
 #if IS_X64
-struct ALIGNED_(128) cache_padded_t final { /// hard code here for GCC 4.x
+struct ALIGNED_(128) cache_padded_t final {  /// hard code here for GCC 4.x
 #else
 struct ALIGNED_(CACHE_LINE_FETCH_ALIGN) cache_padded_t final {
 #endif
   T v;
 
-  template<class ...Args>
-  explicit cache_padded_t(Args &&...args)
-      :v(std::forward<Args>(args)...) {}
+  template <class... Args>
+  explicit cache_padded_t(Args &&...args) : v(std::forward<Args>(args)...) {}
 
-  inline const T &operator()() const {
-    return v;
-  }
+  inline const T &operator()() const { return v; }
 
-  inline T &operator()() {
-    return v;
-  }
+  inline T &operator()() { return v; }
 };
 
 #define ALIGNED_TYPE(t, x) typedef t ALIGNED_(x)
@@ -183,7 +178,8 @@ struct ALIGNED_(CACHE_LINE_FETCH_ALIGN) cache_padded_t final {
  */
 
 // test cache padded
-static_assert(0 == sizeof(cache_padded_t<int>) % CACHE_LINE_FETCH_ALIGN, "Bad cache_padded_t");
+static_assert(0 == sizeof(cache_padded_t<int>) % CACHE_LINE_FETCH_ALIGN,
+              "Bad cache_padded_t");
 
 //
 // Likely.

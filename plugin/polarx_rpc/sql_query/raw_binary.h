@@ -10,17 +10,17 @@
 namespace polarx_rpc {
 
 class RawBinary {
-private:
+ private:
   std::string value_;
 
-public:
+ public:
   explicit RawBinary(std::string val) : value_(std::move(val)) {}
 
   const std::string &get_value() const { return value_; }
 
   std::string to_hex_string() const {
     std::string buf;
-    buf.resize(3 + value_.length() * 2); // x'{hex string}'
+    buf.resize(3 + value_.length() * 2);  // x'{hex string}'
     buf[0] = 'x';
     buf[1] = '\'';
     auto idx = 2;
@@ -35,4 +35,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

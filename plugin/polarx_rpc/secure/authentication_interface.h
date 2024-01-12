@@ -37,7 +37,7 @@
 namespace polarx_rpc {
 
 class Authentication_info {
-public:
+ public:
   std::string m_tried_account_name;
   bool m_was_using_password{false};
 
@@ -55,7 +55,7 @@ public:
 };
 
 class Authentication_interface {
-public:
+ public:
   enum Status { Ongoing, Succeeded, Failed, Error };
 
   struct Response {
@@ -69,8 +69,8 @@ public:
 
   Authentication_interface() = default;
   Authentication_interface(const Authentication_interface &) = delete;
-  Authentication_interface &
-  operator=(const Authentication_interface &) = delete;
+  Authentication_interface &operator=(const Authentication_interface &) =
+      delete;
 
   virtual ~Authentication_interface() = default;
 
@@ -89,4 +89,4 @@ public:
 
 typedef std::unique_ptr<Authentication_interface> Authentication_interface_ptr;
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

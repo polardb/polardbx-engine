@@ -38,14 +38,14 @@ namespace polarx_rpc {
   Class for doing account verification for the challenge response authentication
 */
 class Challenge_response_verification : public Account_verification_interface {
-public:
+ public:
   explicit Challenge_response_verification(
       SHA256_password_cache_interface *cache)
       : k_salt(generate_salt()), m_sha256_password_cache(cache) {}
 
   const std::string &get_salt() const override { return k_salt; }
 
-protected:
+ protected:
   const std::string k_salt;
   SHA256_password_cache_interface *m_sha256_password_cache;
 
@@ -56,4 +56,4 @@ protected:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

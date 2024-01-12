@@ -538,9 +538,9 @@ inline my_off_t my_b_get_pos_in_file(const IO_CACHE *info) {
 /* tell write offset in the SEQ_APPEND cache */
 int my_b_copy_to_file(IO_CACHE *cache, FILE *file);
 
-//TODO @yanhua, SEQ_READ_APPEND unused, so these ara unnecesary
-my_off_t my_b_append_tell(IO_CACHE* info);
-my_off_t my_b_safe_tell(IO_CACHE* info); /* picks the correct tell() */
+// TODO @yanhua, SEQ_READ_APPEND unused, so these ara unnecesary
+my_off_t my_b_append_tell(IO_CACHE *info);
+my_off_t my_b_safe_tell(IO_CACHE *info); /* picks the correct tell() */
 
 inline size_t my_b_bytes_in_cache(const IO_CACHE *info) {
   return *info->current_end - *info->current_pos;

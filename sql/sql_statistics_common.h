@@ -20,12 +20,11 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef SQL_STATISTICS_COMMON_INCLUDED
 #define SQL_STATISTICS_COMMON_INCLUDED
 
-#include "sql/sql_const.h"  // MAX_KEY
 #include "my_inttypes.h"
+#include "sql/sql_const.h"  // MAX_KEY
 
 struct ST_FIELD_INFO;
 class THD;
@@ -87,4 +86,3 @@ typedef struct Stats_data {
 } Stats_data;
 
 #endif
-

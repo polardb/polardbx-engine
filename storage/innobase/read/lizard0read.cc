@@ -30,15 +30,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 3/30/2020 zanye.zjy
  *******************************************************/
 
-#include "univ.i"
-#include "trx0sys.h"
 #include "clone0clone.h"
 #include "row0mysql.h"
+#include "trx0sys.h"
+#include "univ.i"
 
+#include "lizard0gcs.h"
 #include "lizard0read0read.h"
 #include "lizard0read0types.h"
 #include "lizard0scn.h"
-#include "lizard0gcs.h"
 #include "lizard0undo.h"
 
 #include "sql/lizard/lizard_snapshot.h"
@@ -399,22 +399,21 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
   @retval     whether the vision sees the modifications of id.
               True if visible
 */
-bool Vision::modifications_visible(txn_rec_t *txn_rec,
-                                   const table_name_t &name,
+bool Vision::modifications_visible(txn_rec_t *txn_rec, const table_name_t &name,
                                    bool check_consistent) const {
   ut_ad(txn_rec);
   ut_ad(txn_rec->trx_id > 0 && txn_rec->trx_id < TRX_ID_MAX);
 
   return modifications_visible_mvcc(txn_rec, name, check_consistent);
 }
-  /**
-    Whether Vision can see the target trx id,
-    if the target trx id is less than the least
-    active trx, then it will see.
+/**
+  Whether Vision can see the target trx id,
+  if the target trx id is less than the least
+  active trx, then it will see.
 
-    @param       id		transaction to check
-    @retval      true  if view sees transaction id
-  */
+  @param       id		transaction to check
+  @retval      true  if view sees transaction id
+*/
 bool Vision::sees(trx_id_t id) const {
   ut_ad(id < TRX_ID_MAX && m_creator_trx_id < TRX_ID_MAX);
   ut_ad(m_list_idx != VISION_LIST_IDX_NULL);

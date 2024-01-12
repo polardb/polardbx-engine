@@ -539,7 +539,8 @@ extern "C" bool myfunc_int_init(UDF_INIT *, UDF_ARGS *, char *) {
   or 1 if no arguments have been given
 */
 
-extern "C" bool sequence_alias_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
+extern "C" bool sequence_alias_init(UDF_INIT *initid, UDF_ARGS *args,
+                                    char *message) {
   if (args->arg_count > 1) {
     strcpy(message, "This function takes none or 1 argument");
     return true;
@@ -564,8 +565,8 @@ extern "C" void sequence_alias_deinit(UDF_INIT *initid) {
   if (initid->ptr) free(initid->ptr);
 }
 
-extern "C" long long sequence_alias(UDF_INIT *initid, UDF_ARGS *args, unsigned char *,
-                              unsigned char *) {
+extern "C" long long sequence_alias(UDF_INIT *initid, UDF_ARGS *args,
+                                    unsigned char *, unsigned char *) {
   unsigned long long val = 0;
   if (args->arg_count) val = *((long long *)args->args[0]);
   return ++*((long long *)initid->ptr) + val;

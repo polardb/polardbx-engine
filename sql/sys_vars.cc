@@ -136,9 +136,9 @@
 #include "sql/transaction.h"  // trans_commit_stmt
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
+#include "sys_vars_ext.h"
 #include "template_utils.h"  // pointer_cast
 #include "thr_lock.h"
-#include "sys_vars_ext.h"
 #ifdef _WIN32
 #include "sql/named_pipe.h"
 #endif
@@ -153,12 +153,11 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
 
-#include "sql/bl_consensus_log.h"            // ConsensusLogManager and alisql::Paxos
-#include "sql/appliedindex_checker.h"         // AppliedIndexChecker
-#include "sql/rpl_replica.h"              // rotate_relay_log
+#include "sql/appliedindex_checker.h"  // AppliedIndexChecker
+#include "sql/bl_consensus_log.h"      // ConsensusLogManager and alisql::Paxos
 #include "sql/consensus_log_manager.h"
 #include "sql/polarx_proc/changeset_manager.h"
-
+#include "sql/rpl_replica.h"  // rotate_relay_log
 
 static constexpr const unsigned long DEFAULT_ERROR_COUNT{1024};
 static constexpr const unsigned long DEFAULT_SORT_MEMORY{256UL * 1024UL};
@@ -1619,10 +1618,9 @@ static bool repository_check(sys_var *self, THD *thd, set_var *var,
   mi = channel_map.get_default_channel_mi();
 
   mysql_mutex_lock(&mi->rli->data_lock);
-  if (!mi->rli->inited && thread_mask == SLAVE_THD_SQL)
-  {
+  if (!mi->rli->inited && thread_mask == SLAVE_THD_SQL) {
     mysql_mutex_unlock(&mi->rli->data_lock);
-    msg= "relay_log_info is not inited";
+    msg = "relay_log_info is not inited";
     my_error(ER_CHANGE_RPL_INFO_REPOSITORY_FAILURE, MYF(0), msg);
     channel_map.unlock();
     return true;
@@ -4719,29 +4717,28 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
   // Rotate
   {
     consensus_log_manager.lock_consensus(true);
-      uint64 binlog_status = consensus_log_manager.get_status();
-      if (binlog_status == BINLOG_WORKING) {
-        bool dont_care= false;
-        if (mysql_bin_log.rotate(true, &dont_care)) {
-          consensus_log_manager.unlock_consensus();
-          goto err;
-        }
-      } else {
-        Relay_log_info *rli_info = consensus_log_manager.get_relay_log_info();
-        Master_info *mi = rli_info->mi;
-        mysql_mutex_lock(&mi->data_lock);
-        if (rotate_relay_log(rli_info->mi))
-        {
-          mysql_mutex_unlock(&mi->data_lock);
-          consensus_log_manager.unlock_consensus();
-          my_error(ER_CANT_SET_GTID_MODE, MYF(0),
-               Gtid_mode::to_string(new_gtid_mode),
-               "rotate relay log failed.");
-          goto err;
-        }
-        mysql_mutex_unlock(&mi->data_lock);
+    uint64 binlog_status = consensus_log_manager.get_status();
+    if (binlog_status == BINLOG_WORKING) {
+      bool dont_care = false;
+      if (mysql_bin_log.rotate(true, &dont_care)) {
+        consensus_log_manager.unlock_consensus();
+        goto err;
       }
-      consensus_log_manager.unlock_consensus();
+    } else {
+      Relay_log_info *rli_info = consensus_log_manager.get_relay_log_info();
+      Master_info *mi = rli_info->mi;
+      mysql_mutex_lock(&mi->data_lock);
+      if (rotate_relay_log(rli_info->mi)) {
+        mysql_mutex_unlock(&mi->data_lock);
+        consensus_log_manager.unlock_consensus();
+        my_error(ER_CANT_SET_GTID_MODE, MYF(0),
+                 Gtid_mode::to_string(new_gtid_mode),
+                 "rotate relay log failed.");
+        goto err;
+      }
+      mysql_mutex_unlock(&mi->data_lock);
+    }
+    consensus_log_manager.unlock_consensus();
   }
 
 end:
@@ -7745,15 +7742,14 @@ static bool handle_enable_changeset(sys_var *, THD *, enum_var_type) {
   if (!opt_enable_changeset) {
     im::gChangesetManager.erase_all_changeset();
   }
-	return false;
+  return false;
 }
 
 static Sys_var_bool Sys_enable_changeset(
-       "enable_changeset",
-       "Whether open the polarx changeset proc",
-       GLOBAL_VAR(opt_enable_changeset), CMD_LINE(OPT_ARG), DEFAULT(true),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(handle_enable_changeset)
-);
+    "enable_changeset", "Whether open the polarx changeset proc",
+    GLOBAL_VAR(opt_enable_changeset), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(handle_enable_changeset));
 
-#include "sys_vars_ext.cc"
 #include "sys_vars_consensus.cc"
+#include "sys_vars_ext.cc"

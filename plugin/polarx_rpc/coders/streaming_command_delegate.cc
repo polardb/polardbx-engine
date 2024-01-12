@@ -28,9 +28,11 @@ namespace polarx_rpc {
 CstreamingCommandDelegate::CstreamingCommandDelegate(
     CsessionBase &session, CpolarxEncoder &encoder,
     std::function<bool()> &&flush, bool compact_metadata, ulong capabilities)
-    : session_(session), encoder_(encoder),
+    : session_(session),
+      encoder_(encoder),
       flush_(std::forward<std::function<bool()>>(flush)),
-      compact_metadata_(compact_metadata), capabilities_(capabilities),
+      compact_metadata_(compact_metadata),
+      capabilities_(capabilities),
       row_enc_(&encoder.message_encoder()),
       chunk_enc_(&encoder.message_encoder()) {}
 
@@ -72,8 +74,7 @@ int CstreamingCommandDelegate::start_result_metadata(
     uint num_cols, uint flags, const CHARSET_INFO *result_cs) {
   auto iret =
       CcommandDelegate::start_result_metadata(num_cols, flags, result_cs);
-  if (iret != 0)
-    return iret;
+  if (iret != 0) return iret;
 
   sent_result_ = true;
   result_cs_ = result_cs;
@@ -83,8 +84,7 @@ int CstreamingCommandDelegate::start_result_metadata(
 int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
                                               const CHARSET_INFO *charset) {
   auto iret = CcommandDelegate::field_metadata(field, charset);
-  if (iret != 0)
-    return iret;
+  if (iret != 0) return iret;
 
   /// build protobuf inplace
   PolarXRPC::Resultset::ColumnMetaData_FieldType xtype{};
@@ -101,14 +101,11 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
   enum_field_types type = field->type;
   uint32_t flags = 0;
 
-  if (field->flags & NOT_NULL_FLAG)
-    flags |= POLARX_COLUMN_FLAGS_NOT_NULL;
+  if (field->flags & NOT_NULL_FLAG) flags |= POLARX_COLUMN_FLAGS_NOT_NULL;
 
-  if (field->flags & PRI_KEY_FLAG)
-    flags |= POLARX_COLUMN_FLAGS_PRIMARY_KEY;
+  if (field->flags & PRI_KEY_FLAG) flags |= POLARX_COLUMN_FLAGS_PRIMARY_KEY;
 
-  if (field->flags & UNIQUE_KEY_FLAG)
-    flags |= POLARX_COLUMN_FLAGS_UNIQUE_KEY;
+  if (field->flags & UNIQUE_KEY_FLAG) flags |= POLARX_COLUMN_FLAGS_UNIQUE_KEY;
 
   if (field->flags & MULTIPLE_KEY_FLAG)
     flags |= POLARX_COLUMN_FLAGS_MULTIPLE_KEY;
@@ -128,154 +125,154 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
   collation_ptr = &collation;
 
   switch (type) {
-  case MYSQL_TYPE_TINY:
-  case MYSQL_TYPE_SHORT:
-  case MYSQL_TYPE_INT24:
-  case MYSQL_TYPE_LONG:
-  case MYSQL_TYPE_LONGLONG:
-    length = field->length;
-    length_ptr = &length;
+    case MYSQL_TYPE_TINY:
+    case MYSQL_TYPE_SHORT:
+    case MYSQL_TYPE_INT24:
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_LONGLONG:
+      length = field->length;
+      length_ptr = &length;
 
-    if (field->flags & UNSIGNED_FLAG)
-      xtype = PolarXRPC::Resultset::ColumnMetaData::UINT;
-    else
-      xtype = PolarXRPC::Resultset::ColumnMetaData::SINT;
+      if (field->flags & UNSIGNED_FLAG)
+        xtype = PolarXRPC::Resultset::ColumnMetaData::UINT;
+      else
+        xtype = PolarXRPC::Resultset::ColumnMetaData::SINT;
 
-    if (field->flags & ZEROFILL_FLAG)
-      flags |= POLARX_COLUMN_FLAGS_UINT_ZEROFILL;
-    break;
+      if (field->flags & ZEROFILL_FLAG)
+        flags |= POLARX_COLUMN_FLAGS_UINT_ZEROFILL;
+      break;
 
-  case MYSQL_TYPE_FLOAT:
-    if (field->flags & UNSIGNED_FLAG)
-      flags |= POLARX_COLUMN_FLAGS_FLOAT_UNSIGNED;
-    decimals = field->decimals;
-    decimals_ptr = &decimals;
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::FLOAT;
-    break;
-
-  case MYSQL_TYPE_DOUBLE:
-    if (field->flags & UNSIGNED_FLAG)
-      flags |= POLARX_COLUMN_FLAGS_DOUBLE_UNSIGNED;
-    decimals = field->decimals;
-    decimals_ptr = &decimals;
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::DOUBLE;
-    break;
-
-  case MYSQL_TYPE_DECIMAL:
-  case MYSQL_TYPE_NEWDECIMAL:
-    if (field->flags & UNSIGNED_FLAG)
-      flags |= POLARX_COLUMN_FLAGS_DECIMAL_UNSIGNED;
-    decimals = field->decimals;
-    decimals_ptr = &decimals;
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::DECIMAL;
-    break;
-
-  case MYSQL_TYPE_STRING:
-    is_string = true;
-    flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
-    length = field->length;
-    length_ptr = &length;
-    break;
-
-  case MYSQL_TYPE_SET:
-    is_string = true;
-    flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::SET;
-    length = field->length;
-    length_ptr = &length;
-    break;
-
-  case MYSQL_TYPE_TINY_BLOB:
-  case MYSQL_TYPE_BLOB:
-  case MYSQL_TYPE_MEDIUM_BLOB:
-  case MYSQL_TYPE_LONG_BLOB:
-  case MYSQL_TYPE_VARCHAR:
-  case MYSQL_TYPE_VAR_STRING:
-    is_string = true;
-    if (field->decimals != 0) {
+    case MYSQL_TYPE_FLOAT:
+      if (field->flags & UNSIGNED_FLAG)
+        flags |= POLARX_COLUMN_FLAGS_FLOAT_UNSIGNED;
       decimals = field->decimals;
       decimals_ptr = &decimals;
-    }
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
-    break;
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::FLOAT;
+      break;
 
-  case MYSQL_TYPE_JSON:
-    is_string = true;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
-    content_type = POLARX_COLUMN_BYTES_CONTENT_TYPE_JSON;
-    content_type_ptr = &content_type;
-    length = field->length;
-    length_ptr = &length;
-    break;
+    case MYSQL_TYPE_DOUBLE:
+      if (field->flags & UNSIGNED_FLAG)
+        flags |= POLARX_COLUMN_FLAGS_DOUBLE_UNSIGNED;
+      decimals = field->decimals;
+      decimals_ptr = &decimals;
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::DOUBLE;
+      break;
 
-  case MYSQL_TYPE_GEOMETRY:
-    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
-    content_type = POLARX_COLUMN_BYTES_CONTENT_TYPE_GEOMETRY;
-    content_type_ptr = &content_type;
-    break;
+    case MYSQL_TYPE_DECIMAL:
+    case MYSQL_TYPE_NEWDECIMAL:
+      if (field->flags & UNSIGNED_FLAG)
+        flags |= POLARX_COLUMN_FLAGS_DECIMAL_UNSIGNED;
+      decimals = field->decimals;
+      decimals_ptr = &decimals;
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::DECIMAL;
+      break;
 
-  case MYSQL_TYPE_TIME:
-  case MYSQL_TYPE_TIME2:
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::TIME;
-    decimals = field->decimals;
-    decimals_ptr = &decimals;
-    break;
+    case MYSQL_TYPE_STRING:
+      is_string = true;
+      flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
+      length = field->length;
+      length_ptr = &length;
+      break;
 
-  case MYSQL_TYPE_TIMESTAMP:
-  case MYSQL_TYPE_TIMESTAMP2:
-    flags |= POLARX_COLUMN_FLAGS_DATETIME_TIMESTAMP;
-    // fall through
+    case MYSQL_TYPE_SET:
+      is_string = true;
+      flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::SET;
+      length = field->length;
+      length_ptr = &length;
+      break;
+
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_VAR_STRING:
+      is_string = true;
+      if (field->decimals != 0) {
+        decimals = field->decimals;
+        decimals_ptr = &decimals;
+      }
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
+      break;
+
+    case MYSQL_TYPE_JSON:
+      is_string = true;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
+      content_type = POLARX_COLUMN_BYTES_CONTENT_TYPE_JSON;
+      content_type_ptr = &content_type;
+      length = field->length;
+      length_ptr = &length;
+      break;
+
+    case MYSQL_TYPE_GEOMETRY:
+      xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
+      content_type = POLARX_COLUMN_BYTES_CONTENT_TYPE_GEOMETRY;
+      content_type_ptr = &content_type;
+      break;
+
+    case MYSQL_TYPE_TIME:
+    case MYSQL_TYPE_TIME2:
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::TIME;
+      decimals = field->decimals;
+      decimals_ptr = &decimals;
+      break;
+
+    case MYSQL_TYPE_TIMESTAMP:
+    case MYSQL_TYPE_TIMESTAMP2:
+      flags |= POLARX_COLUMN_FLAGS_DATETIME_TIMESTAMP;
+      // fall through
 #if __cplusplus >= 201703L
-    [[fallthrough]];
+      [[fallthrough]];
 #endif
-  case MYSQL_TYPE_NEWDATE:
-  case MYSQL_TYPE_DATE:
-  case MYSQL_TYPE_DATETIME:
-  case MYSQL_TYPE_DATETIME2:
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::DATETIME;
-    decimals = field->decimals;
-    decimals_ptr = &decimals;
-    break;
+    case MYSQL_TYPE_NEWDATE:
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_DATETIME2:
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::DATETIME;
+      decimals = field->decimals;
+      decimals_ptr = &decimals;
+      break;
 
-  case MYSQL_TYPE_YEAR:
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::UINT;
-    break;
+    case MYSQL_TYPE_YEAR:
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::UINT;
+      break;
 
-  case MYSQL_TYPE_ENUM:
-    is_string = true;
-    flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::ENUM;
-    length = field->length;
-    length_ptr = &length;
-    break;
+    case MYSQL_TYPE_ENUM:
+      is_string = true;
+      flags |= POLARX_COLUMN_FLAGS_BYTES_RIGHTPAD;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::ENUM;
+      length = field->length;
+      length_ptr = &length;
+      break;
 
-  case MYSQL_TYPE_NULL:
-    xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
-    break;
+    case MYSQL_TYPE_NULL:
+      xtype = PolarXRPC::Resultset::ColumnMetaData::BYTES;
+      break;
 
-  case MYSQL_TYPE_BIT:
-    length = field->length;
-    length_ptr = &length;
-    xtype = PolarXRPC::Resultset::ColumnMetaData::BIT;
-    break;
+    case MYSQL_TYPE_BIT:
+      length = field->length;
+      length_ptr = &length;
+      xtype = PolarXRPC::Resultset::ColumnMetaData::BIT;
+      break;
 
-  default:
-    assert(false); // Shouldn't happen
+    default:
+      assert(false);  // Shouldn't happen
   }
 
   /// fix length
@@ -366,18 +363,16 @@ bool CstreamingCommandDelegate::send_row() {
     msg_enc().encode_token_done();
     if (trigger_on_message(::PolarXRPC::ServerMessages::RESULTSET_TOKEN_DONE) !=
         0)
-      return false; /// IO error
+      return false;  /// IO error
     /// now do wait
-    if (!flow_control_->flow_wait())
-      return false; /// IO error
+    if (!flow_control_->flow_wait()) return false;  /// IO error
   }
 
   return 0 == trigger_on_message(PolarXRPC::ServerMessages::RESULTSET_ROW);
 }
 
 int CstreamingCommandDelegate::end_row() {
-  if (streaming_metadata_)
-    return 0;
+  if (streaming_metadata_) return 0;
 
   if (send_row()) {
     // TODO warnings
@@ -504,28 +499,13 @@ int CstreamingCommandDelegate::get_string(const char *const value,
   const unsigned int flags = field_types_[field_idx].flags;
 
   switch (type) {
-  case MYSQL_TYPE_NEWDECIMAL:
-    if (chunk_result_)
-      chunk_enc_.field_decimal(value, length);
-    else
-      row_enc_.field_decimal(value, length);
-    break;
-  case MYSQL_TYPE_SET: {
-    CconvertIfNecessary conv(result_cs_, value, length, value_cs);
-    if (chunk_result_)
-      chunk_enc_.field_set(conv.get_ptr(), conv.get_length());
-    else
-      row_enc_.field_set(conv.get_ptr(), conv.get_length());
-    break;
-  }
-  case MYSQL_TYPE_BIT:
-    if (chunk_result_)
-      chunk_enc_.field_bit(value, length);
-    else
-      row_enc_.field_bit(value, length);
-    break;
-  case MYSQL_TYPE_STRING:
-    if ((flags & SET_FLAG) != 0) {
+    case MYSQL_TYPE_NEWDECIMAL:
+      if (chunk_result_)
+        chunk_enc_.field_decimal(value, length);
+      else
+        row_enc_.field_decimal(value, length);
+      break;
+    case MYSQL_TYPE_SET: {
       CconvertIfNecessary conv(result_cs_, value, length, value_cs);
       if (chunk_result_)
         chunk_enc_.field_set(conv.get_ptr(), conv.get_length());
@@ -533,18 +513,33 @@ int CstreamingCommandDelegate::get_string(const char *const value,
         row_enc_.field_set(conv.get_ptr(), conv.get_length());
       break;
     }
-    // fall through
+    case MYSQL_TYPE_BIT:
+      if (chunk_result_)
+        chunk_enc_.field_bit(value, length);
+      else
+        row_enc_.field_bit(value, length);
+      break;
+    case MYSQL_TYPE_STRING:
+      if ((flags & SET_FLAG) != 0) {
+        CconvertIfNecessary conv(result_cs_, value, length, value_cs);
+        if (chunk_result_)
+          chunk_enc_.field_set(conv.get_ptr(), conv.get_length());
+        else
+          row_enc_.field_set(conv.get_ptr(), conv.get_length());
+        break;
+      }
+      // fall through
 #if __cplusplus >= 201703L
-    [[fallthrough]];
+      [[fallthrough]];
 #endif
-  default: {
-    CconvertIfNecessary conv(result_cs_, value, length, value_cs);
-    if (chunk_result_)
-      chunk_enc_.field_string(conv.get_ptr(), conv.get_length());
-    else
-      row_enc_.field_string(conv.get_ptr(), conv.get_length());
-    break;
-  }
+    default: {
+      CconvertIfNecessary conv(result_cs_, value, length, value_cs);
+      if (chunk_result_)
+        chunk_enc_.field_string(conv.get_ptr(), conv.get_length());
+      else
+        row_enc_.field_string(conv.get_ptr(), conv.get_length());
+      break;
+    }
   }
   return 0;
 }
@@ -559,8 +554,7 @@ void CstreamingCommandDelegate::handle_ok(uint32_t server_status,
     wait_for_fetch_done_ = false;
 
     /// flush all chunks before fetch done
-    if (chunk_result_ && !chunk_enc_.chunk_empty())
-      chunk_enc_.send_chunk();
+    if (chunk_result_ && !chunk_enc_.chunk_empty()) chunk_enc_.send_chunk();
 
 #ifndef MYSQL8
     if (feedback_) {
@@ -672,8 +666,7 @@ void CstreamingCommandDelegate::handle_out_param_in_handle_ok(
   handle_fetch_done_more_results(server_status);
 
   const auto out_params = (server_status & SERVER_PS_OUT_PARAMS) != 0;
-  if (out_params)
-    wait_for_fetch_done_ = true;
+  if (out_params) wait_for_fetch_done_ = true;
 
   const auto more_results = (server_status & SERVER_MORE_RESULTS_EXISTS) != 0;
   handle_ok_received_ = sent_result_ && more_results && !out_params;
@@ -686,4 +679,4 @@ void CstreamingCommandDelegate::reset() {
   CcommandDelegate::reset();
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 
 #include "../global_defines.h"
 
@@ -91,4 +91,4 @@ extern std::atomic<uint64_t> g_tcp_id_generator;
  */
 extern struct SYS_VAR *polarx_rpc_system_variables[];
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

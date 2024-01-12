@@ -229,10 +229,8 @@ void contextualize_optimizer_hint(THD *thd, Query_block *select_lex) {
   @param[in]        len           query length
   @param[out]       query         Trimed query
 */
-void alloc_query(THD *thd, const char *str, size_t len,
-                        LEX_CSTRING &query) {
-
-  if(!str || len == 0) {
+void alloc_query(THD *thd, const char *str, size_t len, LEX_CSTRING &query) {
+  if (!str || len == 0) {
     query = to_lex_cstring(NULL);
     return;
   }

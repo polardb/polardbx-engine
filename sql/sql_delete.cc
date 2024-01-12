@@ -45,9 +45,9 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
 #include "sql/auth/sql_guard.h"
-#include "sql/binlog.h"            // mysql_bin_log
-#include "sql/debug_sync.h"        // DEBUG_SYNC
-#include "sql/filesort.h"          // Filesort
+#include "sql/binlog.h"      // mysql_bin_log
+#include "sql/debug_sync.h"  // DEBUG_SYNC
+#include "sql/filesort.h"    // Filesort
 #include "sql/handler.h"
 #include "sql/item.h"
 #include "sql/iterators/delete_rows_iterator.h"
@@ -85,10 +85,10 @@
 #include "sql/table.h"
 #include "sql/table_trigger_dispatcher.h"  // Table_trigger_dispatcher
 #include "sql/thd_raii.h"
+#include "sql/trans_proc/returning_parse.h"
 #include "sql/transaction_info.h"
 #include "sql/trigger_def.h"
 #include "sql/uniques.h"  // Unique
-#include "sql/trans_proc/returning_parse.h"
 
 class COND_EQUAL;
 class Item_exists_subselect;
@@ -309,7 +309,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
   /* Setup returning fields and prepare the result set*/
   returning_stmt.setup(thd, const_cast<Query_block *>(query_block));
   bool delete_all_rows = false;
-  if(thd->is_error()) return true;
+  if (thd->is_error()) return true;
 
   /*
     Test if the user wants to delete all rows and deletion doesn't have
@@ -696,8 +696,7 @@ cleanup:
     if (!delete_all_rows && returning_stmt.is_returning()) {
       returning_stmt.send_eof(thd);
       thd->set_row_count_func(deleted_rows);
-    }
-    else
+    } else
       my_ok(thd, deleted_rows);
     DBUG_PRINT("info", ("%ld records deleted", (long)deleted_rows));
   }
@@ -729,7 +728,7 @@ bool Sql_cmd_delete::prepare_inner(THD *thd) {
   /* Return error if deleting from multitable tables */
   if (multitable && thd->get_lex_returning()->is_returning_call()) {
     my_error(ER_NOT_SUPPORT_RETURNING_CLAUSE, MYF(0));
-    //DBUG_RETURN(true);
+    // DBUG_RETURN(true);
     return true;
   }
 

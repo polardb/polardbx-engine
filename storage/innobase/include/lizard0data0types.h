@@ -60,8 +60,6 @@ intrinsic tempooary table. Intrinsic table didn't support
 rollback, so didn't have UBA and no meaningful of SCN */
 #define DATA_ITT_N_LIZARD_COLS 0
 
-namespace lizard {
-
-} /* namespace lizard */
+namespace lizard {} /* namespace lizard */
 
 #endif

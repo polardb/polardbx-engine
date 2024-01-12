@@ -67,7 +67,6 @@
 
 #include "sql/recycle_bin/recycle_table.h"
 
-
 namespace dd {
 class Table;
 }  // namespace dd

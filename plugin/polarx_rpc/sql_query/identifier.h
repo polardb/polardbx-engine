@@ -4,11 +4,11 @@
 
 namespace polarx_rpc {
 class Identifier {
-public:
+ public:
   Identifier(const std::string &identifier) : identifier_(identifier) {}
   Identifier(std::string &&identifier)
       : identifier_(std::forward<std::string>(identifier)) {}
 
   std::string identifier_;
 };
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

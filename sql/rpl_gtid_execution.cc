@@ -323,8 +323,7 @@ bool is_already_logged_transaction(const THD *thd) {
 #ifdef HAVE_GTID_NEXT_LIST
     if (gtid_next->type == ASSIGNED_GTID) {
       assert(gtid_next_list->contains_gtid(gtid_next->gtid));
-      if (!thd->owned_gtid_set.contains_gtid(gtid_next->gtid))
-        return true;
+      if (!thd->owned_gtid_set.contains_gtid(gtid_next->gtid)) return true;
     }
 #else
     assert(0); /*NOTREACHED*/

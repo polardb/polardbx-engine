@@ -275,8 +275,8 @@ void my_print_stacktrace(const uchar *stack_bottom, ulong thread_stack) {
   void *addrs[128];
   char **strings = nullptr;
   int n = backtrace(addrs, array_elements(addrs));
-  my_safe_printf_stderr("tid-%lld stack_bottom = %p thread_stack 0x%lx\n", my_thread_os_id(), stack_bottom,
-                        thread_stack);
+  my_safe_printf_stderr("tid-%lld stack_bottom = %p thread_stack 0x%lx\n",
+                        my_thread_os_id(), stack_bottom, thread_stack);
 #ifdef HAVE_ABI_CXA_DEMANGLE
   if ((strings = backtrace_symbols(addrs, n))) {
     my_demangle_symbols(strings, n);

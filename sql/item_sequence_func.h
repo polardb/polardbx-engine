@@ -41,12 +41,20 @@ class Item_seq_func : public Item_int_func {
 
  protected:
   Item_seq_func(const POS &pos, THD *thd, const char *db, const char *table)
-      : Item_int_func(pos), m_thd(thd), m_db(db), m_table(table),
-        m_para_list(nullptr), m_table_list(nullptr) {}
+      : Item_int_func(pos),
+        m_thd(thd),
+        m_db(db),
+        m_table(table),
+        m_para_list(nullptr),
+        m_table_list(nullptr) {}
 
   Item_seq_func(const POS &pos, THD *thd, const PT_item_list *para_list)
-      : Item_int_func(pos), m_thd(thd), m_db(nullptr), m_table(nullptr),
-        m_para_list(para_list), m_table_list(nullptr) {}
+      : Item_int_func(pos),
+        m_thd(thd),
+        m_db(nullptr),
+        m_table(nullptr),
+        m_para_list(para_list),
+        m_table_list(nullptr) {}
 
   virtual bool parse_parameter() = 0;
   bool parse_table_ident();
@@ -64,9 +72,9 @@ class Item_seq_func : public Item_int_func {
   }
 
   void fix_length_and_dec() {
-     unsigned_flag = 1;
-     max_length = MAX_BIGINT_WIDTH;
-     set_nullable(true); 
+    unsigned_flag = 1;
+    max_length = MAX_BIGINT_WIDTH;
+    set_nullable(true);
   }
 
   bool const_item() const { return 0; }
@@ -100,7 +108,7 @@ class Item_func_nextval : public Item_seq_func {
   unsigned long long m_value;
 };
 
-class Item_func_nextval_skip: public Item_func_nextval {
+class Item_func_nextval_skip : public Item_func_nextval {
  public:
   Item_func_nextval_skip(const POS &pos, THD *thd, const char *db,
                          const char *table)
@@ -117,8 +125,7 @@ class Item_func_nextval_skip: public Item_func_nextval {
   const char *func_name() const override { return "nextval_skip"; }
 };
 
-
-class Item_func_nextval_show: public Item_func_nextval {
+class Item_func_nextval_show : public Item_func_nextval {
  public:
   Item_func_nextval_show(const POS &pos, THD *thd, const char *db,
                          const char *table)

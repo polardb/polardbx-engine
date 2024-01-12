@@ -70,7 +70,7 @@ class Show_native_procedure_proc : public Proc, public Disable_copy_base {
       m_columns.assign_at(i, elements[i]);
     }
   }
-  
+
   /* Singleton instance */
   static Proc *instance();
 

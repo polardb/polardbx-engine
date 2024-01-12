@@ -46,7 +46,6 @@ namespace lizard {
 using TXN_tablespaces =
     std::vector<undo::Tablespace *, ut::allocator<undo::Tablespace *>>;
 
-
 /** Global singlton txn tablespaces */
 extern TXN_tablespaces txn_spaces;
 

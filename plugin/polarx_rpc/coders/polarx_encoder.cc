@@ -18,8 +18,7 @@ bool CpolarxEncoder::flush(CtcpConnection &tcp) {
     while (page) {
       const auto len = page->get_used_bytes();
       write_success = tcp.send(page->m_begin_data, len);
-      if (!write_success)
-        break;
+      if (!write_success) break;
       flushed_bytes_ += len;
       page = page->m_next_page;
     }
@@ -29,4 +28,4 @@ bool CpolarxEncoder::flush(CtcpConnection &tcp) {
   return write_success;
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

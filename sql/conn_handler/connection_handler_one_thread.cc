@@ -88,7 +88,7 @@ bool One_thread_connection_handler::add_connection(Channel_info *channel_info) {
   close_connection(thd, 0, false, false);
   thd->release_resources();
   thd_manager->remove_thd(thd);
-    im::global_manager_dec_connection(thd);
+  im::global_manager_dec_connection(thd);
   delete thd;
   return error;
 }

@@ -2,8 +2,8 @@
 
 #include <unordered_map>
 
-#include "error.h"
 #include "../coders/protocol_fwd.h"
+#include "error.h"
 
 namespace rpc_executor {
 
@@ -33,7 +33,7 @@ inline const char *pb2ptr(const MysqlxScalar &scalar) {
   return real(scalar).v_string().value().data();
 }
 
-template<typename M>
+template <typename M>
 inline const char *parse_index_name(M &msg) {
   return msg.has_index_info() ? pb2ptr(msg.index_info().name()) : "PRIMARY";
 }
@@ -41,7 +41,7 @@ inline const char *parse_index_name(M &msg) {
 // Server representation of Mysqlx.Datatypes.Scalar
 // should be able to convert to and from Mysqlx.Datatypes.Scalar.Type
 class DataRep {
-public:
+ public:
   enum DataType {
     SIGNED_INT = 1,
     UNSIGNED_INT = 2,
@@ -107,7 +107,7 @@ public:
 // Server representation of GetExpr which is an array of (field_name, value)
 // Convert the array to a map
 class ExecKeyMap {
-public:
+ public:
   int init(const PolarXRPC::ExecPlan::GetExpr &mysqlx_key) {
     int ret = HA_EXEC_SUCCESS;
     int32_t key_parts_offered = mysqlx_key.keys().size();
@@ -135,12 +135,10 @@ public:
     return ret;
   }
 
-  int64_t parts() const {
-    return key_field_map_.size();
-  }
+  int64_t parts() const { return key_field_map_.size(); }
 
-private:
+ private:
   std::unordered_map<std::string, DataRep> key_field_map_;
 };
 
-} // namespace executor
+}  // namespace rpc_executor

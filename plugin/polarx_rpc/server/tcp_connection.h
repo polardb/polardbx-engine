@@ -13,15 +13,15 @@
 #include <string>
 #include <unordered_map>
 
-#include <poll.h> /// for poll wait
+#include <poll.h>  /// for poll wait
 
 #include "m_ctype.h"
 #include "sql/mysqld.h"
 
-#include "../global_defines.h"
 #include "../coders/polarx_encoder.h"
 #include "../coders/protocol_fwd.h"
 #include "../common_define.h"
+#include "../global_defines.h"
 #include "../polarx_rpc.h"
 #include "../secure/auth_challenge_response.h"
 #include "../session/pkt.h"
@@ -36,18 +36,18 @@
 
 namespace polarx_rpc {
 
-static constexpr uint32_t MIN_TCP_BUF = 0x800;    // 2KB
-static constexpr uint32_t MAX_TCP_BUF = 0x200000; // 2MB
+static constexpr uint32_t MIN_TCP_BUF = 0x800;     // 2KB
+static constexpr uint32_t MAX_TCP_BUF = 0x200000;  // 2MB
 
-static constexpr uint32_t MIN_FIXED_DEALING_BUF = 0x1000;    // 4KB
-static constexpr uint32_t MAX_FIXED_DEALING_BUF = 0x4000000; // 64MB
+static constexpr uint32_t MIN_FIXED_DEALING_BUF = 0x1000;     // 4KB
+static constexpr uint32_t MAX_FIXED_DEALING_BUF = 0x4000000;  // 64MB
 
-static constexpr uint32_t MAX_NET_WRITE_TIMEOUT = 60 * 1000; // 60s
+static constexpr uint32_t MAX_NET_WRITE_TIMEOUT = 60 * 1000;  // 60s
 
 class CtcpConnection final : public CepollCallback {
   NO_COPY_MOVE(CtcpConnection);
 
-private:
+ private:
   CmtEpoll &epoll_;
   const uint64_t tcp_id_;
   const std::string ip_, host_;
@@ -89,7 +89,7 @@ private:
    * 5. event callback
    * Note: When reference count reach 0, the object should be freed.
    */
-  std::atomic<intptr_t> reference_; /// init with 1
+  std::atomic<intptr_t> reference_;  /// init with 1
 
   /// general encoder for messages
   CpolarxEncoder encoder_;
@@ -110,8 +110,7 @@ private:
 
   static inline void reclaim(void *ctx) {
     auto tcp = reinterpret_cast<CtcpConnection *>(ctx);
-    if (tcp->sub_reference() <= 0)
-      delete tcp;
+    if (tcp->sub_reference() <= 0) delete tcp;
   }
 
   inline void tcp_log(plugin_log_level level, int err,
@@ -147,8 +146,7 @@ private:
       std::lock_guard<std::mutex> lck(exit_lock_);
       if (LIKELY(fd_ > 0)) {
         int64_t fin_start_time = 0;
-        if (enable_perf_hist)
-          fin_start_time = Ctime::steady_ns();
+        if (enable_perf_hist) fin_start_time = Ctime::steady_ns();
 
         Csocket::shutdown(fd_);
         if (LIKELY(registered_)) {
@@ -281,7 +279,7 @@ private:
         0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d,
     };
 
-    crc ^= 0xffffffff; // Restore last state.
+    crc ^= 0xffffffff;  // Restore last state.
     auto ptr = reinterpret_cast<const uint8_t *>(data);
 
     for (size_t i = 0; i < size; ++i)
@@ -296,76 +294,76 @@ private:
                                           size_t length) {
     std::unique_ptr<ProtoMsg> msg;
     switch (type) {
-    case PolarXRPC::ClientMessages::CON_CAPABILITIES_GET:
-      msg.reset(new PolarXRPC::Connection::CapabilitiesGet());
-      break;
+      case PolarXRPC::ClientMessages::CON_CAPABILITIES_GET:
+        msg.reset(new PolarXRPC::Connection::CapabilitiesGet());
+        break;
 
-    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START:
-      msg.reset(new PolarXRPC::Session::AuthenticateStart());
-      break;
+      case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START:
+        msg.reset(new PolarXRPC::Session::AuthenticateStart());
+        break;
 
-    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE:
-      msg.reset(new PolarXRPC::Session::AuthenticateContinue());
-      break;
+      case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE:
+        msg.reset(new PolarXRPC::Session::AuthenticateContinue());
+        break;
 
-    case PolarXRPC::ClientMessages::EXPECT_OPEN:
-      msg.reset(new PolarXRPC::Expect::Open());
-      break;
+      case PolarXRPC::ClientMessages::EXPECT_OPEN:
+        msg.reset(new PolarXRPC::Expect::Open());
+        break;
 
-    case PolarXRPC::ClientMessages::EXPECT_CLOSE:
-      msg.reset(new PolarXRPC::Expect::Close());
-      break;
+      case PolarXRPC::ClientMessages::EXPECT_CLOSE:
+        msg.reset(new PolarXRPC::Expect::Close());
+        break;
 
-    case PolarXRPC::ClientMessages::EXEC_PLAN_READ:
-      msg.reset(new PolarXRPC::ExecPlan::ExecPlan());
-      break;
+      case PolarXRPC::ClientMessages::EXEC_PLAN_READ:
+        msg.reset(new PolarXRPC::ExecPlan::ExecPlan());
+        break;
 
-    case PolarXRPC::ClientMessages::EXEC_SQL:
-      msg.reset(new PolarXRPC::Sql::StmtExecute());
-      break;
+      case PolarXRPC::ClientMessages::EXEC_SQL:
+        msg.reset(new PolarXRPC::Sql::StmtExecute());
+        break;
 
-    case PolarXRPC::ClientMessages::SESS_NEW:
-      msg.reset(new PolarXRPC::Session::NewSession());
-      break;
+      case PolarXRPC::ClientMessages::SESS_NEW:
+        msg.reset(new PolarXRPC::Session::NewSession());
+        break;
 
-    case PolarXRPC::ClientMessages::SESS_KILL:
-      msg.reset(new PolarXRPC::Session::KillSession());
-      break;
+      case PolarXRPC::ClientMessages::SESS_KILL:
+        msg.reset(new PolarXRPC::Session::KillSession());
+        break;
 
-    case PolarXRPC::ClientMessages::SESS_CLOSE:
-      msg.reset(new PolarXRPC::Session::Close());
-      break;
+      case PolarXRPC::ClientMessages::SESS_CLOSE:
+        msg.reset(new PolarXRPC::Session::Close());
+        break;
 
-    case PolarXRPC::ClientMessages::TOKEN_OFFER:
-      msg.reset(new PolarXRPC::Sql::TokenOffer());
-      break;
+      case PolarXRPC::ClientMessages::TOKEN_OFFER:
+        msg.reset(new PolarXRPC::Sql::TokenOffer());
+        break;
 
-    case PolarXRPC::ClientMessages::GET_TSO:
-      msg.reset(new PolarXRPC::ExecPlan::GetTSO());
-      break;
+      case PolarXRPC::ClientMessages::GET_TSO:
+        msg.reset(new PolarXRPC::ExecPlan::GetTSO());
+        break;
 
-    case PolarXRPC::ClientMessages::AUTO_SP:
-      msg.reset(new PolarXRPC::ExecPlan::AutoSp());
-      break;
+      case PolarXRPC::ClientMessages::AUTO_SP:
+        msg.reset(new PolarXRPC::ExecPlan::AutoSp());
+        break;
 
-    case PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO:
-      msg.reset(new PolarXRPC::PhysicalBackfill::GetFileInfoOperator);
-      break;
+      case PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO:
+        msg.reset(new PolarXRPC::PhysicalBackfill::GetFileInfoOperator);
+        break;
 
-    case PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE:
-      msg.reset(new PolarXRPC::PhysicalBackfill::FileManageOperator());
-      break;
+      case PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE:
+        msg.reset(new PolarXRPC::PhysicalBackfill::FileManageOperator());
+        break;
 
-    case PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA:
-      msg.reset(new PolarXRPC::PhysicalBackfill::TransferFileDataOperator());
-      break;
+      case PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA:
+        msg.reset(new PolarXRPC::PhysicalBackfill::TransferFileDataOperator());
+        break;
 
-    default: {
-      char extra[0x100];
-      ::snprintf(extra, sizeof(extra), "type: %u, len: %zu", type, length);
-      tcp_warn(0, "failed to parsing message", extra);
-      return {};
-    }
+      default: {
+        char extra[0x100];
+        ::snprintf(extra, sizeof(extra), "type: %u, len: %zu", type, length);
+        tcp_warn(0, "failed to parsing message", extra);
+        return {};
+      }
     }
 
     // feed the data to the command (up to the specified boundary)
@@ -391,39 +389,39 @@ private:
   inline void send_auth_result(const uint64_t &sid,
                                const Authentication_interface::Response &r) {
     switch (r.status) {
-    case Authentication_interface::Succeeded: {
-      /// record user name and new host
-      auto &info = auth_handler_->get_authentication_info();
-      sessions_.set_user(info.m_authed_account_name.c_str());
-      authed_ = true;
-      tcp_info(0, "auth success");
+      case Authentication_interface::Succeeded: {
+        /// record user name and new host
+        auto &info = auth_handler_->get_authentication_info();
+        sessions_.set_user(info.m_authed_account_name.c_str());
+        authed_ = true;
+        tcp_info(0, "auth success");
 
-      /// reset handler and send success notify
-      auth_handler_.reset();
+        /// reset handler and send success notify
+        auth_handler_.reset();
 
-      ::PolarXRPC::Session::AuthenticateOk msg;
-      msg.set_auth_data(r.data);
-      msg_enc()
-          .encode_protobuf_message<
-              ::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_OK>(msg);
-    } break;
+        ::PolarXRPC::Session::AuthenticateOk msg;
+        msg.set_auth_data(r.data);
+        msg_enc()
+            .encode_protobuf_message<
+                ::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_OK>(msg);
+      } break;
 
-    case Authentication_interface::Failed:
-      /// reset auth handler
-      auth_handler_.reset();
-      /// send error message
-      msg_enc().reset_sid(sid);
-      msg_enc().encode_error(PolarXRPC::Error::ERROR, r.error_code, r.data,
-                             "HY000");
-      break;
+      case Authentication_interface::Failed:
+        /// reset auth handler
+        auth_handler_.reset();
+        /// send error message
+        msg_enc().reset_sid(sid);
+        msg_enc().encode_error(PolarXRPC::Error::ERROR, r.error_code, r.data,
+                               "HY000");
+        break;
 
-    default:
-      /// send continue challenge
-      ::PolarXRPC::Session::AuthenticateContinue msg;
-      msg.set_auth_data(r.data);
-      msg_enc()
-          .encode_protobuf_message<
-              ::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE>(msg);
+      default:
+        /// send continue challenge
+        ::PolarXRPC::Session::AuthenticateContinue msg;
+        msg.set_auth_data(r.data);
+        msg_enc()
+            .encode_protobuf_message<
+                ::PolarXRPC::ServerMessages::SESS_AUTHENTICATE_CONTINUE>(msg);
     }
 
     /// flush buffer
@@ -432,69 +430,70 @@ private:
 
   inline void auth_routine(const uint64_t &sid, msg_t &&msg) {
     switch (msg.type) {
-    case PolarXRPC::ClientMessages::CON_CAPABILITIES_GET: {
-      /// for alive probe
-      ::PolarXRPC::Connection::Capabilities caps;
-      auto cap = caps.add_capabilities();
-      cap->set_name("polarx_rpc");
-      auto v = cap->mutable_value();
-      v->set_type(::PolarXRPC::Datatypes::Any::SCALAR);
-      auto s = v->mutable_scalar();
-      s->set_type(::PolarXRPC::Datatypes::Scalar::V_UINT);
-      s->set_v_unsigned_int(1);
+      case PolarXRPC::ClientMessages::CON_CAPABILITIES_GET: {
+        /// for alive probe
+        ::PolarXRPC::Connection::Capabilities caps;
+        auto cap = caps.add_capabilities();
+        cap->set_name("polarx_rpc");
+        auto v = cap->mutable_value();
+        v->set_type(::PolarXRPC::Datatypes::Any::SCALAR);
+        auto s = v->mutable_scalar();
+        s->set_type(::PolarXRPC::Datatypes::Scalar::V_UINT);
+        s->set_v_unsigned_int(1);
 
-      /// send to client
-      msg_enc().reset_sid(sid);
-      msg_enc()
-          .encode_protobuf_message<
-              ::PolarXRPC::ServerMessages::CONN_CAPABILITIES>(caps);
-      encoder().flush(*this);
-    } break;
+        /// send to client
+        msg_enc().reset_sid(sid);
+        msg_enc()
+            .encode_protobuf_message<
+                ::PolarXRPC::ServerMessages::CONN_CAPABILITIES>(caps);
+        encoder().flush(*this);
+      } break;
 
-    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START: {
-      /// start auth
-      const auto &authm =
-          static_cast<const ::PolarXRPC::Session::AuthenticateStart &>(
-              *msg.msg);
-      Authentication_interface::Response r;
-      if (LIKELY(!auth_handler_)) {
-        auth_handler_ = Sasl_mysql41_auth::create(*this, nullptr);
-        r = auth_handler_->handle_start(authm.mech_name(), authm.auth_data(),
-                                        authm.initial_response());
-        tcp_info(0, "start auth", authm.mech_name().c_str());
-      } else {
-        r.status = Authentication_interface::Error,
-        r.error_code = ER_NET_PACKETS_OUT_OF_ORDER;
-      }
-      send_auth_result(sid, r);
-    } break;
+      case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_START: {
+        /// start auth
+        const auto &authm =
+            static_cast<const ::PolarXRPC::Session::AuthenticateStart &>(
+                *msg.msg);
+        Authentication_interface::Response r;
+        if (LIKELY(!auth_handler_)) {
+          auth_handler_ = Sasl_mysql41_auth::create(*this, nullptr);
+          r = auth_handler_->handle_start(authm.mech_name(), authm.auth_data(),
+                                          authm.initial_response());
+          tcp_info(0, "start auth", authm.mech_name().c_str());
+        } else {
+          r.status = Authentication_interface::Error,
+          r.error_code = ER_NET_PACKETS_OUT_OF_ORDER;
+        }
+        send_auth_result(sid, r);
+      } break;
 
-    case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE: {
-      /// continue auth
-      const auto &authm =
-          static_cast<const ::PolarXRPC::Session::AuthenticateContinue &>(
-              *msg.msg);
-      Authentication_interface::Response r;
-      if (LIKELY(auth_handler_)) {
-        r = auth_handler_->handle_continue(authm.auth_data());
-        tcp_info(0, "continue auth", r.data.empty() ? nullptr : r.data.c_str());
-      } else {
-        r.status = Authentication_interface::Error,
-        r.error_code = ER_NET_PACKETS_OUT_OF_ORDER;
-      }
-      send_auth_result(sid, r);
-    } break;
+      case PolarXRPC::ClientMessages::SESS_AUTHENTICATE_CONTINUE: {
+        /// continue auth
+        const auto &authm =
+            static_cast<const ::PolarXRPC::Session::AuthenticateContinue &>(
+                *msg.msg);
+        Authentication_interface::Response r;
+        if (LIKELY(auth_handler_)) {
+          r = auth_handler_->handle_continue(authm.auth_data());
+          tcp_info(0, "continue auth",
+                   r.data.empty() ? nullptr : r.data.c_str());
+        } else {
+          r.status = Authentication_interface::Error,
+          r.error_code = ER_NET_PACKETS_OUT_OF_ORDER;
+        }
+        send_auth_result(sid, r);
+      } break;
 
-    default:
-      send_auth_result(
-          sid, {Authentication_interface::Error, ER_ACCESS_DENIED_ERROR});
-      break;
+      default:
+        send_auth_result(
+            sid, {Authentication_interface::Error, ER_ACCESS_DENIED_ERROR});
+        break;
     }
   }
 
   /// scheduled task
   class CdelayedTask final : public Ctask<CdelayedTask> {
-  private:
+   private:
     const uint64_t sid_;
     CtcpConnection *tcp_;
 
@@ -502,11 +501,10 @@ private:
 
     void run() {
       auto s = tcp_->sessions_.get_session(sid_);
-      if (s)
-        s->run();
+      if (s) s->run();
     }
 
-  public:
+   public:
     CdelayedTask(const uint64_t &sid, CtcpConnection *tcp)
         : sid_(sid), tcp_(tcp) {
       tcp_->add_reference();
@@ -533,8 +531,7 @@ private:
 
       /// recode decode time
       int64_t decode_start_time = 0;
-      if (enable_perf_hist)
-        decode_start_time = Ctime::steady_ns();
+      if (enable_perf_hist) decode_start_time = Ctime::steady_ns();
 
       /// start decode routine
       do {
@@ -542,7 +539,7 @@ private:
           recheck_.store(true, std::memory_order_release);
           std::atomic_thread_fence(std::memory_order_seq_cst);
           if (LIKELY(!read_lock_.try_lock()))
-            break; /// do any possible notify task
+            break;  /// do any possible notify task
         }
 
         auto now_time = Ctime::steady_ms();
@@ -642,7 +639,7 @@ private:
 
               auto full_pkt_size = hdr_sz_ + extra_data - 1;
               if (UNLIKELY(full_pkt_size > fixed_buf_size_))
-                last_big_packet_time_ = now_time; /// refresh dyn buf time
+                last_big_packet_time_ = now_time;  /// refresh dyn buf time
 
               /// check enough data?
               if (LIKELY(buf_pos_ - start_pos >=
@@ -688,8 +685,7 @@ private:
                 else {
                   /// do auth routine
                   int64_t auth_start_time = 0;
-                  if (enable_perf_hist)
-                    auth_start_time = Ctime::steady_ns();
+                  if (enable_perf_hist) auth_start_time = Ctime::steady_ns();
 
                   auth_routine(sid, std::move(msg));
 
@@ -721,7 +717,7 @@ private:
                   tcp_info(0, "switch to larger buffer");
 #endif
                 }
-                break; /// continue receiving
+                break;  /// continue receiving
               }
             }
 
@@ -737,11 +733,11 @@ private:
 
             if (0 == buf_pos_) {
               /// no data in buf, and try shrink
-              if (now_time - last_big_packet_time_ > 10 * 1000 && /// >10s
-                  buf_ptr_ != fixed_buf_.get()) {                 /// dyn buf
+              if (now_time - last_big_packet_time_ > 10 * 1000 &&  /// >10s
+                  buf_ptr_ != fixed_buf_.get()) {                  /// dyn buf
                 dyn_buf_size_ = 0;
                 dyn_buf_.reset();
-                buf_ptr_ = fixed_buf_.get(); /// back to fixed buf
+                buf_ptr_ = fixed_buf_.get();  /// back to fixed buf
 #if POLARX_RPC_PKT_DBG
                 tcp_info(0, "switch to fixed buffer");
 #endif
@@ -764,8 +760,7 @@ private:
                 std::lock_guard<std::mutex> lck(exit_lock_);
                 ignore = -1 == fd_ && !registered_;
               }
-              if (!ignore)
-                tcp_err(err, "recv error");
+              if (!ignore) tcp_err(err, "recv error");
               /// fatal error
               fin("fatal error");
             }
@@ -810,7 +805,7 @@ private:
             std::unique_ptr<CdelayedTask> task(new CdelayedTask(sid, this));
             auto bret = epoll_.push_work(task->gen_task());
             if (LIKELY(bret))
-              task.release(); /// release the owner to queue
+              task.release();  /// release the owner to queue
             else {
               /// queue is full, try and kill if timeout
               task.reset();
@@ -831,10 +826,9 @@ private:
         /// run session in trx directly
         if (direct_run_sid != UINT64_C(0xFFFFFFFFFFFFFFFF)) {
           DBG_LOG(("tcp_conn run session %lu directly", direct_run_sid));
-          assert(index + 1 == total); /// must be last event
+          assert(index + 1 == total);  /// must be last event
           auto s = sessions_.get_session(direct_run_sid);
-          if (s)
-            s->run();
+          if (s) s->run();
         }
       }
     }
@@ -852,15 +846,29 @@ private:
 
   friend class Clistener;
 
-public:
+ public:
   explicit CtcpConnection(CmtEpoll &epoll, uint64_t id, int fd,
                           std::string &&ip, std::string &&host, uint16_t port)
-      : epoll_(epoll), tcp_id_(id), ip_(std::forward<std::string>(ip)),
-        host_(std::forward<std::string>(host)), port_(port), fd_(fd),
-        recheck_(false), is_gx_(false), gx_ver_(0), hdr_sz_(13),
-        fixed_buf_size_(0), dyn_buf_size_(0), last_big_packet_time_(0),
-        buf_ptr_(nullptr), buf_pos_(0), registered_(false), reference_(1),
-        encoder_(0), authed_(false), sessions_(host_, port) {
+      : epoll_(epoll),
+        tcp_id_(id),
+        ip_(std::forward<std::string>(ip)),
+        host_(std::forward<std::string>(host)),
+        port_(port),
+        fd_(fd),
+        recheck_(false),
+        is_gx_(false),
+        gx_ver_(0),
+        hdr_sz_(13),
+        fixed_buf_size_(0),
+        dyn_buf_size_(0),
+        last_big_packet_time_(0),
+        buf_ptr_(nullptr),
+        buf_pos_(0),
+        registered_(false),
+        reference_(1),
+        encoder_(0),
+        authed_(false),
+        sessions_(host_, port) {
     DBG_LOG(("new TCP context %s:%u", host_.c_str(), port_));
     plugin_info.tcp_connections.fetch_add(1, std::memory_order_release);
 
@@ -873,8 +881,7 @@ public:
         buf_size = MAX_TCP_BUF;
     }
     auto err = Csocket::set_sndbuf(fd_, buf_size);
-    if (err != 0)
-      tcp_warn(-err, "failed to set sndbuf");
+    if (err != 0) tcp_warn(-err, "failed to set sndbuf");
     buf_size = tcp_recv_buf;
     if (buf_size != 0) {
       if (UNLIKELY(buf_size < MIN_TCP_BUF))
@@ -883,8 +890,7 @@ public:
         buf_size = MAX_TCP_BUF;
     }
     err = Csocket::set_rcvbuf(fd_, buf_size);
-    if (err != 0)
-      tcp_warn(-err, "failed to set rcvbuf");
+    if (err != 0) tcp_warn(-err, "failed to set rcvbuf");
 
     /// init fixed dealing buf
     fixed_buf_size_ = tcp_fixed_dealing_buf;
@@ -929,8 +935,7 @@ public:
 
   /// blocking send
   bool send(const void *data, size_t length) final {
-    if (UNLIKELY(fd_ < 0))
-      return false;
+    if (UNLIKELY(fd_ < 0)) return false;
     auto ptr = reinterpret_cast<const uint8_t *>(data);
     auto retry = 0;
     while (length > 0) {
@@ -963,7 +968,7 @@ public:
           return false;
         }
       } else {
-        retry = 0; /// clear retry
+        retry = 0;  /// clear retry
         ptr += iret;
         length -= iret;
       }
@@ -972,4 +977,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

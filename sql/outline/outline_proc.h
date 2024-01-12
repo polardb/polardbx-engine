@@ -73,7 +73,7 @@ class Sql_cmd_outline_proc_base : public Sql_cmd_admin_proc {
   It will add index hint outline into mysql.outline table,
   and the outline cache that take effect immediately.
 */
-class Sql_cmd_optimizer_outline_proc_add: public Sql_cmd_outline_proc_base {
+class Sql_cmd_optimizer_outline_proc_add : public Sql_cmd_outline_proc_base {
  public:
   explicit Sql_cmd_optimizer_outline_proc_add(THD *thd,
                                               mem_root_deque<Item *> *list,
@@ -98,7 +98,6 @@ class Sql_cmd_optimizer_outline_proc_add: public Sql_cmd_outline_proc_base {
   */
   Outline_record *get_record(THD *thd);
 };
-
 
 class Outline_optimizer_proc_add : public Outline_proc_base {
   using Sql_cmd_type = Sql_cmd_optimizer_outline_proc_add;
@@ -455,7 +454,6 @@ class Outline_proc_show : public Outline_proc_base {
   Show the matched outline for the query.
 */
 
-
 class Sql_cmd_outline_proc_preview : public Sql_cmd_outline_proc_base {
  public:
   explicit Sql_cmd_outline_proc_preview(THD *thd, mem_root_deque<Item *> *list,
@@ -490,7 +488,6 @@ class Sql_cmd_outline_proc_preview : public Sql_cmd_outline_proc_base {
   */
   Outline_record *get_record(THD *thd);
 };
-
 
 class Outline_proc_preview : public Outline_proc_base {
   using Sql_cmd_type = Sql_cmd_outline_proc_preview;
@@ -564,8 +561,6 @@ class Outline_proc_preview : public Outline_proc_base {
     return std::string("preview_outline");
   }
 };
-
-
 
 } /* namespace im */
 

@@ -48,7 +48,7 @@ class logger {
   @param[in]    err             Error code from errmsg-*.txt.
   @param[in]    args            Variable length argument list */
   template <class... Args>
-  logger &log(int err, Args &&... args) {
+  logger &log(int err, Args &&...args) {
     assert(m_err == ER_XP_0);
 
     m_err = err;
@@ -91,12 +91,11 @@ class logger {
   loglevel m_level{INFORMATION_LEVEL};
 
  protected:
-
   /** Format an error message.
   @param[in]    err     Error code from errmsg-*.txt.
   @param[in]    args    Variable length argument list */
   template <class... Args>
-  static std::string msg(int err, Args &&... args) {
+  static std::string msg(int err, Args &&...args) {
     const char *fmt = error_message_for_error_log(err);
 
     int ret;
@@ -140,7 +139,7 @@ class logger {
   @param[in]    err             Error message code.
   @param[in]    args            Variable length argument list */
   template <class... Args>
-  explicit logger(loglevel level, int err, Args &&... args)
+  explicit logger(loglevel level, int err, Args &&...args)
       : m_err(err), m_level(level) {
     m_oss << msg(err, std::forward<Args>(args)...);
   }
@@ -163,7 +162,6 @@ statement.  If a named object is created, then the log message will be emitted
 only when it goes out of scope or destroyed. */
 class info : public logger {
  public:
-
   /** Default constructor uses ER_IB_MSG_0 */
   info() : logger(INFORMATION_LEVEL) {}
 
@@ -171,7 +169,7 @@ class info : public logger {
   @param[in]    err             Error code from errmsg-*.txt.
   @param[in]    args            Variable length argument list */
   template <class... Args>
-  explicit info(int err, Args &&... args)
+  explicit info(int err, Args &&...args)
       : logger(INFORMATION_LEVEL, err, std::forward<Args>(args)...) {}
 };
 
@@ -186,7 +184,7 @@ class warn : public logger {
   @param[in]    err             Error code from errmsg-*.txt.
   @param[in]    args            Variable length argument list */
   template <class... Args>
-  explicit warn(int err, Args &&... args)
+  explicit warn(int err, Args &&...args)
       : logger(WARNING_LEVEL, err, std::forward<Args>(args)...) {}
 };
 
@@ -201,7 +199,7 @@ class error : public logger {
   @param[in]    err             Error code from errmsg-*.txt.
   @param[in]    args            Variable length argument list */
   template <class... Args>
-  explicit error(int err, Args &&... args)
+  explicit error(int err, Args &&...args)
       : logger(ERROR_LEVEL, err, std::forward<Args>(args)...) {}
 };
 

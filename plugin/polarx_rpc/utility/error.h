@@ -31,7 +31,9 @@ struct err_t final {
   err_t() : error(0), severity(OK) {}
 
   err_t(int e, std::string m, std::string state = "HY000", Severity sev = ERROR)
-      : error(e), message(std::move(m)), sql_state(std::move(state)),
+      : error(e),
+        message(std::move(m)),
+        sql_state(std::move(state)),
         severity(sev) {}
 
 #pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
@@ -48,7 +50,8 @@ struct err_t final {
   explicit inline operator bool() const { return error != 0; }
 
   inline PolarXRPC::Error_Severity get_protocol_severity() const {
-    return FATAL == severity ? PolarXRPC::Error::FATAL : PolarXRPC::Error::ERROR;
+    return FATAL == severity ? PolarXRPC::Error::FATAL
+                             : PolarXRPC::Error::ERROR;
   }
 
   static inline err_t Success(const char *msg, ...) {
@@ -99,4 +102,4 @@ struct err_t final {
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

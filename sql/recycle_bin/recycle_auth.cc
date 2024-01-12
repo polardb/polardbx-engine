@@ -63,4 +63,3 @@ Recycle_internal_schema_access *Recycle_internal_schema_access::instance() {
 
 } /* namespace recycle_bin */
 } /* namespace im */
-

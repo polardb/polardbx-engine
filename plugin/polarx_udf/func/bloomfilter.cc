@@ -20,8 +20,8 @@
 #include "../service/udf.h"
 
 #include <assert.h>
-#include <string>
 #include <string.h>
+#include <string>
 
 #if defined(_WIN32) || defined(_WIN64) || defined(__WIN32__) || defined(WIN32)
 #define DLLEXP __declspec(dllexport)
@@ -46,18 +46,18 @@ typedef unsigned __int64 uint64_t;
 
 #include <stdint.h>
 
-#endif // !defined(_MSC_VER)
+#endif  // !defined(_MSC_VER)
 
 //-----------------------------------------------------------------------------
 
 #if defined(_MSC_VER)
 
-#define FORCE_INLINE  __forceinline
+#define FORCE_INLINE __forceinline
 
 #include <stdlib.h>
 
-#define ROTL32(x,y)  _rotl(x,y)
-#define ROTL64(x,y)  _rotl64(x,y)
+#define ROTL32(x, y) _rotl(x, y)
+#define ROTL64(x, y) _rotl64(x, y)
 
 #define BIG_CONSTANT(x) (x)
 
@@ -65,8 +65,8 @@ typedef unsigned __int64 uint64_t;
 
 #else  // defined(_MSC_VER)
 
-#define  FORCE_INLINE inline __attribute__((always_inline))
-typedef void (*HASH_FUNC) (const void*, int, uint32_t, void*);
+#define FORCE_INLINE inline __attribute__((always_inline))
+typedef void (*HASH_FUNC)(const void *, int, uint32_t, void *);
 
 namespace gx {
 
@@ -636,16 +636,15 @@ HASH_FUNC get_hash_func(int hash_enum) {
   }
 }
 
-} // namespace gx
+}  // namespace gx
 
 /**
  * BloomFilter only supports one field now
  */
-longlong bloomfilter(UDF_INIT*, UDF_ARGS* args, char*, char*)
-{
-  char* bitmap_ = args->args[0];
-  long long total_bits_ = *((long long*)args->args[1]);
-  long long numFunc = *((long long*)args->args[2]);
+longlong bloomfilter(UDF_INIT *, UDF_ARGS *args, char *, char *) {
+  char *bitmap_ = args->args[0];
+  long long total_bits_ = *((long long *)args->args[1]);
+  long long numFunc = *((long long *)args->args[2]);
   unsigned char hash_res[16];
 
   char tmp_value_buffer[sizeof(double)];
@@ -655,42 +654,51 @@ longlong bloomfilter(UDF_INIT*, UDF_ARGS* args, char*, char*)
   HASH_FUNC hash_func = gx::MurmurHash3_x64_128;
   bool is_result_64 = false;
   if (args->arg_count == 5) {
-    int hash_func_enum = (*((int*)args->args[4]));
+    int hash_func_enum = (*((int *)args->args[4]));
     hash_func = gx::get_hash_func(hash_func_enum);
     is_result_64 = gx::is_hash_result_64[hash_func_enum];
   }
 
   // The possible type values are STRING_RESULT, INT_RESULT, and REAL_RESULT.
   switch (args->arg_type[3]) {
-  case INT_RESULT:
-    // For arguments of types INT_RESULT or REAL_RESULT, lengths still contains the maximum length of the argument (as for the initialisation function).
-    // For an argument of type INT_RESULT, you must cast args->args[i] to a long long value :
-    hash_func(gx::null_safe_value_ptr(args->args[3], tmp_value_buffer, sizeof(long long), gx::Is_big_endian),
-                        sizeof(long long), gx::DEFAULT_SEED, &hash_res);
-    break;
-  case DECIMAL_RESULT:
-  case STRING_RESULT:
-    // For each invocation of the main function, lengths contains the actual lengths of any string arguments that are passed for the row currently being processed
-    // An argument of type STRING_RESULT is given as a string pointer plus a length, to allow handling of binary data or data of arbitrary length.
-    // The string contents are available as args->args[i] and the string length is args->lengths[i].
-    // You should not assume that strings are null-terminated.
+    case INT_RESULT:
+      // For arguments of types INT_RESULT or REAL_RESULT, lengths still
+      // contains the maximum length of the argument (as for the initialisation
+      // function). For an argument of type INT_RESULT, you must cast
+      // args->args[i] to a long long value :
+      hash_func(gx::null_safe_value_ptr(args->args[3], tmp_value_buffer,
+                                        sizeof(long long), gx::Is_big_endian),
+                sizeof(long long), gx::DEFAULT_SEED, &hash_res);
+      break;
+    case DECIMAL_RESULT:
+    case STRING_RESULT:
+      // For each invocation of the main function, lengths contains the actual
+      // lengths of any string arguments that are passed for the row currently
+      // being processed An argument of type STRING_RESULT is given as a string
+      // pointer plus a length, to allow handling of binary data or data of
+      // arbitrary length. The string contents are available as args->args[i]
+      // and the string length is args->lengths[i]. You should not assume that
+      // strings are null-terminated.
 
-    hash_func(gx::null_safe_value_ptr(args->args[3], tmp_value_buffer, args->lengths[3], false),
-                        args->lengths[3], gx::DEFAULT_SEED, &hash_res);
-    break;
-  case REAL_RESULT:
-    // For an argument of type REAL_RESULT, you must cast args->args[i] to a double value:
-    hash_func(gx::null_safe_value_ptr(args->args[3], tmp_value_buffer, sizeof(double), gx::Is_big_endian),
-                        sizeof(double), gx::DEFAULT_SEED, &hash_res);
-    break;
-  default:
-    return 0;
+      hash_func(gx::null_safe_value_ptr(args->args[3], tmp_value_buffer,
+                                        args->lengths[3], false),
+                args->lengths[3], gx::DEFAULT_SEED, &hash_res);
+      break;
+    case REAL_RESULT:
+      // For an argument of type REAL_RESULT, you must cast args->args[i] to a
+      // double value:
+      hash_func(gx::null_safe_value_ptr(args->args[3], tmp_value_buffer,
+                                        sizeof(double), gx::Is_big_endian),
+                sizeof(double), gx::DEFAULT_SEED, &hash_res);
+      break;
+    default:
+      return 0;
   }
 
   if (!is_result_64) {
     // for 128 bit
-    int64_t hash1 = *(reinterpret_cast<int64_t*>(hash_res));
-    int64_t hash2 = *(reinterpret_cast<int64_t*>(hash_res + 8));
+    int64_t hash1 = *(reinterpret_cast<int64_t *>(hash_res));
+    int64_t hash2 = *(reinterpret_cast<int64_t *>(hash_res + 8));
 
     int64_t combined_hash = hash1;
 
@@ -706,10 +714,10 @@ longlong bloomfilter(UDF_INIT*, UDF_ARGS* args, char*, char*)
     return 1;
   } else {
     // for 64 bit
-    int64_t hash = *(reinterpret_cast<int64_t*>(hash_res));
+    int64_t hash = *(reinterpret_cast<int64_t *>(hash_res));
 
-    int32_t hash1 = (int32_t) hash;
-    int32_t hash2 = (int32_t) (hash >> 32);
+    int32_t hash1 = (int32_t)hash;
+    int32_t hash2 = (int32_t)(hash >> 32);
     int32_t combined_hash = hash1 + hash2;
 
     for (int64_t i = 0; i < numFunc; ++i) {
@@ -741,17 +749,16 @@ bool bloomfilter_init(UDF_INIT *initid MY_ATTRIBUTE((unused)), UDF_ARGS *args,
     return 1;
   }
 
-  if (args->arg_type[3] != REAL_RESULT
-    && args->arg_type[3] != INT_RESULT
-    && args->arg_type[3] != DECIMAL_RESULT
-    && args->arg_type[3] != STRING_RESULT) {
+  if (args->arg_type[3] != REAL_RESULT && args->arg_type[3] != INT_RESULT &&
+      args->arg_type[3] != DECIMAL_RESULT &&
+      args->arg_type[3] != STRING_RESULT) {
     strcpy(message, "illegal datatype");
     return 1;
   }
 
   // Ask mysql to coerce decimal value to double
   if (args->arg_type[3] == DECIMAL_RESULT) {
-      args->arg_type[3] = REAL_RESULT;
+    args->arg_type[3] = REAL_RESULT;
   }
 
   if (args->arg_count == 5) {
@@ -759,7 +766,7 @@ bool bloomfilter_init(UDF_INIT *initid MY_ATTRIBUTE((unused)), UDF_ARGS *args,
       strcpy(message, "illegal hash method version");
       return 1;
     }
-    if (gx::get_hash_func(*((int*)args->args[4])) == nullptr) {
+    if (gx::get_hash_func(*((int *)args->args[4])) == nullptr) {
       strcpy(message, "not supported hash method");
       return 1;
     }
@@ -769,16 +776,13 @@ bool bloomfilter_init(UDF_INIT *initid MY_ATTRIBUTE((unused)), UDF_ARGS *args,
   return 0;
 }
 
-void bloomfilter_deinit(UDF_INIT* initid MY_ATTRIBUTE((unused)))
-{
-}
+void bloomfilter_deinit(UDF_INIT *initid MY_ATTRIBUTE((unused))) {}
 
 void bloomfilter_udf(gs::udf::Udf_definition *def) {
   def->m_name = const_cast<char *>("bloomfilter");
-  def->m_result= INT_RESULT;
+  def->m_result = INT_RESULT;
   def->m_type = UDFTYPE_FUNCTION;
   def->m_func_init = (Udf_func_init)bloomfilter_init;
   def->m_func_deinit = (Udf_func_deinit)bloomfilter_deinit;
   def->m_func = (Udf_func_any)bloomfilter;
 }
-

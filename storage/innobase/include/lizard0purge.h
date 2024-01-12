@@ -33,10 +33,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0purge_h
 #define lizard0purge_h
 
-#include "lizard0undo0types.h"
-#include "lizard0scn.h"
-#include "page0size.h"
 #include "lizard0gcs.h"
+#include "lizard0scn.h"
+#include "lizard0undo0types.h"
+#include "page0size.h"
 
 struct trx_purge_t;
 struct mtr_t;

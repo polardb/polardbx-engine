@@ -33,8 +33,8 @@
 #include "lizard0xa.h"
 
 #include <sql_class.h>
-#include "sql/xa/lizard_xa_trx.h"
 #include "sql/package/proc_undo_purge.h"
+#include "sql/xa/lizard_xa_trx.h"
 
 /**
   Compare whether the xid in thd is the same as the xid in trx (and aslo in
@@ -93,8 +93,8 @@ bool innobase_assign_slot_for_xa(THD *thd, my_slot_ptr_t *slot_ptr_arg) {
   ut_ad(trx);
 
   /** The trx must have been started as rw mode. */
-  if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) ||
-      trx->id == 0 || trx->read_only) {
+  if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) || trx->id == 0 ||
+      trx->read_only) {
     return true;
   }
 

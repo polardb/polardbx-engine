@@ -28,8 +28,8 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "errmsg.h"
 #include "../../../client/mysqlxclient/mysqlxclient_error.h"
+#include "errmsg.h"
 #include "helper/to_string.h"
 
 namespace mysqlxtest {

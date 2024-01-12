@@ -59,8 +59,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 
 #include "lizard0data0types.h"
-#include "lizard0undo.h"
 #include "lizard0dict.h"
+#include "lizard0undo.h"
 
 /** Object to handle Log_DDL */
 Log_DDL *log_ddl = nullptr;

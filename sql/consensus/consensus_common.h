@@ -20,12 +20,11 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef CONSENSUS_CORE_INCLUDED
 #define CONSENSUS_CORE_INCLUDED
 
-#include "sql/bl_consensus_log.h"
 #include "lex_string.h"
+#include "sql/bl_consensus_log.h"
 
 #define CONSENSUS_MAX_NODE_NUMBER 100
 
@@ -70,9 +69,12 @@ typedef struct Consensus_show_logs_result {
   ulonglong start_log_index;
 } Consensus_show_logs_result;
 
-void collect_show_global_results(MEM_ROOT *mem_root, std::vector<Consensus_show_global_result *> &results);
-void collect_show_local_results(MEM_ROOT *mem_root, Consensus_show_local_result *results);
-void collect_show_logs_results(MEM_ROOT *mem_root, std::vector<Consensus_show_logs_result *> &results);
+void collect_show_global_results(
+    MEM_ROOT *mem_root, std::vector<Consensus_show_global_result *> &results);
+void collect_show_local_results(MEM_ROOT *mem_root,
+                                Consensus_show_local_result *results);
+void collect_show_logs_results(
+    MEM_ROOT *mem_root, std::vector<Consensus_show_logs_result *> &results);
 
 } /* namespace im */
 

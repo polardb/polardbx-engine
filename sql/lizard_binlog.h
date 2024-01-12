@@ -65,7 +65,7 @@ namespace xa {
   deterministically.
 */
 int binlog_start_trans(THD *thd);
-}
+}  // namespace xa
 }  // namespace lizard
 
 #endif

@@ -56,8 +56,8 @@
 #include "sql/transaction_info.h"
 #include "sql/xa.h"
 
-#include "ppi/ppi_transaction.h"
 #include "mysql/plugin_audit.h"
+#include "ppi/ppi_transaction.h"
 
 /**
   Helper: Tell tracker (if any) that transaction ended.

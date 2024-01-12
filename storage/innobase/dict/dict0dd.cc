@@ -76,10 +76,10 @@ Data dictionary interface */
 #include "sql_table.h"
 #endif /* !UNIV_HOTBACKUP */
 
-#include "lizard0dict.h"
-#include "lizard0row.h"
-#include "lizard0page.h"
 #include "lizard0data0types.h"
+#include "lizard0dict.h"
+#include "lizard0page.h"
+#include "lizard0row.h"
 
 const char *DD_instant_col_val_coder::encode(const byte *stream, size_t in_len,
                                              size_t *out_len) {

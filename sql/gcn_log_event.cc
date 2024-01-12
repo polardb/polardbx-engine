@@ -230,7 +230,7 @@ uint32 Gcn_log_event::write_data_header_to_memory(uchar *buffer) {
     flags |= FLAG_HAVE_SNAPSHOT_SEQ;
   }
 
-  //DBUG_ASSERT(flags != 0);
+  // DBUG_ASSERT(flags != 0);
 
   *ptr_buffer = flags;
   ptr_buffer += FLAGS_LENGTH;
@@ -290,8 +290,8 @@ int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
 
     /** Set owned_commit_gcn in THD. */
     thd->owned_commit_gcn.set(commit_gcn, (flags & FLAG_GCN_ASSIGNED)
-                                       ? MYSQL_CSR_ASSIGNED
-                                       : MYSQL_CSR_AUTOMATIC);
+                                              ? MYSQL_CSR_ASSIGNED
+                                              : MYSQL_CSR_AUTOMATIC);
   }
 
   return 0;

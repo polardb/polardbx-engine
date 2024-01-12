@@ -159,7 +159,7 @@ bool buffer_to_set(const std::string &buffer,
 }
 
 bool buffer_to_list(const std::string &buffer,
-                   std::list<std::string> *out_result) {
+                    std::list<std::string> *out_result) {
   pb::io::CodedInputStream input_stream(
       reinterpret_cast<const pb::uint8 *>(&buffer[0]),
       static_cast<int>(buffer.length()));

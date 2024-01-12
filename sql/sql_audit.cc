@@ -1003,10 +1003,8 @@ int mysql_audit_notify(THD *thd, mysql_event_message_subclass_t subclass,
 
 int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
                        const char *subclass_name) {
-
   /* Skip rds audit for bootstrap */
-  if (opt_initialize)
-    return 0;
+  if (opt_initialize) return 0;
 
   mysql_event_rds_connection event;
   char user_buff[USERNAME_LENGTH + 1] = "";
@@ -1022,7 +1020,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
   current_utime = my_micro_time();
   event.event_subclass = subclass;
   event.error_code =
-    thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
+      thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
   event.thread_id = thd->thread_id();
   sctx = thd->security_context();
   event.is_super = sctx->check_access(SUPER_ACL);
@@ -1038,17 +1036,18 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
   event.cost_utime = (current_utime - thd->start_utime);
 
   event.endpoint_ip.str = thd->variables.client_endpoint_ip;
-  event.endpoint_ip.length = thd->variables.client_endpoint_ip ?
-    strlen(thd->variables.client_endpoint_ip) : 0;
+  event.endpoint_ip.length = thd->variables.client_endpoint_ip
+                                 ? strlen(thd->variables.client_endpoint_ip)
+                                 : 0;
 
   if (subclass == MYSQL_AUDIT_RDS_CONNECTION_CONNECT) {
     if (event.error_code == 0) {
-      event.message = { C_STRING_WITH_LEN("login success!") };
+      event.message = {C_STRING_WITH_LEN("login success!")};
     } else {
-      event.message = { C_STRING_WITH_LEN("login failed!") };
+      event.message = {C_STRING_WITH_LEN("login failed!")};
     }
   } else if (subclass == MYSQL_AUDIT_RDS_CONNECTION_DISCONNECT) {
-    event.message = { C_STRING_WITH_LEN("logout!") };
+    event.message = {C_STRING_WITH_LEN("logout!")};
   }
 
   Ignore_event_error_handler handler(thd, subclass_name);
@@ -1060,11 +1059,9 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
 int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
                        const char *subclass_name) {
   /* Skip rds audit for bootstrap */
-  if (opt_initialize)
-    return 0;
+  if (opt_initialize) return 0;
   /* Skip rds audit for dd upgrade */
-  if (thd->is_server_upgrade_thread())
-    return 0;
+  if (thd->is_server_upgrade_thread()) return 0;
 
   mysql_event_rds_query event;
   char user_buff[USERNAME_LENGTH + 1] = "";
@@ -1080,7 +1077,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   current_utime = my_micro_time();
   event.event_subclass = subclass;
   event.error_code =
-    thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
+      thd->get_stmt_da()->is_error() ? thd->get_stmt_da()->mysql_errno() : 0;
   event.thread_id = thd->thread_id();
 
   sctx = thd->security_context();
@@ -1103,11 +1100,12 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
 
   event.lock_utime = (thd->get_lock_usec() - thd->start_utime);
   event.cost_utime = (current_utime - thd->start_utime);
-  event.examined_rows = (ulonglong) thd->get_examined_row_count();
+  event.examined_rows = (ulonglong)thd->get_examined_row_count();
 
   event.endpoint_ip.str = thd->variables.client_endpoint_ip;
-  event.endpoint_ip.length = thd->variables.client_endpoint_ip ?
-    strlen(thd->variables.client_endpoint_ip) : 0;
+  event.endpoint_ip.length = thd->variables.client_endpoint_ip
+                                 ? strlen(thd->variables.client_endpoint_ip)
+                                 : 0;
 
   /*
     This could be -1 under some circumstances, check comments for
@@ -1115,7 +1113,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   */
   longlong updated_rows = thd->get_row_count_func();
   event.updated_rows = updated_rows < 0 ? 0 : updated_rows;
-  event.sent_rows = (ulonglong) thd->get_sent_row_count();
+  event.sent_rows = (ulonglong)thd->get_sent_row_count();
 
   if (thd->audit_trx_ctx.state == AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
     event.trx_utime = my_micro_time() - thd->audit_trx_ctx.start_time;
@@ -1132,8 +1130,8 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
     We have to reset trx_id after it had been recorded in the event,
     otherwise trx_id would be not 0 for select SQL in audit log.
   */
-  if (thd->audit_trx_ctx.trx_id != 0 && 
-    thd->audit_trx_ctx.state != AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
+  if (thd->audit_trx_ctx.trx_id != 0 &&
+      thd->audit_trx_ctx.state != AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
     thd->audit_trx_ctx.set_trx_id(0);
   }
 

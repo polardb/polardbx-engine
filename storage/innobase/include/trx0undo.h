@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef trx0undo_h
 #define trx0undo_h
 
+#include "fut0lst.h"
 #include "mtr0mtr.h"
 #include "page0types.h"
 #include "sql/xa.h"
@@ -40,7 +41,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "trx0xa.h"
 #include "univ.i"
-#include "fut0lst.h"
 
 #include "lizard0undo0types.h"
 
@@ -600,11 +600,12 @@ constexpr uint32_t TRX_UNDO_PREV_LOG = 32;
 constexpr uint32_t TRX_UNDO_HISTORY_NODE = 34;
 
 /** Lizard: Offset of the SCN */
-constexpr uint32_t TRX_UNDO_SCN = (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE); // = 46
+constexpr uint32_t TRX_UNDO_SCN =
+    (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE);  // = 46
 /** Lizard: Offset of the utc */
-constexpr uint32_t TRX_UNDO_UTC = (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN); // = 54
+constexpr uint32_t TRX_UNDO_UTC = (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN);  // = 54
 /** Lizard: Offset of the Slot */
-constexpr uint32_t TRX_UNDO_SLOT = (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN);	
+constexpr uint32_t TRX_UNDO_SLOT = (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN);
 
 /** Lizard: offset of the GCN, reuse TRX_NO position */
 constexpr uint32_t TRX_UNDO_GCN = TRX_UNDO_TRX_NO_DUP;

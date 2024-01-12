@@ -66,8 +66,7 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
 
   ut_ad(page_simple_validate_new(page));
   ut_ad(page_zip_simple_validate(page_zip));
-  ut_ad(page_zip_get_size(page_zip) >
-        PAGE_DATA + page_zip_dir_size(page_zip));
+  ut_ad(page_zip_get_size(page_zip) > PAGE_DATA + page_zip_dir_size(page_zip));
   ut_ad(rec_offs_validate(rec, NULL, offsets));
   ut_ad(rec_offs_comp(offsets));
 
@@ -84,7 +83,8 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
             DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN;
 
   /** Get pointer of scn_id in record */
-  field = const_cast<byte *>(rec_get_nth_field(index, rec, offsets, scn_col, &len));
+  field =
+      const_cast<byte *>(rec_get_nth_field(index, rec, offsets, scn_col, &len));
   ut_ad(len == DATA_SCN_ID_LEN);
   ut_ad(field + DATA_SCN_ID_LEN ==
         rec_get_nth_field(index, rec, offsets, scn_col + 1, &len));

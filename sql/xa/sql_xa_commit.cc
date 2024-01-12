@@ -23,17 +23,17 @@
 #include "sql/xa/sql_xa_commit.h"         // Sql_cmd_xa_commit
 #include "mysql/psi/mysql_transaction.h"  // MYSQL_SET_TRANSACTION_XA_STATE
 #include "mysqld_error.h"                 // Error codes
-#include "sql/clone_handler.h"            // Clone_handler::XA_Operation
-#include "sql/debug_sync.h"               // DEBUG_SYNC
-#include "sql/handler.h"                  // commit_owned_gtids
-#include "sql/raii/sentry.h"              // raii::Sentry<>
-#include "sql/rpl_gtid.h"                 // gtid_state_commit_or_rollback
-#include "sql/sql_class.h"                // THD
-#include "sql/sql_lex.h"                  // struct LEX
-#include "sql/tc_log.h"                   // tc_log
+#include "ppi/ppi_transaction.h"
+#include "sql/clone_handler.h"  // Clone_handler::XA_Operation
+#include "sql/debug_sync.h"     // DEBUG_SYNC
+#include "sql/handler.h"        // commit_owned_gtids
+#include "sql/raii/sentry.h"    // raii::Sentry<>
+#include "sql/rpl_gtid.h"       // gtid_state_commit_or_rollback
+#include "sql/sql_class.h"      // THD
+#include "sql/sql_lex.h"        // struct LEX
+#include "sql/tc_log.h"         // tc_log
 #include "sql/transaction.h"  // trans_reset_one_shot_chistics, trans_track_end_trx
 #include "sql/transaction_info.h"  // Transaction_ctx
-#include "ppi/ppi_transaction.h"
 
 namespace {
 /**

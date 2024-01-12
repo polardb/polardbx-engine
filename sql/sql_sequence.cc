@@ -186,8 +186,8 @@ bool PT_create_sequence_stmt::prepare_sequence_fields(const THD *thd) {
     column_attrs->push_back(comment_attr);
 
     /* Column type is bigint(21) */
-    field_type = new (mem_root) PT_numeric_type(const_cast<THD *>(thd),
-        Int_type::BIGINT, field_def->field_length, 0);
+    field_type = new (mem_root) PT_numeric_type(
+        const_cast<THD *>(thd), Int_type::BIGINT, field_def->field_length, 0);
     field_def_base = new (mem_root) PT_field_def(field_type, column_attrs);
 
     field_name_len = strlen(field_def->field_name);
@@ -298,7 +298,7 @@ Sql_cmd *PT_create_sequence_stmt::make_cmd(THD *thd) {
   lex->set_current_query_block(pc.select);
 
   assert((pc2.create_info->used_fields & HA_CREATE_USED_ENGINE) &&
-              pc2.create_info->db_type);
+         pc2.create_info->db_type);
 
   create_table_set_open_action_and_adjust_tables(lex);
 

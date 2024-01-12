@@ -94,7 +94,7 @@ class logger {
   /** For converting the message into a string. */
   std::ostringstream m_oss;
 
-   /** Log subsys name */
+  /** Log subsys name */
   const char *m_subsys_name{nullptr};
 
 #ifndef UNIV_NO_ERR_MSGS
@@ -185,13 +185,13 @@ class logger {
       : m_subsys_name(subsys), m_err(err), m_level(level) {
     m_oss << msg(err, "");
   }
- 
+
   template <class... Args>
-  explicit logger(const char *subsys, loglevel level, int err, Args &&... args)
+  explicit logger(const char *subsys, loglevel level, int err, Args &&...args)
       : m_subsys_name(subsys), m_err(err), m_level(level) {
     m_oss << msg(err, std::forward<Args>(args)...);
   }
- 
+
   explicit logger(const char *subsys, loglevel level)
       : m_subsys_name(subsys), m_err(ER_IB_MSG_0), m_level(level) {}
   /*----------------------------------------------------------------------*/

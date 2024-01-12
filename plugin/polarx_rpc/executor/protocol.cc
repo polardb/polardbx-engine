@@ -6,8 +6,8 @@
 #include "sql/protocol.h"
 #include "sql/sql_class.h"
 
-#include "protocol.h"
 #include "log.h"
+#include "protocol.h"
 
 namespace rpc_executor {
 
@@ -15,9 +15,9 @@ int Protocol::write_metadata(InternalDataSet &dataset) {
   int ret = 0;
   ExecTable *exec_table = dataset.table();
   TABLE *table = exec_table->table();
-  if (xprotocol_.start_result_metadata(table->s->fields,
-                                       ::Protocol::SEND_NUM_ROWS | ::Protocol::SEND_EOF,
-                                       &my_charset_utf8mb4_general_ci)) {
+  if (xprotocol_.start_result_metadata(
+          table->s->fields, ::Protocol::SEND_NUM_ROWS | ::Protocol::SEND_EOF,
+          &my_charset_utf8mb4_general_ci)) {
     ret = 1;
     log_exec_error("write metadata failed");
   } else {
@@ -96,7 +96,7 @@ int Protocol::write_row(InternalDataSet &dataset) {
     if (thd->get_stmt_da()->is_error()) {
       ret = (int)thd->get_stmt_da()->mysql_errno();
       log_exec_error("Agg Item send failed, reason: %s",
-                      thd->get_stmt_da()->message_text());
+                     thd->get_stmt_da()->message_text());
     }
   } else if (dataset.has_project()) {
     String buffer;
@@ -115,7 +115,8 @@ int Protocol::write_row(InternalDataSet &dataset) {
     dataset.get_all_fields(project_fields, field_count);
     for (uint32_t i = 0; i < field_count; ++i) {
       Field *this_field = project_fields[i];
-      // xprotocol_.store(this_field->ptr, this_field->pack_length(), this_field->charset());
+      // xprotocol_.store(this_field->ptr, this_field->pack_length(),
+      // this_field->charset());
 #ifdef MYSQL8
       xprotocol_.store_field(this_field);
 #else
@@ -136,4 +137,4 @@ int Protocol::send_and_flush() {
   return ret;
 }
 
-}
+}  // namespace rpc_executor

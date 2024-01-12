@@ -44,9 +44,9 @@ const byte field_ref_zero[FIELD_REF_SIZE] = {
 
 #include <zlib.h>
 
-#include "lizard0row.h"
 #include "btr0cur.h"
 #include "dict0dict.h"
+#include "lizard0row.h"
 #include "log0recv.h"
 #include "mtr0log.h"
 #include "page0page.h"
@@ -893,9 +893,9 @@ static int page_zip_compress_clust(
       ut_ad(!c_stream->avail_in);
       ut_ad(c_stream->next_in == src);
 
-      memcpy(storage - PAGE_ZIP_TRX_FIELDS_SIZE *
-                           (rec_get_heap_no_new(rec) - 1),
-             c_stream->next_in, PAGE_ZIP_TRX_FIELDS_SIZE);
+      memcpy(
+          storage - PAGE_ZIP_TRX_FIELDS_SIZE * (rec_get_heap_no_new(rec) - 1),
+          c_stream->next_in, PAGE_ZIP_TRX_FIELDS_SIZE);
 
       c_stream->next_in += PAGE_ZIP_TRX_FIELDS_SIZE;
 
@@ -1585,8 +1585,7 @@ static byte *page_zip_write_rec_ext(
 
   /* Note that this will not take into account
   the BLOB columns of rec if create==true. */
-  ut_ad(data + rec_offs_data_size(offsets) -
-            PAGE_ZIP_TRX_FIELDS_SIZE -
+  ut_ad(data + rec_offs_data_size(offsets) - PAGE_ZIP_TRX_FIELDS_SIZE -
             n_ext * BTR_EXTERN_FIELD_REF_SIZE <
         externs - BTR_EXTERN_FIELD_REF_SIZE * page_zip->n_blobs);
 
@@ -1629,8 +1628,8 @@ static byte *page_zip_write_rec_ext(
       start = src + PAGE_ZIP_TRX_FIELDS_SIZE;
 
       /* Store trx_id, roll_ptr, scn_id and undo_ptr. */
-      memcpy(storage - (PAGE_ZIP_TRX_FIELDS_SIZE) * (heap_no - 1),
-             src, PAGE_ZIP_TRX_FIELDS_SIZE);
+      memcpy(storage - (PAGE_ZIP_TRX_FIELDS_SIZE) * (heap_no - 1), src,
+             PAGE_ZIP_TRX_FIELDS_SIZE);
       i += 4; /* skip also roll_ptr, scn_id and undo_ptr, gcn */
     } else if (rec_offs_nth_extern(index, offsets, i)) {
       src = rec_get_nth_field(index, rec, offsets, i, &len);

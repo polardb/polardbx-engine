@@ -5541,7 +5541,6 @@ bool lock_table_names(THD *thd, Table_ref *tables_start, Table_ref *tables_end,
       return true;
     }
   }
-    
 
   // Check schema read only for all schemas.
   for (const Table_ref *table_l : schema_set)
@@ -6624,7 +6623,7 @@ bool open_and_lock_tables(THD *thd, Table_ref *tables, uint flags,
   assert(!thd->is_attachable_ro_transaction_active() &&
          (!thd->is_attachable_rw_transaction_active() ||
           !strcmp(tables->table_name, "gtid_executed") ||
-               thd->is_autonomous_transaction()));
+          thd->is_autonomous_transaction()));
 
   if (open_tables(thd, &tables, &counter, flags, prelocking_strategy)) goto err;
 

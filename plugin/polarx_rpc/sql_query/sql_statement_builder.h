@@ -32,7 +32,7 @@ namespace polarx_rpc {
 class Query_string_builder;
 
 class Sql_statement_builder {
-public:
+ public:
   static const char *const k_sql_namespace;
 
   using Arg_list =
@@ -46,8 +46,8 @@ public:
   void build(const std::string &query, const Arg_list &args,
              const CHARSET_INFO &charset) const;
 
-private:
+ private:
   Query_string_builder *m_qb;
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

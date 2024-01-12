@@ -70,11 +70,10 @@ void Consensus_recovery_manager::add_trx_in_binlog(uint64 consensus_index,
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   external_xids_in_binlog[xid] = consensus_index;
 
-  xp::system(ER_XP_RECOVERY)
-      << "XID = [" << xid << "]"
-      << " Index = [" << consensus_index
-      << " ] was added at "
-         "Consensus_recovery_manager::add_trx_in_binlog";
+  xp::system(ER_XP_RECOVERY) << "XID = [" << xid << "]"
+                             << " Index = [" << consensus_index
+                             << " ] was added at "
+                                "Consensus_recovery_manager::add_trx_in_binlog";
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 }
 
@@ -139,7 +138,7 @@ void Consensus_recovery_manager::add_pending_recovering_trx(
   if (std::count(Pending_recovering_trxs.begin(), Pending_recovering_trxs.end(),
                  consensus_index)) {
     xp::fatal(ER_XP_RECOVERY) << "same index = [" << consensus_index << "] "
-                                  << "is already in pending recovering trxs";
+                              << "is already in pending recovering trxs";
   }
 
   Pending_recovering_trxs.insert(std::make_unique<Pending_recovering_trx>(
@@ -190,8 +189,7 @@ int Consensus_recovery_manager::truncate_pending_recovering_trxs(
       [&](const std::unique_ptr<Pending_recovering_trx> &trx) {
         assert(trx->index() >= consensus_index);
         xp::system(ER_XP_RECOVERY)
-            << "XID = [" << trx->xid() << "] Index = [" << trx->index()
-            << "]"
+            << "XID = [" << trx->xid() << "] Index = [" << trx->index() << "]"
             << " is rollback since index large than " << consensus_index
             << " at "
                "Consensus_recovery_manager::truncate_pending_recovering_trxs ";

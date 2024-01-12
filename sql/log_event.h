@@ -104,7 +104,6 @@ class Basic_ostream;
 
 #include "rpl_rli_ext.h"
 
-
 #ifndef MYSQL_SERVER
 class Format_description_log_event;
 #endif
@@ -820,32 +819,34 @@ class Log_event {
   Log_event_type get_type_code() const { return common_header->type_code; }
 
   bool is_control_event() {
-    return common_header->type_code == binary_log::FORMAT_DESCRIPTION_EVENT
-      || common_header->type_code == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT
-      || common_header->type_code == binary_log::PREVIOUS_GTIDS_LOG_EVENT
-      || common_header->type_code == binary_log::CONSENSUS_LOG_EVENT
-      || common_header->type_code == binary_log::ROTATE_EVENT;
+    return common_header->type_code == binary_log::FORMAT_DESCRIPTION_EVENT ||
+           common_header->type_code ==
+               binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
+           common_header->type_code == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
+           common_header->type_code == binary_log::CONSENSUS_LOG_EVENT ||
+           common_header->type_code == binary_log::ROTATE_EVENT;
   }
 
   /* event generate in follower */
   bool is_local_event() {
-    return common_header->type_code == binary_log::FORMAT_DESCRIPTION_EVENT
-      || common_header->type_code == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT
-      || common_header->type_code == binary_log::PREVIOUS_GTIDS_LOG_EVENT
-      || common_header->type_code == binary_log::CONSENSUS_LOG_EVENT
-      || common_header->type_code == binary_log::ROTATE_EVENT
-      || common_header->type_code == binary_log::CONSENSUS_EMPTY_EVENT
-      || common_header->type_code == binary_log::CONSENSUS_CLUSTER_INFO_EVENT;
+    return common_header->type_code == binary_log::FORMAT_DESCRIPTION_EVENT ||
+           common_header->type_code ==
+               binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
+           common_header->type_code == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
+           common_header->type_code == binary_log::CONSENSUS_LOG_EVENT ||
+           common_header->type_code == binary_log::ROTATE_EVENT ||
+           common_header->type_code == binary_log::CONSENSUS_EMPTY_EVENT ||
+           common_header->type_code == binary_log::CONSENSUS_CLUSTER_INFO_EVENT;
   }
 
   static bool is_local_event_type(Log_event_type type) {
-    return type == binary_log::FORMAT_DESCRIPTION_EVENT
-      || type == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT
-      || type == binary_log::PREVIOUS_GTIDS_LOG_EVENT
-      || type == binary_log::CONSENSUS_LOG_EVENT
-      || type == binary_log::ROTATE_EVENT
-      || type == binary_log::CONSENSUS_EMPTY_EVENT
-      || type == binary_log::CONSENSUS_CLUSTER_INFO_EVENT;
+    return type == binary_log::FORMAT_DESCRIPTION_EVENT ||
+           type == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT ||
+           type == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
+           type == binary_log::CONSENSUS_LOG_EVENT ||
+           type == binary_log::ROTATE_EVENT ||
+           type == binary_log::CONSENSUS_EMPTY_EVENT ||
+           type == binary_log::CONSENSUS_CLUSTER_INFO_EVENT;
   }
 
   /**

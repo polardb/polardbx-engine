@@ -37,16 +37,16 @@ extern bool opt_only_report_warning_when_skip_sequence;
 extern handlerton *sequence_hton;
 
 /* Define the field */
-#define SF_CURRVAL      Sequence_field::FIELD_NUM_CURRVAL
-#define SF_NEXTVAL      Sequence_field::FIELD_NUM_NEXTVAL
-#define SF_MINVALUE     Sequence_field::FIELD_NUM_MINVALUE
-#define SF_MAXVALUE     Sequence_field::FIELD_NUM_MAXVALUE
-#define SF_START        Sequence_field::FIELD_NUM_START
-#define SF_INCREMENT    Sequence_field::FIELD_NUM_INCREMENT
-#define SF_CACHE        Sequence_field::FIELD_NUM_CACHE
-#define SF_CYCLE        Sequence_field::FIELD_NUM_CYCLE
-#define SF_ROUND        Sequence_field::FIELD_NUM_ROUND
-#define SF_END          Sequence_field::FIELD_NUM_END
+#define SF_CURRVAL Sequence_field::FIELD_NUM_CURRVAL
+#define SF_NEXTVAL Sequence_field::FIELD_NUM_NEXTVAL
+#define SF_MINVALUE Sequence_field::FIELD_NUM_MINVALUE
+#define SF_MAXVALUE Sequence_field::FIELD_NUM_MAXVALUE
+#define SF_START Sequence_field::FIELD_NUM_START
+#define SF_INCREMENT Sequence_field::FIELD_NUM_INCREMENT
+#define SF_CACHE Sequence_field::FIELD_NUM_CACHE
+#define SF_CYCLE Sequence_field::FIELD_NUM_CYCLE
+#define SF_ROUND Sequence_field::FIELD_NUM_ROUND
+#define SF_END Sequence_field::FIELD_NUM_END
 
 /** How many rounds then put into sleep */
 #define TIMESTAMP_SEQUENCE_ROUND_SLEEP 100
@@ -170,7 +170,7 @@ class Sequence_share {
     mysql_mutex_destroy(&m_mutex);
     mysql_cond_destroy(&m_cond);
     if (m_name) {
-      my_free(const_cast<char*>(m_name));
+      my_free(const_cast<char *>(m_name));
       m_name = NULL;
     }
     bitmap_free(&m_read_set);
@@ -224,12 +224,11 @@ class Sequence_share {
   Cache_request digital_skip_read(ulonglong *local_values, SR_ctx *sr_ctx);
   Cache_request timestamp_quick_read(ulonglong *local_values, SR_ctx *sr_ctx);
 
-
   /**
-     Show the next value store in cache. It will reload cache if 
+     Show the next value store in cache. It will reload cache if
     current cache has run out.
 
-    Show cache will set local_values to 0 if the sequence has 
+    Show cache will set local_values to 0 if the sequence has
     run out
 
     @param[out]     local_values           local value array
@@ -242,7 +241,7 @@ class Sequence_share {
 
   /**
      handle some specific errors:
-    1. skip_sequence will raise no error if 
+    1. skip_sequence will raise no error if
         opt_only_report_warning_when_skip_sequence is setted
     2. HA_ERR_SEQUENCE_SKIP_ERROR will not invalidate cache
 
@@ -253,7 +252,7 @@ class Sequence_share {
     @retval            error                      error no
   */
   int handle_specific_error(int error, ulonglong *local_values);
-  
+
   /**
     Validate cache.
   */
@@ -700,4 +699,4 @@ class ha_sequence : public handler {
 extern handler *get_ha_sequence(Sequence_info *sequence_info,
                                 MEM_ROOT *mem_root);
 
-#endif  /* HA_SEQUENCE_INCLUDED */
+#endif /* HA_SEQUENCE_INCLUDED */

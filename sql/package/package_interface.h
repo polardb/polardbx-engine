@@ -39,7 +39,7 @@ extern void package_context_init();
 
 /**
   whether exist native proc by schema_name and proc_name
- 
+
   @retval       true              Exist
   @retval       false             Not exist
 */

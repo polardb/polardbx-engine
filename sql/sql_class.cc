@@ -84,6 +84,7 @@
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
 #include "sql/query_result.h"
+#include "sql/recycle_bin/recycle.h"
 #include "sql/rpl_replica.h"  // rpl_master_erroneous_autoinc
 #include "sql/rpl_rli.h"      // Relay_log_info
 #include "sql/rpl_transaction_write_set_ctx.h"
@@ -116,7 +117,6 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
-#include "sql/recycle_bin/recycle.h"
 
 class Parse_tree_root;
 
@@ -884,7 +884,6 @@ void THD::copy_table_access_properties(THD *thd) {
   variables.option_bits = thd->variables.option_bits & OPTION_BIN_LOG;
   skip_readonly_check = thd->skip_readonly_check;
   tx_isolation = thd->tx_isolation;
-
 }
 
 void THD::set_transaction(Transaction_ctx *transaction_ctx) {
@@ -3036,9 +3035,10 @@ bool THD::is_current_stmt_binlog_disabled() const {
 }
 
 bool THD::is_current_stmt_binlog_log_replica_updates_disabled() const {
-  return (!opt_bin_log 
-          || (slave_thread && (!opt_log_replica_updates || this->xpaxos_replication_channel))
-          || !mysql_bin_log.is_open());
+  return (!opt_bin_log ||
+          (slave_thread &&
+           (!opt_log_replica_updates || this->xpaxos_replication_channel)) ||
+          !mysql_bin_log.is_open());
 }
 
 bool THD::is_current_stmt_binlog_enabled_and_caches_empty() const {

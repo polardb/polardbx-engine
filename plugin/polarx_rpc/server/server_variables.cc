@@ -96,7 +96,7 @@ static constexpr uint32_t request_cache_number = 1024;
 static constexpr uint32_t request_cache_instances = 16;
 /// only cache sql/plan smaller than 1MB
 static constexpr uint32_t request_cache_max_length = 1024 * 1024;
-} // namespace defaults
+}  // namespace defaults
 
 my_bool auto_cpu_affinity = defaults::auto_cpu_affinity;
 my_bool multi_affinity_in_group = defaults::multi_affinity_in_group;
@@ -424,4 +424,4 @@ struct SYS_VAR *polarx_rpc_system_variables[] = {
     MYSQL_SYSVAR(epoll_group_tasker_extend_step),
     MYSQL_SYSVAR(enable_epoll_in_tasker),
     nullptr};
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

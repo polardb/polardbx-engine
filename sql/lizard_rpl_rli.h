@@ -64,4 +64,4 @@ constexpr auto is_b_events_before_gtid =
     &Begin_events_before_gtid_manager::is_b_events_before_gtid;
 }  // namespace lizard
 
-#endif // LIZARD_LIZARD_RPL_RLI_INCLUDED
+#endif  // LIZARD_LIZARD_RPL_RLI_INCLUDED

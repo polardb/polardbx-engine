@@ -41,7 +41,7 @@ extern PSI_rwlock_key key_rwlock_outline;
 
 /* Outline object allocator */
 template <typename T, typename... Args>
-T *allocate_outline_object(Args &&... args) {
+T *allocate_outline_object(Args &&...args) {
   return allocate_object<T, Args...>(key_memory_outline,
                                      std::forward<Args>(args)...);
 }

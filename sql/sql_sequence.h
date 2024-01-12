@@ -89,8 +89,9 @@ class PT_create_sequence_stmt : public PT_create_table_stmt {
   */
   explicit PT_create_sequence_stmt(
       MEM_ROOT *mem_root, bool only_if_not_exists, Table_ident *table_name,
-      On_duplicate on_duplicate, const Mem_root_array<PT_create_table_option *>
-                                     *opt_create_sequence_options)
+      On_duplicate on_duplicate,
+      const Mem_root_array<PT_create_table_option *>
+          *opt_create_sequence_options)
       : PT_create_table_stmt(mem_root, false, only_if_not_exists, table_name,
                              NULL, NULL, NULL, on_duplicate, NULL),
         opt_create_sequence_options(opt_create_sequence_options) {}
@@ -170,10 +171,10 @@ class Open_sequence_table_ctx {
    public:
     /* Used by CREATE SEQUENCE. */
     Table_list_state(THD *thd, Table_ref *table) {
-      m_table = new (thd->mem_root) Table_ref(table->db, table->db_length,
-                              table->table_name, table->table_name_length,
-                              table->alias, TL_WRITE_CONCURRENT_DEFAULT,
-                              MDL_SHARED_WRITE);
+      m_table = new (thd->mem_root)
+          Table_ref(table->db, table->db_length, table->table_name,
+                    table->table_name_length, table->alias,
+                    TL_WRITE_CONCURRENT_DEFAULT, MDL_SHARED_WRITE);
       m_table->open_strategy = Table_ref::OPEN_IF_EXISTS;
       m_table->open_type = OT_BASE_ONLY;
     }
@@ -186,10 +187,9 @@ class Open_sequence_table_ctx {
       char *alias = (char *)thd->memdup(share->table_name.str,
                                         share->table_name.length + 1);
 
-      m_table = new (thd->mem_root) Table_ref(db, share->db.length, table_name,
-                                        share->table_name.length, alias,
-                                        TL_WRITE_CONCURRENT_DEFAULT,
-                                        MDL_SHARED_WRITE);
+      m_table = new (thd->mem_root)
+          Table_ref(db, share->db.length, table_name, share->table_name.length,
+                    alias, TL_WRITE_CONCURRENT_DEFAULT, MDL_SHARED_WRITE);
 
       m_table->open_strategy = Table_ref::OPEN_IF_EXISTS;
       m_table->open_type = OT_BASE_ONLY;

@@ -32,7 +32,7 @@ class CtcpConnection;
 class CsessionManager final {
   NO_COPY_MOVE(CsessionManager);
 
-private:
+ private:
   const std::string host_;
   const uint16_t port_;
 
@@ -44,10 +44,9 @@ private:
 
   err_t get_shared_session_and_attach(CmtEpoll &epoll,
                                       std::unique_ptr<reusable_session_t> &ptr);
-  static void
-  detach_and_reuse_shared_session(CmtEpoll &epoll,
-                                  std::unique_ptr<reusable_session_t> &ptr,
-                                  const err_t &err);
+  static void detach_and_reuse_shared_session(
+      CmtEpoll &epoll, std::unique_ptr<reusable_session_t> &ptr,
+      const err_t &err);
 
 #ifdef MYSQL8
   err_t get_tso_mysql80(CtcpConnection &tcp, uint64_t &ts, int32_t batch_count);
@@ -62,7 +61,7 @@ private:
   err_t new_session(CtcpConnection &tcp, const uint64_t &sid,
                     std::shared_ptr<Csession> &ptr);
 
-public:
+ public:
   CsessionManager(std::string host, uint16_t port)
       : host_(std::move(host)), port_(port) {}
 
@@ -74,14 +73,12 @@ public:
     {
       CautoSpinRWLock lck(session_lock_, true, session_poll_rwlock_spin_cnt);
       free_sessions.reserve(sessions_.size());
-      for (auto &s : sessions_)
-        free_sessions.emplace_back(std::move(s.second));
+      for (auto &s : sessions_) free_sessions.emplace_back(std::move(s.second));
       sessions_.clear();
     }
     counter.fetch_sub(static_cast<int>(free_sessions.size()),
                       std::memory_order_release);
-    for (auto &s : free_sessions)
-      s->shutdown(true);
+    for (auto &s : free_sessions) s->shutdown(true);
   }
 
   void execute(CtcpConnection &tcp, const uint64_t &sid, msg_t &&msg,
@@ -90,8 +87,7 @@ public:
   inline std::shared_ptr<Csession> get_session(uint64_t sid) {
     CautoSpinRWLock lck(session_lock_, false, session_poll_rwlock_spin_cnt);
     auto it = sessions_.find(sid);
-    if (it != sessions_.end())
-      return it->second;
+    if (it != sessions_.end()) return it->second;
     return {};
   }
 
@@ -115,8 +111,8 @@ public:
     return false;
   }
 
-  inline void
-  gather_killed_sessions(std::vector<std::shared_ptr<Csession>> &sessions) {
+  inline void gather_killed_sessions(
+      std::vector<std::shared_ptr<Csession>> &sessions) {
     auto has_killed = false;
     /// try optimistic check with read lock
     {
@@ -143,4 +139,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

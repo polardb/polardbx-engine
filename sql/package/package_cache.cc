@@ -21,8 +21,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "my_macros.h"
-#include "mysql/psi/mysql_memory.h"
 #include "mysql/components/services/bits/psi_bits.h"
+#include "mysql/psi/mysql_memory.h"
 
 #include "sql/ccl/ccl_proc.h"
 #include "sql/outline/outline_proc.h"
@@ -30,12 +30,11 @@
 #include "sql/package/package_common.h"
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
-#include "sql/sp_head.h"
-#include "sql/tso/tso_proc.h"
-#include "sql/trans_proc/returning.h"
-#include "sql/ccl/ccl_proc.h"
 #include "sql/recycle_bin/recycle_proc.h"
+#include "sql/sp_head.h"
 #include "sql/trans_proc/implicit_savepoint.h"
+#include "sql/trans_proc/returning.h"
+#include "sql/tso/tso_proc.h"
 
 #include "sql/consensus/consensus_proc.h"
 
@@ -45,8 +44,8 @@
 
 #include "sql/package/show_native_procedure.h"
 
-#include "sql/xa/lizard_xa_proc.h"
 #include "sql/package/proc_undo_purge.h"
+#include "sql/xa/lizard_xa_proc.h"
 #include "sql/xrpc/xrpc_proc.h"
 
 #include "sql/polarx_proc/changeset_proc.h"
@@ -94,7 +93,7 @@ template const Proc *find_package_element(const std::string &schema_name,
 
 /**
   whether exist native proc by schema_name and proc_name
- 
+
   @retval       true              Exist
   @retval       false             Not exist
 */
@@ -156,7 +155,7 @@ void package_context_init() {
   /* dbms_trans.returning() */
   register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
 
- /* dbms_undo.purge_status() */
+  /* dbms_undo.purge_status() */
   register_package<Proc, Proc_purge_status>(PROC_UNDO_SCHEMA);
 
   /* dbms_ccl.add_ccl_rule(...) */
@@ -185,7 +184,7 @@ void package_context_init() {
 
   /* dbms_admin.show_native_procedure() */
   register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);
-  
+
   /* dbms_outln.add_optimizer_outline(...) */
   register_package<Proc, Outline_optimizer_proc_add>(OUTLINE_PROC_SCHEMA);
   /* dbms_outln.add_index_outline(...) */
@@ -208,11 +207,16 @@ void package_context_init() {
   register_package<Proc, Consensus_proc_add_follower>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_drop_learner>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_upgrade_learner>(CONSENSUS_PROC_SCHEMA);
-  register_package<Proc, Consensus_proc_downgrade_follower>(CONSENSUS_PROC_SCHEMA);
-  register_package<Proc, Consensus_proc_refresh_learner_meta>(CONSENSUS_PROC_SCHEMA);
-  register_package<Proc, Consensus_proc_configure_follower>(CONSENSUS_PROC_SCHEMA);
-  register_package<Proc, Consensus_proc_configure_learner>(CONSENSUS_PROC_SCHEMA);
-  register_package<Proc, Consensus_proc_force_single_mode>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_downgrade_follower>(
+      CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_refresh_learner_meta>(
+      CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_configure_follower>(
+      CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_configure_learner>(
+      CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_force_single_mode>(
+      CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_fix_cluster_id>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_fix_matchindex>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_show_global>(CONSENSUS_PROC_SCHEMA);
@@ -221,7 +225,8 @@ void package_context_init() {
   register_package<Proc, Consensus_proc_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_local_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_force_purge_log>(CONSENSUS_PROC_SCHEMA);
-  register_package<Proc, Consensus_proc_drop_prefetch_channel>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_drop_prefetch_channel>(
+      CONSENSUS_PROC_SCHEMA);
 
   /** xrpc.perf_hist() */
   register_package<Proc, Proc_perf_hist>(XRPC_PROC_SCHEMA);

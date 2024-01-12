@@ -33,4 +33,3 @@ this program; if not, write to the Free Software Foundation, Inc.,
 extern LEX_CSTRING CONSENSUS_INFO_NAME;
 
 #endif
-

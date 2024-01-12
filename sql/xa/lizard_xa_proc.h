@@ -62,7 +62,8 @@ class Xa_proc_base : public Proc, public Disable_copy_base {
 */
 class Sql_cmd_xa_proc_base : public Sql_cmd_trans_proc {
  public:
-  explicit Sql_cmd_xa_proc_base(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+  explicit Sql_cmd_xa_proc_base(THD *thd, mem_root_deque<Item *> *list,
+                                const Proc *proc)
       : Sql_cmd_trans_proc(thd, list, proc) {
     set_priv_type(Priv_type::PRIV_NONE_ACL);
   }
@@ -88,7 +89,7 @@ class Sql_cmd_xa_proc_trans_base : public Sql_cmd_admin_proc {
 
   Find transactions status in the finalized state by XID.
 */
-class Sql_cmd_xa_proc_find_by_xid: public Sql_cmd_xa_proc_base {
+class Sql_cmd_xa_proc_find_by_xid : public Sql_cmd_xa_proc_base {
  public:
   explicit Sql_cmd_xa_proc_find_by_xid(THD *thd, mem_root_deque<Item *> *list,
                                        const Proc *proc)
@@ -108,7 +109,7 @@ class Sql_cmd_xa_proc_find_by_xid: public Sql_cmd_xa_proc_base {
   virtual void send_result(THD *thd, bool error) override;
 };
 
-class Xa_proc_find_by_xid: public Xa_proc_base {
+class Xa_proc_find_by_xid : public Xa_proc_base {
   using Sql_cmd_type = Sql_cmd_xa_proc_find_by_xid;
 
   enum enum_parameter {
@@ -345,10 +346,7 @@ class Sql_cmd_xa_proc_advance_gcn_no_flush : public Sql_cmd_xa_proc_trans_base {
 class Xa_proc_advance_gcn_no_flush : public Xa_proc_base {
   using Sql_cmd_type = Sql_cmd_xa_proc_advance_gcn_no_flush;
 
-  enum enum_parameter {
-    XA_PARAM_GCN = 0,
-    XA_PARAM_LAST
-  };
+  enum enum_parameter { XA_PARAM_GCN = 0, XA_PARAM_LAST };
 
   enum_field_types get_field_type(enum_parameter param) {
     switch (param) {
@@ -390,6 +388,6 @@ class Xa_proc_advance_gcn_no_flush : public Xa_proc_base {
   }
 };
 
-}
+}  // namespace im
 
 #endif

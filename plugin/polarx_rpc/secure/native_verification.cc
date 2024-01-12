@@ -38,11 +38,9 @@ namespace polarx_rpc {
 bool Native_verification::verify_authentication_string(
     const std::string &user, const std::string &host,
     const std::string &client_string, const std::string &db_string) const {
-  if (client_string.empty())
-    return db_string.empty();
+  if (client_string.empty()) return db_string.empty();
 
-  if (db_string.empty())
-    return false;
+  if (db_string.empty()) return false;
 
   uint8 db_hash[SCRAMBLE_LENGTH + 1] = {0};
   uint8 user_hash[SCRAMBLE_LENGTH + 1] = {0};
@@ -52,4 +50,4 @@ bool Native_verification::verify_authentication_string(
          ::check_scramble((const uchar *)user_hash, k_salt.c_str(), db_hash);
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

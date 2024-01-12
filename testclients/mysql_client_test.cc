@@ -23464,28 +23464,26 @@ static void test_bug25584097() {
   thd.join();
 }
 
-static void test_client_endpoint_ip()
-{
+static void test_client_endpoint_ip() {
   int rc;
   MYSQL *lmysql;
   DBUG_ENTER("test_client_endpoint_ip");
   myheader("test_client_endpoint_ip");
-  lmysql= mysql_client_init(NULL);
+  lmysql = mysql_client_init(NULL);
   DIE_UNLESS(lmysql);
   /* put in an attr */
-  rc= mysql_options4(lmysql, MYSQL_OPT_CONNECT_ATTR_ADD,
-                     "_endpoint_ip", "42.42.42.42");
+  rc = mysql_options4(lmysql, MYSQL_OPT_CONNECT_ATTR_ADD, "_endpoint_ip",
+                      "42.42.42.42");
   DIE_UNLESS(!rc);
   if (!mysql_real_connect(lmysql, opt_host, opt_user, opt_password,
-                          opt_db ? opt_db : "test", opt_port,
-                          opt_unix_socket, 0))
-  {
-    mysql= lmysql;
+                          opt_db ? opt_db : "test", opt_port, opt_unix_socket,
+                          0)) {
+    mysql = lmysql;
     myerror("mysql_real_connect failed");
     mysql_close(lmysql);
     exit(1);
   }
-  rc= mysql_query(lmysql, "SELECT @@client_endpoint_ip;");
+  rc = mysql_query(lmysql, "SELECT @@client_endpoint_ip;");
   myquery(rc);
   mysql_close(lmysql);
   DBUG_VOID_RETURN;

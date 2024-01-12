@@ -46,7 +46,7 @@
 namespace polarx_rpc {
 
 class Query_formatter {
-public:
+ public:
   Query_formatter(std::string &query);
 
   inline void set_charset(const CHARSET_INFO *charset) {
@@ -54,8 +54,9 @@ public:
     assert(m_charset != nullptr);
   }
 
-  template <typename Value_type> class No_escape {
-  public:
+  template <typename Value_type>
+  class No_escape {
+   public:
     explicit No_escape(const Value_type &value) : m_value(value) {}
 
     const Value_type &m_value;
@@ -76,8 +77,9 @@ public:
 
   std::size_t count_tags() const;
 
-private:
-  template <typename Value_type> Query_formatter &put(const Value_type &value) {
+ private:
+  template <typename Value_type>
+  Query_formatter &put(const Value_type &value) {
     validate_next_tag();
     std::string string_value = to_string(value);
     put_value(string_value.c_str(), string_value.length());
@@ -112,13 +114,13 @@ private:
   void put_ident_and_escape(const char *value, std::size_t length);
 
   std::string &m_query;
-  const CHARSET_INFO *m_charset; /// target sql charset
+  const CHARSET_INFO *m_charset;  /// target sql charset
   std::size_t m_last_tag_position;
   std::size_t m_prev_start_position{0};
 
   /** Fast query string builder buffer. */
   std::vector<std::unique_ptr<std::string>> m_bufs;
-  static constexpr size_t BLOCK_BUF_SIZE = 0x10000; // 64KB
+  static constexpr size_t BLOCK_BUF_SIZE = 0x10000;  // 64KB
 
   inline std::string &reserve_buf(size_t size) {
     if (m_bufs.empty()) {
@@ -130,8 +132,7 @@ private:
     if (size <= BLOCK_BUF_SIZE) {
       // Allocate new if now not enough.
       auto &now = *m_bufs.back();
-      if (now.size() + size <= BLOCK_BUF_SIZE)
-        return now;
+      if (now.size() + size <= BLOCK_BUF_SIZE) return now;
       // Allocate new one.
       std::unique_ptr<std::string> block(new std::string);
       block->reserve(BLOCK_BUF_SIZE);
@@ -145,7 +146,7 @@ private:
     return *m_bufs.back();
   }
 
-public:
+ public:
   inline void finalize() {
     // Concat last one.
     if (m_prev_start_position < m_query.size())
@@ -153,8 +154,7 @@ public:
                             m_query.size() - m_prev_start_position);
     // Form full stmt.
     size_t sz = 0;
-    for (const auto &block : m_bufs)
-      sz += block->size();
+    for (const auto &block : m_bufs) sz += block->size();
     m_query.resize(sz);
     auto ptr = const_cast<char *>(m_query.data());
     for (const auto &block : m_bufs) {
@@ -184,4 +184,4 @@ inline Query_formatter &Query_formatter::put<bool>(const bool &value) {
   return *this;
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

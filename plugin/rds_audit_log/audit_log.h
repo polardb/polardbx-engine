@@ -115,7 +115,7 @@ class MYSQL_RDS_AUDIT_LOG {
   enum enum_log_format { PLAIN, JSON };
 
   /* PolorDB 8.0 supports MYSQL_V2, we don't */
-  enum enum_log_version {MYSQL_V1, MYSQL_V3};
+  enum enum_log_version { MYSQL_V1, MYSQL_V3 };
 
   /*
     The strategy used when write to audit log file.
@@ -139,33 +139,24 @@ class MYSQL_RDS_AUDIT_LOG {
     LOG_QUERIES :    Log only query events
     LOG_NONE    :    Log nothing (disable the audit stream)
   */
-  enum enum_log_policy {
-    LOG_ALL,
-    LOG_LOGINS,
-    LOG_QUERIES,
-    LOG_NONE
-  };
+  enum enum_log_policy { LOG_ALL, LOG_LOGINS, LOG_QUERIES, LOG_NONE };
 
-    /*
-    This policy controls how connection event is written to log file
-    CONN_ALL    : Log all connection events
-    CONN_ERRORS : Log only failed connection events
-    CONN_NONE   : Do not log connection events
-  */
-  enum enum_log_connection_policy {
-    CONN_ALL,
-    CONN_ERRORS,
-    CONN_NONE
-  };
+  /*
+  This policy controls how connection event is written to log file
+  CONN_ALL    : Log all connection events
+  CONN_ERRORS : Log only failed connection events
+  CONN_NONE   : Do not log connection events
+*/
+  enum enum_log_connection_policy { CONN_ALL, CONN_ERRORS, CONN_NONE };
 
-    /*
-    This policy controls how query event is written to log file
-    STMT_ALL               : Log all statement events
-    STMT_UPDATES           : Log only update statement events
-    STMT_UPDATES_OR_ERRORS : Log only update or failed statement events
-    STMT_ERRORS            : Log only failed statement events
-    STMT_NONE              : Do not log statement events
-  */
+  /*
+  This policy controls how query event is written to log file
+  STMT_ALL               : Log all statement events
+  STMT_UPDATES           : Log only update statement events
+  STMT_UPDATES_OR_ERRORS : Log only update or failed statement events
+  STMT_ERRORS            : Log only failed statement events
+  STMT_NONE              : Do not log statement events
+*/
   enum enum_log_statement_policy {
     STMT_ALL,
     STMT_UPDATES,
@@ -600,13 +591,10 @@ class MYSQL_RDS_AUDIT_LOG {
 
  public:
   /* Constuctor */
-  MYSQL_RDS_AUDIT_LOG(const char* dir, ulong n_buf_size,
-                      ulong n_row_limit, ulong log_format,
-                      ulong log_strategy, ulong log_policy,
-                      ulong log_conn_policy,
-                      ulong log_stmt_policy,
-                      ulong log_version,
-                      bool enable);
+  MYSQL_RDS_AUDIT_LOG(const char *dir, ulong n_buf_size, ulong n_row_limit,
+                      ulong log_format, ulong log_strategy, ulong log_policy,
+                      ulong log_conn_policy, ulong log_stmt_policy,
+                      ulong log_version, bool enable);
 
   /* Destructor */
   ~MYSQL_RDS_AUDIT_LOG();
@@ -645,7 +633,7 @@ class MYSQL_RDS_AUDIT_LOG {
   /* Change log connection policy. */
   void set_log_connection_policy(enum_log_connection_policy conn_policy);
 
-    /* Change log statement policy. */
+  /* Change log statement policy. */
   void set_log_statement_policy(enum_log_statement_policy stmt_policy);
 
   /*
@@ -753,41 +741,29 @@ class MYSQL_RDS_AUDIT_LOG {
     return lost_row_num_by_row_limit_total.load();
   }
 
-  inline ulonglong get_log_total_size() {
-    return log_total_size.load();
-  }
+  inline ulonglong get_log_total_size() { return log_total_size.load(); }
 
   inline ulonglong get_log_event_max_drop_size() {
     return log_event_max_drop_size.load();
   }
 
-  inline ulonglong get_log_events() {
-    return log_events.load();
-  }
+  inline ulonglong get_log_events() { return log_events.load(); }
 
   inline ulonglong get_log_events_filtered() {
     return log_events_filtered.load();
   }
 
-  inline ulonglong get_log_events_lost() {
-    return log_events_lost.load();
-  }
+  inline ulonglong get_log_events_lost() { return log_events_lost.load(); }
 
   inline ulonglong get_log_events_written() {
     return log_events_written.load();
   }
 
-  inline ulonglong get_log_write_waits() {
-    return log_write_waits.load();
-  }
+  inline ulonglong get_log_write_waits() { return log_write_waits.load(); }
 
-  inline ulonglong get_log_file_writes() {
-    return log_file_writes.load();
-  }
+  inline ulonglong get_log_file_writes() { return log_file_writes.load(); }
 
-  inline ulonglong get_log_file_syncs() {
-    return log_file_syncs.load();
-  }
+  inline ulonglong get_log_file_syncs() { return log_file_syncs.load(); }
 };
 
 /* Singleton of MySQL_RDS_AUDIT_LOG */

@@ -39,11 +39,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0ut.h"
 #include "ut0mutex.h"
 
-
 #include "mtr0types.h"
 
 /** The number gap of persist scn number into system tablespace */
-#define GCS_SCN_NUMBER_MAGIN 8192 
+#define GCS_SCN_NUMBER_MAGIN 8192
 
 struct mtr_t;
 
@@ -378,7 +377,6 @@ class GCN {
   bool m_inited;
 };
 
-
 /** gcn persister */
 class GcnPersister : public Persister {
  public:
@@ -420,10 +418,10 @@ enum scn_state_t commit_mark_state(const commit_mark_t &cmmt);
 #define COMMIT_MARK_NULL \
   { lizard::SCN_NULL, lizard::US_NULL, lizard::GCN_NULL, CSR_AUTOMATIC }
 
-#define COMMIT_MARK_LOST                                                  \
-  {                                                                      \
+#define COMMIT_MARK_LOST                                                \
+  {                                                                     \
     lizard::SCN_UNDO_LOST, lizard::US_UNDO_LOST, lizard::GCN_UNDO_LOST, \
-        CSR_AUTOMATIC                                                    \
+        CSR_AUTOMATIC                                                   \
   }
 
 inline bool commit_mark_is_lost(commit_mark_t &cmmt) {

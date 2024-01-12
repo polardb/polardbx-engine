@@ -109,9 +109,7 @@ static void get_transaction_stat_noop(PPI_thread *, PPI_transaction_stat *) {
   return;
 }
 
-static void rows_read_delete_mark_noop(unsigned long long) {
-  return;
-}
+static void rows_read_delete_mark_noop(unsigned long long) { return; }
 
 /* The noop definition for thread service */
 static PPI_statement_service_t PPI_statement_service_noop = {

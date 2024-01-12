@@ -11,7 +11,7 @@
 namespace polarx_rpc {
 
 class Decimal {
-public:
+ public:
   Decimal() = default;
 
   explicit Decimal(const std::string &s) {
@@ -78,8 +78,7 @@ public:
         m_buffer = "";
         return;
       }
-      if (sign)
-        m_buffer.push_back(sign << 4);
+      if (sign) m_buffer.push_back(sign << 4);
     }
   }
 
@@ -91,8 +90,7 @@ public:
   }
 
   bool str(std::string *value_str) const {
-    if (m_buffer.length() < 1)
-      return false;
+    if (m_buffer.length() < 1) return false;
     size_t scale = m_buffer[0];
 
     for (std::string::const_iterator d = m_buffer.begin() + 1;
@@ -101,23 +99,20 @@ public:
       uint32_t n2 = (uint32_t)*d & 0xf;
 
       if (n1 > 9) {
-        if (n1 == 0xb || n1 == 0xd)
-          (*value_str) = "-" + (*value_str);
+        if (n1 == 0xb || n1 == 0xd) (*value_str) = "-" + (*value_str);
         break;
       } else {
         (*value_str).push_back('0' + n1);
       }
       if (n2 > 9) {
-        if (n2 == 0xb || n2 == 0xd)
-          (*value_str) = "-" + (*value_str);
+        if (n2 == 0xb || n2 == 0xd) (*value_str) = "-" + (*value_str);
         break;
       } else {
         (*value_str).push_back('0' + n2);
       }
     }
 
-    if (scale > (*value_str).length())
-      return false;
+    if (scale > (*value_str).length()) return false;
 
     if (scale > 0) {
       (*value_str).insert((*value_str).length() - scale, 1, '.');
@@ -136,8 +131,7 @@ public:
     std::string result;
     auto error = str(&result);
 
-    if (error)
-      return "";
+    if (error) return "";
 
     return result;
   }
@@ -148,9 +142,9 @@ public:
     return dec;
   }
 
-private:
+ private:
   /* first byte stores the scale (number of digits after '.') */
   /* then all digits in BCD */
   std::string m_buffer;
 };
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

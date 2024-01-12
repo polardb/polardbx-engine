@@ -136,19 +136,13 @@ bool Lazy_printer::print(const char *msg) {
   return false;
 }
 
-void Lazy_printer::reset() {
-  m_first = true;
-}
+void Lazy_printer::reset() { m_first = true; }
 
 Heartbeat_freezer hb_freezer;
 
-void hb_freezer_heartbeat() {
-  hb_freezer.heartbeat();
-}
+void hb_freezer_heartbeat() { hb_freezer.heartbeat(); }
 
-bool hb_freezer_determine_freeze() {
-  return hb_freezer.determine_freeze();
-}
+bool hb_freezer_determine_freeze() { return hb_freezer.determine_freeze(); }
 
 bool hb_freezer_is_freeze() {
   return opt_no_heartbeat_freeze && hb_freezer.is_freeze();

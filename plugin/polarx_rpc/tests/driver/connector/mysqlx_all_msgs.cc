@@ -36,7 +36,8 @@ Message_server_by_id server_msgs_by_id;
 Message_client_by_id client_msgs_by_id;
 
 static struct init_message_factory {
-  template <class C> static xcl::XProtocol::Message *create() {
+  template <class C>
+  static xcl::XProtocol::Message *create() {
     return new C();
   }
 
@@ -46,8 +47,7 @@ static struct init_message_factory {
     server_msgs_by_name[name] = std::make_pair(&create<T>, id);
     server_msgs_by_id[id] = std::make_pair(&create<T>, name);
 
-    if (!full_name.empty())
-      server_msgs_by_full_name[full_name] = name;
+    if (!full_name.empty()) server_msgs_by_full_name[full_name] = name;
   }
 
   template <typename T, typename Message_type_id>
@@ -56,8 +56,7 @@ static struct init_message_factory {
     client_msgs_by_name[name] = std::make_pair(&create<T>, id);
     client_msgs_by_id[id] = std::make_pair(&create<T>, name);
 
-    if (!full_name.empty())
-      client_msgs_by_full_name[full_name] = name;
+    if (!full_name.empty()) client_msgs_by_full_name[full_name] = name;
   }
 
   init_message_factory() {
@@ -149,30 +148,34 @@ static struct init_message_factory {
         PolarXRPC::ServerMessages::RESULTSET_TOKEN_DONE, "RESULTSET_TOKEN_DONE",
         "PolarXRPC.Resultset.TokenDone");
     client_message<PolarXRPC::ExecPlan::AutoSp>(
-        PolarXRPC::ClientMessages::AUTO_SP, "AUTO_SP",
-        "PolarXRPC.Sql.AutoSp");
-
+        PolarXRPC::ClientMessages::AUTO_SP, "AUTO_SP", "PolarXRPC.Sql.AutoSp");
 
     server_message<PolarXRPC::PhysicalBackfill::GetFileInfoOperator>(
-        PolarXRPC::ServerMessages::RESULTSET_GET_FILE_INFO_OK, "RESULTSET_GET_FILE_INFO_OK",
+        PolarXRPC::ServerMessages::RESULTSET_GET_FILE_INFO_OK,
+        "RESULTSET_GET_FILE_INFO_OK",
         "PolarXRPC.PhysicalBackfill.GetFileInfoOperator");
 
     server_message<PolarXRPC::PhysicalBackfill::TransferFileDataOperator>(
-        PolarXRPC::ServerMessages::RESULTSET_TRANSFER_FILE_DATA_OK, "RESULTSET_TRANSFER_FILE_DATA_OK",
+        PolarXRPC::ServerMessages::RESULTSET_TRANSFER_FILE_DATA_OK,
+        "RESULTSET_TRANSFER_FILE_DATA_OK",
         "PolarXRPC.PhysicalBackfill.TransferFileDataOperator");
 
     server_message<PolarXRPC::PhysicalBackfill::FileManageOperatorResponse>(
-       PolarXRPC::ServerMessages::RESULTSET_FILE_MANAGE_OK, "RESULTSET_FILE_MANAGE_OK",
-       "PolarXRPC.PhysicalBackfill.FileManageOperatorResponse");
+        PolarXRPC::ServerMessages::RESULTSET_FILE_MANAGE_OK,
+        "RESULTSET_FILE_MANAGE_OK",
+        "PolarXRPC.PhysicalBackfill.FileManageOperatorResponse");
 
-     client_message<PolarXRPC::PhysicalBackfill::GetFileInfoOperator>(
-             PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO, "FILE_OPERATION_GET_FILE_INFO",
-             "PolarXRPC.PhysicalBackfill.GetFileInfoOperator");
-      client_message<PolarXRPC::PhysicalBackfill::FileManageOperator>(
-              PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE, "FILE_OPERATION_FILE_MANAGE",
-              "PolarXRPC.PhysicalBackfill.FileManageOperator");
-      client_message<PolarXRPC::PhysicalBackfill::TransferFileDataOperator>(
-              PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA, "FILE_OPERATION_TRANSFER_FILE_DATA",
-              "PolarXRPC.PhysicalBackfill.TransferFileDataOperator");
+    client_message<PolarXRPC::PhysicalBackfill::GetFileInfoOperator>(
+        PolarXRPC::ClientMessages::FILE_OPERATION_GET_FILE_INFO,
+        "FILE_OPERATION_GET_FILE_INFO",
+        "PolarXRPC.PhysicalBackfill.GetFileInfoOperator");
+    client_message<PolarXRPC::PhysicalBackfill::FileManageOperator>(
+        PolarXRPC::ClientMessages::FILE_OPERATION_FILE_MANAGE,
+        "FILE_OPERATION_FILE_MANAGE",
+        "PolarXRPC.PhysicalBackfill.FileManageOperator");
+    client_message<PolarXRPC::PhysicalBackfill::TransferFileDataOperator>(
+        PolarXRPC::ClientMessages::FILE_OPERATION_TRANSFER_FILE_DATA,
+        "FILE_OPERATION_TRANSFER_FILE_DATA",
+        "PolarXRPC.PhysicalBackfill.TransferFileDataOperator");
   }
 } init_message_factory;

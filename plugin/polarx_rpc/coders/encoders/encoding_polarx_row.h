@@ -24,10 +24,10 @@
 
 #pragma once
 
+#include <google/protobuf/wire_format_lite.h>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <google/protobuf/wire_format_lite.h>
 #include <string>
 #include <vector>
 
@@ -42,14 +42,15 @@
 namespace polarx_rpc {
 namespace protocol {
 
-template <typename Encoder_type> class XRow_encoder_base {
-private:
+template <typename Encoder_type>
+class XRow_encoder_base {
+ private:
   using Position = typename Encoder_type::Position;
   Encoder_type *m_encoder = nullptr;
   Position m_row_begin;
   uint32_t m_fields;
 
-public:
+ public:
   explicit XRow_encoder_base(Encoder_type *encoder) : m_encoder(encoder) {}
 
   uint32_t get_num_fields() const { return m_fields; }
@@ -238,7 +239,7 @@ public:
     ++m_fields;
     m_encoder->template ensure_buffer_size<24>();
     m_encoder->template encode_field_delimited_header<tags::Row::field>();
-    m_encoder->template encode_const_var_uint<4>(); // Field size
+    m_encoder->template encode_const_var_uint<4>();  // Field size
     m_encoder->encode_fixed_uint32(
         google::protobuf::internal::WireFormatLite::EncodeFloat(value));
   }
@@ -247,7 +248,7 @@ public:
     ++m_fields;
     m_encoder->template ensure_buffer_size<28>();
     m_encoder->template encode_field_delimited_header<tags::Row::field>();
-    m_encoder->template encode_const_var_uint<8>(); // Field size
+    m_encoder->template encode_const_var_uint<8>();  // Field size
     m_encoder->encode_fixed_uint64(
         google::protobuf::internal::WireFormatLite::EncodeDouble(value));
   }
@@ -289,10 +290,10 @@ public:
 };
 
 class PolarX_Row_encoder : public XRow_encoder_base<PolarX_Protocol_encoder> {
-public:
+ public:
   using Base = XRow_encoder_base<PolarX_Protocol_encoder>;
   using Base::Base;
 };
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

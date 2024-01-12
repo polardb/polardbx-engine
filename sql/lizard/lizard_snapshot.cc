@@ -28,14 +28,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/lizard/lizard_snapshot.h"
 
-#include "sql/parse_tree_node_base.h"
-#include "sql/sql_class.h"
-#include "sql/table.h"
-#include "sql/sql_lex.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
 #include "sql/item_timefunc.h"
 #include "sql/mysqld.h"
+#include "sql/parse_tree_node_base.h"
+#include "sql/sql_class.h"
+#include "sql/sql_lex.h"
+#include "sql/table.h"
 
 #include "sql/mysqld.h"
 
@@ -202,7 +202,6 @@ static bool try_cast_to_gcn(THD *thd, Item **item) {
   return false;
 }
 
-
 /**
   Itemize the snapshot item and hook onto TABLE_LIST.
 
@@ -351,7 +350,6 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
   return false;
 }
 
-
 int Snapshot_gcn_hint::evoke_vision(TABLE *table, THD *thd) {
   Snapshot_gcn_vision *vision =
       dynamic_cast<Snapshot_gcn_vision *>(table->table_snapshot.get(type()));
@@ -396,7 +394,7 @@ bool Snapshot_gcn_vision::too_old() const {
              innodb_hton->ext.snapshot_automatic_gcn_too_old(m_gcn);
     case MYSQL_CSR_ASSIGNED:
       assert(m_current_scn == MYSQL_SCN_NULL && m_gcn != MYSQL_GCN_NULL);
-      return  innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn);
+      return innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn);
     default:
       assert(m_csr == MYSQL_CSR_NONE);
       return true;
@@ -518,4 +516,3 @@ bool Table_ref::process_snapshot_hint(THD *thd) {
   }
   return false;
 }
-

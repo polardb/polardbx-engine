@@ -67,7 +67,7 @@ static int polarx_rpc_init(MYSQL_PLUGIN info) {
 
 static int polarx_rpc_deinit(void *arg MY_ATTRIBUTE((unused))) {
   plugin_info.exit.store(true, std::memory_order_release);
-  plugin_info.server.reset(); /// un-initialize
+  plugin_info.server.reset();  /// un-initialize
   /// listener and cache never free
 
   my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
@@ -213,23 +213,23 @@ static int audit_event_notify(MYSQL_THD, mysql_event_class_t event_class,
 
     /// start exit threads
     plugin_info.exit.store(true, std::memory_order_release);
-    plugin_info.server.reset(); /// un-initialize
+    plugin_info.server.reset();  /// un-initialize
   }
   return 0;
 }
 
 /// cleanup callback
 static struct st_mysql_audit polarx_rpc_plugin_descriptor = {
-    MYSQL_AUDIT_INTERFACE_VERSION, // interface version
-    nullptr,                       // release_thd()
-    audit_event_notify,            // event_notify()
-    {0,                            // MYSQL_AUDIT_GENERAL_CLASS
-     0,                            // MYSQL_AUDIT_CONNECTION_CLASS
-     0,                            // MYSQL_AUDIT_PARSE_CLASS
-     0,                            // MYSQL_AUDIT_AUTHORIZATION_CLASS
-     0,                            // MYSQL_AUDIT_TABLE_ACCESS_CLASS
-     0,                            // MYSQL_AUDIT_GLOBAL_VARIABLE_CLASS
-     0,                            // MYSQL_AUDIT_SERVER_STARTUP_CLASS
+    MYSQL_AUDIT_INTERFACE_VERSION,  // interface version
+    nullptr,                        // release_thd()
+    audit_event_notify,             // event_notify()
+    {0,                             // MYSQL_AUDIT_GENERAL_CLASS
+     0,                             // MYSQL_AUDIT_CONNECTION_CLASS
+     0,                             // MYSQL_AUDIT_PARSE_CLASS
+     0,                             // MYSQL_AUDIT_AUTHORIZATION_CLASS
+     0,                             // MYSQL_AUDIT_TABLE_ACCESS_CLASS
+     0,                             // MYSQL_AUDIT_GLOBAL_VARIABLE_CLASS
+     0,                             // MYSQL_AUDIT_SERVER_STARTUP_CLASS
      static_cast<unsigned long>(MYSQL_AUDIT_SERVER_SHUTDOWN_SHUTDOWN)}};
 
 mysql_declare_plugin(polarx_rpc){

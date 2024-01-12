@@ -18,7 +18,7 @@ namespace polarx_rpc {
 class CrequestCache final {
   NO_COPY_MOVE(CrequestCache);
 
-public:
+ public:
   struct plan_store_t final {
     std::string audit_str;
     std::shared_ptr<PolarXRPC::ExecPlan::AnyPlan> plan;
@@ -26,23 +26,22 @@ public:
     plan_store_t() : audit_str(), plan() {}
   };
 
-private:
+ private:
   const size_t hash_slots_;
   std::vector<
       std::unique_ptr<CcopyableLru<std::string, std::shared_ptr<std::string>>>>
-      sql_cache_; /// digest -> sql
+      sql_cache_;  /// digest -> sql
   std::vector<std::unique_ptr<CcopyableLru<std::string, plan_store_t>>>
-      plan_cache_; /// digest -> <audit_str, plan>
+      plan_cache_;  /// digest -> <audit_str, plan>
   std::hash<std::string> hasher_;
 
-public:
+ public:
   CrequestCache(size_t cache_size, size_t hash_slots)
       : hash_slots_(hash_slots) {
     sql_cache_.reserve(hash_slots_);
     plan_cache_.reserve(hash_slots_);
     auto cache_per_slot = cache_size / hash_slots_;
-    if (cache_per_slot < 1)
-      cache_per_slot = 1;
+    if (cache_per_slot < 1) cache_per_slot = 1;
     for (size_t i = 0; i < hash_slots; ++i) {
       sql_cache_.emplace_back(
           new CcopyableLru<std::string, std::shared_ptr<std::string>>(
@@ -84,4 +83,4 @@ public:
   }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

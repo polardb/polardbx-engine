@@ -128,4 +128,3 @@ struct gp_wait_t {
 };
 
 #endif
-

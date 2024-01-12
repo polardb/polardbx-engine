@@ -24,9 +24,9 @@
 
 #pragma once
 
+#include <google/protobuf/wire_format_lite.h>
 #include <cassert>
 #include <cstdint>
-#include <google/protobuf/wire_format_lite.h>
 #include <string>
 
 #include "my_dbug.h"
@@ -46,11 +46,11 @@ namespace protocol {
   fields and X headers.
 */
 class PolarX_Protocol_encoder : public Protobuf_encoder {
-private:
+ private:
   constexpr static uint32_t k_header_size = 8 + 4 + 1;
   uint64_t m_sid;
 
-public:
+ public:
   explicit PolarX_Protocol_encoder(const uint64_t &sid, Encoding_buffer *buffer)
       : Protobuf_encoder(buffer), m_sid(sid) {
     ensure_buffer_size<1>();
@@ -90,9 +90,11 @@ public:
     }
   };
 
-  template <uint32_t delimiter_length> struct Field_delimiter : Position {};
+  template <uint32_t delimiter_length>
+  struct Field_delimiter : Position {};
 
-  template <uint32_t id> void empty_xmessage() {
+  template <uint32_t id>
+  void empty_xmessage() {
     ensure_buffer_size<k_header_size>();
 
     primitives::base::Fixint_length<8>::encode_value(m_page->m_current_data,
@@ -148,12 +150,12 @@ public:
   void abort_xmessage(const Position &position) {
     auto page = position.m_page->m_next_page;
 
-    m_buffer->remove_page_list(page); /// may null but can deal it
+    m_buffer->remove_page_list(page);  /// may null but can deal it
 
     /// restore encoder ptr and buffer ptr
     m_page = position.m_page;
     m_page->m_current_data = position.m_position;
-    m_page->m_next_page = nullptr; /// Important: unlink to prevent double free
+    m_page->m_next_page = nullptr;  /// Important: unlink to prevent double free
     m_buffer->m_current = m_page;
   }
 
@@ -183,5 +185,5 @@ public:
   }
 };
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

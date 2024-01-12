@@ -16,7 +16,7 @@ class Cnumber final {
   NO_CONSTRUCTOR(Cnumber);
   NO_COPY_MOVE(Cnumber);
 
-public:
+ public:
   static inline uint32_t next_power_of_two_u32(uint32_t v) {
     --v;
     v |= v >> 1;
@@ -51,4 +51,4 @@ public:
   }
 };
 
-} // namespace utility
+}  // namespace polarx_rpc

@@ -2,32 +2,32 @@
 #define POLARX_PROC_CHANGESET_H
 
 // #include <my_global.h>
-#include <mysql.h>
 #include <dirent.h>
+#include <mysql.h>
 #include <mysql/plugin.h>
 #include <mysql/service_my_plugin_log.h>
 
 #include "plugin/polarx_rpc/utility/atomicex.h"
 
-#include "../sql_base.h"
-#include "../sql_admin.h"
-#include "../sql_plugin.h"
-#include "sql_string.h"
-#include "../sql_class.h"
-#include "../sql_udf.h"
-#include "../my_decimal.h"
-#include "my_base.h"
-#include "../package/proc.h"
-#include "../table.h"
-#include "../field.h"
 #include "../common/component.h"
-#include "thread_pool.h"
-#include "mysqld_error.h"
-#include "field_types.h"
-#include "../log.h"
-#include "../item.h"
-#include "../mysqld.h"
 #include "../consensus_log_manager.h"
+#include "../field.h"
+#include "../item.h"
+#include "../log.h"
+#include "../my_decimal.h"
+#include "../mysqld.h"
+#include "../package/proc.h"
+#include "../sql_admin.h"
+#include "../sql_base.h"
+#include "../sql_class.h"
+#include "../sql_plugin.h"
+#include "../sql_udf.h"
+#include "../table.h"
+#include "field_types.h"
+#include "my_base.h"
+#include "mysqld_error.h"
+#include "sql_string.h"
+#include "thread_pool.h"
 
 namespace im {
 
@@ -38,24 +38,23 @@ extern LEX_CSTRING POLARX_PROC_SCHEMA;
  *
  */
 class ChangesetResult {
-public:
-  ChangesetResult(ChangeType type, std::list<Field *> pk_field_list) : type(type), pk_field_list(std::move(pk_field_list)) {
-  }
+ public:
+  ChangesetResult(ChangeType type, std::list<Field *> pk_field_list)
+      : type(type), pk_field_list(std::move(pk_field_list)) {}
 
   ~ChangesetResult() {
-    for (auto field: pk_field_list) {
+    for (auto field : pk_field_list) {
       my_free(field->field_ptr());
       // delete field;
     }
   }
 
   void *operator new(size_t size) {
-    return my_malloc(key_memory_CS_RESULT_BUFFER, size, MYF(MY_WME | ME_FATALERROR));
+    return my_malloc(key_memory_CS_RESULT_BUFFER, size,
+                     MYF(MY_WME | ME_FATALERROR));
   }
 
-  void operator delete(void* ptr) {
-    my_free(ptr);
-  }
+  void operator delete(void *ptr) { my_free(ptr); }
 
   std::string get_op_string() const {
     std::string ret;
@@ -74,8 +73,8 @@ public:
 /**
  * @brief Changeset describes DMLs during partition migration
  */
-class Changeset {  
-public:
+class Changeset {
+ public:
   Changeset();
 
   ~Changeset();
@@ -95,26 +94,25 @@ public:
   };
 
   void *operator new(size_t size) {
-    return my_malloc(key_memory_CS_PRIMARY_KEY, size, MYF(MY_WME | ME_FATALERROR));
+    return my_malloc(key_memory_CS_PRIMARY_KEY, size,
+                     MYF(MY_WME | ME_FATALERROR));
   }
 
-  void operator delete(void* ptr) {
-    my_free(ptr);
-  }
+  void operator delete(void *ptr) { my_free(ptr); }
 
   /**
-    * @brief delete pk
-  */
+   * @brief delete pk
+   */
   void pk_map_delete(std::unique_ptr<Change> &change, bool mem_c = false);
 
   /**
-    * @brief insert pk
-  */
+   * @brief insert pk
+   */
   void pk_map_insert(std::unique_ptr<Change> &change, bool mem_c = false);
 
   /**
-    * insert delete update of change set
-  */
+   * insert delete update of change set
+   */
   void add_delete(const std::string &pk);
 
   void add_insert(const std::string &pk);
@@ -144,21 +142,24 @@ public:
 
   void rm_all_changeset_files();
 
-  void fetch_pk(bool delete_last_cs, std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share);
+  void fetch_pk(bool delete_last_cs,
+                std::map<std::string, ChangesetResult *> &res,
+                TABLE_SHARE *table_share);
 
-  void get_result_list(std::unordered_map<std::string, unique_ptr<Change>> &pk_map, std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share);
+  void get_result_list(
+      std::unordered_map<std::string, unique_ptr<Change>> &pk_map,
+      std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share);
 
-  void get_result_list(const char *file_name, std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share);
+  void get_result_list(const char *file_name,
+                       std::map<std::string, ChangesetResult *> &res,
+                       TABLE_SHARE *table_share);
 
-  std::list<Field *> make_pk_fields(KEY *key_info, uchar *pk, MEM_ROOT *mem_root);
+  std::list<Field *> make_pk_fields(KEY *key_info, uchar *pk,
+                                    MEM_ROOT *mem_root);
 
-  void set_stop(bool stop) {
-    this->stop = stop;
-  }
+  void set_stop(bool stop) { this->stop = stop; }
 
-  bool is_stop() const {
-    return this->stop;
-  }
+  bool is_stop() const { return this->stop; }
 
   uint64_t get_approximate_memory_size() const;
 
@@ -176,13 +177,13 @@ public:
   // memory limit
   u_int64_t memory_limit;
 
-private:
-
-  static int open_table(THD *thd,const std::string &db, const std::string &tb, TABLE **output);
+ private:
+  static int open_table(THD *thd, const std::string &db, const std::string &tb,
+                        TABLE **output);
 
   // stats info
   Stats stats_{0, 0, 0, 0, 0};
-                                            
+
   // changeset stop
   bool stop;
 
@@ -203,6 +204,6 @@ private:
   mutable std::list<std::pair<const char *, bool>> file_list;
 };
 
-}// namespace im
+}  // namespace im
 
-#endif // POLARX_PROC_CHANGESET_H
+#endif  // POLARX_PROC_CHANGESET_H

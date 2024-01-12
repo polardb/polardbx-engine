@@ -25,14 +25,15 @@
 #include <mutex>
 
 #include "my_dbug.h"
-#include "my_sys.h" // escape_string_for_mysql
+#include "my_sys.h"  // escape_string_for_mysql
 
 #include "query_string_builder.h"
 
 namespace polarx_rpc {
 
 Query_string_builder::Query_string_builder(size_t reserve)
-    : m_in_quoted(false), m_in_identifier(false),
+    : m_in_quoted(false),
+      m_in_identifier(false),
       m_charset(&my_charset_utf8mb4_general_ci) {
   m_str.reserve(reserve);
 }
@@ -45,8 +46,8 @@ Query_string_builder &Query_string_builder::quote_identifier(const char *s,
   return *this;
 }
 
-Query_string_builder &
-Query_string_builder::quote_identifier_if_needed(const char *s, size_t length) {
+Query_string_builder &Query_string_builder::quote_identifier_if_needed(
+    const char *s, size_t length) {
   bool need_quote = false;
   if (length > 0 && isalpha(s[0])) {
     for (size_t i = 1; i < length; i++)
@@ -73,8 +74,7 @@ Query_string_builder &Query_string_builder::escape_identifier(const char *s,
   const char *cursor_in = s;
 
   for (size_t idx = 0; idx < length; ++idx) {
-    if (*cursor_in == '`')
-      *cursor_out++ = '`';
+    if (*cursor_in == '`') *cursor_out++ = '`';
     *cursor_out++ = *cursor_in++;
   }
   m_str.resize(str_pos + (cursor_out - &m_str[str_pos]));
@@ -115,9 +115,8 @@ Query_string_builder &Query_string_builder::put(const char *s, size_t length) {
 }
 
 Query_formatter &Query_string_builder::format() {
-  if (!m_formatter)
-    m_formatter.reset(new Query_formatter(m_str));
+  if (!m_formatter) m_formatter.reset(new Query_formatter(m_str));
   return *m_formatter;
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

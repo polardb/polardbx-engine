@@ -24,34 +24,34 @@
 
 #include "command.h"
 
-#include <cstdlib>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <iostream>
 #include <set>
 #include <stdexcept>
 #include <thread>
-#include <chrono>
 
 #include <signal.h>
 #include <sys/types.h>
 
 #include "mysqld_error.h"
 
-#include "helper/to_string.h"
 #include "../../common/message_matcher.h"
 #include "../../connector/mysqlx_all_msgs.h"
 #include "../../connector/warning.h"
 #include "../../formatters/message_formatter.h"
 #include "../../json_to_any_handler.h"
 #include "../../parsers/message_parser.h"
-#include "mysqlxtest_error_names.h"
 #include "../comment_processor.h"
 #include "../indigestion_processor.h"
 #include "../macro_block_processor.h"
 #include "../stream_processor.h"
 #include "../variable_names.h"
+#include "helper/to_string.h"
+#include "mysqlxtest_error_names.h"
 
 namespace {
 
@@ -276,8 +276,8 @@ Command::Result Command::cmd_title(std::istream &input,
 }
 
 Command::Result Command::cmd_switchsid(std::istream &input,
-                                      Execution_context *context,
-                                      const std::string &args) {
+                                       Execution_context *context,
+                                       const std::string &args) {
   std::vector<std::string> vargs;
   aux::split(vargs, args, " ", true);
 
@@ -569,7 +569,8 @@ Command::Result Command::cmd_recverror(std::istream &input,
     const int expected_error_code = mysqlxtest::get_error_code_by_text(args);
     if (msg->GetDescriptor()->full_name() != "PolarXRPC.Error" ||
         expected_error_code !=
-            static_cast<int>(static_cast<PolarXRPC::Error *>(msg.get())->code())) {
+            static_cast<int>(
+                static_cast<PolarXRPC::Error *>(msg.get())->code())) {
       context->print_error(context->m_script_stack, "Was expecting Error ",
                            args, ", but got:\n");
       failed = true;
@@ -1004,7 +1005,8 @@ Command::Result Command::cmd_endrepeat(std::istream &input,
     ++ld.value;
 
     if (ld.variable_name.length())
-      context->m_variables->set(ld.variable_name, polarx_rpc::to_string(ld.value));
+      context->m_variables->set(ld.variable_name,
+                                polarx_rpc::to_string(ld.value));
 
     if (1 > ld.iterations) {
       m_loop_stack.pop_back();
@@ -1200,8 +1202,9 @@ Command::Result Command::cmd_peerdisc(std::istream &input,
     }
   }
 
-  int execution_delta_time = static_cast<int>(
-      polarx_rpc::chrono::to_milliseconds(polarx_rpc::chrono::now() - start_time));
+  int execution_delta_time =
+      static_cast<int>(polarx_rpc::chrono::to_milliseconds(
+          polarx_rpc::chrono::now() - start_time));
 
   if (abs(execution_delta_time - expected_delta_time) > tolerance) {
     context->print_error(
@@ -1602,8 +1605,8 @@ Command::Result Command::cmd_endmeasure(std::istream &input,
   }
 
   const int64_t expected_msec = std::stoi(argl[0]);
-  const int64_t msec =
-      polarx_rpc::chrono::to_milliseconds(polarx_rpc::chrono::now() - m_start_measure);
+  const int64_t msec = polarx_rpc::chrono::to_milliseconds(
+      polarx_rpc::chrono::now() - m_start_measure);
 
   int64_t tolerance = expected_msec * 10 / 100;
 
@@ -1957,14 +1960,15 @@ Command::Result Command::cmd_assert_eq(std::istream &input,
 Command::Result Command::cmd_assert_ne(std::istream &input,
                                        Execution_context *context,
                                        const std::string &args) {
-  return cmd_assert_generic<std::not_equal_to<std::string>>(input, context, args);
+  return cmd_assert_generic<std::not_equal_to<std::string>>(input, context,
+                                                            args);
 }
 
 Command::Result Command::cmd_assert_gt(std::istream &input,
                                        Execution_context *context,
                                        const std::string &args) {
-  return cmd_assert_generic<Numeric_values<std::greater<long>>>(
-      input, context, args);
+  return cmd_assert_generic<Numeric_values<std::greater<long>>>(input, context,
+                                                                args);
 }
 
 Command::Result Command::cmd_assert_le(std::istream &input,
@@ -1977,8 +1981,8 @@ Command::Result Command::cmd_assert_le(std::istream &input,
 Command::Result Command::cmd_assert_lt(std::istream &input,
                                        Execution_context *context,
                                        const std::string &args) {
-  return cmd_assert_generic<Numeric_values<std::less<long>>>(
-      input, context, args);
+  return cmd_assert_generic<Numeric_values<std::less<long>>>(input, context,
+                                                             args);
 }
 
 Command::Result Command::cmd_assert_ge(std::istream &input,

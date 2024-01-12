@@ -15,7 +15,7 @@ class THD;
 namespace polarx_rpc {
 
 class CflowControl {
-public:
+ public:
   inline void set_thd(THD *thd) { thd_ = thd; }
 
   inline bool flow_consume(int32_t token) {
@@ -45,7 +45,7 @@ public:
   inline void flow_offer(int32_t token) {
     std::lock_guard<std::mutex> lck(mutex_);
     flow_reset(token);
-    cv_.notify_one(); /// only one wait thread
+    cv_.notify_one();  /// only one wait thread
   }
 
   inline void exit() {
@@ -54,7 +54,7 @@ public:
     cv_.notify_all();
   }
 
-private:
+ private:
   THD *thd_{nullptr};
 
   std::atomic<bool> exit_{false};
@@ -67,4 +67,4 @@ private:
   void wait_end();
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

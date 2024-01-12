@@ -18,10 +18,11 @@
 
 namespace polarx_rpc {
 
-template <class T> class CarrayQueue {
+template <class T>
+class CarrayQueue {
   NO_COPY(CarrayQueue);
 
-private:
+ private:
   // pushed from tail and popped from head
   cache_padded_t<std::atomic<size_t>> head_;
   cache_padded_t<std::atomic<size_t>> tail_;
@@ -35,33 +36,38 @@ private:
   const size_t cap_;
   const size_t one_lap_;
 
-public:
+ public:
   explicit CarrayQueue(size_t cap)
-      : head_(0), tail_(0), buffer_(new slot_t[cap]), cap_(cap),
+      : head_(0),
+        tail_(0),
+        buffer_(new slot_t[cap]),
+        cap_(cap),
         one_lap_(Cnumber::next_power_of_two_sz(cap + 1)) {
-    static_assert(0 == offsetof(CarrayQueue, head_) &&
-                      CACHE_LINE_FETCH_ALIGN == offsetof(CarrayQueue, tail_) &&
-                      2 * CACHE_LINE_FETCH_ALIGN ==
-                          offsetof(CarrayQueue, buffer_),
-                  "Bad align of CarrayQueue.");
+    static_assert(
+        0 == offsetof(CarrayQueue, head_) &&
+            CACHE_LINE_FETCH_ALIGN == offsetof(CarrayQueue, tail_) &&
+            2 * CACHE_LINE_FETCH_ALIGN == offsetof(CarrayQueue, buffer_),
+        "Bad align of CarrayQueue.");
     assert(cap_ > 0);
     for (size_t i = 0; i < cap_; ++i)
       buffer_[i].stamp.store(
-          i, std::memory_order_relaxed); // init first round stamp
+          i, std::memory_order_relaxed);  // init first round stamp
     std::atomic_thread_fence(std::memory_order_release);
   }
 
   CarrayQueue(CarrayQueue &&another) noexcept
       : head_(another.head_().load(std::memory_order_acquire)),
         tail_(another.tail_().load(std::memory_order_acquire)),
-        buffer_(std::move(another.buffer_)), cap_(another.cap_),
+        buffer_(std::move(another.buffer_)),
+        cap_(another.cap_),
         one_lap_(another.one_lap_) {
     buffer_.reset();
   }
 
   CarrayQueue &operator=(CarrayQueue &&another) = delete;
 
-  template <class V> inline bool push(V &&v) {
+  template <class V>
+  inline bool push(V &&v) {
     Cbackoff backoff;
     auto tail = tail_().load(std::memory_order_relaxed);
 
@@ -89,13 +95,12 @@ public:
         std::atomic_thread_fence(std::memory_order_seq_cst);
         // may full and recheck head
         auto head = head_().load(std::memory_order_relaxed);
-        if (head + one_lap_ == tail)
-          return false; // full
+        if (head + one_lap_ == tail) return false;  // full
         backoff.spin();
         // reload and recheck
         tail = tail_().load(std::memory_order_relaxed);
       } else {
-        backoff.snooze(); // wait data move and stamp update
+        backoff.snooze();  // wait data move and stamp update
         tail = tail_().load(std::memory_order_relaxed);
       }
     }
@@ -129,13 +134,12 @@ public:
         std::atomic_thread_fence(std::memory_order_seq_cst);
         // may empty and recheck tail
         auto tail = tail_().load(std::memory_order_relaxed);
-        if (tail == head)
-          return false; // empty
+        if (tail == head) return false;  // empty
         backoff.spin();
         // reload and recheck
         head = head_().load(std::memory_order_relaxed);
       } else {
-        backoff.snooze(); // wait data move and stamp update
+        backoff.snooze();  // wait data move and stamp update
         head = head_().load(std::memory_order_relaxed);
       }
     }
@@ -175,4 +179,4 @@ public:
   inline size_t tail() const { return tail_().load(std::memory_order_seq_cst); }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

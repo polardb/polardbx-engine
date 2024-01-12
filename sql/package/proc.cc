@@ -61,7 +61,6 @@ bool Proc::send_result_metadata(THD *thd) const {
 
   for (Columns::const_iterator it = m_columns.begin(); it != m_columns.end();
        it++) {
-
     /* TODO: Support more field type */
     switch ((*it).type) {
       case MYSQL_TYPE_LONGLONG:
@@ -180,8 +179,7 @@ bool Sql_cmd_proc::check_parameter() {
   @retval       false         Success
 */
 bool Sql_cmd_proc::prepare(THD *thd) {
-  if (check_parameter() || check_access(thd))
-    return true;
+  if (check_parameter() || check_access(thd)) return true;
   set_prepared();
   return false;
 }

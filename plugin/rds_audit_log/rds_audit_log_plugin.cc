@@ -35,9 +35,9 @@
 
 #include <sql/sql_class.h>
 
+#include "audit_log.h"
 #include "lex_string.h"
 #include "typelib.h"
-#include "audit_log.h"
 
 /* For logging service. Module plugin need to define these variables,
 rds_audit_log is a statically compiled plugin, so we don't need these.*/
@@ -712,12 +712,11 @@ static int audit_log_plugin_init(void *arg MY_ATTRIBUTE((unused))) {
   register_all_audit_psi_keys();
 #endif
 
-  rds_audit_log = new MYSQL_RDS_AUDIT_LOG(rds_audit_log_dir,
-    rds_audit_log_buffer_size, rds_audit_log_row_limit,
-    rds_audit_log_format, rds_audit_log_strategy,
-    rds_audit_log_policy, rds_audit_log_connection_policy,
-    rds_audit_log_statement_policy, rds_audit_log_version,
-    rds_audit_log_enabled);
+  rds_audit_log = new MYSQL_RDS_AUDIT_LOG(
+      rds_audit_log_dir, rds_audit_log_buffer_size, rds_audit_log_row_limit,
+      rds_audit_log_format, rds_audit_log_strategy, rds_audit_log_policy,
+      rds_audit_log_connection_policy, rds_audit_log_statement_policy,
+      rds_audit_log_version, rds_audit_log_enabled);
 
   /* Failed to create flush thread */
   if (rds_audit_log->create_flush_thread()) {
@@ -749,7 +748,6 @@ static int audit_log_plugin_deinit(void *arg MY_ATTRIBUTE((unused))) {
 */
 static int audit_log_notify(MYSQL_THD thd, mysql_event_class_t event_class,
                             const void *event) {
-
   /* Note: rds_audit_log->is_enabled() is a dirty of rds_audit_log->enabled */
   if (!rds_audit_log->is_enabled() || (bool)THDVAR(thd, skip)) {
     return 0;
@@ -763,7 +761,7 @@ static int audit_log_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         sizeof(LEX_STRING) + rds_audit_log_event_buffer_size, MYF(MY_FAE));
 
     event_buf->length = rds_audit_log_event_buffer_size;
-    event_buf->str = (char *) (event_buf + 1);
+    event_buf->str = (char *)(event_buf + 1);
     thd_set_rds_audit_event_buf(thd, event_buf);
   }
 
@@ -777,7 +775,7 @@ static int audit_log_notify(MYSQL_THD thd, mysql_event_class_t event_class,
 }
 
 static void audit_log_release(MYSQL_THD thd) {
-  LEX_STRING * event_buf = thd_get_rds_audit_event_buf(thd);
+  LEX_STRING *event_buf = thd_get_rds_audit_event_buf(thd);
   if (event_buf) {
     my_free(event_buf);
     thd_set_rds_audit_event_buf(thd, nullptr);
@@ -825,11 +823,11 @@ mysql_declare_plugin(rds_audit_log){
     "RDS audit log",         /* description                     */
     PLUGIN_LICENSE_GPL,      /* license                         */
     audit_log_plugin_init,   /* init function (when loaded)     */
-    nullptr,                    /* check uninstall function        */
+    nullptr,                 /* check uninstall function        */
     audit_log_plugin_deinit, /* deinit function (when unloaded) */
     0x0010,                  /* version (0.1)                   */
     audit_log_status_vars,   /* status variables                */
     audit_log_system_vars,   /* system variables                */
-    nullptr,                    /* reserved                        */
+    nullptr,                 /* reserved                        */
     0,                       /* flags                           */
 } mysql_declare_plugin_end;

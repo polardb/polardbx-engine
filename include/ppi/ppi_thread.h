@@ -20,7 +20,6 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef PPI_THREAD_H_INCLUDED
 #define PPI_THREAD_H_INCLUDED
 
@@ -32,14 +31,12 @@
   PPI for thread
 */
 
-#define PPI_THREAD_CALL(M)  PPI_thread_service->M
+#define PPI_THREAD_CALL(M) PPI_thread_service->M
 
 /**
   Through this function to register the Performacne Point thread service
   handler when plugin init.
 */
 extern void PPI_register_thread_service(PPI_thread_service_t *service);
-
-
 
 #endif

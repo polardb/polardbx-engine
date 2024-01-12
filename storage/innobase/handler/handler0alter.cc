@@ -2801,9 +2801,7 @@ bool innobase_fts_check_doc_id_col(
   /* Not to count the virtual columns */
   i -= *num_v;
 
-  for (;
-       i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < (uint)table->n_cols;
-       i++) {
+  for (; i + DATA_N_SYS_COLS + DATA_N_LIZARD_COLS < (uint)table->n_cols; i++) {
     const char *name = table->get_col_name(i);
 
     if (strcmp(name, FTS_DOC_ID_COL_NAME) == 0) {

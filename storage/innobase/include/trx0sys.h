@@ -564,8 +564,8 @@ struct trx_sys_t {
   // /** Array of Read write transaction IDs for MVCC snapshot. A ReadView would
   // take a snapshot of these transactions whose changes are not visible to it.
   // We should remove transactions from the list before committing in memory and
-  // releasing locks to ensure right order of removal and consistent snapshot. */
-  // trx_ids_t rw_trx_ids;
+  // releasing locks to ensure right order of removal and consistent snapshot.
+  // */ trx_ids_t rw_trx_ids;
 
   char pad7[ut::INNODB_CACHE_LINE_SIZE];
 

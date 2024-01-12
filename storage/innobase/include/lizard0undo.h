@@ -33,10 +33,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0undo_h
 #define lizard0undo_h
 
+#include "clone0repl.h"
 #include "fut0lst.h"
 #include "trx0types.h"
 #include "trx0undo.h"
-#include "clone0repl.h"
 
 #include "lizard0dbg.h"
 #include "lizard0scn.h"
@@ -88,8 +88,8 @@ struct SYS_VAR;
 
 
   Attention:
-    The UBA in undo log header only demonstrate the address, the state within UBA
-    always is committed,  didn't use state to judge the transaction state.
+    The UBA in undo log header only demonstrate the address, the state within
+  UBA always is committed,  didn't use state to judge the transaction state.
 */
 
 /** Those will only exist in txn undo log header*/
@@ -126,21 +126,21 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
 #define TXN_MAGIC_N 91118498
 
 /* States of an txn undo log header */
-#define TXN_UNDO_LOG_ACTIVE   1
+#define TXN_UNDO_LOG_ACTIVE 1
 #define TXN_UNDO_LOG_COMMITED 2
-#define TXN_UNDO_LOG_PURGED   3
+#define TXN_UNDO_LOG_PURGED 3
 
 /*****************************************
-*        TXN_UNDO_LOG_EXT_FLAG           *
-*****************************************/
+ *        TXN_UNDO_LOG_EXT_FLAG           *
+ *****************************************/
 /** bit_0: TXN have TXN_UNDO_LOG_TAGS_1. */
 #define TXN_EXT_FLAG_HAVE_TAGS_1 0x01
 /** Initial value of TXN_UNDO_LOG_EXT_FLAG. */
 #define TXN_EXT_FLAG_V1 TXN_EXT_FLAG_HAVE_TAGS_1
 
 /******************************************
-*           TXN_UNDO_LOG_TAGS_1       *
-******************************************/
+ *           TXN_UNDO_LOG_TAGS_1       *
+ ******************************************/
 /** bit_0: Finish state of the transaction (true: ROLLBACK,
 false: other state). */
 #define TXN_NEW_TAGS_1_ROLLBACK 0x01
@@ -350,7 +350,8 @@ bool trx_undo_hdr_slot_validate(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 @param[in]  rseg txn rseg
 @param[in]  page_size
 @return     true   if purged */
-bool txn_undo_log_has_purged(const trx_rseg_t *rseg, const page_size_t &page_size);
+bool txn_undo_log_has_purged(const trx_rseg_t *rseg,
+                             const page_size_t &page_size);
 
 #endif  // UNIV_DEBUG || LIZARD_DEBUG
 
@@ -470,7 +471,8 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   @param[in]      log_hdr       undo log header
   @param[in]      mtr           current mtr context
 */
-commit_mark_t txn_undo_hdr_read_prev_cmmt(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+commit_mark_t txn_undo_hdr_read_prev_cmmt(const trx_ulogf_t *log_hdr,
+                                          mtr_t *mtr);
 
 /**
   Write the scn into the buffer
@@ -550,8 +552,7 @@ void undo_decode_undo_ptr(undo_ptr_t undo_ptr, undo_addr_t *undo_addr);
   @param[in]      undo addr
   @param[out]     undo ptr
 */
-void undo_encode_undo_addr(const undo_addr_t &undo_addr,
-                           undo_ptr_t *undo_ptr);
+void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr);
 
 /**
   Decode the slot_ptr into addr
@@ -706,8 +707,7 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
 
   @return         bool       true if the record should be cleaned out.
 */
-bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec,
-                             txn_lookup_t *txn_lookup,
+bool txn_undo_hdr_lookup_low(txn_rec_t *txn_rec, txn_lookup_t *txn_lookup,
                              mtr_t *txn_mtr);
 
 /**
@@ -721,14 +721,13 @@ inline void txn_lookup_t_set(txn_lookup_t *txn_lookup,
                              const txn_undo_hdr_t &txn_undo_hdr,
                              const commit_mark_t &real_image,
                              const txn_state_t &real_state) {
-  if (txn_lookup == nullptr)  return;
+  if (txn_lookup == nullptr) return;
 
   txn_lookup->txn_undo_hdr = txn_undo_hdr;
   txn_lookup->real_image = real_image;
   txn_lookup->real_state = real_state;
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
-  if (real_state == TXN_STATE_ACTIVE ||
-      real_state == TXN_STATE_COMMITTED ||
+  if (real_state == TXN_STATE_ACTIVE || real_state == TXN_STATE_COMMITTED ||
       real_state == TXN_STATE_PURGED) {
     if (real_state != TXN_STATE_ACTIVE) {
       /** TXN reuse, current scn should be larger than prev scn */
@@ -834,7 +833,7 @@ void trx_add_rsegs_for_purge(commit_mark_t &scn, TxnUndoRsegs *elem);
 inline void txn_undo_set_state(trx_ulogf_t *log_hdr, ulint state, mtr_t *mtr) {
   /* When creating a new page, hold SX latch, otherwise X latch */
   ut_ad(mtr_memo_contains_page(mtr, page_align(log_hdr),
-        MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
+                               MTR_MEMO_PAGE_SX_FIX | MTR_MEMO_PAGE_X_FIX));
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
   auto page = page_align(log_hdr);
@@ -906,9 +905,9 @@ inline void txn_undo_set_state_at_init(trx_ulogf_t *log_hdr, mtr_t *mtr) {
 class Undo_retention {
  public:
   // user configurations
-  static ulint retention_time; // in seconds
-  static ulint space_limit;    // in MiB
-  static ulint space_reserve;  // in MiB
+  static ulint retention_time;  // in seconds
+  static ulint space_limit;     // in MiB
+  static ulint space_reserve;   // in MiB
   // show status
   static char status[128];
 
@@ -918,31 +917,31 @@ class Undo_retention {
                            struct st_mysql_value *value);
   static void on_update(THD *, SYS_VAR *, void *var_ptr, const void *save);
 
-  static void on_update_and_start(THD *thd, SYS_VAR *var,
-                                  void *var_ptr, const void *save);
+  static void on_update_and_start(THD *thd, SYS_VAR *var, void *var_ptr,
+                                  const void *save);
 
   ib_mutex_t m_mutex;
 
  protected:
   volatile bool m_stat_done;
 
-  volatile ulint m_last_top_utc; // to output status
+  volatile ulint m_last_top_utc;  // to output status
 
   std::atomic<ulint> m_total_used_size;
   std::atomic<ulint> m_total_file_size;
 
-  Undo_retention () :
-      m_stat_done(false),
-      m_last_top_utc(0),
-      m_total_used_size(0),
-      m_total_file_size(0) {}
+  Undo_retention()
+      : m_stat_done(false),
+        m_last_top_utc(0),
+        m_total_used_size(0),
+        m_total_file_size(0) {}
 
-  Undo_retention &operator=(const Undo_retention&) = delete;
-  Undo_retention(const Undo_retention&) = delete;
+  Undo_retention &operator=(const Undo_retention &) = delete;
+  Undo_retention(const Undo_retention &) = delete;
 
-  static Undo_retention inst; // global instance
+  static Undo_retention inst;  // global instance
 
-  static ulint current_utc() { return  ut_time_system_us() / 1000000; }
+  static ulint current_utc() { return ut_time_system_us() / 1000000; }
 
   static ulint mb_to_pages(ulint size) {
     return (ulint)(1024.0 * 1024.0 / univ_page_size.physical() * size);
@@ -965,9 +964,7 @@ class Undo_retention {
   bool purge_advise();
 
   /* Create the lizard undo retention mutex. */
-  inline void init_mutex() {
-    mutex_create(LATCH_ID_UNDO_RETENTION, &m_mutex);
-  }
+  inline void init_mutex() { mutex_create(LATCH_ID_UNDO_RETENTION, &m_mutex); }
 
   /* Free the lizard undo retention mutex. */
   static inline void destroy() { mutex_free(&(instance()->m_mutex)); }
@@ -1113,11 +1110,11 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
                                                 free space on it */
                              trx_id_t trx_id,   /*!< in: transaction id */
                              commit_mark_t *prev_image,
-                                                /*!< out: previous scn/utc
-                                                if have. Only used in TXN
-                                                undo header. Pass in as NULL
-                                                if don't care. */
-                             mtr_t *mtr);       /*!< in: mtr */
+                             /*!< out: previous scn/utc
+                             if have. Only used in TXN
+                             undo header. Pass in as NULL
+                             if don't care. */
+                             mtr_t *mtr); /*!< in: mtr */
 
 /** Remove an rseg header from the history list.
 @param[in,out]	rseg_hdr	rollback segment header
@@ -1176,15 +1173,15 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
   } while (0)
 
 #define trx_undo_hdr_slot_validation(undo_hdr, mtr)          \
-  do {                                                      \
+  do {                                                       \
     ut_a(lizard::trx_undo_hdr_slot_validate(undo_hdr, mtr)); \
   } while (0)
 
-#define trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)                \
-  do {                                                                       \
-    txn_undo_hdr_t txn_undo_hdr;                                             \
-    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_hdr);  \
-    ut_a(txn_undo_hdr.magic_n == TXN_MAGIC_N);                               \
+#define trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)               \
+  do {                                                                      \
+    txn_undo_hdr_t txn_undo_hdr;                                            \
+    lizard::trx_undo_hdr_read_txn(undo_page, undo_hdr, mtr, &txn_undo_hdr); \
+    ut_a(txn_undo_hdr.magic_n == TXN_MAGIC_N);                              \
   } while (0)
 
 #define undo_addr_validation(undo_addr, index)          \

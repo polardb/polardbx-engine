@@ -50,17 +50,16 @@ class Basic_istream {
   virtual ~Basic_istream() = default;
 };
 
-
 /**
    the consensus_log cache must be write and read
 */
 class Write_cache_istream : public Basic_istream {
-public:
+ public:
   Write_cache_istream(IO_CACHE *io_cache) : m_io_cache(io_cache) {}
 
-ssize_t read(unsigned char *buffer, size_t length) override;
+  ssize_t read(unsigned char *buffer, size_t length) override;
 
-private:
+ private:
   IO_CACHE *m_io_cache;
 };
 

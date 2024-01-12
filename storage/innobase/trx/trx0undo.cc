@@ -57,13 +57,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0rseg.h"
 #include "trx0trx.h"
 
+#include "lizard0cleanout.h"
+#include "lizard0fsp.h"
+#include "lizard0gcs.h"
+#include "lizard0mon.h"
+#include "lizard0scn.h"
 #include "lizard0txn.h"
 #include "lizard0undo.h"
-#include "lizard0fsp.h"
-#include "lizard0scn.h"
-#include "lizard0mon.h"
-#include "lizard0gcs.h"
-#include "lizard0cleanout.h"
 #include "lizard0xa.h"
 
 #include "sql/binlog/binlog_xa_specification.h"
@@ -125,10 +125,9 @@ be obtained on the rollback segment and individual pages. */
 #endif /* !UNIV_HOTBACKUP */
 
 /** Initializes the fields in an undo log segment page. */
-void trx_undo_page_init(
-    page_t *undo_page, /*!< in: undo log segment page */
-    ulint type,        /*!< in: undo log segment type */
-    mtr_t *mtr);       /*!< in: mtr */
+void trx_undo_page_init(page_t *undo_page, /*!< in: undo log segment page */
+                        ulint type,        /*!< in: undo log segment type */
+                        mtr_t *mtr);       /*!< in: mtr */
 
 #ifndef UNIV_HOTBACKUP
 /** Creates and initializes an undo log memory object.
@@ -510,11 +509,11 @@ ulint trx_undo_header_create(page_t *undo_page, /*!< in/out: undo log segment
                                                 free space on it */
                              trx_id_t trx_id,   /*!< in: transaction id */
                              commit_mark_t *prev_image,
-                                                /*!< out: previous scn/utc
-                                                if have. Only used in TXN
-                                                undo header. Pass in as NULL
-                                                if don't care. */
-                             mtr_t *mtr)        /*!< in: mtr */
+                             /*!< out: previous scn/utc
+                             if have. Only used in TXN
+                             undo header. Pass in as NULL
+                             if don't care. */
+                             mtr_t *mtr) /*!< in: mtr */
 {
   trx_upagef_t *page_hdr;
   trx_usegf_t *seg_hdr;
@@ -794,7 +793,7 @@ void trx_undo_gtid_write(trx_t *trx, trx_ulogf_t *undo_header, trx_undo_t *undo,
 /** Read X/Open XA Transaction Identification (XID) from undo log header */
 void trx_undo_read_xid(
     const trx_ulogf_t *log_hdr, /*!< in: undo log header */
-    XID *xid)             /*!< out: X/Open XA Transaction Identification */
+    XID *xid) /*!< out: X/Open XA Transaction Identification */
 {
   xid->set_format_id(
       static_cast<long>(mach_read_from_4(log_hdr + TRX_UNDO_XA_FORMAT)));
@@ -813,9 +812,9 @@ void trx_undo_read_xid(
 @param[in,out]  log_hdr         Undo log header
 @param[in,out]  mtr             Mini-transaction
 @param[in]      gtid_storage    GTID storage type */
-void trx_undo_header_add_space_for_xid(
-    page_t *undo_page, trx_ulogf_t *log_hdr, mtr_t *mtr,
-    trx_undo_t::Gtid_storage gtid_storage) {
+void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
+                                       mtr_t *mtr,
+                                       trx_undo_t::Gtid_storage gtid_storage) {
   trx_upagef_t *page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
 
   ulint free = mach_read_from_2(page_hdr + TRX_UNDO_PAGE_FREE);
@@ -2288,7 +2287,8 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
   if (space != nullptr) {
     is_encrypted = FSP_FLAGS_GET_ENCRYPTION(space->flags);
 
-    if (fil_delete_tablespace(old_space_id, BUF_REMOVE_NONE, nullptr) != DB_SUCCESS) {
+    if (fil_delete_tablespace(old_space_id, BUF_REMOVE_NONE, nullptr) !=
+        DB_SUCCESS) {
       return false;
     }
   } else {

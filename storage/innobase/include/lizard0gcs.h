@@ -33,10 +33,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0gcs_h
 
 #include "fsp0types.h"
-#include "lizard0scn.h"
-#include "trx0types.h"
-#include "trx0sys.h"
 #include "lizard0gcs0hist.h"
+#include "lizard0scn.h"
+#include "trx0sys.h"
+#include "trx0types.h"
 
 struct mtr_t;
 
@@ -78,7 +78,6 @@ typedef byte gcs_sysf_t;
 
 /** Initial value of min_active_trx_id */
 #define GCS_DATA_MTX_ID_NULL 0
-
 
 #ifdef UNIV_PFS_MUTEX
 /* GCS scn list mutex PFS key */
@@ -223,7 +222,7 @@ extern bool gcs_persist_gcn();
   Modify the min active trx id
 
   @param[in]      the add/removed trx */
-extern void gcs_mod_min_active_trx_id(trx_t * trx);
+extern void gcs_mod_min_active_trx_id(trx_t *trx);
 
 /**
   Get the min active trx id
@@ -233,8 +232,10 @@ extern trx_id_t gcs_load_min_active_trx_id();
 
 /**
   In MySQL 8.0:
-  * Hold trx_sys::mutex, generate trx->no, add trx to trx_sys->serialisation_list
-  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are ordered.
+  * Hold trx_sys::mutex, generate trx->no, add trx to
+  trx_sys->serialisation_list
+  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are
+  ordered.
   * Erase above mutexs, commit in undo header
   * Hold trx_sys::mutex, erase serialisation_list, rw_trx_ids, rw_trx_list,
     the modifications from the committed trx can be seen.

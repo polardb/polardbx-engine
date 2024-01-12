@@ -45,4 +45,3 @@ void ccl_queue_buckets_init(ulonglong bucket_count, ulonglong bucket_size) {
 }
 
 } /* namespace im */
-

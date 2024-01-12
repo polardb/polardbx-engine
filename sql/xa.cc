@@ -83,8 +83,8 @@
 #include "template_utils.h"
 #include "thr_mutex.h"
 
-#include "sql/lizard0handler.h"
 #include "sql/consensus/consensus_err.h"
+#include "sql/lizard0handler.h"
 
 const char *XID_STATE::xa_state_names[] = {"NON-EXISTING", "ACTIVE", "IDLE",
                                            "PREPARED", "ROLLBACK ONLY"};

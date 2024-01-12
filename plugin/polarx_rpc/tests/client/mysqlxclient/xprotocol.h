@@ -34,10 +34,10 @@
 #include <utility>
 #include <vector>
 
-#include "xmessage.h"
 #include "xargument.h"
 #include "xconnection.h"
 #include "xerror.h"
+#include "xmessage.h"
 #include "xquery_result.h"
 
 #define HAVE_MYSQLX_FULL_PROTO(Y, N) Y
@@ -538,8 +538,8 @@ class XProtocol {
     Execute session closing flow.
 
     Send "PolarXRPC::Session::Close" message and expect successful confirmation
-    from the X Plugin by reception of "PolarXRPC::Ok". Synchronization errors and
-    "PolarXRPC::Error" are returned through return values.
+    from the X Plugin by reception of "PolarXRPC::Ok". Synchronization errors
+    and "PolarXRPC::Error" are returned through return values.
 
     @return Error code with description
       @retval != true     Received OK message

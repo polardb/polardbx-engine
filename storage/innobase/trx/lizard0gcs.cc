@@ -36,13 +36,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0sys.h"
 #include "trx0trx.h"
 
+#include "lizard0dbg.h"
 #include "lizard0dict.h"
 #include "lizard0fil.h"
 #include "lizard0fsp.h"
+#include "lizard0gcs.h"
 #include "lizard0read0read.h"
 #include "lizard0scn.h"
-#include "lizard0gcs.h"
-#include "lizard0dbg.h"
 
 #include "lizard0ut.h"
 
@@ -377,8 +377,7 @@ static void gcs_create_sysf(mtr_t *mtr) {
 
   memset(ptr, 0, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - ptr);
 
-  mlog_log_string(hdr, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - hdr,
-                  mtr);
+  mlog_log_string(hdr, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - hdr, mtr);
   lizard_info(ER_LIZARD) << "Initialize Global Change System";
 }
 
@@ -493,8 +492,10 @@ void min_safe_scn_valid() {
 
 /**
   In MySQL 8.0:
-  * Hold trx_sys::mutex, generate trx->no, add trx to trx_sys->serialisation_list
-  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are ordered.
+  * Hold trx_sys::mutex, generate trx->no, add trx to
+  trx_sys->serialisation_list
+  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are
+  ordered.
   * Erase above mutexs, commit in undo header
   * Hold trx_sys::mutex, erase serialisation_list, rw_trx_ids, rw_trx_list,
     the modifications from the committed trx can be seen.

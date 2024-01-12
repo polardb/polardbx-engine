@@ -6804,8 +6804,7 @@ bool Fil_shard::space_extend(fil_space_t *space, page_no_t size) {
 
   if (space->id == TRX_SYS_SPACE) {
     srv_sys_space.set_last_file_size(size_in_pages);
-  } else if (space->id ==
-                 lizard::dict_lizard::s_lizard_space_id) {
+  } else if (space->id == lizard::dict_lizard::s_lizard_space_id) {
     lizard::srv_lizard_space.set_last_file_size(size_in_pages);
   } else if (fsp_is_system_temporary(space->id)) {
     srv_tmp_space.set_last_file_size(size_in_pages);
@@ -8503,8 +8502,8 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
       }
     }
     if (opt_import_tablespace_iterator_interval_ms > 0) {
-      std::this_thread::sleep_for(
-          std::chrono::microseconds(opt_import_tablespace_iterator_interval_ms));
+      std::this_thread::sleep_for(std::chrono::microseconds(
+          opt_import_tablespace_iterator_interval_ms));
     }
   }
 

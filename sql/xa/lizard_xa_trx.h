@@ -155,4 +155,4 @@ extern bool hb_freezer_is_freeze();
 }  // namespace xa
 }  // namespace lizard
 
-#endif // XA_TRX_INCUDED
+#endif  // XA_TRX_INCUDED

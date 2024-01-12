@@ -1278,7 +1278,6 @@ struct dict_index_t {
        actual value from undo header when it is SCN_NULL */
   txn_index_t txn;
 
-
   /** Determine if the index has been committed to the
   data dictionary.
   @return whether the index definition has been committed */

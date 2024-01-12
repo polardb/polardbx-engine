@@ -392,7 +392,7 @@ class PPS_io_stat {
 
 class PPS_rows_stat {
  public:
-  explicit PPS_rows_stat () : m_rows_read_delete_mark(0) {}
+  explicit PPS_rows_stat() : m_rows_read_delete_mark(0) {}
 
   void reset() { m_rows_read_delete_mark = 0; }
 
@@ -416,8 +416,11 @@ class PPS_rows_stat {
 class PPS_statement {
  public:
   explicit PPS_statement()
-      : m_cpu_stat(), m_io_stat(), m_lock_stat(), m_rows_stat(), prev(nullptr)
-      {}
+      : m_cpu_stat(),
+        m_io_stat(),
+        m_lock_stat(),
+        m_rows_stat(),
+        prev(nullptr) {}
 
   void reset() {
     m_cpu_stat.reset();
@@ -504,7 +507,9 @@ class PPS_transaction {
   }
   void end_transaction() { m_state = PPI_TRANSACTION_IDLE; }
 
-  void inc_binlog_size(ulonglong bytes) { m_binlog_size.aggregate_value(bytes); }
+  void inc_binlog_size(ulonglong bytes) {
+    m_binlog_size.aggregate_value(bytes);
+  }
 
   void inc_statement_count(ulonglong count) { m_statement_count += count; }
 
@@ -537,7 +542,7 @@ class PPS_thread {
         m_main_transaction(),
         m_transaction(nullptr) {}
 
-  virtual ~PPS_thread(){}
+  virtual ~PPS_thread() {}
 
   void begin_statement();
   void end_statement();
@@ -596,7 +601,7 @@ class PPS_thread {
   PPS_transaction *get_transaction_context() const { return m_transaction; }
 
   void backup_transaction() {
-    //TODO:
+    // TODO:
   }
 
   void restore_transaction() {

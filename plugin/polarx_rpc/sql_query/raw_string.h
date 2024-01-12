@@ -10,13 +10,13 @@
 namespace polarx_rpc {
 
 class RawString {
-private:
+ private:
   std::string value_;
 
-public:
+ public:
   explicit RawString(std::string val) : value_(std::move(val)) {}
 
   const std::string &get_value() const { return value_; }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

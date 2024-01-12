@@ -16,21 +16,19 @@
  *
  * If we want to override MySQL server, we have to override the network layer.
  *
-*/
+ */
 namespace rpc_executor {
 class Protocol {
-public:
+ public:
   Protocol(polarx_rpc::CcommandDelegate *deleg)
-      : xprotocol_(deleg->callbacks(),
-                   CS_BINARY_REPRESENTATION,
-                   deleg) {}
+      : xprotocol_(deleg->callbacks(), CS_BINARY_REPRESENTATION, deleg) {}
 
-  int write_metadata(InternalDataSet& dataset);
-  int write_row(InternalDataSet& dataset);
+  int write_metadata(InternalDataSet &dataset);
+  int write_row(InternalDataSet &dataset);
   int send_and_flush();
 
-private:
+ private:
   // vio and socket in wrapped in xprotocol
   Protocol_callback xprotocol_;
 };
-} // namespace executor
+}  // namespace rpc_executor

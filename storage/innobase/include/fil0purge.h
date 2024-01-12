@@ -71,7 +71,6 @@ class File_purge {
   static constexpr const char *PREFIX = "#FP_";
 
  public:
-
   /** Constructor */
   explicit File_purge(ulint thread_id, time_t start_time);
 

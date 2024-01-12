@@ -1879,7 +1879,7 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
           report error as usual. We will not do any duplicate key processing.
         */
         info->last_errno = error;
-        info->prev_errno= error;
+        info->prev_errno = error;
         table->file->print_error(error, MYF(0));
         /*
           If IGNORE option is used, handler errors will be downgraded
@@ -2067,7 +2067,7 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
                                                   table->record[0])) &&
               error != HA_ERR_RECORD_IS_THE_SAME) {
             info->last_errno = error;
-            info->prev_errno= error;
+            info->prev_errno = error;
             myf error_flags = MYF(0);
             if (table->file->is_fatal_error(error))
               error_flags |= ME_FATALERROR;

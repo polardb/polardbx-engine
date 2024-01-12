@@ -17,7 +17,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
 #ifndef PLUGIN_GALAXY_UDF_REGISTRATOR_H
 #define PLUGIN_GALAXY_UDF_REGISTRATOR_H
 
@@ -32,15 +31,15 @@ namespace udf {
 class Registrator {
   typedef gs::udf::Registry::Names::value_type Udf_name;
 
- public :
+ public:
   Registrator()
       : m_registry(),
         m_udf_registry(&m_registry),
         m_udf_registry_aggregate(&m_registry) {}
 
   /**
-     Register udf 
-     
+     Register udf
+
      @param[in]     def     UDF
 
      @retval        true    Failure
@@ -68,4 +67,3 @@ class Registrator {
 }  // namespace gs
 
 #endif
-

@@ -56,7 +56,7 @@ class TimestampService {
 
   bool is_initialized() { return m_initialized; }
 
-  ~TimestampService(){}
+  ~TimestampService() {}
 
  private:
   /* Used to open the base table */

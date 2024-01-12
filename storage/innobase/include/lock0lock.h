@@ -611,11 +611,11 @@ bool lock_clust_rec_cons_read_sees(
  @return true if certainly sees, or false if an earlier version of the
  clustered index record might be needed */
 [[nodiscard]] bool lock_sec_rec_cons_read_sees(
-    const rec_t *rec,          /*!< in: user record which
-                               should be read or passed over
-                               by a read cursor */
-    const dict_index_t *index, /*!< in: index */
-    const lizard::Vision *vision);   /*!< in: consistent read view */
+    const rec_t *rec,              /*!< in: user record which
+                                   should be read or passed over
+                                   by a read cursor */
+    const dict_index_t *index,     /*!< in: index */
+    const lizard::Vision *vision); /*!< in: consistent read view */
 /** Locks the specified database table in the mode given. If the lock cannot
  be granted immediately, the query thread is put to wait.
  @return DB_SUCCESS, DB_LOCK_WAIT, or DB_DEADLOCK */

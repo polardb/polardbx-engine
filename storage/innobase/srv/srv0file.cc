@@ -135,8 +135,7 @@ loop:
 
   if (truncated <= 0) {
     sig_count = os_event_reset(file_purge_event);
-    os_event_wait_time_low(file_purge_event, 
-                           std::chrono::milliseconds{5000000},
+    os_event_wait_time_low(file_purge_event, std::chrono::milliseconds{5000000},
                            sig_count);
     truncated_size = 0;
   } else if (truncated > 0) {
@@ -144,12 +143,13 @@ loop:
       sig_count_shutdown = os_event_reset(file_purge_shutdown_event);
       auto t = std::chrono::milliseconds{srv_data_file_purge_interval} * 1000;
       os_event_wait_time_low(file_purge_shutdown_event, t, sig_count_shutdown);
-      
+
       truncated_size = 0;
     }
   }
 
-  if (srv_shutdown_state.load() >= SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS) goto exit_func;
+  if (srv_shutdown_state.load() >= SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS)
+    goto exit_func;
 
   goto loop;
 
@@ -170,12 +170,12 @@ exit_func:
 }
 
 /** Wakeup the background thread if new file added to purge list */
-void srv_wakeup_file_purge_thread() { os_event_set(file_purge_event);}
+void srv_wakeup_file_purge_thread() { os_event_set(file_purge_event); }
 
 void srv_file_purge_shutown() {
   ut_ad(!srv_read_only_mode);
   /** Wakeup the background thread when shutdown */
   os_event_set(file_purge_event);
-  os_event_set(file_purge_shutdown_event); 
+  os_event_set(file_purge_shutdown_event);
   srv_threads.m_file_purge.join();
 }

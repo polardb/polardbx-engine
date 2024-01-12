@@ -22,7 +22,7 @@ class CsessionBase;
 class CstreamingCommandDelegate : public CcommandDelegate {
   NO_COPY(CstreamingCommandDelegate);
 
-protected:
+ protected:
   CsessionBase &session_;
   CpolarxEncoder &encoder_;
   std::function<bool()> flush_;
@@ -106,7 +106,7 @@ protected:
   void end_result_metadata_handle_fetch(uint32_t server_status);
   void handle_out_param_in_handle_ok(uint32_t server_status);
 
-public:
+ public:
   CstreamingCommandDelegate(CsessionBase &session, CpolarxEncoder &encoder,
                             std::function<bool()> &&flush,
                             bool compact_metadata, ulong capabilities);
@@ -123,4 +123,4 @@ public:
   inline void set_feedback(bool feedback) { feedback_ = feedback; }
 };
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

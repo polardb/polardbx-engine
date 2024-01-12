@@ -39,12 +39,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0cleanout.h"
 #include "lizard0dbg.h"
-#include "lizard0mon.h"
-#include "lizard0txn.h"
-#include "lizard0ut.h"
-#include "lizard0undo.h"
-#include "lizard0row.h"
 #include "lizard0dict.h"
+#include "lizard0mon.h"
+#include "lizard0row.h"
+#include "lizard0txn.h"
+#include "lizard0undo.h"
+#include "lizard0ut.h"
 
 namespace std {
 
@@ -187,9 +187,7 @@ void trx_rseg_init_undo_hdr_hash(space_id_t space_id, trx_rsegf_t *rseg_hdr,
   }
 }
 
-Undo_logs::Undo_logs() {
-  mutex_create(LATCH_ID_UNDO_HDR_HASH, &m_mutex);
-}
+Undo_logs::Undo_logs() { mutex_create(LATCH_ID_UNDO_HDR_HASH, &m_mutex); }
 
 Undo_logs::~Undo_logs() { mutex_free(&m_mutex); }
 
@@ -220,7 +218,6 @@ bool Undo_logs::exist(Undo_hdr hdr) {
   return exist;
 }
 
-
 /**
   Write redo log when updating scn and uba fileds in physical records.
   @param[in]      rec        physical record
@@ -230,7 +227,7 @@ bool Undo_logs::exist(Undo_hdr hdr) {
 */
 void btr_cur_upd_lizard_fields_clust_rec_log(const rec_t *rec,
                                              const dict_index_t *index,
-                                             const txn_rec_t* txn_rec,
+                                             const txn_rec_t *txn_rec,
                                              mtr_t *mtr) {
   byte *log_ptr = nullptr;
 
@@ -417,8 +414,6 @@ Cleanout_pages::~Cleanout_pages() {
   m_page_num = 0;
   m_txn_num = 0;
 }
-
-
 
 /*----------------------------------------------------------------*/
 /* Lizard cleanout by cursor. */

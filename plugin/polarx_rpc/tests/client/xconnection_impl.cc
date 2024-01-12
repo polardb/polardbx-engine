@@ -484,9 +484,8 @@ XError Connection_impl::set_write_timeout(const int deadline_seconds) {
 }
 
 const XConnection::State &Connection_impl::state() {
-  m_state.reset(new details::Connection_state(
-      m_vio, false, m_ssl_active, m_connected,
-      m_connection_type));
+  m_state.reset(new details::Connection_state(m_vio, false, m_ssl_active,
+                                              m_connected, m_connection_type));
   return *m_state;
 }
 

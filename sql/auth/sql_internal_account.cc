@@ -30,7 +30,6 @@
   2. Prefined ACLs or need-protect attributes for every kind of account
 */
 
-
 #include "sql/auth/sql_internal_account.h"
 #include "sql/auth/auth_acls.h"                           // NO_ACCESS
 #include "sql/auth/sql_security_ctx.h"                    // Security_context
@@ -271,20 +270,21 @@ bool Internal_account_ctx::adjust_connection(THD *thd,
   if ((conn_limit = ia_config.conn_at(sa_iter)) == 0) return false;
 
   /**
-    KILL_USER can use normal user's connections and ia_config[IA_type::KILL_USER]
-    If !exceed_max_connection(thd) which means normal user's connections has
-    not been run out, this KILL_USER connection will be treated as normal user.
-    If exceed_max_connection(thd) which means normal user's connections has been
-    run out, this KILL_USER connection will be added to ia_ctx[IA_type::KILL_USER]
+    KILL_USER can use normal user's connections and
+    ia_config[IA_type::KILL_USER] If !exceed_max_connection(thd) which means
+    normal user's connections has not been run out, this KILL_USER connection
+    will be treated as normal user. If exceed_max_connection(thd) which means
+    normal user's connections has been run out, this KILL_USER connection will
+    be added to ia_ctx[IA_type::KILL_USER]
   */
 
   /**
     Revision 1:
       Redesign the kill user connection management:
-       a) Security_context attribute still is treated as KILL_USER and have KILL_ACL.
-       b) THD connection will be treated as UNKOWN_USER and use the max connections.
-       c) Normal user only can use max_connection - kill_user_connections.
-       d) Kill user can use max_connection
+       a) Security_context attribute still is treated as KILL_USER and have
+    KILL_ACL. b) THD connection will be treated as UNKOWN_USER and use the max
+    connections. c) Normal user only can use max_connection -
+    kill_user_connections. d) Kill user can use max_connection
   */
   if (*sa_iter == IA_type::KILL_USER) return false;
 
@@ -339,8 +339,8 @@ bool Internal_account_ctx::change_connection(THD *thd,
         so we should incr the global connection count.
     */
     if (!adjusted &&
-        !Connection_handler_manager::get_instance()
-             ->check_and_incr_conn_count(false)) {
+        !Connection_handler_manager::get_instance()->check_and_incr_conn_count(
+            false)) {
       thd->conn_attr.set(*bak_conn_iter);
       return true;
     }

@@ -255,7 +255,6 @@ int table_replication_applier_status_by_worker::rnd_next(void) {
       continue;
     }
 
-
     if (mi->rli == nullptr) {
       continue;
     }
@@ -301,7 +300,8 @@ int table_replication_applier_status_by_worker::rnd_pos(const void *pos) {
 
   mi = channel_map.get_mi_at_pos(m_pos.m_index_1);
 
-  if (!mi || !mi->rli || (!Multisource_info::is_xpaxos_channel(mi) && !mi->host[0])) {
+  if (!mi || !mi->rli ||
+      (!Multisource_info::is_xpaxos_channel(mi) && !mi->host[0])) {
     return res;
   }
 

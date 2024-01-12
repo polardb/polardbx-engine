@@ -38,5 +38,5 @@ namespace im {
   @retval         number          how many rule added.
 */
 size_t refresh_ccl_cache(Conf_records *records, bool force_clean);
-}
+}  // namespace im
 #endif

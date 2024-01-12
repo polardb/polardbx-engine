@@ -82,7 +82,9 @@ class Proc_get_timestamp : public Tso_proc_base {
 
   Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
-  const std::string str() const override { return std::string("get_timestamp"); }
+  const std::string str() const override {
+    return std::string("get_timestamp");
+  }
 };
 
 /**
@@ -90,7 +92,8 @@ class Proc_get_timestamp : public Tso_proc_base {
 */
 class Cmd_get_timestamp : public Sql_cmd_admin_proc {
  public:
-  explicit Cmd_get_timestamp(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
+  explicit Cmd_get_timestamp(THD *thd, mem_root_deque<Item *> *list,
+                             const Proc *proc)
       : Sql_cmd_admin_proc(thd, list, proc) {
     m_timestamp = 0;
   }

@@ -16,44 +16,38 @@
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
-#include <sstream>
 #include "appliedindex_checker.h"
+#include <sstream>
 #include "sql/replica_read_manager.h"
 
 AppliedIndexChecker appliedindex_checker;
 
-void AppliedIndexChecker::prepare(intervalType &inv)
-{
+void AppliedIndexChecker::prepare(intervalType &inv) {
   std::lock_guard<std::mutex> lg(lock_);
-  assert(group_queue_.size() == 0 || group_queue_.back().group_max < inv.group_min);
+  assert(group_queue_.size() == 0 ||
+         group_queue_.back().group_max < inv.group_min);
   group_queue_.push_back(inv);
 }
 
-//TODO@ yanhua, need debug use
-int AppliedIndexChecker::commit(uint64 index)
-{
+// TODO@ yanhua, need debug use
+int AppliedIndexChecker::commit(uint64 index) {
   std::lock_guard<std::mutex> lg(lock_);
-  for (auto &inv: group_queue_)
-  {
-    if (unlikely(inv.group_min > index))
-      return -1;
-    if (inv.group_min <= index && index <= inv.group_max)
-    {
+  for (auto &inv : group_queue_) {
+    if (unlikely(inv.group_min > index)) return -1;
+    if (inv.group_min <= index && index <= inv.group_max) {
       inv.size--;
-      if (inv.size == 0)
-      {
+      if (inv.size == 0) {
         // update appliedindex
         uint64 group_max = 0;
-        while (group_queue_.front().size == 0)
-        {
+        while (group_queue_.front().size == 0) {
           group_max = group_queue_.front().group_max;
           group_queue_.pop_front();
-          if (group_queue_.size() == 0)
-            break;
+          if (group_queue_.size() == 0) break;
         }
-        if (group_max != 0)
-        {
-          group_max = opt_appliedindex_force_delay >= group_max? 0: group_max - opt_appliedindex_force_delay;
+        if (group_max != 0) {
+          group_max = opt_appliedindex_force_delay >= group_max
+                          ? 0
+                          : group_max - opt_appliedindex_force_delay;
           consensus_ptr->updateAppliedIndex(group_max);
           replica_read_manager.update_lsn(group_max);
         }
@@ -64,27 +58,24 @@ int AppliedIndexChecker::commit(uint64 index)
   return 0;
 }
 
-void AppliedIndexChecker::reset()
-{
+void AppliedIndexChecker::reset() {
   std::lock_guard<std::mutex> lg(lock_);
   group_queue_.clear();
 }
 
-const char *AppliedIndexChecker::get_group_queue_status()
-{
+const char *AppliedIndexChecker::get_group_queue_status() {
   std::lock_guard<std::mutex> lg(lock_);
   status_buf_.clear();
   std::ostringstream status_stream;
   int cnt = 0;
-  for (auto &inv: group_queue_)
-  {
+  for (auto &inv : group_queue_) {
     cnt++;
-    if (cnt > 10)
-    {
+    if (cnt > 10) {
       status_stream << "...";
       break;
     }
-    status_stream << "[" << inv.size << "," << inv.group_min << "-" << inv.group_max << "]";
+    status_stream << "[" << inv.size << "," << inv.group_min << "-"
+                  << inv.group_max << "]";
   }
   status_buf_ = status_stream.str();
   return status_buf_.c_str();

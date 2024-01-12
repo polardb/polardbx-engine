@@ -104,10 +104,10 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
 
   if (stop_prefetch_flag || from_beginning) {
     mysql_mutex_unlock(&LOCK_prefetch_channel);
-    xp::info(ER_XP_PREFETCH) << "channel_id " << channel_id
-                                 << " prefetch stop, stop_prefetch_flag is "
-                                 << stop_prefetch_flag
-                                 << ", from_beginning is " << from_beginning;
+    xp::info(ER_XP_PREFETCH)
+        << "channel_id " << channel_id
+        << " prefetch stop, stop_prefetch_flag is " << stop_prefetch_flag
+        << ", from_beginning is " << from_beginning;
     return INTERRUPT;
   }
 
@@ -119,14 +119,13 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
   } else if (first_index_in_cache != 0 &&
              (index < first_index_in_cache ||
               index > first_index_in_cache + prefetch_cache.size())) {
-    xp::info(ER_XP_PREFETCH) << "Consensus prefetch add cache not fit the "
-                                    "range , channel_id "
-                                 << channel_id
-                                 << " the first index in cache is  "
-                                 << first_index_in_cache.load()
-                                 << ", the last index is "
-                                 << first_index_in_cache + prefetch_cache.size()
-                                 << ", the required index is " << index;
+    xp::info(ER_XP_PREFETCH)
+        << "Consensus prefetch add cache not fit the "
+           "range , channel_id "
+        << channel_id << " the first index in cache is  "
+        << first_index_in_cache.load() << ", the last index is "
+        << first_index_in_cache + prefetch_cache.size()
+        << ", the required index is " << index;
     for (auto iter = prefetch_cache.begin(); iter != prefetch_cache.end();
          ++iter) {
       if (iter->buf_size > 0) my_free(iter->buffer);
@@ -143,7 +142,8 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
       //                 << ", channel_id " << channel_id
       //                 << ", input_index " << index
       //                 << ", start_index " << first_index_in_cache
-      //                 << ", current_prefetch_request " << current_prefetch_request.load()
+      //                 << ", current_prefetch_request " <<
+      //                 current_prefetch_request.load()
       //                 << " " << get_backtrace_str();
       if ((!stop_prefetch_flag) && (!from_beginning))
         mysql_cond_wait(&COND_prefetch_channel, &LOCK_prefetch_channel);
@@ -173,14 +173,13 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
     ConsensusLogEntry &old_log = prefetch_cache.back();
     if (old_log.index + 1 != index) {
       mysql_mutex_unlock(&LOCK_prefetch_channel);
-      xp::error(ER_XP_PREFETCH)  << "prefetch cache add invalid index, need strictly increasing"
-                      << ", channel_id " << channel_id
-                      << ", input_index " << index
-                      << ", start_index " << first_index_in_cache
-                      << ", end_index " << old_log.index
-                      << ", cache count " << prefetch_cache.size()
-                      << ", prefetch_cache_size " << prefetch_cache_size
-                      << " " << get_backtrace_str();
+      xp::error(ER_XP_PREFETCH)
+          << "prefetch cache add invalid index, need strictly increasing"
+          << ", channel_id " << channel_id << ", input_index " << index
+          << ", start_index " << first_index_in_cache << ", end_index "
+          << old_log.index << ", cache count " << prefetch_cache.size()
+          << ", prefetch_cache_size " << prefetch_cache_size << " "
+          << get_backtrace_str();
       ut_a(old_log.index + 1 == index);
       return INTERRUPT;
     }
@@ -214,7 +213,7 @@ void ConsensusPreFetchChannel::add_log_to_large_trx_table(uint64 term,
                                                           uint flag) {
   mysql_mutex_lock(&LOCK_prefetch_channel);
   assert(flag & (Consensus_log_event_flag::FLAG_LARGE_TRX |
-                      Consensus_log_event_flag::FLAG_LARGE_TRX_END));
+                 Consensus_log_event_flag::FLAG_LARGE_TRX_END));
   ConsensusLogEntry new_log = {term, index, 0, NULL, outer, flag, 0};
   large_trx_table.insert(std::make_pair(index, new_log));
   mysql_mutex_unlock(&LOCK_prefetch_channel);
@@ -401,13 +400,14 @@ int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
     auto it = large_trx_table.lower_bound(index);
     large_trx_table.erase(it, large_trx_table.end());
   }
-  xp::info(ER_XP_PREFETCH)
-      << "Truncate prefetch before"
-      << ", channel " << channel_id
-      << ", first index = [" << first_index_in_cache.load() 
-      << "], end index = [" << (prefetch_cache.empty() ? -1 : prefetch_cache.back().index)
-      << "], cache count = [" << prefetch_cache.size()
-      << "]";
+  xp::info(ER_XP_PREFETCH) << "Truncate prefetch before"
+                           << ", channel " << channel_id << ", first index = ["
+                           << first_index_in_cache.load() << "], end index = ["
+                           << (prefetch_cache.empty()
+                                   ? -1
+                                   : prefetch_cache.back().index)
+                           << "], cache count = [" << prefetch_cache.size()
+                           << "]";
   if (max_prefetch_cache_size == 0 || prefetch_cache.size() == 0) {
     mysql_mutex_unlock(&LOCK_prefetch_channel);
     return 0;
@@ -431,14 +431,14 @@ int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
     }
   }
 
-
-  xp::info(ER_XP_PREFETCH)
-      << "Truncate prefetch after"
-      << ", channel " << channel_id
-      << ", first index = [" << first_index_in_cache.load() 
-      << "], end index = [" << (prefetch_cache.empty() ? -1 : prefetch_cache.back().index)
-      << "], cache count = [" << prefetch_cache.size()
-      << "]";
+  xp::info(ER_XP_PREFETCH) << "Truncate prefetch after"
+                           << ", channel " << channel_id << ", first index = ["
+                           << first_index_in_cache.load() << "], end index = ["
+                           << (prefetch_cache.empty()
+                                   ? -1
+                                   : prefetch_cache.back().index)
+                           << "], cache count = [" << prefetch_cache.size()
+                           << "]";
 
   mysql_mutex_unlock(&LOCK_prefetch_channel);
   return 0;
@@ -672,9 +672,9 @@ void *run_prefetch(void *arg) {
 
     // get log
     if (!channel->log_exist(index)) {
-      xp::info(ER_XP_PREFETCH) << "Consensus prefetch channel "
-                                   << channel->get_channel_id()
-                                   << " try to fetch index : " << index;
+      xp::info(ER_XP_PREFETCH)
+          << "Consensus prefetch channel " << channel->get_channel_id()
+          << " try to fetch index : " << index;
       if (consensus_log_manager.prefetch_log_directly(
               thd, channel->get_channel_id(), index)) {
         channel->clear_prefetch_request();

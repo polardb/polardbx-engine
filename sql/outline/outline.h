@@ -34,6 +34,7 @@ namespace im {
 struct Outline_stats {
   ulonglong hit;
   ulonglong overflow;
+
  public:
   Outline_stats() {
     hit = 0;
@@ -139,7 +140,6 @@ class Outline {
  private:
   Outline_stats m_stats;
 };
-
 
 /* Outline show result structure */
 struct Outline_show_result {
@@ -308,7 +308,11 @@ class System_outline {
 
  public:
   /* Index or optimizer */
-  enum class Category { CATEGORY_INDEX = 0, CATEGORY_OPTIMIZER, CATEGORY_COUNT };
+  enum class Category {
+    CATEGORY_INDEX = 0,
+    CATEGORY_OPTIMIZER,
+    CATEGORY_COUNT
+  };
 
  public:
   explicit System_outline(size_t partition);

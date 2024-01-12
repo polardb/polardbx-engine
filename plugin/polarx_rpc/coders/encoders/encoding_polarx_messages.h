@@ -29,7 +29,7 @@
 #include <string>
 #include <utility>
 
-#include "my_dbug.h" // NOLINT(build/include_subdir)
+#include "my_dbug.h"  // NOLINT(build/include_subdir)
 
 #include "../protocol_fwd.h"
 #include "encoding_descriptors.h"
@@ -38,8 +38,9 @@
 namespace polarx_rpc {
 namespace protocol {
 
-template <typename Base_type> class XMessage_encoder_base : public Base_type {
-private:
+template <typename Base_type>
+class XMessage_encoder_base : public Base_type {
+ private:
   constexpr static PolarXRPC::Notice::Frame_Type k_state_change =
       PolarXRPC::Notice::Frame_Type_SESSION_STATE_CHANGED;
 
@@ -65,10 +66,10 @@ private:
   constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter
       k_rows_affected = PolarXRPC::Notice::SessionStateChanged::ROWS_AFFECTED;
 
-  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter k_client_id =
-      PolarXRPC::Notice::SessionStateChanged::CLIENT_ID_ASSIGNED;
+  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter
+      k_client_id = PolarXRPC::Notice::SessionStateChanged::CLIENT_ID_ASSIGNED;
 
-public:
+ public:
   // Constructor inheritance doesn't work in solaris
   // for template<T> class X: T {...};
   //
@@ -344,7 +345,8 @@ public:
     Base_type::end_xmessage(xmsg_start);
   }
 
-  template <uint8_t id> void encode_protobuf_message(const ProtoMsg &message) {
+  template <uint8_t id>
+  void encode_protobuf_message(const ProtoMsg &message) {
     std::string out_serialized;
     message.SerializeToString(&out_serialized);
     encode_xmessage<id>(out_serialized);
@@ -353,9 +355,9 @@ public:
 
 class PolarX_Message_encoder
     : public XMessage_encoder_base<PolarX_Protocol_encoder> {
-public:
+ public:
   using XMessage_encoder_base<PolarX_Protocol_encoder>::XMessage_encoder_base;
 };
 
-} // namespace protocol
-} // namespace polarx_rpc
+}  // namespace protocol
+}  // namespace polarx_rpc

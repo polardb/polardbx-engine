@@ -37,10 +37,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
  @return us since epoch or 0 if failed to retrieve */
 ib_time_system_us_t ut_time_system_us(void) {
   const auto now = std::chrono::system_clock::now();
-  const auto ret =
-      std::chrono::duration_cast<std::chrono::microseconds>(
-          now.time_since_epoch())
-          .count();
+  const auto ret = std::chrono::duration_cast<std::chrono::microseconds>(
+                       now.time_since_epoch())
+                       .count();
   return (ret);
 }
-

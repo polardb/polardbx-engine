@@ -27,11 +27,11 @@
 #include "map_helpers.h"             // malloc_unordered_map
 #include "mysql/psi/mysql_mutex.h"   // mysql_mutex_t
 #include "mysql/psi/mysql_rwlock.h"  // mysql_rwlock_t
-#include "sql/sql_const.h"
-#include "sql/stateless_allocator.h"  // Stateless_allocator
-#include "sql/sql_base.h"
-#include "sql/sql_statistics_common.h"
 #include "sql/common/component.h"
+#include "sql/sql_base.h"
+#include "sql/sql_const.h"
+#include "sql/sql_statistics_common.h"
+#include "sql/stateless_allocator.h"  // Stateless_allocator
 
 /**
   Memory usage statistics helper.
@@ -70,7 +70,7 @@ struct hash<String_stats_type> {
 class Object_stats {
  public:
   Object_stats() {}
-  virtual ~Object_stats(){}
+  virtual ~Object_stats() {}
 
   /**
     Accumulate the data from Stats_data;
@@ -94,7 +94,7 @@ class Table_stats : public Object_stats {
  public:
   Table_stats();
 
-  virtual ~Table_stats(){}
+  virtual ~Table_stats() {}
 
   /**
     Accumulate the data from Stats_data;
@@ -121,7 +121,7 @@ class Index_stats : public Object_stats {
  public:
   Index_stats();
 
-  virtual ~Index_stats(){}
+  virtual ~Index_stats() {}
 
   /**
     Accumulate the data from Stats_data;

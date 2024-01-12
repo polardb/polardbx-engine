@@ -44,7 +44,6 @@
 #include "storage/perfschema/pfs_timer.h"
 #include "storage/perfschema/pfs_visitor.h"
 
-
 THR_LOCK table_esms_by_digest_supplement::m_table_lock;
 
 Plugin_table table_esms_by_digest_supplement::m_table_def(
@@ -96,8 +95,8 @@ PFS_engine_table_share table_esms_by_digest_supplement::m_share = {
     false /* m_in_purgatory */
 };
 
-
-PFS_engine_table *table_esms_by_digest_supplement::create(PFS_engine_table_share *) {
+PFS_engine_table *table_esms_by_digest_supplement::create(
+    PFS_engine_table_share *) {
   return new table_esms_by_digest_supplement();
 }
 
@@ -232,4 +231,3 @@ int table_esms_by_digest_supplement::read_row_values(TABLE *table,
 
   return 0;
 }
-

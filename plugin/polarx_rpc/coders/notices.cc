@@ -15,7 +15,7 @@ namespace polarx_rpc {
 namespace {
 
 class CwarningResultset final {
-private:
+ private:
   using Row = CcallbackCommandDelegate::Row_data;
   using Field = CcallbackCommandDelegate::Field_value;
   using Field_list = std::vector<Field *>;
@@ -38,10 +38,8 @@ private:
   static inline Warning::Level get_warning_level(const std::string &level) {
     static const char *const ERROR_STRING = "Error";
     static const char *const WARNING_STRING = "Warning";
-    if (level == WARNING_STRING)
-      return Warning::WARNING;
-    if (level == ERROR_STRING)
-      return Warning::ERROR;
+    if (level == WARNING_STRING) return Warning::WARNING;
+    if (level == ERROR_STRING) return Warning::ERROR;
     return Warning::NOTE;
   }
 
@@ -54,8 +52,7 @@ private:
     }
 
     Field_list &fields = row->fields;
-    if (fields.size() != 3)
-      return false;
+    if (fields.size() != 3) return false;
 
     const Warning::Level level = get_warning_level(*fields[0]->value.v_string);
 
@@ -82,9 +79,10 @@ private:
     return true;
   }
 
-public:
+ public:
   CwarningResultset(CpolarxEncoder &encoder, const bool skip_single_error)
-      : encoder_(encoder), skip_single_error_(skip_single_error),
+      : encoder_(encoder),
+        skip_single_error_(skip_single_error),
         delegate_(std::bind(&CwarningResultset::start_row, this),
                   std::bind(&CwarningResultset::end_row, this,
                             std::placeholders::_1)) {}
@@ -92,7 +90,7 @@ public:
   inline CcommandDelegate &delegate() { return delegate_; }
 };
 
-} // namespace
+}  // namespace
 
 err_t send_warnings(CsessionBase &session, CpolarxEncoder &encoder,
                     bool skip_single_error) {
@@ -102,4 +100,4 @@ err_t send_warnings(CsessionBase &session, CpolarxEncoder &encoder,
   return session.execute_sql(q.data(), q.length(), resultset.delegate());
 }
 
-} // namespace polarx_rpc
+}  // namespace polarx_rpc

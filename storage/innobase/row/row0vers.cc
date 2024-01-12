@@ -716,8 +716,7 @@ static void row_vers_build_cur_vrow_low(
 
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, nullptr, vrow, status,
-                                nullptr,
-                                nullptr /* TODO: figure out it */);
+                                nullptr, nullptr /* TODO: figure out it */);
 
     if (heap2) {
       mem_heap_free(heap2);
@@ -837,8 +836,7 @@ static bool row_vers_vc_matches_cluster(
 
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, nullptr, vrow, status,
-                                nullptr,
-                                nullptr /* TODO: figured out it */ );
+                                nullptr, nullptr /* TODO: figured out it */);
 
     if (heap2) {
       mem_heap_free(heap2);

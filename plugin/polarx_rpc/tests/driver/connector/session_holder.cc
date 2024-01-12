@@ -276,7 +276,7 @@ xcl::Handler_result Session_holder::count_received_messages(
   const auto notice_type =
       static_cast<const PolarXRPC::Notice::Frame *>(&msg)->type() - 1u;
 #ifndef array_elements
-#  define array_elements(A) ((uint) (sizeof(A)/sizeof(A[0])))
+#define array_elements(A) ((uint)(sizeof(A) / sizeof(A[0])))
 #endif
   if (notice_type < array_elements(notice_type_id))
     ++m_received_msg_counters[notice_type_id[notice_type]];

@@ -32,9 +32,9 @@
 #include <string>
 #include <vector>
 
-#include "xconnection_config.h"
 #include "../mysqlxclient/xerror.h"
 #include "../mysqlxclient/xprotocol.h"
+#include "xconnection_config.h"
 
 namespace xcl {
 
@@ -43,8 +43,8 @@ enum class Auth {
   k_auto_fallback,
   k_auto_from_capabilities,
   k_mysql41,
-//  k_plain,
-//  k_sha256_memory
+  //  k_plain,
+  //  k_sha256_memory
 };
 
 class Context {

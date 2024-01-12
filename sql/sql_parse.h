@@ -63,7 +63,6 @@ extern bool opt_auto_savepoint;
 
 bool stmt_causes_implicit_commit(const THD *thd, uint mask);
 
-
 bool stmt_causes_implicit_savepoint(const THD *thd);
 bool stmt_makes_implicit_savepoint(THD *thd);
 

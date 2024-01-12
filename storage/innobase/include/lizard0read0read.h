@@ -52,7 +52,6 @@ namespace lizard {
 extern bool srv_vision_use_commit_snapshot_debug;
 
 class VisionContainer {
-
   typedef UT_LIST_BASE_NODE_T(Vision, list) vision_list_t;
 
   class VisionList {

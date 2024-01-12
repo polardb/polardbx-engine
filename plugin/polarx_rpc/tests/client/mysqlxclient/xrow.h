@@ -26,9 +26,9 @@
 #define PLUGIN_X_CLIENT_MYSQLXCLIENT_XROW_H_
 
 #include <cstdint>
+#include <list>
 #include <memory>
 #include <set>
-#include <list>
 #include <string>
 
 #include "xdatetime.h"

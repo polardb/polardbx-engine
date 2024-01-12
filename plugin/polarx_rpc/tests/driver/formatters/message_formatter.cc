@@ -225,25 +225,32 @@ static std::string messages_repeated_field_to_text(const Message &message,
 
   switch (fd->cpp_type()) {
     case FieldDescriptor::CPPTYPE_INT32:
-      return polarx_rpc::to_string(reflection->GetRepeatedInt32(message, fd, index));
+      return polarx_rpc::to_string(
+          reflection->GetRepeatedInt32(message, fd, index));
 
     case FieldDescriptor::CPPTYPE_UINT32:
-      return polarx_rpc::to_string(reflection->GetRepeatedUInt32(message, fd, index));
+      return polarx_rpc::to_string(
+          reflection->GetRepeatedUInt32(message, fd, index));
 
     case FieldDescriptor::CPPTYPE_INT64:
-      return polarx_rpc::to_string(reflection->GetRepeatedInt64(message, fd, index));
+      return polarx_rpc::to_string(
+          reflection->GetRepeatedInt64(message, fd, index));
 
     case FieldDescriptor::CPPTYPE_UINT64:
-      return polarx_rpc::to_string(reflection->GetRepeatedUInt64(message, fd, index));
+      return polarx_rpc::to_string(
+          reflection->GetRepeatedUInt64(message, fd, index));
 
     case FieldDescriptor::CPPTYPE_DOUBLE:
-      return polarx_rpc::to_string(reflection->GetRepeatedDouble(message, fd, index));
+      return polarx_rpc::to_string(
+          reflection->GetRepeatedDouble(message, fd, index));
 
     case FieldDescriptor::CPPTYPE_FLOAT:
-      return polarx_rpc::to_string(reflection->GetRepeatedFloat(message, fd, index));
+      return polarx_rpc::to_string(
+          reflection->GetRepeatedFloat(message, fd, index));
 
     case FieldDescriptor::CPPTYPE_BOOL:
-      return polarx_rpc::to_string(reflection->GetRepeatedBool(message, fd, index));
+      return polarx_rpc::to_string(
+          reflection->GetRepeatedBool(message, fd, index));
 
     case FieldDescriptor::CPPTYPE_ENUM:
       return reflection->GetRepeatedEnum(message, fd, index)->name();
@@ -374,7 +381,8 @@ std::string message_to_text(const Message &message,
           throw std::logic_error("Elements '" + expected_field.m_name +
                                  "' index out of boundary "
                                  "(size of the array is " +
-                                 polarx_rpc::to_string(field_array_elements) + ")");
+                                 polarx_rpc::to_string(field_array_elements) +
+                                 ")");
         }
 
         msg = &reflection->GetRepeatedMessage(*msg, field_descriptor,

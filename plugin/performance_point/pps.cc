@@ -31,16 +31,16 @@
 #include "plugin/performance_point/pps_table_iostat.h"
 
 #include "mysql/psi/mysql_memory.h"
+#include "ppi/ppi_disable.h"
 #include "ppi/ppi_global.h"
 #include "ppi/ppi_statement.h"
 #include "ppi/ppi_thread.h"
 #include "sql/current_thd.h"  // current_thd
+#include "sql/current_thd.h"
 #include "sql/mysqld.h"
 #include "sql/psi_memory_key.h"  // PSI_memory_key
 #include "sql/sql_class.h"       // THD
 #include "sql/sys_vars.h"
-#include "sql/current_thd.h"
-#include "ppi/ppi_disable.h"
 
 /**
   @addtogroup Performance Point plugin
@@ -120,9 +120,7 @@ static PPI_transaction *PPS_get_transaction_context(
 
 /* Performance Point system thread service handler */
 static PPI_thread_service_t PPS_thread_service = {
-    PPS_create_thread,
-    PPS_destroy_thread,
-    PPS_get_thread_statistic,
+    PPS_create_thread, PPS_destroy_thread, PPS_get_thread_statistic,
     PPS_get_transaction_context};
 
 /* Get current thread object */
@@ -172,15 +170,13 @@ static void PPS_inc_transaction_binlog_size(PPI_transaction *ppi_transaction,
 static void PPS_backup_transaction(PPI_thread *ppi_thread) {
   PPS_thread *pps_thread = reinterpret_cast<PPS_thread *>(ppi_thread);
 
-  if (pps_thread)
-    pps_thread->backup_transaction();
+  if (pps_thread) pps_thread->backup_transaction();
 }
 
 static void PPS_restore_transaction(PPI_thread *ppi_thread) {
   PPS_thread *pps_thread = reinterpret_cast<PPS_thread *>(ppi_thread);
 
-  if (pps_thread)
-    pps_thread->restore_transaction();
+  if (pps_thread) pps_thread->restore_transaction();
 }
 
 static void PPS_get_transaction_stat(PPI_thread *ppi_thread,
@@ -208,8 +204,7 @@ static PPI_transaction_service_t PPS_transaction_service = {
   @param[in]        ppi_thread
   @param[out]       ppi_statement_stat
 */
-static void
-PPS_start_statement(PPI_thread * ppi_thread, PPI_stat *stat) {
+static void PPS_start_statement(PPI_thread *ppi_thread, PPI_stat *stat) {
   PPS_thread *pps_thread = reinterpret_cast<PPS_thread *>(ppi_thread);
 
   /* Clear the statistics when statement begin. */
@@ -308,7 +303,8 @@ static PPI_statement *PPS_start_statement_IO_operation(PPI_IO_data *io_data) {
   PPS_statement *pps_statement = PPS_current_statement();
 
   if (!pps_statement) return nullptr;
-  if (ppi_current_disable && ppi_current_disable->disable_ppi_statement_stat()) return nullptr;
+  if (ppi_current_disable && ppi_current_disable->disable_ppi_statement_stat())
+    return nullptr;
 
   assert(pps_statement->validate_IO_state());
 
@@ -341,8 +337,9 @@ static void PPS_end_statement_IO_operation(PPI_statement *ppi_statement,
       reinterpret_cast<PPS_statement *>(ppi_statement);
 
   if (!pps_statement) return;
-  if (ppi_current_disable && ppi_current_disable->disable_ppi_statement_stat()) return;
-  
+  if (ppi_current_disable && ppi_current_disable->disable_ppi_statement_stat())
+    return;
+
   assert(!pps_statement->validate_IO_state());
   pps_statement->aggregate_IO_operation(count, end_time - start_time);
 }
@@ -410,8 +407,7 @@ static void PPS_get_io_statistic(PPI_iostat_data *stat, bool first_read,
 }
 
 /* Performance point plugin global service definition */
-static PPI_global_service_t PPS_global_service = {
-  PPS_get_io_statistic};
+static PPI_global_service_t PPS_global_service = {PPS_get_io_statistic};
 
 static SYS_VAR *PPS_system_vars[] = {
     NULL,
@@ -448,22 +444,20 @@ static struct st_mysql_performance_point PPS_plugin = {
     MYSQL_PERFORMANCE_POINT_INTERFACE_VERSION};
 
 mysql_declare_plugin(performance_point){
-  MYSQL_PERFORMANCE_POINT_PLUGIN, /* type               */
-  &PPS_plugin,                    /* decriptor          */
-  "performance_point",            /* name               */
-  "Jianwei.zhao",                 /* author             */
-  "Performance Point plugin",     /* description        */
-  PLUGIN_LICENSE_GPL,
-  PPS_initialize,                 /* Plugin init        */
-  NULL,                           /* uninstall func     */
-  NULL,                           /* deinit func        */
-  0x0100,                         /* version            */
-  PPS_status_vars,                /* status variables   */
-  PPS_system_vars,                /* system variables   */
-  NULL,
-  0,
+    MYSQL_PERFORMANCE_POINT_PLUGIN, /* type               */
+    &PPS_plugin,                    /* decriptor          */
+    "performance_point",            /* name               */
+    "Jianwei.zhao",                 /* author             */
+    "Performance Point plugin",     /* description        */
+    PLUGIN_LICENSE_GPL,
+    PPS_initialize,  /* Plugin init        */
+    NULL,            /* uninstall func     */
+    NULL,            /* deinit func        */
+    0x0100,          /* version            */
+    PPS_status_vars, /* status variables   */
+    PPS_system_vars, /* system variables   */
+    NULL,
+    0,
 } mysql_declare_plugin_end;
-
-
 
 /// @} (end of group Performance Point plugin)

@@ -203,8 +203,6 @@ class Rpl_info_factory {
  private:
   static struct_table_data consensus_table_data;
   static struct_file_data consensus_file_data;
-
-
 };
 
 #endif

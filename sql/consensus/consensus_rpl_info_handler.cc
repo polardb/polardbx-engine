@@ -42,7 +42,7 @@ THD *Rpl_info_table_access::force_create_thd() {
   thd->system_thread = SYSTEM_THREAD_INFO_REPOSITORY;
   thd_created = true;
 
-  return(thd);
+  return (thd);
 }
 
 int Rpl_info_dummy::do_flush_info_force_new_thd(
@@ -157,4 +157,3 @@ end:
   access->drop_thd(thd);
   return error;
 }
-

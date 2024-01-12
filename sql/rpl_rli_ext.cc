@@ -13,14 +13,13 @@
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql/log_event.h"
-#include "sql/rpl_rli.h"
 #include "sql/rpl_rli_ext.h"
 #include "bl_consensus_log.h"
+#include "sql/log_event.h"
+#include "sql/rpl_rli.h"
 #include "storage/innobase/include/ut0dbg.h"
 
 bool opt_consensus_index_buf_enabled = false;
-
 
 void update_consensus_apply_index(Relay_log_info *rli, Log_event *ev) {
   /**
@@ -54,8 +53,8 @@ void mts_init_consensus_apply_index(Relay_log_info *rli,
   // assert(rli->is_parallel_exec());
   assert(rli->info_thd->xpaxos_replication_channel);
 
-  xp::info(ER_XP_APPLIER) << "mts_init_consensus_apply_index " << consensus_index
-    << ", rli " << rli;
+  xp::info(ER_XP_APPLIER) << "mts_init_consensus_apply_index "
+                          << consensus_index << ", rli " << rli;
 
   rli->m_consensus_index_buf->init_tail(consensus_index);
 }
@@ -71,8 +70,8 @@ void mts_advance_consensus_apply_index(Relay_log_info *rli, Log_event *ev) {
   assert(rli->is_parallel_exec());
   assert(rli->info_thd->xpaxos_replication_channel);
 
-  uint64 consensus_index =
-      rli->m_consensus_index_buf->add_index_advance_tail(ev->consensus_real_index);
+  uint64 consensus_index = rli->m_consensus_index_buf->add_index_advance_tail(
+      ev->consensus_real_index);
 
   if (consensus_index > consensus_ptr->getAppliedIndex()) {
     consensus_ptr->updateAppliedIndex(consensus_index);
@@ -135,11 +134,11 @@ bool Index_link_buf::lock(bool retry) {
   return false;
 }
 
-void Index_link_buf::unlock() { m_locked.store(false, std::memory_order_seq_cst); }
-
-inline void Index_link_buf::init_tail(uint64 index) {
-  m_tail.store(index);
+void Index_link_buf::unlock() {
+  m_locked.store(false, std::memory_order_seq_cst);
 }
+
+inline void Index_link_buf::init_tail(uint64 index) { m_tail.store(index); }
 
 inline uint64 Index_link_buf::get_slot_index(uint64 index) const {
   return index % m_capacity;

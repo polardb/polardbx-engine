@@ -340,7 +340,8 @@ bool Consensus_cluster_info_log_event::write_data_header(
   uchar buffer[POST_HEADER_LENGTH];
   write_data_header_to_memory(buffer);
   DBUG_RETURN(
-      wrapper_my_b_safe_write(ostream, (const uchar *)buffer, POST_HEADER_LENGTH) ||
+      wrapper_my_b_safe_write(ostream, (const uchar *)buffer,
+                              POST_HEADER_LENGTH) ||
       wrapper_my_b_safe_write(ostream, (const uchar *)info, info_length));
 }
 #endif
@@ -461,8 +462,8 @@ Log_event::enum_skip_reason Stop_log_event::do_shall_skip(Relay_log_info *rli) {
   */
   if (Multisource_info::is_xpaxos_channel(rli)) {
 #ifndef DBUG_OFF
-    bool is_xpaxos =
-        Multisource_info::is_xpaxos_replication_channel_name(rli->get_channel());
+    bool is_xpaxos = Multisource_info::is_xpaxos_replication_channel_name(
+        rli->get_channel());
     assert(is_xpaxos);
 #endif
     return Log_event::EVENT_SKIP_NOT;

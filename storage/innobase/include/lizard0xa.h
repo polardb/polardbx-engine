@@ -36,10 +36,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <unordered_set>
 
+#include "lizard0ut.h"
+#include "lizard0xa0types.h"
 #include "trx0types.h"
 #include "trx0xa.h"
-#include "lizard0xa0types.h"
-#include "lizard0ut.h"
 
 namespace lizard {
 class Vision;
@@ -69,8 +69,8 @@ typedef struct xa_desc_t {
 
   /**
     For future:
-      Building group in advance can improve the performance of collecting group_ids
-      when open new vision;
+      Building group in advance can improve the performance of collecting
+    group_ids when open new vision;
   */
   std::string group;
 

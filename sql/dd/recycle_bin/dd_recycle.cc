@@ -40,7 +40,6 @@
 #include "sql/dd/recycle_bin/dd_recycle.h"
 #include "sql/recycle_bin/recycle_table.h"
 
-
 namespace im {
 namespace recycle_bin {
 
@@ -110,13 +109,11 @@ static bool initialize_recycle_bin(THD *thd) {
 */
 bool init(dd::enum_dd_init_type init_type) {
   if (init_type == dd::enum_dd_init_type::DD_INITIALIZE)
-    return ::bootstrap::run_bootstrap_thread(nullptr, nullptr,
-                                             &initialize_recycle_bin,
-                                             SYSTEM_THREAD_DD_INITIALIZE);
+    return ::bootstrap::run_bootstrap_thread(
+        nullptr, nullptr, &initialize_recycle_bin, SYSTEM_THREAD_DD_INITIALIZE);
   else if (init_type == dd::enum_dd_init_type::DD_RESTART_OR_UPGRADE)
-    return ::bootstrap::run_bootstrap_thread(nullptr, nullptr,
-                                             &initialize_recycle_bin,
-                                             SYSTEM_THREAD_DD_RESTART);
+    return ::bootstrap::run_bootstrap_thread(
+        nullptr, nullptr, &initialize_recycle_bin, SYSTEM_THREAD_DD_RESTART);
   else {
     assert(false);
     return true;
@@ -126,4 +123,3 @@ bool init(dd::enum_dd_init_type init_type) {
 } /* namespace recycle_bin */
 
 } /* namespace im */
-

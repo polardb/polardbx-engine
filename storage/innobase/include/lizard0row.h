@@ -36,8 +36,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0data0types.h"
 #include "lizard0undo0types.h"
 
-#include "mem0mem.h"
 #include "btr0cur.h"
+#include "mem0mem.h"
 #include "rem0types.h"
 
 struct ins_node_t;
@@ -124,8 +124,7 @@ byte *row_get_scn_ptr_in_rec(rec_t *rec, const dict_index_t *index,
   @param[in]      ptr       scn pointer
   @param[in]      txn_desc  txn description
 */
-void row_upd_rec_write_lizard_fields(byte *ptr,
-                                     const txn_desc_t *txn_desc);
+void row_upd_rec_write_lizard_fields(byte *ptr, const txn_desc_t *txn_desc);
 
 /**
   Write the scn and undo_ptr of the physical record.
@@ -247,8 +246,8 @@ byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,
                                           txn_info_t *txn_info);
 
 /**
-  Get the real SCN of a record by UBA, and write back to records in physical page,
-  when we make a btr update / delete.
+  Get the real SCN of a record by UBA, and write back to records in physical
+  page, when we make a btr update / delete.
   @param[in]      trx_id    trx_id of the transactions
                             who updates / deletes the record
   @param[in]      rec       record
@@ -259,8 +258,7 @@ byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,
 void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
                                          const dict_index_t *index,
                                          const ulint *offsets,
-                                         const buf_block_t *block,
-                                         mtr_t *mtr);
+                                         const buf_block_t *block, mtr_t *mtr);
 
 /**
   Write redo log to the buffer about updates of scn and uba.
@@ -271,9 +269,8 @@ void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
 
   @return new pointer to mlog
 */
-byte* row_upd_write_lizard_vals_to_log(const dict_index_t *index,
-                                       const txn_rec_t *txn_rec,
-                                       byte *log_ptr,
+byte *row_upd_write_lizard_vals_to_log(const dict_index_t *index,
+                                       const txn_rec_t *txn_rec, byte *log_ptr,
                                        mtr_t *mtr MY_ATTRIBUTE((unused)));
 
 /**
@@ -423,8 +420,7 @@ bool row_scn_initial(const rec_t *rec, const dict_index_t *index,
 
   @retval         true      Success
 */
-bool row_undo_ptr_is_active(const rec_t *rec,
-                            const dict_index_t *index,
+bool row_undo_ptr_is_active(const rec_t *rec, const dict_index_t *index,
                             const ulint *offsets);
 
 /**
@@ -454,19 +450,19 @@ bool row_lizard_has_cleanout(const rec_t *rec, const dict_index_t *index,
 } /* namespace lizard */
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
-#define assert_row_scn_initial(rec, index, offsets)             \
-  do {                                                          \
-    ut_a(lizard::row_scn_initial(rec, index, offsets));         \
+#define assert_row_scn_initial(rec, index, offsets)     \
+  do {                                                  \
+    ut_a(lizard::row_scn_initial(rec, index, offsets)); \
   } while (0)
 
-#define assert_row_undo_ptr_is_active(rec, index, offsets)      \
-  do {                                                          \
-    ut_a(lizard::row_undo_ptr_is_active(rec, index, offsets));  \
+#define assert_row_undo_ptr_is_active(rec, index, offsets)     \
+  do {                                                         \
+    ut_a(lizard::row_undo_ptr_is_active(rec, index, offsets)); \
   } while (0)
 
-#define assert_row_lizard_valid(rec, index, offsets)            \
-  do {                                                          \
-    ut_a(lizard::row_lizard_valid(rec, index, offsets));        \
+#define assert_row_lizard_valid(rec, index, offsets)     \
+  do {                                                   \
+    ut_a(lizard::row_lizard_valid(rec, index, offsets)); \
   } while (0)
 
 #define assert_row_lizard_has_cleanout(rec, index, offsets)     \

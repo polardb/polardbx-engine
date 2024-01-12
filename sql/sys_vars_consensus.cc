@@ -25,11 +25,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 #include "sys_vars_consensus.h"
-#include "sql/sys_vars.h"
-#include "sql/log.h"
-#include "bl_consensus_log.h"            // ConsensusLogManager and alisql::Paxos
+#include "bl_consensus_log.h"          // ConsensusLogManager and alisql::Paxos
+#include "sql/appliedindex_checker.h"  // AppliedIndexChecker
 #include "sql/events.h"
-#include "sql/appliedindex_checker.h"         // AppliedIndexChecker
+#include "sql/log.h"
+#include "sql/sys_vars.h"
 
 #include "sql/replica_read_manager.h"
 
@@ -42,7 +42,7 @@ bool opt_reset_consensus_prefetch_cache = 0;
 bool opt_consensus_checksum = 0;
 bool opt_consensus_disable_election = 0;
 bool opt_consensus_dynamic_easyindex = 1;
-bool opt_consensus_easy_pool_size= 0;
+bool opt_consensus_easy_pool_size = 0;
 ulonglong opt_cluster_id;
 bool opt_cluster_learner_node;
 bool opt_cluster_log_type_instance;
@@ -109,8 +109,7 @@ bool opt_recover_snapshot = false;
 ulong thread_stack_warning = 65536;
 ulong opt_configured_event_scheduler = Events::EVENTS_OFF;
 
-static bool fix_consensus_checksum(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_checksum(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setChecksumMode(opt_consensus_checksum);
   return false;
 }
@@ -122,8 +121,7 @@ static Sys_var_bool Sys_consensus_checksum(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_checksum));
 
-static bool fix_consensus_disable_election(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_disable_election(sys_var *, THD *, enum_var_type) {
   if (!consensus_ptr->getConsensusAsync() && opt_consensus_disable_election)
     xp::warn(ER_XP_0) << "Disable election while cluster is not in weak mode.";
   consensus_ptr->debugDisableElection = opt_consensus_disable_election;
@@ -138,8 +136,7 @@ static Sys_var_bool Sys_consensus_disable_election(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_disable_election));
 
-static bool fix_consensus_dynamic_easyindex(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_dynamic_easyindex(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setEnableDynamicEasyIndex(opt_consensus_dynamic_easyindex);
   return false;
 }
@@ -151,9 +148,8 @@ static Sys_var_bool Sys_consensus_dynamic_easyindex(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_dynamic_easyindex));
 
-static bool handle_weak_consensus_mode(sys_var *, THD *, enum_var_type)
-{
-  replica_exec_mode_options= opt_weak_consensus_mode? 2: 0;
+static bool handle_weak_consensus_mode(sys_var *, THD *, enum_var_type) {
+  replica_exec_mode_options = opt_weak_consensus_mode ? 2 : 0;
   consensus_ptr->setConsensusAsync(opt_weak_consensus_mode);
   return false;
 }
@@ -164,9 +160,10 @@ static Sys_var_bool Sys_weak_consensus_mode(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(handle_weak_consensus_mode));
 
-static bool handle_consensus_replicate_with_cache_log(sys_var *, THD *, enum_var_type)
-{
-  consensus_ptr->setReplicateWithCacheLog(opt_consensus_replicate_with_cache_log);
+static bool handle_consensus_replicate_with_cache_log(sys_var *, THD *,
+                                                      enum_var_type) {
+  consensus_ptr->setReplicateWithCacheLog(
+      opt_consensus_replicate_with_cache_log);
   return false;
 }
 
@@ -177,8 +174,7 @@ static Sys_var_bool Sys_consensus_replicate_with_cache_log(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(handle_consensus_replicate_with_cache_log));
 
-static bool handle_consensus_old_compact_mode(sys_var *, THD *, enum_var_type)
-{
+static bool handle_consensus_old_compact_mode(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setCompactOldMode(opt_consensus_old_compact_mode);
   return false;
 }
@@ -197,22 +193,22 @@ static Sys_var_bool Sys_consensus_leader_stop_apply(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_ulong Sys_consensus_leader_stop_apply_time(
-       "consensus_leader_stop_apply_time", "leader stop apply time",
-       GLOBAL_VAR(opt_consensus_leader_stop_apply_time), CMD_LINE(OPT_ARG),
-       VALID_RANGE(0, UINT_MAX), DEFAULT(0), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    "consensus_leader_stop_apply_time", "leader stop apply time",
+    GLOBAL_VAR(opt_consensus_leader_stop_apply_time), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, UINT_MAX), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
-static bool fix_consensus_force_sync_epoch_diff(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_force_sync_epoch_diff(sys_var *, THD *,
+                                                enum_var_type) {
   consensus_ptr->setForceSyncEpochDiff(opt_consensus_force_sync_epoch_diff);
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_force_sync_epoch_diff(
-       "consensus_force_sync_epoch_diff", "consensus forceSync epoch diff",
-       GLOBAL_VAR(opt_consensus_force_sync_epoch_diff), CMD_LINE(OPT_ARG),
-       VALID_RANGE(0, 10000000), DEFAULT(0), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_force_sync_epoch_diff));
+    "consensus_force_sync_epoch_diff", "consensus forceSync epoch diff",
+    GLOBAL_VAR(opt_consensus_force_sync_epoch_diff), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, 10000000), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_force_sync_epoch_diff));
 
 static Sys_var_bool Sys_consensus_force_recovery(
     "consensus_force_recovery", "for innodb_force_recovery",
@@ -223,22 +219,24 @@ static Sys_var_bool Sys_force_revise("force_revise", "force revise or not",
                                      CMD_LINE(OPT_ARG), DEFAULT(false),
                                      NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
-static Sys_var_ulonglong Sys_cluster_id(
-       "cluster_id", "cluster id",
-       READ_ONLY GLOBAL_VAR(opt_cluster_id), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(0, ULLONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
+static Sys_var_ulonglong Sys_cluster_id("cluster_id", "cluster id",
+                                        READ_ONLY GLOBAL_VAR(opt_cluster_id),
+                                        CMD_LINE(REQUIRED_ARG),
+                                        VALID_RANGE(0, ULLONG_MAX), DEFAULT(0),
+                                        BLOCK_SIZE(1));
 
-static bool fix_consensus_log_cache_size(sys_var *, THD *, enum_var_type)
-{
-  consensus_log_manager.get_fifo_cache_manager()->set_max_log_cache_size(opt_consensus_log_cache_size);
+static bool fix_consensus_log_cache_size(sys_var *, THD *, enum_var_type) {
+  consensus_log_manager.get_fifo_cache_manager()->set_max_log_cache_size(
+      opt_consensus_log_cache_size);
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_log_cache_size(
-       "consensus_log_cache_size", "Max cached logs size",
-       GLOBAL_VAR(opt_consensus_log_cache_size), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, ULLONG_MAX), DEFAULT(64 * 1024 * 1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_log_cache_size));
+    "consensus_log_cache_size", "Max cached logs size",
+    GLOBAL_VAR(opt_consensus_log_cache_size), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, ULLONG_MAX), DEFAULT(64 * 1024 * 1024), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_log_cache_size));
 
 static Sys_var_bool Sys_consensus_disable_fifo_cache(
     "consensus_disable_fifo_cache",
@@ -247,18 +245,17 @@ static Sys_var_bool Sys_consensus_disable_fifo_cache(
     DEFAULT(false));
 
 static Sys_var_bool Sys_consensuslog_revise(
-      "consensuslog_revise",
-      "revise consensuslog end_pos before flush to disk",
-      GLOBAL_VAR(opt_consensuslog_revise), CMD_LINE(OPT_ARG), DEFAULT(true));
+    "consensuslog_revise", "revise consensuslog end_pos before flush to disk",
+    GLOBAL_VAR(opt_consensuslog_revise), CMD_LINE(OPT_ARG), DEFAULT(true));
 
 static Sys_var_bool Sys_consensus_prefetch_fast_fetch(
     "consensus_prefetch_fast_fetch", "prefetch speed optimize",
     GLOBAL_VAR(opt_consensus_prefetch_fast_fetch), CMD_LINE(OPT_ARG),
     DEFAULT(false));
 
-static bool fix_consensus_prefetch_cache_size(sys_var *, THD *, enum_var_type)
-{
-  consensus_log_manager.get_prefetch_manager()->set_max_prefetch_cache_size(opt_consensus_prefetch_cache_size);
+static bool fix_consensus_prefetch_cache_size(sys_var *, THD *, enum_var_type) {
+  consensus_log_manager.get_prefetch_manager()->set_max_prefetch_cache_size(
+      opt_consensus_prefetch_cache_size);
   return false;
 }
 
@@ -266,119 +263,122 @@ static bool fix_consensus_prefetch_cache_size(sys_var *, THD *, enum_var_type)
  * opt_consensus_prefetch_cache_size >= 3 * opt_consensus_max_log_size
  * make sure at least 3 log entries can be stored in cache
  */
-static bool
-check_consensus_prefetch_cache_size(sys_var *, THD *,  set_var *var)
-{
-  ulonglong val= var->save_result.ulonglong_value;
-  if (val < opt_consensus_max_log_size * 3)
-  {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_prefetch_cache_size", val, "need >= consensus_max_log_size * 3");
+static bool check_consensus_prefetch_cache_size(sys_var *, THD *,
+                                                set_var *var) {
+  ulonglong val = var->save_result.ulonglong_value;
+  if (val < opt_consensus_max_log_size * 3) {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_prefetch_cache_size",
+             val, "need >= consensus_max_log_size * 3");
     return true;
   }
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_prefetch_cache_size(
-       "consensus_prefetch_cache_size", "Max cached logs size",
-       GLOBAL_VAR(opt_consensus_prefetch_cache_size), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, ULLONG_MAX), DEFAULT(64 * 1024 * 1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(check_consensus_prefetch_cache_size), ON_UPDATE(fix_consensus_prefetch_cache_size));
+    "consensus_prefetch_cache_size", "Max cached logs size",
+    GLOBAL_VAR(opt_consensus_prefetch_cache_size), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, ULLONG_MAX), DEFAULT(64 * 1024 * 1024), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_consensus_prefetch_cache_size),
+    ON_UPDATE(fix_consensus_prefetch_cache_size));
 
-
-static bool fix_consensus_prefetch_window_size(sys_var *, THD *, enum_var_type)
-{
-  consensus_log_manager.get_prefetch_manager()->set_prefetch_window_size(opt_consensus_prefetch_window_size);
+static bool fix_consensus_prefetch_window_size(sys_var *, THD *,
+                                               enum_var_type) {
+  consensus_log_manager.get_prefetch_manager()->set_prefetch_window_size(
+      opt_consensus_prefetch_window_size);
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_prefetch_window_size(
-       "consensus_prefetch_window_size", "prefetch window size",
-       GLOBAL_VAR(opt_consensus_prefetch_window_size), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, ULLONG_MAX), DEFAULT(10), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_prefetch_window_size));
+    "consensus_prefetch_window_size", "prefetch window size",
+    GLOBAL_VAR(opt_consensus_prefetch_window_size), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, ULLONG_MAX), DEFAULT(10), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_prefetch_window_size));
 
-static bool fix_consensus_prefetch_wakeup_ratio(sys_var *, THD *, enum_var_type)
-{
-  consensus_log_manager.get_prefetch_manager()->set_prefetch_wakeup_ratio(opt_consensus_prefetch_wakeup_ratio);
+static bool fix_consensus_prefetch_wakeup_ratio(sys_var *, THD *,
+                                                enum_var_type) {
+  consensus_log_manager.get_prefetch_manager()->set_prefetch_wakeup_ratio(
+      opt_consensus_prefetch_wakeup_ratio);
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_prefetch_wakeup_ratio(
-       "consensus_prefetch_wakeup_ratio", "prefetch wakeup ratio ",
-       GLOBAL_VAR(opt_consensus_prefetch_wakeup_ratio), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, ULLONG_MAX), DEFAULT(2), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_prefetch_wakeup_ratio));
+    "consensus_prefetch_wakeup_ratio", "prefetch wakeup ratio ",
+    GLOBAL_VAR(opt_consensus_prefetch_wakeup_ratio), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, ULLONG_MAX), DEFAULT(2), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_prefetch_wakeup_ratio));
 
 /*
  * opt_consensus_prefetch_cache_size >= 3 * opt_consensus_max_log_size
  * make sure at least 3 log entries can be stored in cache
  */
-static bool
-check_consensus_max_log_size(sys_var *, THD *,  set_var *var)
-{
-  ulonglong val= var->save_result.ulonglong_value;
-  if ((val * 3) > opt_consensus_prefetch_cache_size)
-  {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val, "need <= consensus_prefetch_cache_size / 3");
+static bool check_consensus_max_log_size(sys_var *, THD *, set_var *var) {
+  ulonglong val = var->save_result.ulonglong_value;
+  if ((val * 3) > opt_consensus_prefetch_cache_size) {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val,
+             "need <= consensus_prefetch_cache_size / 3");
     return true;
   }
 
-  if (val < opt_consensus_large_trx_split_size)
-  {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val, "need >= consensus_large_trx_split_size");
+  if (val < opt_consensus_large_trx_split_size) {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val,
+             "need >= consensus_large_trx_split_size");
     return true;
   }
 
-  if (val < opt_consensus_large_event_split_size)
-  {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val, "need >= consensus_large_event_split_size");
+  if (val < opt_consensus_large_event_split_size) {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_max_log_size", val,
+             "need >= consensus_large_event_split_size");
     return true;
   }
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_max_log_size(
-       "consensus_max_log_size", "Max one log size. (default: 20M)",
-       GLOBAL_VAR(opt_consensus_max_log_size), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(1, 1024*1024*1024), DEFAULT(20 * 1024 * 1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_consensus_max_log_size), ON_UPDATE(NULL));
+    "consensus_max_log_size", "Max one log size. (default: 20M)",
+    GLOBAL_VAR(opt_consensus_max_log_size), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 1024 * 1024 * 1024), DEFAULT(20 * 1024 * 1024),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_consensus_max_log_size), ON_UPDATE(NULL));
 
-static bool
-check_consensus_large_trx_split_size(sys_var *, THD *,  set_var *var)
-{
-  ulonglong val= var->save_result.ulonglong_value;
-  if (val > opt_consensus_max_log_size)
-  {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_large_trx_split_size", val, "need <= consensus_max_log_size");
+static bool check_consensus_large_trx_split_size(sys_var *, THD *,
+                                                 set_var *var) {
+  ulonglong val = var->save_result.ulonglong_value;
+  if (val > opt_consensus_max_log_size) {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_large_trx_split_size",
+             val, "need <= consensus_max_log_size");
     return true;
   }
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_large_trx_split_size(
-       "consensus_large_trx_split_size", "Max size to split large trx into multi consensus logs. (default 2M)",
-       GLOBAL_VAR(opt_consensus_large_trx_split_size), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(1, 62*1024*1024), DEFAULT(2 * 1024 * 1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_consensus_large_trx_split_size), ON_UPDATE(NULL));
+    "consensus_large_trx_split_size",
+    "Max size to split large trx into multi consensus logs. (default 2M)",
+    GLOBAL_VAR(opt_consensus_large_trx_split_size), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 62 * 1024 * 1024), DEFAULT(2 * 1024 * 1024), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_consensus_large_trx_split_size), ON_UPDATE(NULL));
 
-static bool fix_consensus_new_follower_threshold(sys_var *, THD *, enum_var_type)
-{
-  consensus_ptr->setMaxDelayIndex4NewMember(opt_consensus_new_follower_threshold);
+static bool fix_consensus_new_follower_threshold(sys_var *, THD *,
+                                                 enum_var_type) {
+  consensus_ptr->setMaxDelayIndex4NewMember(
+      opt_consensus_new_follower_threshold);
   return false;
 }
 
-
 static Sys_var_ulonglong Sys_consensus_new_follower_threshold(
-       "consensus_new_follower_threshold", "Max delay index to allow a learner becomes a follower",
-       GLOBAL_VAR(opt_consensus_new_follower_threshold), CMD_LINE(OPT_ARG),
-       VALID_RANGE(0, ULLONG_MAX), DEFAULT(10000), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_new_follower_threshold));
+    "consensus_new_follower_threshold",
+    "Max delay index to allow a learner becomes a follower",
+    GLOBAL_VAR(opt_consensus_new_follower_threshold), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(10000), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_new_follower_threshold));
 
 static Sys_var_bool Sys_consensus_large_trx(
-       "consensus_large_trx", "support consensus large trx or not",
-       GLOBAL_VAR(opt_consensus_large_trx), CMD_LINE(OPT_ARG),
-       DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "consensus_large_trx", "support consensus large trx or not",
+    GLOBAL_VAR(opt_consensus_large_trx), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_bool Sys_consensus_check_large_event(
     "consensus_check_large_event", "check consensus large event or not",
@@ -386,66 +386,64 @@ static Sys_var_bool Sys_consensus_check_large_event(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_consensus_large_event_size_limit(
-       "consensus_large_event_size_limit", "Consensus large event size limit",
-       GLOBAL_VAR(opt_consensus_large_event_size_limit), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(1*1024*1024, ULLONG_MAX), DEFAULT(1024*1024*1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "consensus_large_event_size_limit", "Consensus large event size limit",
+    GLOBAL_VAR(opt_consensus_large_event_size_limit), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1 * 1024 * 1024, ULLONG_MAX), DEFAULT(1024 * 1024 * 1024),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_consensus_large_event_count_limit(
-       "consensus_large_event_count_limit", "Consensus large event count limit in one trx",
-       READ_ONLY GLOBAL_VAR(opt_consensus_large_event_count_limit), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, ULLONG_MAX), DEFAULT(2), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "consensus_large_event_count_limit",
+    "Consensus large event count limit in one trx",
+    READ_ONLY GLOBAL_VAR(opt_consensus_large_event_count_limit),
+    CMD_LINE(OPT_ARG), VALID_RANGE(1, ULLONG_MAX), DEFAULT(2), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_deprecated_alias Sys_consensus_large_event_limit(
     "consensus_large_event_limit", Sys_consensus_large_event_size_limit);
 
-static bool
-check_consensus_large_event_split_size(sys_var *, THD *,  set_var *var)
-{
-  ulonglong val= var->save_result.ulonglong_value;
-  if (val > opt_consensus_max_log_size)
-  {
-    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0), "consensus_large_event_split_size", val, "need <= consensus_max_log_size");
+static bool check_consensus_large_event_split_size(sys_var *, THD *,
+                                                   set_var *var) {
+  ulonglong val = var->save_result.ulonglong_value;
+  if (val > opt_consensus_max_log_size) {
+    my_error(ER_CONSENSUS_CONFIG_BAD, MYF(0),
+             "consensus_large_event_split_size", val,
+             "need <= consensus_max_log_size");
     return true;
   }
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_large_event_split_size(
-       "consensus_large_event_split_size",
-       "split size for large event, dangerous to change this variable",
-       READ_ONLY GLOBAL_VAR(opt_consensus_large_event_split_size), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, 20*1024*1024), DEFAULT(2*1024*1024), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(check_consensus_large_event_split_size), ON_UPDATE(NULL));
+    "consensus_large_event_split_size",
+    "split size for large event, dangerous to change this variable",
+    READ_ONLY GLOBAL_VAR(opt_consensus_large_event_split_size),
+    CMD_LINE(OPT_ARG), VALID_RANGE(1, 20 * 1024 * 1024),
+    DEFAULT(2 * 1024 * 1024), BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_consensus_large_event_split_size), ON_UPDATE(NULL));
 
-static bool fix_consensus_send_timeout(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_send_timeout(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setSendPacketTimeout(opt_consensus_send_timeout);
   return false;
 }
 
 static Sys_var_uint Sys_consensus_send_timeout(
-       "consensus_send_timeout", "Consensus send packet timeout",
-       GLOBAL_VAR(opt_consensus_send_timeout), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(0, 200000), DEFAULT(0), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_send_timeout));
+    "consensus_send_timeout", "Consensus send packet timeout",
+    GLOBAL_VAR(opt_consensus_send_timeout), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, 200000), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_send_timeout));
 
-static bool fix_consensus_learner_timeout(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_learner_timeout(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setLearnerConnTimeout(opt_consensus_learner_timeout);
   return false;
 }
 
 static Sys_var_uint Sys_consensus_learner_timeout(
-       "consensus_learner_timeout", "Consensus learner connection timeout",
-       GLOBAL_VAR(opt_consensus_learner_timeout), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(0, 200000), DEFAULT(0), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_learner_timeout));
+    "consensus_learner_timeout", "Consensus learner connection timeout",
+    GLOBAL_VAR(opt_consensus_learner_timeout), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, 200000), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_learner_timeout));
 
-static bool fix_consensus_learner_pipelining(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_learner_pipelining(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setEnableLearnerPipelining(opt_consensus_learner_pipelining);
   return false;
 }
@@ -456,96 +454,99 @@ static Sys_var_bool Sys_consensus_learner_pipelining(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_learner_pipelining));
 
-static bool fix_consensus_configure_change_timeout(sys_var *, THD *, enum_var_type)
-{
-  consensus_ptr->setConfigureChangeTimeout(opt_consensus_configure_change_timeout);
+static bool fix_consensus_configure_change_timeout(sys_var *, THD *,
+                                                   enum_var_type) {
+  consensus_ptr->setConfigureChangeTimeout(
+      opt_consensus_configure_change_timeout);
   return false;
 }
 
 static Sys_var_uint Sys_consensus_configure_change_timeout(
-       "consensus_configure_change_timeout", "Consensus configure change timeout (ms). Default 1 min",
-       GLOBAL_VAR(opt_consensus_configure_change_timeout), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(0, 200000), DEFAULT(60 * 1000), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_configure_change_timeout));
+    "consensus_configure_change_timeout",
+    "Consensus configure change timeout (ms). Default 1 min",
+    GLOBAL_VAR(opt_consensus_configure_change_timeout), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, 200000), DEFAULT(60 * 1000), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_configure_change_timeout));
 
 static Sys_var_uint Sys_consensus_election_timeout(
-       "consensus_election_timeout", "Consensus election timeout",
-       READ_ONLY GLOBAL_VAR(opt_consensus_election_timeout), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(2000, 200000), DEFAULT(5000), BLOCK_SIZE(1));
+    "consensus_election_timeout", "Consensus election timeout",
+    READ_ONLY GLOBAL_VAR(opt_consensus_election_timeout),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(2000, 200000), DEFAULT(5000),
+    BLOCK_SIZE(1));
 
 static Sys_var_uint Sys_consensus_io_thread_count(
-       "consensus_io_thread_cnt", "Number of consensus io thread",
-       READ_ONLY GLOBAL_VAR(opt_consensus_io_thread_cnt), CMD_LINE(OPT_ARG),
-       VALID_RANGE(2, 10), DEFAULT(3), BLOCK_SIZE(1));
+    "consensus_io_thread_cnt", "Number of consensus io thread",
+    READ_ONLY GLOBAL_VAR(opt_consensus_io_thread_cnt), CMD_LINE(OPT_ARG),
+    VALID_RANGE(2, 10), DEFAULT(3), BLOCK_SIZE(1));
 
 static Sys_var_uint Sys_consensus_worker_thread_count(
-       "consensus_worker_thread_cnt", "Number of consensus worker thread",
-       READ_ONLY GLOBAL_VAR(opt_consensus_worker_thread_cnt), CMD_LINE(OPT_ARG),
-       VALID_RANGE(2, 10), DEFAULT(3), BLOCK_SIZE(1));
+    "consensus_worker_thread_cnt", "Number of consensus worker thread",
+    READ_ONLY GLOBAL_VAR(opt_consensus_worker_thread_cnt), CMD_LINE(OPT_ARG),
+    VALID_RANGE(2, 10), DEFAULT(3), BLOCK_SIZE(1));
 
 static Sys_var_uint Sys_consensus_heartbeat_thread_count(
-       "consensus_heartbeat_thread_cnt", "Number of consensus heartbeat thread",
-       READ_ONLY GLOBAL_VAR(opt_consensus_heartbeat_thread_cnt), CMD_LINE(OPT_ARG),
-       VALID_RANGE(0, 2), DEFAULT(0), BLOCK_SIZE(1));
+    "consensus_heartbeat_thread_cnt", "Number of consensus heartbeat thread",
+    READ_ONLY GLOBAL_VAR(opt_consensus_heartbeat_thread_cnt), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, 2), DEFAULT(0), BLOCK_SIZE(1));
 
-static bool fix_consensus_max_packet_size(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_max_packet_size(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setMaxPacketSize(opt_consensus_max_packet_size);
   return false;
 }
 
 static Sys_var_ulong Sys_consensus_max_packet_size(
-       "consensus_max_packet_size", "Max package size the consensus server send at once",
-       GLOBAL_VAR(opt_consensus_max_packet_size), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, 1024*1024L*1024L), DEFAULT(128 * 1024),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_max_packet_size));
+    "consensus_max_packet_size",
+    "Max package size the consensus server send at once",
+    GLOBAL_VAR(opt_consensus_max_packet_size), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, 1024 * 1024L * 1024L), DEFAULT(128 * 1024), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_max_packet_size));
 
-static bool fix_consensus_msg_compress_option(sys_var *, THD *, enum_var_type)
-{
-  if (NULL == opt_consensus_msg_compress_option)
-    return false;
-  // format: ip1:port1 type threshold checksum; ip2:port2 type threshold checksum...
+static bool fix_consensus_msg_compress_option(sys_var *, THD *, enum_var_type) {
+  if (NULL == opt_consensus_msg_compress_option) return false;
+  // format: ip1:port1 type threshold checksum; ip2:port2 type threshold
+  // checksum...
   std::size_t current, previous = 0;
   std::string fcstr(opt_consensus_msg_compress_option);
   std::vector<std::string> splits;
   current = fcstr.find(';');
   while (current != std::string::npos) {
-      splits.push_back(fcstr.substr(previous, current - previous));
-      previous = current + 1;
-      current = fcstr.find(';', previous);
+    splits.push_back(fcstr.substr(previous, current - previous));
+    previous = current + 1;
+    current = fcstr.find(';', previous);
   }
   splits.push_back(fcstr.substr(previous, current - previous));
   consensus_ptr->resetMsgCompressOption();
-  for (auto &kv: splits)
-  {
-    if (kv.empty())
-      continue;
+  for (auto &kv : splits) {
+    if (kv.empty()) continue;
     char addr[256];
     uint32 type, threshold, checksum;
-    if (std::sscanf(kv.c_str(),"%s %u %u %u", addr, &type, &threshold, &checksum) == 4)
-    {
+    if (std::sscanf(kv.c_str(), "%s %u %u %u", addr, &type, &threshold,
+                    &checksum) == 4) {
       std::string address(addr);
-      if (address == "*:*")
-        address = "";
-      if (consensus_ptr->setMsgCompressOption(type, threshold, (bool)checksum, address) == 0)
-        xp::warn(ER_XP_0) << "Set consensus server " << (address == "" ? "all" : address.c_str())
-                              << " msg compress option succeed: type(" << type
-                              << "), threshold(" << threshold
-                              << "), checksum(" << checksum
-                              << ")";
+      if (address == "*:*") address = "";
+      if (consensus_ptr->setMsgCompressOption(type, threshold, (bool)checksum,
+                                              address) == 0)
+        xp::warn(ER_XP_0) << "Set consensus server "
+                          << (address == "" ? "all" : address.c_str())
+                          << " msg compress option succeed: type(" << type
+                          << "), threshold(" << threshold << "), checksum("
+                          << checksum << ")";
       else
-          xp::warn(ER_XP_0) << "Set consensus server " << (address == "" ? "all" : address.c_str())
-                                << "msg compress option failed, wrong address!";
+        xp::warn(ER_XP_0) << "Set consensus server "
+                          << (address == "" ? "all" : address.c_str())
+                          << "msg compress option failed, wrong address!";
     }
   }
   return false;
 }
 
-static bool check_consensus_msg_compress_option(sys_var *, THD *, set_var *var)
-{
-  if (NULL == var->save_result.string_value.str)
-    return false;
-  // format: ip1:port1 type threshold checksum; ip2:port2 type threshold checksum...
+static bool check_consensus_msg_compress_option(sys_var *, THD *,
+                                                set_var *var) {
+  if (NULL == var->save_result.string_value.str) return false;
+  // format: ip1:port1 type threshold checksum; ip2:port2 type threshold
+  // checksum...
   std::size_t current, previous = 0;
   std::string fcstr(var->save_result.string_value.str);
   std::vector<std::string> splits;
@@ -556,15 +557,14 @@ static bool check_consensus_msg_compress_option(sys_var *, THD *, set_var *var)
     current = fcstr.find(';', previous);
   }
   splits.push_back(fcstr.substr(previous, current - previous));
-  for (auto &kv: splits)
-  {
-    if (kv.empty())
-      continue;
+  for (auto &kv : splits) {
+    if (kv.empty()) continue;
     char addr[256];
     uint32 type, threshold, checksum;
-    if (std::sscanf(kv.c_str(),"%s %u %u %u", addr, &type, &threshold, &checksum) != 4)
-    {
-      xp::warn(ER_XP_0) <<"Set consensus server msg compress option failed, wrong syntax!";
+    if (std::sscanf(kv.c_str(), "%s %u %u %u", addr, &type, &threshold,
+                    &checksum) != 4) {
+      xp::warn(ER_XP_0)
+          << "Set consensus server msg compress option failed, wrong syntax!";
       return true;
     }
   }
@@ -572,67 +572,64 @@ static bool check_consensus_msg_compress_option(sys_var *, THD *, set_var *var)
 }
 
 static Sys_var_charptr Sys_consensus_msg_compress_option(
-       "consensus_msg_compress_option", "consensus msg compress option to one or multiple addresses"
-       "ip:port type(0: no compression, 1: lz4 compression, 2: zstd compression) threshold checksum, \
+    "consensus_msg_compress_option",
+    "consensus msg compress option to one or multiple addresses"
+    "ip:port type(0: no compression, 1: lz4 compression, 2: zstd compression) threshold checksum, \
         if ip:port is *:* it means set option to entire cluster.",
-       GLOBAL_VAR(opt_consensus_msg_compress_option), CMD_LINE(OPT_ARG),
-       IN_FS_CHARSET, DEFAULT(0), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(check_consensus_msg_compress_option), ON_UPDATE(fix_consensus_msg_compress_option));
+    GLOBAL_VAR(opt_consensus_msg_compress_option), CMD_LINE(OPT_ARG),
+    IN_FS_CHARSET, DEFAULT(0), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_consensus_msg_compress_option),
+    ON_UPDATE(fix_consensus_msg_compress_option));
 
-static bool fix_consensus_pipelining_timeout(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_pipelining_timeout(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setPipeliningTimeout(opt_consensus_pipelining_timeout);
   return false;
 }
 
 static Sys_var_ulong Sys_consensus_pipelining_timeout(
-       "consensus_pipelining_timeout", "the timeout the consensus server cache the log (milliseconds)",
-       GLOBAL_VAR(opt_consensus_pipelining_timeout), CMD_LINE(OPT_ARG),
-       VALID_RANGE(0, 1024*1024L*1024L), DEFAULT(1),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_pipelining_timeout));
+    "consensus_pipelining_timeout",
+    "the timeout the consensus server cache the log (milliseconds)",
+    GLOBAL_VAR(opt_consensus_pipelining_timeout), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, 1024 * 1024L * 1024L), DEFAULT(1), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_pipelining_timeout));
 
-
-static bool fix_consensus_large_batch_ratio(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_large_batch_ratio(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setLargeBatchRatio(opt_consensus_large_batch_ratio);
   return false;
 }
 
 static Sys_var_ulong Sys_consensus_large_batch_ratio(
-       "consensus_large_batch_ratio", "Large batch ratio of consensus server send at once",
-       GLOBAL_VAR(opt_consensus_large_batch_ratio), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, 1024), DEFAULT(50),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_large_batch_ratio));
+    "consensus_large_batch_ratio",
+    "Large batch ratio of consensus server send at once",
+    GLOBAL_VAR(opt_consensus_large_batch_ratio), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, 1024), DEFAULT(50), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_large_batch_ratio));
 
-
-
-static bool fix_consensus_max_delay_index(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_max_delay_index(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setMaxDelayIndex(opt_consensus_max_delay_index);
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_max_delay_index(
-       "consensus_max_delay_index", "Max index delay for pipeline log delivery",
-       GLOBAL_VAR(opt_consensus_max_delay_index), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, INT_MAX64), DEFAULT(50000),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_max_delay_index));
+    "consensus_max_delay_index", "Max index delay for pipeline log delivery",
+    GLOBAL_VAR(opt_consensus_max_delay_index), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, INT_MAX64), DEFAULT(50000), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_max_delay_index));
 
-static bool fix_consensus_min_delay_index(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_min_delay_index(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setMinDelayIndex(opt_consensus_min_delay_index);
   return false;
 }
 
-
 static Sys_var_ulonglong Sys_consensus_min_delay_index(
-       "consensus_min_delay_index", "Min index delay for pipeline log delivery",
-       GLOBAL_VAR(opt_consensus_min_delay_index), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, INT_MAX64), DEFAULT(5000),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_min_delay_index));
+    "consensus_min_delay_index", "Min index delay for pipeline log delivery",
+    GLOBAL_VAR(opt_consensus_min_delay_index), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, INT_MAX64), DEFAULT(5000), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_min_delay_index));
 
-static bool fix_consensus_optimistic_heartbeat(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_optimistic_heartbeat(sys_var *, THD *,
+                                               enum_var_type) {
   consensus_ptr->setOptimisticHeartbeat(opt_consensus_optimistic_heartbeat);
   return false;
 }
@@ -644,21 +641,22 @@ static Sys_var_bool Sys_consensus_optimistic_heartbeat(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_optimistic_heartbeat));
 
-static bool fix_consensus_sync_follower_meta_interval(sys_var *, THD *, enum_var_type)
-{
-  consensus_ptr->setSyncFollowerMetaInterval(opt_consensus_sync_follower_meta_interval);
+static bool fix_consensus_sync_follower_meta_interval(sys_var *, THD *,
+                                                      enum_var_type) {
+  consensus_ptr->setSyncFollowerMetaInterval(
+      opt_consensus_sync_follower_meta_interval);
   return false;
 }
 
-
 static Sys_var_ulong Sys_consensus_sync_follower_meta_interval(
-       "consensus_sync_follower_meta_interva", "Interval of leader sync follower's meta for learner source",
-       GLOBAL_VAR(opt_consensus_sync_follower_meta_interval), CMD_LINE(OPT_ARG),
-       VALID_RANGE(1, 1024*1024L*1024L), DEFAULT(1),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_sync_follower_meta_interval));
+    "consensus_sync_follower_meta_interva",
+    "Interval of leader sync follower's meta for learner source",
+    GLOBAL_VAR(opt_consensus_sync_follower_meta_interval), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, 1024 * 1024L * 1024L), DEFAULT(1), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_sync_follower_meta_interval));
 
-static bool fix_enable_appliedindex_checker(sys_var *, THD *, enum_var_type)
-{
+static bool fix_enable_appliedindex_checker(sys_var *, THD *, enum_var_type) {
   appliedindex_checker.reset();
   return false;
 }
@@ -671,38 +669,33 @@ static Sys_var_bool Sys_enable_appliedindex_checker(
     ON_UPDATE(fix_enable_appliedindex_checker));
 
 static Sys_var_ulonglong Sys_appliedindex_force_delay(
-       "appliedindex_force_delay", "force set a smaller appliedindex",
-       GLOBAL_VAR(opt_appliedindex_force_delay), CMD_LINE(OPT_ARG),
-       VALID_RANGE(0, UINT64_MAX), DEFAULT(0),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "appliedindex_force_delay", "force set a smaller appliedindex",
+    GLOBAL_VAR(opt_appliedindex_force_delay), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, UINT64_MAX), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG);
 
-static bool fix_consensus_flow_control(sys_var *, THD *, enum_var_type)
-{
-  if (NULL == opt_consensus_flow_control)
-    return false;
+static bool fix_consensus_flow_control(sys_var *, THD *, enum_var_type) {
+  if (NULL == opt_consensus_flow_control) return false;
   // format: ip1:port1 fc1;ip2:port2 fc2...
   std::size_t current, previous = 0;
   std::string fcstr(opt_consensus_flow_control);
   std::vector<std::string> splits;
   current = fcstr.find(';');
   while (current != std::string::npos) {
-      splits.push_back(fcstr.substr(previous, current - previous));
-      previous = current + 1;
-      current = fcstr.find(';', previous);
+    splits.push_back(fcstr.substr(previous, current - previous));
+    previous = current + 1;
+    current = fcstr.find(';', previous);
   }
   splits.push_back(fcstr.substr(previous, current - previous));
-  if (splits.size() > 0)
-    consensus_ptr->reset_flow_control();
-  for (auto &kv: splits)
-  {
+  if (splits.size() > 0) consensus_ptr->reset_flow_control();
+  for (auto &kv : splits) {
     char addr[300];
     uint64 serverid;
     int64 fc;
-    if (std::sscanf(kv.c_str(),"%s %ld", addr, &fc) == 2)
-    {
+    if (std::sscanf(kv.c_str(), "%s %ld", addr, &fc) == 2) {
       serverid = consensus_ptr->getServerIdFromAddr(addr);
-      xp::warn(ER_XP_0) <<"Add consensus server " << serverid
-                            << " flow control " << fc;
+      xp::warn(ER_XP_0) << "Add consensus server " << serverid
+                        << " flow control " << fc;
       consensus_ptr->set_flow_control(serverid, fc);
     }
   }
@@ -710,34 +703,38 @@ static bool fix_consensus_flow_control(sys_var *, THD *, enum_var_type)
 }
 
 static Sys_var_charptr Sys_consensus_flow_control(
-       "consensus_flow_control", "consensus flow control "
-       "(<-1: no log send, -1: only send log during heartbeat, 0: no flow control, >0: [TODO] flow control).",
-       GLOBAL_VAR(opt_consensus_flow_control), CMD_LINE(OPT_ARG),
-       IN_FS_CHARSET, DEFAULT(0), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-       ON_CHECK(0), ON_UPDATE(fix_consensus_flow_control));
+    "consensus_flow_control",
+    "consensus flow control "
+    "(<-1: no log send, -1: only send log during heartbeat, 0: no flow "
+    "control, >0: [TODO] flow control).",
+    GLOBAL_VAR(opt_consensus_flow_control), CMD_LINE(OPT_ARG), IN_FS_CHARSET,
+    DEFAULT(0), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_flow_control));
 
-static bool fix_consensus_log_level(sys_var *, THD *, enum_var_type)
-{
+static bool fix_consensus_log_level(sys_var *, THD *, enum_var_type) {
   // opt_consensus_log_level + 3 equal to easy log level
-  consensus_ptr->setAlertLogLevel(alisql::Paxos::AlertLogLevel(opt_consensus_log_level + 3));
+  consensus_ptr->setAlertLogLevel(
+      alisql::Paxos::AlertLogLevel(opt_consensus_log_level + 3));
   return false;
 }
 
-const char *internal_tmp_consensus_log_level_names[] = { "LOG_ERROR", "LOG_WARN", "LOG_INFO", "LOG_DEBUG", "LOG_TRACE", 0};
+const char *internal_tmp_consensus_log_level_names[] = {
+    "LOG_ERROR", "LOG_WARN", "LOG_INFO", "LOG_DEBUG", "LOG_TRACE", 0};
 static Sys_var_enum Sys_consensus_log_level(
-       "consensus_log_level", "consensus log level",
-       GLOBAL_VAR(opt_consensus_log_level), CMD_LINE(OPT_ARG),
-       internal_tmp_consensus_log_level_names, DEFAULT(0),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_log_level));
+    "consensus_log_level", "consensus log level",
+    GLOBAL_VAR(opt_consensus_log_level), CMD_LINE(OPT_ARG),
+    internal_tmp_consensus_log_level_names, DEFAULT(0), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_log_level));
 
 static Sys_var_ulonglong Sys_consensus_check_commit_index_interval(
-       "consensus_check_commit_index_interval", "check interval for slave calling checkCommitIndex",
-       GLOBAL_VAR(opt_consensus_check_commit_index_interval), CMD_LINE(OPT_ARG),
-       VALID_RANGE(0, INT_MAX64), DEFAULT(1000),
-       BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "consensus_check_commit_index_interval",
+    "check interval for slave calling checkCommitIndex",
+    GLOBAL_VAR(opt_consensus_check_commit_index_interval), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, INT_MAX64), DEFAULT(1000), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG);
 
-static bool handler_reset_consensus_prefetch_cache(sys_var *, THD *, enum_var_type)
-{
+static bool handler_reset_consensus_prefetch_cache(sys_var *, THD *,
+                                                   enum_var_type) {
   DBUG_ENTER("handle_reset_consensus_prefetch_cache");
   consensus_log_manager.get_prefetch_manager()->reset_prefetch_cache();
   opt_reset_consensus_prefetch_cache = 0;
@@ -757,22 +754,22 @@ static Sys_var_bool Sys_commit_pos_watcher(
     DEFAULT(true));
 
 static Sys_var_ulonglong Sys_commit_pos_watcher_interval(
-       "commit_pos_watcher_interval",
-       "interval(us) for background thread commit_pos_watcher",
-       GLOBAL_VAR(opt_commit_pos_watcher_interval), CMD_LINE(OPT_ARG),
-       VALID_RANGE(100000, ULLONG_MAX), DEFAULT(1000000), BLOCK_SIZE(1),
-       NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    "commit_pos_watcher_interval",
+    "interval(us) for background thread commit_pos_watcher",
+    GLOBAL_VAR(opt_commit_pos_watcher_interval), CMD_LINE(OPT_ARG),
+    VALID_RANGE(100000, ULLONG_MAX), DEFAULT(1000000), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulong Sys_thread_stack_warning(
     "thread_stack_warning", "The warning stack size for each thread",
     GLOBAL_VAR(thread_stack_warning), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1*1024, ULONG_MAX), DEFAULT(DEFAULT_THREAD_STACK),
+    VALID_RANGE(1 * 1024, ULONG_MAX), DEFAULT(DEFAULT_THREAD_STACK),
     BLOCK_SIZE(1024));
 
-static bool update_session_track_index(sys_var *, THD *thd,
-                                              enum_var_type) {
+static bool update_session_track_index(sys_var *, THD *thd, enum_var_type) {
   DBUG_ENTER("update_session_track_index");
-  DBUG_RETURN(thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->update(thd));
+  DBUG_RETURN(
+      thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->update(thd));
 }
 
 static Sys_var_bool Sys_session_track_index(
@@ -782,11 +779,10 @@ static Sys_var_bool Sys_session_track_index(
     ON_UPDATE(update_session_track_index));
 
 static bool handle_consensus_force_promote(sys_var *, THD *, enum_var_type) {
-    DBUG_ENTER("handle_reset_consensus_prefetch_cache");
-    if (opt_consensus_force_promote)
-      consensus_ptr->forcePromote();
-    opt_consensus_force_promote= 0;
-    DBUG_RETURN(false);
+  DBUG_ENTER("handle_reset_consensus_prefetch_cache");
+  if (opt_consensus_force_promote) consensus_ptr->forcePromote();
+  opt_consensus_force_promote = 0;
+  DBUG_RETURN(false);
 }
 
 static Sys_var_bool Sys_consensus_force_promote(
@@ -795,8 +791,10 @@ static Sys_var_bool Sys_consensus_force_promote(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
     ON_UPDATE(handle_consensus_force_promote));
 
-static bool fix_consensus_auto_reset_match_index(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setEnableAutoResetMatchIndex(opt_consensus_auto_reset_match_index);
+static bool fix_consensus_auto_reset_match_index(sys_var *, THD *,
+                                                 enum_var_type) {
+  consensus_ptr->setEnableAutoResetMatchIndex(
+      opt_consensus_auto_reset_match_index);
   return false;
 }
 
@@ -818,9 +816,10 @@ static Sys_var_bool Sys_consensus_learner_heartbeat(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_learner_heartbeat));
 
-static bool fix_consensus_auto_leader_transfer(sys_var *, THD *, enum_var_type)
-{
-  consensus_ptr->setEnableAutoLeaderTransfer(opt_consensus_auto_leader_transfer);
+static bool fix_consensus_auto_leader_transfer(sys_var *, THD *,
+                                               enum_var_type) {
+  consensus_ptr->setEnableAutoLeaderTransfer(
+      opt_consensus_auto_leader_transfer);
   return false;
 }
 
@@ -831,17 +830,20 @@ static Sys_var_bool Sys_consensus_auto_leader_transfer(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_auto_leader_transfer));
 
-static bool fix_consensus_auto_leader_transfer_check_seconds(sys_var *, THD *, enum_var_type)
-{
-  consensus_ptr->setAutoLeaderTransferCheckSeconds(opt_consensus_auto_leader_transfer_check_seconds);
+static bool fix_consensus_auto_leader_transfer_check_seconds(sys_var *, THD *,
+                                                             enum_var_type) {
+  consensus_ptr->setAutoLeaderTransferCheckSeconds(
+      opt_consensus_auto_leader_transfer_check_seconds);
   return false;
 }
 
 static Sys_var_ulonglong Sys_consensus_auto_leader_transfer_check_seconds(
-    "consensus_auto_leader_transfer_check_seconds", "the interval between a leader check its health for a transfer",
-    GLOBAL_VAR(opt_consensus_auto_leader_transfer_check_seconds), CMD_LINE(OPT_ARG),
-    VALID_RANGE(10, 300), DEFAULT(60),
-    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_auto_leader_transfer_check_seconds));
+    "consensus_auto_leader_transfer_check_seconds",
+    "the interval between a leader check its health for a transfer",
+    GLOBAL_VAR(opt_consensus_auto_leader_transfer_check_seconds),
+    CMD_LINE(OPT_ARG), VALID_RANGE(10, 300), DEFAULT(60), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_auto_leader_transfer_check_seconds));
 
 static Sys_var_bool Sys_consensus_safe_for_reset_master(
     "consensus_safe_for_reset_master",

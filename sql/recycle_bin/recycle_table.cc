@@ -24,6 +24,7 @@
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_parse.h"
 
+#include <set>
 #include "m_string.h"
 #include "mysql/components/services/log_builtins.h"
 #include "sql/auth/auth_acls.h"
@@ -38,7 +39,7 @@
 #include "sql/dd/impl/types/partition_impl.h"
 #include "sql/dd/impl/types/table_impl.h"
 #include "sql/dd/impl/types/trigger_impl.h"
-#include "sql/dd/impl/utils.h" // dd::my_time_t_to_ull_datetime()
+#include "sql/dd/impl/utils.h"  // dd::my_time_t_to_ull_datetime()
 #include "sql/dd/object_id.h"
 #include "sql/dd/properties.h"
 #include "sql/dd/types/check_constraint.h"
@@ -57,7 +58,6 @@
 #include "sql/strfunc.h"
 #include "sql/table.h"
 #include "sql/thd_raii.h"
-#include <set>
 
 namespace im {
 namespace recycle_bin {
@@ -212,7 +212,6 @@ static bool is_recycled_table(THD *thd, const char *table,
   DBUG_RETURN(false);
 }
 
-
 /**
   Retrieve all recycle schema tables.
 
@@ -323,7 +322,8 @@ static bool check_state(THD *thd, Table_ref *table) {
     log_recycle_warning(table->db, table->table_name, "schema is recycle bin.");
     DBUG_RETURN(true);
   }
-  /* We cann't remove my own table/table_def from table cache if within lock mode */
+  /* We cann't remove my own table/table_def from table cache if within lock
+   * mode */
   if (thd->locked_tables_mode) {
     log_recycle_warning(table->db, table->table_name, "within lock mode.");
     DBUG_RETURN(true);
@@ -335,8 +335,7 @@ static bool check_state(THD *thd, Table_ref *table) {
     DBUG_RETURN(true);
 
   /* Maybe SUPER_ACL user operated recycle schema directly */
-  if (table_def == nullptr ||
-      table_def->options().exists(ORIGIN_SCHEMA.str) ||
+  if (table_def == nullptr || table_def->options().exists(ORIGIN_SCHEMA.str) ||
       table_def->options().exists(ORIGIN_TABLE.str)) {
     log_recycle_warning(table->db, table->table_name,
                         "table doesn't exist or has been recycled.");
@@ -500,8 +499,7 @@ static bool prepare_recycle_table(THD *thd, Table_ref *table_list,
     test case
     t/invalid_collation.test;
   */
-  if (recycle_context.is_error())
-    DBUG_RETURN(true);
+  if (recycle_context.is_error()) DBUG_RETURN(true);
 
   DBUG_RETURN(false);
 }
@@ -591,11 +589,10 @@ void move_se_attributes(HA_CREATE_INFO *create_info,
   @retval         error           Report client error
 
 */
-Recycle_result
-recycle_base_table(THD *thd, std::set<handlerton *> *post_ddl_htons,
-                   Foreign_key_parents_invalidator *fk_invalidator,
-                   bool only_self, Table_ref *table_list,
-                   HA_CREATE_INFO *original_create_info) {
+Recycle_result recycle_base_table(
+    THD *thd, std::set<handlerton *> *post_ddl_htons,
+    Foreign_key_parents_invalidator *fk_invalidator, bool only_self,
+    Table_ref *table_list, HA_CREATE_INFO *original_create_info) {
   const char *old_db = nullptr;
   const char *old_table = nullptr;
   const char *new_db = nullptr;
@@ -679,10 +676,11 @@ recycle_base_table(THD *thd, std::set<handlerton *> *post_ddl_htons,
 
   // Get the handler for the table, and issue an error if we cannot load it.
   handler *file =
-      (hton == NULL ? 0 : get_new_handler((TABLE_SHARE *)0,
-                                          from_table_def->partition_type() !=
-                                              dd::Table::PT_NONE,
-                                          thd->mem_root, hton));
+      (hton == NULL ? 0
+                    : get_new_handler((TABLE_SHARE *)0,
+                                      from_table_def->partition_type() !=
+                                          dd::Table::PT_NONE,
+                                      thd->mem_root, hton));
   if (!file) {
     my_error(ER_STORAGE_ENGINE_NOT_LOADED, MYF(0), old_db, old_table);
     DBUG_RETURN(Recycle_result::ERROR);
@@ -832,7 +830,7 @@ bool recycle_purge_table(THD *thd, const char *table) {
 }
 
 class Sql_command_backup {
-public:
+ public:
   explicit Sql_command_backup(THD *thd, enum enum_sql_command command)
       : m_thd(thd) {
     m_sql_command = m_thd->lex->sql_command;
@@ -846,7 +844,7 @@ public:
     m_thd->is_recycle_command = m_is_recycle_command;
   }
 
-private:
+ private:
   THD *m_thd;
   enum enum_sql_command m_sql_command;
   bool m_is_recycle_command;
@@ -859,8 +857,7 @@ template <typename Item, typename Item_impl>
 static void reset_primary_key_id(const dd::Collection<Item *> &items) {
   for (const Item *item : items) {
     Item_impl *impl = dynamic_cast<Item_impl *>(const_cast<Item *>(item));
-    if (impl)
-      impl->set_id(dd::INVALID_OBJECT_ID);
+    if (impl) impl->set_id(dd::INVALID_OBJECT_ID);
   }
 }
 /**
@@ -904,8 +901,7 @@ Recycle_result recycle_truncate_table(THD *thd, const char *path,
 
     /* 1.2 Reset dd::Table id */
     dd::Table_impl *table_impl = dynamic_cast<dd::Table_impl *>(table_def);
-    if (table_impl)
-      table_impl->set_id(dd::INVALID_OBJECT_ID);
+    if (table_impl) table_impl->set_id(dd::INVALID_OBJECT_ID);
 
     /* 1.3 Reset dd::Column id */
     reset_primary_key_id<dd::Column, dd::Column_impl>(
@@ -928,7 +924,7 @@ Recycle_result recycle_truncate_table(THD *thd, const char *path,
         static_cast<const dd::Table *>(table_def)->check_constraints());
 
     /* 1.8 Reset dd::partition */
-    for (const dd::Partition *item:
+    for (const dd::Partition *item :
          static_cast<const dd::Table *>(table_def)->partitions()) {
       dd::Partition_impl *impl =
           dynamic_cast<dd::Partition_impl *>(const_cast<dd::Partition *>(item));
@@ -964,4 +960,3 @@ end:
 } /* namespace recycle_bin */
 
 } /* namespace im */
-

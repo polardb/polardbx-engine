@@ -43,7 +43,6 @@ namespace recycle_bin {
 /* Uniform schema name for recycle bin */
 LEX_CSTRING RECYCLE_BIN_PROC_SCHEMA = {STRING_WITH_LEN("dbms_recycle")};
 
-
 /* Singleton instance for show_tables */
 Proc *Recycle_proc_show::instance() {
   static Proc *proc = new Recycle_proc_show(key_memory_recycle);
@@ -141,8 +140,7 @@ void Sql_cmd_recycle_proc_show::send_result(THD *thd, bool error) {
     protocol->store_string((*it)->table.str, (*it)->table.length,
                            system_charset_info);
     protocol->store_string((*it)->origin_schema.str,
-                           (*it)->origin_schema.length,
-                           system_charset_info);
+                           (*it)->origin_schema.length, system_charset_info);
     protocol->store_string((*it)->origin_table.str, (*it)->origin_table.length,
                            system_charset_info);
 
@@ -414,5 +412,3 @@ bool Sql_cmd_recycle_proc_restore::pc_execute(THD *thd) {
 } /* namespace recycle_bin */
 
 } /* namespace im */
-
-
