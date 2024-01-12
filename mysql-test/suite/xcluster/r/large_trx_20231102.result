@@ -1,0 +1,135 @@
+flush local logs;
+flush local logs;
+flush local logs;
+# ---------- case1 ----------
+# prepare cluster
+flush local logs;
+set global debug="+d,force_large_trx";
+flush local logs;
+set global debug="+d,force_large_trx";
+flush local logs;
+set global debug="+d,force_large_trx";
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+set global debug="+d,crash_during_large_trx_binlog_flush";
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+set global debug="+d,force_large_trx";
+consistent!!!!!!!
+drop table t;
+# ---------- case3 ---------
+# prepare cluster
+flush local logs;
+set global debug="+d,force_large_trx";
+flush local logs;
+set global debug="+d,force_large_trx";
+flush local logs;
+set global debug="+d,force_large_trx";
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+call dbms_consensus.change_leader(2);
+xa commit 'x1';
+drop table t;
+call dbms_consensus.change_leader(1);
+# ---------- case4 ----------
+# prepare cluster
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+call dbms_consensus.change_leader(2);
+xa commit 'x1';
+drop table t;
+call dbms_consensus.change_leader(1);
+# ---------- case5 ---------
+# prepare cluster
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+flush local logs;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  IDLE state
+xa prepare 'x1';
+consistent!!!!!!!
+xa commit 'x1';
+drop table t;
+# ---------- case6 ----------
+# prepare cluster
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+flush local logs;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  IDLE state
+xa prepare 'x1';
+# restart
+consistent!!!!!!!
+xa commit 'x1';
+drop table t;
+# ---------- case8 ----------
+# prepare cluster
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,crash_during_large_event_receive";
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+# restart
+Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
+select count(*) from t;
+count(*)
+1
+xa commit 'x1';
+drop table t;
+# ---------- case10 ----------
+# prepare cluster
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+set global debug="+d,crash_after_flush_binlog";
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+# restart
+select count(*) from t;
+count(*)
+1
+xa commit 'x1';
+drop table t;
+# ---------- cleanup -----------
+set global debug="";

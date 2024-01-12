@@ -1,0 +1,408 @@
+# large trx and large event cases:
+# 1. leader, crash during flushing large trx
+# 2. leader, crash during flushing large event [no need]
+# 3. leader, leader transfer during flushing large trx
+# 4. leader, leader transfer during flushing large event
+# 5. leader, rotate during flushing large trx
+# 6. leader, rotate during flushing large event
+# 7. follower, crash during receiving half of large trx
+# 8. follower, crash during receiving half of large event
+# 9. follower, crash during applying large trx
+# 10. follower, crash during applying large event
+# 11. follower, wrong checksum during receiving large trx
+# 12. follower, wrong checksum during receiving large event
+--source include/have_debug.inc
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+flush local logs;
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+flush local logs;
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+flush local logs;
+
+
+
+--echo # ---------- case1 ----------
+--echo # prepare cluster
+--connection conn1
+flush local logs;
+set global debug="+d,force_large_trx";
+--connection conn2
+flush local logs;
+set global debug="+d,force_large_trx";
+--connection conn3
+flush local logs;
+set global debug="+d,force_large_trx";
+
+--connection conn1
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+set global debug="+d,crash_during_large_trx_binlog_flush";
+
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--error 2013
+xa prepare 'x1';
+--source include/wait_until_disconnected.inc
+--sleep 1
+--let $_expect_file_name=$MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--source include/start_mysqld.inc
+set global debug="+d,force_large_trx";
+
+--source include/wait_follower_catchup.inc
+
+let $cnt1= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+let $cnt2= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+let $cnt3= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+if ($cnt1 == $cnt2)
+{
+if ($cnt2 == $cnt3)
+{
+echo consistent!!!!!!!;
+}
+}
+--connection conn1
+drop table t;
+
+
+--echo # ---------- case3 ---------
+--echo # prepare cluster
+--connection conn1
+flush local logs;
+set global debug="+d,force_large_trx";
+--connection conn2
+flush local logs;
+set global debug="+d,force_large_trx";
+--connection conn3
+flush local logs;
+set global debug="+d,force_large_trx";
+
+--connection conn1
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+
+call dbms_consensus.change_leader(2);
+
+--connection conn2
+--enable_reconnec t
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
+--source include/wait_condition.inc
+
+--source include/wait_follower_catchup.inc
+
+xa commit 'x1';
+drop table t;
+
+
+call dbms_consensus.change_leader(1);
+
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+--source include/wait_follower_catchup.inc
+
+
+
+--echo # ---------- case4 ----------
+--echo # prepare cluster
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+
+--connection conn1
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+
+call dbms_consensus.change_leader(2);
+
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
+--source include/wait_condition.inc
+
+--source include/wait_follower_catchup.inc
+
+xa commit 'x1';
+drop table t;
+
+call dbms_consensus.change_leader(1);
+
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+--source include/wait_follower_catchup.inc
+
+
+
+--echo # ---------- case5 ---------
+--echo # prepare cluster
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+
+--connection conn1
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+
+--error ER_XAER_RMFAIL
+--error 1399
+flush local logs;
+
+xa prepare 'x1';
+
+--source include/wait_follower_catchup.inc
+
+let $cnt1= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+let $cnt2= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+let $cnt3= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+if ($cnt1 == $cnt2)
+{
+if ($cnt2 == $cnt3)
+{
+echo consistent!!!!!!!;
+}
+}
+--connection conn1
+xa commit 'x1';
+drop table t;
+
+
+
+--echo # ---------- case6 ----------
+--echo # prepare cluster
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+
+--connection conn1
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+
+--error ER_XAER_RMFAIL
+--error 1399
+flush local logs;
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+xa prepare 'x1';
+
+
+--let $_expect_file_name=$MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--source include/start_mysqld.inc
+
+let $cnt1= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+let $cnt2= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+let $cnt3= query_get_value("select count(*) as cnt from t", cnt, 1);
+
+if ($cnt1 == $cnt2)
+{
+if ($cnt2 == $cnt3)
+{
+echo consistent!!!!!!!;
+}
+}
+--connection conn1
+xa commit 'x1';
+drop table t;
+
+
+
+--echo # ---------- case8 ----------
+--echo # prepare cluster
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+
+--connection conn2
+set global debug="+d,crash_during_large_event_receive";
+
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--let $_expect_file_name=$MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--source include/start_mysqld.inc
+
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+--disable_reconnect
+
+select count(*) from t;
+
+--connection conn1
+xa commit 'x1';
+drop table t;
+
+
+
+--echo # ---------- case10 ----------
+--echo # prepare cluster
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+set global debug="+d,force_large_trx,force_large_trx_single_ev";
+
+
+--connection conn2
+set global debug="+d,crash_after_flush_binlog";
+
+--connection conn1
+create table t (id LongBlob);
+insert into t values(repeat('a', 300));
+xa start 'x1';
+insert into t values(repeat('b', 300));
+insert into t values(repeat('c', 300));
+xa end 'x1';
+xa prepare 'x1';
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--let $_expect_file_name=$MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--source include/start_mysqld.inc
+
+--connection conn2
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+--disable_reconnect
+
+select count(*) from t;
+
+--connection conn1
+xa commit 'x1';
+drop table t;
+
+--echo # ---------- cleanup -----------
+set global debug="";

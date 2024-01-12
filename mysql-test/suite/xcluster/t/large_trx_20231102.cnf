@@ -1,0 +1,12 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+consensus_large_trx=ON
+consensus_check_large_event=ON
+max_allowed_packet=1G
+replica_pending_jobs_size_max=1G
+replica_max_allowed_packet=1G
+consensus_large_event_limit=64
+consensus_max_log_size=64
+consensus_large_trx_split_size=64
+consensus_large_event_split_size=64
