@@ -40,6 +40,8 @@
 #include "sql/sql_list.h"
 #include "sql/table.h"  // TABLE
 
+#include "sql/sql_implicit_common.h"
+
 /**
    Allocates and initializes a MY_BITMAP bitmap, containing one bit per column
    in the table. The table THD's MEM_ROOT is used to allocate memory.
@@ -170,7 +172,9 @@ bool COPY_INFO::set_function_defaults(TABLE *table) {
 
 bool COPY_INFO::ignore_last_columns(TABLE *table, uint count) {
   if (get_function_default_columns(table)) return true;
-  for (uint i = 0; i < count; i++)
-    bitmap_clear_bit(m_function_default_columns, table->s->fields - 1 - i);
+  int skip_ipk = TABLE_HAS_IPK_AND_HIDDEN(table->in_use, table) ? 1 : 0;
+   for (uint i = 0; i < count; i++)
+    bitmap_clear_bit(m_function_default_columns,
+                     table->s->fields - 1 - i - skip_ipk);
   return false;
 }

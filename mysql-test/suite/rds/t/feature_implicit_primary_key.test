@@ -1,6 +1,4 @@
 --source include/have_binlog_format_row.inc
---source include/master-slave.inc
-connection master;
 
 set global implicit_primary_key=on;
 
@@ -141,7 +139,5 @@ SELECT * FROM t3 NATURAL LEFT JOIN t4;
 drop database db1;
 
 
-
 set global implicit_primary_key=off;
 
---source include/rpl_end.inc
