@@ -144,6 +144,7 @@
 #include "sql/ppi/ppi_table_iostat.h"
 #include "sql/sql_statistics_common.h"
 #include "sql_show_consensus.h"
+#include "sql/sql_implicit_common.h"
 
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
@@ -1409,6 +1410,11 @@ void mysqld_list_fields(THD *thd, Table_ref *table_list, const char *wild) {
   for (ptr = table->field; (field = *ptr); ptr++) {
     if (!wild || !wild[0] ||
         !wild_case_compare(system_charset_info, field->field_name, wild)) {
+
+      /* RDS IPK : hide implicit field */
+      assert(debug_field_is_implicit_and_hide(thd, table, field));
+      if (item_is_implicit_and_hide<Field>(thd, field)) continue;
+
       Item *item;
       if (table_list->is_view()) {
         item = new Item_ident_for_show(field, table_list->db,
@@ -1995,6 +2001,10 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
     // Skip hidden system fields.
     if (field->is_hidden_by_system()) continue;
 
+    /* RDS IPK : hide implicit field */
+    assert(debug_field_is_implicit_and_hide(thd, table, field));
+    if (item_is_implicit_and_hide<Field>(thd, field)) continue;
+
     enum_field_types field_type = field->real_type();
 
     if (ptr != first_field) packet->append(STRING_WITH_LEN(",\n"));
@@ -2167,6 +2177,11 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
   for (uint i = skip_gipk ? 1 : 0; i < share->keys; i++, key_info++) {
     KEY_PART_INFO *key_part = key_info->key_part;
     bool found_primary = false;
+
+    /* RDS IPK : hide implicit key */
+    assert(debug_key_is_implicit_and_hide(thd, table, key_info));
+    if (item_is_implicit_and_hide<KEY>(thd, key_info)) continue;
+
     packet->append(STRING_WITH_LEN(",\n  "));
 
     if (i == primary_key && !strcmp(key_info->name, primary_key_name)) {
@@ -2358,7 +2373,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       (generated invisible primary key column) is skipped with this setting.
     */
 
-    if (create_info.auto_increment_value > 1 && !skip_gipk) {
+    if (create_info.auto_increment_value > 1 && !skip_gipk && !TABLE_HAS_IPK_AND_HIDDEN(thd, table)) {
       char *end;
       packet->append(STRING_WITH_LEN(" AUTO_INCREMENT="));
       end = longlong10_to_str(create_info.auto_increment_value, buff, 10);
@@ -3963,6 +3978,10 @@ static int get_schema_tmp_table_columns_record(THD *thd, Table_ref *tables,
     char tmp[MAX_FIELD_WIDTH];
     String type(tmp, sizeof(tmp), system_charset_info);
 
+    /* RDS IPK : hide implicit field */
+    assert(debug_field_is_implicit_and_hide(thd, show_table, field));
+    if (item_is_implicit_and_hide<Field>(thd, field)) continue;
+
     if (wild && wild[0] &&
         wild_case_compare(system_charset_info, field->field_name, wild))
       continue;
@@ -4195,6 +4214,11 @@ static int get_schema_tmp_table_keys_record(THD *thd, Table_ref *tables,
   for (; i < show_table->s->keys; i++, key_info++) {
     KEY_PART_INFO *key_part = key_info->key_part;
     const char *str;
+
+    /* RDS IPK : hide implicit key */
+    assert(debug_key_is_implicit_and_hide(thd, show_table, key_info));
+    if (item_is_implicit_and_hide<KEY>(thd, key_info)) continue;
+
     for (uint j = 0; j < key_info->user_defined_key_parts; j++, key_part++) {
       restore_record(table, s->default_values);
 

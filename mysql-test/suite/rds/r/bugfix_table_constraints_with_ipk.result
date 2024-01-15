@@ -1,0 +1,28 @@
+SET GLOBAL implicit_primary_key = ON;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SET show_ipk_info = ON;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE test.t1 (id INT);
+SHOW CREATE TABLE test.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET show_ipk_info = ON;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+select * from information_schema.TABLE_CONSTRAINTS where table_schema='test' and table_name='t1';
+CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_SCHEMA	TABLE_NAME	CONSTRAINT_TYPE	ENFORCED
+SET show_ipk_info = OFF;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+select * from information_schema.TABLE_CONSTRAINTS where table_schema='test' and table_name='t1';
+CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_SCHEMA	TABLE_NAME	CONSTRAINT_TYPE	ENFORCED
+DROP TABLE test.t1;
+SET GLOBAL implicit_primary_key = OFF;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.

@@ -92,6 +92,8 @@
 #include "sql_string.h"
 #include "thr_lock.h"
 
+#include "sql/sql_implicit_common.h"
+
 class READ_INFO;
 
 using std::max;
@@ -312,6 +314,10 @@ bool Sql_cmd_load_table::execute_inner(THD *thd,
       // Do not include user hidden fields.
       if (field_iterator.field() != nullptr &&
           field_iterator.field()->is_hidden())
+        continue;
+
+      /* RDS IPK : Skip the implicit field */
+      if (item_is_implicit_and_hide<Field>(thd, field_iterator.field()))
         continue;
 
       Item *item;

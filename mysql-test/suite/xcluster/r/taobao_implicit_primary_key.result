@@ -1,0 +1,852 @@
+SHOW GLOBAL VARIABLES LIKE "implicit_primary_key";
+Variable_name	Value
+implicit_primary_key	ON
+SHOW VARIABLES LIKE "show_ipk_info";
+Variable_name	Value
+show_ipk_info	OFF
+SHOW GLOBAL VARIABLES LIKE "implicit_primary_key";
+Variable_name	Value
+implicit_primary_key	ON
+SHOW VARIABLES LIKE "show_ipk_info";
+Variable_name	Value
+show_ipk_info	OFF
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE no_pk (a int, b int) ENGINE=MyISAM;
+CREATE TABLE has_uk (a int, b int, unique key a(a)) ENGINE=MyISAM;
+CREATE TABLE has_inc (a int auto_increment, b int, key a(a)) ENGINE=MyISAM;
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SHOW CREATE TABLE no_pk;
+Table	Create Table
+no_pk	CREATE TABLE `no_pk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE has_uk;
+Table	Create Table
+has_uk	CREATE TABLE `has_uk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  UNIQUE KEY `a` (`a`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE has_inc;
+Table	Create Table
+has_inc	CREATE TABLE `has_inc` (
+  `a` int NOT NULL AUTO_INCREMENT,
+  `b` int DEFAULT NULL,
+  KEY `a` (`a`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+ALTER TABLE no_pk ADD c int;
+ALTER TABLE no_pk ADD id int auto_increment, ADD PRIMARY KEY (id);
+ALTER TABLE has_uk DROP KEY a;
+ALTER TABLE has_inc MODIFY a int;
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SHOW CREATE TABLE no_pk;
+Table	Create Table
+no_pk	CREATE TABLE `no_pk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE has_uk;
+Table	Create Table
+has_uk	CREATE TABLE `has_uk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE has_inc;
+Table	Create Table
+has_inc	CREATE TABLE `has_inc` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`),
+  KEY `a` (`a`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+DROP TABLE has_uk;
+DROP TABLE has_inc;
+ALTER TABLE no_pk DROP id;
+DESC no_pk;
+Field	Type	Null	Key	Default	Extra
+a	int	YES		NULL	
+b	int	YES		NULL	
+c	int	YES		NULL	
+SHOW COLUMNS FROM no_pk;
+Field	Type	Null	Key	Default	Extra
+a	int	YES		NULL	
+b	int	YES		NULL	
+c	int	YES		NULL	
+INSERT INTO no_pk VALUES (1,2,3);
+INSERT INTO no_pk(b,c) VALUES (4,5);
+SELECT * FROM no_pk;
+a	b	c
+1	2	3
+NULL	4	5
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+row_id
+1
+2
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+INSERT INTO no_pk VALUES (1,2,3,100);
+INSERT INTO no_pk VALUES (1,2,3,101),(4,5,6,102);
+SELECT * FROM no_pk;
+a	b	c	__#alibaba_rds_row_id#__
+1	2	3	1
+NULL	4	5	2
+1	2	3	100
+1	2	3	101
+4	5	6	102
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+EXPLAIN SELECT * FROM no_pk WHERE `__#alibaba_rds_row_id#__`=1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	no_pk	NULL	ref	__#alibaba_rds_row_id#__	__#alibaba_rds_row_id#__	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`no_pk`.`a` AS `a`,`test`.`no_pk`.`b` AS `b`,`test`.`no_pk`.`c` AS `c` from `test`.`no_pk` where (`test`.`no_pk`.`__#alibaba_rds_row_id#__` = 1)
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+EXPLAIN SELECT * FROM no_pk WHERE `__#alibaba_rds_row_id#__`=1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	no_pk	NULL	ref	__#alibaba_rds_row_id#__	__#alibaba_rds_row_id#__	8	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`no_pk`.`a` AS `a`,`test`.`no_pk`.`b` AS `b`,`test`.`no_pk`.`c` AS `c`,`test`.`no_pk`.`__#alibaba_rds_row_id#__` AS `__#alibaba_rds_row_id#__` from `test`.`no_pk` where (`test`.`no_pk`.`__#alibaba_rds_row_id#__` = 1)
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT * FROM no_pk;
+a	b	c
+1	2	3
+NULL	4	5
+1	2	3
+1	2	3
+4	5	6
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+row_id
+1
+2
+100
+101
+102
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE no_pk2 SELECT * FROM no_pk;
+CREATE TABLE no_pk3 LIKE no_pk;
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SHOW CREATE TABLE no_pk2;
+Table	Create Table
+no_pk2	CREATE TABLE `no_pk2` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE no_pk3;
+Table	Create Table
+no_pk3	CREATE TABLE `no_pk3` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM no_pk2;
+a	b	c	__#alibaba_rds_row_id#__
+1	2	3	1
+NULL	4	5	2
+1	2	3	3
+1	2	3	4
+4	5	6	5
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+row_id
+1
+2
+3
+4
+5
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SHOW CREATE TABLE no_pk2;
+Table	Create Table
+no_pk2	CREATE TABLE `no_pk2` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE no_pk3;
+Table	Create Table
+no_pk3	CREATE TABLE `no_pk3` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM no_pk2;
+a	b	c	__#alibaba_rds_row_id#__
+1	2	3	1
+NULL	4	5	2
+1	2	3	3
+1	2	3	4
+4	5	6	5
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+row_id
+1
+2
+3
+4
+5
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+INSERT INTO no_pk2 SELECT * FROM no_pk;
+INSERT INTO no_pk2 (b,c) SELECT b,c FROM no_pk;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+a	b	c	row_id
+1	2	3	1
+NULL	4	5	2
+1	2	3	3
+1	2	3	4
+4	5	6	5
+1	2	3	8
+NULL	4	5	9
+1	2	3	10
+1	2	3	11
+4	5	6	12
+NULL	2	3	15
+NULL	4	5	16
+NULL	2	3	17
+NULL	2	3	18
+NULL	5	6	19
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+a	b	c	row_id
+1	2	3	1
+NULL	4	5	2
+1	2	3	3
+1	2	3	4
+4	5	6	5
+1	2	3	8
+NULL	4	5	9
+1	2	3	10
+1	2	3	11
+4	5	6	12
+NULL	2	3	15
+NULL	4	5	16
+NULL	2	3	17
+NULL	2	3	18
+NULL	5	6	19
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+DELETE FROM no_pk WHERE a IS NULL;
+UPDATE no_pk SET a=10;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+a	b	c	row_id
+10	2	3	1
+10	2	3	100
+10	2	3	101
+10	5	6	102
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+a	b	c	row_id
+10	2	3	1
+10	2	3	100
+10	2	3	101
+10	5	6	102
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+PREPARE s1 FROM 'insert INTO no_pk2 values (@x:=@x+1, ?, ?)';
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+SET @x=1;
+EXECUTE s1 USING @x, @x;
+DEALLOCATE PREPARE s1;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+a	b	c	row_id
+1	2	3	1
+NULL	4	5	2
+1	2	3	3
+1	2	3	4
+4	5	6	5
+1	2	3	8
+NULL	4	5	9
+1	2	3	10
+1	2	3	11
+4	5	6	12
+NULL	2	3	15
+NULL	4	5	16
+NULL	2	3	17
+NULL	2	3	18
+NULL	5	6	19
+2	1	1	22
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+a	b	c	row_id
+1	2	3	1
+NULL	4	5	2
+1	2	3	3
+1	2	3	4
+4	5	6	5
+1	2	3	8
+NULL	4	5	9
+1	2	3	10
+1	2	3	11
+4	5	6	12
+NULL	2	3	15
+NULL	4	5	16
+NULL	2	3	17
+NULL	2	3	18
+NULL	5	6	19
+2	1	1	22
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE t1 (a varchar(100)) ENGINE=MyISAM;
+DROP TABLE t1;
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE t1 (a date, b date, c date not null, d date);
+LOAD DATA INFILE '../../std_data/loaddata1.dat' IGNORE INTO TABLE t1 FIELDS TERMINATED BY ',';
+Warnings:
+Warning	1265	Data truncated for column 'a' at row 1
+Warning	1265	Data truncated for column 'c' at row 1
+Warning	1265	Data truncated for column 'd' at row 1
+Warning	1264	Out of range value for column 'a' at row 2
+Warning	1264	Out of range value for column 'b' at row 2
+Warning	1264	Out of range value for column 'c' at row 2
+Warning	1265	Data truncated for column 'd' at row 2
+Warning	4096	Delimiter ' ' in position 0 in datetime value ' 20030303' at row 3 is superfluous and is deprecated. Please remove.
+LOAD DATA INFILE '../../std_data/loaddata1.dat' INTO TABLE t1 FIELDS TERMINATED BY ',' IGNORE 2 LINES;
+Warnings:
+Warning	4096	Delimiter ' ' in position 0 in datetime value ' 20030303' at row 1 is superfluous and is deprecated. Please remove.
+SELECT * FROM t1;
+a	b	c	d
+0000-00-00	NULL	0000-00-00	0000-00-00
+0000-00-00	0000-00-00	0000-00-00	0000-00-00
+2003-03-03	2003-03-03	2003-03-03	NULL
+2003-03-03	2003-03-03	2003-03-03	NULL
+TRUNCATE TABLE t1;
+LOAD DATA INFILE '../../std_data/loaddata1.dat' IGNORE INTO TABLE t1 FIELDS TERMINATED BY ',' LINES STARTING BY ',' (b,c,d);
+Warnings:
+Warning	1265	Data truncated for column 'c' at row 1
+Warning	1265	Data truncated for column 'd' at row 1
+Warning	1264	Out of range value for column 'b' at row 2
+Warning	1264	Out of range value for column 'c' at row 2
+Warning	1265	Data truncated for column 'd' at row 2
+Warning	4096	Delimiter ' ' in position 0 in datetime value ' 20030303' at row 3 is superfluous and is deprecated. Please remove.
+SELECT * FROM t1;
+a	b	c	d
+NULL	NULL	0000-00-00	0000-00-00
+NULL	0000-00-00	0000-00-00	0000-00-00
+NULL	2003-03-03	2003-03-03	NULL
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1;
+a	b	c	d	row_id
+NULL	NULL	0000-00-00	0000-00-00	1
+NULL	0000-00-00	0000-00-00	0000-00-00	2
+NULL	2003-03-03	2003-03-03	NULL	3
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	__#alibaba_rds_row_id#__	1	__#alibaba_rds_row_id#__	A	2	NULL	NULL		BTREE			YES	NULL
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+a	date	YES		NULL	
+b	date	YES		NULL	
+c	date	NO		NULL	
+d	date	YES		NULL	
+__#alibaba_rds_row_id#__	bigint	NO	MUL	NULL	auto_increment
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` date DEFAULT NULL,
+  `b` date DEFAULT NULL,
+  `c` date NOT NULL,
+  `d` date DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DESC t1;
+Field	Type	Null	Key	Default	Extra
+a	date	YES		NULL	
+b	date	YES		NULL	
+c	date	NO		NULL	
+d	date	YES		NULL	
+__#alibaba_rds_row_id#__	bigint	NO	MUL	NULL	auto_increment
+SELECT * FROM information_schema.columns
+WHERE TABLE_schema='test'
+AND TABLE_name='t1' order by ORDINAL_POSITION;
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION	SRS_ID
+def	test	t1	a	1	NULL	YES	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+def	test	t1	b	2	NULL	YES	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+def	test	t1	c	3	NULL	NO	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+def	test	t1	d	4	NULL	YES	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+def	test	t1	__#alibaba_rds_row_id#__	5	NULL	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint	MUL	auto_increment	select,insert,update,references	Implicit Primary Key by RDS		NULL
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+a	date	YES		NULL	
+b	date	YES		NULL	
+c	date	NO		NULL	
+d	date	YES		NULL	
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` date DEFAULT NULL,
+  `b` date DEFAULT NULL,
+  `c` date NOT NULL,
+  `d` date DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DESC t1;
+Field	Type	Null	Key	Default	Extra
+a	date	YES		NULL	
+b	date	YES		NULL	
+c	date	NO		NULL	
+d	date	YES		NULL	
+SELECT * FROM information_schema.columns
+WHERE TABLE_schema='test'
+AND TABLE_name='t1';
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION	SRS_ID
+def	test	t1	a	1	NULL	YES	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+def	test	t1	b	2	NULL	YES	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+def	test	t1	c	3	NULL	NO	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+def	test	t1	d	4	NULL	YES	date	NULL	NULL	NULL	NULL	NULL	NULL	NULL	date			select,insert,update,references			NULL
+SHOW CREATE TABLE no_pk;
+Table	Create Table
+no_pk	CREATE TABLE `no_pk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET GLOBAL implicit_primary_key=0;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SELECT * FROM no_pk;
+a	b	c
+10	2	3
+10	2	3
+10	2	3
+10	5	6
+INSERT INTO no_pk VALUES (3,2,1);
+INSERT INTO no_pk(b,c) VALUES (5,4);
+SELECT * FROM no_pk;
+a	b	c
+10	2	3
+3	2	1
+10	2	3
+10	2	3
+10	5	6
+NULL	5	4
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+a	b	c	row_id
+10	2	3	1
+3	2	1	103
+10	2	3	100
+10	2	3	101
+10	5	6	102
+NULL	5	4	104
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SET GLOBAL implicit_primary_key=0;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+ALTER TABLE no_pk ADD pk int auto_increment, ADD UNIQUE uk(pk);
+SHOW CREATE TABLE no_pk;
+Table	Create Table
+no_pk	CREATE TABLE `no_pk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `pk` int NOT NULL AUTO_INCREMENT,
+  UNIQUE KEY `uk` (`pk`)
+) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE no_pk DROP pk;
+SHOW CREATE TABLE no_pk;
+Table	Create Table
+no_pk	CREATE TABLE `no_pk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SHOW CREATE TABLE no_pk;
+Table	Create Table
+no_pk	CREATE TABLE `no_pk` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM no_pk;
+a	b	c
+10	2	3
+3	2	1
+10	2	3
+10	2	3
+10	5	6
+NULL	5	4
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+DELETE FROM no_pk WHERE a IS NULL;
+UPDATE no_pk SET a=10;
+SELECT * FROM no_pk;
+a	b	c
+10	2	3
+10	2	1
+10	2	3
+10	2	3
+10	5	6
+SET GLOBAL implicit_primary_key=1;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT * FROM no_pk;
+a	b	c
+10	2	3
+10	2	1
+10	2	3
+10	2	3
+10	5	6
+SET GLOBAL implicit_primary_key=1;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SET show_ipk_info=0;
+DROP procedure if exists p1;
+DROP procedure if exists p2;
+DROP TABLE if exists t1;
+create TABLE t1 (a int, b int);
+create procedure p1() 
+begin
+declare spv int default 0;
+while spv < 5 do 
+insert INTO t1 values(spv+1, spv);
+set spv=spv+1;
+end while;
+while spv < 10 do 
+insert INTO t1(b) values(spv+1);
+set spv=spv+1;
+end while;
+end//
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+call p1();
+ERROR 21S01: Column count doesn't match value count at row 1
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+call p1();
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1 ORDER BY a;
+a	b	row_id
+NULL	6	6
+NULL	7	7
+NULL	8	8
+NULL	9	9
+NULL	10	10
+1	0	1
+2	1	2
+3	2	3
+4	3	4
+5	4	5
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1 ORDER BY a;
+a	b	row_id
+NULL	6	6
+NULL	7	7
+NULL	8	8
+NULL	9	9
+NULL	10	10
+1	0	1
+2	1	2
+3	2	3
+4	3	4
+5	4	5
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+create procedure p2() 
+begin
+declare a int default 4;
+declare spv int default 0;
+create TABLE t2 as select a, 10 as b;
+while spv < 5 do 
+insert INTO t2(a) values(spv+1);
+insert INTO t2(b) values(spv+1);
+insert INTO t2 values(spv, spv);
+set spv=spv+1;
+end while;
+end//
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+call p2();
+ERROR 21S01: Column count doesn't match value count at row 1
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+DROP TABLE t2;
+call p2();
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t2 ORDER BY a;
+a	b	row_id
+NULL	1	3
+NULL	2	6
+NULL	3	9
+NULL	4	12
+NULL	5	15
+0	0	4
+1	0	2
+1	1	7
+2	0	5
+2	2	10
+3	0	8
+3	3	13
+4	10	1
+4	0	11
+4	4	16
+5	0	14
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t2 ORDER BY a;
+a	b	row_id
+NULL	1	3
+NULL	2	6
+NULL	3	9
+NULL	4	12
+NULL	5	15
+0	0	4
+1	0	2
+1	1	7
+2	0	5
+2	2	10
+3	0	8
+3	3	13
+4	10	1
+4	0	11
+4	4	16
+5	0	14
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+DROP TABLE if exists t1;
+DROP TABLE if exists t2;
+create TABLE t1 (a int, primary key (a), b int);
+create TABLE t2 (a int, primary key (a), b int);
+insert INTO t2 values (1000, 2000);
+create view v3 (a,b) as select t1.a as a, t2.a as b FROM t1, t2;
+insert INTO v3 select * FROM t2;
+ERROR HY000: Can not insert into join view 'test.v3' without fields list
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+DROP TABLE if exists t1;
+CREATE TABLE t1 (
+id INT,
+fname VARCHAR(30),
+lname VARCHAR(30),
+signed DATE
+) PARTITION BY HASH(MONTH(signed))
+PARTITIONS 12;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `fname` varchar(30) DEFAULT NULL,
+  `lname` varchar(30) DEFAULT NULL,
+  `signed` date DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (month(`signed`))
+PARTITIONS 12 */
+ALTER TABLE t1 COALESCE PARTITION 4;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `fname` varchar(30) DEFAULT NULL,
+  `lname` varchar(30) DEFAULT NULL,
+  `signed` date DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (month(`signed`))
+PARTITIONS 8 */
+ALTER TABLE t1 REMOVE PARTITIONING;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `fname` varchar(30) DEFAULT NULL,
+  `lname` varchar(30) DEFAULT NULL,
+  `signed` date DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 PARTITION BY HASH(MONTH(signed)) PARTITIONS 12;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `fname` varchar(30) DEFAULT NULL,
+  `lname` varchar(30) DEFAULT NULL,
+  `signed` date DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (month(`signed`))
+PARTITIONS 12 */
+CREATE TABLE log_sync_operationnew (
+LogTime TIMESTAMP NOT NULL DEFAULT '2000-01-01 00:00:00',
+UserAgent VARCHAR(256) COLLATE utf8_bin DEFAULT NULL,
+KEY IX_LogTime (LogTime)
+) ENGINE=INNODB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+PARTITION BY RANGE(UNIX_TIMESTAMP(LogTime))
+(
+PARTITION p201407 VALUES LESS THAN (UNIX_TIMESTAMP('2014-08-01')),
+PARTITION p201412 VALUES LESS THAN (UNIX_TIMESTAMP('2015-01-01')),
+PARTITION p201501 VALUES LESS THAN (UNIX_TIMESTAMP('2015-02-01')),
+PARTITION p201502 VALUES LESS THAN (UNIX_TIMESTAMP('2015-03-01')),
+PARTITION p201503 VALUES LESS THAN (UNIX_TIMESTAMP('2015-04-01')),
+PARTITION future VALUES LESS THAN MAXVALUE
+);
+Warnings:
+Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+SHOW CREATE TABLE log_sync_operationnew;
+Table	Create Table
+log_sync_operationnew	CREATE TABLE `log_sync_operationnew` (
+  `LogTime` timestamp NOT NULL DEFAULT '2000-01-01 00:00:00',
+  `UserAgent` varchar(256) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`),
+  KEY `IX_LogTime` (`LogTime`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_bin
+/*!50100 PARTITION BY RANGE (unix_timestamp(`LogTime`))
+(PARTITION p201407 VALUES LESS THAN (1406840400) ENGINE = InnoDB,
+ PARTITION p201412 VALUES LESS THAN (1420059600) ENGINE = InnoDB,
+ PARTITION p201501 VALUES LESS THAN (1422738000) ENGINE = InnoDB,
+ PARTITION p201502 VALUES LESS THAN (1425157200) ENGINE = InnoDB,
+ PARTITION p201503 VALUES LESS THAN (1427835600) ENGINE = InnoDB,
+ PARTITION future VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+CREATE TABLE log_sync_operation (
+LogTime TIMESTAMP NOT NULL DEFAULT '2000-01-01 00:00:00',
+UserAgent VARCHAR(256) COLLATE utf8_bin DEFAULT NULL,
+KEY IX_LogTime (LogTime)
+) ENGINE=INNODB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+Warnings:
+Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	3778	'utf8mb3_bin' is a collation of the deprecated character set UTF8MB3. Please consider using UTF8MB4 with an appropriate collation instead.
+SHOW CREATE TABLE log_sync_operation;
+Table	Create Table
+log_sync_operation	CREATE TABLE `log_sync_operation` (
+  `LogTime` timestamp NOT NULL DEFAULT '2000-01-01 00:00:00',
+  `UserAgent` varchar(256) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`),
+  KEY `IX_LogTime` (`LogTime`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_bin
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+INSERT INTO log_sync_operation VALUES('2014-08-02 00:00:00','useragent');
+SELECT * FROM log_sync_operation;
+LogTime	UserAgent
+2014-08-02 00:00:00	useragent
+ALTER TABLE log_sync_operationnew EXCHANGE PARTITION p201412 WITH TABLE log_sync_operation;
+SHOW CREATE TABLE log_sync_operationnew;
+Table	Create Table
+log_sync_operationnew	CREATE TABLE `log_sync_operationnew` (
+  `LogTime` timestamp NOT NULL DEFAULT '2000-01-01 00:00:00',
+  `UserAgent` varchar(256) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin DEFAULT NULL,
+  KEY `IX_LogTime` (`LogTime`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_bin
+/*!50100 PARTITION BY RANGE (unix_timestamp(`LogTime`))
+(PARTITION p201407 VALUES LESS THAN (1406840400) ENGINE = InnoDB,
+ PARTITION p201412 VALUES LESS THAN (1420059600) ENGINE = InnoDB,
+ PARTITION p201501 VALUES LESS THAN (1422738000) ENGINE = InnoDB,
+ PARTITION p201502 VALUES LESS THAN (1425157200) ENGINE = InnoDB,
+ PARTITION p201503 VALUES LESS THAN (1427835600) ENGINE = InnoDB,
+ PARTITION future VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+SHOW CREATE TABLE log_sync_operation;
+Table	Create Table
+log_sync_operation	CREATE TABLE `log_sync_operation` (
+  `LogTime` timestamp NOT NULL DEFAULT '2000-01-01 00:00:00',
+  `UserAgent` varchar(256) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin DEFAULT NULL,
+  KEY `IX_LogTime` (`LogTime`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_bin
+SELECT *,`__#alibaba_rds_row_id#__` FROM log_sync_operationnew;
+LogTime	UserAgent	__#alibaba_rds_row_id#__
+2014-08-02 00:00:00	useragent	1
+SELECT *,`__#alibaba_rds_row_id#__` FROM log_sync_operation;
+LogTime	UserAgent	__#alibaba_rds_row_id#__
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+DROP DATABASE test;
+CREATE DATABASE test;

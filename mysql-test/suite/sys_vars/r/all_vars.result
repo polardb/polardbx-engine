@@ -160,10 +160,14 @@ enable_appliedindex_checker
 enable_appliedindex_checker
 enable_changeset
 enable_changeset
+enable_implicit_primary_key
+enable_implicit_primary_key
 enable_physical_backfill
 enable_physical_backfill
 enable_polarx_rpc
 enable_polarx_rpc
+enable_show_ipk_info
+enable_show_ipk_info
 enable_udf_bloomfilter_xxhash
 enable_udf_bloomfilter_xxhash
 explain_format
@@ -176,6 +180,8 @@ generated_random_password_length
 generated_random_password_length
 group_replication_consistency
 group_replication_consistency
+implicit_primary_key
+implicit_primary_key
 import_tablespace_iterator_interval
 import_tablespace_iterator_interval
 import_tablespace_iterator_interval_ms
@@ -517,6 +523,8 @@ select_into_disk_sync_delay
 sequence_read_skip_cache
 session_track_index
 session_track_index
+show_ipk_info
+show_ipk_info
 skip_replica_start
 skip_replica_start
 skip_slave_start

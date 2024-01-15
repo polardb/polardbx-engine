@@ -141,6 +141,10 @@ Columns::Columns() {
   m_target_def.add_where(
       "AND IS_VISIBLE_DD_OBJECT(tbl.hidden, col.hidden NOT IN ('Visible', "
       "'User'), col.options)");
+
+  /* RDS IPK : hide implicit column */
+  m_target_def.add_where("AND CAN_ACCESS_IMPLICIT_OBJECT(col.name)");
+
 }
 
 }  // namespace system_views

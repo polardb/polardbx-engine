@@ -82,6 +82,7 @@
 #include "sql/system_variables.h"
 #include "sql_string.h"
 #include "tztime.h"  // convert_time_zone_displacement
+#include "sql/sql_implicit_element.h"
 
 /**
   @addtogroup GROUP_PARSER
@@ -1786,7 +1787,10 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"INTERNAL_IS_MANDATORY_ROLE",
      SQL_FN_INTERNAL(Item_func_internal_is_mandatory_role, 2)},
     {"INTERNAL_IS_ENABLED_ROLE",
-     SQL_FN_INTERNAL(Item_func_internal_is_enabled_role, 2)}};
+     SQL_FN_INTERNAL(Item_func_internal_is_enabled_role, 2)},
+    {"CAN_ACCESS_IMPLICIT_OBJECT",
+     SQL_FN_INTERNAL(Item_func_can_access_implicit_object, 1)}
+    };
 
 using Native_functions_hash = std::unordered_map<std::string, Create_func *>;
 static const Native_functions_hash *native_functions_hash;

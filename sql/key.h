@@ -353,6 +353,14 @@ class KEY {
 
     m_in_memory_estimate = in_memory_estimate;
   }
+
+  /* RDS IPK : Implicit ATTR in KEY */
+ private:
+  bool m_is_implicit;
+
+ public:
+  void set_implicit() { m_is_implicit = true; }
+  bool is_implicit() const { return m_is_implicit; }
 };
 
 int find_ref_key(KEY *key, uint key_count, uchar *record, Field *field,

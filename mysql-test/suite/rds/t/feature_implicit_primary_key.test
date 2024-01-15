@@ -1,0 +1,147 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+connection master;
+
+set global implicit_primary_key=on;
+
+create database db1;
+use db1;
+
+create table t1(id1 int primary key, id2 int);
+
+insert into t1 values(1, 2);
+insert into t1 values(2, 3);
+
+
+set global implicit_primary_key=off;
+
+
+create table t2(id1 int, id2 int, col1 int) as select id1, id2 from t1;
+create table t3(id1 int, col1 int, id2 int) as select id1, id2 from t1;
+create table t4(col1 int, id1 int, id2 int) as select id1, id2 from t1;
+create table t5(col1 int, id1 int, id2 int) as select * from t1;
+
+select * from t2;
+select * from t3;
+select * from t4;
+select * from t5;
+
+show create table t2;
+show create table t3;
+show create table t4;
+show create table t5;
+
+set global implicit_primary_key=on;
+
+create table t21(id1 int, id2 int, col1 int) as select id1, id2 from t1;
+create table t31(id1 int, col1 int, id2 int) as select id1, id2 from t1;
+create table t41(col1 int, id1 int, id2 int) as select id1, id2 from t1;
+create table t51(col1 int, id1 int, id2 int) as select * from t1;
+
+
+select * from t21;
+select * from t31;
+select * from t41;
+select * from t51;
+
+show create table t21;
+show create table t31;
+show create table t41;
+show create table t51;
+
+
+set show_ipk_info=on;
+
+select * from t21;
+select * from t31;
+select * from t41;
+select * from t51;
+
+show create table t21;
+show create table t31;
+show create table t41;
+show create table t51;
+
+
+drop database db1;
+
+
+#test temporary table
+
+set global implicit_primary_key = on;
+create database db1;
+
+use db1;
+create temporary table t1(id int);
+set show_ipk_info=off;
+insert into t1 values(1);
+show create table t1;
+set show_ipk_info=on;
+insert into t1 values(1);
+show create table t1;
+
+alter table t1 add col1 int;
+show create table t1;
+
+set global implicit_primary_key = off;
+
+create temporary table t2(id int);
+set show_ipk_info=off;
+insert into t2 values(1);
+show create table t2;
+set show_ipk_info=on;
+insert into t2 values(1);
+show create table t2;
+
+alter table t2 add col1 int;
+show create table t2;
+
+drop table t1;
+drop table t2;
+drop database db1;
+
+
+
+#test natural join
+
+create database db1;
+use db1;
+set global implicit_primary_key = on;
+set show_ipk_info=off;
+create table t1(a int, b varchar(10));
+create table t2(a int, c varchar(10));
+
+insert into t1 values(1,'x');
+insert into t1 values(2,'y');
+insert into t2 values(2,'z');
+insert into t2 values(3,'w');
+
+set show_ipk_info = on;
+SELECT * FROM t1 NATURAL LEFT JOIN t2;
+set show_ipk_info = off;
+SELECT * FROM t1 NATURAL LEFT JOIN t2;
+
+
+set global implicit_primary_key = off;
+set show_ipk_info=off;
+create table t3(a int, b varchar(10));
+create table t4(a int, c varchar(10));
+
+insert into t3 values(1,'x');
+insert into t3 values(2,'y');
+insert into t4 values(2,'z');
+insert into t4 values(3,'w');
+
+set show_ipk_info = on;
+SELECT * FROM t3 NATURAL LEFT JOIN t4;
+set show_ipk_info = off;
+SELECT * FROM t3 NATURAL LEFT JOIN t4;
+
+
+drop database db1;
+
+
+
+set global implicit_primary_key=off;
+
+--source include/rpl_end.inc

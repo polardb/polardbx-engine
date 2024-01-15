@@ -1,0 +1,14 @@
+SET GLOBAL implicit_primary_key = ON;
+
+SET show_ipk_info = ON;
+CREATE TABLE test.t1 (id INT);
+SHOW CREATE TABLE test.t1;
+
+SET show_ipk_info = ON;
+select * from information_schema.TABLE_CONSTRAINTS where table_schema='test' and table_name='t1';
+
+SET show_ipk_info = OFF;
+select * from information_schema.TABLE_CONSTRAINTS where table_schema='test' and table_name='t1';
+
+DROP TABLE test.t1;
+SET GLOBAL implicit_primary_key = OFF;

@@ -192,6 +192,7 @@
 #include "typelib.h"
 
 #include "sql/recycle_bin/recycle_table.h"
+#include "sql/sql_implicit_common.h"
 
 namespace dd {
 class View;
@@ -8026,6 +8027,16 @@ bool mysql_prepare_create_table(
     add_functional_index_to_create_list().
   */
   int select_field_pos = alter_info->create_list.elements - select_field_count;
+
+  /**
+    RDS IPK :
+    Adding an implicit row id, if no primary/unique keys or
+    AUTO_INCREMENT field in this table.
+  */
+  if (is_support_and_need_implicit_ipk(thd, file, create_info, alter_info)) {
+    add_implicit_ipk(thd, alter_info, NULL, NULL);
+  }
+
   create_info->null_bits = 0;
   int field_no = 0;
   Create_field *sql_field;
@@ -14613,6 +14624,16 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
   List<Key_part_spec> key_parts;
   KEY *key_info = table->key_info;
 
+  /* RDS IPK : */
+  /* How many UNIQUE keys are exist in this table */
+  int exist_unique_key = 0;
+  /* How many UNIQUE keys will be added in this alter */
+  int added_unique_key = 0;
+  /* How many AUTO_INCREMENT fields are exist in this table */
+  int exist_auto_inc_field = 0;
+  /* How many AUTO_INCREMENT fields will be added in this alter */
+  int added_auto_inc_field = 0;
+
   DBUG_TRACE;
 
   /*
@@ -14632,7 +14653,11 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
     First collect all fields from table which isn't in drop_list
   */
   Field **f_ptr, *field;
+
   for (f_ptr = table->field; (field = *f_ptr); f_ptr++) {
+    /* RDS IPK : If this field is AUTO_INCREMENT type */
+    if (field->auto_flags & Field::NEXT_NUMBER) exist_auto_inc_field += 1;
+
     /* Check if field should be dropped */
     size_t i = 0;
     while (i < drop_list.size()) {
@@ -14642,6 +14667,9 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         /* Reset auto_increment value if it was dropped */
         if ((field->auto_flags & Field::NEXT_NUMBER) &&
             !(used_fields & HA_CREATE_USED_AUTO)) {
+
+          added_auto_inc_field -= 1;  // IPK: AUTO_INCREMENT field is dropped
+
           create_info->auto_increment_value = 0;
           create_info->used_fields |= HA_CREATE_USED_AUTO;
         }
@@ -14703,6 +14731,19 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         of the list for now. Their positions will be corrected later.
       */
       new_create_list.push_back(def);
+
+      // RDS IPK : adjust added_auto_inc_field
+      if (!def->after) {
+        /* RDS IPK : */
+        // Change from normal field to AUTO_INCREMENT field
+        if ((def->auto_flags & Field::NEXT_NUMBER) &&
+            !(field->auto_flags & Field::NEXT_NUMBER))
+          added_auto_inc_field += 1;
+        // Change from AUTO_INCREMENT field to normal field
+        else if (!(def->auto_flags & Field::NEXT_NUMBER) &&
+                 (field->auto_flags & Field::NEXT_NUMBER))
+          added_auto_inc_field -= 1;
+      }
 
       /*
         If the new column type is GEOMETRY (or a subtype) NOT NULL,
@@ -14771,6 +14812,14 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
     */
     if (def->change && !def->after) continue;
 
+
+    /**
+      RDS IPK :
+      If this is an AUTO_INCREMENT field,
+      then added_auto_inc_field should plus 1.
+    */
+    if (def->auto_flags & Field::NEXT_NUMBER) added_auto_inc_field += 1;
+
     /*
       New columns of type DATE/DATETIME/GEOMETRIC with NOT NULL constraint
       added as part of ALTER operation will generate zero date for DATE/
@@ -14823,9 +14872,32 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
       }
     }
 
-    if (!def->after)
-      new_create_list.push_back(def);
-    else {
+    if (!def->after) {
+      /* RDS IPK : */
+      // If implicit row id is exist, then move it to the last
+      if (is_handler_support_implicit_autoinc(table->file) &&
+          table->s->has_implicit_row_id) {
+        Create_field *find;
+        find_it.rewind();
+        // Search the implicit row id postion
+        while ((find = find_it++)) {
+          if (NAME_IS_IMPLICIT(find->field_name)) break;
+        }
+        // Found the implicit row id
+        if (find) {
+          // Remove it from create_list first
+          find_it.remove();
+          // Then adding the new column to the last
+          new_create_list.push_back(def);
+          // At last, putting the implicit row id in the last
+          new_create_list.push_back(find);
+        } else
+          // If no implicit row id be found, then putting new column in the last
+          new_create_list.push_back(def);
+      } else
+        // If no implicit row id in this table, then putting new column in the last
+        new_create_list.push_back(def);      
+    } else {
       const Create_field *find;
       if (def->change) {
         find_it.rewind();
@@ -14901,11 +14973,19 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
     const char *key_name = key_info->name;
     bool index_column_dropped = false;
     size_t drop_idx = 0;
+
+    /* RDS IPK : Collect PK/UK number */
+    if (key_info->flags & HA_NOSAME) exist_unique_key++;
+
     while (drop_idx < drop_list.size()) {
       const Alter_drop *drop = drop_list[drop_idx];
       if (drop->type == Alter_drop::KEY &&
           !my_strcasecmp(system_charset_info, key_name, drop->name))
+      {
+        /* RDS IPK : If dropped PK/UK, reduce the number */
+        if (key_info->flags & HA_NOSAME) added_unique_key--;
         break;
+      }
       drop_idx++;
     }
     if (drop_idx < drop_list.size()) {
@@ -15099,12 +15179,21 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
           thd->mem_root, key_type, to_lex_cstring(key_name), &key_create_info,
           (key_info->flags & HA_GENERATED_KEY), index_column_dropped,
           key_parts));
+    } else {
+      /* RDS IPK : If this key is unique, and all fields in the key is dropped,
+        then this key also will be dropped. */
+      if (key_info->flags & HA_NOSAME) added_unique_key--;
     }
   }
   {
     new_key_list.reserve(new_key_list.size() + alter_info->key_list.size());
-    for (size_t i = 0; i < alter_info->key_list.size(); i++)
+    for (size_t i = 0; i < alter_info->key_list.size(); i++) {
+      /* RDS IPK: If the new key is PK/UK */
+      if (alter_info->key_list[i]->type == KEYTYPE_PRIMARY ||
+          alter_info->key_list[i]->type == KEYTYPE_UNIQUE)
+        added_unique_key++;
       new_key_list.push_back(alter_info->key_list[i]);  // Add new keys
+    }
   }
 
   /*
@@ -15174,6 +15263,24 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
     my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), index_visibility_list[0]->name(),
              table->s->table_name.str);
     return true;
+  }
+
+  /**
+    RDS IPK :
+    If implicit_row_id=1 and this table supports AUTO_INCREMENT column,
+    then try to add implicit row id.
+  */
+  if (!deny_table_add_implicit_ipk(thd, table->file, alter_info) &&
+      !table->s->tmp_table && (exist_unique_key + added_unique_key <= 0) &&
+      (exist_auto_inc_field + added_auto_inc_field <= 0)) {
+    // no PK/UK in this table anymore
+    // And no AUTO_INCREMENT field in this table anymore
+    add_implicit_ipk(thd, alter_info, &new_create_list, &new_key_list);
+  } else if (table->s->has_implicit_row_id &&
+             (added_unique_key > 0 || added_auto_inc_field > 0)) {
+    // Table contains implicit row id
+    // And added PK/UK or added AUTO_INCREMENT field
+    drop_implicit_ipk(alter_info, create_info, &new_create_list, &new_key_list);
   }
 
   alter_info->create_list.swap(new_create_list);
@@ -18803,6 +18910,9 @@ bool mysql_checksum_table(THD *thd, Table_ref *tables,
 
             for (uint i = 0; i < t->s->fields; i++) {
               Field *f = t->field[i];
+
+              /* RDS IPK : */
+              if (item_is_implicit_and_hide<Field>(thd, f)) continue;
 
               /*
                 BLOB and VARCHAR have pointers in their field, we must convert

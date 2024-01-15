@@ -129,6 +129,7 @@
 
 #include "sql/ccl/ccl_table.h"
 #include "sql/common/reload.h"
+#include "sql/sql_implicit_common.h"
 
 /* INFORMATION_SCHEMA name */
 LEX_CSTRING INFORMATION_SCHEMA_NAME = {STRING_WITH_LEN("information_schema")};
@@ -1380,6 +1381,12 @@ static int make_field_from_frm(THD *thd, TABLE_SHARE *share,
     return 4;
   }
 
+  /* RDS IPK : */
+  if (NAME_IS_IMPLICIT(frm_context->fieldnames.type_names[field_idx])) {
+    reg_field->set_implicit();
+    share->has_implicit_row_id = true;
+  }
+
   reg_field->set_field_index(field_idx);
   reg_field->comment = comment;
   reg_field->gcol_info = gcol_info;
@@ -1898,6 +1905,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
 
   mysql_file_seek(file, pos + 288, MY_SEEK_SET, MYF(0));
 
+  share->has_implicit_row_id = false;
   share->fields = uint2korr(forminfo + 258);
   pos = uint2korr(forminfo + 260); /* Length of all screens */
   n_length = uint2korr(forminfo + 268);
@@ -2075,6 +2083,13 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
     for (uint key = 0; key < share->keys; key++, keyinfo++) {
       uint usable_parts = 0;
       keyinfo->name = share->keynames.type_names[key];
+
+      /* RDS IPK : */
+      if (NAME_IS_IMPLICIT(keyinfo->name)) {
+        keyinfo->set_implicit();
+        share->has_implicit_row_id = true;
+      }
+
       /* Fix fulltext keys for old .frm files */
       if (share->key_info[key].flags & HA_FULLTEXT)
         share->key_info[key].algorithm = HA_KEY_ALG_FULLTEXT;

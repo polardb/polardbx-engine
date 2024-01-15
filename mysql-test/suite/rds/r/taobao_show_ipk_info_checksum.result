@@ -1,0 +1,74 @@
+SHOW GLOBAL VARIABLES LIKE "implicit_primary_key";
+Variable_name	Value
+implicit_primary_key	OFF
+SHOW VARIABLES LIKE "show_ipk_info";
+Variable_name	Value
+show_ipk_info	OFF
+SET GLOBAL implicit_primary_key=1;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+CREATE TABLE a1 (c1 int, c2 char(4), c3 double) ENGINE=InnoDB DEFAULT
+CHARSET=latin1;
+SET GLOBAL implicit_primary_key=0;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+CREATE TABLE a2 (c1 int, c2 char(4), c3 double) ENGINE=InnoDB DEFAULT
+CHARSET=latin1;
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+INSERT INTO a1 (c1, c2, c3) VALUES(1, 'aaaa', 11.11);
+INSERT INTO a1 (c1, c2, c3) VALUES(2, 'bbbb', 22.22);
+INSERT INTO a1 (c1, c2, c3) VALUES(3, 'cccc', 33.33);
+INSERT INTO a1 (c1, c2, c3) VALUES(4, 'dddd', 44.44);
+INSERT INTO a1 (c1, c2, c3) VALUES(5, 'eeee', 55.55);
+INSERT INTO a2 (c1, c2, c3) SELECT c1, c2, c3 FROM a1;
+"2 tables should have the same data & checksum"
+SET show_ipk_info=0;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT * FROM a1;
+c1	c2	c3
+1	aaaa	11.11
+2	bbbb	22.22
+3	cccc	33.33
+4	dddd	44.44
+5	eeee	55.55
+SELECT * FROM a2;
+c1	c2	c3
+1	aaaa	11.11
+2	bbbb	22.22
+3	cccc	33.33
+4	dddd	44.44
+5	eeee	55.55
+CHECKSUM TABLE a1;
+Table	Checksum
+test.a1	3622009542
+CHECKSUM TABLE a2;
+Table	Checksum
+test.a2	3622009542
+"a1 table will calc implicit primary key in checksum()"
+SET show_ipk_info=1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+SELECT * FROM a1;
+c1	c2	c3	__#alibaba_rds_row_id#__
+1	aaaa	11.11	1
+2	bbbb	22.22	2
+3	cccc	33.33	3
+4	dddd	44.44	4
+5	eeee	55.55	5
+SELECT * FROM a2;
+c1	c2	c3
+1	aaaa	11.11
+2	bbbb	22.22
+3	cccc	33.33
+4	dddd	44.44
+5	eeee	55.55
+CHECKSUM TABLE a1;
+Table	Checksum
+test.a1	3131179014
+CHECKSUM TABLE a2;
+Table	Checksum
+test.a2	3622009542
+DROP TABLE a1, a2;

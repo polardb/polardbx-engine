@@ -1,0 +1,125 @@
+SET GLOBAL implicit_primary_key=off;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SET show_ipk_info=on;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE sales (
+amount DOUBLE NOT NULL,
+order_day DATETIME NOT NULL
+) ENGINE=Innodb PARTITION BY RANGE(YEAR(order_day)) (
+PARTITION p_2010 VALUES LESS THAN (2010),
+PARTITION p_2011 VALUES LESS THAN (2011),
+PARTITION p_2012 VALUES LESS THAN (2012));
+SET GLOBAL implicit_primary_key=on;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+ALTER TABLE sales ADD PARTITION (PARTITION p_2014 VALUES LESS THAN (2014));
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`order_day`))
+(PARTITION p_2010 VALUES LESS THAN (2010) ENGINE = InnoDB,
+ PARTITION p_2011 VALUES LESS THAN (2011) ENGINE = InnoDB,
+ PARTITION p_2012 VALUES LESS THAN (2012) ENGINE = InnoDB,
+ PARTITION p_2014 VALUES LESS THAN (2014) ENGINE = InnoDB) */
+ALTER TABLE sales REORGANIZE PARTITION p_2012, p_2014 INTO (PARTITION p_2014 VALUES LESS THAN (2014));
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`order_day`))
+(PARTITION p_2010 VALUES LESS THAN (2010) ENGINE = InnoDB,
+ PARTITION p_2011 VALUES LESS THAN (2011) ENGINE = InnoDB,
+ PARTITION p_2014 VALUES LESS THAN (2014) ENGINE = InnoDB) */
+ALTER TABLE sales drop PARTITION p_2014;
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`order_day`))
+(PARTITION p_2010 VALUES LESS THAN (2010) ENGINE = InnoDB,
+ PARTITION p_2011 VALUES LESS THAN (2011) ENGINE = InnoDB) */
+ALTER TABLE sales check PARTITION p_2010;
+Table	Op	Msg_type	Msg_text
+test.sales	check	status	OK
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`order_day`))
+(PARTITION p_2010 VALUES LESS THAN (2010) ENGINE = InnoDB,
+ PARTITION p_2011 VALUES LESS THAN (2011) ENGINE = InnoDB) */
+ALTER TABLE sales analyze PARTITION p_2010;
+Table	Op	Msg_type	Msg_text
+test.sales	analyze	status	OK
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`order_day`))
+(PARTITION p_2010 VALUES LESS THAN (2010) ENGINE = InnoDB,
+ PARTITION p_2011 VALUES LESS THAN (2011) ENGINE = InnoDB) */
+ALTER TABLE sales REMOVE PARTITIONING;
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE sales;
+SET GLOBAL implicit_primary_key=off;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SET show_ipk_info=on;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE sales (
+amount DOUBLE NOT NULL,
+order_day DATETIME NOT NULL
+) ENGINE=Innodb PARTITION BY RANGE(YEAR(order_day)) (
+PARTITION p_2010 VALUES LESS THAN (2010),
+PARTITION p_2011 VALUES LESS THAN (2011),
+PARTITION p_2012 VALUES LESS THAN (2012));
+SET GLOBAL implicit_primary_key=on;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`order_day`))
+(PARTITION p_2010 VALUES LESS THAN (2010) ENGINE = InnoDB,
+ PARTITION p_2011 VALUES LESS THAN (2011) ENGINE = InnoDB,
+ PARTITION p_2012 VALUES LESS THAN (2012) ENGINE = InnoDB) */
+alter table sales add id int;
+SHOW CREATE TABLE sales;
+Table	Create Table
+sales	CREATE TABLE `sales` (
+  `amount` double NOT NULL,
+  `order_day` datetime NOT NULL,
+  `id` int DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (year(`order_day`))
+(PARTITION p_2010 VALUES LESS THAN (2010) ENGINE = InnoDB,
+ PARTITION p_2011 VALUES LESS THAN (2011) ENGINE = InnoDB,
+ PARTITION p_2012 VALUES LESS THAN (2012) ENGINE = InnoDB) */
+SET GLOBAL implicit_primary_key=off;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+DROP TABLE sales;

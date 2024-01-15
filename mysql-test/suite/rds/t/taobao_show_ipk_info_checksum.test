@@ -1,0 +1,34 @@
+SHOW GLOBAL VARIABLES LIKE "implicit_primary_key";
+SHOW VARIABLES LIKE "show_ipk_info";
+
+SET GLOBAL implicit_primary_key=1;
+CREATE TABLE a1 (c1 int, c2 char(4), c3 double) ENGINE=InnoDB DEFAULT
+CHARSET=latin1;
+SET GLOBAL implicit_primary_key=0;
+CREATE TABLE a2 (c1 int, c2 char(4), c3 double) ENGINE=InnoDB DEFAULT
+CHARSET=latin1;
+
+SET show_ipk_info=1;
+INSERT INTO a1 (c1, c2, c3) VALUES(1, 'aaaa', 11.11);
+INSERT INTO a1 (c1, c2, c3) VALUES(2, 'bbbb', 22.22);
+INSERT INTO a1 (c1, c2, c3) VALUES(3, 'cccc', 33.33);
+INSERT INTO a1 (c1, c2, c3) VALUES(4, 'dddd', 44.44);
+INSERT INTO a1 (c1, c2, c3) VALUES(5, 'eeee', 55.55);
+
+INSERT INTO a2 (c1, c2, c3) SELECT c1, c2, c3 FROM a1;
+
+--echo "2 tables should have the same data & checksum"
+SET show_ipk_info=0;
+SELECT * FROM a1;
+SELECT * FROM a2;
+CHECKSUM TABLE a1;
+CHECKSUM TABLE a2;
+
+--echo "a1 table will calc implicit primary key in checksum()"
+SET show_ipk_info=1;
+SELECT * FROM a1;
+SELECT * FROM a2;
+CHECKSUM TABLE a1;
+CHECKSUM TABLE a2;
+
+DROP TABLE a1, a2;

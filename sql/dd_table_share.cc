@@ -91,6 +91,7 @@
 #include "typelib.h"
 
 #include "sql/sequence_common.h"  // Sequence_property
+#include "sql/sql_implicit_common.h"
 
 namespace histograms {
 class Histogram;
@@ -1003,6 +1004,12 @@ static bool fill_column_from_dd(THD *thd, TABLE_SHARE *share,
   reg_field->set_field_index(field_nr);
   reg_field->stored_in_db = true;
 
+  /* RDS IPK : Set implicit ATTR within TABLE_SHARE and Field */
+  if (NAME_IS_IMPLICIT(reg_field->field_name)) {
+    reg_field->set_implicit();
+    share->has_implicit_row_id = true;
+  }
+
   // Handle generated columns
   if (!col_obj->is_generation_expression_null()) {
     Value_generator *gcol_info = new (&share->mem_root) Value_generator();
@@ -1288,6 +1295,12 @@ static bool fill_index_from_dd(THD *thd, TABLE_SHARE *share,
     } else
       share->keynames.type_names[key_nr] = nullptr;
     // share->keynames.count= key_nr+1;
+  }
+
+  /* RDS IPK : Set implicit ATTR within KEY */
+  if (NAME_IS_IMPLICIT(keyinfo->name)) {
+    keyinfo->set_implicit();
+    share->has_implicit_row_id = true;
   }
 
   // Index algorithm

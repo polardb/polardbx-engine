@@ -57,6 +57,7 @@
 
 #include "sql/replica_read_manager.h"
 #include "sql/xa/lizard_xa_trx.h"
+#include "sql/sql_implicit_element.h"
 
 /* Global scope variables */
 char innodb_version[SERVER_VERSION_LENGTH];
@@ -578,3 +579,20 @@ static Sys_var_bool Sys_enable_udf_bloomfilter_xxhash(
 
 static Sys_var_deprecated_alias Sys_udf_bloomfilter_xxhash(
     "udf_bloomfilter_xxhash", Sys_enable_udf_bloomfilter_xxhash);
+
+static Sys_var_bool Sys_enable_implicit_row_id(
+    "enable_implicit_primary_key",
+    "MySQL add the primary key for every tables "
+    "that haven't any unique indexes automaticly",
+    GLOBAL_VAR(opt_enable_implicit_row_id), CMD_LINE(OPT_ARG), DEFAULT(0));
+
+static Sys_var_deprecated_alias Sys_implicit_row_id(
+    "implicit_primary_key", Sys_enable_implicit_row_id);
+
+static Sys_var_bool Sys_enable_show_ipk_info(
+    "enable_show_ipk_info", "Show everything about implicit key info",
+    SESSION_VAR(opt_enable_show_ipk_info), CMD_LINE(OPT_ARG), DEFAULT(0), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_deprecated_alias Sys_show_ipk_info(
+    "show_ipk_info", Sys_enable_show_ipk_info);

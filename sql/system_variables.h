@@ -408,6 +408,8 @@ struct System_variables {
 
   bool sql_require_primary_key;
 
+  bool opt_enable_show_ipk_info;
+
   /**
     @sa Sys_sql_generate_invisible_primary_key
   */

@@ -716,6 +716,8 @@ SET(SQL_SHARED_SOURCES
   consensus_log_index.cc
   consensus_recovery_manager.cc
 
+  sql_implicit_common.cc
+  sql_implicit_element.cc
   xrpc/xrpc_proc.cc
   )
 

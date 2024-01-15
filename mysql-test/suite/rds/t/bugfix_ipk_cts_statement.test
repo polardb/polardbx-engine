@@ -1,0 +1,34 @@
+--source include/have_binlog_format_row.inc
+
+call mtr.add_suppression("Unsafe statement written to the binary log");
+
+connection default;
+
+select @@global.implicit_primary_key into @save_implicit_primary_key;
+
+create database my_db;
+use my_db;
+
+create table t1(id int, create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, name varchar(30), primary key(id)) engine=innodb;
+
+insert into t1 values (1, '2018-01-01 00:00:00', 'hello');
+
+set global implicit_primary_key = off;
+create  table t2 as select create_time, name from t1;
+
+set global implicit_primary_key = on;
+create  table t3 as select create_time, name from t1;
+
+select * from t2;
+
+select * from t3;
+
+set session show_ipk_info = on;
+show create table t2;
+show create table t3;
+
+drop table t1;
+drop table t2;
+drop table t3;
+drop database my_db;
+set @@global.implicit_primary_key = @save_implicit_primary_key;

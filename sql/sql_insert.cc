@@ -111,6 +111,8 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 
+#include "sql/sql_implicit_common.h"
+
 namespace dd {
 class Table;
 }  // namespace dd
@@ -191,6 +193,10 @@ static bool check_insert_fields(THD *thd, Table_ref *table_list,
 
     for (it.set(table_list); !it.end_of_fields(); it.next()) {
       if (it.field()->is_hidden()) continue;
+
+      /* RDS IPK : Skip the implicit field if insert_field_list.elements == 0 */
+      if ((item_is_implicit_and_hide<Field>(thd, it.field()))) continue;
+
       Item *item = it.create_item(thd);
       if (item == nullptr) return true;
       fields->push_back(item);
@@ -2911,6 +2917,14 @@ bool Query_result_create::create_table_for_query_block(THD *thd) {
   }
   // First field to copy
   table_fields = table->field + (field_count - visible_select_exprs);
+
+  /**
+    RDS IPK :
+    If the table contains IPK, change the first field to copy,
+    skip the ipk.
+  */
+  if (TABLE_HAS_IPK_AND_HIDDEN(thd, table)) table_fields -= 1;
+
   for (Field **f = table_fields; *f != nullptr; f++) {
     if ((*f)->gcol_info && !(*f)->is_field_for_functional_index()) {
       /*

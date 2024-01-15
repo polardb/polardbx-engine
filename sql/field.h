@@ -1831,6 +1831,14 @@ class Field {
   uchar *pack_int64(uchar *to, const uchar *from, size_t max_length) const;
 
   const uchar *unpack_int64(uchar *to, const uchar *from) const;
+
+  /* RDS IPK : Implicit ATTR in Field */
+ private:
+  bool m_is_implicit;
+
+ public:
+  void set_implicit() { m_is_implicit = true; }
+  bool is_implicit() const { return m_is_implicit; }
 };
 
 /**

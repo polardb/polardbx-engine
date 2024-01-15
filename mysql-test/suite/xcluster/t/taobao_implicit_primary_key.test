@@ -1,0 +1,390 @@
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+
+
+connection conn1;
+SHOW GLOBAL VARIABLES LIKE "implicit_primary_key";
+SHOW VARIABLES LIKE "show_ipk_info";
+
+connection conn2;
+SHOW GLOBAL VARIABLES LIKE "implicit_primary_key";
+SHOW VARIABLES LIKE "show_ipk_info";
+
+# Test CREATE/ALTER TABLE
+connection conn1;
+SET show_ipk_info=0;
+CREATE TABLE no_pk (a int, b int) ENGINE=MyISAM;
+CREATE TABLE has_uk (a int, b int, unique key a(a)) ENGINE=MyISAM;
+CREATE TABLE has_inc (a int auto_increment, b int, key a(a)) ENGINE=MyISAM;
+SET show_ipk_info=1;
+SHOW CREATE TABLE no_pk;
+SHOW CREATE TABLE has_uk;
+SHOW CREATE TABLE has_inc;
+
+SET show_ipk_info=0;
+ALTER TABLE no_pk ADD c int;
+ALTER TABLE no_pk ADD id int auto_increment, ADD PRIMARY KEY (id);
+ALTER TABLE has_uk DROP KEY a;
+ALTER TABLE has_inc MODIFY a int;
+
+SET show_ipk_info=1;
+SHOW CREATE TABLE no_pk;
+SHOW CREATE TABLE has_uk;
+SHOW CREATE TABLE has_inc;
+
+SET show_ipk_info=0;
+DROP TABLE has_uk;
+DROP TABLE has_inc;
+
+# TEST INSERT
+ALTER TABLE no_pk DROP id;
+DESC no_pk;
+SHOW COLUMNS FROM no_pk;
+
+INSERT INTO no_pk VALUES (1,2,3);
+INSERT INTO no_pk(b,c) VALUES (4,5);
+SELECT * FROM no_pk;
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+
+SET show_ipk_info=1;
+INSERT INTO no_pk VALUES (1,2,3,100);
+INSERT INTO no_pk VALUES (1,2,3,101),(4,5,6,102);
+SELECT * FROM no_pk;
+
+# TEST EXPLAIN
+SET show_ipk_info=0;
+EXPLAIN SELECT * FROM no_pk WHERE `__#alibaba_rds_row_id#__`=1;
+SET show_ipk_info=1;
+EXPLAIN SELECT * FROM no_pk WHERE `__#alibaba_rds_row_id#__`=1;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=0;
+SELECT * FROM no_pk;
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+
+connection conn1;
+SET show_ipk_info=0;
+CREATE TABLE no_pk2 SELECT * FROM no_pk;
+CREATE TABLE no_pk3 LIKE no_pk;
+SET show_ipk_info=1;
+SHOW CREATE TABLE no_pk2;
+SHOW CREATE TABLE no_pk3;
+SELECT * FROM no_pk2;
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=1;
+SHOW CREATE TABLE no_pk2;
+SHOW CREATE TABLE no_pk3;
+SELECT * FROM no_pk2;
+SELECT `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+
+# TEST INSERT .. SELECT ..
+connection conn1;
+SET show_ipk_info=0;
+INSERT INTO no_pk2 SELECT * FROM no_pk;
+INSERT INTO no_pk2 (b,c) SELECT b,c FROM no_pk;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+
+# Test UPDATE/DELETE
+connection conn1;
+SET show_ipk_info=0;
+DELETE FROM no_pk WHERE a IS NULL;
+UPDATE no_pk SET a=10;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+
+# TEST PREPARE
+connection conn1;
+SET show_ipk_info=0;
+PREPARE s1 FROM 'insert INTO no_pk2 values (@x:=@x+1, ?, ?)';
+SET @x=1;
+EXECUTE s1 USING @x, @x;
+DEALLOCATE PREPARE s1;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk2;
+
+connection conn1;
+SET show_ipk_info=0;
+CREATE TABLE t1 (a varchar(100)) ENGINE=MyISAM;
+#PREPARE s2 FROM 'insert INTO t1 values(?)';
+#PREPARE s3 FROM 'insert INTO t1 select concat("hello",?)';
+#SET @string="emergency_1_";
+#EXECUTE s2 USING @string;
+#EXECUTE s3 USING @string;
+#DEALLOCATE PREPARE s2;
+#DEALLOCATE PREPARE s3;
+#SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1;
+#
+#connection conn2;
+#--source include/wait_follower_catchup.inc
+
+#SET show_ipk_info=0;
+#SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1;
+
+DROP TABLE t1;
+
+# TEST LOAD
+connection conn1;
+SET show_ipk_info=0;
+CREATE TABLE t1 (a date, b date, c date not null, d date);
+LOAD DATA INFILE '../../std_data/loaddata1.dat' IGNORE INTO TABLE t1 FIELDS TERMINATED BY ',';
+LOAD DATA INFILE '../../std_data/loaddata1.dat' INTO TABLE t1 FIELDS TERMINATED BY ',' IGNORE 2 LINES;
+SELECT * FROM t1;
+TRUNCATE TABLE t1;
+
+LOAD DATA INFILE '../../std_data/loaddata1.dat' IGNORE INTO TABLE t1 FIELDS TERMINATED BY ',' LINES STARTING BY ',' (b,c,d);
+SELECT * FROM t1;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1;
+
+
+# TEST SHOW
+connection conn1;
+SET show_ipk_info=1;
+SHOW INDEX FROM t1;
+SHOW COLUMNS FROM t1;
+SHOW CREATE TABLE t1;
+DESC t1;
+SELECT * FROM information_schema.columns
+WHERE TABLE_schema='test'
+AND TABLE_name='t1' order by ORDINAL_POSITION;
+SET show_ipk_info=0;
+SHOW INDEX FROM t1;
+SHOW COLUMNS FROM t1;
+SHOW CREATE TABLE t1;
+DESC t1;
+SELECT * FROM information_schema.columns
+WHERE TABLE_schema='test'
+AND TABLE_name='t1';
+
+# When we disable implicit priamry key
+SHOW CREATE TABLE no_pk;
+SET GLOBAL implicit_primary_key=0;
+SELECT * FROM no_pk;
+INSERT INTO no_pk VALUES (3,2,1);
+INSERT INTO no_pk(b,c) VALUES (5,4);
+SELECT * FROM no_pk;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM no_pk;
+
+connection conn2;
+SET show_ipk_info=0;
+SET GLOBAL implicit_primary_key=0;
+
+connection conn1;
+SET show_ipk_info=1;
+ALTER TABLE no_pk ADD pk int auto_increment, ADD UNIQUE uk(pk);
+SHOW CREATE TABLE no_pk;
+ALTER TABLE no_pk DROP pk;
+SHOW CREATE TABLE no_pk;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=1;
+SHOW CREATE TABLE no_pk;
+SELECT * FROM no_pk;
+SET show_ipk_info=0;
+
+# Test UPDATE/DELETE
+connection conn1;
+SET show_ipk_info=0;
+DELETE FROM no_pk WHERE a IS NULL;
+UPDATE no_pk SET a=10;
+SELECT * FROM no_pk;
+SET GLOBAL implicit_primary_key=1;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+SET show_ipk_info=0;
+SELECT * FROM no_pk;
+SET GLOBAL implicit_primary_key=1;
+
+# Begin to test SP
+--disable_warnings
+connection conn1;
+SET show_ipk_info=0;
+DROP procedure if exists p1;
+DROP procedure if exists p2;
+DROP TABLE if exists t1;
+--enable_warnings
+create TABLE t1 (a int, b int);
+
+# SP: Test simple variables use.
+delimiter //;
+create procedure p1() 
+begin
+  declare spv int default 0;
+  while spv < 5 do 
+    insert INTO t1 values(spv+1, spv);
+    set spv=spv+1;
+  end while;
+  while spv < 10 do 
+    insert INTO t1(b) values(spv+1);
+    set spv=spv+1;
+  end while;
+end//
+delimiter ;//
+
+SET show_ipk_info=1;
+--error 1136
+call p1();
+SET show_ipk_info=0;
+call p1();
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+connection conn2;
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1 ORDER BY a;
+connection conn1;
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t1 ORDER BY a;
+
+# SP: Test SP variable name
+connection conn1;
+SET show_ipk_info=0;
+delimiter //;
+create procedure p2() 
+begin
+  declare a int default 4;
+  declare spv int default 0;
+  create TABLE t2 as select a, 10 as b;
+  while spv < 5 do 
+    insert INTO t2(a) values(spv+1);
+    insert INTO t2(b) values(spv+1);
+    insert INTO t2 values(spv, spv);
+    set spv=spv+1;
+  end while;
+end//
+delimiter ;//
+
+SET show_ipk_info=1;
+--error 1136
+call p2();
+SET show_ipk_info=0;
+DROP TABLE t2;
+call p2();
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t2 ORDER BY a;
+
+--source include/wait_follower_catchup.inc
+
+connection conn2;
+
+connection conn2;
+SET show_ipk_info=0;
+SELECT *, `__#alibaba_rds_row_id#__` AS row_id FROM t2 ORDER BY a;
+
+# Test view
+connection conn1;
+SET show_ipk_info=0;
+DROP TABLE if exists t1;
+DROP TABLE if exists t2;
+create TABLE t1 (a int, primary key (a), b int);
+create TABLE t2 (a int, primary key (a), b int);
+insert INTO t2 values (1000, 2000);
+create view v3 (a,b) as select t1.a as a, t2.a as b FROM t1, t2;
+-- error ER_VIEW_NO_INSERT_FIELD_LIST
+insert INTO v3 select * FROM t2;
+
+# Test PARTITIONING
+connection conn1;
+SET show_ipk_info=1;
+DROP TABLE if exists t1;
+CREATE TABLE t1 (
+    id INT,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    signed DATE
+) PARTITION BY HASH(MONTH(signed))
+  PARTITIONS 12;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 COALESCE PARTITION 4;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 REMOVE PARTITIONING;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 PARTITION BY HASH(MONTH(signed)) PARTITIONS 12;
+SHOW CREATE TABLE t1;
+
+CREATE TABLE log_sync_operationnew (
+    LogTime TIMESTAMP NOT NULL DEFAULT '2000-01-01 00:00:00',
+    UserAgent VARCHAR(256) COLLATE utf8_bin DEFAULT NULL,
+    KEY IX_LogTime (LogTime)
+) ENGINE=INNODB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+PARTITION BY RANGE(UNIX_TIMESTAMP(LogTime))
+  (
+   PARTITION p201407 VALUES LESS THAN (UNIX_TIMESTAMP('2014-08-01')),
+   PARTITION p201412 VALUES LESS THAN (UNIX_TIMESTAMP('2015-01-01')),
+   PARTITION p201501 VALUES LESS THAN (UNIX_TIMESTAMP('2015-02-01')),
+   PARTITION p201502 VALUES LESS THAN (UNIX_TIMESTAMP('2015-03-01')),
+   PARTITION p201503 VALUES LESS THAN (UNIX_TIMESTAMP('2015-04-01')),
+   PARTITION future VALUES LESS THAN MAXVALUE
+  );
+SHOW CREATE TABLE log_sync_operationnew;
+
+CREATE TABLE log_sync_operation (
+    LogTime TIMESTAMP NOT NULL DEFAULT '2000-01-01 00:00:00',
+    UserAgent VARCHAR(256) COLLATE utf8_bin DEFAULT NULL,
+    KEY IX_LogTime (LogTime)
+) ENGINE=INNODB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+SHOW CREATE TABLE log_sync_operation;
+
+SET show_ipk_info=0;
+INSERT INTO log_sync_operation VALUES('2014-08-02 00:00:00','useragent');
+SELECT * FROM log_sync_operation;
+
+ALTER TABLE log_sync_operationnew EXCHANGE PARTITION p201412 WITH TABLE log_sync_operation;
+SHOW CREATE TABLE log_sync_operationnew;
+SHOW CREATE TABLE log_sync_operation;
+
+SELECT *,`__#alibaba_rds_row_id#__` FROM log_sync_operationnew;
+SELECT *,`__#alibaba_rds_row_id#__` FROM log_sync_operation;
+
+# Finish
+connection conn1;
+SET show_ipk_info=1;
+DROP DATABASE test;
+CREATE DATABASE test;

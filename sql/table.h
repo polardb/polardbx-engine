@@ -1291,6 +1291,8 @@ struct TABLE_SHARE {
 
   /** Sequence attributes represent that it is sequence table */
   Sequence_property *sequence_property;
+
+  bool has_implicit_row_id{false}; /* Whether include ipk column */
 };
 
 /**

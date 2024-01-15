@@ -99,6 +99,10 @@ Statistics_base::Statistics_base() {
   m_target_def.add_where(
       "AND IS_VISIBLE_DD_OBJECT(tbl.hidden, "
       "idx.hidden OR icu.hidden, idx.options)");
+
+  /* RDS IPK : hide implicit column and index */
+  m_target_def.add_where("AND CAN_ACCESS_IMPLICIT_OBJECT(idx.name)");
+  m_target_def.add_where("AND CAN_ACCESS_IMPLICIT_OBJECT(col.name)");
 }
 
 Statistics::Statistics() {

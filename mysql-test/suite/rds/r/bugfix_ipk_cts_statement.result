@@ -1,0 +1,46 @@
+call mtr.add_suppression("Unsafe statement written to the binary log");
+select @@global.implicit_primary_key into @save_implicit_primary_key;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+create database my_db;
+use my_db;
+create table t1(id int, create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, name varchar(30), primary key(id)) engine=innodb;
+insert into t1 values (1, '2018-01-01 00:00:00', 'hello');
+set global implicit_primary_key = off;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+create  table t2 as select create_time, name from t1;
+set global implicit_primary_key = on;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+create  table t3 as select create_time, name from t1;
+select * from t2;
+create_time	name
+2018-01-01 00:00:00	hello
+select * from t3;
+create_time	name
+2018-01-01 00:00:00	hello
+set session show_ipk_info = on;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `name` varchar(30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `name` varchar(30) DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table t1;
+drop table t2;
+drop table t3;
+drop database my_db;
+set @@global.implicit_primary_key = @save_implicit_primary_key;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.

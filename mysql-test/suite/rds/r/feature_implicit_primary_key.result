@@ -1,0 +1,255 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+set global implicit_primary_key=on;
+create database db1;
+use db1;
+create table t1(id1 int primary key, id2 int);
+insert into t1 values(1, 2);
+insert into t1 values(2, 3);
+set global implicit_primary_key=off;
+create table t2(id1 int, id2 int, col1 int) as select id1, id2 from t1;
+create table t3(id1 int, col1 int, id2 int) as select id1, id2 from t1;
+create table t4(col1 int, id1 int, id2 int) as select id1, id2 from t1;
+create table t5(col1 int, id1 int, id2 int) as select * from t1;
+select * from t2;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+select * from t3;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+select * from t4;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+select * from t5;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+set global implicit_primary_key=on;
+create table t21(id1 int, id2 int, col1 int) as select id1, id2 from t1;
+create table t31(id1 int, col1 int, id2 int) as select id1, id2 from t1;
+create table t41(col1 int, id1 int, id2 int) as select id1, id2 from t1;
+create table t51(col1 int, id1 int, id2 int) as select * from t1;
+select * from t21;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+select * from t31;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+select * from t41;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+select * from t51;
+col1	id1	id2
+NULL	1	2
+NULL	2	3
+show create table t21;
+Table	Create Table
+t21	CREATE TABLE `t21` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t31;
+Table	Create Table
+t31	CREATE TABLE `t31` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t41;
+Table	Create Table
+t41	CREATE TABLE `t41` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t51;
+Table	Create Table
+t51	CREATE TABLE `t51` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+set show_ipk_info=on;
+select * from t21;
+col1	id1	id2	__#alibaba_rds_row_id#__
+NULL	1	2	1
+NULL	2	3	2
+select * from t31;
+col1	id1	id2	__#alibaba_rds_row_id#__
+NULL	1	2	1
+NULL	2	3	2
+select * from t41;
+col1	id1	id2	__#alibaba_rds_row_id#__
+NULL	1	2	1
+NULL	2	3	2
+select * from t51;
+col1	id1	id2	__#alibaba_rds_row_id#__
+NULL	1	2	1
+NULL	2	3	2
+show create table t21;
+Table	Create Table
+t21	CREATE TABLE `t21` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t31;
+Table	Create Table
+t31	CREATE TABLE `t31` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t41;
+Table	Create Table
+t41	CREATE TABLE `t41` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table t51;
+Table	Create Table
+t51	CREATE TABLE `t51` (
+  `col1` int(11) DEFAULT NULL,
+  `id1` int(11) DEFAULT NULL,
+  `id2` int(11) DEFAULT NULL,
+  `__#alibaba_rds_row_id#__` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'Implicit Primary Key by RDS',
+  KEY `__#alibaba_rds_row_id#__` (`__#alibaba_rds_row_id#__`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop database db1;
+set global implicit_primary_key = on;
+create database db1;
+use db1;
+create temporary table t1(id int);
+set show_ipk_info=off;
+insert into t1 values(1);
+show create table t1;
+Table	Create Table
+t1	CREATE TEMPORARY TABLE `t1` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+set show_ipk_info=on;
+insert into t1 values(1);
+show create table t1;
+Table	Create Table
+t1	CREATE TEMPORARY TABLE `t1` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+alter table t1 add col1 int;
+show create table t1;
+Table	Create Table
+t1	CREATE TEMPORARY TABLE `t1` (
+  `id` int(11) DEFAULT NULL,
+  `col1` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+set global implicit_primary_key = off;
+create temporary table t2(id int);
+set show_ipk_info=off;
+insert into t2 values(1);
+show create table t2;
+Table	Create Table
+t2	CREATE TEMPORARY TABLE `t2` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+set show_ipk_info=on;
+insert into t2 values(1);
+show create table t2;
+Table	Create Table
+t2	CREATE TEMPORARY TABLE `t2` (
+  `id` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+alter table t2 add col1 int;
+show create table t2;
+Table	Create Table
+t2	CREATE TEMPORARY TABLE `t2` (
+  `id` int(11) DEFAULT NULL,
+  `col1` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table t1;
+drop table t2;
+drop database db1;
+create database db1;
+use db1;
+set global implicit_primary_key = on;
+set show_ipk_info=off;
+create table t1(a int, b varchar(10));
+create table t2(a int, c varchar(10));
+insert into t1 values(1,'x');
+insert into t1 values(2,'y');
+insert into t2 values(2,'z');
+insert into t2 values(3,'w');
+set show_ipk_info = on;
+SELECT * FROM t1 NATURAL LEFT JOIN t2;
+a	__#alibaba_rds_row_id#__	b	c
+1	1	x	NULL
+2	2	y	NULL
+set show_ipk_info = off;
+SELECT * FROM t1 NATURAL LEFT JOIN t2;
+a	b	c
+2	y	z
+1	x	NULL
+set global implicit_primary_key = off;
+set show_ipk_info=off;
+create table t3(a int, b varchar(10));
+create table t4(a int, c varchar(10));
+insert into t3 values(1,'x');
+insert into t3 values(2,'y');
+insert into t4 values(2,'z');
+insert into t4 values(3,'w');
+set show_ipk_info = on;
+SELECT * FROM t3 NATURAL LEFT JOIN t4;
+a	b	c
+2	y	z
+1	x	NULL
+set show_ipk_info = off;
+SELECT * FROM t3 NATURAL LEFT JOIN t4;
+a	b	c
+2	y	z
+1	x	NULL
+drop database db1;
+set global implicit_primary_key=off;
+include/rpl_end.inc

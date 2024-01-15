@@ -1,0 +1,77 @@
+SET GLOBAL implicit_primary_key=off;
+SET show_ipk_info=on;
+
+CREATE TABLE sales (
+    amount DOUBLE NOT NULL,
+    order_day DATETIME NOT NULL
+) ENGINE=Innodb PARTITION BY RANGE(YEAR(order_day)) (
+    PARTITION p_2010 VALUES LESS THAN (2010),
+    PARTITION p_2011 VALUES LESS THAN (2011),
+    PARTITION p_2012 VALUES LESS THAN (2012));
+
+SET GLOBAL implicit_primary_key=on;
+
+#
+#case1: add partition
+#
+ALTER TABLE sales ADD PARTITION (PARTITION p_2014 VALUES LESS THAN (2014));
+SHOW CREATE TABLE sales;
+
+#
+#case2: REORGANIZE PARTITION
+#
+ALTER TABLE sales REORGANIZE PARTITION p_2012, p_2014 INTO (PARTITION p_2014 VALUES LESS THAN (2014));
+SHOW CREATE TABLE sales;
+
+#
+#case3: drop partition
+#
+ALTER TABLE sales drop PARTITION p_2014;
+SHOW CREATE TABLE sales;
+
+
+#
+#case4: check partition
+#
+ALTER TABLE sales check PARTITION p_2010;
+SHOW CREATE TABLE sales;
+
+
+#
+#case5: analyze partition
+#
+ALTER TABLE sales analyze PARTITION p_2010;
+SHOW CREATE TABLE sales;
+
+#
+#case6: REMOVE PARTITIONING
+#
+ALTER TABLE sales REMOVE PARTITIONING;
+SHOW CREATE TABLE sales;
+
+DROP TABLE sales;
+
+
+#
+#recover the table.
+#
+SET GLOBAL implicit_primary_key=off;
+SET show_ipk_info=on;
+
+CREATE TABLE sales (
+    amount DOUBLE NOT NULL,
+    order_day DATETIME NOT NULL
+) ENGINE=Innodb PARTITION BY RANGE(YEAR(order_day)) (
+    PARTITION p_2010 VALUES LESS THAN (2010),
+    PARTITION p_2011 VALUES LESS THAN (2011),
+    PARTITION p_2012 VALUES LESS THAN (2012));
+
+SET GLOBAL implicit_primary_key=on;
+SHOW CREATE TABLE sales;
+
+
+alter table sales add id int;
+SHOW CREATE TABLE sales;
+
+SET GLOBAL implicit_primary_key=off;
+DROP TABLE sales;

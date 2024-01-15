@@ -155,6 +155,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+#include "sql/sql_implicit_common.h"
 
 using std::equal_to;
 using std::hash;
@@ -8502,6 +8503,9 @@ static bool mark_common_columns(THD *thd, Table_ref *table_ref_1,
     if (is_non_participant_column(it_1.field())) continue;
 
     field_name_1 = nj_col_1->name();
+
+    if (ITEM_IS_IMPLICIT_AND_HIDDEN(thd, field_name_1)) continue;
+
     is_using_column_1 =
         using_fields && test_if_string_in_list(field_name_1, using_fields);
     DBUG_PRINT("info", ("field_name_1=%s.%s",
@@ -8524,6 +8528,9 @@ static bool mark_common_columns(THD *thd, Table_ref *table_ref_1,
       if (is_non_participant_column(it_2.field())) continue;
 
       cur_field_name_2 = cur_nj_col_2->name();
+
+      if (ITEM_IS_IMPLICIT_AND_HIDDEN(thd, cur_field_name_2)) continue;
+
       DBUG_PRINT("info",
                  ("cur_field_name_2=%s.%s",
                   cur_nj_col_2->table_name() ? cur_nj_col_2->table_name() : "",
@@ -8567,6 +8574,12 @@ static bool mark_common_columns(THD *thd, Table_ref *table_ref_1,
       equi-join condition to the ON clause.
     */
     if (nj_col_2 && (!using_fields || is_using_column_1)) {
+
+      /* RDS IPK : Skip the implicit row for natural join */
+      if (item_is_implicit_and_hide<Field>(thd, nj_col_1->field()) &&
+          item_is_implicit_and_hide<Field>(thd, nj_col_2->field()))
+        continue;
+
       Item *item_1 = nj_col_1->create_item(thd);
       if (!item_1) return true;
       Item *item_2 = nj_col_2->create_item(thd);
@@ -9438,6 +9451,7 @@ bool insert_fields(THD *thd, Query_block *query_block, const char *db_name,
       if (!item) return true; /* purecov: inspected */
       assert(item->fixed);
 
+      bool is_hidden_implicit_field = false;
       if (item->type() == Item::FIELD_ITEM) {
         Item_field *field = down_cast<Item_field *>(item);
         /*
@@ -9448,7 +9462,11 @@ bool insert_fields(THD *thd, Query_block *query_block, const char *db_name,
         is_hidden &= (tables->join_using_fields == nullptr ||
                       !test_if_string_in_list(field->field_name,
                                               tables->join_using_fields));
-        if (is_hidden) continue;
+        /* RDS IPK : Judge the implicit field */
+        is_hidden_implicit_field =
+            item_is_implicit_and_hide<Field>(thd, field->field);
+
+        if (is_hidden || is_hidden_implicit_field) continue;
 
         /* cache the table for the Item_fields inserted by expanding stars */
         if (tables->cacheable_table) field->cached_table = tables;
@@ -10014,6 +10032,12 @@ bool fill_record(THD *thd, TABLE *table, Field **ptr,
   while ((field = *ptr++) && !thd->is_error()) {
     // Skip hidden system field.
     if (field->is_hidden_by_system()) continue;
+
+    /* RDS IPK : Fill the implicit field with NULL */
+    if (item_is_implicit_and_hide<Field>(thd, field)) {
+      if (fill_implicit_field_with_null(thd, field)) return true;
+      continue;
+    }
 
     Item *value = *value_it++;
     assert(field->table == table);
