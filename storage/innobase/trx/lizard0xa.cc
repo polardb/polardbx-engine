@@ -270,14 +270,15 @@ static bool serach_history_trx_by_xid(const XID *xid, Transaction_info *info) {
           info->state = txn_hdr.is_rollback() ? TRANS_STATE_ROLLBACK
                                               : TRANS_STATE_COMMITTED;
         }
+        txn_hdr.image.copy_to_my_gcn(&info->gcn);
         break;
       case TXN_UNDO_LOG_ACTIVE:
-        /** Can't be active. */
-        /** fall through */
+        /** Skip txn in active state. */
+        found = false;
+        break;
       default:
         ut_error;
     }
-    txn_hdr.image.copy_to_my_gcn(&info->gcn);
   }
   return found;
 }
@@ -292,7 +293,7 @@ bool trx_search_by_xid(const XID *xid, Transaction_info *info) {
     return true;
   }
 
-  /** 2. Search history transaction in the rseg history list. */
+  /** 2. Search history transaction in the rseg. */
   return serach_history_trx_by_xid(xid, info);
 }
 

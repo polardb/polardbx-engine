@@ -1,0 +1,51 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+set global innodb_purge_rseg_truncate_frequency = 1;
+create table t1 (id int);
+set global innodb_undo_retention = 0;
+set global innodb_txn_retention = 0;
+set global innodb_txn_undo_page_reuse_max_percent = 10;
+###############################
+# case 1 innodb_txn_retention = 0
+###############################
+xa start '1';
+insert into t1 values (1);
+xa end '1';
+xa prepare '1';
+xa commit '1';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 2 innodb_txn_retention = 1800 
+###############################
+set global innodb_txn_retention = 1800;
+SET GLOBAL innodb_purge_run_now=ON;
+xa start '2';
+insert into t1 values (1);
+xa end '2';
+xa prepare '2';
+xa commit '2';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+###############################
+# case 3 innodb_txn_retention = 1800 
+###############################
+set global innodb_txn_undo_page_reuse_max_percent = 30;
+SET GLOBAL innodb_purge_run_now=ON;
+xa start '3';
+insert into t1 values (1);
+xa end '3';
+xa prepare '3';
+xa commit '3';
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_state == actual_state]
+drop table t1;
+set global innodb_undo_retention = default;
+set global innodb_txn_retention = default;
+set global innodb_txn_undo_page_reuse_max_percent = default;
+set global innodb_purge_rseg_truncate_frequency = default;

@@ -1,0 +1,3 @@
+--initialize --innodb_page_size=512
+--binlog_format='row'
+--xa_detach_on_prepare=0

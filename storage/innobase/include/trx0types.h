@@ -285,6 +285,12 @@ struct trx_rseg_t {
   /** SCN number of the last not yet purged log, it still is in history list */
   scn_t last_scn;
 
+  /** The maximum UTC in the oldest node of the txn free list.
+   * This value is used to determine whether there are avaiable txns in the free
+   * list can be reused in a quick mode. If the oldest node needs to be
+   * retained, then there is no avaiable txn for reuse. */
+  utc_t oldest_utc_in_txn_free;
+
   std::ostream &print(std::ostream &out) const {
     out << "[trx_rseg_t: this=" << (void *)this << ", id=" << id
         << ", space_id=" << space_id << ", page_no=" << page_no

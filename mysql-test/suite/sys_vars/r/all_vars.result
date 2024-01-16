@@ -263,6 +263,8 @@ innodb_transaction_group
 innodb_transaction_group
 innodb_txn_cached_list_keep_size
 innodb_txn_cached_list_keep_size
+innodb_txn_retention
+innodb_txn_retention
 innodb_txn_undo_page_reuse_max_percent
 innodb_txn_undo_page_reuse_max_percent
 innodb_undo_retention

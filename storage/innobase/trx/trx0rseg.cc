@@ -323,6 +323,7 @@ static trx_rseg_t *trx_rseg_physical_initialize(
     commit_mark_t cmmt = lizard::trx_undo_hdr_read_cmmt(undo_log_hdr, mtr);
     assert_commit_mark_allocated(cmmt);
     rseg->last_scn = cmmt.scn;
+    rseg->oldest_utc_in_txn_free = 0;
 
     rseg->last_del_marks =
         mtr_read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);
@@ -469,6 +470,7 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
     commit_mark_t cmmt = lizard::trx_undo_hdr_read_cmmt(undo_log_hdr, mtr);
     assert_commit_mark_allocated(cmmt);
     rseg->last_scn = cmmt.scn;
+    rseg->oldest_utc_in_txn_free = 0;
 
 #ifdef UNIV_DEBUG
     /* Update last transactioin number during recovery. */

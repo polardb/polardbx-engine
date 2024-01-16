@@ -8,20 +8,20 @@ create table tt (id int);
 set xa_detach_on_prepare = on;
 --let $commit_gcn = `select @base_seq + 100`
 
-xa start '1';
+--eval xa start '1$postfix'
 insert into tt values (1);
-xa end '1';
-xa prepare '1';
+--eval xa end '1$postfix'
+--eval xa prepare '1$postfix'
 
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
 
-xa commit '1';
+--eval xa commit '1$postfix'
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= '1','',1
+--let $my_xid= '1$postfix','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
@@ -30,20 +30,20 @@ xa commit '1';
 set xa_detach_on_prepare = on;
 --let $commit_gcn = `select @base_seq + 200`
 
-xa start '2';
+--eval xa start '2$postfix'
 insert into tt values (2);
-xa end '2';
-xa prepare '2';
+--eval xa end '2$postfix'
+--eval xa prepare '2$postfix'
 
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
 
-xa rollback '2';
+--eval xa rollback '2$postfix'
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= ROLLBACK
---let $my_xid= '2','',1
+--let $my_xid= '2$postfix','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
@@ -52,20 +52,20 @@ xa rollback '2';
 set xa_detach_on_prepare = off;
 --let $commit_gcn = `select @base_seq + 300`
 
-xa start '3';
+--eval xa start '3$postfix'
 insert into tt values (3);
-xa end '3';
-xa prepare '3';
+--eval xa end '3$postfix'
+--eval xa prepare '3$postfix'
 
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
 
-xa commit '3';
+--eval xa commit '3$postfix'
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= '3','',1
+--let $my_xid= '3$postfix','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################
@@ -74,20 +74,20 @@ xa commit '3';
 set xa_detach_on_prepare = off;
 --let $commit_gcn = `select @base_seq + 400`
 
-xa start '4';
+--eval xa start '4$postfix'
 insert into tt values (4);
-xa end '4';
-xa prepare '4';
+--eval xa end '4$postfix'
+--eval xa prepare '4$postfix'
 
 --disable_query_log
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
 
-xa rollback '4';
+--eval xa rollback '4$postfix'
 
 --let $expect_gcn= $commit_gcn
 --let $expect_state= ROLLBACK
---let $my_xid= '4','',1
+--let $my_xid= '4$postfix','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 --echo ###############################

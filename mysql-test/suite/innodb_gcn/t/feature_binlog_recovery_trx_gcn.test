@@ -98,11 +98,11 @@ connection default;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
-xa start 'xx';
+xa start 'xx_1';
 insert into db_tc.t values(1);
-xa end 'xx';
+xa end 'xx_1';
 --error 2013
-xa prepare 'xx';
+xa prepare 'xx_1';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -114,12 +114,12 @@ connection default;
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
 
-xa commit 'xx';
+xa commit 'xx_1';
 
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_1','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 # 4. xa prepare (update)
@@ -129,11 +129,11 @@ connection default;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
-xa start 'xx';
+xa start 'xx_2';
 update db_tc.t set id = 2;
-xa end 'xx';
+xa end 'xx_2';
 --error 2013
-xa prepare 'xx';
+xa prepare 'xx_2';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -145,12 +145,12 @@ connection default;
 --eval set innodb_commit_seq = $commit_gcn
 --enable_query_log
 
-xa commit 'xx';
+xa commit 'xx_2';
 
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_2','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 
@@ -161,9 +161,9 @@ connection default;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
-xa start 'xx';
+xa start 'xx_3';
 insert into db_tc.t values(1);
-xa end 'xx';
+xa end 'xx_3';
 
 --expr $commit_gcn = $commit_gcn + $step_gcn
 --disable_query_log
@@ -171,7 +171,7 @@ xa end 'xx';
 --enable_query_log
 
 --error 2013
-xa commit 'xx' one phase;
+xa commit 'xx_3' one phase;
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -179,7 +179,7 @@ xa commit 'xx' one phase;
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_3','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 
@@ -190,9 +190,9 @@ connection default;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
-xa start 'xx';
+xa start 'xx_4';
 update db_tc.t set id = 2;
-xa end 'xx';
+xa end 'xx_4';
 
 --expr $commit_gcn = $commit_gcn + $step_gcn
 --disable_query_log
@@ -200,7 +200,7 @@ xa end 'xx';
 --enable_query_log
 
 --error 2013
-xa commit 'xx' one phase;
+xa commit 'xx_4' one phase;
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -208,7 +208,7 @@ xa commit 'xx' one phase;
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_4','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 
@@ -218,10 +218,10 @@ connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-xa start 'xx';
+xa start 'xx_5';
 insert into db_tc.t values(1);
-xa end 'xx';
-xa prepare 'xx';
+xa end 'xx_5';
+xa prepare 'xx_5';
 
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
@@ -231,7 +231,7 @@ SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 --enable_query_log
 
 --error 2013
-xa commit 'xx';
+xa commit 'xx_5';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -239,7 +239,7 @@ xa commit 'xx';
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_5','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 # 8. xa commit (update)
@@ -248,10 +248,10 @@ connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-xa start 'xx';
+xa start 'xx_6';
 update db_tc.t set id = 2;
-xa end 'xx';
-xa prepare 'xx';
+xa end 'xx_6';
+xa prepare 'xx_6';
 
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
@@ -261,7 +261,7 @@ SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 --enable_query_log
 
 --error 2013
-xa commit 'xx';
+xa commit 'xx_6';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -269,7 +269,7 @@ xa commit 'xx';
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= COMMIT
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_6','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 # 9. xa rollback (insert)
@@ -278,10 +278,10 @@ connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-xa start 'xx';
+xa start 'xx_7';
 insert into db_tc.t values(1);
-xa end 'xx';
-xa prepare 'xx';
+xa end 'xx_7';
+xa prepare 'xx_7';
 
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
@@ -291,7 +291,7 @@ SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 --enable_query_log
 
 --error 2013
-xa rollback 'xx';
+xa rollback 'xx_7';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -299,7 +299,7 @@ xa rollback 'xx';
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= ROLLBACK
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_7','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 # 10. xa rollback (update)
@@ -308,11 +308,11 @@ connection default;
 
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-xa start 'xx';
+xa start 'xx_8';
 insert into db_tc.t values(1);
 update db_tc.t set id = 2;
-xa end 'xx';
-xa prepare 'xx';
+xa end 'xx_8';
+xa prepare 'xx_8';
 
 SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 
@@ -322,7 +322,7 @@ SET SESSION debug="+d,simulate_crash_after_sync_binlog";
 --enable_query_log
 
 --error 2013
-xa rollback 'xx';
+xa rollback 'xx_8';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -330,7 +330,7 @@ xa rollback 'xx';
 connection default;
 --let $expect_gcn= $commit_gcn
 --let $expect_state= ROLLBACK
---let $my_xid= 'xx','',1
+--let $my_xid= 'xx_8','',1
 --source suite/innodb_gcn/include/xa_proc_find_by_xid_verify.inc
 
 

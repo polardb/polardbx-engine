@@ -1714,9 +1714,8 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
   if (type == TRX_UNDO_TXN) {
     txn_ext_storage = TXN_EXT_STORAGE_V1;
     /** Add space for txn extension and initialize the fields. */
-    lizard::trx_undo_header_add_space_for_txn(rseg->space_id, undo_page, trx_id,
-                                              mtr, offset, txn_ext_storage,
-                                              &slot_addr, &prev_image);
+    lizard::trx_undo_header_add_space_for_txn(
+        rseg, undo_page, mtr, offset, txn_ext_storage, &slot_addr, &prev_image);
   } else {
     /** Slot is come from txn undo */
     slot_addr = lizard::trx_undo_hdr_write_slot(undo_page + offset, trx, mtr);
@@ -1837,9 +1836,8 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
                                       gtid_storage);
 
     txn_ext_storage = TXN_EXT_STORAGE_V1;
-    lizard::trx_undo_header_add_space_for_txn(rseg->space_id, undo_page, trx_id,
-                                              mtr, offset, txn_ext_storage,
-                                              &slot_addr, &prev_image);
+    lizard::trx_undo_header_add_space_for_txn(
+        rseg, undo_page, mtr, offset, txn_ext_storage, &slot_addr, &prev_image);
     ut_ad(slot_addr.is_redo());
     assert_commit_mark_allocated(prev_image);
   }
@@ -2435,6 +2433,7 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
     rseg->last_offset = 0;
     rseg->last_del_marks = false;
     rseg->last_scn = 0;
+    rseg->oldest_utc_in_txn_free = 0;
   }
 
   marked_rsegs->x_unlock();

@@ -203,6 +203,9 @@ slot_addr_t txn_sys_t::SLOT_ADDR_NO_REDO = {
 
 slot_addr_t txn_sys_t::SLOT_ADDR_NULL = {0, 0, 0};
 
+/** Retention time of txn undo data in seconds. */
+ulong txn_retention_time = 0;
+
 /**
   Encode UBA into undo_ptr that need to copy into record
   @param[in]      undo addr
@@ -982,46 +985,85 @@ dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr) {
 
 struct Find_transaction_info_by_xid {
   Find_transaction_info_by_xid(const XID *in_xid)
-      : xid(in_xid), found(false), txn_hdr() {}
+      : xid(in_xid), found(false), txn_hdr(), searched_pages() {}
 
-  bool operator()(const page_t *undo_page, const trx_ulogf_t *log_hdr,
-                  mtr_t *mtr) {
+  /**
+    Check whether the page has been searched.
+    @param[in]  page_no    page no to search
+
+    @retval     true       page has been searched
+  */
+  bool operator()(const page_no_t page_no) {
+    return (searched_pages.find(page_no) != searched_pages.end());
+  }
+
+  /**
+    Iterate over the txn slots on the page (rseg, page_no) until finding the txn
+    that matches the exact xid.
+    @param[in]  page_no    page no to search
+    @param[in]  undo_page  undo page
+    @param[in]  mtr        mini-transaction handle
+
+    @retval     true       found
+  */
+  bool operator()(const page_no_t page_no, page_t *undo_page, mtr_t *mtr) {
+    trx_ulogf_t *txn_header;
+    uint32_t last_offset;
     XID read_xid;
 
     ut_ad(!found);
 
-    /* Check if undo log has XID. */
-    auto flag = mach_read_ulint(log_hdr + TRX_UNDO_FLAGS, MLOG_1BYTE);
-    if (!(flag & TRX_UNDO_FLAG_XID)) {
+    /** Skip page if it has already been searched. */
+    if (searched_pages.find(page_no) != searched_pages.end()) {
       return false;
     }
 
-    trx_undo_read_xid(const_cast<trx_ulogf_t *>(log_hdr), &read_xid);
+    last_offset =
+        mach_read_from_2(undo_page + TRX_UNDO_SEG_HDR + TRX_UNDO_LAST_LOG);
 
-    if (read_xid.eq(xid)) {
-      trx_undo_hdr_read_txn(undo_page, log_hdr, mtr, &txn_hdr);
-      ut_ad(txn_hdr.state == TXN_UNDO_LOG_COMMITED ||
-            txn_hdr.state == TXN_UNDO_LOG_PURGED);
-      found = true;
+    /** Iterate over the txn slots on the undo page. */
+    for (uint32_t txn_offset = TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE;
+         txn_offset <= last_offset; txn_offset += TXN_UNDO_LOG_EXT_HDR_SIZE) {
+      /** 1. get the txn header. */
+      txn_header = undo_page + txn_offset;
+
+      /** 2. Check if undo log has XID. */
+      auto flag = mach_read_ulint(txn_header + TRX_UNDO_FLAGS, MLOG_1BYTE);
+      if (!(flag & TRX_UNDO_FLAG_XID)) {
+        continue;
+      }
+
+      /** 3. Read and check XID. */
+      trx_undo_read_xid(const_cast<trx_ulogf_t *>(txn_header), &read_xid);
+      if (read_xid.eq(xid)) {
+        trx_undo_hdr_read_txn(undo_page, txn_header, mtr, &txn_hdr);
+        found = true;
+        break;
+      }
     }
 
+    searched_pages.insert(page_no);
     return found;
   }
 
   const XID *xid;
   bool found;
   txn_undo_hdr_t txn_hdr;
+  std::unordered_set<page_no_t> searched_pages;
 };
 
+/**
+  Because the retained txn could be in the history list, the free list, the
+  cached list, and the txn list, we need to search all of them.
+
+  @param[in]  rseg       trx_rseg_t
+  @param[out] func       search function
+*/
 template <typename Functor>
-static void txn_rseg_iterate_history_list(trx_rseg_t *rseg, Functor &func) {
+static void txn_rseg_iterate_lists(trx_rseg_t *rseg, Functor &func) {
   trx_rsegf_t *rseg_header;
-  trx_ulogf_t *txn_header;
-
   page_t *undo_page;
-
   fil_addr_t node_addr;
-  fil_addr_t hdr_addr;
 
   mtr_t mtr;
 
@@ -1029,7 +1071,7 @@ static void txn_rseg_iterate_history_list(trx_rseg_t *rseg, Functor &func) {
 
   mutex_enter(&(rseg->mutex));
 
-  /** 1. Get the first node of the history list. */
+  /** 1. Iterate over the history list. */
   rseg_header =
       trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, &mtr);
 
@@ -1037,30 +1079,86 @@ static void txn_rseg_iterate_history_list(trx_rseg_t *rseg, Functor &func) {
 
   mtr.commit();
 
-  /** 2. Iterate the history list. */
   while (node_addr.page != FIL_NULL) {
     mtr.start();
 
-    /** 2.1 get the undo page. */
     undo_page = trx_undo_page_get_s_latched(
         page_id_t(rseg->space_id, node_addr.page), rseg->page_size, &mtr);
 
-    /** 2.2 get the txn header real offset on the page. */
-    hdr_addr = trx_purge_get_log_from_hist(node_addr);
-    txn_header = undo_page + hdr_addr.boffset;
-
-    /** 2.3 do something by using the txn header on **func** */
-    if (func(undo_page, txn_header, &mtr)) {
+    if (func(node_addr.page, undo_page, &mtr)) {
       mtr.commit();
-      break;
+      goto func_exit;
     }
 
-    /** 2.4 get the next node's address. */
     node_addr = flst_get_next_addr(undo_page + node_addr.boffset, &mtr);
+    mtr.commit();
+  }
+
+  /** 2. If not found, iterate over the free list. */
+  mtr.start();
+  rseg_header =
+      trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, &mtr);
+  node_addr = flst_get_first(rseg_header + TXN_RSEG_FREE_LIST, &mtr);
+  mtr.commit();
+
+  while (node_addr.page != FIL_NULL) {
+    mtr.start();
+
+    undo_page = trx_undo_page_get_s_latched(
+        page_id_t(rseg->space_id, node_addr.page), rseg->page_size, &mtr);
+
+    if (func(node_addr.page, undo_page, &mtr)) {
+      mtr.commit();
+      goto func_exit;
+    }
+
+    node_addr = flst_get_next_addr(undo_page + node_addr.boffset, &mtr);
+    mtr.commit();
+  }
+
+  /** 3. If not found, iterate over the cached list. */
+  for (trx_undo_t *undo = UT_LIST_GET_FIRST(rseg->txn_undo_cached);
+       undo != nullptr; undo = UT_LIST_GET_NEXT(undo_list, undo)) {
+    if (func(undo->hdr_page_no)) {
+      /** Skip reading page if it has already been searched. */
+      continue;
+    }
+
+    mtr.start();
+
+    undo_page = trx_undo_page_get_s_latched(
+        page_id_t(rseg->space_id, undo->hdr_page_no), rseg->page_size, &mtr);
+
+    if (func(undo->hdr_page_no, undo_page, &mtr)) {
+      mtr.commit();
+      goto func_exit;
+    }
 
     mtr.commit();
   }
 
+  /** 4. If not found, iterate over the txn list. */
+  for (trx_undo_t *undo = UT_LIST_GET_FIRST(rseg->txn_undo_list);
+       undo != nullptr; undo = UT_LIST_GET_NEXT(undo_list, undo)) {
+    if (func(undo->hdr_page_no)) {
+      /** Skip reading page if it has already been searched. */
+      continue;
+    }
+
+    mtr.start();
+
+    undo_page = trx_undo_page_get_s_latched(
+        page_id_t(rseg->space_id, undo->hdr_page_no), rseg->page_size, &mtr);
+
+    if (func(undo->hdr_page_no, undo_page, &mtr)) {
+      mtr.commit();
+      goto func_exit;
+    }
+
+    mtr.commit();
+  }
+
+func_exit:
   mutex_exit(&(rseg->mutex));
 }
 
@@ -1077,7 +1175,7 @@ bool txn_rseg_find_trx_info_by_xid(trx_rseg_t *rseg, const XID *xid,
                                    txn_undo_hdr_t *txn_undo_hdr) {
   Find_transaction_info_by_xid finder(xid);
 
-  txn_rseg_iterate_history_list<Find_transaction_info_by_xid>(rseg, finder);
+  txn_rseg_iterate_lists<Find_transaction_info_by_xid>(rseg, finder);
 
   if (finder.found) {
     *txn_undo_hdr = finder.txn_hdr;
@@ -1133,29 +1231,28 @@ bool trx_is_txn_rseg_updated(const trx_t *trx) {
 
 /**
   Add space for txn extension and initialize the fields.
-
-  @param[in]      space_id          space id
+  @param[in]      rseg              rollback segment
   @param[in]      undo_page         undo log header page
-  @param[in]      trx_id            transaction id
   @param[in]      mtr               mini transaction
   @param[in]      offset            txn header byte offset on page
   @param[in]      txn_ext_storage   txn extension storage flag
   @param[out]     slot_addr         slot address of created txn
   @param[out]     prev_image        prev scn/utc
 */
-void trx_undo_header_add_space_for_txn(space_id_t space_id, page_t *undo_page,
-                                       trx_id_t trx_id, mtr_t *mtr,
-                                       ulint offset, uint8 txn_ext_storage,
+void trx_undo_header_add_space_for_txn(trx_rseg_t *rseg, page_t *undo_page,
+                                       mtr_t *mtr, ulint offset,
+                                       uint8 txn_ext_storage,
                                        slot_addr_t *slot_addr,
                                        commit_mark_t *prev_image) {
   page_no_t page_no;
 
+  ut_ad(mutex_own(&rseg->mutex));
   ut_ad(slot_addr);
   ut_ad(prev_image);
 
   /** Lizard: add slot addr into undo log header */
   page_no = page_get_page_no(undo_page);
-  *slot_addr = {space_id, page_no, offset};
+  *slot_addr = {rseg->space_id, page_no, offset};
   ut_ad(slot_addr->is_redo());
   lizard::trx_undo_hdr_write_slot(undo_page + offset, *slot_addr, mtr);
 
@@ -1225,9 +1322,8 @@ static ulint txn_undo_segment_reuse(trx_rseg_t *rseg, trx_rsegf_t *rseg_header,
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       trx_undo_t::Gtid_storage::NONE);
 
-    lizard::trx_undo_header_add_space_for_txn(rseg->space_id, undo_page, trx_id,
-                                              mtr, offset, txn_ext_storage,
-                                              slot_addr, prev_image);
+    lizard::trx_undo_header_add_space_for_txn(
+        rseg, undo_page, mtr, offset, txn_ext_storage, slot_addr, prev_image);
 
     ut_ad(offset == TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE);
     ut_ad(slot_addr->is_redo());
@@ -1240,6 +1336,261 @@ static ulint txn_undo_segment_reuse(trx_rseg_t *rseg, trx_rsegf_t *rseg_header,
 
   return offset;
 }
+
+/* txn retention start */
+
+/**
+  Read the utc from txn undo header.
+  @param[in]      undo_page     undo log header page
+  @param[in]      log_hdr       undo log header
+  @param[in]      mtr           current mtr context
+*/
+static inline utc_t txn_undo_hdr_read_utc(trx_rseg_t *rseg,
+                                          const page_t *undo_page,
+                                          const trx_ulogf_t *log_hdr,
+                                          mtr_t *mtr) {
+  ut_ad(mutex_own(&rseg->mutex));
+
+  utc_t utc;
+  /** Here must hold the S/SX/X lock on the page */
+  ut_ad(mtr_memo_contains_page_flagged(
+      mtr, log_hdr,
+      MTR_MEMO_PAGE_S_FIX | MTR_MEMO_PAGE_X_FIX | MTR_MEMO_PAGE_SX_FIX));
+
+  /** Validate the undo page */
+  trx_undo_page_validation(page_align(log_hdr));
+
+  ulint type = mtr_read_ulint(
+      undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE, MLOG_2BYTES, mtr);
+  ut_a(type == TRX_UNDO_TXN);
+
+  auto flag = mtr_read_ulint(log_hdr + TRX_UNDO_FLAGS, MLOG_1BYTE, mtr);
+
+  /** If in cleanout safe mode,  */
+  ut_a((flag & TRX_UNDO_FLAG_TXN) != 0 || opt_cleanout_safe_mode);
+
+  utc = decode_utc(mach_read_from_8(log_hdr + TRX_UNDO_UTC)).first;
+
+  return utc;
+}
+
+/**
+  Update oldest_utc_in_txn_free in rseg when the oldest node in the
+  free list has changed.
+
+  @param[in]  rseg       trx_rseg_t
+  @param[in]  mtr        mini-transaction handle
+*/
+static void txn_retention_update_oldest_utc(trx_rseg_t *rseg, mtr_t *mtr) {
+  trx_rsegf_t *rseg_hdr;
+  flst_base_node_t *base;
+  fil_addr_t node_addr;
+  page_t *undo_page;
+  trx_ulogf_t *last_log_hdr;
+  ulint offset;
+
+  rseg_hdr = trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
+  base = rseg_hdr + TXN_RSEG_FREE_LIST;
+  node_addr = flst_get_last(base, mtr);
+
+  if (fil_addr_is_null(node_addr)) {
+    /** The free list is empty. */
+    rseg->oldest_utc_in_txn_free = 0;
+    return;
+  }
+
+  undo_page = trx_undo_page_get(page_id_t(rseg->space_id, node_addr.page),
+                                rseg->page_size, mtr);
+  offset = mach_read_from_2(undo_page + TRX_UNDO_SEG_HDR + TRX_UNDO_LAST_LOG);
+  last_log_hdr = undo_page + offset;
+
+  utc_t utc = txn_undo_hdr_read_utc(rseg, undo_page, last_log_hdr, mtr);
+  ut_a(utc > rseg->oldest_utc_in_txn_free);
+  rseg->oldest_utc_in_txn_free = utc;
+}
+
+/**
+  Check if the txn retention time has been satisfied.
+  If the retention time has been satisfied, the txn undo has been retained for
+  the required period as defined by txn_retention_time.
+
+  @param[in]  utc        utc on txn to be checked
+
+  @retval     true if the txn retention satisfied
+*/
+static inline bool txn_retention_satisfied(utc_t utc) {
+  ut_ad(utc > 0);
+
+  auto cur_utc = ut_time_system_us();
+  std::chrono::microseconds elapsed_time(cur_utc - utc);
+  std::chrono::microseconds retention_time =
+      std::chrono::seconds(txn_retention_time);
+  ut_a(elapsed_time.count() > 0);
+
+  if (elapsed_time > retention_time) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+  Determines if the retention time of a given txn undo page has been satisfied.
+  Retrieves the txn with the maximum UTC on this undo page and checks if its
+  retention time has been satisfied. If the retention time has been satisfied,
+  the txn undo page has been retained for the required period and can be reused.
+  Otherwise, it needs to continue being retained.
+
+  @param[in]  rseg       trx_rseg_t the txn belongs to
+  @param[in]  mtr        mini-transaction handle
+  @param[in]  undo_page  txn undo page
+
+  @retval     true if the txn retention satisfied
+*/
+static bool txn_retention_page_check(trx_rseg_t *rseg, mtr_t *mtr,
+                                     page_t *undo_page) {
+  ut_a(undo_page != nullptr);
+  ut_ad(mutex_own(&rseg->mutex));
+
+  ulint offset =
+      mach_read_from_2(undo_page + TRX_UNDO_SEG_HDR + TRX_UNDO_LAST_LOG);
+  trx_ulogf_t *last_log_hdr = undo_page + offset;
+  utc_t utc = txn_undo_hdr_read_utc(rseg, undo_page, last_log_hdr, mtr);
+
+  return txn_retention_satisfied(utc);
+}
+
+/**
+  Quickly determines whether there are available txns that have satisfied
+  retention time and can be reused, based on the oldest UTC cached in this
+  rollback segment.
+
+  @param[in]  rseg       current trx_rseg_t
+
+  @retval     true if the txn retention satisfied
+ */
+static bool txn_retention_get_free_check(trx_rseg_t *rseg, mtr_t *mtr) {
+  ut_ad(mutex_own(&rseg->mutex));
+
+  if (rseg->oldest_utc_in_txn_free == 0) {
+    txn_retention_update_oldest_utc(rseg, mtr);
+  }
+
+  return ((rseg->oldest_utc_in_txn_free == 0)
+              ? false /* txn free list is empty. */
+              : txn_retention_satisfied(rseg->oldest_utc_in_txn_free));
+}
+
+/**
+  Remove the last node that satisfied retetion time from the free list.
+
+  @param[in]    rseg       trx_rseg_t the txn belongs to
+  @param[out]   undo_page  txn undo page
+  @param[in]    mtr        mini transaction
+
+  @retval     true if failed to remove the last node
+*/
+static bool txn_remove_last_node_from_free_list(trx_rseg_t *rseg,
+                                                page_t **undo_page,
+                                                mtr_t *mtr) {
+  trx_rsegf_t *rseg_hdr;
+  trx_usegf_t *seg_hdr;
+  ulint seg_size;
+  ulint free_size;
+  flst_base_node_t *base;
+  fil_addr_t hdr_addr;
+
+  ut_ad(mutex_own(&rseg->mutex));
+  /** Only transaction rollback segment have free list */
+  ut_ad(fsp_is_txn_tablespace_by_id(rseg->space_id));
+
+  /* Quickly determines whether there are available txns that have satisfied
+   * retention time. */
+  if (!txn_retention_get_free_check(rseg, mtr)) {
+    return true;
+  }
+
+  /** Phase 1 : Find the oldest undo log segment from free list */
+  rseg_hdr = trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
+
+  free_size =
+      mtr_read_ulint(rseg_hdr + TXN_RSEG_FREE_LIST_SIZE, MLOG_4BYTES, mtr);
+  if (free_size == 0) {
+    /** No node in the free list can be fetched. */
+    return true;
+  }
+
+  /** Retrieves the oldest node in the free list, which is at the end of the
+   * list. Every time a txn is retrieved from the history list, it is added to
+   * the front of the free list. Therefore, the last node in the free list is
+   * the oldest. */
+  base = rseg_hdr + TXN_RSEG_FREE_LIST;
+  hdr_addr = flst_get_last(base, mtr);
+  *undo_page = trx_undo_page_get(page_id_t(rseg->space_id, hdr_addr.page),
+                                 rseg->page_size, mtr);
+  ut_ad(txn_retention_page_check(rseg, mtr, *undo_page));
+
+  seg_hdr = *undo_page + TRX_UNDO_SEG_HDR;
+  /** The page list always has only its self page */
+  seg_size = flst_get_len(seg_hdr + TRX_UNDO_PAGE_LIST);
+  ut_a(seg_size == 1);
+
+  /** Phase 2: Remove the node from free list. */
+  flst_remove(base, *undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
+  mlog_write_ulint(rseg_hdr + TXN_RSEG_FREE_LIST_SIZE, free_size - seg_size,
+                   MLOG_4BYTES, mtr);
+  gcs->txn_undo_log_free_list_len.fetch_sub(1);
+
+  txn_retention_update_oldest_utc(rseg, mtr);
+
+  return false;
+}
+
+/**
+  Add the node to the txn cached list.
+
+  @param[in]    rseg       trx_rseg_t the txn belongs to
+  @param[in]    undo_page  txn undo page
+  @param[in]    slot_no    slot number
+  @param[in]    mtr        mini transaction
+*/
+static void txn_add_node_to_cached_list(trx_rseg_t *rseg, page_t *undo_page,
+                                        ulint slot_no, mtr_t *mtr) {
+  trx_rsegf_t *rseg_hdr;
+  page_no_t undo_page_no;
+  ulint offset;
+
+  ut_ad(mutex_own(&rseg->mutex));
+  /** Only transaction rollback segment have free list */
+  ut_ad(fsp_is_txn_tablespace_by_id(rseg->space_id));
+  ut_ad(slot_no != ULINT_UNDEFINED);
+
+  /** Phase 1: Reinit the txn undo log segment header page for reuse. */
+  rseg_hdr = trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
+
+  offset = txn_undo_segment_reuse(rseg, rseg_hdr, undo_page, slot_no, mtr, 0,
+                                  TXN_EXT_STORAGE_NONE, nullptr, nullptr);
+  ut_ad(offset == 0);
+
+  /** Phase 2: Create a memory object for txn undo. */
+  XID xid;
+  xid.reset();
+  undo_page_no = page_get_page_no(undo_page);
+  trx_undo_t *undo =
+      trx_undo_mem_create(rseg, slot_no, TRX_UNDO_TXN, 0, &xid, undo_page_no, 0,
+                          txn_sys_t::SLOT_ADDR_NULL);
+  undo->state = TRX_UNDO_CACHED;
+  undo->empty = true;
+
+  /** Phase 3: Add the txn undo to cached list. */
+  UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
+
+  MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
+  LIZARD_MONITOR_INC_TXN_CACHED(1);
+  lizard_stats.txn_undo_log_recycle.inc();
+}
+
+/* txn retention end */
 
 /**
   Get undo log segment from free list
@@ -1257,15 +1608,9 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
                                  trx_undo_t **undo) {
   page_t *undo_page = nullptr;
   trx_rsegf_t *rseg_header;
-  trx_usegf_t *seg_hdr;
   page_no_t page_no;
   ulint offset;
-  ulint len;
-  ulint size;
-  flst_base_node_t *base;
   fil_addr_t node_addr;
-  ulint seg_size;
-  ulint free_size;
   commit_mark_t prev_image = COMMIT_MARK_LOST;
   slot_addr_t slot_addr;
   uint8 txn_ext_storage = TXN_EXT_STORAGE_V1;
@@ -1302,46 +1647,17 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
     goto func_exit;
   }
 
-  /** Phase 2 : Find a undo log segment from free list */
-  base = rseg_header + TXN_RSEG_FREE_LIST;
-  len = flst_get_len(base);
-  size =
-      mtr_read_ulint(rseg_header + TXN_RSEG_FREE_LIST_SIZE, MLOG_4BYTES, &mtr);
-
-  /* txn undo log segment only have one page */
-  ut_a(len == size);
-  if (len == 0) {
+  /** Phase 2 : Remove the oldest undo log segment from free list */
+  if (txn_remove_last_node_from_free_list(rseg, &undo_page, &mtr)) {
     *undo = nullptr;
     goto func_exit;
   }
 
-  node_addr = flst_get_first(base, &mtr);
-
-  /** The page node was used by free list */
-  ut_ad(node_addr.boffset == (TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE));
-
-  undo_page = trx_undo_page_get(page_id_t(rseg->space_id, node_addr.page),
-                                rseg->page_size, &mtr);
-
-  page_no = page_get_page_no(undo_page);
-  seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
-
-  seg_size = flst_get_len(seg_hdr + TRX_UNDO_PAGE_LIST);
-  ut_a(seg_size == 1);
-
-  /** Phase 3: Remove the node from free list. */
-  flst_remove(rseg_header + TXN_RSEG_FREE_LIST,
-              undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, &mtr);
-  free_size =
-      mtr_read_ulint(rseg_header + TXN_RSEG_FREE_LIST_SIZE, MLOG_4BYTES, &mtr);
-
-  mlog_write_ulint(rseg_header + TXN_RSEG_FREE_LIST_SIZE, free_size - seg_size,
-                   MLOG_4BYTES, &mtr);
-
-  gcs->txn_undo_log_free_list_len.fetch_sub(1);
-
-  /** Phase 4: Reinit the txn undo log segment header page and create a txn undo
+  /** Phase 3: Reinit the txn undo log segment header page and create a txn undo
    * header for use. */
+  ut_ad(undo_page);
+  page_no = page_get_page_no(undo_page);
+
   offset =
       txn_undo_segment_reuse(rseg, rseg_header, undo_page, slot_no, &mtr,
                              trx_id, txn_ext_storage, &slot_addr, &prev_image);
@@ -1350,7 +1666,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   ut_ad(slot_addr.is_redo());
   assert_commit_mark_allocated(prev_image);
 
-  /** Phase 5: Create and init a memory object for txn undo. */
+  /** Phase 4: Create and init a memory object for txn undo. */
   *undo = trx_undo_mem_create(rseg, slot_no, type, trx_id, xid, page_no, offset,
                               slot_addr, &prev_image);
 
@@ -1970,11 +2286,47 @@ bool txn_undo_free_list_validate(trx_rsegf_t *rseg_hdr, page_t *undo_page,
 ulint srv_txn_cached_list_keep_size = 0;
 
 /**
+  Prefetch the oldest node from the txn free list to the txn cached list.
+
+  @param[in]        rseg        rollback segment
+  @param[in]        hdr_addr    txn log hdr address
+*/
+static void txn_try_prefetch_to_cached_list(trx_rseg_t *rseg, mtr_t *mtr) {
+  trx_rsegf_t *rseg_hdr;
+  page_t *undo_page = nullptr;
+  ulint slot_no = ULINT_UNDEFINED;
+
+  ut_ad(mutex_own(&rseg->mutex));
+  /** Only transaction rollback segment have free list */
+  ut_ad(fsp_is_txn_tablespace_by_id(rseg->space_id));
+
+  /** Phase 1 : Find a free slot in rseg array */
+  rseg_hdr = trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
+  slot_no = trx_rsegf_undo_find_free(rseg_hdr, mtr);
+  if (slot_no == ULINT_UNDEFINED) {
+    lizard_warn(ER_LIZARD)
+        << "Can't find a free slot for txn undo log when recycle, put back "
+           "free list instead, maybe decrease "
+           "innodb_txn_cached_list_keep_size.";
+    return;
+  }
+
+  /** Phase 2 : Remove the oldest node in the free list. */
+  if (txn_remove_last_node_from_free_list(rseg, &undo_page, mtr)) {
+    /** Failed to get the oldest node that satisfied retetion time from the
+     * free list. */
+    return;
+  }
+
+  /** Phase 3 : Prefetch the node to the cached list. */
+  ut_ad(undo_page != nullptr);
+  txn_add_node_to_cached_list(rseg, undo_page, slot_no, mtr);
+}
+
+/**
   Put the txn undo log segment into free list after purge all.
   Reinit undo log segment into cached_list or put into free list;
   @param[in]        rseg        rollback segment
-  @param[in]        rseg        rollback segment
-  @param[in]        hdr_addr    txn log hdr address
   @param[in]        hdr_addr    txn log hdr address
 */
 void txn_recycle_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
@@ -1987,6 +2339,13 @@ void txn_recycle_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
       rseg->txn_undo_cached.get_length() < srv_txn_cached_list_keep_size) {
     auto ret = txn_purge_segment_to_cached_list(rseg, hdr_addr, &mtr);
     if (ret) {
+      /** If the current node needs to be retained, it fails to be added to the
+       * cached list and needs to be added to the free list. For performance
+       * considerations, we try to find whethere there are any other nodes in
+       * the free list that can be prefetched to the cached list if their
+       * retention time has been satisfied.
+       */
+      txn_try_prefetch_to_cached_list(rseg, &mtr);
       goto add_to_free_list;
     }
   } else {
@@ -2009,12 +2368,10 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
                                       mtr_t *mtr) {
   trx_rsegf_t *rseg_hdr;
   trx_ulogf_t *log_hdr;
-  trx_usegf_t *seg_hdr;
   page_t *undo_page;
   ulint seg_size;
   ulint hist_size;
   ulint slot_no = ULINT_UNDEFINED;
-  page_no_t undo_page_no;
 
   ut_ad(mutex_own(&rseg->mutex));
   /** Only transaction rollback segment have free list */
@@ -2031,21 +2388,28 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
     return true;
   }
 
-  undo_page_no = hdr_addr.page;
-  undo_page = trx_undo_page_get(page_id_t(rseg->space_id, undo_page_no),
+  /** Phase 2 : Check whether txn retention satisfied. */
+  undo_page = trx_undo_page_get(page_id_t(rseg->space_id, hdr_addr.page),
                                 rseg->page_size, mtr);
-  seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
+
+  if (!txn_retention_page_check(rseg, mtr, undo_page)) {
+    /** If the current page needs to be retained, it fails to be added to the
+     * cached list. */
+    return true;
+  }
+
+  /** Phase 3: Remove the undo log segment from history list */
   log_hdr = undo_page + hdr_addr.boffset;
 
   /** The page list always has only its self page */
-  seg_size = flst_get_len(seg_hdr + TRX_UNDO_PAGE_LIST);
+  seg_size = flst_get_len(undo_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST);
   ut_a(seg_size == 1);
 
-  /** Phase 2: Remove the undo log segment from history list */
   trx_purge_remove_log_hdr(rseg_hdr, log_hdr, mtr);
   hist_size =
       mtr_read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr);
   ut_ad(hist_size >= seg_size);
+
   mlog_write_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, hist_size - seg_size,
                    MLOG_4BYTES, mtr);
 
@@ -2053,27 +2417,8 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
   ut_ad(rseg->get_curr_size() >= seg_size);
   rseg->decr_curr_size(seg_size);
 
-  /** Phase 3: Reinit the txn undo log segment header page for reuse. */
-  ulint offset =
-      txn_undo_segment_reuse(rseg, rseg_hdr, undo_page, slot_no, mtr, 0,
-                             TXN_EXT_STORAGE_NONE, nullptr, nullptr);
-  ut_ad(offset == 0);
-
-  /** Phase 4: Create a memory object for txn undo. */
-  XID xid;
-  xid.reset();
-  trx_undo_t *undo =
-      trx_undo_mem_create(rseg, slot_no, TRX_UNDO_TXN, 0, &xid, hdr_addr.page,
-                          0, txn_sys_t::SLOT_ADDR_NULL);
-  undo->state = TRX_UNDO_CACHED;
-  undo->empty = true;
-
-  /** Phase 5: Add the txn undo to cached list. */
-  UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
-
-  MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
-  LIZARD_MONITOR_INC_TXN_CACHED(1);
-  lizard_stats.txn_undo_log_recycle.inc();
+  /** Phase 4: Add the txn node to the txn cached list. */
+  txn_add_node_to_cached_list(rseg, undo_page, slot_no, mtr);
 
   return false;
 }

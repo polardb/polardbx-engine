@@ -155,6 +155,9 @@ extern ulint txn_undo_page_reuse_max_percent;
 /** Max list size of txn_undo_cached of a rsegment. */
 extern ulint srv_txn_cached_list_keep_size;
 
+/** Retention time of txn undo data in seconds. */
+extern ulong txn_retention_time;
+
 #define TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF 90
 #define TXN_UNDO_PAGE_REUSE_LIMIT (9 * UNIV_PAGE_SIZE / 10)
 
@@ -460,19 +463,17 @@ void trx_undo_hdr_txn_ext_init(page_t *undo_page, trx_ulogf_t *log_hdr,
 
 /**
   Add space for txn extension and initialize the fields.
-
-  @param[in]      space_id          space id
+  @param[in]      rseg              rollback segment
   @param[in]      undo_page         undo log header page
-  @param[in]      trx_id            transaction id
   @param[in]      mtr               mini transaction
   @param[in]      offset            txn header byte offset on page
   @param[in]      txn_ext_storage   txn extension storage flag
   @param[out]     slot_addr         slot address of created txn
   @param[out]     prev_image        prev scn/utc
 */
-void trx_undo_header_add_space_for_txn(space_id_t space_id, page_t *undo_page,
-                                       trx_id_t trx_id, mtr_t *mtr,
-                                       ulint offset, uint8 txn_ext_storage,
+void trx_undo_header_add_space_for_txn(trx_rseg_t *rseg, page_t *undo_page,
+                                       mtr_t *mtr, ulint offset,
+                                       uint8 txn_ext_storage,
                                        slot_addr_t *slot_addr,
                                        commit_mark_t *prev_image);
 /**

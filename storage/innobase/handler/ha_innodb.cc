@@ -23616,6 +23616,11 @@ static MYSQL_SYSVAR_ULONG(undo_space_reserved_size,
                           lizard::Undo_retention::on_update, 0, 0, UINT_MAX32,
                           0);
 
+static MYSQL_SYSVAR_ULONG(txn_retention, lizard::txn_retention_time,
+                          PLUGIN_VAR_OPCMDARG,
+                          "Retention time of txn undo data in seconds", nullptr,
+                          nullptr, 0, 0, UINT_MAX32, 0);
+
 static const char *innodb_tcn_cache_level_names[] = {
     "none",   /* Disable */
     "global", /* GLOBAL_LEVEL */
@@ -23934,6 +23939,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(undo_retention),
     MYSQL_SYSVAR(undo_space_supremum_size),
     MYSQL_SYSVAR(undo_space_reserved_size),
+    MYSQL_SYSVAR(txn_retention),
     MYSQL_SYSVAR(global_query_wait_timeout),
     MYSQL_SYSVAR(transaction_group),
     MYSQL_SYSVAR(tcn_cache_level),
