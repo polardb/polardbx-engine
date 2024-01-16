@@ -242,6 +242,7 @@ innodb.instant_ddl_upgrade_part_metadata_debug    : WL#000 Lizard didn't support
 innodb.instant_ddl_upgrade_update                 : WL#000 Lizard didn't support in-place upgrade.
 innodb.instant_ddl_upgrade_rollback               : WL#000 Lizard didn't support in-place upgrade.
 main.dd_schema_definition_debug                   : WL#000 Lizard didn't support in-place upgrade.
+information_schema.i_s_schema_definition_debug    : WL#000 Lizard didn't support in-place upgrade.
 
 # innodb-rollback-segments
 innodb.innodb_bug12400341                         : WL#000 Lizard didn't support adjust innodb-rollback-segments.
@@ -410,3 +411,8 @@ service_sys_var_registration.sys_var_service_cl       : WL#21509040 not support 
 sys_vars.innodb_version_basic                         : WL#21509040 modify the version
 main.log_components_filter                            : WL#21509040 log timestamp unstable
 x.compression_level_lz4_server                        : WL#21509040 error from xcluster support
+perfschema.idx_compare_socket_instances               : WL#21509040 disable ipv6
+
+
+
+

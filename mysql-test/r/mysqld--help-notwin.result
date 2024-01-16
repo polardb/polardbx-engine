@@ -527,8 +527,13 @@ The following options may be given as the first argument:
  (Defaults to on; use --skip-enable-appliedindex-checker to disable.)
  --enable-changeset  Whether open the polarx changeset proc
  (Defaults to on; use --skip-enable-changeset to disable.)
+ --enable-implicit-primary-key 
+ MySQL add the primary key for every tables that haven't
+ any unique indexes automaticly
  --enable-polarx-rpc Use new open PolarDB-X RPC
  (Defaults to on; use --skip-enable-polarx-rpc to disable.)
+ --enable-show-ipk-info 
+ Show everything about implicit key info
  --end-markers-in-json 
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
@@ -655,6 +660,9 @@ The following options may be given as the first argument:
  Maximum amount of memory available for generating
  histograms
  --host-cache-size=# How many host names should be cached to avoid resolving.
+ --implicit-primary-key 
+ This option is deprecated. Use
+ enable_implicit_primary_key instead.
  --import-tablespace-iterator-interval[=#] 
  This option is deprecated. Use
  import_tablespace_iterator_interval_ms instead.
@@ -1795,6 +1803,8 @@ The following options may be given as the first argument:
  SHOW commands and INFORMATION_SCHEMA tables shows
  generated invisible primary key definition.
  (Defaults to on; use --skip-show-gipk-in-create-table-and-information-schema to disable.)
+ --show-ipk-info     This option is deprecated. Use enable_show_ipk_info
+ instead.
  --show-old-temporals 
  When this option is enabled, the pre-5.6.4 temporal types
  will be marked in the 'SHOW CREATE TABLE' and
@@ -2215,7 +2225,9 @@ disconnect-slave-event-count 0
 div-precision-increment 4
 enable-appliedindex-checker TRUE
 enable-changeset TRUE
+enable-implicit-primary-key FALSE
 enable-polarx-rpc TRUE
+enable-show-ipk-info FALSE
 end-markers-in-json FALSE
 enforce-gtid-consistency false
 eq-range-index-dive-limit 200
@@ -2245,6 +2257,7 @@ gtid-mode OFF
 help TRUE
 histogram-generation-max-mem-size 20000000
 host-cache-size 279
+implicit-primary-key FALSE
 import-tablespace-iterator-interval 10
 import-tablespace-iterator-interval-ms 10
 information-schema-stats-expiry 86400
@@ -2582,6 +2595,7 @@ session-track-transaction-info OFF
 sha256-password-proxy-users FALSE
 show-create-table-verbosity FALSE
 show-gipk-in-create-table-and-information-schema TRUE
+show-ipk-info FALSE
 show-old-temporals FALSE
 show-replica-auth-info FALSE
 show-slave-auth-info FALSE

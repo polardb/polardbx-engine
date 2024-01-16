@@ -106,7 +106,7 @@ xa prepare 'x1';
 call dbms_consensus.change_leader(2);
 
 --connection conn2
---enable_reconnec t
+--enable_reconnect
 --source include/wait_until_connected_again_old.inc
 --disable_reconnect
 let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';

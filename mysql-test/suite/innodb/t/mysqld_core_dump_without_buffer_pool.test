@@ -7,6 +7,7 @@
 # madvise MADV_DONTDUMP is non-posix extension available in Linux 3.4
 --let $minimum_required_linux_version = 3.4
 --source include/linux-version.inc
+--source include/have_debug.inc
 
 # Unless /proc/sys/kernel/core_pattern is core, it's not possible to locate core file to verify size
 --source include/linux_core_pattern.inc

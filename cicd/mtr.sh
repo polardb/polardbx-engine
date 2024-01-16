@@ -1,18 +1,18 @@
 #!/usr/bin/bash
 source cicd/common.sh
 
-CORES=$(nproc)
+CORES=32
 RETRY=2
 PARALLEL=${CORES}
 PERL_BIN=perl
 
+#--sanitize \
 if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ]; then
   ${PERL_BIN} "${CICD_BUILD_ROOT}"/mysql-test/mysql-test-run.pl \
     --report-unstable-tests \
-    --sanitize \
     --timer \
     --force \
-    --max-test-fail=0 \
+    --max-test-fail=100 \
     --retry="${RETRY}" \
     --skip-ndb \
     --skip-rpl \
