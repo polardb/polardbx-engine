@@ -330,7 +330,7 @@ Conf_error reload_ccl_rules(THD *thd) {
   Conf_error error;
   size_t num;
   TABLE_LIST_PTR table_list;
-  Conf_records *records;
+  Conf_records *records = nullptr;
   DBUG_ENTER("reload_ccl_rules");
 
   if ((error = open_ccl_table(thd, table_list, false)) != Conf_error::CONF_OK)
@@ -355,6 +355,7 @@ Conf_error reload_ccl_rules(THD *thd) {
   }
 err_and_close:
   commit_and_close_conf_table(thd);
+  destroy(records);
   DBUG_RETURN(error);
 }
 

@@ -408,7 +408,7 @@ void statement_outline_init(bool bootstrap) {
 Conf_error reload_outlines(THD *thd) {
   Conf_error error;
   TABLE_LIST_PTR table_list;
-  Conf_records *records;
+  Conf_records *records = nullptr;
   size_t num;
   DBUG_ENTER("reload_outlines");
 
@@ -434,6 +434,7 @@ Conf_error reload_outlines(THD *thd) {
 
 err_and_close:
   commit_and_close_conf_table(thd);
+  destroy(records);
   DBUG_RETURN(error);
 }
 
