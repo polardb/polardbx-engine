@@ -80,6 +80,24 @@ pipeline {
     failure {
       sh "mv ${RESULT_PATH}/failed.json ${RESULT_PATH}/result.json"
       sh "rm ${RESULT_PATH}/passed.json"
+
+      script {
+        if (env.TEST_TYPE == 'DAILY_REGRESSION') {
+          dingtalk(
+              robot: '44281ff8-2953-4369-97f8-137e09cbc486',
+              type: 'MARKDOWN',
+              title: '[PolarDB-X] DN 8032 Daily Regression',
+              text: [
+                "# [${env.JOB_NAME}](${env.JOB_URL})",
+                "---",
+                "- 任务: [${env.BUILD_DISPLAY_NAME}](${env.BUILD_URL})",
+                "- 状态: ${currentBuild.currentResult}",
+                "---",
+                "## 回归失败，请查看日志"
+              ]
+            )
+        }
+      }
     }
     cleanup {
       // must use relative path ???

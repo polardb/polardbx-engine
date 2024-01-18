@@ -11,7 +11,7 @@ GET_TEST_TYPE() {
     res=$MERGE_CHECK
   else
     #use daily regression by default
-    res=1
+    res=$DAILY_REGRESSION
   fi
   echo "$res"
 }

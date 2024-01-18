@@ -339,7 +339,7 @@ else
       -DWITH_DEBUG=$debug                \
       -DENABLE_GCOV=$gcov                \
       -DINSTALL_LAYOUT=STANDALONE        \
-      -DMYSQL_MAINTAINER_MODE=0          \
+      -DMYSQL_MAINTAINER_MODE=1          \
       -DWITH_SSL=openssl                 \
       -DWITH_ZLIB=bundled                \
       -DWITH_ZSTD=bundled                \
