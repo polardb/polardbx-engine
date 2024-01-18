@@ -16,7 +16,7 @@ XA COMMIT X'78696431',X'',1 ONE PHASE;
 # Kill the server
 ERROR HY000: Lost connection to MySQL server during query
 # restart
-include/assert.inc [Found 1 log message(s) for "((Successfully rolled back 1 XA transaction)|(Rolling back trx with id ([0-9]+), 1 rows to undo))"]
+include/assert.inc [Found 1 log message(s) for "((Successfully rolled back 1 XA transaction)|(Rolling back trx with id ([0-9]+), XID X%,X%,%, 1 rows to undo))"]
 include/assert_binlog_events.inc [Consensus_log # Consensus_empty]
 include/assert.inc [GTID_EXECUTED has not been updated]
 include/assert.inc [No XA transactions in PREPARED state]

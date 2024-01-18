@@ -1215,7 +1215,7 @@ int MYSQL_BIN_LOG::truncate_single_file_by_consensus_index(
     mysql_file_close(file, MYF(MY_WME));
     return -1;
   } else {
-    xp::info(ER_XP_COMMIT) << "Truncate binlog file " << file_name
+    xp::system(ER_XP_COMMIT) << "Truncate binlog file " << file_name
                            << ", consensus_index " << consensus_index
                            << ", Binlog trimmed to " << *offset << " position.";
     mysql_file_close(file, MYF(MY_WME));
@@ -1241,7 +1241,7 @@ int MYSQL_BIN_LOG::consensus_truncate_log(uint64 consensus_index) {
     abort();
   } else {
     update_binlog_end_pos();
-    xp::info(ER_XP_COMMIT) << "succ to truncate binlog file "
+    xp::system(ER_XP_COMMIT) << "succ to truncate binlog file "
                            << file_name.c_str() << ", consensus_index "
                            << consensus_index << ", offset " << offset
                            << ", position " << m_binlog_file->position();
@@ -1473,6 +1473,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
     /* save real data to cache */
     my_b_write(consensus_log_manager.get_cache(), log.buffer, log.buf_size);
     xp::info(ER_XP_COMMIT) << "Large event: cache the current log"
+                           << ", index " << log.index
                            << ", size " << log.buf_size << ", cache size "
                            << my_b_tell(consensus_log_manager.get_cache());
   } else if (log.flag & Consensus_log_event_flag::FLAG_BLOB_END) {
@@ -1489,6 +1490,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
     my_b_write(consensus_log_manager.get_cache(), log.buffer, log.buf_size);
     real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
     xp::info(ER_XP_COMMIT) << "Large event: cache the current log finish"
+                           << ", index " << log.index
                            << ", size " << log.buf_size << ", whole log "
                            << real_buf_size;
   } else {
@@ -1635,6 +1637,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
       my_b_write(consensus_log_manager.get_cache(), iter->buffer,
                  iter->buf_size);
       xp::info(ER_XP_COMMIT) << "Large event: cache the current log"
+                             << ", index " << iter->index
                              << ", size " << iter->buf_size << ", cache size "
                              << my_b_tell(consensus_log_manager.get_cache());
     } else if (iter->flag & Consensus_log_event_flag::FLAG_BLOB_END) {
@@ -1654,6 +1657,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
       real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
       xp::info(ER_XP_COMMIT)
           << "Large event: cache the current log finish"
+          << ", index " << iter->index
           << ", size " << iter->buf_size << ", whole log " << real_buf_size;
     } else {
       ut_a(!consensus_log_manager.get_in_large_event_appending());

@@ -6205,8 +6205,6 @@ bool mts_recovery_groups(Relay_log_info *rli) {
 
   DBUG_TRACE;
 
-  assert(rli->replica_parallel_workers == 0);
-
   /*
      Although mts_recovery_groups() is reentrant it returns
      early if the previous invocation raised any bit in
@@ -6229,6 +6227,8 @@ bool mts_recovery_groups(Relay_log_info *rli) {
     rli->mts_recovery_group_cnt = 0;
     return false;
   }
+
+  assert(rli->replica_parallel_workers == 0);
 
   /*
     Save relay log position to compare with worker's position.

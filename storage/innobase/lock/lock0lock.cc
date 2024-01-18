@@ -4508,6 +4508,7 @@ static void lock_table_print(FILE *file,         /*!< in: file where to print */
   fputs("TABLE LOCK table ", file);
   ut_print_name(file, lock->trx, lock->tab_lock.table->name.m_name);
   fprintf(file, " trx id " TRX_ID_FMT, trx_get_id_for_print(lock->trx));
+  fprintf(file, " XID %s", trx_get_xid_for_print(lock->trx).c_str());
 
   if (lock_get_mode(lock) == LOCK_S) {
     fputs(" lock mode S", file);
@@ -4551,6 +4552,7 @@ static void lock_rec_print(FILE *file,         /*!< in: file where to print */
           ulonglong{lock_rec_get_n_bits(lock)}, lock->index->name());
   ut_print_name(file, lock->trx, lock->index->table_name);
   fprintf(file, " trx id " TRX_ID_FMT, trx_get_id_for_print(lock->trx));
+  fprintf(file, " XID %s", trx_get_xid_for_print(lock->trx).c_str());
 
   if (lock_get_mode(lock) == LOCK_S) {
     fputs(" lock mode S", file);

@@ -78,7 +78,7 @@ INSERT INTO t1 VALUES (1);
 # 5.a. Error log for messages stating that recovery process found one
 #      transaction needing recovery and that was rolled back.
 #
---let $assert_select = ((Successfully rolled back 1 XA transaction)|(Rolling back trx with id ([0-9]+), 1 rows to undo))
+--let $assert_select = ((Successfully rolled back 1 XA transaction)|(Rolling back trx with id ([0-9]+), XID X%,X%,%, 1 rows to undo))
 --source extra/xa_crash_safe_tests/assert_recovery_message.inc
 
 # 5.b. The `XA PREPARE` wasn't logged to the binary log.

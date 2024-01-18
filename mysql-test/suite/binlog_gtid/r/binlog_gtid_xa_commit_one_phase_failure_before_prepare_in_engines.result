@@ -16,7 +16,7 @@ XA COMMIT X'78696431',X'',1 ONE PHASE;
 # Kill the server
 ERROR HY000: Lost connection to MySQL server during query
 # restart
-include/assert.inc [Found log message(s) for "Rolling back trx with id %, 1 rows to undo"]
+include/assert.inc [Found log message(s) for "Rolling back trx with id %, XID X%,X%,%, 1 rows to undo"]
 include/assert.inc [Found 1 log message(s) for "in InnoDB engine. No attempts to commit, rollback or prepare any transactions."]
 include/assert_binlog_events.inc [Consensus_log # Consensus_empty]
 include/assert.inc [GTID_EXECUTED has not been updated]

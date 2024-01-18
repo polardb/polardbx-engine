@@ -118,7 +118,7 @@ while ($iteration != 5) {
 # 3) Check that:
 # 3.a) SE recovery rolled back the transaction executed in 1.a)
 #
---let $assert_select = Rolling back trx with id %, 1 rows to undo
+--let $assert_select = Rolling back trx with id %, XID X%,X%,%, 1 rows to undo
 --source extra/xa_crash_safe_tests/assert_se_recovery_message.inc
 
 # 3.b) XA recovery rolled back the transaction executed in 1.b)
@@ -279,7 +279,7 @@ while ($iteration != 14) {
 #
 # 15.a) SE recovery rolled back the transaction executed in 13.a)
 #
---let $assert_select = Rolling back trx with id %, 1 rows to undo
+--let $assert_select = Rolling back trx with id %, XID X%,X%,%, 1 rows to undo
 --source extra/xa_crash_safe_tests/assert_se_recovery_message.inc
 
 # 15.b) XA recovery rolled back the transaction executed in 13.b)

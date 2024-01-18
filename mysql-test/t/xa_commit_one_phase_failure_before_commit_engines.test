@@ -77,7 +77,7 @@ INSERT INTO t1 VALUES (1);
 # 4.a. Error log for messages stating that SE recovery process rolled back
 #      a pending transaction.
 #
---let $assert_select = Rolling back trx with id %, 1 rows to undo
+--let $assert_select = Rolling back trx with id %, XID X%,X%,%, 1 rows to undo
 --source extra/xa_crash_safe_tests/assert_se_recovery_message.inc
 
 # 4.b. Error log for messages stating that XA recovery process didn't find

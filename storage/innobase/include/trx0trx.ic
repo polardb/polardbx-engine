@@ -136,6 +136,15 @@ static inline trx_id_t trx_get_id_for_print(const trx_t *trx) {
               : trx_id_t{reinterpret_cast<uintptr_t>(trx)} | (max_trx_id + 1));
 }
 
+static inline std::string trx_get_xid_for_print(const trx_t *trx) {
+  char tmp_xid_buf[XID::ser_buf_size];
+  XID tmp_xid;
+  if (trx && trx->xid)
+    tmp_xid = *trx->xid;
+
+  return tmp_xid.serialize(tmp_xid_buf);
+}
+
 /** Determine if a transaction is a dictionary operation.
  @return dictionary operation mode */
 static inline enum trx_dict_op_t trx_get_dict_operation(

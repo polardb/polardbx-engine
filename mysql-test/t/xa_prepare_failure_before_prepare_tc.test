@@ -77,7 +77,7 @@ INSERT INTO t1 VALUES (1);
 # 4.a. Error log for messages stating that recovery process found one
 #      transaction needing recovery.
 #
---let $assert_select = ((Successfully rolled back 1 XA transaction)|(Rolling back trx with id ([0-9]+), 1 rows to undo))
+--let $assert_select = ((Successfully rolled back 1 XA transaction)|(Rolling back trx with id ([0-9]+), XID X%,X%,%, 1 rows to undo))
 --source extra/xa_crash_safe_tests/assert_recovery_message.inc
 
 # 4.b. There aren't any pending XA transaction listed in the output of `XA

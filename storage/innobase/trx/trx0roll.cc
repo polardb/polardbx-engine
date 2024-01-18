@@ -664,8 +664,9 @@ static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
 
   const trx_id_t trx_id = trx_get_id_for_print(trx);
 
-  ib::info(ER_IB_MSG_1186) << "Rolling back trx with id " << trx_id << ", "
-                           << rows_to_undo << unit << " rows to undo";
+  ib::info(ER_IB_MSG_1186) << "Rolling back trx with id " << trx_id
+                           << ", XID " << trx_get_xid_for_print(trx)
+                            << ", " << rows_to_undo << unit << " rows to undo";
 
   que_run_threads(thr);
   ut_a(roll_node->undo_thr != nullptr);
@@ -680,6 +681,7 @@ static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
   ut_a(trx->lock.que_state == TRX_QUE_RUNNING);
 
   ib::info(ER_IB_MSG_1187) << "Rollback of trx with id " << trx_id
+                           << ", XID " << trx_get_xid_for_print(trx)
                            << " completed";
 
   mem_heap_free(heap);
@@ -728,7 +730,8 @@ static bool trx_rollback_or_clean_resurrected(
     case TRX_STATE_COMMITTED_IN_MEMORY:
       trx_sys_mutex_exit();
       ib::info(ER_IB_MSG_1188)
-          << "Cleaning up trx with id " << trx_get_id_for_print(trx);
+          << "Cleaning up trx with id " << trx_get_id_for_print(trx)
+          << ", XID " << trx_get_xid_for_print(trx);
 
       /** If has committed, only left insert undo to cleanup */
       lizard_ut_ad(trx->rsegs.m_txn.rseg == NULL);

@@ -183,13 +183,18 @@ bool xa::recovery::recover_prepared_in_tc_one_ht(THD *, plugin_ref plugin,
                                                  void *arg) {
   handlerton *ht = plugin_data<handlerton *>(plugin);
   xarecover_st *info = static_cast<struct xarecover_st *>(arg);
+  bool ret = false;
 
   if (ht->state == SHOW_OPTION_YES && ht->recover_prepared_in_tc) {
     assert(info->xa_list != nullptr);
-    return ht->recover_prepared_in_tc(ht, *info->xa_list) ||
-           ht->recover_prepared_in_tc(ht, *info->xa_list_in_ht);
+    xp::system(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list";
+    ret = ht->recover_prepared_in_tc(ht, *info->xa_list);
+    if (ret) return ret;
+
+    xp::system(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list_in_ht ";
+    ret = ht->recover_prepared_in_tc(ht, *info->xa_list_in_ht);
   }
-  return false;
+  return ret;
 }
 
 bool xa::recovery::recover_one_ht(THD *, plugin_ref plugin, void *arg) {

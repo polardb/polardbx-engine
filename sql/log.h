@@ -1610,6 +1610,6 @@ int log_builtins_exit();
 */
 void log_write_errstream(const char *buffer, size_t length);
 
-char *get_backtrace_str();
+std::string get_backtrace_str();
 
 #endif /* LOG_H */

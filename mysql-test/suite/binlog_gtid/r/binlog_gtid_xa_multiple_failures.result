@@ -31,7 +31,7 @@ include/execute_to_conditional_timestamp_sync_point.inc [after_writing_to_tc_log
 XA PREPARE 'xid4';
 # Kill the server
 # restart
-include/assert.inc [Found log message(s) for "Rolling back trx with id %, 1 rows to undo"]
+include/assert.inc [Found log message(s) for "Rolling back trx with id %, XID X%,X%,%, 1 rows to undo"]
 include/assert.inc [Found 1 log message(s) for "Successfully rolled back 1, prepared 2 XA transaction"]
 include/assert.inc [2 XA transaction(s) in PREPARED state]
 XA ROLLBACK 'xid3';
@@ -101,7 +101,7 @@ include/execute_to_conditional_timestamp_sync_point.inc [before_commit_in_engine
 XA COMMIT 'xid13' ONE PHASE;
 # Kill the server
 # restart
-include/assert.inc [Found log message(s) for "Rolling back trx with id %, 1 rows to undo"]
+include/assert.inc [Found log message(s) for "Rolling back trx with id %, XID X%,X%,%, 1 rows to undo"]
 include/assert.inc [Found 1 log message(s) for "Successfully committed 1, rolled back 1 XA transaction"]
 include/assert.inc [No XA transactions in PREPARED state]
 DROP TABLE t1;

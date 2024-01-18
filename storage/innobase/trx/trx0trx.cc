@@ -617,7 +617,8 @@ static void trx_validate_state_before_free(trx_t *trx) {
     ib::error(ER_IB_MSG_1202)
         << "Freeing a trx (" << trx << ", " << trx_get_id_for_print(trx)
         << ") which is declared"
-           " to be processing inside InnoDB";
+           " to be processing inside InnoDB"
+        << ", XID " << trx_get_xid_for_print(trx);
 
     trx_print(stderr, trx, 600);
     putc('\n', stderr);
@@ -895,7 +896,8 @@ static trx_t *trx_resurrect_insert(
 
     if (undo->is_prepared()) {
       ib::info(ER_IB_MSG_1204) << "Transaction " << trx_get_id_for_print(trx)
-                               << " was in the XA prepared state.";
+                               << " was in the XA prepared state"
+                               << ", XID " << trx_get_xid_for_print(trx);
 
       if (srv_force_recovery == 0) {
         trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
@@ -948,7 +950,8 @@ void trx_resurrect_update_in_prepared_state(
 
   if (undo->is_prepared()) {
     ib::info(ER_IB_MSG_1206) << "Transaction " << trx_get_id_for_print(trx)
-                             << " was in the XA prepared state.";
+                             << " was in the XA prepared state."
+                             << ", XID " << trx_get_xid_for_print(trx);
 
     ut_ad(trx->state.load(std::memory_order_relaxed) !=
           TRX_STATE_FORCED_ROLLBACK);
@@ -2715,6 +2718,7 @@ void trx_print_low(FILE *f,
   ut_ad(trx_sys_mutex_own());
 
   fprintf(f, "TRANSACTION " TRX_ID_FMT, trx_get_id_for_print(trx));
+  fprintf(f, ", XID %s", trx_get_xid_for_print(trx).c_str());
 
   const auto trx_state = trx->state.load(std::memory_order_relaxed);
 
@@ -3461,7 +3465,8 @@ int trx_recover_for_mysql(
       }
 
       ib::info(ER_IB_MSG_1208) << "Transaction " << trx_get_id_for_print(trx)
-                               << " in prepared state after recovery";
+                               << " in prepared state after recovery"
+                               << ", XID " << trx_get_xid_for_print(trx);
 
       ib::info(ER_IB_MSG_1209)
           << "Transaction contains changes to " << trx->undo_no << " rows";

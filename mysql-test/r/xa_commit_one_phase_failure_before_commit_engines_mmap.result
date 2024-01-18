@@ -16,7 +16,7 @@ XA COMMIT X'78696431',X'',1 ONE PHASE;
 # Kill the server
 ERROR HY000: Lost connection to MySQL server during query
 # restart
-include/assert.inc [Found log message(s) for "Rolling back trx with id %, 1 rows to undo"]
+include/assert.inc [Found log message(s) for "Rolling back trx with id %, XID X%,X%,%, 1 rows to undo"]
 include/assert.inc [Found 1 log message(s) for "in InnoDB engine. No attempts to commit, rollback or prepare any transactions."]
 include/assert.inc [No XA transactions in PREPARED state]
 include/assert.inc [Table 'test.t1' record count must be 1]

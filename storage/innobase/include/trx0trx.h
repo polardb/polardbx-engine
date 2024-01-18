@@ -399,6 +399,8 @@ Check if redo/noredo rseg is modified for insert/update.
 static inline bool trx_is_rseg_updated(const trx_t *trx);
 #endif /* !UNIV_HOTBACKUP */
 
+static inline std::string trx_get_xid_for_print(const trx_t *trx);
+
 typedef std::vector<ib_lock_t *, ut::allocator<ib_lock_t *>> lock_pool_t;
 
 /** Latching protocol for trx_lock_t::que_state.  trx_lock_t::que_state

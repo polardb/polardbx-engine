@@ -839,15 +839,15 @@ uint32 ConsensusLogManager::serialize_cache(uchar **buffer) {
 int ConsensusLogManager::truncate_log(uint64 consensus_index) {
   int error = 0;
 
-  xp::warn(ER_XP_0)
+  xp::system(ER_XP_0)
       << "ConsensusLogManager::truncate_log before"
-      << ", error: " << error << ", consensus index: " << consensus_index
-      << ", status: " << status << ", relaylog_reader_position: "
-      << (rli_info && rli_info->applier_reader
-              ? rli_info->applier_reader->relaylog_reader_position()
-              : 0)
-      << ", relay_log->position "
-      << (rli_info ? rli_info->relay_log.get_binlog_file()->position() : 0)
+      << ", error: " << error
+      << ", consensus index: " << consensus_index
+      << ", status: " << status
+      << ", relay_log name: " << ((rli_info && rli_info->applier_reader) ? rli_info->applier_reader->get_log_info()->log_file_name : "")
+      << ", relaylog_reader_position: " << ((rli_info && rli_info->applier_reader) ? rli_info->applier_reader->relaylog_reader_position() : 0)
+      << ", relay_log->position: " << (rli_info ? rli_info->relay_log.get_binlog_file()->position() : 0)
+      << ", binlog name: " << binlog->get_binlog_file()->get_binlog_name()
       << ", binlog->position: " << binlog->get_binlog_file()->position();
 
   prefetch_manager->stop_prefetch_threads();
@@ -872,15 +872,19 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index) {
   reinit_io_cache(cache_log->get_io_cache(), WRITE_CACHE, 0, 0, 1);
 
   if (status == RELAY_LOG_WORKING) {
-    if (rli_info->applier_reader &&
-        log->get_binlog_file()->position() <
-            rli_info->applier_reader->relaylog_reader_position()) {
-      xp::error(ER_XP_COMMIT)
-          << "relay log new position " << log->get_binlog_file()->position()
-          << " is small then current relaylog_reader_position "
-          << rli_info->applier_reader->relaylog_reader_position()
-          << ", need abort and restart";
-      abort();
+    if (rli_info->applier_reader) {
+      const int cmp_result = strcmp(log->get_binlog_file()->get_binlog_name(),
+                                    rli_info->applier_reader->get_log_info()->log_file_name);
+      if (cmp_result < 0
+          || (cmp_result == 0
+              && log->get_binlog_file()->position() < rli_info->applier_reader->relaylog_reader_position())) {
+        xp::error(ER_XP_COMMIT) << "relay log(" << log->get_binlog_file()->get_binlog_name()
+            << ") new position " << log->get_binlog_file()->position()
+            << " is small then current relaylog_reader(" << rli_info->applier_reader->get_log_info()->log_file_name
+            << ") position " << rli_info->applier_reader->relaylog_reader_position()
+            << ", need abort and restart";
+        abort();
+      }
     }
 
     if (recovery_manager->get_last_leader_term_index() >= consensus_index)
@@ -899,15 +903,15 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index) {
   mysql_rwlock_unlock(&LOCK_consensuslog_status);
   prefetch_manager->start_prefetch_threads();
 
-  xp::warn(ER_XP_0)
-      << "ConsensusLogManager::truncate_log finish"
-      << ", error: " << error << ", consensus index: " << consensus_index
-      << ", status: " << status << ", relaylog_reader_position: "
-      << (rli_info && rli_info->applier_reader
-              ? rli_info->applier_reader->relaylog_reader_position()
-              : 0)
-      << ", relay_log->position "
-      << (rli_info ? rli_info->relay_log.get_binlog_file()->position() : 0)
+  xp::system(ER_XP_0)
+      << "ConsensusLogManager::truncate_log after"
+      << ", error: " << error
+      << ", consensus index: " << consensus_index
+      << ", status: " << status
+      << ", relay_log name: " << ((rli_info && rli_info->applier_reader) ? rli_info->applier_reader->get_log_info()->log_file_name : "")
+      << ", relaylog_reader_position: " << ((rli_info && rli_info->applier_reader) ? rli_info->applier_reader->relaylog_reader_position() : 0)
+      << ", relay_log->position: " << (rli_info ? rli_info->relay_log.get_binlog_file()->position() : 0)
+      << ", binlog name: " << binlog->get_binlog_file()->get_binlog_name()
       << ", binlog->position: " << binlog->get_binlog_file()->position();
 
   return error;

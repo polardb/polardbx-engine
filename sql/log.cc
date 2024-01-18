@@ -2373,10 +2373,10 @@ int my_plugin_log_message(MYSQL_PLUGIN *plugin_ptr, plugin_log_level level,
 }
 
 #include <execinfo.h>
-char *get_backtrace_str() {
+std::string get_backtrace_str() {
 #define LOCAL_BUF_LEN 1024
-  static __thread char buf[LOCAL_BUF_LEN];
-  static __thread void *addrs[100];
+  char buf[LOCAL_BUF_LEN];
+  void *addrs[100];
   int size = backtrace(addrs, sizeof(addrs) / sizeof(addrs[0]));
   int i = 0;
   int pos = 0;
