@@ -105,9 +105,9 @@ struct SYS_VAR;
 /* Undo log state */
 #define TXN_UNDO_LOG_STATE (TXN_UNDO_PREV_GCN + 8)
 /* Flag how to use reserved space */
-#define TXN_UNDO_LOG_EXT_FLAG (TXN_UNDO_LOG_STATE + 2)
+#define TXN_UNDO_LOG_EXT_STORAGE (TXN_UNDO_LOG_STATE + 2)
 /* New flags. */
-#define TXN_UNDO_LOG_TAGS_1 (TXN_UNDO_LOG_EXT_FLAG + 1)
+#define TXN_UNDO_LOG_TAGS_1 (TXN_UNDO_LOG_EXT_STORAGE + 1)
 /* Unused space */
 #define TXN_UNDO_LOG_EXT_RESERVED (TXN_UNDO_LOG_TAGS_1 + 2)
 /* Unused space size */
@@ -131,12 +131,14 @@ static_assert(TXN_UNDO_LOG_EXT_HDR_SIZE == 275,
 #define TXN_UNDO_LOG_PURGED 3
 
 /*****************************************
- *        TXN_UNDO_LOG_EXT_FLAG           *
+ *        TXN_UNDO_LOG_EXT_STORAGE           *
  *****************************************/
+/** Empty TXN_UNDO_LOG_EXT_STORAGE */
+#define TXN_EXT_STORAGE_NONE 0x00
 /** bit_0: TXN have TXN_UNDO_LOG_TAGS_1. */
 #define TXN_EXT_FLAG_HAVE_TAGS_1 0x01
-/** Initial value of TXN_UNDO_LOG_EXT_FLAG. */
-#define TXN_EXT_FLAG_V1 TXN_EXT_FLAG_HAVE_TAGS_1
+/** Initial value of TXN_UNDO_LOG_EXT_STORAGE. */
+#define TXN_EXT_STORAGE_V1 TXN_EXT_FLAG_HAVE_TAGS_1
 
 /******************************************
  *           TXN_UNDO_LOG_TAGS_1       *
@@ -441,19 +443,38 @@ bool txn_undo_header_reuse_if_need(const page_t *undo_page,
 */
 extern void trx_undo_hdr_add_space_for_txn(page_t *undo_page,
                                            trx_ulogf_t *log_hdr, mtr_t *mtr);
+
 /**
-  Init the txn extension information.
+  Initialize the txn extension fields for the txn undo log header.
 
-  @param[in]      undo          undo memory struct
-  @param[in]      undo_page     undo log header page
-  @param[in]      log_hdr       undo log hdr
-  @param[in]      prev_image    prev scn/utc if the undo log header is reused
-  @param[in]      mtr
+  @param[in]      undo_page         undo log header page
+  @param[in]      log_hdr           undo log hdr
+  @param[in]      prev_image        prev scn/utc if the undo log header is
+  reused
+  @param[in]      txn_ext_storage   txn extension storage flag
+  @param[in]      mtr               mini transaction
 */
-void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
-                               trx_ulogf_t *log_hdr,
-                               const commit_mark_t &prev_image, mtr_t *mtr);
+void trx_undo_hdr_txn_ext_init(page_t *undo_page, trx_ulogf_t *log_hdr,
+                               const commit_mark_t &prev_image,
+                               uint8 txn_ext_storage, mtr_t *mtr);
 
+/**
+  Add space for txn extension and initialize the fields.
+
+  @param[in]      space_id          space id
+  @param[in]      undo_page         undo log header page
+  @param[in]      trx_id            transaction id
+  @param[in]      mtr               mini transaction
+  @param[in]      offset            txn header byte offset on page
+  @param[in]      txn_ext_storage   txn extension storage flag
+  @param[out]     slot_addr         slot address of created txn
+  @param[out]     prev_image        prev scn/utc
+*/
+void trx_undo_header_add_space_for_txn(space_id_t space_id, page_t *undo_page,
+                                       trx_id_t trx_id, mtr_t *mtr,
+                                       ulint offset, uint8 txn_ext_storage,
+                                       slot_addr_t *slot_addr,
+                                       commit_mark_t *prev_image);
 /**
   Read the txn undo log header extension information.
 
@@ -1093,11 +1114,6 @@ extern trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg,
     trx_undo_t::Gtid_storage gtid_storage, trx_undo_t **undo, mtr_t *mtr);
 
 void trx_resurrect_update_in_prepared_state(trx_t *trx, const trx_undo_t *undo);
-
-trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
-                                trx_id_t trx_id, const XID *xid,
-                                page_no_t page_no, ulint offset,
-                                const slot_addr_t &slot_addr);
 
 void trx_undo_page_init(page_t *undo_page, /*!< in: undo log segment page */
                         ulint type,        /*!< in: undo log segment type */

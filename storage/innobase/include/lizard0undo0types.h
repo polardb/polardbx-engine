@@ -388,7 +388,7 @@ struct txn_undo_hdr_t {
   or TXN_UNDO_LOG_PURGED */
   ulint state;
   /** A flag determining how to explain the txn extension */
-  ulint ext_flag;
+  ulint ext_storage;
   /** flags of the TXN. For example: 0x01 means rollback. */
   ulint tags_1;
   /** Return true if the transaction was eventually rolled back. */

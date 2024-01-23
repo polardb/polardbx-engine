@@ -277,6 +277,21 @@ PREPARED or (ACTIVE and recovered).
 void trx_undo_free_trx_with_prepared_or_active_logs(trx_t *trx,
                                                     bool prepared) UNIV_COLD;
 
+/** Creates and initializes an undo log memory object.
+@param[in]   rseg     rollback segment memory object
+@param[in]   id       slot index within rseg
+@param[in]   type     type of the log: TRX_UNDO_INSERT or TRX_UNDO_UPDATE
+@param[in]   trx_id   id of the trx for which the undo log is created
+@param[in]   xid      X/Open XA transaction identification
+@param[in]   page_no  undo log header page number
+@param[in]   offset   undo log header byte offset on page
+@return own: the undo log memory object */
+trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
+                                trx_id_t trx_id, const XID *xid,
+                                page_no_t page_no, ulint offset,
+                                const slot_addr_t &slot_addr,
+                                const commit_mark_t *prev_image = nullptr);
+
 /* Forward declaration. */
 namespace undo {
 struct Tablespace;
@@ -445,13 +460,13 @@ struct trx_undo_t {
   /*!< SCN last commit */
 
   /**
-    TXN ext_flag, only useful on TXN.
+    TXN ext_storage, only useful on TXN.
 
     Format:
     bit_0, TXN_EXT_FLAG_HAVE_TAGS_1
     bit_1~bit_7, unused for now.
   */
-  uint8_t txn_ext_flag;
+  uint8_t txn_ext_storage;
 
   /**
     TXN_UNDO_LOG_TAGS_1 in TXN. Only valid if TXN_EXT_FLAG_HAVE_TAGS_1 is set.

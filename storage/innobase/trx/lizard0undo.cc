@@ -128,7 +128,7 @@ mysql_pfs_key_t undo_retention_mutex_key;
 /* txn_undo_hdr_t related */
 /*-----------------------------------------------------------------------------*/
 bool txn_undo_hdr_t::have_tags_1() const {
-  return ext_flag & TXN_EXT_FLAG_HAVE_TAGS_1;
+  return ext_storage & TXN_EXT_FLAG_HAVE_TAGS_1;
 }
 
 bool txn_undo_hdr_t::is_rollback() const {
@@ -611,17 +611,18 @@ void trx_undo_hdr_add_space_for_txn(page_t *undo_page, trx_ulogf_t *log_hdr,
   mlog_write_ulint(log_hdr + TRX_UNDO_LOG_START, new_free, MLOG_2BYTES, mtr);
 }
 /**
-  Init the txn extension information.
+  Initialize the txn extension fields for the txn undo log header.
 
-  @param[in]      undo          undo memory struct
-  @param[in]      undo_page     undo log header page
-  @param[in]      log_hdr       undo log hdr
-  @param[in]      prev_image    prev scn/utc if the undo log header is reused
-  @param[in]      mtr
+  @param[in]      undo_page         undo log header page
+  @param[in]      log_hdr           undo log hdr
+  @param[in]      prev_image        prev scn/utc if the undo log header is
+  reused
+  @param[in]      txn_ext_storage   txn extension storage flag
+  @param[in]      mtr               mini transaction
 */
-void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
-                               trx_ulogf_t *log_hdr,
-                               const commit_mark_t &prev_image, mtr_t *mtr) {
+void trx_undo_hdr_txn_ext_init(page_t *undo_page, trx_ulogf_t *log_hdr,
+                               const commit_mark_t &prev_image,
+                               uint8 txn_ext_storage, mtr_t *mtr) {
   ut_ad(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
         TRX_UNDO_TXN);
 
@@ -645,30 +646,20 @@ void trx_undo_hdr_init_for_txn(trx_undo_t *undo, page_t *undo_page,
 
   if (DBUG_EVALUATE_IF("sim_old_txn_undo_hdr", true, false)) {
     /* TXN old format: Write the txn undo extension flag */
-    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, 0, MLOG_1BYTE, mtr);
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_STORAGE, TXN_EXT_STORAGE_NONE,
+                     MLOG_1BYTE, mtr);
   } else {
-    ut_ad(undo->txn_ext_flag == 0);
-    undo->txn_ext_flag |= TXN_EXT_FLAG_V1;
     /* Write the txn undo extension flag */
-    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_FLAG, undo->txn_ext_flag,
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_STORAGE, txn_ext_storage,
                      MLOG_1BYTE, mtr);
 
-    ut_ad(undo->txn_tags_1 == 0);
     /* Write the txn undo tags_1 */
-    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, undo->txn_tags_1,
-                     MLOG_2BYTES, mtr);
+    mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, 0, MLOG_2BYTES, mtr);
   }
 
-  ut_a(undo->flag == 0);
-
-  undo->flag |= TRX_UNDO_FLAG_TXN;
-
   /** Write the undo flag when create undo log header */
-  mlog_write_ulint(log_hdr + TRX_UNDO_FLAGS, undo->flag, MLOG_1BYTE, mtr);
-
-  /** Copy prev image into undo structure */
-  undo->prev_image = prev_image;
-  assert_commit_mark_allocated(undo->prev_image);
+  mlog_write_ulint(log_hdr + TRX_UNDO_FLAGS, TRX_UNDO_FLAG_TXN, MLOG_1BYTE,
+                   mtr);
 }
 
 /**
@@ -805,8 +796,8 @@ void trx_undo_hdr_read_txn(const page_t *undo_page,
   txn_undo_hdr->state =
       mtr_read_ulint(undo_header + TXN_UNDO_LOG_STATE, MLOG_2BYTES, mtr);
 
-  txn_undo_hdr->ext_flag =
-      mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
+  txn_undo_hdr->ext_storage =
+      mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_STORAGE, MLOG_1BYTE, mtr);
 
   if (txn_undo_hdr->have_tags_1()) {
     txn_undo_hdr->tags_1 =
@@ -1141,6 +1132,116 @@ bool trx_is_txn_rseg_updated(const trx_t *trx) {
 }
 
 /**
+  Add space for txn extension and initialize the fields.
+
+  @param[in]      space_id          space id
+  @param[in]      undo_page         undo log header page
+  @param[in]      trx_id            transaction id
+  @param[in]      mtr               mini transaction
+  @param[in]      offset            txn header byte offset on page
+  @param[in]      txn_ext_storage   txn extension storage flag
+  @param[out]     slot_addr         slot address of created txn
+  @param[out]     prev_image        prev scn/utc
+*/
+void trx_undo_header_add_space_for_txn(space_id_t space_id, page_t *undo_page,
+                                       trx_id_t trx_id, mtr_t *mtr,
+                                       ulint offset, uint8 txn_ext_storage,
+                                       slot_addr_t *slot_addr,
+                                       commit_mark_t *prev_image) {
+  page_no_t page_no;
+
+  ut_ad(slot_addr);
+  ut_ad(prev_image);
+
+  /** Lizard: add slot addr into undo log header */
+  page_no = page_get_page_no(undo_page);
+  *slot_addr = {space_id, page_no, offset};
+  ut_ad(slot_addr->is_redo());
+  lizard::trx_undo_hdr_write_slot(undo_page + offset, *slot_addr, mtr);
+
+  /** Add space for txn. */
+  trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
+
+  /** Init txn extension fields. */
+  trx_undo_hdr_txn_ext_init(undo_page, undo_page + offset, *prev_image,
+                            txn_ext_storage, mtr);
+}
+
+/**
+  Initialize the page header and segment header for txn undo.
+  Currently, this is only used by the 'txn_undo_get_free' and
+  'txn_purge_segment_to_cached_list' functions for txn undo segment reuse.
+
+  @param[in]      rseg      rollback segment
+  @param[in]      rseg_header      rollback segment header
+  @param[in]      undo_page      txn undo page
+  @param[in]      slot_no       index for free slot in undo log seg
+  @param[in]      mtr       mini transaction
+  @param[in]      trx_id        transaction id
+  @param[in]      txn_ext_storage   txn extension storage flag
+  @param[out]     slot_addr     slot address of created txn
+  @param[out]     prev_image    prev scn/utc
+*/
+static ulint txn_undo_segment_reuse(trx_rseg_t *rseg, trx_rsegf_t *rseg_header,
+                                    page_t *undo_page, ulint slot_no,
+                                    mtr_t *mtr, trx_id_t trx_id,
+                                    uint8 txn_ext_storage,
+                                    slot_addr_t *slot_addr,
+                                    commit_mark_t *prev_image) {
+  trx_upagef_t *page_hdr;
+  trx_usegf_t *seg_hdr;
+  page_no_t page_no;
+  ulint offset = 0;
+
+  ut_ad(slot_no != ULINT_UNDEFINED);
+
+  seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
+  page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
+  page_no = page_get_page_no(undo_page);
+
+  /** Init txn undo page header. */
+  trx_undo_page_init(undo_page, TRX_UNDO_TXN, mtr);
+
+  /** Init txn undo segment header. */
+  mlog_write_ulint(page_hdr + TRX_UNDO_PAGE_FREE,
+                   TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE, MLOG_2BYTES, mtr);
+  mlog_write_ulint(seg_hdr + TRX_UNDO_LAST_LOG, 0, MLOG_2BYTES, mtr);
+  flst_init(seg_hdr + TRX_UNDO_PAGE_LIST, mtr);
+  flst_add_last(seg_hdr + TRX_UNDO_PAGE_LIST, page_hdr + TRX_UNDO_PAGE_NODE,
+                mtr);
+  ut_ad(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
+        TRX_UNDO_TXN);
+
+  /** Increment the size of the rollback segment. */
+  rseg->incr_curr_size();
+
+  /** Set the undo log slot */
+  trx_rsegf_set_nth_undo(rseg_header, slot_no, page_no, mtr);
+
+  if (trx_id != 0) {
+    /** Allocate a txn header for a foreground trx. */
+    offset = trx_undo_header_create(undo_page, trx_id, prev_image, mtr);
+
+    trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
+                                      trx_undo_t::Gtid_storage::NONE);
+
+    lizard::trx_undo_header_add_space_for_txn(rseg->space_id, undo_page, trx_id,
+                                              mtr, offset, txn_ext_storage,
+                                              slot_addr, prev_image);
+
+    ut_ad(offset == TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE);
+    ut_ad(slot_addr->is_redo());
+    assert_commit_mark_allocated(*prev_image);
+  } else {
+    /** Reset TRX_UNDO_STATE to TRX_UNDO_CACHED for a background task. */
+    mlog_write_ulint(seg_hdr + TRX_UNDO_STATE, TRX_UNDO_CACHED, MLOG_2BYTES,
+                     mtr);
+  }
+
+  return offset;
+}
+
+/**
   Get undo log segment from free list
   @param[in]      trx       transaction
   @param[in]      rseg      rollback segment
@@ -1156,7 +1257,6 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
                                  trx_undo_t **undo) {
   page_t *undo_page = nullptr;
   trx_rsegf_t *rseg_header;
-  trx_upagef_t *page_hdr;
   trx_usegf_t *seg_hdr;
   page_no_t page_no;
   ulint offset;
@@ -1168,6 +1268,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
   ulint free_size;
   commit_mark_t prev_image = COMMIT_MARK_LOST;
   slot_addr_t slot_addr;
+  uint8 txn_ext_storage = TXN_EXT_STORAGE_V1;
 
   ulint slot_no = ULINT_UNDEFINED;
   dberr_t err = DB_SUCCESS;
@@ -1223,7 +1324,6 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
                                 rseg->page_size, &mtr);
 
   page_no = page_get_page_no(undo_page);
-  page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
   seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
 
   seg_size = flst_get_len(seg_hdr + TRX_UNDO_PAGE_LIST);
@@ -1240,49 +1340,21 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
 
   gcs->txn_undo_log_free_list_len.fetch_sub(1);
 
-  /** Phase 4 : Reinit the undo log segment header page */
-  trx_undo_page_init(undo_page, type, &mtr);
-
-  mlog_write_ulint(page_hdr + TRX_UNDO_PAGE_FREE,
-                   TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE, MLOG_2BYTES, &mtr);
-
-  mlog_write_ulint(seg_hdr + TRX_UNDO_LAST_LOG, 0, MLOG_2BYTES, &mtr);
-
-  flst_init(seg_hdr + TRX_UNDO_PAGE_LIST, &mtr);
-
-  flst_add_last(seg_hdr + TRX_UNDO_PAGE_LIST, page_hdr + TRX_UNDO_PAGE_NODE,
-                &mtr);
-
-  ut_ad(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
-        TRX_UNDO_TXN);
-
-  rseg->incr_curr_size();
-
-  offset = trx_undo_header_create(undo_page, trx_id, &prev_image, &mtr);
+  /** Phase 4: Reinit the txn undo log segment header page and create a txn undo
+   * header for use. */
+  offset =
+      txn_undo_segment_reuse(rseg, rseg_header, undo_page, slot_no, &mtr,
+                             trx_id, txn_ext_storage, &slot_addr, &prev_image);
 
   ut_ad(offset == TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE);
+  ut_ad(slot_addr.is_redo());
+  assert_commit_mark_allocated(prev_image);
 
-  /** Lizard: add slot into undo log header */
-  slot_addr = {rseg->space_id, page_no, offset};
-
-  /** Current undo log hdr is UBA */
-  lizard::trx_undo_hdr_write_slot(undo_page + offset, slot_addr, &mtr);
-
-  trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, &mtr,
-                                    trx_undo_t::Gtid_storage::NONE);
-
-  trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, &mtr);
-
-  /** Phase 5 : Set the undo log slot */
-  trx_rsegf_set_nth_undo(rseg_header, slot_no, page_no, &mtr);
-
-  /** Phase 6 : Create a memory object for txn undo */
+  /** Phase 5: Create and init a memory object for txn undo. */
   *undo = trx_undo_mem_create(rseg, slot_no, type, trx_id, xid, page_no, offset,
-                              slot_addr);
+                              slot_addr, &prev_image);
 
-  trx_undo_hdr_init_for_txn(*undo, undo_page, undo_page + offset, prev_image,
-                            &mtr);
-
+  (*undo)->txn_ext_storage = txn_ext_storage;
   ut_ad((*undo)->flag == TRX_UNDO_FLAG_TXN);
 
   assert_commit_mark_allocated((*undo)->prev_image);
@@ -1938,7 +2010,6 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
   trx_rsegf_t *rseg_hdr;
   trx_ulogf_t *log_hdr;
   trx_usegf_t *seg_hdr;
-  trx_upagef_t *page_hdr;
   page_t *undo_page;
   ulint seg_size;
   ulint hist_size;
@@ -1949,6 +2020,7 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
   /** Only transaction rollback segment have free list */
   ut_ad(fsp_is_txn_tablespace_by_id(rseg->space_id));
 
+  /** Phase 1 : Find a free slot in rseg array */
   rseg_hdr = trx_rsegf_get(rseg->space_id, rseg->page_no, rseg->page_size, mtr);
   slot_no = trx_rsegf_undo_find_free(rseg_hdr, mtr);
   if (slot_no == ULINT_UNDEFINED) {
@@ -1964,13 +2036,12 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
                                 rseg->page_size, mtr);
   seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
   log_hdr = undo_page + hdr_addr.boffset;
-  page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
 
   /** The page list always has only its self page */
   seg_size = flst_get_len(seg_hdr + TRX_UNDO_PAGE_LIST);
   ut_a(seg_size == 1);
 
-  /** Remove the undo log segment from history list */
+  /** Phase 2: Remove the undo log segment from history list */
   trx_purge_remove_log_hdr(rseg_hdr, log_hdr, mtr);
   hist_size =
       mtr_read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr);
@@ -1982,31 +2053,22 @@ bool txn_purge_segment_to_cached_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
   ut_ad(rseg->get_curr_size() >= seg_size);
   rseg->decr_curr_size(seg_size);
 
-  /** Reinit undo log segment header page. */
-  trx_undo_page_init(undo_page, TRX_UNDO_TXN, mtr);
-  mlog_write_ulint(page_hdr + TRX_UNDO_PAGE_FREE,
-                   TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE, MLOG_2BYTES, mtr);
-  mlog_write_ulint(seg_hdr + TRX_UNDO_LAST_LOG, 0, MLOG_2BYTES, mtr);
-  flst_init(seg_hdr + TRX_UNDO_PAGE_LIST, mtr);
-  flst_add_last(seg_hdr + TRX_UNDO_PAGE_LIST, page_hdr + TRX_UNDO_PAGE_NODE,
-                mtr);
-  ut_ad(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
-        TRX_UNDO_TXN);
-  /** Set state = CACHED and the undo log slot */
-  mlog_write_ulint(seg_hdr + TRX_UNDO_STATE, TRX_UNDO_CACHED, MLOG_2BYTES, mtr);
-  trx_rsegf_set_nth_undo(rseg_hdr, slot_no, undo_page_no, mtr);
-  rseg->incr_curr_size();
+  /** Phase 3: Reinit the txn undo log segment header page for reuse. */
+  ulint offset =
+      txn_undo_segment_reuse(rseg, rseg_hdr, undo_page, slot_no, mtr, 0,
+                             TXN_EXT_STORAGE_NONE, nullptr, nullptr);
+  ut_ad(offset == 0);
 
-  /** Create memory object undo. */
+  /** Phase 4: Create a memory object for txn undo. */
   XID xid;
   xid.reset();
-
   trx_undo_t *undo =
       trx_undo_mem_create(rseg, slot_no, TRX_UNDO_TXN, 0, &xid, hdr_addr.page,
                           0, txn_sys_t::SLOT_ADDR_NULL);
   undo->state = TRX_UNDO_CACHED;
   undo->empty = true;
 
+  /** Phase 5: Add the txn undo to cached list. */
   UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
 
   MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
@@ -2355,7 +2417,7 @@ static bool txn_undo_hdr_lookup_func(txn_rec_t *txn_rec,
   /** NOTES: If the extent flag is used, there might be some records's flag
   that is equal to 0, and there also might be other records's flag that's not
   equal to 0 at the same time. */
-  // if (txn_undo_hdr.ext_flag != 0) {
+  // if (txn_undo_hdr.ext_storage != 0) {
   //   /** The header might be raw */
   //   lizard_stats.txn_undo_lost_ext_flag_wrong.inc();
   //   goto undo_corrupted;
@@ -2941,7 +3003,7 @@ void txn_undo_set_state_at_finish(trx_t *trx, trx_ulogf_t *log_hdr,
   txn_undo_set_state(log_hdr, TXN_UNDO_LOG_COMMITED, mtr);
 
   /** 2. Set rollback tag if need */
-  if (is_rollback && (txn_undo->txn_ext_flag & TXN_EXT_FLAG_HAVE_TAGS_1)) {
+  if (is_rollback && (txn_undo->txn_ext_storage & TXN_EXT_FLAG_HAVE_TAGS_1)) {
     txn_undo->txn_tags_1 |= TXN_NEW_TAGS_1_ROLLBACK;
     mlog_write_ulint(log_hdr + TXN_UNDO_LOG_TAGS_1, txn_undo->txn_tags_1,
                      MLOG_2BYTES, mtr);
@@ -2954,7 +3016,7 @@ void trx_undo_mem_init_for_txn(trx_rseg_t *rseg, trx_undo_t *undo,
                                uint32_t flag, ulint state, mtr_t *mtr) {
   assert_commit_mark_initial(undo->cmmt);
   assert_commit_mark_initial(undo->prev_image);
-  ut_ad(undo->txn_ext_flag == 0);
+  ut_ad(undo->txn_ext_storage == TXN_EXT_STORAGE_NONE);
   ut_ad(undo->txn_tags_1 == 0);
 
   if (type == TRX_UNDO_TXN) {
@@ -2970,12 +3032,12 @@ void trx_undo_mem_init_for_txn(trx_rseg_t *rseg, trx_undo_t *undo,
     undo->prev_image = lizard::txn_undo_hdr_read_prev_cmmt(undo_header, mtr);
     assert_commit_mark_allocated(undo->prev_image);
 
-    /** 3. Init txn_ext_flag */
-    undo->txn_ext_flag =
-        mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_FLAG, MLOG_1BYTE, mtr);
+    /** 3. Init txn_ext_storage */
+    undo->txn_ext_storage =
+        mtr_read_ulint(undo_header + TXN_UNDO_LOG_EXT_STORAGE, MLOG_1BYTE, mtr);
 
     /** 4. Init txn_tags_1 */
-    if (undo->txn_ext_flag & TXN_EXT_FLAG_HAVE_TAGS_1) {
+    if (undo->txn_ext_storage & TXN_EXT_FLAG_HAVE_TAGS_1) {
       undo->txn_tags_1 =
           mtr_read_ulint(undo_header + TXN_UNDO_LOG_TAGS_1, MLOG_2BYTES, mtr);
     }

@@ -129,21 +129,6 @@ void trx_undo_page_init(page_t *undo_page, /*!< in: undo log segment page */
                         ulint type,        /*!< in: undo log segment type */
                         mtr_t *mtr);       /*!< in: mtr */
 
-#ifndef UNIV_HOTBACKUP
-/** Creates and initializes an undo log memory object.
-@param[in]   rseg     rollback segment memory object
-@param[in]   id       slot index within rseg
-@param[in]   type     type of the log: TRX_UNDO_INSERT or TRX_UNDO_UPDATE
-@param[in]   trx_id   id of the trx for which the undo log is created
-@param[in]   xid      X/Open XA transaction identification
-@param[in]   page_no  undo log header page number
-@param[in]   offset   undo log header byte offset on page
-@return own: the undo log memory object */
-trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
-                                trx_id_t trx_id, const XID *xid,
-                                page_no_t page_no, ulint offset,
-                                const slot_addr_t &slot_addr);
-#endif /* !UNIV_HOTBACKUP */
 /** Initializes a cached insert undo log header page for new use. NOTE that this
  function has its own log record type MLOG_UNDO_HDR_REUSE. You must NOT change
  the operation of this function!
@@ -1541,7 +1526,8 @@ ulint trx_undo_lists_init(
 trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
                                 trx_id_t trx_id, const XID *xid,
                                 page_no_t page_no, ulint offset,
-                                const slot_addr_t &slot_addr) {
+                                const slot_addr_t &slot_addr,
+                                const commit_mark_t *prev_image) {
   trx_undo_t *undo;
 
   ut_a(id < TRX_RSEG_N_SLOTS);
@@ -1582,8 +1568,32 @@ trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
   /** Lizard: init undo scn */
   undo->cmmt = COMMIT_MARK_NULL;
   undo->prev_image = COMMIT_MARK_NULL;
-  undo->txn_ext_flag = 0;
+  undo->txn_ext_storage = TXN_EXT_STORAGE_NONE;
   undo->txn_tags_1 = 0;
+
+  /** For txn undo, we initialize the txn fields directly if a physical txn undo
+   * header has been created. */
+  if (type == TRX_UNDO_TXN) {
+    if (offset == 0) {
+      /** If the offset is invalid, no physical txn undo header is created. This
+       * only happens in txn_purge_segment_to_cached_list. */
+      ut_ad(prev_image == nullptr);
+      ut_ad(slot_addr == lizard::txn_sys_t::SLOT_ADDR_NULL);
+    } else {
+      /** If the offset is valid, a physical txn undo header must be created
+       * before the txn undo memory object. Therefore, a valid slot_addr must be
+       * provided. */
+      ut_ad(!(slot_addr == lizard::txn_sys_t::SLOT_ADDR_NULL));
+
+      undo->flag |= TRX_UNDO_FLAG_TXN;
+
+      if (prev_image) {
+        /** Set undo->prev_image if a valid prev_image provided. */
+        assert_commit_mark_allocated(*prev_image);
+        undo->prev_image = *prev_image;
+      }
+    }
+  }
 
   return (undo);
 }
@@ -1595,7 +1605,8 @@ static void trx_undo_mem_init_for_reuse(
                       is created */
     const XID *xid,   /*!< in: X/Open XA transaction identification*/
     ulint offset,     /*!< in: undo log header byte offset on page */
-    const slot_addr_t &slot_addr) /*!< in: txn undo slot address. */
+    const slot_addr_t &slot_addr,    /*!< in: txn undo slot address. */
+    const commit_mark_t &prev_image) /*!< in: prev scn/utc. */
 {
   ut_ad(mutex_own(&((undo->rseg)->mutex)));
 
@@ -1618,8 +1629,21 @@ static void trx_undo_mem_init_for_reuse(
   /** Lizard: init undo scn */
   undo->cmmt = COMMIT_MARK_NULL;
   undo->prev_image = COMMIT_MARK_NULL;
-  undo->txn_ext_flag = 0;
+  undo->txn_ext_storage = TXN_EXT_STORAGE_NONE;
   undo->txn_tags_1 = 0;
+
+  /** For txn undo, we initialize the txn fields directly. */
+  if (undo->type == TRX_UNDO_TXN) {
+    /** When reusing, a physical txn undo header must be created before the txn
+     * undo memory object. Therefore, a valid prev_image, offset and slot_addr
+     * must be provided. */
+    ut_ad(offset != 0);
+    ut_ad(!(slot_addr == lizard::txn_sys_t::SLOT_ADDR_NULL));
+    assert_commit_mark_allocated(prev_image);
+
+    undo->flag |= TRX_UNDO_FLAG_TXN;
+    undo->prev_image = prev_image;
+  }
 }
 
 /** Frees an undo log memory copy. */
@@ -1653,6 +1677,7 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
   page_t *undo_page;
   commit_mark_t prev_image = COMMIT_MARK_LOST;
   slot_addr_t slot_addr;
+  uint8 txn_ext_storage = TXN_EXT_STORAGE_NONE;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1687,27 +1712,24 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
 
   /** Lizard: special for txn undo */
   if (type == TRX_UNDO_TXN) {
-    /** Follow the XA will be txn extension information  */
-    lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
-
-    /** Lizard: add slot into undo log header */
-    slot_addr = {rseg->space_id, page_no, offset};
-
-    /** Current undo log hdr is UBA */
-    lizard::trx_undo_hdr_write_slot(undo_page + offset, slot_addr, mtr);
+    txn_ext_storage = TXN_EXT_STORAGE_V1;
+    /** Add space for txn extension and initialize the fields. */
+    lizard::trx_undo_header_add_space_for_txn(rseg->space_id, undo_page, trx_id,
+                                              mtr, offset, txn_ext_storage,
+                                              &slot_addr, &prev_image);
   } else {
     /** Slot is come from txn undo */
     slot_addr = lizard::trx_undo_hdr_write_slot(undo_page + offset, trx, mtr);
   }
 
   *undo = trx_undo_mem_create(rseg, id, type, trx_id, xid, page_no, offset,
-                              slot_addr);
+                              slot_addr, &prev_image);
 
   /** Lizard: Already use txn extension, so set TRX_UNDO_FLAG_TXN in advance. */
   if (type == TRX_UNDO_TXN) {
-    lizard::trx_undo_hdr_init_for_txn(*undo, undo_page, undo_page + offset,
-                                      prev_image, mtr);
     ut_ad((*undo)->flag == TRX_UNDO_FLAG_TXN);
+
+    (*undo)->txn_ext_storage = txn_ext_storage;
 
     lizard::txn_undo_hash_insert(*undo);
 
@@ -1739,6 +1761,7 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
   trx_undo_t *undo;
   commit_mark_t prev_image = COMMIT_MARK_LOST;
   slot_addr_t slot_addr;
+  uint8 txn_ext_storage = TXN_EXT_STORAGE_NONE;
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
@@ -1806,30 +1829,27 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
   } else {
     ut_a(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
          TRX_UNDO_TXN);
+    /** Create and init a txn undo header. */
     offset = trx_undo_header_create(undo_page, trx_id, &prev_image, mtr);
     gtid_storage = trx_undo_t::Gtid_storage::NONE;
 
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr,
                                       gtid_storage);
-    /* Lizard: special for txn undo log header */
-    /** Lizard: add slot into undo log header */
 
-    slot_addr = {undo->space, undo->hdr_page_no, offset};
-
-    /** Current undo log hdr is slot */
-    lizard::trx_undo_hdr_write_slot(undo_page + offset, slot_addr, mtr);
-
-    /** Follow the XA will be txn extension information  */
-    lizard::trx_undo_hdr_add_space_for_txn(undo_page, undo_page + offset, mtr);
+    txn_ext_storage = TXN_EXT_STORAGE_V1;
+    lizard::trx_undo_header_add_space_for_txn(rseg->space_id, undo_page, trx_id,
+                                              mtr, offset, txn_ext_storage,
+                                              &slot_addr, &prev_image);
+    ut_ad(slot_addr.is_redo());
+    assert_commit_mark_allocated(prev_image);
   }
 
-  trx_undo_mem_init_for_reuse(undo, trx_id, xid, offset, slot_addr);
+  trx_undo_mem_init_for_reuse(undo, trx_id, xid, offset, slot_addr, prev_image);
 
   undo->m_gtid_storage = gtid_storage;
 
   if (type == TRX_UNDO_TXN) {
-    lizard::trx_undo_hdr_init_for_txn(undo, undo_page, undo_page + offset,
-                                      prev_image, mtr);
+    undo->txn_ext_storage = txn_ext_storage;
     ut_ad(undo->flag == TRX_UNDO_FLAG_TXN);
   }
   return (undo);
