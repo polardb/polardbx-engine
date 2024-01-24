@@ -1498,6 +1498,7 @@ time_t server_start_time, flush_status_time;
 
 char server_uuid[UUID_LENGTH + 1];
 const char *server_uuid_ptr;
+binary_log::Uuid server_sid;
 #if defined(HAVE_BUILD_ID_SUPPORT)
 char server_build_id[42];
 const char *server_build_id_ptr;
@@ -6962,6 +6963,10 @@ static int init_server_components() {
     LogErr(ERROR_LEVEL, ER_OOM);
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
+
+  //init server_sid before revover
+  if (server_sid.parse(server_uuid, binary_log::Uuid::TEXT_LENGTH) != 0)
+    unireg_abort(MYSQLD_ABORT_EXIT);
 
   RUN_HOOK(server_state, before_recovery, (nullptr));
   if (tc_log->open(opt_bin_log ? opt_bin_logname : opt_tc_log_file)) {

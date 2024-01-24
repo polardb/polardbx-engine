@@ -98,10 +98,9 @@ class Consensus_binlog_recovery : public binlog::Binlog_recovery {
   void process_previous_consensus_index_event(
       const Previous_consensus_index_log_event &ev);
 
-  void process_internal_xid(ulong unmasked_server_id, my_xid xid);
+  void process_internal_xid(my_xid xid);
 
-  void process_external_xid(ulong unmasked_server_id, const XID &xid,
-                            enum_ha_recover_xa_state state);
+  void process_external_xid(const XID &xid, enum_ha_recover_xa_state state);
 
  private:
   uint64 m_current_index;
