@@ -1829,13 +1829,13 @@ static void trx_finalize_for_fts(
 
 /** If required, flushes the log to disk based on the value of
  innodb_flush_log_at_trx_commit. */
-static void trx_flush_log_if_needed_low(lsn_t lsn) /*!< in: lsn up to which logs
+static void trx_flush_log_if_needed_low(lsn_t lsn, bool no_flush) /*!< in: lsn up to which logs
                                                    are to be flushed. */
 {
 #ifdef _WIN32
   bool flush = true;
 #else
-  bool flush = srv_unix_file_flush_method != SRV_UNIX_NOSYNC;
+  bool flush = srv_unix_file_flush_method != SRV_UNIX_NOSYNC && !no_flush;
 #endif /* _WIN32 */
 
   Wait_stats wait_stats;
@@ -1872,7 +1872,9 @@ static void trx_flush_log_if_needed(lsn_t lsn, /*!< in: lsn up to which logs are
     auto wait_stats = log_write_up_to(*log_sys, lsn, true);
     MONITOR_INC_WAIT_STATS(MONITOR_TRX_ON_LOG_, wait_stats);
   } else {
-    trx_flush_log_if_needed_low(lsn);
+    //Note:: xpaxos follower apply worker no need flush immediately
+    bool no_flush = trx->mysql_thd && trx->mysql_thd->xpaxos_replication_channel;
+    trx_flush_log_if_needed_low(lsn, no_flush);
   }
 
   trx->op_info = "";

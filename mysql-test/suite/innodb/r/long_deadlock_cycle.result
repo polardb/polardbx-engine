@@ -39,14 +39,14 @@ InnoDB
 ------------------------
 %DATE% %THREAD_ID%
 *** (1) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 3 lock struct(s), heap size %NUMBER%, 2 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 1 FOR UPDATE
 
 *** (1) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -57,7 +57,7 @@ Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (1) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -68,14 +68,14 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (2) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 3 lock struct(s), heap size %NUMBER%, 2 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 4 FOR UPDATE
 
 *** (2) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -86,7 +86,7 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (2) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -97,14 +97,14 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (3) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 3 lock struct(s), heap size %NUMBER%, 2 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 3 FOR UPDATE
 
 *** (3) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -115,7 +115,7 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (3) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -126,14 +126,14 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (4) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 3 lock struct(s), heap size %NUMBER%, 2 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 2 FOR UPDATE
 
 *** (4) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -144,7 +144,7 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (4) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -205,14 +205,14 @@ InnoDB
 ------------------------
 %DATE% %THREAD_ID%
 *** (1) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 3 lock struct(s), heap size %NUMBER%, 2 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 1 FOR UPDATE
 
 *** (1) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -223,7 +223,7 @@ Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (1) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -234,14 +234,14 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (2) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 5 lock struct(s), heap size %NUMBER%, 8 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 4 FOR UPDATE
 
 *** (2) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -252,7 +252,7 @@ Record lock, heap no 2 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (2) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -263,14 +263,14 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (3) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'%HEX_XID%',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 3 lock struct(s), heap size %NUMBER%, 2 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 3 FOR UPDATE
 
 *** (3) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'%HEX_XID%',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -281,7 +281,7 @@ Record lock, heap no 5 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (3) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'%HEX_XID%',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -292,14 +292,14 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (4) TRANSACTION:
-TRANSACTION %NUMBER%, ACTIVE %NUMBER% sec starting index read
+TRANSACTION %NUMBER%, XID X'',X'',%NUMBER%, ACTIVE %NUMBER% sec starting index read
 mysql tables in use 1, locked 1
 LOCK WAIT 3 lock struct(s), heap size %NUMBER%, 2 row lock(s)
 MySQL thread id %NUMBER%, OS thread handle %NUMBER%, query id %NUMBER% %ADDRESS% %USER% statistics
 SELECT * FROM t1 WHERE id = 2 FOR UPDATE
 
 *** (4) HOLDS THE LOCK(S):
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap
 Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;
@@ -310,7 +310,7 @@ Record lock, heap no 4 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
 
 
 *** (4) WAITING FOR THIS LOCK TO BE GRANTED:
-RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% lock_mode X locks rec but not gap waiting
+RECORD LOCKS space id %NUMBER% page no 4 n bits 72 index PRIMARY of table `test`.`t1` trx id %NUMBER% XID X'',X'',%NUMBER% lock_mode X locks rec but not gap waiting
 Record lock, heap no 3 PHYSICAL RECORD: n_fields 6; compact format; info bits 0
  0: len 4; hex %HEXADECIMAL%; asc %ASC%;;
  1: len 6; hex %HEXADECIMAL%; asc %ASC%;;

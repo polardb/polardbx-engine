@@ -388,7 +388,7 @@ Warnings:
 Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
 SHOW INDEX FROM t1;
 Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
-t1	1	__#alibaba_rds_row_id#__	1	__#alibaba_rds_row_id#__	A	2	NULL	NULL		BTREE			YES	NULL
+t1	1	__#alibaba_rds_row_id#__	1	__#alibaba_rds_row_id#__	A	3	NULL	NULL		BTREE			YES	NULL
 SHOW COLUMNS FROM t1;
 Field	Type	Null	Key	Default	Extra
 a	date	YES		NULL	
