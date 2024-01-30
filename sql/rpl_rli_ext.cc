@@ -54,7 +54,7 @@ void mts_init_consensus_apply_index(Relay_log_info *rli,
   assert(rli->info_thd->xpaxos_replication_channel);
 
   xp::info(ER_XP_APPLIER) << "mts_init_consensus_apply_index "
-                          << consensus_index << ", rli " << rli;
+                          << consensus_index;
 
   rli->m_consensus_index_buf->init_tail(consensus_index);
 }
@@ -190,6 +190,10 @@ inline void Index_link_buf::force_advance_tail(uint64 index) {
     unlock();
     return;
   }
+
+  // xp::info(ER_XP_APPLIER) << "force_advance_tail " << index
+  //   << ", old tail " << m_tail.load()
+  //   << ", old count " << (index > m_tail.load() ? index - m_tail.load() : 0);
 
   m_tail.store(index);
   unlock();
