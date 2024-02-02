@@ -251,7 +251,7 @@ static bool fix_server_version(sys_var *, THD *, enum_var_type) {
 static Sys_var_uint Sys_rds_version("rds_version", "The mysql patch version",
                                     GLOBAL_VAR(rds_version), CMD_LINE(OPT_ARG),
                                     VALID_RANGE(1, 999),
-                                    DEFAULT(30), BLOCK_SIZE(1),
+                                    DEFAULT(MYSQL_VERSION_PATCH), BLOCK_SIZE(1),
                                     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
                                     ON_UPDATE(fix_server_version));
 
