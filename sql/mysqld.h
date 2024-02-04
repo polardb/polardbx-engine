@@ -67,7 +67,6 @@
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"  // UUID_LENGTH
 #include "sql/sys_vars_consensus.h"
-#include "libbinlogevents/include/uuid.h"
 
 class Rpl_global_filter;
 class Rpl_acf_configuration_handler;
@@ -311,7 +310,6 @@ extern char *opt_init_file;
 extern const char *opt_tc_log_file;
 extern char server_uuid[UUID_LENGTH + 1];
 extern const char *server_uuid_ptr;
-extern binary_log::Uuid server_sid;
 #if defined(HAVE_BUILD_ID_SUPPORT)
 extern char server_build_id[42];
 extern const char *server_build_id_ptr;

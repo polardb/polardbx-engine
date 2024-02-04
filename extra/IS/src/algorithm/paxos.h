@@ -352,6 +352,8 @@ class Paxos : public Consensus {
       uint64_t term = 0); /* A lock-free interface for follower */
   uint64_t getClusterId() override { return clusterId_.load(); }
   int setClusterId(uint64_t ci) override;
+  uint64_t getMyServerId() { return myServerId_.load(); }
+  int setMyServerId(uint64_t ci) { myServerId_.store(ci); return 0; }
 
   int checkLeaderTransfer(uint64_t targetId, uint64_t term, uint64_t &logIndex,
                           uint64_t leftCnt);
@@ -404,11 +406,12 @@ class Paxos : public Consensus {
   uint64_t appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
                                 LogFillModeT mode = NormalMode);
   int init(const std::vector<std::string> &strConfig, uint64_t current,
-           ClientService *cs = NULL, uint64_t ioThreadCnt = 4,
-           uint64_t workThreadCnt = 4,
+           uint64_t myServerId, ClientService *cs = NULL,
+           uint64_t ioThreadCnt = 4, uint64_t workThreadCnt = 4,
            std::shared_ptr<LocalServer> localServer = nullptr,
            bool memory_usage_count = false, uint64_t heartbeatThreadCnt = 0);
-  int initAsLearner(std::string &strConfig, ClientService *cs = NULL,
+  int initAsLearner(std::string &strConfig, uint64_t myServerId,
+                    ClientService *cs = NULL,
                     uint64_t ioThreadCnt = 4, uint64_t workThreadCnt = 4,
                     std::shared_ptr<LocalServer> localServer = nullptr,
                     bool memory_usage_count = false,
@@ -634,6 +637,7 @@ class Paxos : public Consensus {
   std::shared_ptr<LocalServer> localServer_;
 
   std::atomic<uint64_t> clusterId_;
+  std::atomic<uint64_t> myServerId_;
   std::atomic<bool> shutdown_;
   uint64_t maxPacketSize_;
   const static uint64_t maxSystemPacketSize_;

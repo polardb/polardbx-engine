@@ -102,9 +102,6 @@ Relay_log_info *Rpl_info_factory::new_rli_object(bool is_slave_recovery,
 #endif
         instances, channel, is_rli_fake);
 
-    /** Attention.  */
-    rli->replicate_same_server_id = true;
-
   } else {
     rli = new Relay_log_info(
         is_slave_recovery,

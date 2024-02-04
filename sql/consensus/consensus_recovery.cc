@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/mysqld.h"
 #include "sql/xa/xid_extract.h"
 #include "storage/innobase/include/ut0dbg.h"
+#include "sql/system_variables.h"
 
 namespace xp {
 
@@ -256,9 +257,9 @@ void Consensus_binlog_recovery::process_previous_consensus_index_event(
   m_valid_index = m_current_index;
 }
 
-void Consensus_binlog_recovery::process_internal_xid(my_xid xid) {
-  //NOTE:: only own xid need recover for xpaxos
-  if (server_sid.equals(m_xa_spec.m_sid)) {
+void Consensus_binlog_recovery::process_internal_xid(ulong unmasked_server_id, my_xid xid) {
+  //NOTE:: only own server need recover for xpaxos
+  if (unmasked_server_id == server_id) {
     if (m_recover_term == 0 || m_current_term > m_recover_term) {
       consensus_log_manager.get_recovery_manager()->clear_trx_in_binlog();
       m_internal_xids.clear();
@@ -277,10 +278,10 @@ void Consensus_binlog_recovery::process_internal_xid(my_xid xid) {
   }
 }
 
-void Consensus_binlog_recovery::process_external_xid(
+void Consensus_binlog_recovery::process_external_xid(ulong unmasked_server_id,
   const XID &xid, enum_ha_recover_xa_state state) {
-  //NOTE:: only own xid need recover for xpaxos
-  if (server_sid.equals(m_xa_spec.m_sid)) {
+  //NOTE:: only own server need recover for xpaxos
+  if (unmasked_server_id == server_id) {
     if (m_recover_term == 0 || m_current_term > m_recover_term) {
       consensus_log_manager.get_recovery_manager()->clear_trx_in_binlog();
       m_internal_xids.clear();
@@ -332,7 +333,7 @@ void Consensus_binlog_recovery::process_xa_commit(const std::string &query) {
   }
   m_xa_spec.m_source = binlog::Binlog_xa_specification::Source::XA_COMMIT;
   xa::XID_extractor tokenizer{query, 1};
-  process_external_xid(tokenizer[0], enum_ha_recover_xa_state::COMMITTED);
+  process_external_xid(this->m_query_ev->common_header->unmasked_server_id, tokenizer[0], enum_ha_recover_xa_state::COMMITTED);
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA COMMIT` holds an invalid XID");
@@ -352,7 +353,7 @@ void Consensus_binlog_recovery::process_xa_rollback(const std::string &query) {
   }
   m_xa_spec.m_source = binlog::Binlog_xa_specification::Source::XA_ROLLBACK;
   xa::XID_extractor tokenizer{query, 1};
-  process_external_xid(tokenizer[0], enum_ha_recover_xa_state::ROLLEDBACK);
+  process_external_xid(this->m_query_ev->common_header->unmasked_server_id, tokenizer[0], enum_ha_recover_xa_state::ROLLEDBACK);
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA ROLLBACK` holds an invalid XID");
@@ -370,7 +371,7 @@ void Consensus_binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
   }
 
   m_xa_spec.m_source = binlog::Binlog_xa_specification::Source::COMMIT;
-  process_internal_xid(ev.ddl_xid);
+  process_internal_xid(ev.common_header->unmasked_server_id, ev.ddl_xid);
 }
 
 void Consensus_binlog_recovery::process_xid_event(const Xid_log_event &ev) {
@@ -385,7 +386,7 @@ void Consensus_binlog_recovery::process_xid_event(const Xid_log_event &ev) {
   }
   this->m_in_transaction = false;
   m_xa_spec.m_source = binlog::Binlog_xa_specification::Source::COMMIT;
-  process_internal_xid(ev.xid);
+  process_internal_xid(ev.common_header->unmasked_server_id, ev.xid);
 }
 
 void Consensus_binlog_recovery::process_xa_prepare_event(
@@ -411,7 +412,7 @@ void Consensus_binlog_recovery::process_xa_prepare_event(
       ev.is_one_phase()
           ? binlog::Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE
           : binlog::Binlog_xa_specification::Source::XA_PREPARE;
-  process_external_xid(xid, state);
+  process_external_xid(ev.common_header->unmasked_server_id, xid, state);
 }
 
 void Consensus_binlog_recovery::process_query_event(const Query_log_event &ev) {

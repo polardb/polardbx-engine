@@ -140,6 +140,9 @@ message PaxosMsg
     APPEND = 1;
   }
   optional MsgErrorType msgError = 30;
+
+  //ClusterIdNotMatch
+  optional uint64 myServerId = 31;
 };
 
 message TestMsg1

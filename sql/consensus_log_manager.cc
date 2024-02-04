@@ -423,7 +423,7 @@ int ConsensusLogManager::init_service() {
       if (!is_learner) {
         // startup as normal node
         consensus_ptr->init(
-            cluster_str_config, 0, NULL, opt_consensus_io_thread_cnt,
+            cluster_str_config, 0, ::server_id, NULL, opt_consensus_io_thread_cnt,
             opt_consensus_worker_thread_cnt, alisql_server,
             opt_consensus_easy_pool_size, opt_consensus_heartbeat_thread_cnt);
 
@@ -433,7 +433,7 @@ int ConsensusLogManager::init_service() {
       } else {
         // startup as learner node, config string arg pass empty
         consensus_ptr->initAsLearner(
-            empty_str, NULL, opt_consensus_io_thread_cnt,
+            empty_str, ::server_id, NULL, opt_consensus_io_thread_cnt,
             opt_consensus_worker_thread_cnt, alisql_server,
             opt_consensus_easy_pool_size, opt_consensus_heartbeat_thread_cnt);
       }

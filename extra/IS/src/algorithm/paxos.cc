@@ -27,6 +27,7 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       ,
       log_(log),
       clusterId_(0),
+      myServerId_(0),
       shutdown_(false),
       maxPacketSize_(1000000),
       maxDelayIndex_(10000),
@@ -1351,6 +1352,7 @@ int Paxos::requestVote(bool force) {
       LogEntry entry;
       log_->getEntry(lastLogIndex, entry, false);
       msg.set_lastlogterm(entry.term());
+      msg.set_myserverid(getMyServerId());
       config_->forEachLearners(&Server::sendMsg, (void *)&msg);
     }
     return -1;
@@ -1412,6 +1414,7 @@ int Paxos::requestVote(bool force) {
     msg.set_force((uint64_t)force);
     msg.set_lastlogindex(lastLogIndex);
     msg.set_lastlogterm(entry.term());
+    msg.set_myserverid(getMyServerId());
 
     config_->forEach(&Server::sendMsg, (void *)&msg);
   }
@@ -1433,6 +1436,16 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   std::lock_guard<std::mutex> lg(lock_);
   if (shutdown_.load()) return -1;
   rsp->set_serverid(localServer_->serverId);
+
+  if (msg->myserverid() == getMyServerId()) {
+    rsp->set_term(currentTerm_);
+    rsp->set_votegranted(0);
+    easy_error_log(
+        "Server %d : reject RequestVote because this server has same mysql server_id(%llu)"
+        ", server(id:%llu, addr:%s).\n",
+        localServer_->serverId, msg->myserverid(), msg->candidateid(), msg->addr().c_str());
+    return 0;
+  }
 
   if (state_ == LEARNER) {
     rsp->set_term(msg->term());
@@ -1691,6 +1704,7 @@ int Paxos::appendLog(const bool needLock) {
   msg.set_msgtype(AppendLog);
 
   msg.set_leaderid(localServer_->serverId);
+  msg.set_myserverid(getMyServerId());
   msg.set_commitindex(commitIndex_);
 
   /*
@@ -1721,6 +1735,7 @@ int Paxos::appendLogToLearner(std::shared_ptr<RemoteServer> server,
   msg.set_msgtype(AppendLog);
 
   msg.set_leaderid(localServer_->serverId);
+  msg.set_myserverid(getMyServerId());
   msg.set_commitindex(commitIndex_);
 
   if (server == nullptr)
@@ -1780,6 +1795,7 @@ int Paxos::appendLogToServerByPtr(std::shared_ptr<RemoteServer> server,
   msg.set_msgtype(AppendLog);
 
   msg.set_leaderid(localServer_->serverId);
+  msg.set_myserverid(getMyServerId());
   msg.set_commitindex(commitIndex_);
 
   /*
@@ -1911,6 +1927,15 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
       localServer_->serverId = msg->serverid();
     }
   }
+
+  if (state_ == LEARNER && msg->myserverid() == getMyServerId()) {
+    easy_error_log(
+        "Server %d : reject AppendLog because this server has same mysql server_id(%llu)"
+        ", server(id:%llu, addr:%s).\n",
+        localServer_->serverId, msg->myserverid(), msg->candidateid(), msg->addr().c_str());
+    return -1;
+  }
+
 
   easy_warn_log(
       "Server %d : msgId(%llu) onAppendLog start, receive logs from "
@@ -3148,7 +3173,8 @@ int Paxos::tryUpdateCommitIndex_() {
 
 /* TODO should read from config file or cmd line */
 int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
-                uint64_t current /*start 1*/, ClientService *cs,
+                uint64_t current /*start 1*/, uint64_t myServerId,
+                ClientService *cs,
                 uint64_t ioThreadCnt, uint64_t workThreadCnt,
                 std::shared_ptr<LocalServer> localServer,
                 bool memory_usage_count, uint64_t heartbeatThreadCnt) {
@@ -3161,6 +3187,8 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
   if (!log_->getMetaData(std::string(keyClusterId), &itmp)) {
     clusterId_.store(itmp);
   }
+
+  myServerId_.store(myServerId);
 
   if (!log_->getMetaData(std::string(keyCurrentTerm), &itmp)) {
     currentTerm_ = itmp;
@@ -3301,7 +3329,8 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
   return 0;
 }
 
-int Paxos::initAsLearner(std::string &strConfig, ClientService *cs,
+int Paxos::initAsLearner(std::string &strConfig, uint64_t myServerId,
+                         ClientService *cs,
                          uint64_t ioThreadCnt, uint64_t workThreadCnt,
                          std::shared_ptr<LocalServer> localServer,
                          bool memory_usage_count, uint64_t heartbeatThreadCnt) {
@@ -3312,11 +3341,14 @@ int Paxos::initAsLearner(std::string &strConfig, ClientService *cs,
   state_ = LEARNER;
 
   easy_warn_log("Start init node as a learner.");
+
   /* Init persistent variables */
   uint64_t itmp;
   if (!log_->getMetaData(std::string(keyClusterId), &itmp)) {
     clusterId_.store(itmp);
   }
+
+  myServerId_.store(myServerId);
 
   if (!log_->getMetaData(std::string(keyCurrentTerm), &itmp)) {
     currentTerm_ = itmp;

@@ -1666,6 +1666,7 @@ class PaxosMsg final :
     kNewClusterIdFieldNumber = 24,
     kRoleFieldNumber = 26,
     kMsgErrorFieldNumber = 30,
+    kMyServerIdFieldNumber = 31,
   };
   // repeated .alisql.LogEntry entries = 10;
   int entries_size() const;
@@ -2069,6 +2070,19 @@ class PaxosMsg final :
   void _internal_set_msgerror(::alisql::PaxosMsg_MsgErrorType value);
   public:
 
+  // optional uint64 myServerId = 31;
+  bool has_myserverid() const;
+  private:
+  bool _internal_has_myserverid() const;
+  public:
+  void clear_myserverid();
+  uint64_t myserverid() const;
+  void set_myserverid(uint64_t value);
+  private:
+  uint64_t _internal_myserverid() const;
+  void _internal_set_myserverid(uint64_t value);
+  public:
+
   // @@protoc_insertion_point(class_scope:alisql.PaxosMsg)
  private:
   class _Internal;
@@ -2110,6 +2124,7 @@ class PaxosMsg final :
   uint64_t newclusterid_;
   uint32_t role_;
   int msgerror_;
+  uint64_t myserverid_;
   friend struct ::TableStruct_paxos_2eproto;
 };
 // -------------------------------------------------------------------
@@ -4846,6 +4861,34 @@ inline void PaxosMsg::_internal_set_msgerror(::alisql::PaxosMsg_MsgErrorType val
 inline void PaxosMsg::set_msgerror(::alisql::PaxosMsg_MsgErrorType value) {
   _internal_set_msgerror(value);
   // @@protoc_insertion_point(field_set:alisql.PaxosMsg.msgError)
+}
+
+// optional uint64 myServerId = 31;
+inline bool PaxosMsg::_internal_has_myserverid() const {
+  bool value = (_has_bits_[0] & 0x08000000u) != 0;
+  return value;
+}
+inline bool PaxosMsg::has_myserverid() const {
+  return _internal_has_myserverid();
+}
+inline void PaxosMsg::clear_myserverid() {
+  myserverid_ = uint64_t{0u};
+  _has_bits_[0] &= ~0x08000000u;
+}
+inline uint64_t PaxosMsg::_internal_myserverid() const {
+  return myserverid_;
+}
+inline uint64_t PaxosMsg::myserverid() const {
+  // @@protoc_insertion_point(field_get:alisql.PaxosMsg.myServerId)
+  return _internal_myserverid();
+}
+inline void PaxosMsg::_internal_set_myserverid(uint64_t value) {
+  _has_bits_[0] |= 0x08000000u;
+  myserverid_ = value;
+}
+inline void PaxosMsg::set_myserverid(uint64_t value) {
+  _internal_set_myserverid(value);
+  // @@protoc_insertion_point(field_set:alisql.PaxosMsg.myServerId)
 }
 
 // -------------------------------------------------------------------

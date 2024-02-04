@@ -148,7 +148,8 @@ constexpr PaxosMsg::PaxosMsg(
   , newclusterid_(uint64_t{0u})
   , role_(0u)
   , msgerror_(0)
-{}
+
+  , myserverid_(uint64_t{0u}){}
 struct PaxosMsgDefaultTypeInternal {
   constexpr PaxosMsgDefaultTypeInternal()
     : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
@@ -2610,6 +2611,9 @@ class PaxosMsg::_Internal {
   static void set_has_msgerror(HasBits* has_bits) {
     (*has_bits)[0] |= 67108864u;
   }
+  static void set_has_myserverid(HasBits* has_bits) {
+    (*has_bits)[0] |= 134217728u;
+  }
   static bool MissingRequiredFields(const HasBits& has_bits) {
     return ((has_bits[0] & 0x000010f0) ^ 0x000010f0) != 0;
   }
@@ -2658,8 +2662,8 @@ PaxosMsg::PaxosMsg(const PaxosMsg& from)
     compressedentries_ = nullptr;
   }
   ::memcpy(&configid_, &from.configid_,
-    static_cast<size_t>(reinterpret_cast<char*>(&msgerror_) -
-    reinterpret_cast<char*>(&configid_)) + sizeof(msgerror_));
+    static_cast<size_t>(reinterpret_cast<char*>(&myserverid_) -
+    reinterpret_cast<char*>(&configid_)) + sizeof(myserverid_));
   // @@protoc_insertion_point(copy_constructor:alisql.PaxosMsg)
 }
 
@@ -2674,8 +2678,8 @@ extra_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlread
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&compressedentries_) - reinterpret_cast<char*>(this)),
-    0, static_cast<size_t>(reinterpret_cast<char*>(&msgerror_) -
-    reinterpret_cast<char*>(&compressedentries_)) + sizeof(msgerror_));
+    0, static_cast<size_t>(reinterpret_cast<char*>(&myserverid_) -
+    reinterpret_cast<char*>(&compressedentries_)) + sizeof(myserverid_));
 }
 
 PaxosMsg::~PaxosMsg() {
@@ -2738,10 +2742,10 @@ void PaxosMsg::Clear() {
         reinterpret_cast<char*>(&appliedindex_) -
         reinterpret_cast<char*>(&ignorecheck_)) + sizeof(appliedindex_));
   }
-  if (cached_has_bits & 0x07000000u) {
+  if (cached_has_bits & 0x0f000000u) {
     ::memset(&newclusterid_, 0, static_cast<size_t>(
-        reinterpret_cast<char*>(&msgerror_) -
-        reinterpret_cast<char*>(&newclusterid_)) + sizeof(msgerror_));
+        reinterpret_cast<char*>(&myserverid_) -
+        reinterpret_cast<char*>(&newclusterid_)) + sizeof(myserverid_));
   }
   _has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
@@ -3026,6 +3030,15 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
+      // optional uint64 myServerId = 31;
+      case 31:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 248)) {
+          _Internal::set_has_myserverid(&has_bits);
+          myserverid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -3238,6 +3251,12 @@ uint8_t* PaxosMsg::_InternalSerialize(
       30, this->_internal_msgerror(), target);
   }
 
+  // optional uint64 myServerId = 31;
+  if (cached_has_bits & 0x08000000u) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(31, this->_internal_myserverid(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -3438,7 +3457,7 @@ size_t PaxosMsg::ByteSizeLong() const {
     }
 
   }
-  if (cached_has_bits & 0x07000000u) {
+  if (cached_has_bits & 0x0f000000u) {
     // optional uint64 newClusterId = 24;
     if (cached_has_bits & 0x01000000u) {
       total_size += 2 +
@@ -3457,6 +3476,13 @@ size_t PaxosMsg::ByteSizeLong() const {
     if (cached_has_bits & 0x04000000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_msgerror());
+    }
+
+    // optional uint64 myServerId = 31;
+    if (cached_has_bits & 0x08000000u) {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+          this->_internal_myserverid());
     }
 
   }
@@ -3564,7 +3590,7 @@ void PaxosMsg::MergeFrom(const PaxosMsg& from) {
     }
     _has_bits_[0] |= cached_has_bits;
   }
-  if (cached_has_bits & 0x07000000u) {
+  if (cached_has_bits & 0x0f000000u) {
     if (cached_has_bits & 0x01000000u) {
       newclusterid_ = from.newclusterid_;
     }
@@ -3573,6 +3599,9 @@ void PaxosMsg::MergeFrom(const PaxosMsg& from) {
     }
     if (cached_has_bits & 0x04000000u) {
       msgerror_ = from.msgerror_;
+    }
+    if (cached_has_bits & 0x08000000u) {
+      myserverid_ = from.myserverid_;
     }
     _has_bits_[0] |= cached_has_bits;
   }
@@ -3617,8 +3646,8 @@ void PaxosMsg::InternalSwap(PaxosMsg* other) {
       &other->extra_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PaxosMsg, msgerror_)
-      + sizeof(PaxosMsg::msgerror_)
+      PROTOBUF_FIELD_OFFSET(PaxosMsg, myserverid_)
+      + sizeof(PaxosMsg::myserverid_)
       - PROTOBUF_FIELD_OFFSET(PaxosMsg, compressedentries_)>(
           reinterpret_cast<char*>(&compressedentries_),
           reinterpret_cast<char*>(&other->compressedentries_));
