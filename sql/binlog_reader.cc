@@ -98,6 +98,7 @@ bool Binlog_event_data_istream::fill_event_data(
 }
 
 bool Binlog_event_data_istream::check_event_header() {
+  m_event_type = m_header[EVENT_TYPE_OFFSET];
   m_event_length = uint4korr(m_header + EVENT_LEN_OFFSET);
 
   if (m_event_length < LOG_EVENT_MINIMAL_HEADER_LEN)

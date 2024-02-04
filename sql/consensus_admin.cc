@@ -61,9 +61,7 @@ bool show_consensuslog_events(THD *thd, MYSQL_BIN_LOG *binary_log,
   List<Item> field_list;
   const char *errmsg = 0;
   bool ret = true;
-  // IO_CACHE log;
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
-  // File file = -1;
   int old_max_allowed_packet = thd->variables.max_allowed_packet;
   LOG_INFO linfo;
 
@@ -106,8 +104,6 @@ bool show_consensuslog_events(THD *thd, MYSQL_BIN_LOG *binary_log,
     thd->current_linfo = &linfo;
     mysql_mutex_unlock(&thd->LOCK_thd_data);
 
-    // if ((file = open_binlog_file(&log, linfo.log_file_name, &errmsg)) < 0)
-    // goto err;
     if (binlog_file_reader.open(linfo.log_file_name)) goto err;
 
     my_off_t end_pos;
@@ -151,7 +147,6 @@ bool show_consensuslog_events(THD *thd, MYSQL_BIN_LOG *binary_log,
         delete ev;
     }
 
-    // my_b_seek(&log, pos);
     binlog_file_reader.seek(pos);
 
     if (!description_event->is_valid()) {
@@ -159,10 +154,6 @@ bool show_consensuslog_events(THD *thd, MYSQL_BIN_LOG *binary_log,
       goto err;
     }
 
-    // for (event_count = 0;
-    // (ev = Log_event::read_log_event(&log, (mysql_mutex_t*)0,
-    // description_event,
-    // opt_source_verify_checksum)); )
     for (event_count = 0; (ev = binlog_file_reader.read_event_object());) {
       DEBUG_SYNC(thd, "wait_in_show_binlog_events_loop");
       if (ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT)

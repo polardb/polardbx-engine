@@ -407,34 +407,18 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
 
   for (auto iter = consensuslog_file_name_vector.begin();
        iter != consensuslog_file_name_vector.end(); ++iter) {
-    // const char *errmsg = NULL;
-    // IO_CACHE log;
-    // File file = open_binlog_file(&log, iter->c_str(), &errmsg);
-    // if (file < 0)
-    // return 1;
     Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
     if (binlog_file_reader.open(iter->c_str())) return 1;
 
-    Format_description_log_event fd_ev;
-    Format_description_log_event *fd_ev_p = &fd_ev;
-
-    // my_b_seek(&log, BIN_LOG_HEADER_SIZE);
     binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
-    binlog_file_reader.set_format_description_event(*fd_ev_p);
     Log_event *ev = NULL;
     Previous_consensus_index_log_event *prev_consensus_index_ev = NULL;
     bool find_prev_consensus_log = false;
 
-    // while (!find_prev_consensus_log && ((ev = Log_event::read_log_event(&log,
-    // 0, fd_ev_p, 1)) != NULL))
+    binlog_file_reader.add_expected_event(binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT);
     while (!find_prev_consensus_log &&
            (ev = binlog_file_reader.read_event_object()) != NULL) {
       switch (ev->get_type_code()) {
-        case binary_log::FORMAT_DESCRIPTION_EVENT:
-          if (fd_ev_p != &fd_ev) delete fd_ev_p;
-          fd_ev_p = (Format_description_log_event *)ev;
-          binlog_file_reader.set_format_description_event(*fd_ev_p);
-          break;
         case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
           prev_consensus_index_ev = (Previous_consensus_index_log_event *)ev;
           consensus_log_manager.get_log_file_index()->add_to_index_list(
@@ -445,19 +429,15 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
         default:
           break;
       }
-      if (ev != NULL && ev != fd_ev_p) delete ev, ev = NULL;
+      delete ev;
+      ev = nullptr;
     }
 
-    if (fd_ev_p != &fd_ev) {
-      delete fd_ev_p;
-      fd_ev_p = &fd_ev;
-    }
-    // mysql_file_close(file, MYF(MY_WME));
-    // end_io_cache(&log);
+    xp::info(ER_XP_COMMIT) << "build_consensus_log_index finish, log file " << iter->c_str()
+                           << ", skip_event_count " << binlog_file_reader.get_skip_event_count()
+                           << ", find_prev_consensus_log " << find_prev_consensus_log;
 
     if (!find_prev_consensus_log) {
-      xp::error(ER_XP_COMMIT) << "log file " << iter->c_str()
-                              << " do not contain prev_consensus_log_ev";
       return 1;
     }
   }
@@ -476,34 +456,18 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term) {
     uint64 current_term = 0;
     uint64 current_index = 0;
     uint64 current_flag = 0;
-    // const char *errmsg = NULL;
-    // IO_CACHE log;
-    // File file = open_binlog_file(&log, iter->c_str(), &errmsg);
-    // if (file < 0)
-    // return 1;
 
     Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
     if (binlog_file_reader.open(iter->c_str())) return 1;
 
-    Format_description_log_event fd_ev;
-    Format_description_log_event *fd_ev_p = &fd_ev;
-
-    // my_b_seek(&log, BIN_LOG_HEADER_SIZE);
     binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
-    binlog_file_reader.set_format_description_event(*fd_ev_p);
     Log_event *ev = NULL;
     Consensus_log_event *consensus_log_ev = NULL;
     bool skip = false;
 
-    // while (!skip && ((ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) !=
-    // NULL))
+    binlog_file_reader.add_expected_event(binary_log::CONSENSUS_LOG_EVENT);
     while (!skip && (ev = binlog_file_reader.read_event_object()) != NULL) {
       switch (ev->get_type_code()) {
-        case binary_log::FORMAT_DESCRIPTION_EVENT:
-          if (fd_ev_p != &fd_ev) delete fd_ev_p;
-          fd_ev_p = (Format_description_log_event *)ev;
-          binlog_file_reader.set_format_description_event(*fd_ev_p);
-          break;
         case binary_log::CONSENSUS_LOG_EVENT:
           consensus_log_ev = (Consensus_log_event *)ev;
           current_term = consensus_log_ev->get_term();
@@ -523,21 +487,13 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term) {
         default:
           break;
       }
-      if (ev != NULL && ev != fd_ev_p) delete ev, ev = NULL;
+      delete ev;
+      ev = nullptr;
     }
 
-    if (fd_ev_p != &fd_ev) {
-      delete fd_ev_p;
-      fd_ev_p = &fd_ev;
-    }
-    // mysql_file_close(file, MYF(MY_WME));
-    // end_io_cache(&log);
-
-    if (!found) {
-      xp::warn(ER_XP_COMMIT)
-          << "log file " << iter->c_str()
-          << " cannot found last log term index, term is " << term;
-    }
+    xp::info(ER_XP_COMMIT) << "init_last_index_of_term finish, log file " << iter->c_str()
+                            << ", skip_event_count " << binlog_file_reader.get_skip_event_count()
+                            << ", found " << found;
   }
   xp::info(ER_XP_COMMIT) << "last log term is " << term
                          << ", last log term index is "
@@ -568,32 +524,19 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex) {
     return 0;
   }
 
-  // const char *errmsg = NULL;
-  // IO_CACHE log;
-
-  // File file = open_binlog_file(&log, file_name.c_str(), &errmsg);
-  // if (file < 0) {
-  // return 0;
-  //}
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name.c_str())) {
     xp::error(ER_XP_RECOVERY) << "fail to open file " << file_name;
     return 0;  // ??????
   }
 
-  Format_description_log_event fd_ev;
-  Format_description_log_event *fd_ev_p = &fd_ev;
-
-  // my_b_seek(&log, BIN_LOG_HEADER_SIZE);
   binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
-  binlog_file_reader.set_format_description_event(*fd_ev_p);
   Log_event *ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
   bool stop_scan = false;
   uint64 currentIndex = 0;
   uint64 currentFlag = 0;
-  // while (!stop_scan && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1))
-  // != NULL)
+  binlog_file_reader.add_expected_event(binary_log::CONSENSUS_LOG_EVENT);
   while (!stop_scan && (ev = binlog_file_reader.read_event_object()) != NULL) {
     switch (ev->get_type_code()) {
       case binary_log::CONSENSUS_LOG_EVENT:
@@ -604,28 +547,20 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex) {
             !(currentFlag & Consensus_log_event_flag::FLAG_LARGE_TRX))
           stop_scan = true;
         break;
-      case binary_log::FORMAT_DESCRIPTION_EVENT:
-        if (fd_ev_p != &fd_ev) delete fd_ev_p;
-        fd_ev_p = (Format_description_log_event *)ev;
-        binlog_file_reader.set_format_description_event(*fd_ev_p);
-        break;
       default:
         break;
     }
-    if (ev != NULL && ev != fd_ev_p) delete ev;
+    delete ev;
+    ev = nullptr;
   }
 
-  if (fd_ev_p != &fd_ev) {
-    delete fd_ev_p;
-    fd_ev_p = &fd_ev;
-  }
-
-  // mysql_file_close(file, MYF(MY_WME));
-  // end_io_cache(&log);
   xp::info(ER_XP_RECOVERY) << "get_trx_end_index finish  "
-                           << ", stop_scan " << stop_scan << ", firstIndex "
-                           << firstIndex << ", currentIndex " << currentIndex
-                           << ", currentFlag " << currentFlag;
+                           << "log file " << file_name
+                           << ", stop_scan " << stop_scan 
+                           << ", firstIndex " << firstIndex
+                           << ", currentIndex " << currentIndex
+                           << ", currentFlag " << currentFlag
+                           << ", skip_event_count " << binlog_file_reader.get_skip_event_count();
 
   return stop_scan ? currentIndex : 0;
 }
@@ -659,12 +594,8 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
     std::string &log_content, bool *outer, uint *flag, bool need_content) {
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name)) return 1;
-  Format_description_log_event fd_ev;
-  Format_description_log_event *fd_ev_p = &fd_ev;
 
-  // my_b_seek(&log, BIN_LOG_HEADER_SIZE);
   binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
-  binlog_file_reader.set_format_description_event(*fd_ev_p);
   Log_event *ev = NULL;
   Consensus_cluster_info_log_event *rci_ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
@@ -675,8 +606,6 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
   uint64 consensus_log_length = 0;
   uint64 cindex, cterm, cflag = 0;
   std::vector<uint64> blob_index_list;
-  // while (!stop_scan && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1))
-  // != NULL)
   while (!stop_scan && (ev = binlog_file_reader.read_event_object()) != NULL) {
     switch (ev->get_type_code()) {
       case binary_log::CONSENSUS_LOG_EVENT:
@@ -695,11 +624,6 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
               << "directly read log error, log size is error";
           abort();
         }
-        break;
-      case binary_log::FORMAT_DESCRIPTION_EVENT:
-        if (fd_ev_p != &fd_ev) delete fd_ev_p;
-        fd_ev_p = (Format_description_log_event *)ev;
-        binlog_file_reader.set_format_description_event(*fd_ev_p);
         break;
       default:
         if (!ev->is_control_event()) {
@@ -756,21 +680,14 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
         }
         break;
     }
-    if (ev != NULL && ev != fd_ev_p) delete ev;
-  }
-
-  if (fd_ev_p != &fd_ev) {
-    delete fd_ev_p;
-    fd_ev_p = &fd_ev;
+    delete ev;
+    ev = nullptr;
   }
 
   xp::info(ER_XP_COMMIT) << "directly read log reached consensus index "
                          << consensus_index;
 
   if (!found) xp::error(ER_XP_COMMIT) << "read log by consensus index failed";
-
-  // mysql_file_close(file, MYF(MY_WME));
-  // end_io_cache(&log);
 
   return (int)!found;
 }
@@ -787,11 +704,6 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
   thd->current_linfo = &linfo;
   mysql_mutex_unlock(&thd->LOCK_thd_data);
 
-  // File file = open_binlog_file(&log, file_name, &errmsg);
-  // if (file < 0) {
-  // thd->current_linfo = 0;
-  // return 1;
-  // }
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name)) {
     mysql_mutex_lock(&thd->LOCK_thd_data);
@@ -799,12 +711,8 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
     mysql_mutex_unlock(&thd->LOCK_thd_data);
     return 1;
   }
-  Format_description_log_event fd_ev;
-  Format_description_log_event *fd_ev_p = &fd_ev;
 
-  // my_b_seek(&log, BIN_LOG_HEADER_SIZE);
   binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
-  binlog_file_reader.set_format_description_event(*fd_ev_p);
   Log_event *ev = NULL;
   Consensus_cluster_info_log_event *rci_ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
@@ -851,7 +759,6 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
                                  Consensus_log_event_flag::FLAG_BLOB_END))) &&
               (current_index + prefetch_channel->get_window_size() <
                start_index)) {
-            // my_b_seek(&log, start_pos + consensus_log_length);
             binlog_file_reader.seek(start_pos + consensus_log_length);
           }
           /*
@@ -890,11 +797,6 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
             binlog_file_reader.seek(end_pos);
           }
         }
-        break;
-      case binary_log::FORMAT_DESCRIPTION_EVENT:
-        if (fd_ev_p != &fd_ev) delete fd_ev_p;
-        fd_ev_p = (Format_description_log_event *)ev;
-        binlog_file_reader.set_format_description_event(*fd_ev_p);
         break;
       default:
         if (!ev->is_control_event()) {
@@ -983,21 +885,16 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
             }
             rci_ev = NULL;
           }
-        }
+        }//end of default
         break;
     }
-    if (ev != NULL && ev != fd_ev_p) delete ev, ev = NULL;
+    delete ev;
+    ev = nullptr;
   }
 
-  if (fd_ev_p != &fd_ev) {
-    delete fd_ev_p;
-    fd_ev_p = &fd_ev;
-  }
   prefetch_channel->set_prefetching(false);
   prefetch_channel->dec_ref_count();
   prefetch_channel->clear_prefetch_request();
-  // mysql_file_close(file, MYF(MY_WME));
-  // end_io_cache(&log);
   mysql_mutex_lock(&thd->LOCK_thd_data);
   thd->current_linfo = 0;
   mysql_mutex_unlock(&thd->LOCK_thd_data);
@@ -1027,30 +924,19 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
 int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
                                                uint64 consensus_index,
                                                uint64 *pos) {
-  // const char *errmsg = NULL;
-  // IO_CACHE log;
-
-  // File file = open_binlog_file(&log, file_name, &errmsg);
-  // if (file < 0)
-  //{
-  // return 1;
-  //}
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name)) return 1;
-  Format_description_log_event fd_ev;
-  Format_description_log_event *fd_ev_p = &fd_ev;
 
-  // my_b_seek(&log, BIN_LOG_HEADER_SIZE);
   binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
-  binlog_file_reader.set_format_description_event(*fd_ev_p);
   Log_event *ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
   Previous_consensus_index_log_event *consensus_prev_ev = NULL;
   bool found = false;
   bool first_log_in_file = false;
+  binlog_file_reader.add_expected_event(binary_log::CONSENSUS_LOG_EVENT)
+                    .add_expected_event(binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT)
+                    .add_expected_event(binary_log::PREVIOUS_GTIDS_LOG_EVENT);
 
-  // while (!found && (ev = Log_event::read_log_event(&log, 0, fd_ev_p, 1)) !=
-  // NULL)
   while (!found && (ev = binlog_file_reader.read_event_object()) != NULL) {
     switch (ev->get_type_code()) {
       case binary_log::CONSENSUS_LOG_EVENT:
@@ -1073,24 +959,16 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
           found = true;
         }
         break;
-      case binary_log::FORMAT_DESCRIPTION_EVENT:
-        if (fd_ev_p != &fd_ev) delete fd_ev_p;
-        fd_ev_p = (Format_description_log_event *)ev;
-        binlog_file_reader.set_format_description_event(*fd_ev_p);
-        break;
       default:
         break;
     }
-    if (ev != NULL && ev != fd_ev_p) delete ev, ev = NULL;
+    delete ev;
+    ev = nullptr;
   }
-
-  if (fd_ev_p != &fd_ev) {
-    delete fd_ev_p;
-    fd_ev_p = &fd_ev;
-  }
-  // mysql_file_close(file, MYF(MY_WME));
-  // end_io_cache(&log);
-
+  xp::info(ER_XP_COMMIT) << "find_pos_by_consensus_index finish, log file " << file_name
+                          << ", consensus_index " << consensus_index
+                          << ", skip_event_count " << binlog_file_reader.get_skip_event_count()
+                          << ", found " << found;
   return !found;
 }
 
@@ -1137,10 +1015,7 @@ int MYSQL_BIN_LOG::truncate_logs_from_index(
            "move crash safe index file to index file.";
     goto err;
   }
-  // #ifdef HAVE_REPLICATION
-  // now update offsets in index file for running threads
   adjust_linfo_offsets(log_info.index_file_start_offset);
-  // #endif
   mysql_mutex_unlock(&LOCK_index);
   return 0;
 
@@ -1808,10 +1683,8 @@ void binlog_commit_pos_watcher(bool *is_running) {
   std::string log_name;
   uint64_t commitIndex = 0, pos = 0;
   uint retry = 0;
-  Format_description_log_event fd_ev, *fd_ev_p = &fd_ev;
   Log_event *ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
-  // const char *errmsg = NULL;
   bool skip = false;  // skip flag if flush log
 
   while (*is_running) {
@@ -1826,9 +1699,12 @@ void binlog_commit_pos_watcher(bool *is_running) {
       xp::error(ER_XP_COMMIT)
           << "Thread binlog_commit_pos_watcher fails to open the binlog file "
           << log_name.c_str();
-      goto err;
+      skip = true;
     }
-    skip = false;
+
+    binlog_file_reader.add_expected_event(binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT)
+                      .add_expected_event(binary_log::CONSENSUS_LOG_EVENT);
+
     while (*is_running && !skip &&
            (ev = binlog_file_reader.read_event_object()) != NULL) {
       switch (ev->get_type_code()) {
@@ -1891,20 +1767,12 @@ void binlog_commit_pos_watcher(bool *is_running) {
             }
           }
           break;
-        case binary_log::FORMAT_DESCRIPTION_EVENT:
-          if (fd_ev_p != &fd_ev) delete fd_ev_p;
-          fd_ev_p = (Format_description_log_event *)ev;
-          break;
         default:
           break;
       }
-      if (ev != NULL && ev != fd_ev_p) delete ev, ev = NULL;
+      delete ev;
+      ev = nullptr;
     }  // shutdown or EOF
-  err:
-    if (fd_ev_p != &fd_ev) {
-      delete fd_ev_p;
-      fd_ev_p = &fd_ev;
-    }
 
     /* It is safe in truncate_log case and the error is not READ_EOF */
     if (binlog_file_reader.has_fatal_error()) {
@@ -1992,10 +1860,8 @@ bool MYSQL_BIN_LOG::open_exist_binlog(
     return error;
   }
 
-  // #ifdef HAVE_REPLICATION
   DBUG_EXECUTE_IF("crash_create_non_critical_before_update_index",
                   DBUG_SUICIDE(););
-  // #endif
 
   write_error = 0;
 

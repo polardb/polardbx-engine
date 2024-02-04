@@ -84,6 +84,20 @@ class Binlog_event_data_istream {
     DBUG_TRACE;
     if (read_event_header() || check_event_header()) return true;
 
+    if (!m_expected_events.empty()) {
+      Basic_seekable_istream *seekable_istream = dynamic_cast<Basic_seekable_istream *>(m_istream);
+      assert(seekable_istream != nullptr);
+    // only read expected events, otherwise continue read next event
+      while (m_expected_events.find(m_event_type) == m_expected_events.end()
+             && m_event_type > Log_event_type::UNKNOWN_EVENT
+             && m_event_type <= binary_log::ENUM_END_EVENT) {
+        seekable_istream->seek(my_b_tell(seekable_istream->get_io_cache())
+          + m_event_length - LOG_EVENT_MINIMAL_HEADER_LEN);
+        m_skip_event_count++;
+        if (read_event_header() || check_event_header()) return true;
+      }
+    }
+
     unsigned char *event_data = allocator->allocate(m_event_length);
     if (event_data == nullptr)
       return m_error->set_type(Binlog_read_error::MEM_ALLOCATE);
@@ -96,6 +110,11 @@ class Binlog_event_data_istream {
     *length = m_event_length;
     return false;
   }
+
+  void add_expected_event(const uint32 event_type)
+  { m_expected_events.insert(event_type); }
+
+  uint get_skip_event_count() const { return m_skip_event_count; }
 
  protected:
   unsigned char m_header[LOG_EVENT_MINIMAL_HEADER_LEN];
@@ -149,10 +168,14 @@ class Binlog_event_data_istream {
   */
   Binlog_read_error *m_error;
 
+  std::unordered_set<uint32> m_expected_events{};
+  uint32 m_skip_event_count{0};//used for debug output
+
  private:
   Basic_istream *m_istream = nullptr;
   unsigned int m_max_event_size;
   unsigned int m_event_length = 0;
+  unsigned int m_event_type = 0;
 
   /**
      Fill the event data into the given buffer and verify checksum if
@@ -346,6 +369,13 @@ class Basic_binlog_file_reader {
   const Format_description_event *format_description_event() { return &m_fde; }
   my_off_t event_start_pos() { return m_event_start_pos; }
   IO_CACHE *get_io_cache() { return m_ifile.get_io_cache(); }
+  Basic_binlog_file_reader &add_expected_event(const uint32 event_type)
+  {
+    m_data_istream.add_expected_event(event_type);
+    return *this;
+  }
+
+  uint get_skip_event_count() const { return m_data_istream.get_skip_event_count(); }
 
  private:
   Binlog_read_error m_error;
