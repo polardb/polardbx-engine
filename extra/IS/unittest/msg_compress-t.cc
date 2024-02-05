@@ -140,7 +140,7 @@ TEST(MsgCompress, CompressOption) {
 
   std::shared_ptr<PaxosLog> rlog= std::make_shared<FilePaxosLog>(std::string("paxosLogTestDir1"));
   Paxos *paxos= new Paxos(10000, rlog);
-  paxos->init(strConfig, 1);
+  paxos->init(strConfig, 1, 1);
 
   ASSERT_EQ(paxos->setMsgCompressOption(1, 4096, false), 0);
   ASSERT_EQ(paxos->setMsgCompressOption(2, 8192, true, "127.0.0.1:11002"), 0);

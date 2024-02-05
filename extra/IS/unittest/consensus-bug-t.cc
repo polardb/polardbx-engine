@@ -59,20 +59,20 @@ TEST(bug, cc_corner_case1) {
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir12", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir13", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir14", true, 4 * 1024 * 1024);
   Paxos *paxos4 = new Paxos(timeout, rlog);
-  paxos4->initAsLearner(strTmp3);
+  paxos4->initAsLearner(strTmp3, 4);
 
   sleep(3);
   paxos1->requestVote();
@@ -132,7 +132,7 @@ TEST(bug, cc_corner_case1) {
   easy_warn_log("Now restart paxos1...");
   paxos1 = new Paxos(timeout, rlog1);
   strConfig.clear();
-  paxos1->init(strConfig, 0);
+  paxos1->init(strConfig, 0, 1);
   sleep(5);
 
   /* paxos3 and paxos4 are normal */
@@ -172,20 +172,20 @@ TEST(bug, cc_corner_case2) {
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir12", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir13", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir14", true, 4 * 1024 * 1024);
   Paxos *paxos4 = new Paxos(timeout, rlog);
-  paxos4->initAsLearner(strTmp3);
+  paxos4->initAsLearner(strTmp3, 4);
 
   sleep(3);
   paxos1->requestVote();
@@ -282,11 +282,11 @@ TEST(bug, pre_check) {
   std::shared_ptr<rdsRDPaxosLog> rlog1, rlog2;
   rlog1 = std::make_shared<rdsRDPaxosLog>("paxosLogTestDir11");
   Paxos *paxos1 = new Paxos(timeout, rlog1);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
 
   rlog2 = std::make_shared<rdsRDPaxosLog>("paxosLogTestDir14");
   Paxos *paxos4 = new Paxos(timeout, rlog2);
-  paxos4->initAsLearner(strTmp3);
+  paxos4->initAsLearner(strTmp3, 4);
 
   sleep(3);
   paxos1->requestVote();
@@ -353,15 +353,15 @@ TEST(bug, follower_does_not_proceed_match_index) {
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir12", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir13", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(1);
   paxos1->requestVote();

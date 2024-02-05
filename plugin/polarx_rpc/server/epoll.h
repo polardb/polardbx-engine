@@ -484,7 +484,8 @@ class CmtEpoll final {
           /// consume the event fd as soon as possible
           /// which makes more threads notified if many tasks inserted
           uint64_t dummy;
-          ::read(eventfd_, &dummy, sizeof(dummy));
+          size_t result = ::read(eventfd_, &dummy, sizeof(dummy));
+          (void)result;
           DBG_LOG(
               ("polarx_rpc thread %u:%u notified work", group_id_, thread_id));
         } else {
@@ -1060,7 +1061,8 @@ class CmtEpoll final {
     if (UNLIKELY(last_time - trigger_time >= 0)) {
       /// need notify to restart new thread to wait with smaller timeout
       uint64_t dummy = 1;
-      ::write(eventfd_, &dummy, sizeof(dummy));
+      size_t result = ::write(eventfd_, &dummy, sizeof(dummy));
+      (void)result;
     }
   }
 
@@ -1073,7 +1075,8 @@ class CmtEpoll final {
     if (waiting > 0) {
       /// notify if some one is in epoll
       uint64_t dummy = 1;
-      ::write(eventfd_, &dummy, sizeof(dummy));
+      size_t result = ::write(eventfd_, &dummy, sizeof(dummy));
+      (void)result;
     }
     return true;
   }

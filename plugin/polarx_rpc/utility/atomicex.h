@@ -244,6 +244,7 @@ class CspinRWLock final {
           /// reenter(Single thread scope, so relaxed)
           const auto before_cnt = lock_counter_.fetch_add(
               RWLOCK_READ_ADD, std::memory_order_relaxed);
+          (void)before_cnt;
           assert(before_cnt == old_cnt);
           return true;
         }
@@ -274,6 +275,7 @@ class CspinRWLock final {
   inline void read_unlock() {
     const auto before_cnt =
         lock_counter_.fetch_sub(RWLOCK_READ_ADD, std::memory_order_release);
+    (void)before_cnt;
     assert(RWLOCK_READ_COUNT(before_cnt) >= 1);
   }
 
@@ -322,6 +324,7 @@ class CspinRWLock final {
           /// reenter(single thread scope, so relaxed)
           const auto before_cnt = lock_counter_.fetch_add(
               RWLOCK_WRITE_ADD, std::memory_order_relaxed);
+          (void)before_cnt;
           assert(before_cnt == old_cnt);
           return true;
         }
@@ -348,6 +351,7 @@ class CspinRWLock final {
       writer_.store(std::thread::id(), std::memory_order_relaxed);
     const auto before_cnt =
         lock_counter_.fetch_sub(RWLOCK_WRITE_ADD, std::memory_order_release);
+    (void)before_cnt;
     assert(before_cnt == old_cnt);
   }
 };

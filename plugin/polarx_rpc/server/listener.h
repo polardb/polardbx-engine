@@ -126,6 +126,7 @@ class Clistener final : public CepollCallback {
           /// to avoid missing epoll_in
           tcp->pre_events();
           auto bret = tcp->events(EPOLLIN, 0, 1);
+          (void)bret;
           assert(bret);  /// still keep the reference, so never fail
         } else {
           tcp->fin("failed to add to epoll");  /// close socket

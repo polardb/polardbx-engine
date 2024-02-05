@@ -157,12 +157,12 @@ TEST(consensus, paxos_learner_restart) {
   std::shared_ptr<PaxosLog> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir1");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   std::string strTmp1("127.0.0.1:11002");
   std::string strTmp2("127.0.0.1:11003");
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir3");
   Paxos *learner2 = new Paxos(timeout, rlog);
-  learner2->initAsLearner(strTmp2);
+  learner2->initAsLearner(strTmp2, 12);
 
   sleep(1);
   paxos1->requestVote();
@@ -237,7 +237,7 @@ TEST(consensus, paxos_learner_restart) {
   delete learner2;
   sleep(1);
   learner2 = new Paxos(timeout, rlog);
-  learner2->initAsLearner(strTmp2);
+  learner2->initAsLearner(strTmp2, 12);
 
   le.clear_term();
   paxos1->replicateLog(le);
@@ -287,15 +287,15 @@ TEST(consensus, stability) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(1);
   paxos1->requestVote();

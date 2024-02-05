@@ -24,6 +24,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <string.h>
 #include "ev.h"
 // #include "easyNet.h"
 // #include "service.h"

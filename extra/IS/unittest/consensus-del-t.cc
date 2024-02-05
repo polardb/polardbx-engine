@@ -43,15 +43,15 @@ TEST(consensus, Paxos_delete_node) {
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(3);
   paxos2->requestVote();
@@ -76,11 +76,11 @@ TEST(consensus, Paxos_delete_node) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir5", true, 4 * 1024 * 1024);
   Paxos *learner2 = new Paxos(timeout, rlog);
-  learner2->initAsLearner(strTmp2);
+  learner2->initAsLearner(strTmp2, 12);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir6", true, 4 * 1024 * 1024);
   Paxos *learner3 = new Paxos(timeout, rlog);
-  learner3->initAsLearner(strTmp3);
+  learner3->initAsLearner(strTmp3, 13);
   sleep(1);
   // // add 2 learners
   strConfig.clear();
@@ -151,7 +151,7 @@ TEST(consensus, Paxos_delete_node) {
   delete paxos1;
   paxos1 = new Paxos(timeout, rlog1);
   strConfig.clear();
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   sleep(1);
   auto config1 =
       std::dynamic_pointer_cast<StableConfiguration>(paxos1->getConfig());
@@ -211,7 +211,7 @@ TEST(consensus, Paxos_delete_node) {
   std::cout << "add learner 127.0.0.1:11008" << std::endl;
   Paxos *learner4 = new Paxos(timeout, rlog7);
   std::string strTmp5("127.0.0.1:11008");
-  learner4->initAsLearner(strTmp5);
+  learner4->initAsLearner(strTmp5, 15);
   strConfig.clear();
   strConfig.push_back(strTmp5);
   paxos2->changeLearners(Paxos::CCAddNode, strConfig);
@@ -238,7 +238,7 @@ TEST(consensus, Paxos_delete_node) {
   std::cout << "add learner 127.0.0.1:11009" << std::endl;
   Paxos *learner5 = new Paxos(timeout, rlog8);
   std::string strTmp6("127.0.0.1:11009");
-  learner5->initAsLearner(strTmp6);
+  learner5->initAsLearner(strTmp6, 16);
   strConfig.clear();
   strConfig.push_back(strTmp6);
   paxos2->changeLearners(Paxos::CCAddNode, strConfig);

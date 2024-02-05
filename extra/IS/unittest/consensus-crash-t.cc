@@ -73,8 +73,8 @@ TEST(consensus, follower_has_more_log) {
   le.set_index(3);
   rlog1->append(le);
 
-  paxos2->init(strConfig, 2);
-  paxos3->init(strConfig, 3);
+  paxos2->init(strConfig, 2, 2);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(2);
   paxos2->setMaxPacketSize(1);
@@ -82,7 +82,7 @@ TEST(consensus, follower_has_more_log) {
   sleep(1);
   const Paxos::StatsType &stats = paxos1->getStats();
   EXPECT_EQ(stats.countTruncateBackward, 0);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   paxos1->requestVote();
   sleep(1);
   EXPECT_EQ(stats.countTruncateBackward, 1);
@@ -162,9 +162,9 @@ TEST(consensus, leader_has_more_log) {
   le.set_index(3);
   rlog1->append(le);
 
-  paxos1->init(strConfig, 1);
-  paxos2->init(strConfig, 2);
-  paxos3->init(strConfig, 3);
+  paxos1->init(strConfig, 1, 1);
+  paxos2->init(strConfig, 2, 2);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(2);
   paxos1->setMaxPacketSize(1);
@@ -233,8 +233,8 @@ TEST(consensus, follower_has_different_log) {
   le.set_index(3);
   rlog2->append(le);
 
-  paxos2->init(strConfig, 2);
-  paxos3->init(strConfig, 3);
+  paxos2->init(strConfig, 2, 2);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(2);
   paxos2->setMaxPacketSize(1);
@@ -242,7 +242,7 @@ TEST(consensus, follower_has_different_log) {
   sleep(1);
   const Paxos::StatsType &stats = paxos1->getStats();
   EXPECT_EQ(stats.countTruncateBackward, 0);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   paxos1->requestVote();
   sleep(1);
   EXPECT_EQ(stats.countTruncateBackward, 1);
@@ -304,9 +304,9 @@ TEST(consensus, follower_lose_log) {
   Paxos *paxos3 = new Paxos(timeout, rlog);
   paxos1->setEnableAutoResetMatchIndex(true);
 
-  paxos1->init(strConfig, 1);
-  paxos2->init(strConfig, 2);
-  paxos3->init(strConfig, 3);
+  paxos1->init(strConfig, 1, 1);
+  paxos2->init(strConfig, 2, 2);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(2);
 
@@ -332,7 +332,7 @@ TEST(consensus, follower_lose_log) {
   EXPECT_EQ(rlog2->getLastLogIndex(), 1);
   delete paxos2;
   paxos2 = new Paxos(timeout, rlog2);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
 
   sleep(1);
 
@@ -362,15 +362,15 @@ TEST(consensus, leader_truncate_configure_change) {
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(3);
   paxos1->requestVote();

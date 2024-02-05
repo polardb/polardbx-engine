@@ -238,6 +238,7 @@ bool fill_implicit_field_with_null(THD *thd, Field *field) {
 bool debug_field_is_implicit_and_hide(THD *, TABLE *table, Field *field) {
   bool is_implicit_name = NAME_IS_IMPLICIT(field->field_name);
   if (is_implicit_name) {
+    MY_UNUSED(table);
     assert(table->s->has_implicit_row_id);
     assert(field->is_implicit());
   } else {
@@ -250,6 +251,7 @@ bool debug_field_is_implicit_and_hide(THD *, TABLE *table, Field *field) {
 bool debug_key_is_implicit_and_hide(THD *, TABLE *table, KEY *key) {
   bool is_implicit_name = NAME_IS_IMPLICIT(key->name);
   if (is_implicit_name) {
+    MY_UNUSED(table);
     assert(table->s->has_implicit_row_id);
     assert(key->is_implicit());
   } else {

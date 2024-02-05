@@ -364,7 +364,7 @@ else
       -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
       -DDOWNLOAD_BOOST=0                \
       -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
-      -DWITH_UNIT_TESTS=0
+      -DWITH_TESTS=0
 fi
 
 make -j 40 install

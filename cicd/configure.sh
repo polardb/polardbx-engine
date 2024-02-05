@@ -44,6 +44,7 @@ cat "${BOOST_PATH}".*  > "${BOOST_PATH}"
 CMAKE_FLAGS=(
 "-DWITH_SSL=openssl"
 "-DDOWNLOAD_BOOST=1"
+"-DWITH_TESTS=1"
 "-DWITH_BOOST=${BOOST_DIRECTORY}"
 )
 
@@ -53,12 +54,11 @@ if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ]; then
   CMAKE_FLAGS+=(
   "-DCMAKE_BUILD_TYPE=Debug"
   "-DWITH_DEBUG=1"
-  "-DWITH_TESTS=1"
   )
 elif [ "${TEST_TYPE_ENUM}" -eq "${MERGE_CHECK}" ]; then
   CMAKE_FLAGS+=(
-    "-DCMAKE_BUILD_TYPE=Release"
-    )
+  "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+  )
 fi
 
 cd "${CICD_BUILD_ROOT}" && \

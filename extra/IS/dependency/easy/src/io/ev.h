@@ -645,9 +645,8 @@ void ev_resume  (EV_P);
 /* these may evaluate ev multiple times, and the other arguments at most once */
 /* either use ev_init + ev_TYPE_set, or the ev_TYPE_init macro, below, to first initialise a watcher */
 #define ev_init(ev,cb_) do {            \
-        ((ev_watcher *)(void *)(ev))->active  =   \
-                ((ev_watcher *)(void *)(ev))->pending = 0;    \
-        ev_set_priority ((ev), 0);            \
+        ev_watcher *tmp = ((ev_watcher *)(void *)(ev)); \
+        memset(tmp, 0, sizeof(ev_watcher)); \
         ev_set_cb ((ev), cb_);            \
     } while (0)
 

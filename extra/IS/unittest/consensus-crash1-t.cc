@@ -91,9 +91,9 @@ TEST(consensus, may_read_mock_log) {
     rlog1->append(le);
   }
 
-  paxos1->init(strConfig, 1);
-  paxos2->init(strConfig, 2);
-  paxos3->init(strConfig, 3);
+  paxos1->init(strConfig, 1, 1);
+  paxos2->init(strConfig, 2, 2);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(2);
   paxos1->setMaxPacketSize(2);

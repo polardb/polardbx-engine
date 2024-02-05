@@ -634,7 +634,7 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
 
 void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
                                 bool is_xpaxos_replication) {
-  (void)rli;
+  MY_UNUSED(rli);
   if (is_xpaxos_replication) {
     // update apply index
     /* for large trx, use the first one */

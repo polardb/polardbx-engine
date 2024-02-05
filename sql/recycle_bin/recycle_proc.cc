@@ -162,6 +162,7 @@ void Sql_cmd_recycle_proc_show::send_result(THD *thd, bool error) {
 void Sql_cmd_recycle_proc_purge::send_result(THD *thd, bool error) {
   DBUG_ENTER("Sql_cmd_recycle_proc_purge::send_result");
   if (error) {
+    MY_UNUSED(thd);
     assert(thd->is_error());
     DBUG_VOID_RETURN;
   }
@@ -234,7 +235,7 @@ Sql_cmd *Recycle_proc_restore::evoke_cmd(THD *thd,
 void Sql_cmd_recycle_proc_restore::send_result(THD *thd, bool error) {
   DBUG_ENTER("Sql_cmd_recycle_proc_restore::restore_result");
   if (error) {
-    (void)thd;
+    MY_UNUSED(thd);
     assert(thd->is_error());
     DBUG_VOID_RETURN;
   }

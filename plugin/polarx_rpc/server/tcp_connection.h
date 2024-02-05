@@ -187,6 +187,7 @@ class CtcpConnection final : public CepollCallback {
 
   inline void add_reference() {
     auto before = reference_.fetch_add(1, std::memory_order_relaxed);
+    (void)before;
     assert(before > 0);
   }
 

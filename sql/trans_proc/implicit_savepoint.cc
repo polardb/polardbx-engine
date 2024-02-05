@@ -84,6 +84,7 @@ void Sql_cmd_trans_proc_implicit_savepoint::send_result(THD *thd, bool error) {
   DBUG_ENTER("Sql_cmd_trans_proc_implicit_savepoint::send_result");
 
   if (error) {
+    MY_UNUSED(thd);
     assert(thd->is_error());
   }
 

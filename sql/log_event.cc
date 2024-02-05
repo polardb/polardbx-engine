@@ -3127,10 +3127,8 @@ int Log_event::apply_event(Relay_log_info *rli) {
   bool parallel = false;
   enum enum_mts_event_exec_mode actual_exec_mode = EVENT_EXEC_PARALLEL;
   THD *rli_thd = rli->info_thd;
-  lizard::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
-      rli->get_b_events_before_gtid_mgr();
 #ifndef NDEBUG
-  size_t b_ev_before_gtid_size = b_events_before_gtid_mgr.get_size();
+  size_t b_ev_before_gtid_size = rli->get_b_events_before_gtid_mgr().get_size();
 #endif
 
   worker = rli;

@@ -60,7 +60,7 @@ TEST(misc, minMatchIndex)
   std::shared_ptr<PaxosLog> rlog;
   rlog= std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1= new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   sleep(1);
   paxos1->requestVote();
   sleep(2);

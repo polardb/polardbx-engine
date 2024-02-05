@@ -281,6 +281,7 @@ void Gcn_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
 #ifdef MYSQL_SERVER
 int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
   DBUG_TRACE;
+  MY_UNUSED(rli);
   assert(rli->info_thd == thd);
 
   if (flags & FLAG_HAVE_COMMITTED_GCN) {

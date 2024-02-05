@@ -57,13 +57,13 @@ TEST(consensus, paxos_consensus_async) {
   std::shared_ptr<PaxosLog> rlog, rlog2;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   rlog2 = rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir62");
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir63");
   Paxos *paxos3 = new Paxos(timeout, rlog, 3000);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(1);
   paxos1->requestVote();
@@ -117,7 +117,7 @@ TEST(consensus, paxos_consensus_async) {
   delete paxos2;
   rlog2->truncateBackward(4);
   paxos2 = new Paxos(timeout, rlog2, 3000);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   sleep(1);
   ASSERT_TRUE(waitUntilLogReplicatedWithIndex(paxos2, 3));
 
@@ -153,19 +153,19 @@ TEST(consensus, paxos_consensus_async_follower_still_sync) {
   std::shared_ptr<PaxosLog> rlog, rlog2;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   rlog2 = rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir62");
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir63");
   Paxos *paxos3 = new Paxos(timeout, rlog, 3000);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir64");
   Paxos *paxos4 = new Paxos(timeout, rlog, 3000);
-  paxos4->init(strConfig, 4, NULL);
+  paxos4->init(strConfig, 4, 4);
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir65");
   Paxos *paxos5 = new Paxos(timeout, rlog, 3000);
-  paxos5->init(strConfig, 5, NULL);
+  paxos5->init(strConfig, 5, 5);
 
   sleep(1);
   paxos1->requestVote();

@@ -1953,8 +1953,9 @@ on LOCK_log and LOCK_index.
 
 bool MYSQL_BIN_LOG::open_exist_binlog(
     const char *log_name, const char *new_name, ulong max_size_arg,
-    bool null_created_arg __attribute__((unused)), bool need_lock_index,
-    bool need_sid_lock,
+    bool null_created_arg __attribute__((unused)),
+    bool need_lock_index __attribute__((unused)),
+    bool need_sid_lock __attribute__((unused)),
     Format_description_log_event *extra_description_event
     __attribute__((unused))) {
   LOG_INFO log_info;

@@ -60,13 +60,13 @@ TEST(LeaderDegrade, OptimisticHeartbeat) {
   std::shared_ptr<PaxosLog> rlog;
   rlog = std::make_shared<TestFilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 10000);
-  paxos1->init(strConfig, 1, NULL, 4, 4, NULL, false, 1);
+  paxos1->init(strConfig, 1, 1, NULL, 4, 4, NULL, false, 1);
   rlog = std::make_shared<TestFilePaxosLog>("paxosLogTestDir62");
   Paxos *paxos2 = new Paxos(timeout, rlog, 10000);
-  paxos2->init(strConfig, 2, NULL, 4, 4, NULL, false, 1);
+  paxos2->init(strConfig, 2, 2, NULL, 4, 4, NULL, false, 1);
   rlog = std::make_shared<TestFilePaxosLog>("paxosLogTestDir63");
   Paxos *paxos3 = new Paxos(timeout, rlog, 10000);
-  paxos3->init(strConfig, 3, NULL, 4, 4, NULL, false, 1);
+  paxos3->init(strConfig, 3, 3, NULL, 4, 4, NULL, false, 1);
 
   Paxos *leader = NULL, *follower1 = NULL, *follower2 = NULL;
   Paxos *paxosList[3];

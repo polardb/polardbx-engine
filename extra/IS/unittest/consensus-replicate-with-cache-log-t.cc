@@ -47,17 +47,17 @@ TEST(consensus, replicate_with_cache_log) {
   std::shared_ptr<PaxosLog> rlog1 =
       std::make_shared<FilePaxosLogTest>(dir1, FilePaxosLog::LogType::LTMem);
   Paxos *paxos1 = new Paxos(timeout, rlog1);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   std::string dir2 = std::string("paxosLogTestDir") + strConfig[1];
   std::shared_ptr<PaxosLog> rlog2 =
       std::make_shared<FilePaxosLogTest>(dir2, FilePaxosLog::LogType::LTMem);
   Paxos *paxos2 = new Paxos(timeout, rlog2);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   std::string dir3 = std::string("paxosLogTestDir") + strConfig[2];
   std::shared_ptr<PaxosLog> rlog3 =
       std::make_shared<FilePaxosLogTest>(dir3, FilePaxosLog::LogType::LTMem);
   Paxos *paxos3 = new Paxos(timeout, rlog3);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(3);
   paxos1->requestVote();

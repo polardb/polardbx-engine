@@ -67,6 +67,7 @@ class CcopyableLru final {
       assert(!lru_list_.empty());
       auto &last = lru_list_.back();
       auto sz = lru_map_.erase(last.first);
+      (void)sz;
       assert(sz > 0);
       lru_list_.pop_back();
       --count_;

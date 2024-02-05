@@ -345,5 +345,7 @@ inline void dbug(const char *keyword [[maybe_unused]],
   DBUG_EXECUTE_IF(keyword, clos(););
 }
 
+#define MY_UNUSED(x) (void)(x)
+
 #endif /* __cplusplus */
 #endif /* MY_DBUG_INCLUDED */

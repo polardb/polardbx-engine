@@ -45,17 +45,17 @@ TEST(witness, Paxos_replicateLog) {
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   ClientService *cs1 = new ClientService();
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1, cs1);
+  paxos1->init(strConfig, 1, 1, cs1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   ClientService *cs2 = new ClientService();
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2, cs2);
+  paxos2->init(strConfig, 2, 2, cs2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   ClientService *cs3 = new ClientService();
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3, cs3);
+  paxos3->init(strConfig, 3, 3, cs3);
 
   std::vector<std::string> witnesslist = {"127.0.0.1:11004"};
   sleep(3);
@@ -129,17 +129,17 @@ TEST(witness, wrong_clusterid) {
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   ClientService *cs1 = new ClientService();
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1, cs1);
+  paxos1->init(strConfig, 1, 1, cs1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   ClientService *cs2 = new ClientService();
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2, cs2);
+  paxos2->init(strConfig, 2, 2, cs2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   ClientService *cs3 = new ClientService();
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3, cs3);
+  paxos3->init(strConfig, 3, 3, cs3);
 
   std::vector<std::string> witnesslist = {"127.0.0.1:11004"};
   paxos1->requestVote();
@@ -216,7 +216,7 @@ TEST(witness, single_leader_learner) {
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   rlog->setMetaData(Paxos::keyClusterId, 1);
   Paxos *paxos1 = new Paxos(5000, rlog);
-  paxos1->initAsLearner(addr);
+  paxos1->initAsLearner(addr, 11);
   LogEntry le;
   le.set_term(1);
   le.set_optype(1);
@@ -242,15 +242,15 @@ TEST(witness, client_mode) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   std::vector<std::string> witnesslist = {"127.0.0.1:11004"};
   sleep(1);
@@ -328,15 +328,15 @@ TEST(witness, cache_timeout) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   std::vector<std::string> witnesslist = {"127.0.0.1:11004"};
   sleep(1);
@@ -412,15 +412,15 @@ TEST(witness, send_by_appliedIndex) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   std::vector<std::string> witnesslist = {"127.0.0.1:11004"};
   sleep(3);
@@ -486,15 +486,15 @@ TEST(learnerClient, basic) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   std::vector<std::string> witnesslist = {"127.0.0.1:11004"};
   sleep(3);
@@ -540,15 +540,15 @@ TEST(learnerClient, blob) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
-  paxos1->init(strConfig, 1);
+  paxos1->init(strConfig, 1, 1);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir2", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog);
-  paxos2->init(strConfig, 2);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir3", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog);
-  paxos3->init(strConfig, 3);
+  paxos3->init(strConfig, 3, 3);
 
   std::vector<std::string> witnesslist = {"127.0.0.1:11004", "127.0.0.1:11005",
                                           "127.0.0.1:11006"};

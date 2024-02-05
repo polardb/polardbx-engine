@@ -42,13 +42,13 @@ TEST(consensus, paxos_leader_state_order) {
   std::shared_ptr<PaxosLog> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir62");
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir63");
   Paxos *paxos3 = new Paxos(timeout, rlog, 3000);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   while (paxos1->getCurrentLeader() == 0)
     ;
@@ -83,13 +83,13 @@ TEST(consensus, paxos_group_send) {
   std::shared_ptr<PaxosLog> rlog, rlog1;
   rlog1 = rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir1");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir2");
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   // rlog= std::make_shared<FilePaxosLog>("paxosLogTestDir3");
   // Paxos *paxos3= new Paxos(timeout, rlog, 3000);
-  // paxos3->init(strConfig, 3, NULL);
+  // paxos3->init(strConfig, 3, 3);
 
   LogEntry le;
   le.set_index(0);

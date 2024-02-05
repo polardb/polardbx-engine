@@ -40,16 +40,16 @@ TEST(consensus, paxos_purgeLog_normal) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir31", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   paxos1->initAutoPurgeLog(true);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir32", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir33", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog, 3000);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(3);
   paxos1->requestVote();
@@ -91,16 +91,16 @@ TEST(consensus, paxos_purgeLog_nopurge_forcepurge) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir41", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   paxos1->initAutoPurgeLog(false, true, NULL);  // disable autoPurge
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir42", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir43", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog, 3000);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(3);
   paxos1->requestVote();
@@ -146,17 +146,17 @@ TEST(consensus, paxos_purgeLog_disable_appliedIndex) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir51", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   paxos1->initAutoPurgeLog(true, false,
                            NULL);  // disable appliedIndex use commitIndex
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir52", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir53", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog, 3000);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   sleep(3);
   paxos1->requestVote();
@@ -197,23 +197,23 @@ TEST(consensus, paxos_purgeLog_local) {
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir41", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
-  paxos1->init(strConfig, 1, NULL);
+  paxos1->init(strConfig, 1, 1);
   paxos1->initAutoPurgeLog(false, false, NULL);  // disable autoPurge
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir42", true, 4 * 1024 * 1024);
   Paxos *paxos2 = new Paxos(timeout, rlog, 3000);
-  paxos2->init(strConfig, 2, NULL);
+  paxos2->init(strConfig, 2, 2);
   paxos2->initAutoPurgeLog(false, false, NULL);  // disable autoPurge
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir43", true, 4 * 1024 * 1024);
   Paxos *paxos3 = new Paxos(timeout, rlog, 3000);
-  paxos3->init(strConfig, 3, NULL);
+  paxos3->init(strConfig, 3, 3);
 
   std::string learnerAddr = "127.0.0.1:11004";
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir44", true, 4 * 1024 * 1024);
   Paxos *paxos4 = new Paxos(timeout, rlog, 3000);
-  paxos4->initAsLearner(learnerAddr);
+  paxos4->initAsLearner(learnerAddr, 4);
 
   sleep(3);
   paxos1->requestVote();
