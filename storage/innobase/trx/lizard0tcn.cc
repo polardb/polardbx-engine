@@ -146,14 +146,16 @@ void trx_cache_tcn(trx_t *trx) {
 void allocate_block_tcn(buf_block_t *block) {
   if (block->cache_tcn == nullptr) {
     if (innodb_tcn_block_cache_type == BLOCK_LRU)
-      block->cache_tcn = new Lru_tcn();
+      block->cache_tcn =
+          ut::new_withkey<Lru_tcn>(ut::make_psi_memory_key(mem_key_tcn));
     else
-      block->cache_tcn = new Array_tcn(ARRAY_TCN_SIZE);
+      block->cache_tcn = ut::new_withkey<Array_tcn>(
+          ut::make_psi_memory_key(mem_key_tcn), ARRAY_TCN_SIZE, mem_key_tcn);
   }
 }
 void deallocate_block_tcn(buf_block_t *block) {
   if (block->cache_tcn != nullptr) {
-    delete block->cache_tcn;
+    ut::delete_(block->cache_tcn);
     block->cache_tcn = nullptr;
   }
 }

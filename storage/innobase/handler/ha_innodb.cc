@@ -1697,7 +1697,7 @@ static int innodb_shutdown(handlerton *, ha_panic_function) {
   innobase::component_services::deinitialize_service_handles();
 
   if (lizard::global_tcn_cache != nullptr) {
-    delete lizard::global_tcn_cache;
+    ut::delete_(lizard::global_tcn_cache);
     lizard::global_tcn_cache = nullptr;
   }
 
@@ -5535,8 +5535,9 @@ static int innodb_init(void *p) {
     return innodb_init_abort();
   }
 
-  lizard::global_tcn_cache =
-      new lizard::Global_tcn(lizard::tcn_cache_size_align());
+  lizard::global_tcn_cache = ut::new_withkey<lizard::Global_tcn>(
+      ut::make_psi_memory_key(mem_key_tcn), lizard::tcn_cache_size_align(),
+      mem_key_tcn);
 
   return 0;
 }

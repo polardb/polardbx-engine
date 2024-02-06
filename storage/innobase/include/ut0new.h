@@ -226,6 +226,7 @@ extern PSI_memory_key mem_key_std;
 extern PSI_memory_key mem_key_trx_sys_t_rw_trx_ids;
 extern PSI_memory_key mem_key_undo_spaces;
 extern PSI_memory_key mem_key_ut_lock_free_hash_t;
+extern PSI_memory_key mem_key_tcn;
 /* Please obey alphabetical order in the definitions above. */
 
 /** Setup the internal objects needed for ut::*_withkey() to operate.

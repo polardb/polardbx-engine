@@ -64,6 +64,7 @@ PSI_memory_key mem_key_std;
 PSI_memory_key mem_key_trx_sys_t_rw_trx_ids;
 PSI_memory_key mem_key_undo_spaces;
 PSI_memory_key mem_key_ut_lock_free_hash_t;
+PSI_memory_key mem_key_tcn;
 /* Please obey alphabetical order in the definitions above. */
 
 #ifdef UNIV_PFS_MEMORY
@@ -109,6 +110,7 @@ static PSI_memory_info pfs_info[] = {
     {&mem_key_ut_lock_free_hash_t, "ut_lock_free_hash_t", 0, 0,
      PSI_DOCUMENT_ME},
     {&commit_snapshot_mem_key, "commit_snapshot_buffer", 0, 0, PSI_DOCUMENT_ME},
+    {&mem_key_tcn, "gloabl_tcn_cache", 0, 0, PSI_DOCUMENT_ME},
     /* Please obey alphabetical order in the definitions above. */
 };
 

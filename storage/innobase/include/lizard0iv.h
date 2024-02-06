@@ -146,11 +146,12 @@ template <typename Element_type, typename Key_type, typename Value_type>
 class Random_array
     : public Cache_interface<Element_type, Key_type, Value_type> {
  public:
-  Random_array(size_t size) : m_size(size) {
-    m_elements = new Value_type[m_size];
+  Random_array(size_t size, PSI_memory_key psi_mem_key) : m_size(size) {
+    m_elements = ut::new_arr_withkey<Value_type>(
+        ut::make_psi_memory_key(psi_mem_key), ut::Count{m_size});
   }
 
-  virtual ~Random_array() { delete[] m_elements; }
+  virtual ~Random_array() { ut::delete_arr(m_elements); }
 
   virtual bool do_before_operation(size_t pos) { return false; }
 
@@ -189,8 +190,8 @@ template <typename Element_type, typename Key_type, typename Value_type>
 class Atomic_random_array
     : public Random_array<Element_type, Key_type, Value_type> {
  public:
-  Atomic_random_array(size_t size)
-      : Random_array<Element_type, Key_type, Value_type>(size) {}
+  Atomic_random_array(size_t size, PSI_memory_key psi_mem_key)
+      : Random_array<Element_type, Key_type, Value_type>(size, psi_mem_key) {}
 
   virtual ~Atomic_random_array() {}
 
