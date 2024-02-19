@@ -1,13 +1,14 @@
 #!/usr/bin/bash
 source cicd/common.sh
 
-CORES=32
+CORES=$(nproc)
 RETRY=2
-PARALLEL=${CORES}
+PARALLEL=$((CORES / 4))
 PERL_BIN=perl
 
-#--sanitize \
-if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ]; then
+if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
+  [ "${TEST_TYPE_ENUM}" -eq "${MERGE_TEST_COVERAGE}" ] ||
+  [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_ALL}" ]; then
   ${PERL_BIN} "${CICD_BUILD_ROOT}"/mysql-test/mysql-test-run.pl \
     --report-unstable-tests \
     --timer \
@@ -23,5 +24,6 @@ if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ]; then
     --unit-tests-report \
     --big-test \
     -testcase-timeout=45 \
-    --xml-report="${RESULT_PATH}"/mtr_result.xml
+    --xml-report="${RESULT_PATH}"/mtr_result.xml \
+    --port-base=10000
 fi

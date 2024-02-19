@@ -1,7 +1,7 @@
 pipeline {
   agent {
     docker {
-      image 'reg.docker.alibaba-inc.com/polardb_x/mysql_dev:1.0-SNAPSHOT'
+      image 'reg.docker.alibaba-inc.com/polardb_x/mysql_dev:1.1-SNAPSHOT'
       args '-v /home/xiedao.yy/Software:/opt/Software \
             --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \
@@ -13,18 +13,20 @@ pipeline {
     CMAKE_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/cmake'
     CTEST_BIN_PATH = '/opt/Software/cmake-3.28.0-linux-x86_64/bin/ctest'
 
-    // relative path of project_root
-    CICD_BUILD_ROOT = "${env.WORKSPACE}/build"
+    RELATIVE_CICD_BUILD_ROOT = 'build'
+    CICD_BUILD_ROOT = "${env.WORKSPACE}/${RELATIVE_CICD_BUILD_ROOT}"
     BOOST_DIRECTORY = "${env.WORKSPACE}/extra/boost"
     BOOST_PATH = "${BOOST_DIRECTORY}/boost_1_77_0.tar.bz2"
     RESULT_PATH = "${CICD_BUILD_ROOT}/result"
     // CCACHE_DIR MUST USE ABSOLUTE PATH
     CCACHE_DIR = "${env.WORKSPACE}/${CICD_BUILD_ROOT}/.cache/ccache"
 
-    CMAKE_C_FLAGS = ""
-    CMAKE_CXX_FLAGS = ""
+    CMAKE_C_FLAGS = ''
+    CMAKE_CXX_FLAGS = ''
+
+    DINGTALK_BOT_ID = '44281ff8-2953-4369-97f8-137e09cbc486'
   }
-  
+
   stages {
     stage('Configure') {
       steps {
@@ -40,68 +42,46 @@ pipeline {
 
     stage('Test') {
       steps {
-        sh 'cicd/unittest.sh || true'
-        sh 'cicd/mtr.sh || true'
+        sh 'cicd/unittest.sh'
+        sh 'cicd/mtr.sh'
+      }
+    }
 
-        script {
-          if (env.TEST_TYPE == 'DAILY_REGRESSION') {
-            def summary = junit allowEmptyResults: true, testResults: "build/result/*.xml"
-            dingtalk(
-              robot: '44281ff8-2953-4369-97f8-137e09cbc486',
-              type: 'MARKDOWN',
-              title: '[PolarDB-X] DN 8032 Daily Regression',
-              text: [
-                "# [${env.JOB_NAME}](${env.JOB_URL})",
-                "---",
-                "- 任务: [${env.BUILD_DISPLAY_NAME}](${env.BUILD_URL})",
-                "- 状态: ${currentBuild.currentResult}",
-                "- 测试数量: ${summary.totalCount}",
-                "- 失败数量: ${summary.failCount}",
-                "- 跳过数量: ${summary.skipCount}",
-                "- 成功数量: ${summary.passCount}",
-                "- 持续时间: ${currentBuild.durationString}",
-              ]
-            )
-          }
-        }
+    stage('TestCoverage') {
+      steps {
+        sh 'cicd/test_coverage.sh'
       }
     }
   }
 
   post {
-    success {
-      sh "mv ${RESULT_PATH}/passed.json ${RESULT_PATH}/result.json"
-      sh "rm ${RESULT_PATH}/failed.json"
-    }
-    unstable {
-      sh "mv ${RESULT_PATH}/passed.json ${RESULT_PATH}/result.json"
-      sh "rm ${RESULT_PATH}/failed.json"
-    }
-    failure {
-      sh "mv ${RESULT_PATH}/failed.json ${RESULT_PATH}/result.json"
-      sh "rm ${RESULT_PATH}/passed.json"
-
+    cleanup {
       script {
         if (env.TEST_TYPE == 'DAILY_REGRESSION') {
-          dingtalk(
-              robot: '44281ff8-2953-4369-97f8-137e09cbc486',
-              type: 'MARKDOWN',
-              title: '[PolarDB-X] DN 8032 Daily Regression',
-              text: [
-                "# [${env.JOB_NAME}](${env.JOB_URL})",
-                "---",
-                "- 任务: [${env.BUILD_DISPLAY_NAME}](${env.BUILD_URL})",
-                "- 状态: ${currentBuild.currentResult}",
-                "---",
-                "## 回归失败，请查看日志"
-              ]
-            )
+          PostJunitResult()
         }
       }
-    }
-    cleanup {
-      // must use relative path ???
-      archiveArtifacts artifacts: "build/result/*.json", onlyIfSuccessful: true
+      archiveArtifacts artifacts: "${RELATIVE_CICD_BUILD_ROOT}/result/**", allowEmptyArchive: true
     }
   }
+}
+
+def PostJunitResult() {
+  def summary = junit allowEmptyResults: true, testResults: "${RELATIVE_CICD_BUILD_ROOT}/result/*.xml"
+  dingtalk(
+    robot: "${DINGTALK_BOT_ID}",
+    type: 'MARKDOWN',
+    title: '[PolarDB-X] DN 8032 Daily Regression',
+    text: [
+      "# [${env.JOB_NAME}](${env.JOB_URL})",
+      '---',
+      "- 任务: [${env.BUILD_DISPLAY_NAME}](${env.BUILD_URL})",
+      "- 状态: ${currentBuild.currentResult}",
+      "- 测试数量: ${summary.totalCount}",
+      "- 失败数量: ${summary.failCount}",
+      "- 跳过数量: ${summary.skipCount}",
+      "- 成功数量: ${summary.passCount}",
+      "- 持续时间: ${currentBuild.durationString}",
+    ]
+  )
 }

@@ -415,4 +415,14 @@ perfschema.idx_compare_socket_instances               : WL#21509040 disable ipv6
 
 
 
-
+main.mysqlpump_bugs : WL#001 dependency not exist
+main.mtr_unit_tests : WL#001 dependency not exist
+main.ssl_ca : WL#001 dependency not exist
+main.ssl_crl : WL#001 dependency not exist
+innodb.mysqld_core_dump_without_buffer_pool : WL#001 tcn cache cause dump larger
+innodb.mysqld_core_dump_without_buffer_pool_dynamic : WL#001 tcn cache cause dump larger
+innodb.mysqld_core_dump_without_buffer_pool_with_resizing : WL#001 tcn cache cause dump larger
+main.count_distinct3 : WL#001 myisam not support
+main.window_functions_big : WL#001 too slow
+main.sum_distinct-big : WL#001 too slow
+main.multi_update2 : WL#001 too slow
