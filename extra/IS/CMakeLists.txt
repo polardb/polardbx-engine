@@ -25,7 +25,7 @@ include_directories(${CONSENSUS_INCLUDE_DIR})
 
 set(COMMON_FLAGS "-Wno-unused-function -Wno-format-truncation -Wno-type-limits -Wno-unused-variable -Wno-empty-body -Wno-dangling-else -Wno-vla -Wno-unused-value -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-implicit-fallthrough -Wno-unused-parameter -Wno-unused-result -Wno-sign-compare -Wno-maybe-uninitialized -Wno-undef -Wno-cast-qual -fno-strict-aliasing ")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} -Wno-jump-misses-init -Wno-discarded-qualifiers -Wno-old-style-declaration")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -Wno-reorder -Wno-suggest-override -Wno-extra-semi -Wno-class-memaccess -Wno-overloaded-virtual -Wno-suggest-attribute=format ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} -Wno-reorder -Wno-suggest-override -Wno-extra-semi -Wno-class-memaccess -Wno-overloaded-virtual -Wno-suggest-attribute=format  -Wno-permissive")
 
 # prepare environment
 set(DEPENDENCY_PATH ${CMAKE_CURRENT_SOURCE_DIR}/dependency)
