@@ -6832,6 +6832,9 @@ int MYSQL_BIN_LOG::new_file_impl(
   file_to_open = index_file_name;
   error = open_index_file(index_file_name, nullptr,
                           false /*need_lock_index=false*/);
+
+  DBUG_EXECUTE_IF("simulate_open_file_error_on_binlog_rotate", error = 1;);
+
   if (!error) {
     /* reopen the binary log file. */
     file_to_open = new_name_ptr;

@@ -1688,6 +1688,7 @@ void binlog_commit_pos_watcher(bool *is_running) {
   bool skip = false;  // skip flag if flush log
 
   while (*is_running) {
+    skip = false;
     /*
       Note that you cannot flush log if it still has pending xid,
       which means commit position locates in last binlog file.

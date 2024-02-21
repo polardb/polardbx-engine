@@ -1,0 +1,86 @@
+#
+# Test for binlog rotation failure
+#
+# 1) In the beginning of binlog rotation, firstly, ROTATE event is
+#    generated and logged at the end of binlog file.
+# 2) Then binlog index file is opened, a new binlog file is created
+#    and registered in it. Buf it binlog index file cannot be opened,
+#    there is no chance to do this.
+# 3) If error in step 2) occurs, binary logging is turned off for
+#    the whole instance, have to restart it.
+# 4) After restart, the ROTATE event remains even binlog file does
+#    not succeed, now binary logging is enabled again, new consensus
+#    log will be appended to the ROTATE event.
+#
+
+--source include/have_debug.inc
+--source include/have_log_bin.inc
+
+--connect (conn_leader, 127.0.0.1, root, , test, $MYPORT_1)
+--connect (conn_follower, 127.0.0.1, root, , test, $MYPORT_2)
+
+connection conn_leader;
+
+# create the test table
+CREATE TABLE t1 (a INT PRIMARY KEY) engine = innodb;
+
+INSERT INTO t1 VALUES(1), (2);
+
+--echo # Check data on follower
+connection conn_follower;
+--source include/wait_apply_catchup.inc
+
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
+SET GLOBAL debug='+d,simulate_open_file_error_on_binlog_rotate';
+
+SELECT * FROM t1;
+
+# Check number of binlog files
+--replace_column 2 # 3 #
+SHOW CONSENSUS LOGS;
+
+# Binlog rotation will fail due to the simulated error
+--error ER_CANT_OPEN_FILE
+FLUSH LOGS;
+
+--error ER_NO_BINARY_LOGGING
+SHOW CONSENSUS LOGS;
+
+--echo # Restart follower to enable binary logging
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--shutdown_server
+--enable_reconnect
+--sleep 1
+--source include/wait_until_connected_again_old.inc
+
+connection conn_follower;
+# Number of binlog files should not change
+--replace_column 2 # 3 #
+SHOW CONSENSUS LOGS;
+
+# Check there is no ROTATE event
+--let $last_index = query_get_value("SELECT * FROM information_schema.alisql_cluster_local", COMMIT_INDEX, 1)
+--let $check_index = query_get_value("select $last_index-1 as idx", idx, 1)
+
+--replace_column 2 # 4 # 5 # 6 #
+--replace_result $check_index index
+eval SHOW CONSENSUS_LOG EVENTS from $check_index;
+
+# Insert another row to generate new consensus logs
+connection conn_leader;
+
+INSERT INTO t1 VALUES(3);
+
+# Check there is no ROTATE event on follower
+connection conn_follower;
+
+SELECT * FROM t1;
+
+--let $check_index = query_get_value("select $last_index+1 as idx", idx, 1)
+
+--replace_column 2 # 4 # 5 # 6 #
+--replace_result $check_index index
+eval SHOW CONSENSUS_LOG EVENTS from $check_index;
+
+connection conn_leader;
+DROP TABLE t1;

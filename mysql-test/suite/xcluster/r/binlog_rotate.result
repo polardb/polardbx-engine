@@ -1,0 +1,48 @@
+CREATE TABLE t1 (a INT PRIMARY KEY) engine = innodb;
+INSERT INTO t1 VALUES(1), (2);
+# Check data on follower
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
+SET GLOBAL debug='+d,simulate_open_file_error_on_binlog_rotate';
+SELECT * FROM t1;
+a
+1
+2
+SHOW CONSENSUS LOGS;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+FLUSH LOGS;
+ERROR HY000: Can't open file: './master-bin.index' (errno: 1 - Operation not permitted)
+SHOW CONSENSUS LOGS;
+ERROR HY000: You are not using binary logging
+# Restart follower to enable binary logging
+SHOW CONSENSUS LOGS;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+SHOW CONSENSUS_LOG EVENTS from index;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Consensus_log	#	#	#
+master-bin.000001	#	Gcn	#	#	#
+master-bin.000001	#	Gtid	#	#	#
+master-bin.000001	#	Query	#	#	#
+master-bin.000001	#	Consensus_log	#	#	#
+master-bin.000001	#	Gcn	#	#	#
+master-bin.000001	#	Gtid	#	#	#
+master-bin.000001	#	Query	#	#	#
+master-bin.000001	#	Table_map	#	#	#
+master-bin.000001	#	Write_rows	#	#	#
+master-bin.000001	#	Xid	#	#	#
+INSERT INTO t1 VALUES(3);
+SELECT * FROM t1;
+a
+1
+2
+SHOW CONSENSUS_LOG EVENTS from index;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Consensus_log	#	#	#
+master-bin.000001	#	Gcn	#	#	#
+master-bin.000001	#	Gtid	#	#	#
+master-bin.000001	#	Query	#	#	#
+master-bin.000001	#	Table_map	#	#	#
+master-bin.000001	#	Write_rows	#	#	#
+master-bin.000001	#	Xid	#	#	#
+DROP TABLE t1;
