@@ -23,7 +23,7 @@ perl;
                pid-file slow-query-log-file
                language lc-messages-dir
                datadir replica-load-tmpdir slave-load-tmpdir tmpdir socket table-definition-cache table-open-cache
-               tls-version admin-tls-version secure-file-priv/;
+               tls-version admin-tls-version secure-file-priv rds-active-memory-profiling/;
 
   # Variables which we don't want to display in result file since
   # they depend on type of build
@@ -34,7 +34,7 @@ perl;
               thread-concurrency super-large-pages mutex-deadlock-detector null-audit
               sha256-password-private-key-path sha256-password-public-key-path
               sha256-password-auto-generate-rsa-keys caching-sha2-password-auto-generate-rsa-keys
-              keyring-migration-socket mysqlx/;
+              keyring-migration-socket mysqlx rds-active-memory-profiling/;
 
   # And substitute the content some environment variables with their
   # names:

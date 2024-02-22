@@ -48,7 +48,7 @@ Docs/INFO_BIN
 Docs/INFO_SRC
 VERSION.dep
 archive_output_directory/
-bin
+/bin
 boost_patch_diffs
 client/base/libclient_base.a
 client/dump/libmysqlpump_lib.a
@@ -537,3 +537,5 @@ extra/IS/unittest/pxserror-t
 extra/IS/unittest/service-t
 extra/IS/unittest/tmp-t
 extra/IS/unittest/witness-t
+extra/jemalloc/tmp/
+sql/libsql_no_jemalloc.a

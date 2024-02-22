@@ -826,6 +826,7 @@ INCLUDE(fprofile)
 INCLUDE(gloves)
 INCLUDE(fido2)
 INCLUDE(win_jemalloc)
+INCLUDE(jemalloc)
 
 IF(UNIX)
   OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
@@ -846,7 +847,7 @@ ENDIF()
 
 OPTION(WITH_JEMALLOC "Use jemalloc rather than builtin malloc/free etc." OFF)
 IF(WITH_JEMALLOC)
-  FIND_MALLOC_LIBRARY(jemalloc)
+  FIND_JEMALLOC_LIBRARY()
 ENDIF()
 
 IF(WITH_JEMALLOC AND (WITH_TCMALLOC OR WITH_TCMALLOC_DEBUG))
@@ -1563,6 +1564,11 @@ ENDIF()
 # Run platform tests
 INCLUDE(configure.cmake)
 
+# Find header files from the bundled libraries
+# (jemalloc, yassl, readline, pcre, etc)
+# before the ones installed in the system
+SET(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
+
 # Common defines and includes
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
 ADD_DEFINITIONS(-D__STDC_LIMIT_MACROS)     # Enable C99 limit macros
@@ -2063,6 +2069,9 @@ IF(WITH_PROTOBUF STREQUAL "bundled" OR WITH_FIDO STREQUAL "bundled")
   ENDIF()
 ENDIF()
 
+SET(MALLOC_LIBRARY "system")
+CHECK_JEMALLOC()
+
 #
 # Setup maintainer mode options by the end. Platform checks are
 # not run with the warning options as to not perturb fragile checks
@@ -2211,6 +2220,7 @@ IF(NOT WITHOUT_SERVER AND WITH_UNIT_TESTS)
       ${MYSQLD_STATIC_PLUGIN_LIBS}
       minchassis
       ${ICU_LIBRARIES}
+      ${LIBJEMALLOC}
       # Import some core symbols. Other symbols needed by the unit test
       # executables are pulled in transitively by symbol dependencies.
       #
@@ -2252,6 +2262,7 @@ IF(NOT WITHOUT_SERVER AND WITH_UNIT_TESTS)
     TARGET_LINK_LIBRARIES(server_unittest_library sql_main)
     TARGET_LINK_LIBRARIES(server_unittest_library minchassis)
     TARGET_LINK_LIBRARIES(server_unittest_library ${ICU_LIBRARIES})
+    TARGET_LINK_LIBRARIES(server_unittest_library ${LIBJEMALLOC})
   ENDIF()
 ENDIF()
 

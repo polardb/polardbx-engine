@@ -78,6 +78,7 @@ ulonglong opt_import_tablespace_iterator_interval_ms =
   @returns void.
 */
 void print_build_info() {
+  printf("Engine Malloc Library: %s\n", MALLOC_LIBRARY);
   printf("Engine Release Date: %s\n", RDS_RELEASE_DATE);
   printf("Engine Build Type: %s\n", BUILD_TYPE);
   printf("Engine Build Branch: %s\n", BUILD_BRANCH);

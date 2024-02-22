@@ -8411,6 +8411,12 @@ int mysqld_main(int argc, char **argv)
       .type(LOG_TYPE_ERROR)
       .subsys(LOG_SUBSYSTEM_TAG)
       .prio(SYSTEM_LEVEL)
+      .message("[RDS Diagnose] %s is using '%s' malloc library.",
+               my_progname, MALLOC_LIBRARY);
+  LogEvent()
+      .type(LOG_TYPE_ERROR)
+      .subsys(LOG_SUBSYSTEM_TAG)
+      .prio(SYSTEM_LEVEL)
       .lookup(ER_SERVER_STARTUP_MSG, my_progname, server_version,
 #ifdef HAVE_SYS_UN_H
               (opt_initialize ? "" : mysqld_unix_port),

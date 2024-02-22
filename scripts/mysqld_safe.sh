@@ -33,6 +33,9 @@ syslog_tag_mysqld=mysqld
 syslog_tag_mysqld_safe=mysqld_safe
 syslog_facility=daemon
 
+# For jemalloc memory profiling
+malloc_conf=
+
 trap '' 1 2 3 15			# we shouldn't let anyone kill us
 trap '' 13                              # not even SIGPIPE
 
@@ -281,6 +284,9 @@ parse_arguments() {
       --skip-syslog) want_syslog=0 ;;
       --syslog-tag=*) syslog_tag="$val" ;;
       --timezone=*) TZ="$val"; export TZ; ;;
+      --malloc-conf=*)
+          malloc_conf="$val";
+          export  MALLOC_CONF="$malloc_conf"; ;;
 
       --help) usage ;;
 

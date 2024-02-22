@@ -12181,6 +12181,12 @@ ER_RECYCLE_BIN
 ER_OUTLINE
   eng "Statement outline : %s"
 
+ER_JEMALLOC_PROFILING_STATE
+  eng "Jemalloc memory profiling is %s"
+
+ER_JEMALLOC_API_MISTAKE
+  eng "Jemalloc API is used by mistake"
+
 ER_XP_0
   eng "%s"
 

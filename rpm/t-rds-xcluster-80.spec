@@ -5,7 +5,7 @@ License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
 Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-BuildRequires: cmake >= 3.8.2
+BuildRequires: cmake >= 3.10
 
 %if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
 BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static

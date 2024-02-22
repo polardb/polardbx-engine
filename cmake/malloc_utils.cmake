@@ -70,3 +70,22 @@ FUNCTION(FIND_MALLOC_LIBRARY library_name)
     SET(${flag} "${${flag}}" PARENT_SCOPE)
   ENDFOREACH()
 ENDFUNCTION()
+
+FUNCTION(FIND_JEMALLOC_LIBRARY)
+  IF(NOT ${LIBJEMALLOC})
+    WARN_MISSING_SYSTEM_JEMALLOC()
+    MESSAGE(FATAL_ERROR "Library JEMALLOC not found")
+  ENDIF()
+
+  STRING_APPEND(CMAKE_C_FLAGS " -fno-builtin-malloc -fno-builtin-calloc")
+  STRING_APPEND(CMAKE_C_FLAGS " -fno-builtin-realloc -fno-builtin-free")
+  STRING_APPEND(CMAKE_CXX_FLAGS " -fno-builtin-malloc -fno-builtin-calloc")
+  STRING_APPEND(CMAKE_CXX_FLAGS " -fno-builtin-realloc -fno-builtin-free")
+
+  FOREACH(flag
+      CMAKE_C_FLAGS
+      CMAKE_CXX_FLAGS
+      )
+    SET(${flag} "${${flag}}" PARENT_SCOPE)
+  ENDFOREACH()
+ENDFUNCTION()

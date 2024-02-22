@@ -306,6 +306,15 @@
 #define PROTOCOL_VERSION 10
 
 /*
+ * malloc library
+ */
+#ifdef MALLOC_LIBRARY_EXTRA
+#define MALLOC_LIBRARY MALLOC_LIBRARY_EXTRA
+#else
+#define MALLOC_LIBRARY "@MALLOC_LIBRARY@"
+#endif
+
+/*
  * CPU info
  */
 #cmakedefine CPU_LEVEL1_DCACHE_LINESIZE @CPU_LEVEL1_DCACHE_LINESIZE@
@@ -362,5 +371,7 @@
 
 /* sasl_client_done support */
 #cmakedefine SASL_CLIENT_DONE_SUPPORTED @SASL_CLIENT_DONE_SUPPORTED@
+
+#cmakedefine RDS_HAVE_JEMALLOC 1
 
 #endif

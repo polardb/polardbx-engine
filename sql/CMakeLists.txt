@@ -91,7 +91,7 @@ ADD_CUSTOM_COMMAND(
 MYSQL_ADD_EXECUTABLE(gen_keyword_list
   gen_keyword_list.cc
   DEPENDENCIES GenServerSource
-  LINK_LIBRARIES ${ICU_LIBRARIES} ${CMAKE_DL_LIBS}
+  LINK_LIBRARIES ${ICU_LIBRARIES} ${CMAKE_DL_LIBS} ${LIBJEMALLOC}
   SKIP_INSTALL
   )
 
@@ -705,6 +705,7 @@ SET(SQL_SHARED_SOURCES
   lizard_rpl_binlog_sender.cc
   lizard_rpl_rli.cc
   sql_common_ext.cc
+  sql_jemalloc.cc
   consensus/consensus_err.cc
   consensus/consensus_channel.cc
   consensus/consensus_rpl_info_factory.cc
@@ -892,6 +893,10 @@ SET(SQL_SOURCE
 IF(NOT HAVE_SETNS)
   LIST(REMOVE_ITEM SQL_SOURCE ../sql-common/net_ns.cc)
 ENDIF()
+
+#SET(SQL_JEMALLOC_DUMMY_SOURCE
+#    sql_jemalloc_dummy.cc
+#  )
 
 IF(NOT WIN32)
   LIST(APPEND SQL_SOURCE mysqld_daemon.cc)
@@ -1240,6 +1245,10 @@ IF(DEBUG_EXTNAME)
   SET_TARGET_PROPERTIES(mysqld PROPERTIES DEBUG_OUTPUT_NAME "mysqld-debug")
 ENDIF()
 
+#IF(UNIX AND NOT (MALLOC_LIBRARY STREQUAL "system"))
+#  SET_TARGET_PROPERTIES(mysqld PROPERTIES SUFFIX "_jemalloc")
+#ENDIF()
+
 # macOS has problems with enabling LTO for shared libs, so we only set it
 # as target property for mysqld.
 IF(APPLE AND WITH_LTO)
@@ -1348,7 +1357,7 @@ ENDIF()
 SET_TARGET_PROPERTIES(mysqld PROPERTIES ENABLE_EXPORTS TRUE)
 TARGET_LINK_LIBRARIES(mysqld
   sql_main sql_gis binlog rpl master slave sql_dd mysys
-  minchassis binlogevents_static ${ICU_LIBRARIES})
+  minchassis binlogevents_static ${ICU_LIBRARIES} ${LIBJEMALLOC})
 
 # Add dependency on ldap library, to ensure it is not unloaded
 # when we shutdown the authentication plugin.
@@ -1382,6 +1391,66 @@ INSTALL_DEBUG_TARGET(mysqld
   DESTINATION ${INSTALL_SBINDIR}
   RENAME mysqld-debug${CMAKE_EXECUTABLE_SUFFIX}
 )
+
+#
+# Target mysqld without jemalloc
+#
+# IF(UNIX AND NOT (MALLOC_LIBRARY STREQUAL "system"))
+#   # Build libsql_no_Jemalloc
+#   ADD_LIBRARY(sql_no_jemalloc STATIC ${SQL_SOURCE} ${SQL_JEMALLOC_DUMMY_SOURCE})
+#   ADD_DEPENDENCIES(sql_no_jemalloc mysqld)
+#   SET_TARGET_PROPERTIES(sql_no_jemalloc PROPERTIES COMPILE_DEFINITIONS
+#     "MALLOC_LIBRARY_EXTRA=\"system\"")
+#   TARGET_LINK_LIBRARIES(sql_no_jemalloc ${MYSQLD_STATIC_PLUGIN_LIBS}
+#     mysql_server_component_services
+#     ${MYSQLD_STATIC_COMPONENT_LIBS}  mysys strings vio
+#     binlogevents_static ${LIBWRAP} ${LIBCRYPT} ${LIBDL} ${SSL_LIBRARIES}
+#     ${PROTOBUF_LITE_LIBRARY})
+# 
+#   # Add executable mysqld_clean
+#   MYSQL_ADD_EXECUTABLE(mysqld_clean
+#     ${MYSQLD_SOURCE} DESTINATION ${INSTALL_SBINDIR} COMPONENT Server)
+# 
+#   # We depend on protobuf because of the mysqlx plugin.
+#   IF(UNIX_INSTALL_RPATH_ORIGIN_PRIV_LIBDIR)
+#     ADD_INSTALL_RPATH_FOR_PROTOBUF(mysqld_clean)
+#   ENDIF()
+# 
+#   # Set the same properties as mysqld for mysqld_clean
+#   GET_TARGET_PROPERTY(tmp_flags mysqld LINK_FLAGS)
+#   IF(tmp_flags)
+#     SET_TARGET_PROPERTIES(mysqld_clean PROPERTIES LINK_FLAGS
+#       "${tmp_flags}")
+#   ENDIF()
+# 
+#   GET_TARGET_PROPERTY(tmp_libraries mysqld LINK_INTERFACE_LIBRARIES)
+#   IF(tmp_libraries)
+#     SET_TARGET_PROPERTIES(mysqld_clean PROPERTIES LINK_INTERFACE_LIBRARIES
+#       "${tmp_libraries}")
+#   ENDIF()
+# 
+#   GET_TARGET_PROPERTY(runtime_dir mysqld RUNTIME_OUTPUT_DIRECTORY)
+#   IF(runtime_dir)
+#     SET_TARGET_PROPERTIES(mysqld_clean PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+#       "${runtime_dir}")
+#   ENDIF()
+# 
+#   SET_TARGET_PROPERTIES(mysqld_clean PROPERTIES ENABLE_EXPORTS TRUE)
+# 
+#   # Set libraries
+#   TARGET_LINK_LIBRARIES(mysqld_clean
+#     sql_no_jemalloc sql_gis binlog rpl master slave sql_no_jemalloc sql_dd sql_gis mysys
+#     minchassis binlogevents_static ${ICU_LIBRARIES})
+# 
+#   # Rename mysqld to mysqld_jemalloc, and install
+#   ADD_CUSTOM_TARGET(mysqld_jemalloc_softlink ALL
+#     COMMAND ${CMAKE_COMMAND} -E create_symlink ./mysqld_jemalloc ${runtime_dir}/mysqld
+#   )
+#   INSTALL(FILES ${runtime_dir}/mysqld DESTINATION ${INSTALL_SBINDIR} COMPONENT server)
+#   # Clean mysqld_jemalloc_softlink
+#   SET_DIRECTORY_PROPERTIES(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${runtime_dir}/mysqld)
+# 
+# ENDIF()
 
 # We have already included cmake/bison.cmake, and done FIND_PACKAGE(BISON)
 IF(BISON_FOUND)
