@@ -259,6 +259,8 @@ innodb_tcn_cache_level
 innodb_tcn_cache_level
 innodb_tcn_cache_replace_after_commit
 innodb_tcn_cache_replace_after_commit
+innodb_tcn_cache_size
+innodb_tcn_cache_size
 innodb_transaction_group
 innodb_transaction_group
 innodb_txn_cached_list_keep_size
