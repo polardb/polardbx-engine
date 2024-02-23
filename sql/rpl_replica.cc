@@ -8668,7 +8668,8 @@ int rotate_relay_log(Master_info *mi, bool log_master_fd, bool need_lock,
     xp::error(ER_XP_APPLIER) << "Didn't allowed to rotate when last "
                                 "consensus log entry is in large trx";
     my_error(ER_CONSENSUS_FOLLOWER_NOT_ALLOWED, MYF(0));
-    return 1;
+    error = 1;
+    goto end;
   }
 
   /* If the relay log is closed, new_file() will do nothing. */
