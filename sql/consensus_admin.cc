@@ -572,6 +572,12 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         DBUG_RETURN(1);
       }
 
+      if ((rli->is_time_for_mta_checkpoint() ||
+           DBUG_EVALUATE_IF("check_replica_debug_group", 1, 0)) &&
+          mta_checkpoint_routine(rli, false)) {
+            DBUG_RETURN(1);
+      }
+
       // determine whether exit
       uint64 stop_term = consensus_log_manager.get_stop_term();
       long time_diff = (long)(time(0) - rli->last_master_timestamp);
