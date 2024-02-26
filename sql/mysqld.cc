@@ -10245,7 +10245,6 @@ static void print_server_version(void) {
   set_server_version();
 
   print_explicit_version(server_version);
-  print_polardbx_engine_version();
 }
 
 /** Compares two options' names, treats - and _ the same */

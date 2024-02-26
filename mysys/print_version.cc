@@ -74,7 +74,3 @@ void build_version(const std::string &progname, std::string *destination) {
                 << MACHINE_TYPE << " (" << MYSQL_COMPILATION_COMMENT << ")";
   *destination = output_buffer.str();
 }
-
-void print_polardbx_engine_version() {
-  printf("PolarDB-X Engine Version: %s\n", POLARDB_X_ENGINE_VERSION);
-}
