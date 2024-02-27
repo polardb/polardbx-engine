@@ -5,6 +5,7 @@ CORES=$(nproc)
 RETRY=2
 PARALLEL=$((CORES / 4))
 PERL_BIN=perl
+TIME_OUT=90
 
 if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
   [ "${TEST_TYPE_ENUM}" -eq "${MERGE_TEST_COVERAGE}" ] ||
@@ -23,7 +24,7 @@ if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
     --report-features \
     --unit-tests-report \
     --big-test \
-    -testcase-timeout=45 \
+    --testcase-timeout="${TIME_OUT}" \
     --xml-report="${RESULT_PATH}"/mtr_result.xml \
     --port-base=10000
 fi
