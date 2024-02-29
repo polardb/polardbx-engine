@@ -3224,3 +3224,18 @@ ANALYZE TABLE t1;
 SELECT at1.c3 FROM (t1 AS at1 LEFT JOIN (SELECT at2.* FROM (t1 AS at2 JOIN t1 AS at3 ON ((1,2) IN (SELECT c1,c1 FROM t1 as at4)))) AS at5 ON at5.c1 = at1.c1);
 
 DROP TABLE t1;
+
+--echo #
+--echo # BUGFIX: issue#594 Index conditions refering to const table were not added to RANGE SCAN
+--echo #
+CREATE TABLE t1 (a INTEGER, b INTEGER, PRIMARY KEY (a));
+CREATE TABLE t2 (a INTEGER, b INTEGER, PRIMARY KEY (a, b));
+INSERT INTO t1 VALUES (1, 1), (2, 2);
+INSERT INTO t2 VALUES (2, 1), (2, 2), (2, 3), (2, 4);
+ANALYZE TABLE t1, t2;
+EXPLAIN FORMAT=TREE
+SELECT t2.b FROM t1 JOIN t2
+  WHERE t1.a = t2.a AND t2.a = 2 AND t2.b >= t1.b AND t2.b <= t1.b+2;
+SELECT t2.b FROM t1 JOIN t2
+  WHERE t1.a = t2.a AND t2.a = 2 AND t2.b >= t1.b AND t2.b <= t1.b+2;
+DROP TABLE t1,t2;
