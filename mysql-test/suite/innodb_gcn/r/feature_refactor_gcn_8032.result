@@ -7,44 +7,44 @@ create table tt (id int);
 # Case 1: commit detached XA
 ###############################
 set xa_detach_on_prepare = on;
-xa start '1';
+xa start '1_normal';
 insert into tt values (1);
-xa end '1';
-xa prepare '1';
-xa commit '1';
+xa end '1_normal';
+xa prepare '1_normal';
+xa commit '1_normal';
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
 ###############################
 # Case 2: rollback detached XA
 ###############################
 set xa_detach_on_prepare = on;
-xa start '2';
+xa start '2_normal';
 insert into tt values (2);
-xa end '2';
-xa prepare '2';
-xa rollback '2';
+xa end '2_normal';
+xa prepare '2_normal';
+xa rollback '2_normal';
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
 ###############################
 # Case 3: commit attached XA
 ###############################
 set xa_detach_on_prepare = off;
-xa start '3';
+xa start '3_normal';
 insert into tt values (3);
-xa end '3';
-xa prepare '3';
-xa commit '3';
+xa end '3_normal';
+xa prepare '3_normal';
+xa commit '3_normal';
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
 ###############################
 # Case 4: rollback attached XA
 ###############################
 set xa_detach_on_prepare = off;
-xa start '4';
+xa start '4_normal';
 insert into tt values (4);
-xa end '4';
-xa prepare '4';
-xa rollback '4';
+xa end '4_normal';
+xa prepare '4_normal';
+xa rollback '4_normal';
 include/assert.inc [expect_gcn == actual_gcn]
 include/assert.inc [expect_state == actual_state]
 ###############################

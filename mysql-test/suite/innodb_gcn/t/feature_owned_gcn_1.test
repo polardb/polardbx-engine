@@ -5,6 +5,7 @@ call mtr.add_suppression("Found 1 prepared XA transactions");
 set global innodb_purge_rseg_truncate_frequency = 1;
 
 create table tt (id int);
+create table t_my_gcn(save_gcn int);
 
 --source include/wait_innodb_all_purged.inc
 
@@ -88,8 +89,15 @@ xa commit '4' one phase;
 --echo ###############################
 --echo # case 5
 --echo ###############################
-set xa_detach_on_prepare = 0;
+## Save $my_gcn
 --let $my_gcn = `select @base_seq + 500`
+--disable_query_log
+--disable_result_log
+--eval insert into t_my_gcn values ($my_gcn);
+--enable_result_log
+--enable_query_log
+
+set xa_detach_on_prepare = 0;
 xa start '5';
 insert into tt values (5);
 xa end '5';
@@ -115,6 +123,7 @@ xa commit '5';
 
 --source suite/innodb_gcn/include/init_conn_base_seq.inc
 
+--let $my_gcn = `select save_gcn from t_my_gcn`
 --let $diff = 10
 --expr $my_gcn = $my_gcn + $diff
 --disable_query_log
@@ -230,6 +239,7 @@ xa commit '8';
 --echo # cleanup
 --echo ###############################
 drop table tt;
+drop table t_my_gcn;
 
 set global innodb_undo_retention = default;
 set global innodb_purge_rseg_truncate_frequency = default;
