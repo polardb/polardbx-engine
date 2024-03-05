@@ -343,6 +343,8 @@ xa prepare 'x1';
 --let $_expect_file_name=$MYSQLTEST_VARDIR/tmp/mysqld.2.expect
 --source include/start_mysqld.inc
 
+--sleep 30
+
 --connection conn2
 --enable_reconnect
 --source include/wait_until_connected_again_old.inc

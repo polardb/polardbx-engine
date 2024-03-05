@@ -430,18 +430,16 @@ insert into t1 values (60);
 
 --connection conn2
 set global debug="+d,generate_bad_log_entry";
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
 
 --connection conn1
 insert into t1 values (61);
 
 --connection conn2
+--source include/expect_crash.inc
 --enable_reconnect
---exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
---shutdown_server 0
 --source include/wait_until_disconnected.inc
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
 --source include/wait_until_connected_again.inc
---disable_reconnect
 set global debug="+d,force_large_trx,force_large_trx_single_ev";
 
 --connection conn1
@@ -597,3 +595,5 @@ SET debug_sync = "now SIGNAL continue";
 drop table t1;
 
 set global debug="";
+
+--sleep 30

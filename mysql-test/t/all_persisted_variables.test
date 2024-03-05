@@ -68,6 +68,7 @@ performance_schema.global_variables WHERE variable_name NOT IN
 'innodb_monitor_disable',
 'innodb_monitor_reset',
 'innodb_monitor_reset_all',
+'rds_active_memory_profiling',
 'rbr_exec_mode');
 
 --let $count_vars= `SELECT COUNT(*) FROM global_vars;`

@@ -50,6 +50,10 @@
 
 #include "sql/polarx_proc/changeset_proc.h"
 
+#ifdef RDS_HAVE_JEMALLOC
+#include "sql/sql_jemalloc.h"
+#endif
+
 namespace im {
 
 /* All package memory usage aggregation point */
@@ -238,6 +242,11 @@ void package_context_init() {
   register_package<Proc, Changeset_proc_stop>(POLARX_PROC_SCHEMA);
   register_package<Proc, Changeset_proc_finish>(POLARX_PROC_SCHEMA);
   register_package<Proc, Changeset_proc_times>(POLARX_PROC_SCHEMA);
+
+#ifdef RDS_HAVE_JEMALLOC
+  register_package<Proc, im::Jemalloc_profile_proc>(im::JEMALLOC_PROC_SCHEMA);
+#endif
+
 }
 
 } /* namespace im */

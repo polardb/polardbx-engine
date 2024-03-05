@@ -420,6 +420,8 @@ polarx_rpc_tcp_send_buf
 polarx_udf_function_list
 polarx_udf_function_list
 pseudo_slave_mode
+rds_active_memory_profiling
+rds_active_memory_profiling
 rds_audit_log_buffer_size
 rds_audit_log_buffer_size
 rds_audit_log_connection_policy

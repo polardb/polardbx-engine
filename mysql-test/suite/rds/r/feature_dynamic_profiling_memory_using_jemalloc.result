@@ -1,0 +1,11 @@
+show variables like 'rds_active_memory_profiling';
+Variable_name	Value
+rds_active_memory_profiling	ON
+call dbms_jemalloc.profile();
+STATUS	MESSAGE
+OK	A memory profile is dumped to 'xxx.heap'
+set global rds_active_memory_profiling = OFF;
+call dbms_jemalloc.profile();
+STATUS	MESSAGE
+Fail	rds_active_memory_profiling is OFF, enable it at first
+set global rds_active_memory_profiling = ON;

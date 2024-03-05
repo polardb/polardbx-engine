@@ -59,6 +59,11 @@
 #include "sql/xa/lizard_xa_trx.h"
 #include "sql/sql_implicit_element.h"
 
+#ifdef RDS_HAVE_JEMALLOC
+#include "sql/sql_jemalloc.h"
+#endif
+
+
 /* Global scope variables */
 char innodb_version[SERVER_VERSION_LENGTH];
 
@@ -534,6 +539,18 @@ static Sys_var_charptr Sys_rds_inner_user_list(
     IN_FS_CHARSET, DEFAULT(0), &Plock_internal_account_string, NOT_IN_BINLOG,
     ON_CHECK(NULL), ON_UPDATE(update_inner_user));
 
+
+#ifdef RDS_HAVE_JEMALLOC
+
+static Sys_var_bool Sys_rds_active_memory_profiling(
+    "rds_active_memory_profiling",
+    "Active jemalloc memory profing, jemalloc must "
+    "be enabled at server start up.",
+    GLOBAL_VAR(im::opt_rds_active_memory_profiling), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(im::check_active_memory_profiling), ON_UPDATE(0));
+
+#endif
 /* RDS DEFINED */
 
 /* PolarDB-X RPC */

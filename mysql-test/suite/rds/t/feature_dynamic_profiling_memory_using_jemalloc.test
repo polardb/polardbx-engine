@@ -1,0 +1,37 @@
+#--source include/have_nodebug.inc
+
+## skip asan
+--let $_outfile= $MYSQLTEST_VARDIR/tmp/is_asan.tmp
+--error 0,1,127
+--exec $MYSQLD  -V | grep asan | wc -l > $_outfile 2>&1
+disable_query_log;
+--eval SET @is_asan = LOAD_FILE('$_outfile')
+enable_query_log;
+--remove_file $_outfile
+if (`SELECT @is_asan = 1`)
+{
+   --skip skip under asan
+}
+
+--exec export MALLOC_CONF="prof:true,prof_active:true"
+
+## above release version check will ensure we have
+## rds_active_memory_profiling variable.
+## check if environment variable MALLOC_CONF is properly set
+if (`SELECT @@GLOBAL.rds_active_memory_profiling  = 0`)
+{
+   --skip need "export MALLOC_CONF="prof:true,prof_active:true"" and run again
+}
+
+## check variables
+show variables like 'rds_active_memory_profiling';
+
+## flush a memory profile
+--replace_regex /A memory profile is dumped to .*/A memory profile is dumped to 'xxx.heap'/
+call dbms_jemalloc.profile();
+
+## flush fail if memory profiling disabled
+set global rds_active_memory_profiling = OFF;
+call dbms_jemalloc.profile();
+
+set global rds_active_memory_profiling = ON;

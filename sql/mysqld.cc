@@ -1000,6 +1000,10 @@ MySQL clients support the protocol:
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
 
+#ifdef RDS_HAVE_JEMALLOC
+#include "sql/sql_jemalloc.h"
+#endif
+
 using std::max;
 using std::min;
 using std::vector;
@@ -1552,6 +1556,9 @@ ulong connection_errors_internal = 0;
 /** Number of errors when reading the peer address. */
 ulong connection_errors_peer_addr = 0;
 
+Rpl_global_filter rpl_global_filter;
+Rpl_filter *binlog_filter;
+
 /* classes for comparison parsing/processing */
 Eq_creator eq_creator;
 Ne_creator ne_creator;
@@ -1561,8 +1568,6 @@ Lt_creator lt_creator;
 Ge_creator ge_creator;
 Le_creator le_creator;
 
-Rpl_global_filter rpl_global_filter;
-Rpl_filter *binlog_filter;
 Rpl_acf_configuration_handler *rpl_acf_configuration_handler = nullptr;
 Source_IO_monitor *rpl_source_io_monitor = nullptr;
 Udf_load_service udf_load_service;
@@ -5347,7 +5352,12 @@ int init_common_variables() {
 
   if (rpl_channel_filters.build_do_and_ignore_table_hashes()) return 1;
 
+#ifdef RDS_HAVE_JEMALLOC
+  im::jemalloc_profiling_state();
+#endif
+
   return 0;
+
 }
 
 static int init_thread_environment() {
@@ -8411,7 +8421,7 @@ int mysqld_main(int argc, char **argv)
       .type(LOG_TYPE_ERROR)
       .subsys(LOG_SUBSYSTEM_TAG)
       .prio(SYSTEM_LEVEL)
-      .message("[RDS Diagnose] %s is using '%s' malloc library.",
+      .message("%s is using '%s' Malloc Library.",
                my_progname, MALLOC_LIBRARY);
   LogEvent()
       .type(LOG_TYPE_ERROR)

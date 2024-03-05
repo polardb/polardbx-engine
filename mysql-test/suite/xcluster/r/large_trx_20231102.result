@@ -106,7 +106,6 @@ insert into t values(repeat('c', 300));
 xa end 'x1';
 xa prepare 'x1';
 # restart
-Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
 select count(*) from t;
 count(*)
 1
