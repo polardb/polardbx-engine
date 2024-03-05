@@ -1896,6 +1896,9 @@ IF(LIBEVENT_WARN_GIVEN)
     )
 ENDIF()
 
+SET(MALLOC_LIBRARY "system")
+MYSQL_CHECK_JEMALLOC()
+
 # Add lz4 library
 MYSQL_CHECK_LZ4()
 # Add icu library
@@ -2069,8 +2072,6 @@ IF(WITH_PROTOBUF STREQUAL "bundled" OR WITH_FIDO STREQUAL "bundled")
   ENDIF()
 ENDIF()
 
-SET(MALLOC_LIBRARY "system")
-CHECK_JEMALLOC()
 
 #
 # Setup maintainer mode options by the end. Platform checks are

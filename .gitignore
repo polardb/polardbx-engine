@@ -537,5 +537,13 @@ extra/IS/unittest/pxserror-t
 extra/IS/unittest/service-t
 extra/IS/unittest/tmp-t
 extra/IS/unittest/witness-t
-extra/jemalloc/tmp/
 sql/libsql_no_jemalloc.a
+extra/jemalloc/tmp/
+extra/jemalloc/jemalloc-build
+extra/jemalloc/jemalloc-configure
+extra/jemalloc/jemalloc-done
+extra/jemalloc/jemalloc-download
+extra/jemalloc/jemalloc-install
+extra/jemalloc/jemalloc-mkdir
+extra/jemalloc/jemalloc-patch
+extra/jemalloc/jemalloc-update

@@ -1178,13 +1178,13 @@ int MYSQL_BIN_LOG::consensus_prefetch_log_entries(THD *thd, uint64 channel_id,
   return ret;
 }
 
-static void store_gtid_for_xpaxos(const char *buf, Relay_log_info *rli) {
+static void store_gtid_for_xpaxos(const char *buf, size_t buf_size, Relay_log_info *rli) {
   Log_event_type event_type = (Log_event_type)buf[EVENT_TYPE_OFFSET];
   Format_description_log_event fd_ev;
   fd_ev.footer()->checksum_alg =
       static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
 
-  if (event_type == binary_log::GCN_LOG_EVENT) {
+  if (event_type == binary_log::GCN_LOG_EVENT && buf_size > Gcn_log_event::get_event_length(fd_ev.footer()->checksum_alg)) {
     buf = buf + Gcn_log_event::get_event_length(fd_ev.footer()->checksum_alg);
     event_type = (Log_event_type)buf[EVENT_TYPE_OFFSET];
   }
@@ -1422,7 +1422,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
     error = revise_entry_and_write(m_binlog_file, real_buffer, real_buf_size);
 
   if (!error) {
-    store_gtid_for_xpaxos((const char *)real_buffer, rli);
+    store_gtid_for_xpaxos((const char *)real_buffer, real_buf_size, rli);
     bytes += real_buf_size;
     bytes_written += bytes;
   }
@@ -1573,7 +1573,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
       error = revise_entry_and_write(m_binlog_file, real_buffer, real_buf_size);
 
     if (!error && rli != NULL) {
-      store_gtid_for_xpaxos((const char *)real_buffer, rli);
+      store_gtid_for_xpaxos((const char *)real_buffer, real_buf_size, rli);
     }
 
     if (!error) {

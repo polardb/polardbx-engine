@@ -1570,7 +1570,7 @@ static void txn_add_node_to_cached_list(trx_rseg_t *rseg, page_t *undo_page,
 
   offset = txn_undo_segment_reuse(rseg, rseg_hdr, undo_page, slot_no, mtr, 0,
                                   TXN_EXT_STORAGE_NONE, nullptr, nullptr);
-  ut_ad(offset == 0);
+  ut_a(offset == 0);
 
   /** Phase 2: Create a memory object for txn undo. */
   XID xid;

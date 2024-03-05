@@ -1019,7 +1019,6 @@ IF(HAVE_NO_BUILTIN_MEMCMP)
   )
 ENDIF()
 
-
 ADD_LIBRARY(sql_main STATIC ${SQL_SOURCE})
 ADD_DEPENDENCIES(sql_main GenServerSource)
 ADD_DEPENDENCIES(sql_main GenDigestServerSource)

@@ -1,6 +1,6 @@
 # old cmake does not have ExternalProject file
 IF(CMAKE_VERSION VERSION_LESS "2.8.6")
-  MACRO (CHECK_JEMALLOC)
+  MACRO (MYSQL_CHECK_JEMALLOC)
   ENDMACRO()
   RETURN()
 ENDIF()
@@ -9,16 +9,19 @@ INCLUDE(ExternalProject)
 
 MACRO (USE_BUNDLED_JEMALLOC)
   SET(SOURCE_DIR "${CMAKE_SOURCE_DIR}/extra/jemalloc")
-  SET(BINARY_DIR "${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/extra/jemalloc/build")
+  SET(BINARY_DIR ${SOURCE_DIR})
   SET(LIBJEMALLOC "libjemalloc")
   IF(WITH_ASAN)
-    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1}" "--with-private-namespace=jemalloc_internal_" "--enable-cc-silence")
+    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1} --with-private-namespace=jemalloc_internal_  --enable-cc-silence")
   ELSE()
-    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1}" "--with-private-namespace=jemalloc_internal_" "--enable-cc-silence" "--enable-prof")
+    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1} --with-private-namespace=jemalloc_internal_  --enable-cc-silence --enable-prof")
   ENDIF()
+  SET(JEMALLOC_CONFIGURE_OPTS "${JEMALLOC_CONFIGURE_OPTS} --with-malloc-conf=background_thread:true")
   IF (CMAKE_BUILD_TYPE MATCHES "Debug" AND NOT APPLE) # see the comment in CMakeLists.txt
-    LIST(APPEND JEMALLOC_CONFIGURE_OPTS --enable-debug)
+    SET(JEMALLOC_CONFIGURE_OPTS "${JEMALLOC_CONFIGURE_OPTS} --enable-debug") # 
   ENDIF()
+
+  MESSAGE(STATUS "USE JEMALLOC_CONFIGURE_OPTS ${JEMALLOC_CONFIGURE_OPTS}")
 
   IF(CMAKE_GENERATOR MATCHES "Makefiles")
     SET(MAKE_COMMAND ${CMAKE_MAKE_PROGRAM})
@@ -31,11 +34,16 @@ MACRO (USE_BUNDLED_JEMALLOC)
     SOURCE_DIR ${SOURCE_DIR}
     BINARY_DIR ${BINARY_DIR}
     STAMP_DIR  ${BINARY_DIR}
-    CONFIGURE_COMMAND bash -c "cd ${SOURCE_DIR} && autoconf && cd ${BINARY_DIR} && ${SOURCE_DIR}/configure" ${JEMALLOC_CONFIGURE_OPTS}
+    CONFIGURE_COMMAND ""
     BUILD_COMMAND  ${MAKE_COMMAND} "build_lib_static"
     INSTALL_COMMAND ""
   )
-  INCLUDE_DIRECTORIES(${BINARY_DIR}/include)
+  EXECUTE_PROCESS(COMMAND ./autogen.sh ${JEMALLOC_CONFIGURE_OPTS}
+    WORKING_DIRECTORY ${SOURCE_DIR}
+  )
+  MESSAGE(STATUS "USE SOURCE_DIR ${SOURCE_DIR}")
+  MESSAGE(STATUS "USE BINARY_DIR ${BINARY_DIR}")
+  INCLUDE_DIRECTORIES(BEFORE SYSTEM  ${SOURCE_DIR}/include)
   ADD_LIBRARY(libjemalloc STATIC IMPORTED)
   SET_TARGET_PROPERTIES(libjemalloc PROPERTIES IMPORTED_LOCATION "${BINARY_DIR}/lib/libjemalloc_pic.a")
   ADD_DEPENDENCIES(libjemalloc jemalloc)
@@ -53,7 +61,7 @@ ENDIF()
 SET(WITH_JEMALLOC ${WITH_JEMALLOC_DEFAULT} CACHE STRING
     "Which jemalloc to use. Possible values are 'no', 'bundled', 'system', 'yes' (system if possible, otherwise bundled)")
 
-MACRO (CHECK_JEMALLOC)
+MACRO (MYSQL_CHECK_JEMALLOC)
   IF(WITH_JEMALLOC STREQUAL "system" OR WITH_JEMALLOC STREQUAL "yes")
     CHECK_LIBRARY_EXISTS(jemalloc malloc_stats_print "" HAVE_JEMALLOC)
     IF (HAVE_JEMALLOC)
