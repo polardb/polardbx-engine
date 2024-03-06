@@ -363,7 +363,6 @@ else
       -DWITH_VALGRIND=$valg              \
       -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
       -DDOWNLOAD_BOOST=0                \
-      -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
       -DWITH_TESTS=0
 fi
 

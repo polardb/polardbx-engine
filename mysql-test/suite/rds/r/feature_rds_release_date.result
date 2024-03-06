@@ -3,13 +3,26 @@ GRANT SELECT ON *.* to test@localhost;
 show variables like 'rds_release_date';
 Variable_name	Value
 rds_release_date	19700101
+show variables like 'polardbx_engine_version';
+Variable_name	Value
+polardbx_engine_version	1.1.1
 select @@rds_release_date;
 @@rds_release_date
 19900210
+Warnings:
+19900210	1287	'@@rds_release_date' is deprecated and will be removed in a future release. Please use polardbx_release_date instead.
+select @@polardbx_engine_version;
+@@polardbx_engine_version
+1.1.1
 show variables like 'rds_release_date';
 Variable_name	Value
 rds_release_date	19900210
+show variables like 'polardbx_engine_version';
+Variable_name	Value
+polardbx_engine_version	1.1.1
 set global rds_release_date="20230711";
 ERROR HY000: Variable 'rds_release_date' is a read only variable
+set global polardbx_engine_version="20230711";
+ERROR HY000: Variable 'polardbx_engine_version' is a read only variable
 0
 drop user test@localhost;

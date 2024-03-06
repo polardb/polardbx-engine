@@ -1,11 +1,15 @@
-Name: t-rds-xcluster-80
-Version:8.0.32
+%define version_extra X-Cluster
+%define release_date 20240313
+%define engine_version 8.4.18
+Version: 8.4.18.20240313
+
+Name: t-polardbx-engine-80
 Release: %(echo $RELEASE)%{?dist}
 License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
 Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-BuildRequires: cmake >= 3.10
+BuildRequires: cmake >= 3.8.2
 
 %if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
 BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static
@@ -25,7 +29,7 @@ BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
 Packager: jianwei.zhao@alibaba-inc.com
 Autoreq: no
 #Source: %{name}-%{version}.tar.gz
-Prefix: /u01/xcluster80_current
+Prefix: /u01/xcluster80_%{release_date}_current
 Summary: PolarDB-X MySQL XCluster 8.0 based on Oracle MySQL 8.0
 
 %description
@@ -38,8 +42,6 @@ as for embedding into mass-deployed software.
 %define MYSQL_GROUP root
 %define __os_install_post %{nil}
 %define commit_id %(git rev-parse --short HEAD)
-%define release_date 20240229
-%define engine_version 8.4.18
 %define base_dir /u01/xcluster80
 %define copy_dir /u01/xcluster80_%{release_date}
 
@@ -102,6 +104,7 @@ $CMAKE_BIN .                            \
   -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
   -DPOLARDBX_RELEASE_DATE=%{release_date} \
   -DPOLARDBX_ENGINE_VERSION=%{engine_version} \
+  -DPOLARDBX_VERSION_EXTRA=%{version_extra} \
   -DWITH_TESTS=0                     \
   -DWITH_UNIT_TESTS=0
 
@@ -128,6 +131,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755, %{MYSQL_USER}, %{MYSQL_GROUP}) %{prefix}/*
 %dir %attr(755,  %{MYSQL_USER}, %{MYSQL_GROUP}) %{prefix}
 %exclude %{prefix}/mysql-test
+
 
 %pre
 ## in %pre step, $1 is 1 for install, 2 for upgrade
@@ -176,6 +180,9 @@ else
     echo "Copying %{prefix} to %{copy_dir}"
     cp -rf %{prefix} %{copy_dir}
 fi
+
+
+rm -rf %{prefix}
 
 %preun
 

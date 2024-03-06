@@ -261,7 +261,7 @@ bool show_consensus_logs(THD *thd) {
   Protocol *protocol = thd->get_protocol();
   DBUG_ENTER("show_consensus_logs");
 
-  consensus_log_manager.lock_consensus(false);
+  consensus_log_manager.lock_consensus(true);
   MYSQL_BIN_LOG *log =
       consensus_log_manager.get_status() == BINLOG_WORKING
           ? &mysql_bin_log
@@ -279,8 +279,10 @@ bool show_consensus_logs(THD *thd) {
       new Item_return_int("Start_log_index", 20, MYSQL_TYPE_LONGLONG));
 
   if (thd->send_result_metadata(field_list,
-                                Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
+                                Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF)) {
+    consensus_log_manager.unlock_consensus();
     DBUG_RETURN(true);
+  }
 
   mysql_mutex_lock(log->get_log_lock());
   DEBUG_SYNC(thd, "show_binlogs_after_lock_log_before_lock_index");

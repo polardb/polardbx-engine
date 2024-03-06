@@ -69,7 +69,8 @@ char innodb_version[SERVER_VERSION_LENGTH];
 
 /* Local scope variables */
 static uint rds_version = 0;
-static char *rds_release_date_ptr = NULL;
+static char *polardbx_release_date_ptr = NULL;
+static char *polardbx_engine_version_ptr = NULL;
 
 int32 opt_rpc_port = DEFAULT_RPC_PORT;
 bool opt_enable_polarx_rpc = true;
@@ -84,7 +85,9 @@ ulonglong opt_import_tablespace_iterator_interval_ms =
 */
 void print_build_info() {
   printf("Engine Malloc Library: %s\n", MALLOC_LIBRARY);
-  printf("Engine Release Date: %s\n", RDS_RELEASE_DATE);
+  printf("Engine Version: %s\n", POLARDBX_ENGINE_VERSION);
+  printf("Engine Release Date: %s\n", POLARDBX_RELEASE_DATE);
+  printf("Engine Version Extra: %s\n", POLARDBX_VERSION_EXTRA);
   printf("Engine Build Type: %s\n", BUILD_TYPE);
   printf("Engine Build Branch: %s\n", BUILD_BRANCH);
   printf("Engine Build Commit: %s\n", BUILD_COMMIT);
@@ -142,10 +145,18 @@ static Sys_var_uint Sys_rds_version("rds_version", "The mysql patch version",
                                     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
                                     ON_UPDATE(fix_server_version));
 
-static Sys_var_charptr Sys_rds_release_date(
-    "rds_release_date", "RDS RPM package release date",
-    READ_ONLY GLOBAL_VAR(rds_release_date_ptr), NO_CMD_LINE, IN_SYSTEM_CHARSET,
-    DEFAULT(RDS_RELEASE_DATE));
+static Sys_var_charptr Sys_polardbx_release_date(
+    "polardbx_release_date", "PolarDB-X RPM package release date",
+    READ_ONLY GLOBAL_VAR(polardbx_release_date_ptr), NO_CMD_LINE, IN_SYSTEM_CHARSET,
+    DEFAULT(POLARDBX_RELEASE_DATE));
+
+static Sys_var_charptr Sys_polardbx_release_version(
+    "polardbx_engine_version", "PolarDB-X engine version",
+    READ_ONLY GLOBAL_VAR(polardbx_engine_version_ptr), NO_CMD_LINE, IN_SYSTEM_CHARSET,
+    DEFAULT(POLARDBX_ENGINE_VERSION));
+
+static Sys_var_deprecated_alias Sys_rds_release_date(
+    "rds_release_date", Sys_polardbx_release_date);
 
 /* Internal Account variables. */
 using namespace im;
