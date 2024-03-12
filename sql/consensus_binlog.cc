@@ -374,10 +374,12 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
   LOG_INFO log_info;
   int error = 1;
   std::vector<std::string> consensuslog_file_name_vector;
-  mysql_mutex_lock(&LOCK_index);
+  auto index_guard = create_lock_guard(
+    [&] { mysql_mutex_lock(&LOCK_index); },
+    [&] { mysql_mutex_unlock(&LOCK_index); }
+  );
   // find last log name according to the binlog index
   if (!my_b_inited(&index_file)) {
-    mysql_mutex_unlock(&LOCK_index);
     xp::error(ER_XP_COMMIT)
         << "build consenus log index failed, can't init index file";
     return 1;
@@ -385,7 +387,6 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
   if ((error = find_log_pos(&log_info, NullS, false))) {
     if (error != LOG_INFO_EOF) {
       xp::error(ER_XP_COMMIT) << "find_log_pos() failed error: " << error;
-      mysql_mutex_unlock(&LOCK_index);
       return error;
     }
   }
@@ -397,12 +398,11 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
   }
   if (error != LOG_INFO_EOF) {
     xp::error(ER_XP_COMMIT) << "find_log_pos() failed error: " << error;
-    mysql_mutex_unlock(&LOCK_index);
     return error;
   } else {
     error = 0;
   }
-  mysql_mutex_unlock(&LOCK_index);
+  index_guard.unlock();
   if (error) return error;
 
   for (auto iter = consensuslog_file_name_vector.begin();
@@ -975,7 +975,10 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
 int MYSQL_BIN_LOG::truncate_logs_from_index(
     std::vector<std::string> &files_list, std::string last_file) {
   LOG_INFO log_info;
-  mysql_mutex_lock(&LOCK_index);
+  auto index_guard = create_lock_guard(
+    [&] { mysql_mutex_lock(&LOCK_index); },
+    [&] { mysql_mutex_unlock(&LOCK_index); }
+  );
   if (find_log_pos(&log_info, last_file.c_str(),
                    false /*need_lock_index=false*/)) {
     xp::error(ER_XP_COMMIT)
@@ -1016,12 +1019,10 @@ int MYSQL_BIN_LOG::truncate_logs_from_index(
     goto err;
   }
   adjust_linfo_offsets(log_info.index_file_start_offset);
-  mysql_mutex_unlock(&LOCK_index);
   return 0;
 
 err:
   xp::error(ER_XP_COMMIT) << "truncate log from index failed";
-  mysql_mutex_unlock(&LOCK_index);
   return 1;
 }
 
@@ -1301,18 +1302,21 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
   uchar *real_buffer = NULL;
   size_t real_buf_size = 0;
   my_off_t end_pos = 0;
-  mysql_mutex_lock(&LOCK_log);
+  auto log_guard = create_lock_guard(
+    [&] { mysql_mutex_lock(&LOCK_log); },
+    [&] { mysql_mutex_unlock(&LOCK_log); }
+  );
   if (with_check) {
-    mysql_mutex_lock(consensus_log_manager.get_term_lock());
+    auto term_guard = create_lock_guard(
+      [&] { mysql_mutex_lock(consensus_log_manager.get_term_lock()); },
+      [&] { mysql_mutex_unlock(consensus_log_manager.get_term_lock()); }
+    );
     if (consensus_log->getCurrentTerm() != log.term) {
-      mysql_mutex_unlock(consensus_log_manager.get_term_lock());
-      mysql_mutex_unlock(&LOCK_log);
       /* set index to 0 to mark it fail */
       *index = 0;
       /* return 0 do not let it abort */
       return 0;
     }
-    mysql_mutex_unlock(consensus_log_manager.get_term_lock());
   }
 
   if (log.flag & Consensus_log_event_flag::FLAG_LARGE_TRX) {
@@ -1453,7 +1457,6 @@ err:
         "Append log error Hence aborting the server.";
     exec_binlog_error_action_abort(err_buff);
   }
-  mysql_mutex_unlock(&LOCK_log);
   return error;
 }
 
@@ -1462,8 +1465,10 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
     Relay_log_info *rli) {
   int error = 0;
   my_off_t end_pos = 0;
-  mysql_mutex_lock(&LOCK_log);
-
+  auto log_guard = create_lock_guard(
+    [&] { mysql_mutex_lock(&LOCK_log); },
+    [&] { mysql_mutex_unlock(&LOCK_log); }
+  );
   for (auto iter = logs.begin(); iter != logs.end(); iter++) {
     uint64 bytes = 0;
     size_t real_buf_size = 0;
@@ -1611,7 +1616,6 @@ err:
         "Append multi logs error Hence aborting the server.";
     exec_binlog_error_action_abort(err_buff);
   }
-  mysql_mutex_unlock(&LOCK_log);
   return error;
 }
 

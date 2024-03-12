@@ -4716,12 +4716,15 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
 
   // Rotate
   {
-    consensus_log_manager.lock_consensus(true);
+    auto consensus_guard = create_lock_guard(
+      [&] { consensus_log_manager.rdlock_consensus_status(); },
+      [&] { consensus_log_manager.unlock_consensus_status(); }
+    );
     uint64 binlog_status = consensus_log_manager.get_status();
     if (binlog_status == BINLOG_WORKING) {
       bool dont_care = false;
       if (mysql_bin_log.rotate(true, &dont_care)) {
-        consensus_log_manager.unlock_consensus();
+        consensus_guard.unlock();
         goto err;
       }
     } else {
@@ -4730,7 +4733,7 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
       mysql_mutex_lock(&mi->data_lock);
       if (rotate_relay_log(rli_info->mi)) {
         mysql_mutex_unlock(&mi->data_lock);
-        consensus_log_manager.unlock_consensus();
+        consensus_guard.unlock();
         my_error(ER_CANT_SET_GTID_MODE, MYF(0),
                  Gtid_mode::to_string(new_gtid_mode),
                  "rotate relay log failed.");
@@ -4738,7 +4741,6 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
       }
       mysql_mutex_unlock(&mi->data_lock);
     }
-    consensus_log_manager.unlock_consensus();
   }
 
 end:

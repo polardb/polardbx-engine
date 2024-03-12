@@ -1,3 +1,5 @@
+-- source include/have_debug.inc
+
 # mysqld --version/-V
 --exec $MYSQLD --version | grep "Malloc Library" | wc -l | tr -d ' \t'
 # error log

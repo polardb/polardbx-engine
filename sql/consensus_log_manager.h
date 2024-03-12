@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "consensus_prefetch_manager.h"
 #include "my_macros.h"
 #include "sql/rpl_rli.h"
+#include <include/scope_guard.h>
 
 #define CACHE_BUFFER_SIZE (IO_SIZE * 16)
 
@@ -118,11 +119,7 @@ class ConsensusLogManager {
   mysql_mutex_t *get_sequence_stage1_lock() {
     return &LOCK_consensuslog_sequence_stage1;
   }
-  mysql_mutex_t *get_sequence_stage2_lock() {
-    return &LOCK_consensuslog_sequence_stage2;
-  }
   mysql_mutex_t *get_term_lock() { return &LOCK_consensuslog_term; }
-  mysql_mutex_t *get_apply_lock() { return &LOCK_consensuslog_apply; }
   mysql_mutex_t *get_apply_thread_lock() {
     return &LOCK_consensuslog_apply_thread;
   }
@@ -185,17 +182,8 @@ class ConsensusLogManager {
   void set_enable_rotate(bool arg) { enable_rotate = arg; }
 
   // for concurrency
-  void lock_consensus(bool read_lock) {
-    if (read_lock)
-      mysql_rwlock_rdlock(&LOCK_consensuslog_status);
-    else
-      mysql_rwlock_wrlock(&LOCK_consensuslog_status);
-  }
-
-  void unlock_consensus() { mysql_rwlock_unlock(&LOCK_consensuslog_status); }
-  inline mysql_rwlock_t *get_consensuslog_status_lock() {
-    return &LOCK_consensuslog_status;
-  }
+  inline void rdlock_consensus_status() { mysql_rwlock_rdlock(&LOCK_consensuslog_status); }
+  inline void unlock_consensus_status() { mysql_rwlock_unlock(&LOCK_consensuslog_status); }
 
   int set_start_apply_index_if_need(uint64 consensus_index);
   int set_start_apply_term_if_need(uint64 consensus_term);
@@ -265,9 +253,7 @@ class ConsensusLogManager {
   bool inited;
   PSI_rwlock_key key_LOCK_consensuslog_status;
   PSI_mutex_key key_LOCK_consensuslog_sequence_stage1;
-  PSI_mutex_key key_LOCK_consensuslog_sequence_stage2;
   PSI_mutex_key key_LOCK_consensuslog_term;
-  PSI_mutex_key key_LOCK_consensuslog_apply;
   PSI_mutex_key key_LOCK_consensuslog_apply_thread;
   PSI_mutex_key key_LOCK_consensus_state_change;
   PSI_thread_key consensus_thread_key;
@@ -277,10 +263,7 @@ class ConsensusLogManager {
                                             // consensus log module
   mysql_mutex_t
       LOCK_consensuslog_sequence_stage1;  // used to get term in replicatelog
-  mysql_mutex_t
-      LOCK_consensuslog_sequence_stage2;  // used to get writedone index
   mysql_mutex_t LOCK_consensuslog_term;   // use to protect setTerm
-  mysql_mutex_t LOCK_consensuslog_apply;  // used to protect apply position
   mysql_mutex_t LOCK_consensuslog_apply_thread;
   mysql_cond_t COND_consensuslog_catchup;  // used to point out whether apply
                                            // thread arrived commit index
@@ -370,5 +353,16 @@ uint64 show_fifo_cache_size(THD *, SHOW_VAR *var, char *buff);
 uint64 show_first_index_in_fifo_cache(THD *, SHOW_VAR *var, char *buff);
 uint64 show_log_count_in_fifo_cache(THD *, SHOW_VAR *var, char *buff);
 int show_appliedindex_checker_queue(THD *, SHOW_VAR *var, char *);
+
+
+#define GUARDED_READ_CONSENSUS_LOG()                                        \
+  auto consensus_guard = create_lock_guard(                         \
+    [&] { consensus_log_manager.rdlock_consensus_status(); },            \
+    [&] { consensus_log_manager.unlock_consensus_status(); }               \
+  );                                                                \
+  MYSQL_BIN_LOG *consensus_log =                                    \
+      consensus_log_manager.get_status() == BINLOG_WORKING          \
+          ? &mysql_bin_log                                          \
+          : &consensus_log_manager.get_relay_log_info()->relay_log;
 
 #endif

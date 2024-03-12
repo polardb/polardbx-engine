@@ -3586,9 +3586,11 @@ int mysql_execute_command(THD *thd, bool first_level) {
                  "SUPER or REPLICATION_SLAVE_ADMIN");
         goto error;
       }
-      consensus_log_manager.lock_consensus(true);
+      auto consensus_guard = create_lock_guard(
+        [&] { consensus_log_manager.rdlock_consensus_status(); },
+        [&] { consensus_log_manager.unlock_consensus_status(); }
+      );
       res = change_master_cmd(thd);
-      consensus_log_manager.unlock_consensus();
       break;
     }
     case SQLCOM_START_GROUP_REPLICATION: {
@@ -3751,13 +3753,15 @@ int mysql_execute_command(THD *thd, bool first_level) {
     }
 
     case SQLCOM_START_XPAXOS_REPLICATION: {
-      consensus_log_manager.lock_consensus(true);
+      auto consensus_guard = create_lock_guard(
+        [&] { consensus_log_manager.rdlock_consensus_status(); },
+        [&] { consensus_log_manager.unlock_consensus_status(); }
+      );
       if (consensus_log_manager.get_status() == RELAY_LOG_WORKING &&
           !opt_cluster_log_type_instance)
         res = start_slave_cmd(thd);
       else
         my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
-      consensus_log_manager.unlock_consensus();
       break;
     }
 
@@ -3781,7 +3785,10 @@ int mysql_execute_command(THD *thd, bool first_level) {
         goto error;
       }
 
-      consensus_log_manager.lock_consensus(true);
+      auto consensus_guard = create_lock_guard(
+        [&] { consensus_log_manager.rdlock_consensus_status(); },
+        [&] { consensus_log_manager.unlock_consensus_status(); }
+      );
       if (consensus_log_manager.get_status() == RELAY_LOG_WORKING &&
           !opt_cluster_log_type_instance) {
         res = stop_slave_cmd(thd);
@@ -3791,7 +3798,6 @@ int mysql_execute_command(THD *thd, bool first_level) {
                res);
       } else
         my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
-      consensus_log_manager.unlock_consensus();
       break;
     }
 

@@ -1980,7 +1980,10 @@ bool MYSQL_BIN_LOG::reencrypt_logs() {
       purge_logs(filename, true, true /*need_lock_index=true*/,
                  true /*need_update_threads=true*/, nullptr, false);
     });
-    MUTEX_LOCK(lock, &LOCK_index);
+    auto index_guard = create_lock_guard(
+      [&] { mysql_mutex_lock(&LOCK_index); },
+      [&] { mysql_mutex_unlock(&LOCK_index); }
+    );
     std::unique_ptr<Binlog_ofile> ofile(
         Binlog_ofile::open_existing(key_file_binlog, filename, MYF(MY_WME)));
 
@@ -3599,14 +3602,8 @@ bool mysql_show_binlog_events(THD *thd) {
     this is needed so that the uses sees all its own commands in the binlog
   */
   ha_binlog_wait(thd);
-
-  consensus_log_manager.lock_consensus(true);
-  MYSQL_BIN_LOG *log =
-      consensus_log_manager.get_status() == BINLOG_WORKING
-          ? &mysql_bin_log
-          : &consensus_log_manager.get_relay_log_info()->relay_log;
-  bool res = show_binlog_events(thd, log);
-  consensus_log_manager.unlock_consensus();
+  GUARDED_READ_CONSENSUS_LOG();
+  bool res = show_binlog_events(thd, consensus_log);
   return res;
 }
 
@@ -8702,7 +8699,7 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
 
   THD *first_seen = fetch_and_process_flush_stage_queue(true, false);
 
-  mysql_mutex_lock(&LOCK_log);
+  mysql_mutex_lock(&LOCK_log);//will unlock in change_stage(Commit_stage_manager::SYNC_STAGE)
   mysql_mutex_lock(consensus_log_manager.get_term_lock());
 
   // before flush do consensus check
@@ -8910,8 +8907,6 @@ bool MYSQL_BIN_LOG::change_stage(THD *thd [[maybe_unused]],
   if (!Commit_stage_manager::get_instance().enroll_for(
           stage, queue, leave_mutex, enter_mutex)) {
     assert(!thd_get_cache_mngr(thd)->dbug_any_finalized());
-    // follower unlock status lock
-    consensus_log_manager.unlock_consensus();
     return true;
   }
 
@@ -9188,7 +9183,10 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
 
   DEBUG_SYNC(thd, "bgc_before_flush_stage");
 
-  consensus_log_manager.lock_consensus(true);
+  auto consensus_guard = create_lock_guard(
+    [&] { consensus_log_manager.rdlock_consensus_status(); },
+    [&] { consensus_log_manager.unlock_consensus_status(); }
+  );
   // check this function should return early
   if ((!opt_initialize && consensus_log_manager.get_status() !=
                               Consensus_Log_System_Status::BINLOG_WORKING) ||
@@ -9196,7 +9194,6 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     thd_get_cache_mngr(thd)->reset();
     thd->mark_transaction_to_rollback(true);
     thd->commit_error = THD::CE_COMMIT_ERROR;
-    consensus_log_manager.unlock_consensus();
     my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
     return thd->commit_error;
   }
@@ -9213,7 +9210,6 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
       ending_trans(thd, all) ||
       Commit_order_manager::get_rollback_status(thd)) {
     if (Commit_order_manager::wait(thd)) {
-      consensus_log_manager.unlock_consensus();
       return thd->commit_error;
     }
   }
@@ -9232,6 +9228,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
           /*&LOCK_Log*/ consensus_log_manager.get_sequence_stage1_lock())) {
     DBUG_PRINT("return", ("Thread ID: %u, commit_error: %d", thd->thread_id(),
                           thd->commit_error));
+    consensus_guard.unlock();
     return finish_commit(thd);
   }
 
@@ -9263,11 +9260,10 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
       alisql_server->writeCacheLogDone();
     }
     DBUG_EXECUTE_IF("crash_before_flush_binlog", { /* let follower get the log */
-      { sleep(2); DBUG_SUICIDE();
-  }
-});
+      { sleep(2); DBUG_SUICIDE(); }
+    });
     flush_error = flush_cache_to_file(&flush_end_pos);
-    }
+  }
 
   DBUG_EXECUTE_IF("crash_after_flush_binlog", DBUG_SUICIDE(););
 
@@ -9314,6 +9310,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
                    &LOCK_sync)) {
     DBUG_PRINT("return", ("Thread ID: %u, commit_error: %d", thd->thread_id(),
                           thd->commit_error));
+    consensus_guard.unlock();
     return finish_commit(thd);
   }
 
@@ -9424,14 +9421,15 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
 
   DBUG_EXECUTE_IF("simulate_old_8018_allow_null_gcn", { DBUG_SUICIDE(); });
 
-  commit_stage :
-      /* Clone needs binlog commit order. */
-      if ((opt_binlog_order_commits || Clone_handler::need_commit_order()) &&
-          (sync_error == 0 || binlog_error_action != ABORT_SERVER)) {
+commit_stage :
+  /* Clone needs binlog commit order. */
+  if ((opt_binlog_order_commits || Clone_handler::need_commit_order()) &&
+      (sync_error == 0 || binlog_error_action != ABORT_SERVER)) {
     if (change_stage(thd, Commit_stage_manager::COMMIT_STAGE, final_queue,
                      leave_mutex_before_commit_stage, &LOCK_commit)) {
       DBUG_PRINT("return", ("Thread ID: %u, commit_error: %d", thd->thread_id(),
                             thd->commit_error));
+      consensus_guard.unlock();
       return finish_commit(thd);
     }
     THD *commit_queue =
@@ -9443,7 +9441,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     if (flush_error == 0 && sync_error == 0)
       sync_error = call_after_sync_hook(commit_queue);
 
-    consensus_log_manager.unlock_consensus();
+    consensus_guard.unlock();
 
     /*
       process_commit_stage_queue will call update_on_commit or
@@ -9473,7 +9471,8 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
       mysql_mutex_unlock(leave_mutex_before_commit_stage);
     if (flush_error == 0 && sync_error == 0)
       sync_error = call_after_sync_hook(final_queue);
-    consensus_log_manager.unlock_consensus();
+
+    consensus_guard.unlock();
   }
 
   /*
@@ -9509,7 +9508,10 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   if (DBUG_EVALUATE_IF("force_rotate", 1, 0) ||
       (do_rotate && thd->commit_error == THD::CE_NONE &&
        !is_rotating_caused_by_incident)) {
-    consensus_log_manager.lock_consensus(true);
+    auto consensus_guard2 = create_lock_guard(
+      [&] { consensus_log_manager.rdlock_consensus_status(); },
+      [&] { consensus_log_manager.unlock_consensus_status(); }
+    );
     if (consensus_log_manager.get_status() == BINLOG_WORKING) {
       /*
         Do not force the rotate as several consecutive groups may
@@ -9549,7 +9551,6 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
         DBUG_EXECUTE_IF("simulate_crash_after_rotate", { DBUG_SUICIDE(); });
       }
     }
-    consensus_log_manager.unlock_consensus();
   }
   /*
     flush or sync errors are handled above (using binlog_error_action).

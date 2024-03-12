@@ -156,24 +156,23 @@ void collect_show_logs_results(
   char fname[FN_REFLEN];
   size_t length;
   size_t cur_dir_len;
+  GUARDED_READ_CONSENSUS_LOG();
 
-  consensus_log_manager.lock_consensus(true);
-  MYSQL_BIN_LOG *log =
-      consensus_log_manager.get_status() == BINLOG_WORKING
-          ? &mysql_bin_log
-          : &consensus_log_manager.get_relay_log_info()->relay_log;
-  if (!log->is_open()) {
-    consensus_log_manager.unlock_consensus();
+  if (!consensus_log->is_open()) {
     my_error(ER_NO_BINARY_LOGGING, MYF(0));
     return;
   }
 
-  mysql_mutex_lock(log->get_log_lock());
-  log->lock_index();
-  index_file = log->get_index_file();
+  mysql_mutex_lock(consensus_log->get_log_lock());
+  auto index_guard = create_lock_guard(
+    [&] { consensus_log->lock_index(); },
+    [&] { consensus_log->unlock_index(); }
+  );
 
-  log->raw_get_current_log(&cur);           // dont take mutex
-  mysql_mutex_unlock(log->get_log_lock());  // lockdep, OK
+  index_file = consensus_log->get_index_file();
+  consensus_log->raw_get_current_log(&cur);           // dont take mutex
+
+  mysql_mutex_unlock(consensus_log->get_log_lock());  // lockdep, OK
 
   cur_dir_len = dirname_length(cur.log_file_name);
 
@@ -211,14 +210,7 @@ void collect_show_logs_results(
     result->start_log_index = start_index;
     results.push_back(result);
   }
-  if (index_file->error == -1) goto err;
-  log->unlock_index();
-  consensus_log_manager.unlock_consensus();
-  return;
 
-err:
-  log->unlock_index();
-  consensus_log_manager.unlock_consensus();
   return;
 }
 

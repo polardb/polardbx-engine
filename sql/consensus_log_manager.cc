@@ -174,10 +174,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg,
   key_LOCK_consensuslog_status = key_rwlock_ConsensusLog_status_lock;
   key_LOCK_consensuslog_sequence_stage1 =
       key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock;
-  key_LOCK_consensuslog_sequence_stage2 =
-      key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock;
   key_LOCK_consensuslog_term = key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock;
-  key_LOCK_consensuslog_apply = key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock;
   key_LOCK_consensuslog_apply_thread =
       key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock;
   key_LOCK_consensus_state_change =
@@ -187,11 +184,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg,
   mysql_rwlock_init(key_LOCK_consensuslog_status, &LOCK_consensuslog_status);
   mysql_mutex_init(key_LOCK_consensuslog_sequence_stage1,
                    &LOCK_consensuslog_sequence_stage1, MY_MUTEX_INIT_FAST);
-  mysql_mutex_init(key_LOCK_consensuslog_sequence_stage2,
-                   &LOCK_consensuslog_sequence_stage2, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_consensuslog_term, &LOCK_consensuslog_term,
-                   MY_MUTEX_INIT_FAST);
-  mysql_mutex_init(key_LOCK_consensuslog_apply, &LOCK_consensuslog_apply,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_consensuslog_apply_thread,
                    &LOCK_consensuslog_apply_thread, MY_MUTEX_INIT_FAST);
@@ -511,9 +504,7 @@ int ConsensusLogManager::cleanup() {
 
     mysql_rwlock_destroy(&LOCK_consensuslog_status);
     mysql_mutex_destroy(&LOCK_consensuslog_sequence_stage1);
-    mysql_mutex_destroy(&LOCK_consensuslog_sequence_stage2);
     mysql_mutex_destroy(&LOCK_consensuslog_term);
-    mysql_mutex_destroy(&LOCK_consensuslog_apply);
     mysql_mutex_destroy(&LOCK_consensuslog_apply_thread);
     mysql_mutex_destroy(&LOCK_consensus_state_change);
     mysql_mutex_destroy(&LOCK_consensus_commit_pos);
@@ -547,31 +538,33 @@ std::string ConsensusLogManager::get_empty_log() {
 
 int ConsensusLogManager::set_start_apply_index_if_need(uint64 consensus_index) {
   if (opt_cluster_log_type_instance) return 0;
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
   if (!already_set_start_index && status == BINLOG_WORKING) {
     consensus_info->set_start_apply_index(consensus_index);
     if (consensus_info->flush_info(true, true)) {
-      mysql_rwlock_unlock(&LOCK_consensuslog_status);
       return 1;
     }
     already_set_start_index = true;
   }
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
   return 0;
 }
 
 int ConsensusLogManager::set_start_apply_term_if_need(uint64 consensus_term) {
   if (opt_cluster_log_type_instance) return 0;
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
   if (!already_set_start_term && status == BINLOG_WORKING) {
     consensus_info->set_last_leader_term(consensus_term);
     if (consensus_info->flush_info(true, true)) {
-      mysql_rwlock_unlock(&LOCK_consensuslog_status);
       return 1;
     }
     already_set_start_term = true;
   }
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
   return 0;
 }
 
@@ -579,7 +572,10 @@ int ConsensusLogManager::write_log_entry(ConsensusLogEntry &log,
                                          uint64 *consensus_index,
                                          bool with_check) {
   int error = 0;
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
 
   enable_rotate = !(log.flag & Consensus_log_event_flag::FLAG_LARGE_TRX);
   if (status == Consensus_Log_System_Status::BINLOG_WORKING) {
@@ -616,7 +612,7 @@ int ConsensusLogManager::write_log_entry(ConsensusLogEntry &log,
     mysql_mutex_unlock(&mi->data_lock);
   }
 end:
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
+  consensus_guard.unlock();
   if (error)
     xp::error(ER_XP_0)
         << "ConsensusLogManager::write_log_entry error, consensus index: "
@@ -632,7 +628,10 @@ int ConsensusLogManager::write_log_entries(std::vector<ConsensusLogEntry> &logs,
                                            uint64 *max_index) {
   int error = 0;
   // only follower will call this function
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
   bool do_rotate = false;
   MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
                            ? binlog
@@ -660,7 +659,6 @@ int ConsensusLogManager::write_log_entries(std::vector<ConsensusLogEntry> &logs,
     }
   }
 end:
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
     xp::error(ER_XP_0)
         << "ConsensusLogManager::write_log_entries error, batch size: "
@@ -680,7 +678,10 @@ int ConsensusLogManager::get_log_directly(uint64 consensus_index,
     *flag = 0;
     return error;
   }
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
   MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
                            ? binlog
                            : &(rli_info->relay_log);
@@ -688,7 +689,6 @@ int ConsensusLogManager::get_log_directly(uint64 consensus_index,
   if (log->consensus_get_log_entry(consensus_index, consensus_term, log_content,
                                    outer, flag, need_content))
     error = 1;
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
     xp::error(ER_XP_0)
         << "ConsensusLogManager::get_log_directly error,  consensus index: "
@@ -704,14 +704,16 @@ int ConsensusLogManager::get_log_directly(uint64 consensus_index,
 int ConsensusLogManager::prefetch_log_directly(THD *thd, uint64 channel_id,
                                                uint64 consensus_index) {
   int error = 0;
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
   MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
                            ? binlog
                            : &(rli_info->relay_log);
 
   if (log->consensus_prefetch_log_entries(thd, channel_id, consensus_index))
     error = 1;
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
     xp::error(ER_XP_0) << "ConsensusLogManager::prefetch_log_directly error,  "
                           "consensus index: "
@@ -788,7 +790,7 @@ int ConsensusLogManager::get_log_position(uint64 consensus_index,
                                           bool need_lock, char *log_name,
                                           uint64 *pos) {
   int error = 0;
-  if (need_lock) mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  if (need_lock) rdlock_consensus_status();
   MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
                            ? binlog
                            : &(rli_info->relay_log);
@@ -796,7 +798,7 @@ int ConsensusLogManager::get_log_position(uint64 consensus_index,
   if (log->consensus_get_log_position(consensus_index, log_name, pos)) {
     error = 1;
   }
-  if (need_lock) mysql_rwlock_unlock(&LOCK_consensuslog_status);
+  if (need_lock) unlock_consensus_status();
   if (error)
     xp::error(ER_XP_0)
         << "ConsensusLogManager::get_log_position error, consensus index: "
@@ -807,13 +809,15 @@ int ConsensusLogManager::get_log_position(uint64 consensus_index,
 uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index) {
   uint64 retIndex = consensus_index;
   if (consensus_index != 0) {
-    mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+    auto consensus_guard = create_lock_guard(
+      [&] { rdlock_consensus_status(); },
+      [&] { unlock_consensus_status(); }
+    );
     MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
                              ? binlog
                              : &(rli_info->relay_log);
 
     retIndex = log->get_trx_end_index(consensus_index);
-    mysql_rwlock_unlock(&LOCK_consensuslog_status);
     if (retIndex == 0) {
       xp::error(ER_XP_0) << "ConsensusLogManager: fail to find next trx index.";
       abort();
@@ -851,10 +855,16 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index) {
       << ", binlog->position: " << binlog->get_binlog_file()->position();
 
   prefetch_manager->stop_prefetch_threads();
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
   MYSQL_BIN_LOG *log =
       (status == BINLOG_WORKING ? binlog : &(rli_info->relay_log));
-  mysql_mutex_lock(log->get_log_lock());
+  auto log_guard = create_lock_guard(
+    [&] { mysql_mutex_lock(log->get_log_lock()); },
+    [&] { mysql_mutex_unlock(log->get_log_lock()); }
+  );
   log->lock_index();
 
   // truncate log file
@@ -898,9 +908,9 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index) {
   // truncate cache
   fifo_cache_manager->trunc_log_from_cache(consensus_index);
   prefetch_manager->trunc_log_from_prefetch_cache(consensus_index);
-  mysql_mutex_unlock(log->get_log_lock());
+  log_guard.unlock();
 
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
+  consensus_guard.unlock();
   prefetch_manager->start_prefetch_threads();
 
   xp::system(ER_XP_0)
@@ -920,7 +930,10 @@ int ConsensusLogManager::truncate_log(uint64 consensus_index) {
 int ConsensusLogManager::purge_log(uint64 consensus_index) {
   int error = 0;
   std::string file_name;
-  mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { rdlock_consensus_status(); },
+    [&] { unlock_consensus_status(); }
+  );
   uint64 purge_index = 0;
 
   if (status == BINLOG_WORKING) {
@@ -943,9 +956,7 @@ int ConsensusLogManager::purge_log(uint64 consensus_index) {
   // for call binlog->purge_logs
   MYSQL_BIN_LOG *log =
       status == BINLOG_WORKING ? binlog : &(rli_info->relay_log);
-  if (status == RELAY_LOG_WORKING) {
-    mysql_mutex_lock(&rli_info->data_lock);
-  }
+  if (status == RELAY_LOG_WORKING) mysql_mutex_lock(&rli_info->data_lock);
   log->lock_index();
   if (log->find_log_by_consensus_index(purge_index, file_name) ||
       log->purge_logs(file_name.c_str(), false /**include*/,
@@ -953,7 +964,6 @@ int ConsensusLogManager::purge_log(uint64 consensus_index) {
                       true)) {
     error = 1;
   }
-
   if (status == BINLOG_WORKING) {
     log->unlock_index();
   } else {
@@ -977,7 +987,6 @@ int ConsensusLogManager::purge_log(uint64 consensus_index) {
     log->unlock_index();
     mysql_mutex_unlock(&rli_info->data_lock);
   }
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
   if (error)
     xp::error(ER_XP_0)
         << "ConsensusLogManager::purge_log error, consensus index: "
@@ -1105,7 +1114,10 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index) {
   // wait all commit trx finished
   binlog->wait_xid_disappear();
 
-  mysql_rwlock_wrlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { mysql_rwlock_wrlock(&LOCK_consensuslog_status); },
+    [&] { mysql_rwlock_unlock(&LOCK_consensuslog_status); }
+  );
 
   // close binlog system
   binlog->close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
@@ -1127,7 +1139,6 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index) {
     consensus_info->set_start_apply_index(index);
   }
   if (consensus_info->flush_info(true, true)) {
-    mysql_rwlock_unlock(&LOCK_consensuslog_status);
     xp::error(ER_XP_0) << "Failed in flush_info() called from "
                           "ConsensusLog::wait_leader_degraded.";
     error = 1;
@@ -1137,12 +1148,13 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index) {
     start_consensus_apply_threads();
   }
 
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
+  consensus_guard.unlock();
 
   if (!opt_cluster_log_type_instance) {
     wait_apply_threads_start();
   }
 end:
+  consensus_guard.unlock();
   xp::info(ER_XP_0)
       << "ConsensusLogManager::wait_leader_degraded finish, error " << error;
   // recover prefetch
@@ -1182,10 +1194,12 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
   // kill all binlog dump thd
   killall_dump_threads();
 
-  mysql_rwlock_wrlock(&LOCK_consensuslog_status);
+  auto consensus_guard = create_lock_guard(
+    [&] { mysql_rwlock_wrlock(&LOCK_consensuslog_status); },
+    [&] { mysql_rwlock_unlock(&LOCK_consensuslog_status); }
+  );
 
   if (rli_info == nullptr) {
-    mysql_rwlock_unlock(&LOCK_consensuslog_status);
     goto end;
   }
 
@@ -1197,7 +1211,6 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
   // open binlog index and file
   log_lock = binlog->get_log_lock();
   if (binlog->open_index_file(opt_binlog_index_name, opt_bin_logname, true)) {
-    mysql_rwlock_unlock(&LOCK_consensuslog_status);
     xp::error(ER_XP_0) << "Failed in open_index_file() called from "
                           "ConsensusLog::wait_follower_upgraded.";
     error = 1;
@@ -1209,7 +1222,6 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
                                 true /*need_lock_index=true*/,
                                 true /*need_sid_lock=true*/, NULL)) {
     mysql_mutex_unlock(log_lock);
-    mysql_rwlock_unlock(&LOCK_consensuslog_status);
     xp::error(ER_XP_0) << "Failed in open_log() called from "
                           "ConsensusLog::wait_follower_upgraded.";
     error = 2;
@@ -1252,13 +1264,12 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
       Consensus_Log_System_Status::BINLOG_WORKING);
 
   if (consensus_info->flush_info(true, true)) {
-    mysql_rwlock_unlock(&LOCK_consensuslog_status);
     xp::error(ER_XP_0) << "Failed in flush_info() called from "
                           "ConsensusLog::wait_follower_upgraded.";
     error = 3;
     goto end;
   }
-  mysql_rwlock_unlock(&LOCK_consensuslog_status);
+  consensus_guard.unlock();
 
   // switch event scheduler on
   if (opt_configured_event_scheduler == Events::EVENTS_ON) {
@@ -1272,6 +1283,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
     }
   }
 end:
+  consensus_guard.unlock();
   xp::info(ER_XP_0)
       << "ConsensusLogManager::wait_follower_upgraded finish, error " << error;
 
@@ -1299,12 +1311,14 @@ uint64 ConsensusLogManager::get_sync_index(bool serious) {
     return sync_index;
   } else {
     /* currently, never cover this path, deadlock risk */
-    mysql_rwlock_rdlock(&LOCK_consensuslog_status);
+    auto consensus_guard = create_lock_guard(
+      [&] { rdlock_consensus_status(); },
+      [&] { unlock_consensus_status(); }
+    );
     MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
                              ? binlog
                              : &(rli_info->relay_log);
     log->wait_xid_disappear();
-    mysql_rwlock_unlock(&LOCK_consensuslog_status);
     return sync_index;
   }
 }

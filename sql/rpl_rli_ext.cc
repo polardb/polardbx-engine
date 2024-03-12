@@ -149,7 +149,7 @@ inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
   uint64 ret = 0;
   ut_a(index <= old_tail + m_capacity);
 
-  if (index < old_tail) return index;
+  if (index <= old_tail) return index;
 
   auto slot_index = get_slot_index(index);
   auto &slot = m_indexes[slot_index];

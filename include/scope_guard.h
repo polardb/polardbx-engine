@@ -61,6 +61,46 @@ Scope_guard<TLambda> create_scope_guard(const TLambda rollback_lambda) {
   return Scope_guard<TLambda>(rollback_lambda);
 }
 
+template <typename TLockLambda, typename TUnLockLambda>
+class Lock_guard {
+ public:
+  Lock_guard(const TLockLambda& lock_lambda, const TUnLockLambda& unlock_lambda)
+      : m_unlock_lambda(unlock_lambda), m_unlocked(false) {
+    lock_lambda();
+  }
+
+  Lock_guard(const Lock_guard<TLockLambda, TUnLockLambda>&) = delete;
+  Lock_guard& operator=(const Lock_guard<TLockLambda, TUnLockLambda>&) = delete;
+
+  Lock_guard(Lock_guard<TLockLambda, TUnLockLambda>&& moved)
+      : m_unlock_lambda(moved.m_unlock_lambda),
+        m_unlocked(moved.m_unlocked) {
+    // Set moved guard to "invalid" state, so the unlock lambda will not be executed.
+    moved.m_unlocked = true;
+  }
+
+  ~Lock_guard() {
+    if (!m_unlocked) {
+      m_unlock_lambda();
+    }
+  }
+
+  inline void unlock() {
+    if (!m_unlocked) {
+      m_unlock_lambda();
+      m_unlocked = true;
+    }
+  }
+
+ private:
+  TUnLockLambda m_unlock_lambda;
+  bool m_unlocked;
+};
+
+template <typename TLockLambda, typename TUnLockLambda>
+Lock_guard<TLockLambda, TUnLockLambda> create_lock_guard(TLockLambda lock_lambda, TUnLockLambda unlock_lambda) {
+  return Lock_guard<TLockLambda, TUnLockLambda>(lock_lambda, unlock_lambda);
+}
 /**
   Template class to scope guard variables.
 */

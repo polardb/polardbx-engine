@@ -1,3 +1,6 @@
+%define release_date 20240229
+%define engine_version 8.4.18
+
 Name: t-rds-xcluster-80
 Version:8.0.32
 Release: %(echo $RELEASE)%{?dist}
@@ -38,8 +41,6 @@ as for embedding into mass-deployed software.
 %define MYSQL_GROUP root
 %define __os_install_post %{nil}
 %define commit_id %(git rev-parse --short HEAD)
-%define release_date 20240229
-%define engine_version 8.4.18
 %define base_dir /u01/xcluster80
 %define copy_dir /u01/xcluster80_%{release_date}
 

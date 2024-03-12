@@ -11996,9 +11996,7 @@ void reset_status_by_thd() {
 PSI_rwlock_key key_rwlock_ConsensusLog_status_lock;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_commit_pos;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock;
-PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock;
-PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_stage_change;
 PSI_cond_key key_COND_ConsensusLog_catchup;
@@ -12157,9 +12155,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_index, "ConsensusLogIndex::LOCK_consensuslog_index", 0, 0, PSI_DOCUMENT_ME },
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "Consensus_recovery_manager::LOCK_consensuslog_recover_hash", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock, "ConsensusLogManager::LOCK_consensuslog_sequence_stage1", 0, 0, PSI_DOCUMENT_ME},
-  { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage2_lock, "ConsensusLogManager::LOCK_consensuslog_sequence_stage2", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock, "ConsensusLogManager::LOCK_consensus_log_term", 0, 0, PSI_DOCUMENT_ME },
-  { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_lock, "ConsensusLogManager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock, "ConsensusLogManager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_Consensus_stage_change, "ConsensusLogManager::LOCK_consnesus_state_change", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_commit_pos, "ConsensusLogManager::LOCK_consensus_commit_pos", 0, 0, PSI_DOCUMENT_ME},

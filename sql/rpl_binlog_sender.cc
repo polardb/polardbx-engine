@@ -74,14 +74,14 @@
 #include "sql/lizard_rpl_binlog_sender.h"
 
 #define READ_CONSENSUS_LOG()                                        \
-  consensus_log_manager.lock_consensus(true);                       \
+  auto consensus_guard = create_lock_guard(                         \
+    [&] { consensus_log_manager.rdlock_consensus_status(); },     \
+    [&] { consensus_log_manager.unlock_consensus_status(); }        \
+  );                                                                \
   consensus_log =                                                   \
       consensus_log_manager.get_status() == BINLOG_WORKING          \
           ? &mysql_bin_log                                          \
-          : &consensus_log_manager.get_relay_log_info()->relay_log; \
-                                                                    \
-  auto consensus_guard =                                            \
-      create_scope_guard([&] { consensus_log_manager.unlock_consensus(); });
+          : &consensus_log_manager.get_relay_log_info()->relay_log;
 
 #ifndef NDEBUG
 static uint binlog_dump_count = 0;
@@ -316,7 +316,7 @@ void Binlog_sender::init() {
 
   if (check_start_file()) return;
 
-  consensus_guard.rollback();
+  consensus_guard.unlock();
 
   LogErr(INFORMATION_LEVEL, ER_RPL_BINLOG_STARTING_DUMP, thd->thread_id(),
          thd->server_id, m_start_file, m_start_pos);
@@ -447,20 +447,23 @@ void Binlog_sender::run() {
     };);
 
     READ_CONSENSUS_LOG();
-    consensus_log->lock_index();
+    auto index_guard = create_lock_guard(
+      [&] { consensus_log->lock_index(); },
+      [&] { consensus_log->unlock_index(); }
+    );
     if (!consensus_log->is_open()) {
       if (consensus_log->open_index_file(consensus_log->get_index_fname(),
                                          log_file, false)) {
         set_fatal_error(
             "Binary log is not open and failed to open index file "
             "to retrieve next file.");
-        consensus_log->unlock_index();
         break;
       }
       is_index_file_reopened_on_binlog_disable = true;
     }
     int error = consensus_log->find_next_log(&m_linfo, false);
-    consensus_log->unlock_index();
+    index_guard.unlock();
+
     if (unlikely(error)) {
       DBUG_EXECUTE_IF("waiting_for_disable_binlog", {
         const char act[] = "now signal consumed_binlog";
@@ -472,7 +475,7 @@ void Binlog_sender::run() {
       set_fatal_error("could not find next log");
       break;
     }
-    consensus_guard.rollback();
+    consensus_guard.unlock();
 
     start_pos = BIN_LOG_HEADER_SIZE;
     reader.close();
@@ -575,7 +578,7 @@ std::pair<my_off_t, int> Binlog_sender::get_binlog_end_pos(
     return std::make_pair(0, 0);
   }
 
-  consensus_guard.rollback();
+  consensus_guard.unlock();
 
   if (read_pos < result.first) {
     result.second = 0;
@@ -843,7 +846,7 @@ int Binlog_sender::wait_new_events(my_off_t log_pos) {
     ret = wait_without_heartbeat(log_pos);
 
   consensus_log->unlock_binlog_end_pos();
-  consensus_guard.rollback();
+  consensus_guard.unlock();
 
   m_thd->EXIT_COND(&old_stage);
 

@@ -83,16 +83,6 @@
 #include "scope_guard.h"
 #include "sql/consensus_log_manager.h"  // ConsensusLogManager
 
-#define READ_CONSENSUS_LOG()                                          \
-  consensus_log_manager.lock_consensus(true);                         \
-  MYSQL_BIN_LOG *consensus_log =                                      \
-      (consensus_log_manager.get_status() == BINLOG_WORKING           \
-           ? &mysql_bin_log                                           \
-           : &consensus_log_manager.get_relay_log_info()->relay_log); \
-                                                                      \
-  auto consensus_guard =                                              \
-      create_scope_guard([&] { consensus_log_manager.unlock_consensus(); });
-
 int max_binlog_dump_events = 0;  // unlimited
 bool opt_sporadic_binlog_dump_fail = false;
 
@@ -1261,8 +1251,7 @@ bool show_master_status(THD *thd) {
     return true;
   }
   protocol->start_row();
-
-  READ_CONSENSUS_LOG();
+  GUARDED_READ_CONSENSUS_LOG();
 
   if (consensus_log->is_open()) {
     LOG_INFO li;
@@ -1278,7 +1267,7 @@ bool show_master_status(THD *thd) {
       return true;
     }
   }
-  consensus_guard.rollback();
+  consensus_guard.unlock();
   my_eof(thd);
   my_free(gtid_set_buffer);
   return false;
@@ -1303,7 +1292,7 @@ bool show_binlogs(THD *thd) {
   Protocol *protocol = thd->get_protocol();
   DBUG_TRACE;
 
-  READ_CONSENSUS_LOG();
+  GUARDED_READ_CONSENSUS_LOG();
 
   if (!consensus_log->is_open()) {
     my_error(ER_NO_BINARY_LOGGING, MYF(0));
@@ -1321,10 +1310,14 @@ bool show_binlogs(THD *thd) {
 
   mysql_mutex_lock(consensus_log->get_log_lock());
   DEBUG_SYNC(thd, "show_binlogs_after_lock_log_before_lock_index");
-  consensus_log->lock_index();
-  index_file = consensus_log->get_index_file();
+  auto index_guard = create_lock_guard(
+    [&] { consensus_log->lock_index(); },
+    [&] { consensus_log->unlock_index(); }
+  );
 
+  index_file = consensus_log->get_index_file();
   consensus_log->raw_get_current_log(&cur);           // dont take mutex
+
   mysql_mutex_unlock(consensus_log->get_log_lock());  // lockdep, OK
 
   cur_dir_len = dirname_length(cur.log_file_name);
@@ -1374,8 +1367,8 @@ bool show_binlogs(THD *thd) {
     }
   }
   if (index_file->error == -1) goto err;
-  consensus_log->unlock_index();
-  consensus_guard.rollback();
+  index_guard.unlock();
+  consensus_guard.unlock();
   my_eof(thd);
   return false;
 
