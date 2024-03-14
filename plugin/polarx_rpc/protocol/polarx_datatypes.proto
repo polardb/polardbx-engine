@@ -51,8 +51,8 @@ message Scalar {
     V_OCTETS = 4;
     V_DOUBLE = 5;
     V_FLOAT = 6;
-    V_BOOL  = 7;
-    V_STRING  = 8;
+    V_BOOL = 7;
+    V_STRING = 8;
     V_PLACEHOLDER = 9; // 绑定动态参数
     V_IDENTIFIER = 10; // 用于表示表名，库名，列名等
     V_RAW_STRING = 11; // 用于表示字符串的decimal，复用v_string
@@ -92,14 +92,14 @@ message Any {
   enum Type {
     SCALAR = 1;
     OBJECT = 2;
-    ARRAY  = 3;
+    ARRAY = 3;
   };
 
   required Type type = 1;
 
   optional Scalar scalar = 2;
-  optional Object obj    = 3;
-  optional Array  array  = 4;
+  optional Object obj = 3;
+  optional Array  array = 4;
 }
 
 message SessionVariable {

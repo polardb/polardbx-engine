@@ -46,14 +46,14 @@ import "polarx_datatypes.proto";
 // :returns:
 //    * zero or one :protobuf:msg:`PolarXRPC.Resultset::` followed by :protobuf:msg:`PolarXRPC.Sql::StmtExecuteOk`
 message StmtExecute {
-  optional string namespace = 3 [ default = "sql" ];
+  optional string namespace = 3 [default = "sql"];
   optional bytes stmt = 1;
   optional bytes stmt_digest = 12;
   optional bytes hint = 13;
   optional bool chunk_result = 14 [default = false];
   optional bool feed_back = 16 [default = false];
   repeated PolarXRPC.Datatypes.Any args = 2;
-  optional bool compact_metadata = 4 [ default = false ];
+  optional bool compact_metadata = 4 [default = false];
 
   // For auto commit request.
   optional string schema_name = 5;
@@ -75,7 +75,7 @@ message StmtExecuteOk {
 }
 
 message TokenOffer {
-  optional int32 token = 1 [ default = -1];
+  optional int32 token = 1 [default = -1];
 }
 
 

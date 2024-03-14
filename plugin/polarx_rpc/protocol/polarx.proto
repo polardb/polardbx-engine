@@ -57,7 +57,7 @@ message ClientMessages {
     CON_CLOSE = 3;
 
     SESS_AUTHENTICATE_START = 4;
-    SESS_AUTHENTICATE_CONTINUE  = 5;
+    SESS_AUTHENTICATE_CONTINUE = 5;
     SESS_RESET = 6;
     SESS_CLOSE = 7;
 
@@ -152,7 +152,7 @@ message Ok {
 // :param sql_state: SQL state
 // :param msg: human readable error message
 message Error {
-  optional Severity severity = 1 [ default = ERROR ];
+  optional Severity severity = 1 [default = ERROR];
   required uint32 code = 2;
   required string sql_state = 4;
   required string msg = 3;

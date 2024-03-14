@@ -172,7 +172,7 @@ inline Query_formatter &Query_formatter::operator%
 }
 
 template <>
-inline Query_formatter &Query_formatter::operator%<float>(const float &value) {
+inline Query_formatter &Query_formatter::operator% <float>(const float &value) {
   return put_fp(value);
 }
 

@@ -457,21 +457,21 @@ message FetchDone {
 //
 message ColumnMetaData {
   enum FieldType {
-    SINT     = 1;
-    UINT     = 2;
+    SINT = 1;
+    UINT = 2;
 
-    DOUBLE   = 5;
-    FLOAT    = 6;
+    DOUBLE = 5;
+    FLOAT = 6;
 
-    BYTES    = 7;
+    BYTES = 7;
 
-    TIME     = 10;
+    TIME = 10;
     DATETIME = 12;
-    SET      = 15;
-    ENUM     = 16;
-    BIT      = 17;
+    SET = 15;
+    ENUM = 16;
+    BIT = 17;
 
-    DECIMAL  = 18;
+    DECIMAL = 18;
   }
 
   enum OriginalType {
@@ -547,7 +547,7 @@ message Row {
 }
 
 message TokenDone {
-  optional int32 token_left = 1 [ default = 0];
+  optional int32 token_left = 1 [default = 0];
 }
 
 // One chunk of a result set.

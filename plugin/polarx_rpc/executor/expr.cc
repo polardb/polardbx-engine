@@ -9,10 +9,11 @@
 #else
 #define MYSQL_SERVER
 #endif
+#include "sql/sql_class.h"
+
 #include "sql/item_cmpfunc.h"
 #include "sql/item_func.h"
 #include "sql/my_decimal.h"
-#include "sql/sql_class.h"
 
 #include "bloomfilter.h"
 #include "expr.h"

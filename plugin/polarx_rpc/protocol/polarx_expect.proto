@@ -86,7 +86,7 @@ message Open {
     };
     required uint32 condition_key = 1;
     optional bytes condition_value = 2;
-    optional ConditionOperation op = 3 [ default = EXPECT_OP_SET ];
+    optional ConditionOperation op = 3 [default = EXPECT_OP_SET];
   };
   enum CtxOperation {
     // copy the operations from the parent Expect-block
@@ -94,7 +94,7 @@ message Open {
     // start with a empty set of operations
     EXPECT_CTX_EMPTY = 1;
   };
-  optional CtxOperation op = 1 [ default = EXPECT_CTX_COPY_PREV ];
+  optional CtxOperation op = 1 [default = EXPECT_CTX_COPY_PREV];
   repeated Condition cond = 2;
 }
 

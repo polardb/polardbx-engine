@@ -62,15 +62,15 @@ import "polarx_datatypes.proto";
 //
 message Expr {
   enum Type {
-    IDENT          = 1;
-    LITERAL        = 2;
-    VARIABLE       = 3;
-    FUNC_CALL      = 4;
-    OPERATOR       = 5;
-    PLACEHOLDER    = 6;
-    OBJECT         = 7;
-    ARRAY          = 8;
-    REF            = 9; // Reference output of children's input. Start from 0.
+    IDENT = 1;
+    LITERAL = 2;
+    VARIABLE = 3;
+    FUNC_CALL = 4;
+    OPERATOR = 5;
+    PLACEHOLDER = 6;
+    OBJECT = 7;
+    ARRAY = 8;
+    REF = 9; // Reference output of children's input. Start from 0.
   };
 
   required Type type = 1;

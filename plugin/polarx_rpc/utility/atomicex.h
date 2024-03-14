@@ -220,7 +220,7 @@ class CspinRWLock final {
   static constexpr uintptr_t RWLOCK_WRITE_ADD = 1;
   static constexpr uintptr_t RWLOCK_READ_ADD = RWLOCK_PART_OVERFLOW;
 #define RWLOCK_READ_COUNT(_x) ((_x) >> RWLOCK_PART_BITS)
-#define RWLOCK_WRITE_COUNT(_x) ((_x)&RWLOCK_PART_MASK)
+#define RWLOCK_WRITE_COUNT(_x) ((_x) & RWLOCK_PART_MASK)
 
   std::atomic<uintptr_t>
       lock_counter_;  /// high part read lock, low part write lock
